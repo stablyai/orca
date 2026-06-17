@@ -48,10 +48,10 @@ export type SleepingAgentSessionRecord = {
   resumeAvailable?: boolean
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
-   *  Quit records describe panes that still exist in the restored session, so
-   *  only the pane's own cold-restore path may consume them — activation
+   *  Quit/live records describe panes that still exist in the restored session,
+   *  so only the pane's own cold-restore path may consume them — activation
    *  launching a tab too would duplicate a warm-reattached session (#5232). */
-  origin?: 'worktree-sleep' | 'quit'
+  origin?: 'worktree-sleep' | 'quit' | 'live'
 }
 
 export type ArchivedForkableAgentSessionRecord = {

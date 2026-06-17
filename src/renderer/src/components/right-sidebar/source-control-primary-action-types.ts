@@ -71,6 +71,9 @@ export type PrimaryActionInputs = {
   // through to the default publish-to-origin behavior.
   canPushLinkedReviewWithoutUpstream?: boolean
   isPrIntentInFlight?: boolean
+  // Why: eligibility is fetched asynchronously; keep the header anchor visible
+  // while the request is in flight instead of flashing it in after ~1s.
+  isHostedReviewCreationLoading?: boolean
 }
 
 export const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {

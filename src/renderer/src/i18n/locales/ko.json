@@ -37,7 +37,6 @@
     "exploreOrca": "Orca 둘러보기",
     "gettingStarted": "Orca 시작하기",
     "reportCrash": "크래시 신고...",
-    "exportPdf": "PDF로 내보내기...",
     "file": "파일",
     "exit": "종료",
     "edit": "편집",
@@ -277,7 +276,8 @@
           "a5fc0cb622": "OpenClaude",
           "bf53f09bf8": "Claude Agent Teams",
           "0708ed89f1": "Claude",
-          "fc80296033": "Devin"
+          "fc80296033": "Devin",
+          "da41abbdd4": "Ante"
         },
         "skill": {
           "cli": {
@@ -3227,9 +3227,7 @@
         "AddRepoCreateStep": {
           "0ae45b8238": "내 프로젝트",
           "a8149a3a5a": "이름",
-          "038729c107": "폴더",
           "11fd2a7db8": "Git 저장소",
-          "180e9b5e48": "프로젝트 종류",
           "5e97f0c4b9": "프로젝트가 생성되었습니다.",
           "2c12db1511": "프로젝트가 이미 추가되었습니다.",
           "875dda0995": "서버 상위 경로를 입력하세요.",
@@ -3239,7 +3237,7 @@
           "b100311784": "이름을 지정하면 Orca가 적절한 기본값으로 실제 프로젝트를 만듭니다.",
           "685b5eefe1": "{{parent}}의 {{kind}}",
           "2a762f3b19": "이 호스트에서 Git 확인 중...",
-          "fe1e616c5b": "Git이 설치되어 있지 않아 일반 폴더가 기본값입니다.",
+          "fe1e616c5b": "프로젝트를 만들려면 Git이 필요합니다.",
           "c234df77f7": "만들기 전에 서버 상위 폴더를 선택하거나 입력하세요.",
           "3a13f6e88b": "위치가 선택되지 않음",
           "6ed14c0281": "서버 폴더가 선택되지 않음",
@@ -3591,6 +3589,9 @@
           "3d4b9c4997": "호버",
           "ba87080fb7": "속성 표시",
           "320b675c9a": "카드 레이아웃",
+          "newCardDisplay": {
+            "title": "카드 표시"
+          },
           "09faabd875": "프로젝트 순서",
           "7bada3b1ab": "정렬 기준",
           "dc0bb670bc": "그룹화 기준",
@@ -3613,6 +3614,8 @@
           "b8dcc6f321": "PR/MR 링크",
           "ca4d3c522e": "Linear 이슈",
           "91dfc653e8": "GitHub 티켓",
+          "bdd23b4e07": "GitHub 이슈",
+          "44713a5d04": "Linear 이슈",
           "cc17bd443b": "상세한",
           "0f9b959b31": "PR",
           "e029a2d775": "상태",
@@ -3625,7 +3628,14 @@
           "projectSshHost": "Project SSH",
           "activeRuntimeHost": "Active server",
           "projectRuntimeHost": "Project server",
-          "631b97eea9": "Host scope"
+          "631b97eea9": "Host scope",
+          "2d4f0eb933": "기본값",
+          "1a0eec0d35": "상태",
+          "b5536d5a88": "작업",
+          "8d62c68b35": "메모",
+          "2d74665a56": "포트",
+          "65a9820bd1": "Agent 상태",
+          "219ebf1961": "브랜치 이름"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
@@ -3684,8 +3694,6 @@
           "0f33af979b": "부분결제. 이 경로 외부의 파일은 디스크에 없습니다.",
           "4f964d5e8c": "부족한",
           "7d517f82e2": "주요한",
-          "c6833b5187": "첫 번째 agent 메시지에서 이름이 변경됩니다.",
-          "f62a3dadbc": "이름 바꾸기 보류 중",
           "4eba2ea99e": "자동 이름을 지정하지 못했습니다. 자세한 내용을 보려면 클릭하세요.",
           "74522ee457": "이름 바꾸기 실패",
           "02e19349f4": "자동 이름 바꾸기 실패: 보기 오류",
@@ -4718,6 +4726,12 @@
             "idleMinutesSuffix": "분",
             "title": "Agent 최대 절전",
             "toggleLabel": "Agent 최대 절전 전환"
+          },
+          "newWorktreeCardStyle": {
+            "copy": "업데이트된 worktree 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
+            "description": "업데이트된 worktree 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
+            "title": "새 카드 스타일",
+            "toggleLabel": "새 카드 스타일 전환"
           }
         },
         "FloatingWorkspacePane": {
@@ -5243,34 +5257,28 @@
           "239bf9132b": "설치 명령을 복사했습니다."
         },
         "PrivacyDiagnosticBundleControls": {
-          "dc8404a930": "미리보기 만들기",
+          "dc8404a930": "진단 파일 만들기",
           "a5acaffdb6": "버리기",
-          "aca2c8a367": "업로드",
-          "798b6f0be5": "미리보기 열기",
+          "aca2c8a367": "지원팀에 보내기",
+          "798b6f0be5": "검토 파일 열기",
           "2ae9a6b63e": "완료",
-          "7f14a1733c": "번들 삭제",
-          "2801d4ce22": "티켓 복사"
+          "7f14a1733c": "보낸 파일 삭제",
+          "2801d4ce22": "참조 ID 복사",
+          "d8be621237": "먼저 검토 파일을 여세요.",
+          "61676df223": "진단 정보를 보냈습니다. 이 참조 ID를 지원팀에 공유하세요: {{value0}}.",
+          "fd7b3891af": "검토 파일({{value0}})을 열었습니다. 이 파일을 지원팀에 보내거나 버릴 수 있습니다.",
+          "62340d4439": "검토 파일({{value0}})이 준비되었습니다. 열어서 보낼 내용을 확인한 다음 지원팀에 보낼지 선택하세요.",
+          "19ec5e29b3": "최근 앱 활동과 오류를 보내기 전에 검토할 수 있는 수정된 파일로 모읍니다. 보내기를 선택하기 전에는 아무것도 업로드되지 않습니다."
         },
         "PrivacyDiagnosticsSection": {
-          "acc7c66e6e": "OTLP 내보내기",
-          "4ff08ff3a7": "로컬 흔적 지우기",
-          "9ca08a9f8f": "이 시스템에서 회전된 모든 추적 파일을 삭제합니다.",
-          "fe81a52cb2": "추적 폴더 열기",
-          "5ff57fc986": "파일 관리자에 {{value0}}이 표시됩니다.",
-          "af2fc82cde": "진단 번들",
-          "c18cbe45df": "업로드된 진단 번들이 삭제되었습니다.",
-          "7a4944595b": "진단 티켓을 복사할 수 없습니다.",
-          "13eb2c65a1": "진단 티켓이 복사되었습니다.",
-          "860bca9ec9": "진단 번들 미리보기가 삭제되었습니다.",
-          "49fc6c80e8": "진단 번들이 업로드되었습니다.",
-          "db3228e01a": "진단 번들 미리보기 열림",
-          "a2b3505c77": "진단 번들 미리보기가 생성되었습니다.",
-          "9666a05580": "추적 파일을 지울 수 없습니다.",
-          "32d767f84d": "로컬 추적 파일이 지워졌습니다.",
-          "b85fe972cd": "추적 폴더를 열 수 없습니다.",
-          "1fb00a8995": "비활성",
-          "46ea3fb2d0": "활성화됨",
-          "7c9d9820b6": "Orca가 자체 OpenTelemetry 수집기를 가리키도록 ORCA_OTLP_TRACES_URL을 설정합니다."
+          "af2fc82cde": "앱 진단 정보를 지원팀에 보내기",
+          "c18cbe45df": "보낸 진단 정보가 삭제되었습니다",
+          "7a4944595b": "참조 ID를 복사할 수 없습니다",
+          "13eb2c65a1": "참조 ID가 복사되었습니다",
+          "860bca9ec9": "검토 파일을 버렸습니다",
+          "49fc6c80e8": "진단 정보를 보냈습니다",
+          "db3228e01a": "검토 파일을 열었습니다",
+          "a2b3505c77": "검토 파일을 만들었습니다"
         },
         "PrivacyPane": {
           "36e0e2e63b": "환경 변수. 다시 활성화하려면 설정을 해제하고 다시 시작하세요.",
@@ -6784,6 +6792,17 @@
               "sleep": "절전",
               "terminal": "터미널",
               "title": "Agent 최대 절전"
+            },
+            "newWorktreeCardStyle": {
+              "card": "카드",
+              "cards": "카드",
+              "description": "업데이트된 worktree 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
+              "menu": "메뉴",
+              "metadata": "메타데이터",
+              "status": "상태",
+              "title": "새 카드 스타일",
+              "worktree": "worktree",
+              "worktrees": "worktrees"
             }
           }
         },
@@ -7256,12 +7275,8 @@
             "f7a2d9f137": "텔레메트리 전송을 비활성화하는 환경 변수입니다.",
             "e058a3c98d": "텔레메트리 환경 변수",
             "1686c07fee": "지원",
-            "4a583f3a2f": "개방형 텔레메트리",
-            "9ea93ce3d6": "otlp",
-            "685c68a81f": "로그",
-            "40de3c2f19": "추적",
             "c0494ff48a": "진단",
-            "8b08f32366": "추적 파일 및 OTLP 내보내기 제어.",
+            "8b08f32366": "앱 진단 및 지원 공유 제어.",
             "6d258d2ed6": "진단",
             "ead1deded2": "공유",
             "27a27b2f63": "탈퇴",
@@ -8023,6 +8038,13 @@
           "ask": "묻기",
           "safeAuto": "안전 자동",
           "off": "끄기"
+        },
+        "PrivacyDiagnosticsRows": {
+          "5a7cbe069a": "DO_NOT_TRACK=1이 설정되어 있어 진단 파일 만들기와 보내기가 비활성화되었습니다.",
+          "63d03261d1": "ORCA_TELEMETRY_DISABLED=1이 설정되어 있어 진단 파일 만들기와 보내기가 비활성화되었습니다.",
+          "d37e92a06b": "ORCA_DIAGNOSTICS_DISABLED=1이 설정되어 있어 앱 진단이 꺼져 있습니다.",
+          "5ebb31e1fb": "CI에서 실행 중입니다. 진단이 꺼져 있습니다.",
+          "e27c8d45bf": "환경 변수로 인해 진단이 비활성화되었습니다."
         }
       },
       "right": {
@@ -8398,6 +8420,7 @@
             "834cb3f23d": "AI로 해결",
             "60bd988f0b": "AI 수정",
             "461575b9bc": "AI로 commit 메시지 생성",
+            "b16b8f0e4b": "AI commit 메시지",
             "ddc1fbd690": "commit 메시지 생성 중지",
             "5acbcedc1a": "{{value0}} 만들기",
             "aaf1451654": "초안 만들기 {{value0}}",
@@ -8467,9 +8490,21 @@
             "createPrIntentForcePushing": "lease로 강제 푸시하는 중…",
             "createPrIntentPushing": "커밋을 푸시하는 중…",
             "createPrIntentRemoteFailed": "원격 브랜치를 업데이트할 수 없습니다. Create PR을 다시 시도하세요.",
-            "createPrIntentGeneratingDetails": "Generating review details…",
-            "createPrIntentBranchChangedDuringDetails": "Branch changed while generating review details. Retry Create PR.",
-            "createPrIntentCreatingReview": "Creating review…"
+            "createPrIntentGeneratingDetails": "리뷰 세부 정보 생성 중…",
+            "createPrIntentBranchChangedDuringDetails": "리뷰 세부 정보를 생성하는 동안 브랜치가 변경되었습니다. Create PR을 다시 시도하세요.",
+            "createPrIntentCreatingReview": "리뷰 생성 중…",
+            "a91f8e2b01": "목록으로 보기",
+            "b82e9f3c12": "트리로 보기",
+            "f71c4a8d90": "더 많은 소스 제어 작업",
+            "c8e4a1f902": "필터: {{value0}}",
+            "b3c8f1a902": "파일 이름으로 필터링",
+            "d4f8c2a901": "필터 지우고 닫기",
+            "e8a1c4b203": "vs",
+            "f9b2441bb6": "{{value0}}보다 1 커밋 앞서 있음",
+            "b715ef615b": "{{value1}}보다 {{value0}} 커밋 앞서 있음",
+            "c1a8f3e204": "{{value0}}보다 1 커밋 뒤처짐",
+            "d2b9g4f315": "{{value1}}보다 {{value0}} 커밋 뒤처짐",
+            "e9c2a5d416": "{{value0}}와 동일한 상태"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -8761,7 +8796,19 @@
                   "c39d0c75c3": "연결된 검토 브랜치 대상을 사용할 수 없습니다.",
                   "8c6d15a07d": "PR 생성",
                   "d37e68f61d": "검토를 위해 브랜치를 준비하는 중…",
-                  "c72e5e65d1": "이 브랜치를 준비하고 {{value0}} 생성"
+                  "c72e5e65d1": "이 브랜치를 준비하고 {{value0}} 생성",
+                  "b8e4f2a901": "Wait for the remote operation to finish.",
+                  "c9f3a1b802": "Resolve conflicts before creating a {{value0}}.",
+                  "d2a8c4e703": "No changes on this branch to include in a {{value0}}.",
+                  "e3b9d5f814": "Cannot create a {{value0}} from the default branch.",
+                  "f4c0e6a925": "Commit changes before creating a {{value0}}.",
+                  "a5d1f7b036": "Publish commits before creating a {{value0}}.",
+                  "b6e2a8c147": "Push commits before creating a {{value0}}.",
+                  "c7f3b9d258": "Sync this branch before creating a {{value0}}.",
+                  "d8a4c0e369": "Authenticate before creating a {{value0}}.",
+                  "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
+                  "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
+                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
                 }
               }
             }
@@ -8781,7 +8828,9 @@
             "74727df633": "'{{value0}}'이(가) 삭제되었습니다.",
             "d979a4fbb5": "'{{value0}}'을(를) 영구적으로 삭제하시겠습니까?",
             "a76c74f105": "파괴적인",
-            "92276aceb7": "삭제"
+            "92276aceb7": "삭제",
+            "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
+            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "심볼릭 링크 대상을 열 수 없습니다"
@@ -8934,6 +8983,24 @@
             "8c2d5fab13": "커밋 해시 복사",
             "9d3e60bc24": "커밋 메시지 복사",
             "ae4f71cd35": "변경 사항 설명"
+          },
+          "pull": {
+            "policy": {
+              "notice": {
+                "merge": "Merge",
+                "mergeDescription": "Create a merge commit when local and remote both changed.",
+                "rebase": "Rebase",
+                "rebaseDescription": "Replay local commits on top of the remote branch.",
+                "fastForwardOnly": "Fast-forward only",
+                "fastForwardOnlyDescription": "Only pull when no merge or rebase is needed.",
+                "title": "Pull needs a policy",
+                "diverged": "Diverged",
+                "body": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+                "copyAria": "Copy {{value0}} pull policy command",
+                "copied": "Copied",
+                "copyCommand": "Copy command"
+              }
+            }
           }
         }
       },

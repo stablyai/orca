@@ -1,9 +1,7 @@
 // IPC surface for the error-tracking lane (telemetry-error-tracking.md
-// §User controls). Seven renderer-facing channels:
+// §User controls). Six renderer-facing channels:
 //
 //   diagnostics:getStatus            — read-only snapshot for the Privacy pane.
-//   diagnostics:openTraceFolder      — Reveal in Finder / Explorer.
-//   diagnostics:clearTraces          — delete the rotated NDJSON family.
 //   diagnostics:collectBundle        — assemble and retain a redacted payload.
 //   diagnostics:openBundlePreview    — open the retained payload in the OS.
 //   diagnostics:discardBundlePreview — delete a retained, unuploaded payload.
@@ -26,11 +24,9 @@ import { arch as osArch, platform as osPlatform, release as osRelease } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  clearLocalTraces,
   collectDiagnosticBundle,
   deleteDiagnosticBundle,
   getDiagnosticsStatus,
-  getTraceFilePath,
   uploadDiagnosticBundle,
   type DiagnosticsStatus
 } from '../observability'
@@ -42,6 +38,7 @@ import {
 } from '../observability/diagnostic-upload-endpoint'
 
 export type DiagnosticsBundlePreview = Omit<CollectedBundle, 'payload'>
+type UploadBundleIpcResult = UploadBundleResult | { canceled: true }
 
 const PENDING_BUNDLE_TTL_MS = 15 * 60 * 1000
 const MAX_PENDING_BUNDLES = 8
@@ -117,10 +114,10 @@ function getPendingBundleForUpload(bundleSubmissionId: unknown): {
   prunePendingBundles()
   const pending = pendingBundles.get(bundleSubmissionId)
   if (!pending) {
-    throw new Error('diagnostic bundle has expired; collect a new preview before uploading')
+    throw new Error('review file has expired; create a new one before sending')
   }
   if (!pending.previewOpened) {
-    throw new Error('open the diagnostic bundle preview before uploading')
+    throw new Error('open the review file before sending')
   }
   // Why: the preview file is user-editable once opened in the OS. Upload only
   // the redacted bytes main collected and retained before preview.
@@ -137,7 +134,7 @@ function getPendingPreviewFilePath(bundleSubmissionId: unknown): string {
   prunePendingBundles()
   const pending = pendingBundles.get(bundleSubmissionId)
   if (!pending) {
-    throw new Error('diagnostic bundle has expired; collect a new preview before opening')
+    throw new Error('review file has expired; create a new one before opening')
   }
   return pending.previewFilePath
 }
@@ -189,53 +186,28 @@ function deletePreviewFile(filePath: string): void {
   }
 }
 
-function discardAllPendingBundles(): void {
-  for (const bundleSubmissionId of Array.from(pendingBundles.keys())) {
-    deletePendingBundle(bundleSubmissionId)
-  }
-}
-
 function isTicketId(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(value)
 }
 
-async function confirmBundleUpload(bundle: CollectedBundle): Promise<void> {
+async function confirmBundleUpload(bundle: CollectedBundle): Promise<boolean> {
   const result = await dialog.showMessageBox({
     type: 'question',
-    buttons: ['Upload', 'Cancel'],
+    buttons: ['Send', 'Cancel'],
     defaultId: 1,
     cancelId: 1,
-    title: 'Upload diagnostic bundle?',
-    message: 'Upload diagnostic bundle to Orca support?',
-    detail: `Bundle ${bundle.bundleSubmissionId}\n${bundle.spanCount} span(s), ${Math.round(
+    title: 'Send this file to support?',
+    message: 'This uploads the redacted app diagnostics file you reviewed.',
+    detail: `Diagnostic ID: ${bundle.bundleSubmissionId}\nDiagnostic records: ${bundle.spanCount}\nSize: ${Math.round(
       bundle.bytes / 1024
-    )} KB\n\nThe exact redacted NDJSON preview was opened before this upload confirmation.`
+    )} KB`
   })
-  if (result.response !== 0) {
-    throw new Error('diagnostic bundle upload cancelled')
-  }
+  return result.response === 0
 }
 
 export function registerDiagnosticsHandlers(): void {
   ipcMain.handle('diagnostics:getStatus', (): DiagnosticsStatus => {
     return getDiagnosticsStatus()
-  })
-
-  ipcMain.handle('diagnostics:openTraceFolder', async (): Promise<void> => {
-    // Show the trace file's parent in the OS file manager. Using
-    // `showItemInFolder` rather than `openPath(folder)` so the file itself
-    // is highlighted — the user is much more likely to want to inspect
-    // `main.trace.ndjson` than to browse the `logs/` directory.
-    try {
-      shell.showItemInFolder(getTraceFilePath())
-    } catch {
-      /* swallow — best effort; the user can navigate manually */
-    }
-  })
-
-  ipcMain.handle('diagnostics:clearTraces', (): void => {
-    discardAllPendingBundles()
-    clearLocalTraces()
   })
 
   ipcMain.handle(
@@ -247,7 +219,7 @@ export function registerDiagnosticsHandlers(): void {
       // user has disabled diagnostic-bundle collection in Settings → Privacy.
       const status = getDiagnosticsStatus()
       if (!status.bundleEnabled) {
-        throw new Error('diagnostic bundle collection is disabled')
+        throw new Error('creating review files is disabled')
       }
       // Renderer-controlled input → narrow at the boundary. The default
       // (DEFAULT_LOOKBACK_MINUTES in bundle.ts) is fine for the common
@@ -271,7 +243,7 @@ export function registerDiagnosticsHandlers(): void {
 
   ipcMain.handle(
     'diagnostics:uploadBundle',
-    async (_event, bundleSubmissionId: unknown): Promise<UploadBundleResult> => {
+    async (_event, bundleSubmissionId: unknown): Promise<UploadBundleIpcResult> => {
       // Why: the renderer is in the threat model. Upload only a payload main
       // collected and retained for preview, never renderer-supplied bytes.
       const pendingForConfirmation = getPendingBundleForUpload(bundleSubmissionId)
@@ -279,18 +251,21 @@ export function registerDiagnosticsHandlers(): void {
       // renderer-side button-hide is UX, not security. Re-check here in case
       // the user toggled the setting off between collect and upload.
       if (!getDiagnosticsStatus().bundleEnabled) {
-        throw new Error('diagnostic bundle collection is disabled')
+        throw new Error('sending diagnostics is disabled')
       }
-      await confirmBundleUpload(pendingForConfirmation.bundle)
+      const confirmed = await confirmBundleUpload(pendingForConfirmation.bundle)
+      if (!confirmed) {
+        return { canceled: true }
+      }
       // Why: the preview can be discarded or diagnostics can be disabled
       // while the native confirmation dialog is open.
       const { bundle, payload } = getPendingBundleForUpload(bundleSubmissionId)
       if (!getDiagnosticsStatus().bundleEnabled) {
-        throw new Error('diagnostic bundle collection is disabled')
+        throw new Error('sending diagnostics is disabled')
       }
       const tokenEndpoint = resolveDiagnosticTokenEndpoint()
       if (!tokenEndpoint) {
-        throw new Error('diagnostic upload endpoint is not configured for this build')
+        throw new Error('sending diagnostics is not configured for this build')
       }
       const result = await uploadDiagnosticBundle({
         tokenEndpoint,
@@ -309,7 +284,7 @@ export function registerDiagnosticsHandlers(): void {
     const previewFilePath = getPendingPreviewFilePath(bundleSubmissionId)
     const errorMessage = await shell.openPath(previewFilePath)
     if (errorMessage) {
-      throw new Error('could not open diagnostic bundle preview')
+      throw new Error('could not open review file')
     }
     const pending = pendingBundles.get(bundleSubmissionId as string)
     if (pending) {

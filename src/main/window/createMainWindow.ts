@@ -781,11 +781,6 @@ export function createMainWindow(
       return
     }
 
-    if (action.type === 'exportPdf') {
-      mainWindow.webContents.send('export:requestPdf')
-      return
-    }
-
     if (action.type === 'forceReload') {
       opts?.onBeforeReload?.({
         ignoreCache: true,

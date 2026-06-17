@@ -27,7 +27,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 describe('WorktreeCardDetailsHover', () => {
-  it('includes branch identity before metadata details', () => {
+  it('puts workspace title before branch identity and metadata details', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
         branchName="feature/local-branch"
@@ -53,8 +53,8 @@ describe('WorktreeCardDetailsHover', () => {
     )
 
     expect(markup).toContain('feature/local-branch')
+    expect(markup.indexOf('Fix stale GH PR')).toBeLessThan(markup.indexOf('feature/local-branch'))
     expect(markup.indexOf('feature/local-branch')).toBeLessThan(markup.indexOf('PR #456'))
-    expect(markup).toContain('Fix stale GH PR')
   })
 
   it('puts unlink behind the first PR actions menu and keeps GitHub last', () => {

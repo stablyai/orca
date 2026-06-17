@@ -25,6 +25,10 @@ import { openHttpLink } from '@/lib/http-link-routing'
 import { Button } from '@/components/ui/button'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
+  getTerminalUrlSystemBrowserHint,
+  isMacPlatform
+} from '../terminal-pane/terminal-link-open-hints'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -135,6 +139,7 @@ import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullR
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
 import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import { openChecksPanelHostedReviewUrl } from './checks-panel-hosted-review-click-routing'
 
 const RUNTIME_SSH_STATUS_REFRESH_MS = 3000
 const GIT_STATUS_FAILURE_RETRY_MS = 3000
@@ -164,8 +169,9 @@ type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
   isRefreshing: boolean
   canUnlinkPullRequest: boolean
+  showSystemBrowserHint: boolean
   onRefresh: () => void
-  onOpenReview: () => void
+  onOpenReview: (event: React.MouseEvent<HTMLButtonElement>) => void
   onUnlinkPullRequest: () => void
   onLinkAnotherPullRequest: () => void
 }
@@ -174,6 +180,7 @@ export function ChecksPanelReviewHeader({
   review,
   isRefreshing,
   canUnlinkPullRequest,
+  showSystemBrowserHint,
   onRefresh,
   onOpenReview,
   onUnlinkPullRequest,
@@ -183,6 +190,14 @@ export function ChecksPanelReviewHeader({
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
   const showPullRequestMenu = review.provider === 'github'
+  const openTitle = translate(
+    'auto.components.right.sidebar.ChecksPanel.5c88c6db07',
+    'Open on {{value0}}',
+    { value0: reviewHostLabel }
+  )
+  const title = showSystemBrowserHint
+    ? `${openTitle}. ${getTerminalUrlSystemBrowserHint()}`
+    : openTitle
 
   return (
     <div className="flex items-center gap-2">
@@ -190,11 +205,7 @@ export function ChecksPanelReviewHeader({
       <button
         type="button"
         className="rounded px-0.5 text-[12px] font-semibold text-foreground underline decoration-border underline-offset-2 hover:text-foreground hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        title={translate(
-          'auto.components.right.sidebar.ChecksPanel.5c88c6db07',
-          'Open on {{value0}}',
-          { value0: reviewHostLabel }
-        )}
+        title={title}
         onClick={onOpenReview}
       >
         {reviewNumberLabel}
@@ -2542,13 +2553,21 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   // Open hosted review in browser
-  const handleOpenPR = useCallback(() => {
-    if (activeReview?.url) {
-      // Why: route through openHttpLink so PR/MR links honor the "open links
-      // in app" setting instead of always launching the system browser.
-      openHttpLink(activeReview.url, { worktreeId: activeWorktreeId })
-    }
-  }, [activeReview, activeWorktreeId])
+  const handleOpenPR = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (activeReview?.url) {
+        // Why: route through openHttpLink so PR/MR links honor the "open links
+        // in app" setting; Shift+Cmd/Ctrl keeps the terminal-link escape hatch.
+        openChecksPanelHostedReviewUrl({
+          url: activeReview.url,
+          event: event.nativeEvent,
+          isMac: isMacPlatform(),
+          worktreeId: activeWorktreeId
+        })
+      }
+    },
+    [activeReview, activeWorktreeId]
+  )
 
   const handleUnlinkPullRequest = useCallback(() => {
     if (!activeWorktreeId || activeReview?.provider !== 'github' || linkedPR === null) {
@@ -3068,6 +3087,12 @@ export default function ChecksPanel(): React.JSX.Element {
   const reviewShortLabel = activeReview.provider === 'gitlab' ? 'MR' : 'PR'
   const shouldShowReviewTriageStrip =
     activeConflictReview !== null || getBrokenChecks(checks).length > 0
+  // Why: mirror openHttpLink's global routing inputs so the hint only appears
+  // when the actual plain-click path would open inside Orca.
+  const showHostedReviewSystemBrowserHint =
+    Boolean(activeWorktreeId) &&
+    settings?.openLinksInApp === true &&
+    !settings.activeRuntimeEnvironmentId
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {/* Hosted review header */}
@@ -3077,6 +3102,7 @@ export default function ChecksPanel(): React.JSX.Element {
           review={activeReview}
           isRefreshing={isRefreshing}
           canUnlinkPullRequest={linkedPR !== null}
+          showSystemBrowserHint={showHostedReviewSystemBrowserHint}
           onRefresh={() => void handleRefresh()}
           onOpenReview={handleOpenPR}
           onUnlinkPullRequest={handleUnlinkPullRequest}

@@ -160,13 +160,16 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'jumpToTabIndex', index: 2 })
   })
 
-  it('routes menu-backed actions through the same window shortcut policy', () => {
+  it('does not resolve the removed PDF export shortcut globally', () => {
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyE', key: 'e', meta: true, control: false, alt: false, shift: true },
         'darwin'
       )
-    ).toEqual({ type: 'exportPdf' })
+    ).toBeNull()
+  })
+
+  it('routes menu-backed actions through the same window shortcut policy', () => {
     expect(
       resolveWindowShortcutAction(
         { code: 'KeyR', key: 'r', meta: false, control: true, alt: false, shift: true },

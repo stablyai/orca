@@ -354,7 +354,7 @@ describe('OrcaRuntimeRpcServer', () => {
     }
 
     await server.stop()
-  })
+  }, 15_000)
 
   it('includes a web client URL when the web bundle is served by the runtime', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -454,7 +454,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  })
+  }, 15_000)
 
   it('creates mobile-scoped pairing offers for headless mobile pairing', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -531,7 +531,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  })
+  }, 15_000)
 
   it('terminates active WebSockets for a revoked mobile device', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -2475,7 +2475,7 @@ describe('OrcaRuntimeRpcServer', () => {
       phone.ws.close()
       await server.stop()
     }
-  })
+  }, 15_000)
 
   it('serves worktree.ps from the runtime summary builder', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))

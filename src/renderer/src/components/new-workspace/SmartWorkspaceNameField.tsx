@@ -69,6 +69,7 @@ import type {
   LinearIssue
 } from '../../../../shared/types'
 import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
+import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
 import { translate } from '@/i18n/i18n'
 import {
   getMrStateFilters,
@@ -308,6 +309,10 @@ export default function SmartWorkspaceNameField({
   const repoSlugCacheRef = useRef<Map<string, RepoSlug | null>>(new Map())
   const handledCrossRepoUrlRef = useRef<string | null>(null)
   const localInputFocusFrameRef = useRef<number | null>(null)
+  // Why: dialog autofocus and other programmatic .focus() calls can look
+  // user-initiated in Electron, so gate the source popover until the user
+  // actually interacts with this field or tabs from another composer control.
+  const deferSourcePopoverUntilInteractionRef = useRef(true)
   const [crossRepoPrompt, setCrossRepoPrompt] = useState<{
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
     matchingRepo: RepoOption | null
@@ -405,6 +410,31 @@ export default function SmartWorkspaceNameField({
     cancelAnimationFrame(localInputFocusFrameRef.current)
     localInputFocusFrameRef.current = null
   }, [])
+
+  const markSourcePopoverUserEngaged = useCallback((): void => {
+    deferSourcePopoverUntilInteractionRef.current = false
+  }, [])
+
+  const tryOpenSourcePopover = useCallback((): void => {
+    if (disabled || mode === 'text' || deferSourcePopoverUntilInteractionRef.current) {
+      return
+    }
+    setOpen(true)
+  }, [disabled, mode])
+
+  const handleSourcePopoverOpenChange = useCallback(
+    (next: boolean): void => {
+      if (disabled || selectedSource) {
+        setOpen(false)
+        return
+      }
+      if (next && deferSourcePopoverUntilInteractionRef.current) {
+        return
+      }
+      setOpen(next)
+    },
+    [disabled, selectedSource]
+  )
 
   const setInputNode = useCallback(
     (node: HTMLInputElement | null) => {
@@ -1246,7 +1276,12 @@ export default function SmartWorkspaceNameField({
               const nextMode = next as SmartNameMode
               onActiveSourceModeChange?.(nextMode)
               setMode(nextMode)
-              setOpen(!disabled && nextMode !== 'text' && selectedSource === null)
+              if (!disabled && nextMode !== 'text' && selectedSource === null) {
+                markSourcePopoverUserEngaged()
+                setOpen(true)
+              } else {
+                setOpen(false)
+              }
               cancelLocalInputFocusFrame()
               localInputFocusFrameRef.current = requestAnimationFrame(() => {
                 localInputFocusFrameRef.current = null
@@ -1297,7 +1332,7 @@ export default function SmartWorkspaceNameField({
 
       <Popover
         open={!disabled && open && mode !== 'text' && selectedSource === null}
-        onOpenChange={(next) => setOpen(disabled || selectedSource ? false : next)}
+        onOpenChange={handleSourcePopoverOpenChange}
       >
         <Command
           value={resolvedCommandValue}
@@ -1397,16 +1432,29 @@ export default function SmartWorkspaceNameField({
                     ref={setInputNode}
                     data-workspace-name-input="true"
                     value={value}
-                    onChange={(event) => {
-                      onValueChange(event.target.value)
+                    onPointerDown={() => {
                       if (!disabled && mode !== 'text') {
+                        markSourcePopoverUserEngaged()
                         setOpen(true)
                       }
                     }}
-                    onFocus={() => {
+                    onChange={(event) => {
+                      onValueChange(event.target.value)
                       if (!disabled && mode !== 'text') {
+                        markSourcePopoverUserEngaged()
                         setOpen(true)
                       }
+                    }}
+                    onFocus={(event) => {
+                      // Why: only open when focus moves from another composer
+                      // control (Tab/Shift+Tab). Dialog autofocus comes from
+                      // outside the composer root and stays suppressed until
+                      // click/type/tab-within-composer engagement above.
+                      if (!isComposerFieldToFieldFocus(event)) {
+                        return
+                      }
+                      markSourcePopoverUserEngaged()
+                      tryOpenSourcePopover()
                     }}
                     onKeyDown={(event) => {
                       if (event.key === 'Tab' && event.shiftKey) {

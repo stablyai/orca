@@ -228,6 +228,22 @@ describe('CommitArea', () => {
     expect(markup).toContain('commit-area-remote-error')
   })
 
+  it('formats pull policy errors with command options', () => {
+    const markup = renderCommitArea({
+      ...baseProps(),
+      remoteActionError:
+        'Pull needs a Git pull policy for divergent branches. Configure one for this repository or host, then try again: git config pull.rebase false (merge), git config pull.rebase true (rebase), or git config pull.ff only (fast-forward only).'
+    })
+
+    expect(markup).toContain('Pull needs a policy')
+    expect(markup).toContain('Diverged')
+    expect(markup).toContain('git config pull.rebase false')
+    expect(markup).toContain('git config pull.rebase true')
+    expect(markup).toContain('git config pull.ff only')
+    expect(markup).toContain('aria-label="Copy merge pull policy command"')
+    expect(markup).toContain('commit-area-remote-error')
+  })
+
   it('keeps generation errors separate from commit and remote errors', () => {
     const markup = renderCommitArea({
       ...baseProps(),
@@ -371,6 +387,7 @@ describe('CommitArea', () => {
 
     const stageAllButton = firstButton(markup)
     expect(stageAllButton).toContain('Stage All')
+    expect(stageAllButton).toContain('data-variant="outline"')
     expect(stageAllButton).not.toContain('disabled=""')
     expect(stageAllButton).toContain('lucide-plus')
     expect(stageAllButton).toContain('rounded-r-none')
@@ -403,6 +420,7 @@ describe('CommitArea', () => {
 
     const pushButton = firstButton(markup)
     expect(pushButton).toContain('Push')
+    expect(pushButton).toContain('data-variant="outline"')
     expect(pushButton).not.toContain('disabled=""')
     expect(pushButton).toContain('lucide-arrow-up')
     expect(pushButton).toContain('rounded-r-none')
@@ -497,7 +515,7 @@ describe('ConflictSummaryCard', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
-  it('renders abort actions with operation-specific button treatment', () => {
+  it('renders abort actions with the quiet outline review-conflicts button treatment', () => {
     const mergeMarkup = renderToStaticMarkup(
       <ConflictSummaryCard
         conflictOperation="merge"
@@ -520,7 +538,7 @@ describe('ConflictSummaryCard', () => {
     )
 
     expect(buttonContaining(mergeMarkup, 'Review conflicts')).toContain('data-variant="outline"')
-    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="destructive"')
+    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
     expect(buttonContaining(rebaseMarkup, 'Review conflicts')).toContain('data-variant="outline"')
     expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
   })
@@ -560,7 +578,7 @@ describe('OperationBanner', () => {
     expect(cherryPickMarkup).not.toContain('Abort rebase')
   })
 
-  it('renders abort actions with operation-specific button treatment', () => {
+  it('renders abort actions with the quiet outline button treatment', () => {
     const mergeMarkup = renderToStaticMarkup(
       <OperationBanner conflictOperation="merge" onAbortOperation={vi.fn()} />
     )
@@ -568,7 +586,7 @@ describe('OperationBanner', () => {
       <OperationBanner conflictOperation="rebase" onAbortOperation={vi.fn()} />
     )
 
-    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="destructive"')
+    expect(buttonContaining(mergeMarkup, 'Abort merge')).toContain('data-variant="outline"')
     expect(buttonContaining(rebaseMarkup, 'Abort rebase')).toContain('data-variant="outline"')
   })
 })

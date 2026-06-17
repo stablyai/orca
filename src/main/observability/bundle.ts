@@ -17,8 +17,8 @@
 //      a) POST `/diagnostics/token` → token + upload_url
 //      b) POST `<upload_url>` with `Authorization: Bearer <token>` and the
 //         collected NDJSON payload. Returns ticket ID.
-//   4. (renderer) — surface the ticket ID; offer "Copy ticket" and
-//      "Delete this bundle" controls. Delete posts only the ticket ID.
+//   4. (renderer) — surface the support reference ID; offer copy/delete
+//      controls. Delete posts only the server-issued ID.
 //
 // Server-side endpoint contract is fully specified in
 // telemetry-error-tracking.md §Endpoint contract. Implementation of those

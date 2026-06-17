@@ -45,6 +45,7 @@ describe('useSessionRestoredBannerDismiss', () => {
     pane.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }))
 
     expect(dismiss).toHaveBeenCalledTimes(1)
+    expect(dismiss).toHaveBeenCalledWith(expect.any(KeyboardEvent))
   })
 
   it('dismisses the banner on pane pointer interaction', async () => {
@@ -54,6 +55,7 @@ describe('useSessionRestoredBannerDismiss', () => {
     pane.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
 
     expect(dismiss).toHaveBeenCalledTimes(1)
+    expect(dismiss).toHaveBeenCalledWith(expect.any(PointerEvent))
   })
 
   it('does not attach dismissal handlers when the banner is hidden', async () => {

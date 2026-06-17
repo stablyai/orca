@@ -1551,14 +1551,11 @@ const api = {
     ipcRenderer.invoke('telemetry:getConsentState'),
 
   // Why: diagnostics is the renderer-facing surface for the error-tracking
-  // lane (telemetry-error-tracking.md §User controls). All five channels
-  // are gated by main-side handlers that strictly type-narrow their inputs
-  // (renderer is untrusted by design); the bridges here are deliberately
-  // loose for the same reason the telemetry bridges are.
+  // lane (telemetry-error-tracking.md §User controls). Handlers type-narrow
+  // their inputs in main (renderer is untrusted by design); the bridges here
+  // are deliberately loose for the same reason the telemetry bridges are.
   diagnostics: {
     getStatus: (): Promise<unknown> => ipcRenderer.invoke('diagnostics:getStatus'),
-    openTraceFolder: (): Promise<void> => ipcRenderer.invoke('diagnostics:openTraceFolder'),
-    clearTraces: (): Promise<void> => ipcRenderer.invoke('diagnostics:clearTraces'),
     collectBundle: (lookbackMinutes?: number): Promise<unknown> =>
       ipcRenderer.invoke('diagnostics:collectBundle', lookbackMinutes),
     openBundlePreview: (bundleSubmissionId: string): Promise<void> =>
@@ -2855,6 +2852,12 @@ const api = {
       ipcRenderer.on('ui:reloadBrowserPage', listener)
       return () => ipcRenderer.removeListener('ui:reloadBrowserPage', listener)
     },
+    onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 'back' | 'forward'): void =>
+        callback(direction)
+      ipcRenderer.on('ui:browserHistoryNavigate', listener)
+      return () => ipcRenderer.removeListener('ui:browserHistoryNavigate', listener)
+    },
     onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
         callback(direction)
@@ -2906,11 +2909,6 @@ const api = {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:toggleStatusBar', listener)
       return () => ipcRenderer.removeListener('ui:toggleStatusBar', listener)
-    },
-    onExportPdfRequested: (callback: () => void): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent) => callback()
-      ipcRenderer.on('export:requestPdf', listener)
-      return () => ipcRenderer.removeListener('export:requestPdf', listener)
     },
     onDictationKeyDown: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()

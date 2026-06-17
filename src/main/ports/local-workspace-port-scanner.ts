@@ -10,11 +10,14 @@ import type {
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
+import { WorkspacePortScanTimeoutBackoff } from './workspace-port-scan-timeout-backoff'
 
 const COMMAND_TIMEOUT_MS = 4_000
 const MAX_PORTS = 200
 const HTTP_PORTS = new Set([80, 3000, 3001, 4200, 5000, 5173, 5174, 8000, 8080, 8888])
 const HTTPS_PORTS = new Set([443, 8443])
+
+const commandTimeoutBackoff = new WorkspacePortScanTimeoutBackoff()
 
 type RawListeningPort = {
   host: string
@@ -40,8 +43,18 @@ export async function scanWorkspacePorts(
   worktrees: WorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher
 ): Promise<WorkspacePortScanResult> {
+  const cooldown = commandTimeoutBackoff.snapshot()
+  if (cooldown.isCoolingDown) {
+    return makeUnavailableScan(
+      `Port scanning is temporarily paused after a command timeout. Retrying in ${Math.ceil(
+        cooldown.remainingMs / 1000
+      )}s.`
+    )
+  }
+
   try {
     const rawPorts = await scanPlatformListeningPorts()
+    commandTimeoutBackoff.recordSuccess()
     const normalizedWorktrees = normalizeWorkspacePortProbes(worktrees)
     reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
     const ports = rawPorts
@@ -50,13 +63,24 @@ export async function scanWorkspacePorts(
       .slice(0, MAX_PORTS)
     return { platform: process.platform, scannedAt: Date.now(), ports }
   } catch (error) {
-    console.warn('[workspace-ports] scan failed', error)
-    return {
-      platform: process.platform,
-      scannedAt: Date.now(),
-      ports: [],
-      unavailableReason: `Port scanning is unavailable on ${process.platform}.`
+    if (isCommandTimeoutError(error)) {
+      commandTimeoutBackoff.recordTimeout()
     }
+    console.warn('[workspace-ports] scan failed', error)
+    return makeUnavailableScan(`Port scanning is unavailable on ${process.platform}.`)
+  }
+}
+
+export function resetWorkspacePortScanTimeoutBackoffForTests(): void {
+  commandTimeoutBackoff.reset()
+}
+
+function makeUnavailableScan(reason: string): WorkspacePortScanResult {
+  return {
+    platform: process.platform,
+    scannedAt: Date.now(),
+    ports: [],
+    unavailableReason: reason
   }
 }
 
@@ -368,7 +392,7 @@ async function runCommand(command: string, args: string[]): Promise<{ stdout: st
       }
       settled = true
       child?.kill()
-      reject(new Error(`${command} timed out after ${COMMAND_TIMEOUT_MS}ms`))
+      reject(new CommandTimeoutError(command, COMMAND_TIMEOUT_MS))
     }, COMMAND_TIMEOUT_MS)
 
     const settle = (callback: () => void): void => {
@@ -403,6 +427,17 @@ async function runCommand(command: string, args: string[]): Promise<{ stdout: st
       settle(() => reject(error))
     }
   })
+}
+
+class CommandTimeoutError extends Error {
+  constructor(command: string, timeoutMs: number) {
+    super(`${command} timed out after ${timeoutMs}ms`)
+    this.name = 'CommandTimeoutError'
+  }
+}
+
+function isCommandTimeoutError(error: unknown): boolean {
+  return error instanceof CommandTimeoutError
 }
 
 async function readTextIfAvailable(filePath: string): Promise<string | undefined> {

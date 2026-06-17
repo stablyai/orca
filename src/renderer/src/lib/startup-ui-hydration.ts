@@ -52,6 +52,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+    _worktreeCardModeDefaulted: true,
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
     dismissedUpdateVersion: null,

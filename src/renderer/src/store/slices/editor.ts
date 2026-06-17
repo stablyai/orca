@@ -222,6 +222,9 @@ export type OpenFile = {
    * tab from the tree bumps this so the panel refetches instead of reusing a
    * stale snapshot. */
   diffContentReloadNonce?: number
+  /** Why: terminal/agent links can be the user's manual recovery path when a
+   * remote watcher misses an external write. Bumping this refetches clean tabs. */
+  fileContentReloadNonce?: number
   /** Why: CI check full-details tabs are virtual editor tabs backed by fetched
    *  PR check-run metadata instead of a file on disk. */
   checkRunDetails?: OpenCheckRunDetailsState
@@ -258,6 +261,7 @@ type EditorOpenTargetOptions = {
   targetGroupId?: string
   preview?: boolean
   runtimeEnvironmentId?: string | null
+  forceContentReload?: boolean
 }
 
 type GitRuntimeOperationOptions = {
@@ -404,6 +408,7 @@ export type EditorSlice = {
       targetGroupId?: string
       recordReplacedPreview?: boolean
       suppressActiveRuntimeFallback?: boolean
+      forceContentReload?: boolean
     }
   ) => void
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
@@ -897,6 +902,19 @@ function withDiffContentReloadRequest(file: OpenFile): OpenFile {
     ...file,
     diffContentReloadNonce: (file.diffContentReloadNonce ?? 0) + 1
   }
+}
+
+function shouldRequestExistingFileContentReload(
+  existing: OpenFile,
+  nextMode: OpenFile['mode'],
+  options: EditorOpenTargetOptions | undefined
+): boolean {
+  return (
+    options?.forceContentReload === true &&
+    !existing.isDirty &&
+    (existing.mode === 'edit' || existing.mode === 'markdown-preview') &&
+    (nextMode === 'edit' || nextMode === 'markdown-preview')
+  )
 }
 
 function isEditorFileIdOccupiedByOtherOwner(
@@ -1703,6 +1721,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       if (existing) {
         // If opening as non-preview, also pin the existing tab
         const updatedPreview = isPreview ? existing.isPreview : false
+        const fileContentReloadNonce = shouldRequestExistingFileContentReload(
+          existing,
+          file.mode,
+          options
+        )
+          ? (existing.fileContentReloadNonce ?? 0) + 1
+          : existing.fileContentReloadNonce
         const needsExistingUpdate =
           existing.mode !== file.mode ||
           existing.diffSource !== file.diffSource ||
@@ -1716,7 +1741,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.language !== file.language ||
           existing.relativePath !== file.relativePath ||
           existing.worktreeId !== file.worktreeId ||
-          existing.runtimeEnvironmentId !== runtimeEnvironmentId
+          existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
+          existing.fileContentReloadNonce !== fileContentReloadNonce
         if (!needsExistingUpdate) {
           return activeResult
         }
@@ -1740,7 +1766,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   conflict: file.conflict,
                   skippedConflicts: file.skippedConflicts,
                   conflictReview: file.conflictReview,
-                  isPreview: updatedPreview
+                  isPreview: updatedPreview,
+                  fileContentReloadNonce
                 }
               : f
           ),

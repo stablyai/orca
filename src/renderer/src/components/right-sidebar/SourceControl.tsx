@@ -28,8 +28,6 @@ import {
   Trash2,
   TriangleAlert,
   CircleCheck,
-  Search,
-  X,
   MoreHorizontal,
   type LucideIcon
 } from 'lucide-react'
@@ -152,7 +150,7 @@ import {
   type RuntimeGeneratePullRequestFieldsOverrides
 } from '@/runtime/runtime-git-client'
 import { getRuntimeRepoBaseRefDefault } from '@/runtime/runtime-repo-client'
-import { PullRequestIcon } from './checks-panel-content'
+
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { GitHistoryPanel, type GitHistoryPanelState } from './GitHistoryPanel'
 import { useGitHistoryCommitActions } from './useGitHistoryCommitActions'
@@ -199,6 +197,10 @@ import {
   type SourceControlRowOpenEvent
 } from './source-control-split-open'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
+import {
+  isPullPolicyRemoteActionError,
+  PullPolicyRemoteActionNotice
+} from './source-control-pull-policy-error-notice'
 import { SourceControlTextGenerationDialog } from './SourceControlTextGenerationDialog'
 import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
 import {
@@ -221,7 +223,17 @@ import {
   type CreatePrIntentRunToken
 } from './source-control-create-pr-intent-flow'
 import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-intent-state'
-import { resolveCreatePrHeaderAction } from './source-control-primary-create-pr-intent-action'
+import {
+  buildLoadingHostedReviewCreationEligibility,
+  resolveCreatePrHeaderAction,
+  resolveProvisionalHostedReviewProvider
+} from './source-control-primary-create-pr-intent-action'
+import {
+  getNextSourceControlViewMode,
+  shouldShowSourceControlCompareUnavailableCard,
+  SourceControlHeaderToolbar
+} from './source-control-header-toolbar'
+export { HostedReviewHeaderLink } from './hosted-review-header-chrome'
 import {
   createRunningPullRequestGenerationRecord,
   getPullRequestGenerationRecordKey,
@@ -246,7 +258,6 @@ export {
   hasConfiguredSourceControlTextGenerationDefaults
 } from './source-control-text-generation-defaults'
 
-export type SourceControlScope = 'all' | 'uncommitted'
 type AbortConflictOperation = Extract<GitConflictOperation, 'merge' | 'rebase'>
 type AbortActionErrorKind = 'abort_merge' | 'abort_rebase'
 export type SourceControlActionError = {
@@ -555,6 +566,13 @@ type HostedReviewCreationState = {
   data: HostedReviewCreationEligibility
 }
 
+type HostedReviewCreationRequestState = {
+  repoId: string
+  worktreeId: string
+  branch: string
+  status: 'loading' | 'failed'
+}
+
 type CreatedHostedReview = {
   provider: HostedReviewProvider
   number: number
@@ -577,15 +595,10 @@ export function writeCommitDraftForWorktree(
 }
 
 export function shouldRenderCommitArea(
-  scope: SourceControlScope,
   unresolvedConflictCount: number,
   conflictOperation: GitConflictOperation
 ): boolean {
-  return (
-    (scope === 'all' || scope === 'uncommitted') &&
-    unresolvedConflictCount === 0 &&
-    conflictOperation === 'unknown'
-  )
+  return unresolvedConflictCount === 0 && conflictOperation === 'unknown'
 }
 
 export function pickDefaultSourceControlAgent(
@@ -598,19 +611,6 @@ export function pickDefaultSourceControlAgent(
     detectedAgents,
     disabledAgents
   })
-}
-
-function hostedReviewStateClass(review: HostedReviewInfo): string {
-  if (review.state === 'merged') {
-    return 'text-purple-500/80'
-  }
-  if (review.state === 'open') {
-    return 'text-emerald-500/80'
-  }
-  if (review.state === 'closed') {
-    return 'text-muted-foreground/60'
-  }
-  return 'text-muted-foreground/50'
 }
 
 function resolveRemoteActionError(kind: RemoteOpKind, error: unknown): string {
@@ -685,62 +685,6 @@ export function clearRemoteActionErrorsForCompletedConflictOperations({
     next[worktreeId] = null
   }
   return next ?? remoteActionErrors
-}
-
-function HostedReviewIcon({
-  review,
-  className
-}: {
-  review: HostedReviewInfo
-  className?: string
-}): React.JSX.Element {
-  const Icon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  return <Icon className={cn(className, hostedReviewStateClass(review))} />
-}
-
-function hostedReviewLabel(review: HostedReviewInfo): string {
-  return `${review.provider === 'gitlab' ? 'MR' : 'PR'} #${review.number}`
-}
-
-export function HostedReviewHeaderLink({
-  review,
-  onOpenHostedReviewInChecks
-}: {
-  review: HostedReviewInfo
-  onOpenHostedReviewInChecks: () => void
-}): React.JSX.Element {
-  const label = hostedReviewLabel(review)
-  const className =
-    'shrink-0 border-0 bg-transparent p-0 text-left font-medium leading-none text-foreground underline decoration-border underline-offset-2 opacity-80 hover:text-foreground hover:decoration-foreground'
-
-  if (review.provider === 'github' || review.provider === 'gitlab') {
-    return (
-      <button
-        type="button"
-        className={className}
-        onClick={(e) => {
-          e.stopPropagation()
-          // Why: GitHub PR and GitLab MR details live in Orca's Checks tab; keep
-          // the sidebar workflow in-app instead of opening the browser.
-          onOpenHostedReviewInChecks()
-        }}
-      >
-        {label}
-      </button>
-    )
-  }
-
-  return (
-    <a
-      href={review.url}
-      target="_blank"
-      rel="noreferrer"
-      className={className}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {label}
-    </a>
-  )
 }
 
 function SourceControlInner(): React.JSX.Element {
@@ -951,7 +895,7 @@ function SourceControlInner(): React.JSX.Element {
     pendingDiffCommentsClearCount
   ])
 
-  const [scope, setScope] = useState<SourceControlScope>('all')
+  const [filterExpanded, setFilterExpanded] = useState(false)
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     createDefaultCollapsedSections
   )
@@ -1000,6 +944,8 @@ function SourceControlInner(): React.JSX.Element {
   const generateError = generateErrors[activeWorktreeId ?? ''] ?? null
   const [hostedReviewCreationState, setHostedReviewCreationState] =
     useState<HostedReviewCreationState | null>(null)
+  const [hostedReviewCreationRequestState, setHostedReviewCreationRequestState] =
+    useState<HostedReviewCreationRequestState | null>(null)
   const createPrInFlightRef = useRef<Record<string, boolean>>({})
   const [createPrInFlightByWorktree, setCreatePrInFlightByWorktree] = useState<
     Record<string, boolean>
@@ -1055,7 +1001,7 @@ function SourceControlInner(): React.JSX.Element {
   )
   const setPullRequestGenerationRecord = useAppStore((s) => s.setPullRequestGenerationRecord)
   const updatePullRequestGenerationRecord = useAppStore((s) => s.updatePullRequestGenerationRecord)
-  const filterInputRef = useRef<HTMLInputElement>(null)
+
   const commitMessage = readCommitDraftForWorktree(commitDrafts, activeWorktreeId)
   const commitError = commitErrors[activeWorktreeId ?? ''] ?? null
   const remoteActionError = remoteActionErrors[activeWorktreeId ?? ''] ?? null
@@ -1352,6 +1298,56 @@ function SourceControlInner(): React.JSX.Element {
   const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
   const linkedAzureDevOpsPR = activeWorktree?.linkedAzureDevOpsPR ?? null
   const linkedGiteaPR = activeWorktree?.linkedGiteaPR ?? null
+  const shouldResolveHostedReviewCreation =
+    isBranchVisible &&
+    Boolean(activeRepo) &&
+    !isFolder &&
+    Boolean(branchName) &&
+    branchName !== 'HEAD' &&
+    Boolean(activeWorktreeId)
+  const hostedReviewCreationRequestMatchesCurrent =
+    hostedReviewCreationRequestState !== null &&
+    activeRepo?.id === hostedReviewCreationRequestState.repoId &&
+    activeWorktreeId === hostedReviewCreationRequestState.worktreeId &&
+    branchName === hostedReviewCreationRequestState.branch
+  const isHostedReviewCreationLoading =
+    shouldResolveHostedReviewCreation &&
+    hostedReviewCreationRequestMatchesCurrent &&
+    hostedReviewCreationRequestState.status === 'loading' &&
+    hostedReviewCreation === null &&
+    hostedReview === null
+  const hostedReviewCreationForHeader = useMemo(() => {
+    if (hostedReviewCreation) {
+      return hostedReviewCreation
+    }
+    if (!isHostedReviewCreationLoading) {
+      return null
+    }
+    const provider = resolveProvisionalHostedReviewProvider({
+      hostedReview,
+      hostedReviewCreationState,
+      activeRepoId: activeRepo?.id ?? null,
+      linkedGitHubPR,
+      fallbackGitHubPR: fallbackGitHubPRNumber,
+      linkedGitLabMR,
+      linkedBitbucketPR,
+      linkedAzureDevOpsPR,
+      linkedGiteaPR
+    })
+    return buildLoadingHostedReviewCreationEligibility(provider)
+  }, [
+    activeRepo?.id,
+    fallbackGitHubPRNumber,
+    hostedReview,
+    hostedReviewCreation,
+    hostedReviewCreationState,
+    isHostedReviewCreationLoading,
+    linkedAzureDevOpsPR,
+    linkedBitbucketPR,
+    linkedGitHubPR,
+    linkedGitLabMR,
+    linkedGiteaPR
+  ])
   const hasLinkedHostedReview =
     (linkedGitHubPR ?? fallbackGitHubPRNumber) !== null ||
     linkedGitLabMR !== null ||
@@ -1434,7 +1430,7 @@ function SourceControlInner(): React.JSX.Element {
 
   const normalizedFilter = filterQuery.toLowerCase()
   const isGitHistoryVisible =
-    scope === 'all' && !normalizedFilter && Boolean(activeWorktreeId && worktreePath && !isFolder)
+    !normalizedFilter && Boolean(activeWorktreeId && worktreePath && !isFolder)
 
   const filteredGrouped = useMemo(() => {
     if (!normalizedFilter) {
@@ -1644,7 +1640,7 @@ function SourceControlInner(): React.JSX.Element {
   // Instead, reset worktree-specific local state here so the previous
   // worktree's UI state doesn't leak into the new one.
   useEffect(() => {
-    setScope('all')
+    setFilterExpanded(false)
     setCollapsedSections(createDefaultCollapsedSections())
     setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)
@@ -2624,6 +2620,7 @@ function SourceControlInner(): React.JSX.Element {
   useEffect(() => {
     if (!isBranchVisible || !activeRepo || isFolder || !branchName || !activeWorktreeId) {
       setHostedReviewCreationState(null)
+      setHostedReviewCreationRequestState(null)
       return
     }
     // Why: skip refetches while the user's PR flow is mid-flight. AI generation,
@@ -2631,9 +2628,16 @@ function SourceControlInner(): React.JSX.Element {
     // state temporarily. Recomputing eligibility mid-flow can tear down the
     // composer or rotate dropdown hints before the final refresh restores truth.
     if (prGenerating || isCreatingPr || isCreatePrIntentInFlight) {
+      setHostedReviewCreationRequestState(null)
       return
     }
     let stale = false
+    setHostedReviewCreationRequestState({
+      repoId: activeRepo.id,
+      worktreeId: activeWorktreeId,
+      branch: branchName,
+      status: 'loading'
+    })
     void getHostedReviewCreationEligibility({
       repoPath: activeRepo.path,
       repoId: activeRepo.id,
@@ -2659,12 +2663,19 @@ function SourceControlInner(): React.JSX.Element {
             branch: branchName,
             data: result
           })
+          setHostedReviewCreationRequestState(null)
         }
       })
       .catch((error) => {
         console.warn('[SourceControl] hosted review creation eligibility failed', error)
         if (!stale) {
           setHostedReviewCreationState(null)
+          setHostedReviewCreationRequestState({
+            repoId: activeRepo.id,
+            worktreeId: activeWorktreeId,
+            branch: branchName,
+            status: 'failed'
+          })
         }
       })
     return () => {
@@ -2676,6 +2687,7 @@ function SourceControlInner(): React.JSX.Element {
     effectiveBaseRef,
     getHostedReviewCreationEligibility,
     hasUncommittedEntries,
+    setHostedReviewCreationRequestState,
     isBranchVisible,
     isCreatingPr,
     isCreatePrIntentInFlight,
@@ -3565,7 +3577,9 @@ function SourceControlInner(): React.JSX.Element {
       prState: hostedReview?.state ?? null,
       isPRStateLoading: isHostedReviewStateLoading,
       inFlightRemoteOpKind,
-      hostedReviewCreation,
+      hostedReviewCreation: hostedReviewCreationForHeader,
+      isHostedReviewCreationLoading:
+        isHostedReviewCreationLoading && hostedReviewCreationForHeader !== null,
       branchCommitsAhead:
         branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
       hasCurrentBranch: Boolean(branchName),
@@ -3592,25 +3606,27 @@ function SourceControlInner(): React.JSX.Element {
     hasStageableChanges,
     hasUnstagedChanges,
     hostedReview?.state,
-    hostedReviewCreation,
+    hostedReviewCreationForHeader,
     hostedReviewCreateCopy.reviewLabel,
     inFlightRemoteOpKind,
     isAbortingOperation,
     isCommitting,
     isCreatePrIntentInFlight,
     isCreatingPr,
+    isHostedReviewCreationLoading,
     isHostedReviewStateLoading,
     isRemoteOperationActive,
     remoteStatus,
     unresolvedConflicts.length
   ])
   const directCreatePrAction =
-    createPrHeaderAction?.kind === 'create_pr' ? createPrHeaderAction : null
+    createPrHeaderAction?.kind === 'create_pr' &&
+    hostedReviewCreation?.canCreate === true &&
+    (!createPrHeaderAction.disabled || isCreatingPr)
+      ? createPrHeaderAction
+      : null
   const visibleCreatePrHeaderAction = resolveVisibleCreatePrHeaderAction({
-    createPrHeaderAction,
-    directCreatePrAction,
-    isCreatePrIntentInFlight,
-    primaryActionKind: primaryAction.kind
+    createPrHeaderAction
   })
 
   const dropdownItems: DropdownEntry[] = useMemo(
@@ -3804,10 +3820,19 @@ function SourceControlInner(): React.JSX.Element {
       containerRef: sourceControlRef
     })
 
-  // clear selection on scope or list/tree presentation change
+  // clear selection on list/tree presentation change
   useEffect(() => {
     clearSelection()
-  }, [scope, sourceControlViewMode, clearSelection])
+  }, [sourceControlViewMode, clearSelection])
+
+  const handleToggleSourceControlViewMode = useCallback(() => {
+    if (!settings) {
+      return
+    }
+    updateSettings({
+      sourceControlViewMode: getNextSourceControlViewMode(sourceControlViewMode)
+    })
+  }, [settings, sourceControlViewMode, updateSettings])
 
   // Clear selection on worktree or tab change
   useEffect(() => {
@@ -4845,81 +4870,33 @@ function SourceControlInner(): React.JSX.Element {
   return (
     <>
       <div ref={setSourceControlRoot} className="relative flex h-full flex-col overflow-hidden">
-        <div className="flex items-center px-3 pt-2 border-b border-border">
-          {(['all', 'uncommitted'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={cn(
-                'px-3 pb-2 text-xs font-medium transition-colors border-b-2 -mb-px',
-                scope === value
-                  ? 'border-foreground text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              )}
-              onClick={() => setScope(value)}
-            >
-              {value === 'all'
-                ? translate('auto.components.right.sidebar.SourceControl.77afaa8152', 'All')
-                : translate(
-                    'auto.components.right.sidebar.SourceControl.0fad573938',
-                    'Uncommitted'
-                  )}
-            </button>
-          ))}
-          {(visibleCreatePrHeaderAction || hostedReview) && (
-            <div className="ml-auto mb-1.5 flex items-center gap-1.5 min-w-0 text-[11.5px] leading-none">
-              {visibleCreatePrHeaderAction && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex shrink-0">
-                      <Button
-                        type="button"
-                        size="xs"
-                        disabled={visibleCreatePrHeaderAction.disabled}
-                        onClick={handleCreatePrHeaderClick}
-                        className="h-6 px-2 text-[11px]"
-                        title={visibleCreatePrHeaderAction.title}
-                      >
-                        {isCreatePrIntentInFlight || isCreatingPr ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-                        )}
-                        {visibleCreatePrHeaderAction.label}
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
-                    {visibleCreatePrHeaderAction.title}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {hostedReview && (
-                <>
-                  <HostedReviewIcon review={hostedReview} className="size-3 shrink-0" />
-                  <HostedReviewHeaderLink
-                    review={hostedReview}
-                    onOpenHostedReviewInChecks={openHostedReviewInChecks}
-                  />
-                </>
-              )}
-            </div>
-          )}
-        </div>
+        <SourceControlHeaderToolbar
+          filterQuery={filterQuery}
+          filterExpanded={filterExpanded}
+          onFilterQueryChange={setFilterQuery}
+          onFilterExpandedChange={setFilterExpanded}
+          visibleCreatePrHeaderAction={visibleCreatePrHeaderAction}
+          hostedReview={hostedReview}
+          isCreatePrIntentInFlight={isCreatePrIntentInFlight}
+          isCreatingPr={isCreatingPr}
+          onCreatePrHeaderClick={handleCreatePrHeaderClick}
+          onOpenHostedReviewInChecks={openHostedReviewInChecks}
+          sourceControlViewMode={sourceControlViewMode}
+          viewModeToggleDisabled={settings === null}
+          onToggleViewMode={handleToggleSourceControlViewMode}
+          onChangeBaseRef={() => setBaseRefDialogOpen(true)}
+          onRefreshBranchCompare={() => void refreshBranchCompare()}
+          branchCompareRefreshDisabled={!branchSummary || branchSummary.status === 'loading'}
+          diffCommentCount={diffCommentCount}
+          onExpandNotes={() => setDiffCommentsExpanded(true)}
+          branchSummary={branchSummary}
+          compareBaseRef={effectiveBaseRef}
+          upstreamStatus={remoteStatus}
+        />
 
         {detachedHeadDisplay && (
           <div className="border-b border-border px-3 py-2">
             <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />
-          </div>
-        )}
-
-        {scope === 'all' && shouldShowCompareSummary(branchSummary) && (
-          <div className="border-b border-border px-3 py-2">
-            <CompareSummary
-              summary={branchSummary}
-              onChangeBaseRef={() => setBaseRefDialogOpen(true)}
-              onRetry={() => void refreshBranchCompare()}
-            />
           </div>
         )}
 
@@ -5066,34 +5043,6 @@ function SourceControlInner(): React.JSX.Element {
           </div>
         )}
 
-        {/* Filter input for searching changed files across all sections */}
-        <div className="flex items-center gap-1.5 border-b border-border px-3 py-1.5">
-          <Search className="size-3.5 shrink-0 text-muted-foreground" />
-          <input
-            ref={filterInputRef}
-            type="text"
-            value={filterQuery}
-            onChange={(e) => setFilterQuery(e.target.value)}
-            placeholder={translate(
-              'auto.components.right.sidebar.SourceControl.c35baf2f1e',
-              'Filter files…'
-            )}
-            className="flex-1 min-w-0 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/60 outline-none"
-          />
-          {filterQuery && (
-            <button
-              type="button"
-              className="shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                setFilterQuery('')
-                filterInputRef.current?.focus()
-              }}
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
-        </div>
-
         <div
           className="relative flex flex-1 flex-col overflow-auto scrollbar-sleek pt-1"
           style={{ paddingBottom: selectedKeys.size > 0 ? 50 : undefined }}
@@ -5143,28 +5092,19 @@ function SourceControlInner(): React.JSX.Element {
             </div>
           )}
 
-          {scope === 'all' && showGenericEmptyState && !normalizedFilter ? (
+          {showGenericEmptyState && !normalizedFilter ? (
             <EmptyState
               heading="No changes on this branch"
-              supportingText={`This workspace is clean and this branch has no changes ahead of ${branchSummary.baseRef}`}
+              supportingText={`This workspace is clean and this branch has no changes ahead of ${branchSummary?.baseRef ?? 'base'}`}
             />
           ) : null}
 
-          {scope === 'uncommitted' && !hasUncommittedEntries && !normalizedFilter && (
+          {normalizedFilter && !hasFilteredUncommittedEntries && !hasFilteredBranchEntries && (
             <EmptyState
-              heading="No uncommitted changes"
-              supportingText="All changes have been committed"
+              heading="No matching files"
+              supportingText={`No changed files match "${filterQuery}"`}
             />
           )}
-
-          {normalizedFilter &&
-            !hasFilteredUncommittedEntries &&
-            (scope === 'uncommitted' || !hasFilteredBranchEntries) && (
-              <EmptyState
-                heading="No matching files"
-                supportingText={`No changed files match "${filterQuery}"`}
-              />
-            )}
 
           {/* Why: keep CommitArea mounted across normal source-control states.
               The split-button primary rotates through Push / Pull / Sync /
@@ -5196,7 +5136,7 @@ function SourceControlInner(): React.JSX.Element {
             </div>
           ) : null}
 
-          {shouldRenderCommitArea(scope, unresolvedConflicts.length, conflictOperation) &&
+          {shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation) &&
             (directCreatePrAction ? (
               <CreateHostedReviewComposer
                 provider={hostedReviewCreateProvider}
@@ -5248,7 +5188,7 @@ function SourceControlInner(): React.JSX.Element {
                 isCreatingPr={isCreatingPr || isCreatePrIntentInFlight}
                 isCreatePrIntentInFlight={isCreatePrIntentInFlight}
                 groupId={activeGroupId ?? activeWorktreeId}
-                showComposer={!(scope === 'all' && showGenericEmptyState)}
+                showComposer={!showGenericEmptyState}
                 aiEnabled={resolvedCommitMessageAi?.ok === true}
                 aiAgentConfigured={resolvedCommitMessageAi?.ok === true}
                 isGenerating={isGenerating}
@@ -5279,7 +5219,7 @@ function SourceControlInner(): React.JSX.Element {
               />
             ))}
 
-          {(scope === 'all' || scope === 'uncommitted') && hasFilteredUncommittedEntries && (
+          {hasFilteredUncommittedEntries && (
             <>
               {SECTION_ORDER.map((area) => {
                 const items = filteredGrouped[area]
@@ -5500,10 +5440,12 @@ function SourceControlInner(): React.JSX.Element {
             </>
           )}
 
-          {scope === 'all' &&
-          branchSummary &&
-          branchSummary.status !== 'ready' &&
-          branchSummary.status !== 'loading' ? (
+          {shouldShowSourceControlCompareUnavailableCard(
+            branchSummary,
+            hasUncommittedEntries,
+            branchEntries.length > 0,
+            Boolean(normalizedFilter)
+          ) && branchSummary ? (
             <CompareUnavailable
               summary={branchSummary}
               onChangeBaseRef={() => setBaseRefDialogOpen(true)}
@@ -5511,7 +5453,7 @@ function SourceControlInner(): React.JSX.Element {
             />
           ) : null}
 
-          {scope === 'all' && branchSummary?.status === 'ready' && hasFilteredBranchEntries && (
+          {branchSummary?.status === 'ready' && hasFilteredBranchEntries && (
             <div>
               <SectionHeader
                 label={translate(
@@ -6241,7 +6183,7 @@ export function CommitArea({
             aria-describedby={describedBy || undefined}
             // Why: reserve right padding so typed text does not slide under the
             // absolute-positioned Generate icon in the top-right corner.
-            className={`mt-0.5 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`mt-0.5 min-h-14 w-full resize-none rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 ${
               showGenerate ? 'pr-8' : ''
             }`}
           />
@@ -6279,25 +6221,46 @@ export function CommitArea({
                 </TooltipContent>
               </Tooltip>
             ) : (
-              <button
-                type="button"
-                disabled={isGenerateDisabled}
-                onClick={() => onGenerate()}
-                title={
-                  generateDisabledReason ??
-                  translate(
-                    'auto.components.right.sidebar.SourceControl.461575b9bc',
-                    'Generate commit message with AI'
-                  )
-                }
-                aria-label={translate(
-                  'auto.components.right.sidebar.SourceControl.461575b9bc',
-                  'Generate commit message with AI'
-                )}
-                className="absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-              >
-                <Sparkles className="size-3.5" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-disabled={isGenerateDisabled}
+                    onClick={(event) => {
+                      if (isGenerateDisabled) {
+                        event.preventDefault()
+                        return
+                      }
+                      onGenerate()
+                    }}
+                    title={
+                      generateDisabledReason ??
+                      translate(
+                        'auto.components.right.sidebar.SourceControl.b16b8f0e4b',
+                        'ai commit msg'
+                      )
+                    }
+                    aria-label={translate(
+                      'auto.components.right.sidebar.SourceControl.461575b9bc',
+                      'Generate commit message with AI'
+                    )}
+                    className={cn(
+                      'absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                      isGenerateDisabled &&
+                        'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground'
+                    )}
+                  >
+                    <Sparkles className="size-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left" sideOffset={6}>
+                  {generateDisabledReason ??
+                    translate(
+                      'auto.components.right.sidebar.SourceControl.b16b8f0e4b',
+                      'ai commit msg'
+                    )}
+                </TooltipContent>
+              </Tooltip>
             ))}
         </div>
       ) : null}
@@ -6317,6 +6280,7 @@ export function CommitArea({
               <span className="flex flex-1">
                 <Button
                   type="button"
+                  variant="outline"
                   size="xs"
                   disabled={primaryAction.disabled}
                   onClick={() => onPrimaryAction()}
@@ -6343,9 +6307,10 @@ export function CommitArea({
                   <DropdownMenuTrigger asChild>
                     <Button
                       type="button"
+                      variant="outline"
                       size="xs"
                       className={cn(
-                        'rounded-l-none border-l border-primary-foreground/20 px-1.5 shrink-0',
+                        'rounded-l-none border-l border-border px-1.5 shrink-0',
                         // Why: mirror the primary's disabled dimming so the split
                         // button reads as one unit when Commit is unavailable. The
                         // chevron itself stays clickable — its dropdown exposes
@@ -6501,7 +6466,9 @@ export function CommitArea({
           </DialogContent>
         </Dialog>
       )}
-      {remoteActionError && (
+      {remoteActionError && isPullPolicyRemoteActionError(remoteActionError) ? (
+        <PullPolicyRemoteActionNotice id="commit-area-remote-error" />
+      ) : remoteActionError ? (
         <p
           id="commit-area-remote-error"
           role="alert"
@@ -6510,7 +6477,7 @@ export function CommitArea({
         >
           {remoteActionError}
         </p>
-      )}
+      ) : null}
       {createPrIntentNotice && (
         <div
           id="commit-area-create-pr-intent"
@@ -7001,14 +6968,6 @@ function DiffCommentsInlineList({
   )
 }
 
-function conflictAbortButtonVariant(
-  conflictOperation: GitConflictOperation
-): 'outline' | 'destructive' {
-  // Why: aborting a rebase is the escape hatch for this state, so it should
-  // match the quiet outline conflict-review action instead of reading as red.
-  return conflictOperation === 'rebase' ? 'outline' : 'destructive'
-}
-
 export function ConflictSummaryCard({
   conflictOperation,
   unresolvedCount,
@@ -7084,7 +7043,9 @@ export function ConflictSummaryCard({
         {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
           <Button
             type="button"
-            variant={conflictAbortButtonVariant(conflictOperation)}
+            // Why: abort is the escape hatch for this state, so match the quiet
+            // outline conflict-review action instead of reading as destructive.
+            variant="outline"
             size="sm"
             className="mt-1.5 h-7 w-full text-xs"
             disabled={isResolvingWithAI || isAbortingOperation}
@@ -7135,7 +7096,9 @@ export function OperationBanner({
       {(conflictOperation === 'merge' || conflictOperation === 'rebase') && onAbortOperation ? (
         <Button
           type="button"
-          variant={conflictAbortButtonVariant(conflictOperation)}
+          // Why: abort is the escape hatch for this state, so match the quiet
+          // outline conflict-review action instead of reading as destructive.
+          variant="outline"
           size="sm"
           className="mt-2 h-7 w-full text-xs"
           disabled={isAbortingOperation}

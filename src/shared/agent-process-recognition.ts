@@ -1,7 +1,7 @@
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './types'
-import { isClaudeHeadlessOneShotCommand } from './claude-headless-command'
+import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
@@ -288,7 +288,6 @@ export function recognizeAgentProcess(
   }
   return { agent, processName: normalized }
 }
-
 export function recognizeAgentProcessFromCommandLine(
   commandLine: string | null | undefined
 ): RecognizedAgentProcess | null {
@@ -297,12 +296,10 @@ export function recognizeAgentProcessFromCommandLine(
   }
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
-  const directRecognition = recognizeAgentProcess(tokens[0])
-  // Why: Claude Code plugin hooks spawn `claude --print`/JSON one-shots for
-  // internal analysis; those should not surface as long-running agent sessions.
-  if (directRecognition?.agent === 'claude' && isClaudeHeadlessOneShotCommand(tokens)) {
-    return null
-  }
+  const directRecognition = filterHeadlessOneShotAgentCommand(
+    recognizeAgentProcess(tokens[0]),
+    tokens
+  )
   if (directRecognition) {
     return directRecognition
   }
@@ -310,12 +307,11 @@ export function recognizeAgentProcessFromCommandLine(
   if (!entrypoint) {
     return null
   }
-  if (isPythonProcessName(firstNormalized)) {
-    return recognizePythonEntrypoint(tokens, entrypoint)
-  }
-  return recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint)
+  const entrypointRecognition = isPythonProcessName(firstNormalized)
+    ? recognizePythonEntrypoint(tokens, entrypoint)
+    : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
+  return filterHeadlessOneShotAgentCommand(entrypointRecognition, tokens)
 }
-
 export function isAgentForegroundWrapperProcess(processName: string | null | undefined): boolean {
   const normalized = normalizeProcessName(processName)
   return (

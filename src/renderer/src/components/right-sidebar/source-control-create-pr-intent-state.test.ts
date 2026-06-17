@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-intent-state'
 import type { PrimaryAction } from './source-control-primary-action-types'
 
-const createPrIntentAction: PrimaryAction = {
-  kind: 'create_pr_intent',
+const disabledCreatePrAction: PrimaryAction = {
+  kind: 'create_pr',
   label: 'Create PR',
-  title: 'Preparing branch for review…',
+  title: 'Publish commits before creating a pull request.',
   disabled: true
 }
 
-const createPrAction: PrimaryAction = {
+const enabledCreatePrAction: PrimaryAction = {
   kind: 'create_pr',
   label: 'Create PR',
   title: 'Create a pull request for this branch',
@@ -17,36 +17,27 @@ const createPrAction: PrimaryAction = {
 }
 
 describe('resolveVisibleCreatePrHeaderAction', () => {
-  it('hides the header when the hosted-review composer owns direct Create PR', () => {
+  it('returns null when no header action is available', () => {
     expect(
       resolveVisibleCreatePrHeaderAction({
-        createPrHeaderAction: createPrAction,
-        directCreatePrAction: createPrAction,
-        isCreatePrIntentInFlight: false,
-        primaryActionKind: 'create_pr'
+        createPrHeaderAction: null
       })
     ).toBeNull()
   })
 
-  it('hides the header while Create PR intent is in flight on the commit-area primary', () => {
+  it('keeps a disabled Create PR header visible as a stable toolbar anchor', () => {
     expect(
       resolveVisibleCreatePrHeaderAction({
-        createPrHeaderAction: createPrIntentAction,
-        directCreatePrAction: null,
-        isCreatePrIntentInFlight: true,
-        primaryActionKind: 'create_pr_intent'
+        createPrHeaderAction: disabledCreatePrAction
       })
-    ).toBeNull()
+    ).toEqual(disabledCreatePrAction)
   })
 
-  it('keeps the header visible when intent is in flight but the primary is a prerequisite action', () => {
+  it('keeps an enabled Create PR header visible even when the body composer is open', () => {
     expect(
       resolveVisibleCreatePrHeaderAction({
-        createPrHeaderAction: createPrIntentAction,
-        directCreatePrAction: null,
-        isCreatePrIntentInFlight: true,
-        primaryActionKind: 'publish'
+        createPrHeaderAction: enabledCreatePrAction
       })
-    ).toEqual(createPrIntentAction)
+    ).toEqual(enabledCreatePrAction)
   })
 })

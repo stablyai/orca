@@ -146,7 +146,7 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /细绳/g, replacement: '字符串', whenEnIncludes: 'string' },
     { pattern: /在职的/g, replacement: '处理中', whenEnIncludes: 'Working' },
     { pattern: /编曲/g, replacement: '编排', whenEnIncludes: 'Orchestration' },
-    { pattern: /复印门票/g, replacement: '复制工单', whenEnIncludes: 'Copy ticket' },
+    { pattern: /复制票据/g, replacement: '复制参考 ID', whenEnIncludes: 'Copy reference ID' },
     { pattern: /达尔文/g, replacement: 'darwin', whenEnIncludes: 'darwin' },
     { pattern: /外貌/g, replacement: '外观', whenEnIncludes: 'Appearance' },
     { pattern: /一般的/g, replacement: '通用', whenEnIncludes: 'General' },

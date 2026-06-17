@@ -278,4 +278,49 @@ describe('resolvePrimaryAction Create PR intent', () => {
       disabled: false
     })
   })
+
+  it('returns a disabled loading Create PR header while eligibility is still fetching', () => {
+    expect(
+      resolveCreatePrHeaderAction(
+        inputs({
+          hostedReviewCreation: {
+            provider: 'github',
+            review: null,
+            canCreate: false,
+            blockedReason: null,
+            nextAction: null
+          },
+          isHostedReviewCreationLoading: true
+        })
+      )
+    ).toEqual({
+      kind: 'create_pr',
+      label: 'Create PR',
+      title: 'Checking whether this branch can create a pull request…',
+      disabled: true
+    })
+  })
+
+  it('returns a disabled Create PR header when the branch has nothing to publish yet', () => {
+    expect(
+      resolveCreatePrHeaderAction(
+        inputs({
+          upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+          branchCommitsAhead: 0,
+          hostedReviewCreation: {
+            provider: 'github',
+            review: null,
+            canCreate: false,
+            blockedReason: 'no_upstream',
+            nextAction: 'publish'
+          }
+        })
+      )
+    ).toEqual({
+      kind: 'create_pr',
+      label: 'Create PR',
+      title: 'Publish commits before creating a pull request.',
+      disabled: true
+    })
+  })
 })

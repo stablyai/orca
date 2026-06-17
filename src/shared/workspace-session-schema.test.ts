@@ -137,7 +137,7 @@ describe('parseWorkspaceSession', () => {
             { id: '', prompt: 'ignore me', observedAt: 7 }
           ],
           resumeAvailable: false,
-          origin: 'quit'
+          origin: 'live'
         }
       }
     })
@@ -147,7 +147,7 @@ describe('parseWorkspaceSession', () => {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.resumeAvailable).toBe(
         false
       )
-      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('quit')
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('live')
       expect(
         result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.promptInteractions
       ).toEqual([

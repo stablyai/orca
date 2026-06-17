@@ -410,6 +410,48 @@ describe('fetchClaudeRateLimits', () => {
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
+  it('explains auth failures when a live Claude terminal owns managed refresh', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: { CLAUDE_CONFIG_DIR: configDir },
+      stripAuthEnv: false,
+      managedRefreshDeferredByLivePty: true,
+      provenance: 'managed:account-1'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'stale-oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'authentication_error',
+            message: 'Invalid OAuth token.'
+          }
+        }),
+        { status: 401 }
+      )
+    )
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error:
+        'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.'
+    })
+
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
   it('does not start the PTY fallback when disabled for background fetches', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {

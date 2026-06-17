@@ -189,12 +189,10 @@ describe('registerAppMenu', () => {
     expect(template.find((item) => item.label === 'Orca')).toBeUndefined()
 
     const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
+    expect(fileLabels).not.toContain(`Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`)
+    expect(fileLabels[0]).toBe(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
     expect(fileLabels).toEqual(
-      expect.arrayContaining([
-        `Export as PDF...\t${isMac ? '⌘⇧E' : 'Ctrl+Shift+E'}`,
-        `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`,
-        'Exit'
-      ])
+      expect.arrayContaining([`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`, 'Exit'])
     )
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
@@ -218,10 +216,8 @@ describe('registerAppMenu', () => {
       expect.arrayContaining(['Check for Updates...', `Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`])
     )
     // Why: on macOS File should NOT duplicate Settings/Exit — those live in
-    // the system app menu, so only Export belongs under File.
-    const fileLabels = getSubmenu(template, 'File').map((item) => item.label)
-    expect(fileLabels).not.toContain(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
-    expect(fileLabels).not.toContain('Exit')
+    // the system app menu. Without global Export, there is no File item left.
+    expect(template.find((item) => item.label === 'File')).toBeUndefined()
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual([
       'Report Crash...',

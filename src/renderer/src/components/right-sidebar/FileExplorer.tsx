@@ -46,6 +46,7 @@ import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
 import { translate } from '@/i18n/i18n'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 import type { RightSidebarExplorerView } from '../../../../shared/types'
 
 function FileExplorerFiles(): React.JSX.Element {
@@ -175,6 +176,19 @@ function FileExplorerFiles(): React.JSX.Element {
   const handleClearNameFilter = useCallback(() => {
     setNameFilterQuery('')
   }, [setNameFilterQuery])
+  const handleExplorerBackgroundContextMenuCapture = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement
+      if (target.closest('[data-slot="context-menu-trigger"]')) {
+        return
+      }
+      event.preventDefault()
+      window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+      setBgMenuPoint({ x: event.clientX, y: event.clientY })
+      setBgMenuOpen(true)
+    },
+    []
+  )
 
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -302,6 +316,19 @@ function FileExplorerFiles(): React.JSX.Element {
     scrollRef,
     refreshDir
   })
+  const handleExplorerBackgroundDoubleClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!worktreePath || inlineInput) {
+        return
+      }
+      const target = event.target as HTMLElement
+      if (target.closest('[data-slot="context-menu-trigger"]')) {
+        return
+      }
+      startNew('file', worktreePath, 0)
+    },
+    [inlineInput, startNew, worktreePath]
+  )
 
   useFileExplorerWatch({
     worktreePath: visibleFilesWorktreePath,
@@ -594,7 +621,9 @@ function FileExplorerFiles(): React.JSX.Element {
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <ScrollArea
             className={cn(
-              'absolute inset-0 min-h-0',
+              // Why: Radix ScrollArea.Root hard-sets inline `position: relative`,
+              // defeating `absolute`; size by height so the viewport can overflow.
+              'h-full min-h-0',
               explorerView !== 'files' && 'pointer-events-none invisible',
               isRootDragOver &&
                 explorerView === 'files' &&
@@ -616,24 +645,9 @@ function FileExplorerFiles(): React.JSX.Element {
               stopDragEdgeScroll()
               setDropTargetDir(null)
             }}
-            onContextMenu={(e) => {
-              const target = e.target as HTMLElement
-              if (target.closest('[data-slot="context-menu-trigger"]')) {
-                return
-              }
-              e.preventDefault()
-              setBgMenuPoint({ x: e.clientX, y: e.clientY })
-              setBgMenuOpen(true)
-            }}
-            onDoubleClick={(e) => {
-              if (!worktreePath || inlineInput) {
-                return
-              }
-              const target = e.target as HTMLElement
-              if (target.closest('[data-slot="context-menu-trigger"]')) {
-                return
-              }
-              startNew('file', worktreePath, 0)
+            viewportProps={{
+              onContextMenuCapture: handleExplorerBackgroundContextMenuCapture,
+              onDoubleClick: handleExplorerBackgroundDoubleClick
             }}
           >
             {!showTree && (

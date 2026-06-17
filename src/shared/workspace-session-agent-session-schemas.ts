@@ -50,7 +50,7 @@ const sleepingAgentSessionRecordSchema = z.object({
   promptInteractions: promptInteractionHistorySchema,
   connectionId: z.string().nullable().optional(),
   resumeAvailable: z.boolean().optional(),
-  origin: z.enum(['worktree-sleep', 'quit']).optional()
+  origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()
 })
 
 export const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {

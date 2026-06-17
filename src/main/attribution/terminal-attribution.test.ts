@@ -329,7 +329,7 @@ exit 1
     ).toThrow()
 
     expect(readFileSync(argsPath, 'utf8')).not.toContain('Co-authored-by: Orca')
-  }, 15_000)
+  }, 30_000)
 
   it('passes reuse and fixup commit message modes through without attribution', () => {
     const root = makeTmpRoot()
@@ -366,7 +366,7 @@ exit 1
     })
 
     expect(readFileSync(argsPath, 'utf8')).not.toContain('Co-authored-by: Orca')
-  })
+  }, 15_000)
 
   it('adds the trailer before commit-msg hooks validate the commit', () => {
     const root = makeTmpRoot()

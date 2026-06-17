@@ -45,6 +45,7 @@ export type PtyConnectionDeps = {
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
+  onShowSessionRestoredBanner: (paneId: number) => void
   // Why: the renderer dispatches two notification sources — BEL from the PTY
   // byte stream and agent-task-complete on the working→idle title transition.
   // shared/types.ts keeps a wider NotificationEventSource union because the

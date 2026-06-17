@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -15,24 +14,17 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { AgentActivityDisplayMode } from '../../../../shared/types'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
 import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
-import {
-  AGENT_ACTIVITY_DISPLAY_OPTIONS,
-  CARD_LAYOUT_OPTIONS,
-  GROUP_BY_OPTIONS,
-  PROJECT_ORDER_OPTIONS,
-  PROPERTY_OPTIONS,
-  SORT_OPTIONS
-} from './sidebar-workspace-option-items'
+import { PROJECT_ORDER_OPTIONS, SORT_OPTIONS } from './sidebar-workspace-option-items'
+import { WorktreeCardDisplayMenuSection } from './WorktreeCardDisplayMenuSection'
 import { translate } from '@/i18n/i18n'
+import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 
 type SidebarWorkspaceOptionsMenuProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -47,15 +39,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const repos = useAppStore((s) => s.repos)
-  const worktreeCardProperties = useAppStore((s) => s.worktreeCardProperties)
-  const toggleWorktreeCardProperty = useAppStore((s) => s.toggleWorktreeCardProperty)
-  const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
   const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
-  const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
-  const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
@@ -101,12 +87,6 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const projectOrderLabel =
     PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
   const hostVisibilityLabel = getSidebarHostVisibilityLabel(visibleWorkspaceHostIds, hostOptions)
-  const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
-  const cardLayoutLabel =
-    CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
-  const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>
-    worktreeCardProperties.includes(opt.id)
-  ).length
 
   return (
     <DropdownMenu modal={false} open={open} onOpenChange={handleOpenChange}>
@@ -182,28 +162,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.dc0bb670bc', 'Group by')}
         </DropdownMenuLabel>
         <div className="px-2 pt-0.5 pb-1">
-          <ToggleGroup
-            type="single"
-            value={groupBy}
-            onValueChange={(v) => {
-              if (v) {
-                setGroupBy(v as typeof groupBy)
-              }
-            }}
-            variant="outline"
-            size="sm"
-            className="h-6 w-full justify-stretch"
-          >
-            {GROUP_BY_OPTIONS.map((opt) => (
-              <ToggleGroupItem
-                key={opt.id}
-                value={opt.id}
-                className="h-6 grow basis-0 px-1 text-[10px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
-              >
-                {opt.label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+          <SidebarGroupByToggle groupBy={groupBy} setGroupBy={setGroupBy} />
         </div>
 
         <DropdownMenuSeparator />
@@ -301,107 +260,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           </DropdownMenuSub>
         )}
 
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <span className="flex flex-1 items-center justify-between">
-              <span>
-                {translate(
-                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.320b675c9a',
-                  'Card layout'
-                )}
-              </span>
-              <span className="text-[11px] font-medium text-muted-foreground">
-                {cardLayoutLabel}
-              </span>
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent
-            className="w-44"
-            data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-          >
-            <DropdownMenuRadioGroup
-              value={cardLayout}
-              onValueChange={(value) => {
-                void updateSettings({
-                  compactWorktreeCards: value === 'compact'
-                })
-              }}
-            >
-              {CARD_LAYOUT_OPTIONS.map((opt) => (
-                <DropdownMenuRadioItem
-                  key={opt.id}
-                  value={opt.id}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  {opt.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <span className="flex flex-1 items-center justify-between">
-              <span>
-                {translate(
-                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.ba87080fb7',
-                  'Show properties'
-                )}
-              </span>
-              {cardLayout === 'compact' ? (
-                <span className="text-[11px] font-medium text-muted-foreground">
-                  {translate(
-                    'auto.components.sidebar.SidebarWorkspaceOptionsMenu.3d4b9c4997',
-                    'Hover'
-                  )}
-                </span>
-              ) : visiblePropertyCount > 0 ? (
-                <span className="text-[11px] font-medium text-muted-foreground">
-                  {visiblePropertyCount}
-                </span>
-              ) : null}
-            </span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent
-            className="w-48"
-            data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-          >
-            {PROPERTY_OPTIONS.map((opt) => (
-              <DropdownMenuCheckboxItem
-                key={opt.id}
-                checked={worktreeCardProperties.includes(opt.id)}
-                onCheckedChange={() => toggleWorktreeCardProperty(opt.id)}
-                onSelect={(e) => e.preventDefault()}
-              >
-                {opt.label}
-              </DropdownMenuCheckboxItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
-              {translate(
-                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.95c9754653',
-                'Agent activity layout'
-              )}
-            </DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={agentActivityDisplayMode}
-              onValueChange={(value) =>
-                setAgentActivityDisplayMode(value as AgentActivityDisplayMode)
-              }
-            >
-              {AGENT_ACTIVITY_DISPLAY_OPTIONS.map((opt) => (
-                <DropdownMenuRadioItem
-                  key={opt.id}
-                  value={opt.id}
-                  onSelect={(e) => e.preventDefault()}
-                >
-                  {opt.label}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        <WorktreeCardDisplayMenuSection preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
 
         <DropdownMenuSeparator />
         <SidebarWorkspaceFilterSection />

@@ -213,9 +213,8 @@ async function gitPullWithArgs(
 }
 
 export async function gitPull(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-  // Why: plain `git pull` uses the user's configured pull strategy (merge by
-  // default) so diverged branches reconcile instead of erroring out. Conflicts
-  // surface through the existing conflict-resolution flow.
+  // Why: plain `git pull` honors the user's configured merge/rebase/ff policy.
+  // If no policy exists, Git's policy error is normalized with setup guidance.
   await gitPullWithArgs(worktreePath, [], pushTarget)
 }
 
