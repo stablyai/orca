@@ -11,6 +11,7 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  titleAgentNameLabel,
   titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
@@ -364,41 +365,17 @@ export function getAgentLabel(title: string): string | null {
   if (isPiAgentTitle(title)) {
     return 'Pi'
   }
-  // Why: Codex/OpenCode/Aider can also use braille spinner prefixes while
+  // Why: Codex/OpenCode/Aider/Cursor can also use braille spinner prefixes while
   // working. Prefer explicit name matches before Claude's generic spinner
   // heuristic so mixed-agent hovercards stay truthful. Token-match (not
   // substring) so cwd/worktree titles like "opencode-blinker" don't mint a
   // false agent identity.
-  if (titleHasAgentName(title, 'codex')) {
-    return 'Codex'
+  const tokenAgentLabel = titleAgentNameLabel(title)
+  if (tokenAgentLabel) {
+    return tokenAgentLabel
   }
-  if (titleHasAgentName(title, 'openclaude')) {
-    return 'OpenClaude'
-  }
-  if (titleHasAgentName(title, 'copilot')) {
-    return 'GitHub Copilot'
-  }
-  if (titleHasAgentName(title, 'grok')) {
-    return 'Grok'
-  }
-  if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
+  if (AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
-  }
-  if (titleHasAgentName(title, 'opencode')) {
-    return 'OpenCode'
-  }
-  if (titleHasAgentName(title, 'aider')) {
-    return 'Aider'
-  }
-  // Why: the cursor-agent native title is the literal string "Cursor Agent"
-  // (verified against the 2026.04.17 release) — Orca synthesizes the same
-  // label from hook events so the braille-spinner + agent-name path lights
-  // up working/permission/idle transitions in the renderer. Match before
-  // `isClaudeAgent` because Claude's generic braille heuristic would
-  // otherwise claim every "⠋ Cursor Agent" frame as Claude. Token-match so a
-  // cwd like "~/cursor-rules" can't masquerade as a Cursor agent.
-  if (titleHasAgentName(title, 'cursor')) {
-    return 'Cursor'
   }
   // Why: synthesized "⠋ Droid" working title needs to be matched before Claude's braille heuristic.
   // Token matching avoids labeling ordinary Android terminal titles as Droid.

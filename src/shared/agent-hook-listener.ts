@@ -1807,6 +1807,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       return eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
+    case 'devin':
+      return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'gemini':
       return eventName === 'BeforeAgent'
     case 'antigravity':
@@ -1893,6 +1895,8 @@ function extractToolFields(
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)
+    case 'devin':
+      return extractClaudeToolFields(eventName, hookPayload)
     case 'gemini':
       return extractGeminiToolFields(eventName, hookPayload)
     case 'antigravity':
@@ -1963,6 +1967,51 @@ function normalizeClaudeEvent(
       toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage,
       interrupted
+    })
+  )
+}
+
+function normalizeDevinEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  const stateName =
+    eventName === 'SessionStart' ||
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PostToolUseFailure'
+      ? 'working'
+      : eventName === 'PermissionRequest'
+        ? 'waiting'
+        : eventName === 'Stop' || eventName === 'SessionEnd'
+          ? 'done'
+          : null
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('devin', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('devin', eventName) }
+  )
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('devin', eventName)
+      }),
+      agentType: 'devin',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
 }
@@ -2821,6 +2870,9 @@ export function normalizeHookPayload(
     case 'codex':
       payload = normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'devin':
+      payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
     case 'gemini':
       payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
@@ -2945,6 +2997,7 @@ export function normalizeHookPayload(
 export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> = Object.freeze({
   '/hook/claude': 'claude',
   '/hook/codex': 'codex',
+  '/hook/devin': 'devin',
   '/hook/gemini': 'gemini',
   '/hook/antigravity': 'antigravity',
   '/hook/amp': 'amp',

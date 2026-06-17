@@ -7,6 +7,7 @@ export const AGENT_HOOK_TARGETS = [
   'claude',
   'openclaude',
   'codex',
+  'devin',
   'gemini',
   'antigravity',
   'amp',

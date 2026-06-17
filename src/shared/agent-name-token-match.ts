@@ -17,6 +17,7 @@ export const AGENT_NAMES = [
   'claude',
   'openclaude',
   'codex',
+  'devin',
   'copilot',
   'cursor',
   'gemini',
@@ -40,6 +41,18 @@ function buildAgentNameRe(name: string): RegExp {
 
 const AGENT_NAME_RE_BY_NAME = new Map(AGENT_NAMES.map((name) => [name, buildAgentNameRe(name)]))
 
+const AGENT_LABEL_BY_NAME = {
+  codex: 'Codex',
+  devin: 'Devin',
+  openclaude: 'OpenClaude',
+  copilot: 'GitHub Copilot',
+  grok: 'Grok',
+  antigravity: 'Antigravity',
+  opencode: 'OpenCode',
+  aider: 'Aider',
+  cursor: 'Cursor'
+} as const
+
 const ANY_LEGACY_AGENT_NAME_RE = new RegExp(
   AGENT_NAMES.map(
     (name) => `(?<![\\w./\\\\-])${name}(?:${WINDOWS_EXECUTABLE_SUFFIX_RE})?(?![\\w./\\\\-])`
@@ -50,6 +63,15 @@ const ANY_LEGACY_AGENT_NAME_RE = new RegExp(
 /** True when `title` contains `name` (a member of AGENT_NAMES) as a whole token. */
 export function titleHasAgentName(title: string, name: string): boolean {
   return AGENT_NAME_RE_BY_NAME.get(name)?.test(title) ?? false
+}
+
+export function titleAgentNameLabel(title: string): string | null {
+  for (const [name, label] of Object.entries(AGENT_LABEL_BY_NAME)) {
+    if (titleHasAgentName(title, name)) {
+      return label
+    }
+  }
+  return null
 }
 
 /** True when `title` contains any AGENT_NAMES entry as a whole token. */

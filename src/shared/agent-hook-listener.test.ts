@@ -84,6 +84,7 @@ describe('shared agent-hook-listener', () => {
 
   it('routes pathnames to a known source or null', () => {
     expect(resolveHookSource('/hook/claude')).toBe('claude')
+    expect(resolveHookSource('/hook/devin')).toBe('devin')
     expect(resolveHookSource('/hook/cursor')).toBe('cursor')
     expect(resolveHookSource('/hook/antigravity')).toBe('antigravity')
     expect(resolveHookSource('/hook/grok')).toBe('grok')
@@ -124,6 +125,34 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('hello')
     expect(event!.payload.agentType).toBe('claude')
+  })
+
+  it('normalizes Devin hook bodies with status and provider session metadata', () => {
+    const event = normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          prompt: 'approve this command',
+          session_id: 'devin-session',
+          tool_name: 'Bash',
+          tool_input: { command: 'pnpm test' }
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'waiting',
+      prompt: 'approve this command',
+      agentType: 'devin',
+      toolName: 'Bash',
+      toolInput: 'pnpm test'
+    })
+    expect(event?.providerSession).toEqual({ key: 'session_id', id: 'devin-session' })
   })
 
   it('normalizes Gemini BeforeTool to working with tool fields', () => {

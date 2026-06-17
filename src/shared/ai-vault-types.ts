@@ -4,6 +4,7 @@ import type { TuiAgent } from './types'
 export const AI_VAULT_AGENTS = [
   'claude',
   'codex',
+  'devin',
   'hermes',
   'pi',
   'cursor',
@@ -24,6 +25,7 @@ export type AiVaultGroup = 'folder' | 'agent'
 export const AI_VAULT_AGENT_LABELS = {
   claude: 'Claude',
   codex: 'Codex',
+  devin: 'Devin',
   hermes: 'Hermes',
   pi: 'Pi',
   cursor: 'Cursor',
@@ -141,6 +143,7 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --resume=${sessionArg}`
     case 'claude':
     case 'cursor':
+    case 'devin':
     case 'gemini':
     case 'grok':
     case 'hermes':

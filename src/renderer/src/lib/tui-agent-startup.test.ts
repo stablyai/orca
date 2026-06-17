@@ -178,7 +178,7 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'devin',
-      launchCommand: "devin '--permission-mode' 'bypass'",
+      launchCommand: "devin '--permission-mode' 'dangerous'",
       expectedProcess: 'devin',
       followupPrompt: 'Trace the failing test'
     })

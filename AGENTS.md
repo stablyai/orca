@@ -18,6 +18,10 @@ Never add a `max-lines` disable (`eslint-disable max-lines`, `oxlint-disable max
 
 Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuff` for files, folders, or modules. They carry zero info and tend to become dumping grounds. Name files after what they _actually_ contain — prefer the concrete domain concept (e.g. `tab-group-state.ts`, `terminal-orphan-cleanup.ts`) over the generic role (`tabs-helpers.ts`, `terminal-utils.ts`). If you find yourself reaching for `helpers`, the file probably has more than one responsibility and should be split, or there's a better name hiding in the code that describes what the functions operate on.
 
+## Typecheck Configuration
+
+If a new main-process hook service is imported by CLI-reachable managed-hook controls, add its source file to `config/tsconfig.cli.json`; that config has an explicit include list and will not pick up new `src/main/**` files automatically.
+
 ## Worktree Safety
 
 Always use the primary working directory (the worktree) for all file reads and edits. Never follow absolute paths from subagent results that point to the main repo.

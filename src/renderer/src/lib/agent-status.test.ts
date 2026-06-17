@@ -94,6 +94,7 @@ describe('detectAgentStatusFromTitle', () => {
 
   it('detects "waiting" keyword with agent name', () => {
     expect(detectAgentStatusFromTitle('gemini waiting for input')).toBe('permission')
+    expect(detectAgentStatusFromTitle('Devin - action required')).toBe('permission')
   })
 
   it('detects "ready" keyword as idle', () => {
@@ -154,6 +155,11 @@ describe('detectAgentStatusFromTitle', () => {
 
   it('returns idle for bare agent name "codex"', () => {
     expect(detectAgentStatusFromTitle('codex')).toBe('idle')
+  })
+
+  it('classifies Devin title tokens', () => {
+    expect(detectAgentStatusFromTitle('Devin ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Devin working')).toBe('working')
   })
 
   it('returns idle for bare agent name "aider"', () => {
@@ -421,6 +427,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Codex is thinking')).toBe('Codex')
+    expect(getAgentLabel('Devin ready')).toBe('Devin')
     expect(getAgentLabel('OpenClaude running')).toBe('OpenClaude')
     expect(getAgentLabel('⠋ OpenClaude')).toBe('OpenClaude')
     expect(getAgentLabel('Antigravity running')).toBe('Antigravity')
@@ -454,6 +461,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('opencode-blinker')).toBeNull()
     expect(getAgentLabel('claude-scratch')).toBeNull()
     expect(getAgentLabel('~/projects/codex-scratch')).toBeNull()
+    expect(getAgentLabel('devin-scratch')).toBeNull()
     expect(getAgentLabel('~/cursor-rules')).toBeNull()
     expect(getAgentLabel('grok-fixtures')).toBeNull()
     expect(getAgentLabel('aider-config')).toBeNull()
@@ -464,6 +472,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('claude.exe')).toBe('Claude Code')
     expect(getAgentLabel('openclaude.cmd')).toBe('OpenClaude')
     expect(getAgentLabel('⠋ Codex')).toBe('Codex')
+    expect(getAgentLabel('Devin: Greeting')).toBe('Devin')
     expect(getAgentLabel('Aider idle')).toBe('Aider')
   })
 })

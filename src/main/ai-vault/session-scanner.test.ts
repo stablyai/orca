@@ -561,7 +561,7 @@ describe('scanAiVaultSessions', () => {
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
-      new Set(AI_VAULT_AGENTS)
+      new Set(AI_VAULT_AGENTS.filter((agent) => agent !== 'devin'))
     )
 
     const commandByAgent = new Map(
@@ -597,6 +597,17 @@ describe('scanAiVaultSessions', () => {
 })
 
 describe('buildAiVaultResumeCommand', () => {
+  it('builds Devin resume commands for session history drag/drop launches', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'devin',
+        sessionId: 'devin-session',
+        cwd: '/repo/app',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/repo/app' && devin --resume 'devin-session'")
+  })
+
   it('wraps Windows cwd changes in cmd so PowerShell and cmd launch the same resume command', () => {
     expect(
       buildAiVaultResumeCommand({

@@ -14,6 +14,7 @@ import {
 } from '../agent-hooks/migration-unsupported-pty-state'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
+import { devinHookService } from '../devin/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
@@ -59,6 +60,7 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
   ipcMain.removeHandler('agentHooks:claudeStatus')
   ipcMain.removeHandler('agentHooks:openClaudeStatus')
   ipcMain.removeHandler('agentHooks:codexStatus')
+  ipcMain.removeHandler('agentHooks:devinStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
   ipcMain.removeHandler('agentHooks:antigravityStatus')
   ipcMain.removeHandler('agentHooks:ampStatus')
@@ -147,6 +149,19 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
     } catch (err) {
       return {
         agent: 'codex',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:devinStatus', (): AgentHookInstallStatus => {
+    try {
+      return devinHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'devin',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

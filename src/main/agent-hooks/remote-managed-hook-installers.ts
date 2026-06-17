@@ -3,6 +3,7 @@ import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
+import { devinHookService } from '../devin/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
@@ -20,6 +21,7 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['claude', (sftp, remoteHome) => claudeHookService.installRemote(sftp, remoteHome)],
   ['openclaude', (sftp, remoteHome) => openClaudeHookService.installRemote(sftp, remoteHome)],
   ['codex', (sftp, remoteHome) => codexHookService.installRemote(sftp, remoteHome)],
+  ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
   ['amp', (sftp, remoteHome) => ampHookService.installRemote(sftp, remoteHome)],

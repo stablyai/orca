@@ -53,6 +53,9 @@ vi.mock('../openclaude/hook-service', () => ({
 vi.mock('../codex/hook-service', () => ({
   codexHookService: { getStatus: vi.fn(() => ({ agent: 'codex', state: 'absent' })) }
 }))
+vi.mock('../devin/hook-service', () => ({
+  devinHookService: { getStatus: vi.fn(() => ({ agent: 'devin', state: 'absent' })) }
+}))
 vi.mock('../gemini/hook-service', () => ({
   geminiHookService: { getStatus: vi.fn(() => ({ agent: 'gemini', state: 'absent' })) }
 }))
@@ -176,6 +179,17 @@ describe('agentStatus:getSnapshot IPC', () => {
         }
       }
     ])
+  })
+})
+
+describe('agentHooks:devinStatus IPC', () => {
+  it('returns Devin hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:devinStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'devin', state: 'absent' })
   })
 })
 

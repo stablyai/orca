@@ -79,7 +79,8 @@ describe('getDefaultSettings', () => {
       gemini: '--yolo',
       cursor: '--yolo',
       copilot: '--yolo',
-      grok: '--permission-mode bypassPermissions'
+      grok: '--permission-mode bypassPermissions',
+      devin: '--permission-mode dangerous'
     })
     expect(settings.agentDefaultArgs).not.toHaveProperty('opencode')
     expect(settings.agentDefaultArgs).not.toHaveProperty('kilo')
