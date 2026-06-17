@@ -1384,13 +1384,24 @@
   animation-timing-function: cubic-bezier(0.7, 0, 0.84, 0);
 }
 
+/* Why: this board is attached to the worktree sidebar, not floating above it;
+   the generic Sheet elevation casts a haze over the sidebar when left open. */
+.workspace-kanban-sheet-content {
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--worktree-sidebar-border) 80%, transparent);
+  backdrop-filter: none;
+}
+
 /* Why: a sidebar-card drag should advertise the board as a possible drop
    surface without fully committing the companion panel until the pointer enters it. */
 .workspace-kanban-sheet-content[data-workspace-board-drag-preview='true'] {
-  opacity: 0.42;
+  background: color-mix(in srgb, var(--worktree-sidebar) 88%, var(--background));
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 58%, transparent),
     0 10px 24px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.workspace-kanban-sheet-content[data-workspace-board-drag-preview='true'] > * {
+  opacity: 0.42;
 }
 
 @keyframes workspace-kanban-sheet-in {
