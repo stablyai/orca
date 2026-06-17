@@ -2697,7 +2697,15 @@
             "cd9d7b40ff": "Restart {{value0}} Sessions",
             "6cd6650b4c": "Restart Session",
             "1446d0d8a0": "{{value0}} Codex sessions are still on the old account.",
-            "605901a495": "1 Codex session is still on the old account"
+            "605901a495": "1 Codex session is still on the old account",
+            "5e5f9f5160": "1 rate-limit reset available",
+            "5ecae9197c": "{{value0}} rate-limit resets available",
+            "25d8bbde69": "Using reset…",
+            "e159fc1fd7": "Reset now",
+            "972a1ff497": "Reset Codex limits?",
+            "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "f077f586db": "Don't ask again",
+            "c0e972d726": "Cancel"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -2839,7 +2847,9 @@
             "a9a318b7a3": "Refresh failed — showing cached data",
             "7ad719c4bf": "Limited",
             "e740f92596": "Refresh failed",
-            "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in."
+            "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in.",
+            "45198c7d95": "1 rate-limit reset available",
+            "bce421cba3": "{{value0}} rate-limit resets available"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3601,6 +3611,9 @@
           "3d4b9c4997": "Hover",
           "ba87080fb7": "Show properties",
           "320b675c9a": "Card layout",
+          "newCardDisplay": {
+            "title": "Card display"
+          },
           "09faabd875": "Project order",
           "7bada3b1ab": "Sort by",
           "dc0bb670bc": "Group by",
@@ -3624,12 +3637,21 @@
           "b8dcc6f321": "PR/MR link",
           "ca4d3c522e": "Linear issue",
           "91dfc653e8": "GitHub ticket",
+          "bdd23b4e07": "GitHub issues",
+          "44713a5d04": "Linear issues",
           "cc17bd443b": "Detailed",
           "0f9b959b31": "PR",
           "e029a2d775": "Status",
           "c2c7a45cda": "None",
           "680043342f": "compact",
-          "c7591b6014": "repo"
+          "c7591b6014": "repo",
+          "2d4f0eb933": "Default",
+          "1a0eec0d35": "Status",
+          "b5536d5a88": "Tasks",
+          "8d62c68b35": "Notes",
+          "2d74665a56": "Ports",
+          "65a9820bd1": "Agent statuses",
+          "219ebf1961": "Branch name"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Connecting...",
@@ -4672,6 +4694,12 @@
             "idleMinutesSuffix": "minutes",
             "title": "Agent hibernation",
             "toggleLabel": "Toggle agent hibernation"
+          },
+          "newWorktreeCardStyle": {
+            "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+            "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+            "title": "New card style",
+            "toggleLabel": "Toggle new card style"
           },
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
@@ -6759,6 +6787,17 @@
               "sleep": "sleep",
               "terminal": "terminal",
               "title": "Agent hibernation"
+            },
+            "newWorktreeCardStyle": {
+              "card": "card",
+              "cards": "cards",
+              "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+              "menu": "menu",
+              "metadata": "metadata",
+              "status": "status",
+              "title": "New card style",
+              "worktree": "worktree",
+              "worktrees": "worktrees"
             },
             "fe5688b761": "sidebar",
             "ca5d1f3f46": "timeline",
@@ -8945,21 +8984,19 @@
           },
           "pull": {
             "policy": {
-              "error": {
-                "notice": {
-                  "4b90a55d92": "Merge",
-                  "6fb5abf1c4": "Create a merge commit when local and remote both changed.",
-                  "6acbb47d03": "Rebase",
-                  "f01f74a08c": "Replay local commits on top of the remote branch.",
-                  "97c585cf50": "Fast-forward only",
-                  "b65768e783": "Only pull when no merge or rebase is needed.",
-                  "c830a5cc62": "Pull needs a policy",
-                  "88d3757c2e": "Diverged",
-                  "a77529be2d": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
-                  "e678d238a8": "Copy {{value0}} pull policy command",
-                  "f4ab362a2f": "Copied",
-                  "b3ecff2b02": "Copy command"
-                }
+              "notice": {
+                "merge": "Merge",
+                "mergeDescription": "Create a merge commit when local and remote both changed.",
+                "rebase": "Rebase",
+                "rebaseDescription": "Replay local commits on top of the remote branch.",
+                "fastForwardOnly": "Fast-forward only",
+                "fastForwardOnlyDescription": "Only pull when no merge or rebase is needed.",
+                "title": "Pull needs a policy",
+                "diverged": "Diverged",
+                "body": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+                "copyAria": "Copy {{value0}} pull policy command",
+                "copied": "Copied",
+                "copyCommand": "Copy command"
               }
             }
           }

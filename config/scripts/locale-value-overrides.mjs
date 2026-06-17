@@ -456,7 +456,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     string: '文字列',
     Refreshing: '更新中',
     'Refreshing…': '更新中…',
-    Issue: 'イシュー',
+    Issue: 'Issue',
     'Privacy & Telemetry': 'プライバシーとテレメトリ',
     Experimental: '実験的機能',
     Advanced: '詳細設定',

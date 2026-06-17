@@ -305,7 +305,11 @@ import type {
   ClaudeUsageSnapshot,
   ClaudeUsageSummary
 } from '../shared/claude-usage-types'
-import type { RateLimitRuntimeTarget, RateLimitState } from '../shared/rate-limit-types'
+import type {
+  CodexRateLimitResetResult,
+  RateLimitRuntimeTarget,
+  RateLimitState
+} from '../shared/rate-limit-types'
 import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
@@ -2545,6 +2549,7 @@ export type PreloadApi = {
     get: () => Promise<RateLimitState>
     refresh: () => Promise<RateLimitState>
     refreshCodexForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
+    consumeCodexResetCredit: () => Promise<CodexRateLimitResetResult>
     refreshClaudeForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
     setPollingInterval: (ms: number) => Promise<void>
     fetchInactiveClaudeAccounts: () => Promise<void>

@@ -2697,7 +2697,15 @@
             "cd9d7b40ff": "重新启动 {{value0}} 会话",
             "6cd6650b4c": "重新启动会话",
             "1446d0d8a0": "{{value0}} 个 Codex 会话仍使用旧账户。",
-            "605901a495": "1 个 Codex 会话仍使用旧账户"
+            "605901a495": "1 个 Codex 会话仍使用旧账户",
+            "5e5f9f5160": "1 rate-limit reset available",
+            "5ecae9197c": "{{value0}} rate-limit resets available",
+            "25d8bbde69": "Using reset…",
+            "e159fc1fd7": "Reset now",
+            "972a1ff497": "Reset Codex limits?",
+            "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "f077f586db": "Don't ask again",
+            "c0e972d726": "Cancel"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -2839,7 +2847,9 @@
             "a9a318b7a3": "刷新失败——显示缓存数据",
             "7ad719c4bf": "受限",
             "e740f92596": "刷新失败",
-            "8418ec448d": "{{value0}} 用量无法刷新。智能体会话可能仍处于登录状态。"
+            "8418ec448d": "{{value0}} 用量无法刷新。智能体会话可能仍处于登录状态。",
+            "45198c7d95": "1 rate-limit reset available",
+            "bce421cba3": "{{value0}} rate-limit resets available"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 主机"
@@ -3562,6 +3572,9 @@
           "3d4b9c4997": "徘徊",
           "ba87080fb7": "显示属性",
           "320b675c9a": "卡片布局",
+          "newCardDisplay": {
+            "title": "卡片显示"
+          },
           "09faabd875": "项目订单",
           "7bada3b1ab": "排序方式",
           "dc0bb670bc": "分组依据",
@@ -3584,6 +3597,8 @@
           "b8dcc6f321": "PR/MR链接",
           "ca4d3c522e": "Linear 议题",
           "91dfc653e8": "GitHub 票证",
+          "bdd23b4e07": "GitHub 议题",
+          "44713a5d04": "Linear 议题",
           "cc17bd443b": "详细的",
           "0f9b959b31": "PR",
           "e029a2d775": "状态",
@@ -3596,7 +3611,14 @@
           "projectSshHost": "项目 SSH",
           "activeRuntimeHost": "活动服务器",
           "projectRuntimeHost": "项目服务器",
-          "631b97eea9": "主机范围"
+          "631b97eea9": "主机范围",
+          "2d4f0eb933": "默认",
+          "1a0eec0d35": "状态",
+          "b5536d5a88": "任务",
+          "8d62c68b35": "笔记",
+          "2d74665a56": "端口",
+          "65a9820bd1": "Agent 状态",
+          "219ebf1961": "分支名称"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",
@@ -4660,6 +4682,12 @@
             "idleMinutesSuffix": "分钟",
             "title": "Agent 休眠",
             "toggleLabel": "切换 agent 休眠"
+          },
+          "newWorktreeCardStyle": {
+            "copy": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
+            "description": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
+            "title": "新卡片样式",
+            "toggleLabel": "切换新卡片样式"
           }
         },
         "FloatingWorkspacePane": {
@@ -6724,6 +6752,17 @@
               "sleep": "睡眠",
               "terminal": "终端",
               "title": "Agent 休眠"
+            },
+            "newWorktreeCardStyle": {
+              "card": "卡片",
+              "cards": "卡片",
+              "description": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
+              "menu": "菜单",
+              "metadata": "元数据",
+              "status": "状态",
+              "title": "新卡片样式",
+              "worktree": "worktree",
+              "worktrees": "worktrees"
             }
           }
         },
@@ -8945,21 +8984,19 @@
           },
           "pull": {
             "policy": {
-              "error": {
-                "notice": {
-                  "4b90a55d92": "Merge",
-                  "6fb5abf1c4": "Create a merge commit when local and remote both changed.",
-                  "6acbb47d03": "Rebase",
-                  "f01f74a08c": "Replay local commits on top of the remote branch.",
-                  "97c585cf50": "Fast-forward only",
-                  "b65768e783": "Only pull when no merge or rebase is needed.",
-                  "c830a5cc62": "Pull needs a policy",
-                  "88d3757c2e": "Diverged",
-                  "a77529be2d": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
-                  "e678d238a8": "Copy {{value0}} pull policy command",
-                  "f4ab362a2f": "Copied",
-                  "b3ecff2b02": "Copy command"
-                }
+              "notice": {
+                "merge": "Merge",
+                "mergeDescription": "Create a merge commit when local and remote both changed.",
+                "rebase": "Rebase",
+                "rebaseDescription": "Replay local commits on top of the remote branch.",
+                "fastForwardOnly": "Fast-forward only",
+                "fastForwardOnlyDescription": "Only pull when no merge or rebase is needed.",
+                "title": "Pull needs a policy",
+                "diverged": "Diverged",
+                "body": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+                "copyAria": "Copy {{value0}} pull policy command",
+                "copied": "Copied",
+                "copyCommand": "Copy command"
               }
             }
           }

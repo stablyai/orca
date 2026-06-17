@@ -210,15 +210,45 @@ describe('getVisibleUsageProvider', () => {
 })
 
 describe('isUsageEmptyState', () => {
+  it('waits for provider snapshots before showing the setup CTA', () => {
+    expect(
+      isUsageEmptyState(
+        {
+          claude: null,
+          codex: null,
+          gemini: null,
+          opencodeGo: null,
+          kimi: null
+        },
+        usageSettings()
+      )
+    ).toBe(false)
+  })
+
+  it('does not show the setup CTA while system-default usage snapshots are fetching', () => {
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('fetching', { provider: 'claude' }),
+          codex: provider('fetching', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' })
+        },
+        usageSettings()
+      )
+    ).toBe(false)
+  })
+
   it('does not show the setup CTA when persisted accounts exist but snapshots have no usage data', () => {
     expect(
       isUsageEmptyState(
         {
           claude: provider('unavailable', { provider: 'claude' }),
-          codex: provider('fetching', { provider: 'codex' }),
-          gemini: null,
-          opencodeGo: null,
-          kimi: null
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -255,11 +285,11 @@ describe('isUsageEmptyState', () => {
     expect(
       isUsageEmptyState(
         {
-          claude: null,
-          codex: null,
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
           gemini: provider('unavailable'),
-          opencodeGo: null,
-          kimi: null
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' })
         },
         usageSettings()
       )

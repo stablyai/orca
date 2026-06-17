@@ -2697,7 +2697,15 @@
             "cd9d7b40ff": "Reiniciar {{value0}} sesiones",
             "6cd6650b4c": "Reiniciar sesión",
             "1446d0d8a0": "{{value0}} Las sesiones del Codex todavía están en la cuenta anterior.",
-            "605901a495": "1 sesión del Codex todavía está en la cuenta anterior"
+            "605901a495": "1 sesión del Codex todavía está en la cuenta anterior",
+            "5e5f9f5160": "1 rate-limit reset available",
+            "5ecae9197c": "{{value0}} rate-limit resets available",
+            "25d8bbde69": "Using reset…",
+            "e159fc1fd7": "Reset now",
+            "972a1ff497": "Reset Codex limits?",
+            "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "f077f586db": "Don't ask again",
+            "c0e972d726": "Cancel"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -2839,7 +2847,9 @@
             "a9a318b7a3": "Error al actualizar: se muestran datos almacenados en caché",
             "7ad719c4bf": "Limitado",
             "e740f92596": "Error al actualizar",
-            "8418ec448d": "No se pudo actualizar el uso de {{value0}}. Es posible que las sesiones de agente sigan iniciadas."
+            "8418ec448d": "No se pudo actualizar el uso de {{value0}}. Es posible que las sesiones de agente sigan iniciadas.",
+            "45198c7d95": "1 rate-limit reset available",
+            "bce421cba3": "{{value0}} rate-limit resets available"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3581,6 +3591,9 @@
           "3d4b9c4997": "Flotar",
           "ba87080fb7": "Mostrar propiedades",
           "320b675c9a": "Diseño de tarjeta",
+          "newCardDisplay": {
+            "title": "Visualización de tarjeta"
+          },
           "09faabd875": "Orden del proyecto",
           "7bada3b1ab": "Ordenar por",
           "dc0bb670bc": "Agrupar por",
@@ -3603,6 +3616,8 @@
           "b8dcc6f321": "Enlace PR/MR",
           "ca4d3c522e": "Cuestión Linear",
           "91dfc653e8": "billete de GitHub",
+          "bdd23b4e07": "Issues de GitHub",
+          "44713a5d04": "Issues de Linear",
           "cc17bd443b": "Detallado",
           "0f9b959b31": "relaciones públicas",
           "e029a2d775": "Estado",
@@ -3615,7 +3630,14 @@
           "projectSshHost": "Project SSH",
           "activeRuntimeHost": "Active server",
           "projectRuntimeHost": "Project server",
-          "631b97eea9": "Host scope"
+          "631b97eea9": "Host scope",
+          "2d4f0eb933": "Predeterminado",
+          "1a0eec0d35": "Estado",
+          "b5536d5a88": "Tareas",
+          "8d62c68b35": "Notas",
+          "2d74665a56": "Puertos",
+          "65a9820bd1": "Estados del agente",
+          "219ebf1961": "Nombre de rama"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -4675,6 +4697,12 @@
             "idleMinutesSuffix": "minutos",
             "title": "Hibernación de agentes",
             "toggleLabel": "Alternar hibernación de agentes"
+          },
+          "newWorktreeCardStyle": {
+            "copy": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
+            "description": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
+            "title": "Nuevo estilo de tarjeta",
+            "toggleLabel": "Alternar nuevo estilo de tarjeta"
           }
         },
         "FloatingWorkspacePane": {
@@ -6739,6 +6767,17 @@
               "sleep": "suspender",
               "terminal": "terminal",
               "title": "Hibernación de agentes"
+            },
+            "newWorktreeCardStyle": {
+              "card": "tarjeta",
+              "cards": "tarjetas",
+              "description": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
+              "menu": "menú",
+              "metadata": "metadatos",
+              "status": "estado",
+              "title": "Nuevo estilo de tarjeta",
+              "worktree": "worktree",
+              "worktrees": "worktrees"
             }
           }
         },
@@ -8945,21 +8984,19 @@
           },
           "pull": {
             "policy": {
-              "error": {
-                "notice": {
-                  "4b90a55d92": "Merge",
-                  "6fb5abf1c4": "Create a merge commit when local and remote both changed.",
-                  "6acbb47d03": "Rebase",
-                  "f01f74a08c": "Replay local commits on top of the remote branch.",
-                  "97c585cf50": "Fast-forward only",
-                  "b65768e783": "Only pull when no merge or rebase is needed.",
-                  "c830a5cc62": "Pull needs a policy",
-                  "88d3757c2e": "Diverged",
-                  "a77529be2d": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
-                  "e678d238a8": "Copy {{value0}} pull policy command",
-                  "f4ab362a2f": "Copied",
-                  "b3ecff2b02": "Copy command"
-                }
+              "notice": {
+                "merge": "Merge",
+                "mergeDescription": "Create a merge commit when local and remote both changed.",
+                "rebase": "Rebase",
+                "rebaseDescription": "Replay local commits on top of the remote branch.",
+                "fastForwardOnly": "Fast-forward only",
+                "fastForwardOnlyDescription": "Only pull when no merge or rebase is needed.",
+                "title": "Pull needs a policy",
+                "diverged": "Diverged",
+                "body": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+                "copyAria": "Copy {{value0}} pull policy command",
+                "copied": "Copied",
+                "copyCommand": "Copy command"
               }
             }
           }

@@ -16,7 +16,7 @@ const fetchIssue = vi.fn()
 const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
 
-let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'unread']
+let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let tabsByWorktree: Record<string, { id: string }[]> = {}
 let ptyIdsByTabId: Record<string, string[]> = {}
 let browserTabsByWorktree: Record<string, { id: string }[]> = {}
@@ -129,7 +129,7 @@ describe('WorktreeCard quick actions', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    worktreeCardProperties = ['status', 'unread']
+    worktreeCardProperties = ['status']
     tabsByWorktree = {}
     ptyIdsByTabId = {}
     browserTabsByWorktree = {}
@@ -253,8 +253,8 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).not.toContain('rename pending')
   })
 
-  it('renders the repeated branch metadata row in detailed cards', () => {
-    worktreeCardProperties = []
+  it('renders the migrated branch metadata row when branch is enabled', () => {
+    worktreeCardProperties = ['branch']
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -326,8 +326,8 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).not.toContain('text-[11px] text-muted-foreground truncate leading-none')
   })
 
-  it('uses the pre-compact unread lane and primary badge when compact cards are disabled', () => {
-    worktreeCardProperties = ['status', 'unread']
+  it('uses the left status lane and primary badge when compact cards are disabled', () => {
+    worktreeCardProperties = ['status']
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -347,8 +347,8 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
-  it('moves unread and primary into the title row when compact cards are enabled', () => {
-    worktreeCardProperties = ['status', 'unread']
+  it('keeps unread in the status lane and moves primary into the title row when compact cards are enabled', () => {
+    worktreeCardProperties = ['status']
     settings = { compactWorktreeCards: true }
 
     const markup = renderToStaticMarkup(

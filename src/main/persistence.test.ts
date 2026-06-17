@@ -4501,7 +4501,7 @@ describe('Store', () => {
     expect(trackMock).not.toHaveBeenCalled()
   })
 
-  it('updateUI restores fixed card properties from direct UI writes', async () => {
+  it('updateUI preserves selected card properties from direct UI writes', async () => {
     const store = await createStore()
     store.updateUI({ worktreeCardProperties: ['inline-agents'] })
 
@@ -4938,22 +4938,14 @@ describe('Store', () => {
     expect(store.getSettings().experimentalActivity).toBe(true)
   })
 
-  // ── inline-agents card-property migration ──────────────────────────
-  //
-  // Why: 'inline-agents' was added to DEFAULT_WORKTREE_CARD_PROPERTIES after
-  // the inline agents feature shipped default-on. Existing users had
-  // worktreeCardProperties persisted without the new entry, so the
-  // defaults-merge in load() wouldn't reach them and the inline agent list
-  // stayed hidden after upgrade. The migration appends 'inline-agents' once
-  // for every user and sets a flag so a later deliberate uncheck from the
-  // Workspaces view options menu sticks across restarts.
+  // ── worktree-card property migration ───────────────────────────────
 
-  it('adds inline-agents to persisted cardProps on first load after upgrade', async () => {
+  it('adds split-out default card properties for legacy detailed profiles', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: {},
+      settings: { compactWorktreeCards: false },
       ui: {
         worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment']
       },
@@ -4961,69 +4953,27 @@ describe('Store', () => {
       workspaceSession: {}
     })
     const store = await createStore()
-    expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
-    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
-    expect(store.getUI().worktreeCardProperties).toContain('ports')
-    expect(store.getUI()._inlineAgentsDefaultedForExperiment).toBe(true)
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'ci',
+      'issue',
+      'linear-issue',
+      'pr',
+      'comment',
+      'ports',
+      'inline-agents'
+    ])
     expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
     expect(store.getUI()._expandedWorktreeCardPropertiesDefaulted).toBe(true)
   })
 
-  it('adds inline-agents for users who launched a prior RC with the experiment off', async () => {
-    // Why: the legacy flag _inlineAgentsDefaultedForExperiment was stamped
-    // unconditionally on every prior load, so opt-out RC users already have
-    // it set to true on disk. The default-on migration must NOT be gated on
-    // that legacy flag — it must use the new _inlineAgentsDefaultedForAllUsers
-    // flag instead. Without this test, the regression would re-appear if
-    // anyone tried to "consolidate" the two flags.
+  it('adds split-out default card properties without duplicating inline agents', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: {},
-      ui: {
-        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
-        _inlineAgentsDefaultedForExperiment: true
-      },
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-    const store = await createStore()
-    expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
-    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
-    expect(store.getUI().worktreeCardProperties).toContain('ports')
-    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
-    expect(store.getUI()._expandedWorktreeCardPropertiesDefaulted).toBe(true)
-  })
-
-  it('respects a deliberate post-migration uncheck', async () => {
-    // Why: once migrated, an empty-of-inline-agents array is treated as a
-    // user choice — not a legacy pre-migration state — so we must not
-    // re-add it on every subsequent launch.
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: {},
-      ui: {
-        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
-        _inlineAgentsDefaultedForAllUsers: true
-      },
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-    const store = await createStore()
-    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
-    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
-    expect(store.getUI().worktreeCardProperties).toContain('ports')
-  })
-
-  it('adds split-out default card properties without duplicating inline-agents', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: {},
+      settings: { compactWorktreeCards: true },
       ui: {
         worktreeCardProperties: [
           'status',
@@ -5039,60 +4989,84 @@ describe('Store', () => {
       workspaceSession: {}
     })
     const store = await createStore()
-    const props = store.getUI().worktreeCardProperties
-    expect(props.filter((p) => p === 'inline-agents')).toHaveLength(1)
-    expect(props.filter((p) => p === 'linear-issue')).toHaveLength(1)
-    expect(props.filter((p) => p === 'ports')).toHaveLength(1)
-    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
-  })
-
-  it('adds split-out default card properties when loading old user choices', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: {},
-      ui: {
-        worktreeCardProperties: ['inline-agents'],
-        _inlineAgentsDefaultedForAllUsers: true
-      },
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-    const store = await createStore()
     expect(store.getUI().worktreeCardProperties).toEqual([
       'status',
       'unread',
+      'ci',
+      'issue',
+      'linear-issue',
+      'pr',
+      'comment',
       'ports',
       'inline-agents'
     ])
+    expect(store.getUI().worktreeCardProperties).not.toContain('branch')
+    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+    expect(store.getUI()._expandedWorktreeCardPropertiesDefaulted).toBe(true)
   })
 
-  it('keeps Agent activity opt-out while adding split-out default card properties', async () => {
+  it('derives fresh default profiles without branch', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
       settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'linear-issue',
+      'pr',
+      'comment',
+      'ports',
+      'inline-agents'
+    ])
+    expect(store.getUI().worktreeCardProperties).not.toContain('branch')
+    expect(store.getUI()._worktreeCardModeDefaulted).toBe(true)
+  })
+
+  it('adds split-out defaults even when the mode marker exists but expansion has not run', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
       ui: {
-        worktreeCardProperties: [],
-        _inlineAgentsDefaultedForAllUsers: true
+        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr'],
+        _worktreeCardModeDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
     })
     const store = await createStore()
-    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'ports'])
+
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'ci',
+      'issue',
+      'linear-issue',
+      'pr',
+      'ports',
+      'inline-agents'
+    ])
+    expect(store.getUI().worktreeCardProperties).not.toContain('branch')
   })
 
-  it('preserves deliberate Linear and Ports opt-outs after split-out migration', async () => {
+  it('preserves deliberate post-migration card property opt-outs', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: {},
+      settings: { compactWorktreeCards: false },
       ui: {
-        worktreeCardProperties: ['status', 'unread', 'issue', 'pr', 'comment'],
+        worktreeCardProperties: ['status', 'pr'],
         _inlineAgentsDefaultedForAllUsers: true,
         _expandedWorktreeCardPropertiesDefaulted: true
       },
@@ -5100,85 +5074,103 @@ describe('Store', () => {
       workspaceSession: {}
     })
     const store = await createStore()
-    expect(store.getUI().worktreeCardProperties).not.toContain('linear-issue')
+
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread', 'pr'])
+    expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI().worktreeCardProperties).not.toContain('ports')
-  })
-
-  it('preserves a deliberate uncheck from the experimental-toggle era (Case B)', async () => {
-    // Why: a user who turned the experiment on and then deliberately
-    // unchecked 'inline-agents' from the sidebar options menu has the same
-    // on-disk shape as a never-touched user (legacy flag true, no
-    // 'inline-agents' in worktreeCardProperties). The migration discriminates
-    // them via the deprecated experimentalAgentDashboard value still riding
-    // on disk. Without this discriminator, the deliberate uncheck would be
-    // silently overridden on first load after upgrade.
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: { experimentalAgentDashboard: true },
-      ui: {
-        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
-        _inlineAgentsDefaultedForExperiment: true
-      },
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-    const store = await createStore()
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
-    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
-    expect(store.getUI().worktreeCardProperties).toContain('ports')
-    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
   })
 
-  it('Case B preservation is durable across restarts', async () => {
-    // Why: once the new flag is stamped, the discriminator is no longer
-    // consulted. Subsequent loads must leave the deliberate uncheck intact
-    // even if a future settings-write code path were to strip the deprecated
-    // experimentalAgentDashboard key from disk.
+  it('does not re-add branch after an explicit Default mode selection', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { experimentalAgentDashboard: true },
+      settings: { compactWorktreeCards: false },
       ui: {
-        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
-        _inlineAgentsDefaultedForExperiment: true,
-        _inlineAgentsDefaultedForAllUsers: true
+        worktreeCardProperties: [
+          'status',
+          'unread',
+          'issue',
+          'linear-issue',
+          'pr',
+          'comment',
+          'ports',
+          'inline-agents'
+        ],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
     })
     const store = await createStore()
-    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
-    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
-    expect(store.getUI().worktreeCardProperties).toContain('ports')
-  })
 
-  it('lapsed Case B (experiment off at upgrade time) re-adds inline-agents', async () => {
-    // Why: documented limitation. A user who turned experiment on, unchecked,
-    // then turned the experiment off again before upgrading has
-    // experimentalAgentDashboard: false on disk. The discriminator only sees
-    // the most recent value, so they fall into the Case C path. They re-uncheck
-    // once and it sticks (new flag stamps). This test locks the limitation in
-    // so a future "fix" doesn't accidentally regress something else.
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [],
-      worktreeMeta: {},
-      settings: { experimentalAgentDashboard: false },
-      ui: {
-        worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr', 'comment'],
-        _inlineAgentsDefaultedForExperiment: true
-      },
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {}
-    })
-    const store = await createStore()
+    expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI().worktreeCardProperties).toContain('inline-agents')
-    expect(store.getUI().worktreeCardProperties).toContain('linear-issue')
-    expect(store.getUI().worktreeCardProperties).toContain('ports')
-    expect(store.getUI()._inlineAgentsDefaultedForAllUsers).toBe(true)
+  })
+
+  it('preserves explicit Compact card properties after expansion has run', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: true },
+      ui: {
+        worktreeCardProperties: [
+          'status',
+          'unread',
+          'issue',
+          'linear-issue',
+          'pr',
+          'comment',
+          'ports'
+        ],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().compactWorktreeCards).toBe(true)
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'linear-issue',
+      'pr',
+      'comment',
+      'ports'
+    ])
+    expect(store.getUI().worktreeCardProperties).not.toContain('branch')
+    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+  })
+
+  it('uses the default preset when card properties are missing', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().compactWorktreeCards).toBe(true)
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'linear-issue',
+      'pr',
+      'comment',
+      'ports',
+      'inline-agents'
+    ])
   })
 
   // ── GitHub Cache ───────────────────────────────────────────────────

@@ -1000,11 +1000,8 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   return onboarding.closedAt !== null || persistedDismissed === true
 }
 
-// Why: read a settings field that was removed from the GlobalSettings type
-// but still round-trips on disk via the ...parsed.settings spread. One-shot
-// use only — for the inline-agents default-on migration's Case B discriminator.
-// Delete with the migration in the cleanup release (2+ stable releases after
-// _inlineAgentsDefaultedForAllUsers ships).
+// Why: read a settings field that was removed from GlobalSettings but can
+// still exist on disk. One-shot use for the inline-agents migration.
 function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
   return (
     (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
@@ -2741,33 +2738,6 @@ export class Store {
             ) {
               this.loadNeedsSave = true
             }
-            // Why: the 'inline-agents' card property was added after the
-            // feature shipped behind an experimental toggle. Now that the
-            // feature is default-on for everyone, every existing user needs
-            // 'inline-agents' appended to their persisted
-            // worktreeCardProperties on first load after upgrade so the
-            // inline agent rows render without further opt-in. A flag
-            // prevents re-firing so a deliberate uncheck from the Workspaces
-            // view options menu sticks across restarts.
-            //
-            // TRAP — do not key this on `_inlineAgentsDefaultedForExperiment`.
-            // That legacy flag was stamped unconditionally on every successful
-            // load() in prior builds, regardless of whether the experiment was
-            // toggled on. Every prior-RC user therefore already has it set to
-            // true on disk, including the opt-out cohort this widened
-            // migration was specifically written to reach. Gating on the
-            // legacy flag would silently skip exactly those users. The
-            // dedicated `_inlineAgentsDefaultedForAllUsers` flag exists so
-            // the new default-on migration can distinguish "already migrated
-            // under the new rules" from "happened to launch a prior build".
-            //
-            // Case B preservation: a user who turned the experiment on and then
-            // deliberately unchecked 'inline-agents' from the sidebar options
-            // menu has the same on-disk shape as a never-touched user. The
-            // discriminator below reads the deprecated `experimentalAgentDashboard`
-            // value as a one-shot signal. Both branches of the migration stamp
-            // `_inlineAgentsDefaultedForAllUsers`, so subsequent launches don't
-            // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
             const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
             const expandedCardPropsMigrated =

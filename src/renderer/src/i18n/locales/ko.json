@@ -2697,7 +2697,15 @@
             "cd9d7b40ff": "{{value0}} 세션 다시 시작",
             "6cd6650b4c": "세션 다시 시작",
             "1446d0d8a0": "{{value0}} Codex 세션은 여전히 ​​이전 계정에 있습니다.",
-            "605901a495": "1개의 Codex 세션이 여전히 이전 계정에 있습니다."
+            "605901a495": "1개의 Codex 세션이 여전히 이전 계정에 있습니다.",
+            "5e5f9f5160": "1 rate-limit reset available",
+            "5ecae9197c": "{{value0}} rate-limit resets available",
+            "25d8bbde69": "Using reset…",
+            "e159fc1fd7": "Reset now",
+            "972a1ff497": "Reset Codex limits?",
+            "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "f077f586db": "Don't ask again",
+            "c0e972d726": "Cancel"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -2839,7 +2847,9 @@
             "a9a318b7a3": "새로 고침 실패 - 캐시된 데이터 표시",
             "7ad719c4bf": "제한됨",
             "e740f92596": "새로 고침 실패",
-            "8418ec448d": "{{value0}} 사용량을 새로 고칠 수 없습니다. 에이전트 세션은 여전히 로그인되어 있을 수 있습니다."
+            "8418ec448d": "{{value0}} 사용량을 새로 고칠 수 없습니다. 에이전트 세션은 여전히 로그인되어 있을 수 있습니다.",
+            "45198c7d95": "1 rate-limit reset available",
+            "bce421cba3": "{{value0}} rate-limit resets available"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3562,6 +3572,9 @@
           "3d4b9c4997": "호버",
           "ba87080fb7": "속성 표시",
           "320b675c9a": "카드 레이아웃",
+          "newCardDisplay": {
+            "title": "카드 표시"
+          },
           "09faabd875": "프로젝트 순서",
           "7bada3b1ab": "정렬 기준",
           "dc0bb670bc": "그룹화 기준",
@@ -3584,6 +3597,8 @@
           "b8dcc6f321": "PR/MR 링크",
           "ca4d3c522e": "Linear 이슈",
           "91dfc653e8": "GitHub 티켓",
+          "bdd23b4e07": "GitHub 이슈",
+          "44713a5d04": "Linear 이슈",
           "cc17bd443b": "상세한",
           "0f9b959b31": "PR",
           "e029a2d775": "상태",
@@ -3596,7 +3611,14 @@
           "projectSshHost": "Project SSH",
           "activeRuntimeHost": "Active server",
           "projectRuntimeHost": "Project server",
-          "631b97eea9": "Host scope"
+          "631b97eea9": "Host scope",
+          "2d4f0eb933": "기본값",
+          "1a0eec0d35": "상태",
+          "b5536d5a88": "작업",
+          "8d62c68b35": "메모",
+          "2d74665a56": "포트",
+          "65a9820bd1": "Agent 상태",
+          "219ebf1961": "브랜치 이름"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
@@ -4660,6 +4682,12 @@
             "idleMinutesSuffix": "분",
             "title": "Agent 최대 절전",
             "toggleLabel": "Agent 최대 절전 전환"
+          },
+          "newWorktreeCardStyle": {
+            "copy": "업데이트된 worktree 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
+            "description": "업데이트된 worktree 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
+            "title": "새 카드 스타일",
+            "toggleLabel": "새 카드 스타일 전환"
           }
         },
         "FloatingWorkspacePane": {
@@ -6724,6 +6752,17 @@
               "sleep": "절전",
               "terminal": "터미널",
               "title": "Agent 최대 절전"
+            },
+            "newWorktreeCardStyle": {
+              "card": "카드",
+              "cards": "카드",
+              "description": "업데이트된 worktree 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
+              "menu": "메뉴",
+              "metadata": "메타데이터",
+              "status": "상태",
+              "title": "새 카드 스타일",
+              "worktree": "worktree",
+              "worktrees": "worktrees"
             }
           }
         },
@@ -8945,21 +8984,19 @@
           },
           "pull": {
             "policy": {
-              "error": {
-                "notice": {
-                  "4b90a55d92": "Merge",
-                  "6fb5abf1c4": "Create a merge commit when local and remote both changed.",
-                  "6acbb47d03": "Rebase",
-                  "f01f74a08c": "Replay local commits on top of the remote branch.",
-                  "97c585cf50": "Fast-forward only",
-                  "b65768e783": "Only pull when no merge or rebase is needed.",
-                  "c830a5cc62": "Pull needs a policy",
-                  "88d3757c2e": "Diverged",
-                  "a77529be2d": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
-                  "e678d238a8": "Copy {{value0}} pull policy command",
-                  "f4ab362a2f": "Copied",
-                  "b3ecff2b02": "Copy command"
-                }
+              "notice": {
+                "merge": "Merge",
+                "mergeDescription": "Create a merge commit when local and remote both changed.",
+                "rebase": "Rebase",
+                "rebaseDescription": "Replay local commits on top of the remote branch.",
+                "fastForwardOnly": "Fast-forward only",
+                "fastForwardOnlyDescription": "Only pull when no merge or rebase is needed.",
+                "title": "Pull needs a policy",
+                "diverged": "Diverged",
+                "body": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+                "copyAria": "Copy {{value0}} pull policy command",
+                "copied": "Copied",
+                "copyCommand": "Copy command"
               }
             }
           }

@@ -24,6 +24,7 @@ import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
   WorktreeCardProperty,
+  WorktreeCardMode,
   WorkspaceHostOrder,
   WorkspaceHostScope,
   VisibleWorkspaceHostIds
@@ -61,6 +62,7 @@ import {
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
+  getWorktreeCardModeUpdates,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
@@ -798,7 +800,9 @@ export type UISlice = {
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
   worktreeCardProperties: WorktreeCardProperty[]
-  toggleWorktreeCardProperty: (prop: WorktreeCardProperty) => void
+  _worktreeCardModeDefaulted: boolean
+  setWorktreeCardMode: (mode: WorktreeCardMode) => void
+  setWorktreeCardProperties: (properties: readonly WorktreeCardProperty[]) => void
   agentActivityDisplayMode: AgentActivityDisplayMode
   setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
@@ -1939,17 +1943,31 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }),
 
   worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+  _worktreeCardModeDefaulted: true,
+  setWorktreeCardMode: (mode) => {
+    const updates = getWorktreeCardModeUpdates(mode)
+    set((s) => ({
+      settings: s.settings ? { ...s.settings, ...updates.settings } : s.settings,
+      worktreeCardProperties: updates.ui.worktreeCardProperties,
+      _worktreeCardModeDefaulted: true
+    }))
+    void Promise.all([
+      window.api.settings.set(updates.settings).then((nextSettings) => {
+        if (nextSettings) {
+          set({ settings: nextSettings })
+        }
+      }),
+      window.api.ui.set(updates.ui)
+    ]).catch(console.error)
+  },
+  setWorktreeCardProperties: (properties) => {
+    const normalized = normalizeWorktreeCardProperties(properties)
+    set({ worktreeCardProperties: normalized, _worktreeCardModeDefaulted: false })
+    window.api.ui
+      .set({ worktreeCardProperties: normalized, _worktreeCardModeDefaulted: false })
+      .catch(console.error)
+  },
   agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
-  toggleWorktreeCardProperty: (prop) =>
-    set((s) => {
-      const current = normalizeWorktreeCardProperties(s.worktreeCardProperties)
-      const next = current.includes(prop) ? current.filter((p) => p !== prop) : [...current, prop]
-      // Why: retired property toggles no longer exist, so their fields must
-      // stay visible even if an older saved preference hid them.
-      const updated = normalizeWorktreeCardProperties(next)
-      window.api.ui.set({ worktreeCardProperties: updated }).catch(console.error)
-      return { worktreeCardProperties: updated }
-    }),
   setAgentActivityDisplayMode: (mode) => {
     const normalized = normalizeAgentActivityDisplayMode(mode)
     window.api.ui.set({ agentActivityDisplayMode: normalized }).catch(console.error)
@@ -2199,6 +2217,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         uiZoomLevel: ui.uiZoomLevel ?? 0,
         editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,
         worktreeCardProperties: normalizeWorktreeCardProperties(ui.worktreeCardProperties),
+        _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
         agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),

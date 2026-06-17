@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -184,6 +185,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         )
       ]
     },
+    getNewWorktreeCardStyleSearchEntry(),
     {
       title: translate(
         'auto.components.settings.experimental.search.78c2a8dc74',
@@ -260,6 +262,12 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.agentHibernation.title',
         'Agent hibernation'
+      )
+    ),
+    newWorktreeCardStyle: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
+        'New card style'
       )
     ),
     symlinksOnWorktrees: findEntry(

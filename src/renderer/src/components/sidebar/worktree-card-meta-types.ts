@@ -34,6 +34,7 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   children: React.ReactElement
   branchName?: string
   workspaceTitle?: string
+  identityOrder?: 'workspace-first' | 'branch-first'
   detailsAfter?: React.ReactNode
   openDelay?: number
   closeDelay?: number
