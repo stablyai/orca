@@ -309,7 +309,7 @@ describe('runner execFile timeout handling', () => {
       )
       const shellCommand = execFileMock.mock.calls[0]?.[1]?.[5] as string
       expect(shellCommand).toContain('getent passwd')
-      expect(shellCommand).toContain('exec "$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('exec "\\$_orca_wsl_shell" -ilc')
       expect(shellCommand).toContain('/mnt/c/repo')
       expect(shellCommand).toContain("'git'")
       expect(shellCommand).toContain('status')

@@ -64,7 +64,7 @@ async function chooseProjectRuntime(
   runtimeLabel: 'Windows' | 'WSL'
 ): Promise<void> {
   const section = page.locator(`[data-settings-section="repo-${repoId}"]`)
-  await section.getByRole('radio', { name: runtimeLabel }).click()
+  await section.getByRole('radio', { name: runtimeLabel, exact: true }).click()
   const applyButton = section.getByRole('button', { name: 'Apply runtime change' })
   if (await applyButton.isVisible({ timeout: 1_000 }).catch(() => false)) {
     await applyButton.click()

@@ -117,12 +117,14 @@ describe('resolveWindowsShellLaunchArgs', () => {
     // The injected sh cmd must not break out of the surrounding single quotes
     // when the path contains a ' character.
     expect(result.shellArgs[3]).toContain("cd '/mnt/c/weird'\\''path'")
-    expect(result.shellArgs[3]).toContain('exec "$_orca_wsl_shell" -l')
+    expect(result.shellArgs[3]).toContain('exec "\\$_orca_wsl_shell" -l')
   })
 
   it('falls back to /mnt/c when cwd is not a drive-letter path', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', '\\\\server\\share', 'C:\\Users\\alice')
-    expect(result.shellArgs[3]).toContain('cd \'/mnt/c\' && export PATH="$HOME/.local/bin:$PATH"')
+    expect(result.shellArgs[3]).toContain(
+      'cd \'/mnt/c\' && export PATH="\\$HOME/.local/bin:\\$PATH"'
+    )
   })
 
   it('keeps WSL UNC worktree cwd inside the matching distro', () => {
