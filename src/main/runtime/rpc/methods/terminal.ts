@@ -1318,16 +1318,25 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 ptyId,
                 (opcode, payload) => sendFrame(request.streamId, opcode, payload),
                 event
-              ).then((restreamed) => {
-                if (closed || streams.get(request.streamId) !== stream) {
-                  return
-                }
-                if (restreamed) {
-                  stream.lastResizeCols = event.cols
-                  return
-                }
-                sendResizedFrame(stream, event)
-              })
+              )
+                .then((restreamed) => {
+                  if (closed || streams.get(request.streamId) !== stream) {
+                    return
+                  }
+                  if (restreamed) {
+                    stream.lastResizeCols = event.cols
+                    return
+                  }
+                  sendResizedFrame(stream, event)
+                })
+                // Why: if re-stream serialization/runtime throws, still emit the
+                // geometry-only Resized frame so the client never misses the resize.
+                .catch(() => {
+                  if (closed || streams.get(request.streamId) !== stream) {
+                    return
+                  }
+                  sendResizedFrame(stream, event)
+                })
               return
             }
             sendResizedFrame(stream, event)
@@ -1678,16 +1687,25 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           // alt-screen TUIs keep the geometry-only frame + TUI redraw.
           const widthChanged = isMobile && event.cols !== lastResizeCols
           if (widthChanged) {
-            void sendMobileResizeRestream(runtime, ptyId, sendFrame, event).then((restreamed) => {
-              if (closed) {
-                return
-              }
-              if (restreamed) {
-                lastResizeCols = event.cols
-                return
-              }
-              sendResizedFrame(event)
-            })
+            void sendMobileResizeRestream(runtime, ptyId, sendFrame, event)
+              .then((restreamed) => {
+                if (closed) {
+                  return
+                }
+                if (restreamed) {
+                  lastResizeCols = event.cols
+                  return
+                }
+                sendResizedFrame(event)
+              })
+              // Why: if re-stream serialization/runtime throws, still emit the
+              // geometry-only Resized frame so the client never misses the resize.
+              .catch(() => {
+                if (closed) {
+                  return
+                }
+                sendResizedFrame(event)
+              })
             return
           }
           sendResizedFrame(event)
