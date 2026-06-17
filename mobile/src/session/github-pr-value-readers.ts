@@ -140,7 +140,8 @@ export function readRepoIdentity(value: unknown): GitHubRepositoryIdentity | und
   }
   const owner = readString(value.owner)
   const repo = readString(value.repo)
-  if (owner === undefined || repo === undefined) {
+  // Empty owner/repo is malformed, not a valid identity — drop it before it reaches prRepo parsing.
+  if (!owner || !repo) {
     return undefined
   }
   return { owner, repo }
