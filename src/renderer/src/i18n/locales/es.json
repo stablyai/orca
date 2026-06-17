@@ -10883,7 +10883,11 @@
           "e46c1aa9ad": "Crear",
           "a9d9dccf77": "Ahorrar",
           "777548c2d6": "Guardar cambios",
-          "ff5db28639": "existente"
+          "ff5db28639": "existente",
+          "753c8430d7": "Schedule paused — the automation only runs from a webhook or a manual run.",
+          "46db335b53": "Runs automatically on the schedule above.",
+          "d121dcf2de": "On",
+          "3d14e63f84": "Off"
         },
         "AutomationEditorDialogHeader": {
           "31f9253920": "Usar plantilla",

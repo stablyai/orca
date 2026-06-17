@@ -162,6 +162,7 @@ describe('formatAutomationShow', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: 0,
       enabled: true,
+      scheduleEnabled: true,
       nextRunAt: 0,
       missedRunPolicy: 'run_once_within_grace',
       missedRunGraceMinutes: 720,

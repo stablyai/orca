@@ -8,6 +8,7 @@ import type {
   AutomationRun,
   AutomationRunStatus
 } from '../../shared/automations-types'
+import { isScheduledAutomationDue } from '../../shared/automation-schedule'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import { runAutomationPrecheck } from './precheck-runner'
@@ -165,7 +166,7 @@ export class AutomationService {
     try {
       const now = Date.now()
       for (const automation of this.store.listAutomations()) {
-        if (!automation.enabled || automation.nextRunAt > now) {
+        if (!isScheduledAutomationDue(automation, now)) {
           continue
         }
         await this.evaluateAutomation(automation, now)

@@ -11,6 +11,7 @@ import {
   isValidAutomationCronSchedule,
   isValidAutomationSchedule
 } from '../../../../shared/automation-schedules'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Field } from './automation-page-parts'
 import { AutomationEditorDialogFooter } from './AutomationEditorDialogFooter'
 import { AutomationEditorDialogHeader } from './AutomationEditorDialogHeader'
@@ -41,6 +42,7 @@ export type AutomationDraft = {
   customSchedule: string
   missedRunGraceMinutes: string
   scheduleWarning: string | null
+  scheduleEnabled: boolean
 }
 
 export type AutomationCreateTarget = 'orca' | 'hermes'
@@ -105,14 +107,47 @@ export function AutomationEditorDialog({
     <Field
       label={translate('auto.components.automations.AutomationEditorDialog.c4b19094c2', 'Schedule')}
     >
-      <AutomationSchedulePicker
-        draft={draft}
-        triggerClassName={PICKER_TRIGGER_CLASS}
-        validateAdvancedSchedule={
-          isHermesTarget ? isValidAutomationCronSchedule : isValidAutomationSchedule
-        }
-        onDraftChange={onDraftChange}
-      />
+      <div className="space-y-3">
+        <ToggleGroup
+          type="single"
+          value={draft.scheduleEnabled ? 'on' : 'off'}
+          onValueChange={(value) => {
+            if (!value) {
+              return
+            }
+            onDraftChange((current) => ({ ...current, scheduleEnabled: value === 'on' }))
+          }}
+          variant="outline"
+          size="sm"
+          className="grid w-full grid-cols-2"
+        >
+          <ToggleGroupItem value="off" className={MODE_TOGGLE_ITEM_CLASS}>
+            {translate('auto.components.automations.AutomationEditorDialog.3d14e63f84', 'Off')}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="on" className={MODE_TOGGLE_ITEM_CLASS}>
+            {translate('auto.components.automations.AutomationEditorDialog.d121dcf2de', 'On')}
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <AutomationSchedulePicker
+          draft={draft}
+          triggerClassName={PICKER_TRIGGER_CLASS}
+          validateAdvancedSchedule={
+            isHermesTarget ? isValidAutomationCronSchedule : isValidAutomationSchedule
+          }
+          onDraftChange={onDraftChange}
+        />
+        <p className="text-xs text-muted-foreground">
+          {draft.scheduleEnabled
+            ? translate(
+                'auto.components.automations.AutomationEditorDialog.46db335b53',
+                'Runs automatically on the schedule above.'
+              )
+            : translate(
+                'auto.components.automations.AutomationEditorDialog.753c8430d7',
+                'Schedule paused — the automation only runs from a webhook or a manual run.'
+              )}
+        </p>
+      </div>
     </Field>
   )
 

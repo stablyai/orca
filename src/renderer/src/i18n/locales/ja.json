@@ -10883,7 +10883,11 @@
           "e46c1aa9ad": "作成",
           "a9d9dccf77": "保存",
           "777548c2d6": "変更を保存",
-          "ff5db28639": "既存 "
+          "ff5db28639": "既存 ",
+          "753c8430d7": "Schedule paused — the automation only runs from a webhook or a manual run.",
+          "46db335b53": "Runs automatically on the schedule above.",
+          "d121dcf2de": "On",
+          "3d14e63f84": "Off"
         },
         "AutomationEditorDialogHeader": {
           "31f9253920": "テンプレートを使用する",

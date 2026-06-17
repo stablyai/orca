@@ -10883,7 +10883,11 @@
           "e46c1aa9ad": "Create",
           "a9d9dccf77": "Save",
           "777548c2d6": "Save Changes",
-          "ff5db28639": "existing"
+          "ff5db28639": "existing",
+          "753c8430d7": "Schedule paused — the automation only runs from a webhook or a manual run.",
+          "46db335b53": "Runs automatically on the schedule above.",
+          "d121dcf2de": "On",
+          "3d14e63f84": "Off"
         },
         "AutomationEditorDialogHeader": {
           "31f9253920": "Use template",

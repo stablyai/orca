@@ -3882,6 +3882,7 @@ export class Store {
       rrule: input.rrule,
       dtstart: input.dtstart,
       enabled: input.enabled ?? true,
+      scheduleEnabled: input.scheduleEnabled ?? true,
       nextRunAt: nextAutomationOccurrenceAfter(input.rrule, input.dtstart, now),
       missedRunPolicy: 'run_once_within_grace',
       missedRunGraceMinutes: input.missedRunGraceMinutes ?? 720,
@@ -3914,6 +3915,9 @@ export class Store {
       ...updates,
       name:
         updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
+      // Backfill legacy automations (saved before the field) to enabled on any
+      // update, so the persisted shape always carries an explicit boolean.
+      scheduleEnabled: updates.scheduleEnabled ?? current.scheduleEnabled ?? true,
       precheck: Object.hasOwn(updates, 'precheck')
         ? normalizeAutomationPrecheck(updates.precheck)
         : normalizeAutomationPrecheck(current.precheck),

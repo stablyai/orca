@@ -90,6 +90,37 @@ describe('AutomationService', () => {
     )
   })
 
+  it('does not dispatch a due automation whose schedule trigger is disabled', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:59:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    store.createAutomation({
+      name: 'Paused schedule',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-12T00:00:00').getTime(),
+      scheduleEnabled: false
+    })
+
+    vi.setSystemTime(new Date('2026-05-13T09:01:00'))
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({ isDestroyed: () => false, send } as never)
+
+    service.start()
+    service.setRendererReady()
+    // Give the evaluator a tick; a disabled schedule must produce no dispatch.
+    await vi.advanceTimersByTimeAsync(120_000)
+    service.stop()
+
+    expect(send).not.toHaveBeenCalledWith('automations:dispatchRequested', expect.any(Object))
+  })
+
   it('returns the persisted status for manual runs after dispatch is requested', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()

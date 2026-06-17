@@ -27,6 +27,7 @@ function automation(overrides: Partial<Automation> = {}): Automation {
     rrule: 'FREQ=DAILY',
     dtstart: 1,
     enabled: true,
+    scheduleEnabled: true,
     nextRunAt: 1,
     missedRunPolicy: 'run_once_within_grace',
     missedRunGraceMinutes: 720,

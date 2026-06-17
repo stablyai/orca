@@ -104,6 +104,12 @@ export type Automation = {
   rrule: string
   dtstart: number
   enabled: boolean
+  /** Schedule (rrule) trigger switch, independent of the master `enabled` flag
+   *  and the webhook trigger. A scheduled run fires only when the automation is
+   *  `enabled` AND `scheduleEnabled`, so the operator can pause the schedule
+   *  while keeping a webhook trigger live. Absent on automations created before
+   *  this field — treat absence as enabled (see isScheduleTriggerEnabled). */
+  scheduleEnabled: boolean
   nextRunAt: number
   lastRunAt?: number
   missedRunPolicy: AutomationMissedRunPolicy
@@ -155,6 +161,7 @@ export type AutomationCreateInput = {
   rrule: string
   dtstart: number
   enabled?: boolean
+  scheduleEnabled?: boolean
   missedRunGraceMinutes?: number
 }
 
@@ -176,6 +183,7 @@ export type AutomationUpdateInput = Partial<
     | 'rrule'
     | 'dtstart'
     | 'enabled'
+    | 'scheduleEnabled'
     | 'missedRunGraceMinutes'
   >
 >

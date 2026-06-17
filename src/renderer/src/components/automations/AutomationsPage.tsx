@@ -443,7 +443,8 @@ export default function AutomationsPage(): React.JSX.Element {
     dayOfWeek: '1',
     customSchedule: '',
     missedRunGraceMinutes: '720',
-    scheduleWarning: null
+    scheduleWarning: null,
+    scheduleEnabled: true
   })
 
   const externalAutomationEntries = useMemo<ExternalAutomationListEntry[]>(
@@ -1009,7 +1010,8 @@ export default function AutomationsPage(): React.JSX.Element {
       dayOfWeek: '1',
       customSchedule: '',
       missedRunGraceMinutes: '720',
-      scheduleWarning: null
+      scheduleWarning: null,
+      scheduleEnabled: true
     }
     const nextDraft = template
       ? {
@@ -1066,7 +1068,8 @@ export default function AutomationsPage(): React.JSX.Element {
       scheduleWarning:
         schedule || hasCustomSchedule
           ? null
-          : 'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
+          : 'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.',
+      scheduleEnabled: latest.scheduleEnabled !== false
     }
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
@@ -1112,7 +1115,8 @@ export default function AutomationsPage(): React.JSX.Element {
       missedRunGraceMinutes: '720',
       scheduleWarning: hasCustomSchedule
         ? null
-        : 'This Hermes automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
+        : 'This Hermes automation has an unsupported saved schedule. Pick a supported schedule before saving changes.',
+      scheduleEnabled: true
     }
     setEditingAutomationId(null)
     setEditingExternalTarget({ manager, job })
@@ -1342,7 +1346,8 @@ export default function AutomationsPage(): React.JSX.Element {
         baseBranch: draft.baseBranch.trim() || null,
         reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
         timezone,
-        missedRunGraceMinutes
+        missedRunGraceMinutes,
+        scheduleEnabled: draft.scheduleEnabled
       }
       if (!currentAutomation || currentAutomation.rrule !== rrule) {
         // Why: non-schedule edits should not reset dtstart or move nextRunAt.
@@ -1370,7 +1375,8 @@ export default function AutomationsPage(): React.JSX.Element {
             timezone,
             rrule,
             dtstart: now,
-            missedRunGraceMinutes
+            missedRunGraceMinutes,
+            scheduleEnabled: draft.scheduleEnabled
           })
       if (!editingAutomationId) {
         await hydratePersistedUIState()

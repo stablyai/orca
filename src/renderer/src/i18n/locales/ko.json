@@ -10883,7 +10883,11 @@
           "e46c1aa9ad": "생성",
           "a9d9dccf77": "저장",
           "777548c2d6": "변경 사항 저장",
-          "ff5db28639": "기존의"
+          "ff5db28639": "기존의",
+          "753c8430d7": "Schedule paused — the automation only runs from a webhook or a manual run.",
+          "46db335b53": "Runs automatically on the schedule above.",
+          "d121dcf2de": "On",
+          "3d14e63f84": "Off"
         },
         "AutomationEditorDialogHeader": {
           "31f9253920": "템플릿 사용",
