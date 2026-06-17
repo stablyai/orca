@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   View
 } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Sparkles } from 'lucide-react-native'
 import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
 import { BottomDrawer } from './BottomDrawer'
@@ -53,11 +54,12 @@ export function MobilePrComposeSheet({
   onCreated
 }: Props) {
   const copy = hostedReviewCopy(prefill.provider)
-  // Why: grow the description to a screen-relative height so the sheet fills a
-  // comfortable portion of the drawer instead of collapsing to a short form with
-  // empty space below — the body is the natural element to absorb the extra room.
+  // Why: fill the drawer to ~full available (sidebar) height instead of collapsing
+  // to short content with empty space below; the content column is held to this
+  // height and the description flexes to absorb the slack.
   const { height: windowHeight } = useWindowDimensions()
-  const bodyMinHeight = Math.max(160, Math.round(windowHeight * 0.32))
+  const insets = useSafeAreaInsets()
+  const sheetMinHeight = Math.max(420, windowHeight - insets.top - insets.bottom - 100)
   const [title, setTitle] = useState(prefill.title)
   const [body, setBody] = useState(prefill.body)
   const [base, setBase] = useState(prefill.base)
@@ -164,8 +166,9 @@ export function MobilePrComposeSheet({
     <BottomDrawer visible={visible} onClose={onClose}>
       {/* Why: no nested ScrollView here — BottomDrawer already scrolls its children
           inside a keyboard-aware container. A nested capped ScrollView cut off the
-          base picker, draft toggle, and Create button (unreachable with the keyboard up). */}
-      <View>
+          base picker, draft toggle, and Create button (unreachable with the keyboard up).
+          minHeight holds the column at ~full height so the description can flex to fill. */}
+      <View style={{ minHeight: sheetMinHeight }}>
         <Text style={styles.heading}>Create {copy.titleLabel}</Text>
         <View style={styles.fieldRow}>
           <Text style={styles.label}>Title</Text>
@@ -202,7 +205,7 @@ export function MobilePrComposeSheet({
         />
         <Text style={styles.label}>Description</Text>
         <TextInput
-          style={[styles.bodyInput, { minHeight: bodyMinHeight }]}
+          style={[styles.bodyInput, styles.bodyInputFill]}
           value={body}
           onChangeText={setBody}
           placeholder="Describe the change…"
@@ -285,6 +288,11 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     minHeight: 96,
     textAlignVertical: 'top'
+  },
+  // Why: flex:1 lets the description absorb the column's slack so the sheet fills
+  // its min height instead of leaving blank space below the form.
+  bodyInputFill: {
+    flex: 1
   },
   draftRow: {
     flexDirection: 'row',
