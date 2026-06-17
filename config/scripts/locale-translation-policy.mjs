@@ -1,3 +1,4 @@
+import { isScreenCursorContext } from './locale-screen-cursor-exemptions.mjs'
 import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
 import { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
@@ -35,9 +36,11 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Devin',
   'Gemini',
   'GitHub Copilot',
+  'GitLab',
   'Goose',
   'Grok',
   'Hermes',
+  'Jira',
   'Kilocode',
   'Kimi',
   'Kiro',
@@ -47,6 +50,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'OpenClaude',
   'OpenClaw',
   'OpenCode',
+  'OpenCode Go',
   'Orca',
   'Pi',
   'PostHog',
@@ -60,6 +64,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Terminal',
   'Terminals',
   'VS Code',
+  'Warp',
   'Zed',
   'agent',
   'agents',
@@ -103,6 +108,8 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'ripgrep',
   'PowerShell',
   'powershell',
+  'TypeScript',
+  'typescript',
   'Mermaid',
   'mermaid',
   'Swift',
@@ -122,20 +129,30 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'bash',
   'GraphQL',
   'graphql',
+  'iOS',
+  'iPhone',
+  'iPad',
   'ide',
   'IDE',
   'ui',
   'UI',
-  'otlp',
-  'OTLP',
   'calt',
   'ai',
   'AI',
   'ci',
+  'CI',
   'REST',
   'rest',
+  'YAML',
   'yaml',
   'yml',
+  'XML',
+  'SQL',
+  'CSS',
+  'Token',
+  'token',
+  'HTTP/1.1',
+  'HTTP/2',
   'true',
   'false',
   '/home/user',
@@ -209,8 +226,10 @@ export const BRAND_MISTRANSLATIONS = {
     Pi: ['圆周率'],
     Droid: ['机器人'],
     'GitHub Copilot': ['GitHub 副驾驶', '副驾驶'],
+    Bitbucket: ['位桶'],
     Linear: ['线性', '线形'],
     Jira: ['吉拉'],
+    Tailscale: ['尾鳞', '尾鱗'],
     Agent: ['代理', '智能体'],
     Agents: ['代理', '智能体'],
     agent: ['代理', '智能体'],
@@ -228,7 +247,15 @@ export const BRAND_MISTRANSLATIONS = {
     Terminal: ['终端', '端子'],
     Terminals: ['终端', '端子'],
     terminal: ['终端', '端子'],
-    terminals: ['终端', '端子']
+    terminals: ['终端', '端子'],
+    Bash: ['重击'],
+    PowerShell: ['电源外壳'],
+    REST: ['休息'],
+    HEAD: ['头'],
+    Swift: ['迅速'],
+    Rust: ['锈'],
+    'Claude Code': ['Claude·科德'],
+    'Git AI Author': ['Git AI 作者']
   },
   ja: {
     Codex: ['法典', 'コーデックス'],
@@ -305,6 +332,8 @@ export const NATIVE_PICKER_LABELS = {
 }
 
 const CJK_LATIN_SPACED_TERMS = [
+  'Issues',
+  'Issue',
   'Terminal',
   'Terminals',
   'terminal',
@@ -324,10 +353,31 @@ const CJK_LATIN_SPACED_TERMS = [
   'commits',
   'commit',
   'Linear',
+  'GitHub',
+  'GitLab',
+  'Jira',
   'Claude',
+  'Claude Code',
   'Codex',
+  'Gemini',
+  'Kimi',
+  'OpenCode',
   'Orca',
-  'Cursor'
+  'Cursor',
+  'Bitbucket',
+  'Tailscale',
+  'Kagi',
+  'SSH',
+  'WSL',
+  'PR',
+  'MR',
+  'REST',
+  'HEAD',
+  'Bash',
+  'PowerShell',
+  'Git AI Author',
+  'Token',
+  'token'
 ]
 
 const CJK_LATIN_SPACED_TERM_PATTERN = CJK_LATIN_SPACED_TERMS.join('|')
@@ -360,7 +410,7 @@ function includesPreservedLatinTerm(value, term) {
   return new RegExp(`(^|[^A-Za-z_])${escapeRegExp(term)}($|[^A-Za-z_])`).test(value)
 }
 
-function applyBrandMistranslationFixes(enValue, localeValue, locale) {
+function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
   let result = localeValue
   const mistranslations = BRAND_MISTRANSLATIONS[locale] ?? {}
 
@@ -368,6 +418,11 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale) {
     ([left], [right]) => right.length - left.length
   )) {
     if (!enValue.includes(brand)) {
+      continue
+    }
+    // Why: terminal/theme "Cursor" labels name the on-screen カーソル, not the Cursor product —
+    // skip the revert so カーソル survives for these settings.
+    if (isScreenCursorContext(brand, enValue, key)) {
       continue
     }
     if (includesPreservedLatinTerm(result, brand)) {
@@ -436,7 +491,17 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   const keyOverride = LOCALE_KEY_OVERRIDES[key]?.[locale]
   if (keyOverride) {
     // Why: exact key overrides can still carry stale MT output, so glossary repairs remain the final gate.
-    let result = applyBrandMistranslationFixes(enValue, keyOverride, locale)
+    let result = applyBrandMistranslationFixes(enValue, keyOverride, locale, key)
+    result = applyPhraseFixes(enValue, result, locale)
+    if (['zh', 'ja', 'ko'].includes(locale)) {
+      result = applyCjkLatinTermSpacing(result, locale)
+    }
+    return result
+  }
+
+  const valueOverride = LOCALE_VALUE_OVERRIDES[locale]?.[enValue]
+  if (valueOverride) {
+    let result = applyBrandMistranslationFixes(enValue, valueOverride, locale, key)
     result = applyPhraseFixes(enValue, result, locale)
     if (['zh', 'ja', 'ko'].includes(locale)) {
       result = applyCjkLatinTermSpacing(result, locale)
@@ -448,7 +513,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
     return enValue
   }
 
-  let result = LOCALE_VALUE_OVERRIDES[locale]?.[enValue] ?? localeValue
+  let result = localeValue
 
   if (key.includes('.search.')) {
     const searchOverride = SEARCH_KEYWORD_OVERRIDES[locale]?.[enValue]
@@ -457,7 +522,7 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
     }
   }
 
-  result = applyBrandMistranslationFixes(enValue, result, locale)
+  result = applyBrandMistranslationFixes(enValue, result, locale, key)
   result = applyPhraseFixes(enValue, result, locale)
   if (['zh', 'ja', 'ko'].includes(locale)) {
     result = applyCjkLatinTermSpacing(result, locale)

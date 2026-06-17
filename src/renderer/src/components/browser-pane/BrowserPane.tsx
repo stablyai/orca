@@ -914,6 +914,7 @@ function RemoteBrowserPagePane({
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
+  const keybindings = useAppStore((state) => state.keybindings)
 
   currentBrowserTabIdRef.current = browserTab.id
   currentBrowserTabUrlRef.current = browserTab.url
@@ -1931,6 +1932,31 @@ function RemoteBrowserPagePane({
     [runRemoteNavigation]
   )
 
+  // Browser history shortcuts for SSH/runtime browsers.
+  // Why: remote browser panes have no local webview ref, so history shortcuts
+  // must route through the runtime RPC methods rather than desktop WebContents.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const shortcutPlatform = getShortcutPlatform()
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      const method = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
+        ? 'browser.back'
+        : keybindingMatchesAction('browser.forward', e, shortcutPlatform, keybindings)
+          ? 'browser.forward'
+          : null
+      if (method === null) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      void runRemoteNavigation(method)
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [isActive, keybindings, runRemoteNavigation])
+
   const submitAddressBar = (): void => {
     const searchEngine = useAppStore.getState().browserDefaultSearchEngine
     const kagiSessionLink = useAppStore.getState().browserKagiSessionLink
@@ -2593,6 +2619,17 @@ function BrowserPagePane({
   browserTabIdRef.current = browserTab.id
   const inputLockedRef = useRef(inputLocked)
   inputLockedRef.current = inputLocked
+  const navigateBrowserHistoryRef = useRef<(direction: 'back' | 'forward') => void>(() => {})
+  navigateBrowserHistoryRef.current = (direction: 'back' | 'forward'): void => {
+    // Why: Logitech Options+ side-button remaps on macOS arrive as these
+    // keyboard shortcuts. This local pane owns the webview ref, so route the
+    // remap through the same navigation path as the toolbar buttons.
+    if (direction === 'back') {
+      webviewRef.current?.goBack()
+    } else {
+      webviewRef.current?.goForward()
+    }
+  }
   const keybindings = useAppStore((state) => state.keybindings)
   const browserDefaultZoomLevel = useAppStore(
     (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
@@ -3222,6 +3259,45 @@ function BrowserPagePane({
     }
     return window.api.ui.onFindInBrowserPage(() => {
       setFindOpen(true)
+    })
+  }, [isActive])
+
+  // Browser history shortcuts (renderer path: focus on browser chrome)
+  // Why: macOS cannot deliver Logitech side-button navigation to Electron, but
+  // Logi Options+ can remap those buttons to standard browser history chords.
+  // Handle the chords here when focus is on the toolbar or address bar.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const shortcutPlatform = getShortcutPlatform()
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      const direction = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
+        ? 'back'
+        : keybindingMatchesAction('browser.forward', e, shortcutPlatform, keybindings)
+          ? 'forward'
+          : null
+      if (direction === null) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      navigateBrowserHistoryRef.current(direction)
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [isActive, keybindings])
+
+  // Browser history shortcuts (IPC path: focus inside webview guest)
+  // Why: a focused webview is a separate WebContents. Main forwards the same
+  // remapped history chords back here so page focus and toolbar focus behave
+  // identically.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    return window.api.ui.onBrowserHistoryNavigate((direction) => {
+      navigateBrowserHistoryRef.current(direction)
     })
   }, [isActive])
 
@@ -5232,7 +5308,7 @@ function BrowserPagePane({
                   <Button
                     size="icon-xs"
                     variant="ghost"
-                    className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
+                    className="can-hover:opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
                     onClick={() => handleDeleteBrowserAnnotation(annotation.id)}
                     aria-label={translate(
                       'auto.components.browser.pane.BrowserPane.f2d0c22d67',

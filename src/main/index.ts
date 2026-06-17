@@ -92,6 +92,8 @@ import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
+import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
+import { moveWorktree } from './git/worktree'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
@@ -141,6 +143,7 @@ import {
 import type { AgentStatusState } from '../shared/agent-status-types'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
+import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -190,6 +193,12 @@ const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
 if (appImageCliRedirect.redirected) {
   app.exit(appImageCliRedirect.status)
 }
+
+// Kill switch for the first-work on-disk folder rename. The renderer reconciles a
+// worktree id change via migrateWorktreeIdentity + a rename-aware worktrees:changed
+// handler, so an old->new id change is no longer mistaken for a deletion. Flip off
+// to disable the on-disk move (branch + display rename still happen) if needed.
+const ENABLE_FIRST_WORK_FOLDER_RENAME = false
 
 // Why: the store/runtime singletons live here in index.ts; injecting them keeps
 // the rename orchestrator free of module-level state and unit-testable.
@@ -267,6 +276,19 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
           firstAgentMessageRenameError: null
         })
       },
+      renameWorktreeFolder: ENABLE_FIRST_WORK_FOLDER_RENAME
+        ? (worktreeId, newLeaf) =>
+            renameWorktreeFolderOnFirstWork(worktreeId, newLeaf, {
+              getRepo: (repoId) => currentStore.getRepo(repoId),
+              getSettings: () => currentStore.getSettings(),
+              migrateWorktreeIdentity: (oldId, newId) =>
+                currentStore.migrateWorktreeIdentity(oldId, newId),
+              notifyWorktreeRenamed: (repoId, oldId, newId) =>
+                currentRuntime.notifyWorktreeFolderRenamed(repoId, oldId, newId),
+              pathExists: async (candidate) => existsSync(candidate),
+              moveWorktree
+            })
+        : undefined,
       setRenameError: (worktreeId, error) => {
         // Skip the write + renderer push when nothing changes — benign skips
         // clear the error on every settled worktree, most of which never had one.
@@ -683,7 +705,7 @@ function openMainWindow(): BrowserWindow {
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-      prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+      prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
     },
     agentAwakeService ?? undefined,
     crashReports ?? undefined,
@@ -691,9 +713,9 @@ function openMainWindow(): BrowserWindow {
     {
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
-      onBeforeRelaunch: () => {
+      onBeforeRelaunch: async () => {
         isQuitting = true
-        store?.flush()
+        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
       }
     }
   )
@@ -712,7 +734,9 @@ function openMainWindow(): BrowserWindow {
           markExpectedRendererReload(webContentsId)
         }
         recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
-      }
+      },
+      onBeforeUpdateQuit: () =>
+        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
     }
   )
   rateLimits.attach(window)
@@ -1314,7 +1338,10 @@ app.whenReady().then(async () => {
     onPtyStopped: clearProviderPtyState,
     onTerminalAgentStatus: (event) => {
       agentHookServer.ingestTerminalStatus(event)
-    }
+    },
+    // Why: hook-reported agent status is the same source the desktop sidebar
+    // reads. worktree.ps pulls it at query time so mobile shows the same agents.
+    getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot()
   })
   runtime = runtimeService
   automations = new AutomationService(store, {
@@ -1413,7 +1440,7 @@ app.whenReady().then(async () => {
     // even for the system-default path, so every Orca-launched Codex process
     // must resolve CODEX_HOME through the runtime-home service.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-    prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+    prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
   })
   starNag = new StarNagService(store, stats)
   starNag.start()

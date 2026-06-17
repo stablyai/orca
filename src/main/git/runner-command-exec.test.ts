@@ -13,7 +13,14 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
 
-import { commandExecFileAsync, gitExecFileAsync, gitStreamStdout } from './runner'
+import {
+  commandExecFileAsync,
+  ghExecFileAsync,
+  gitExecFileAsync,
+  gitStreamStdout,
+  translateWslOutputPaths,
+  wslAwareSpawn
+} from './runner'
 
 type MockChildProcess = EventEmitter & {
   stdout: EventEmitter
@@ -189,7 +196,7 @@ describe('runner execFile timeout handling', () => {
       cwd: '/repo',
       timeout: 1000
     })
-    const rejection = expect(promise).rejects.toThrow('git timed out.')
+    const rejection = expect(promise).rejects.toThrow(/git(?:\.exe)? timed out\./i)
     await vi.advanceTimersByTimeAsync(1000)
 
     await rejection
@@ -211,6 +218,56 @@ describe('runner execFile timeout handling', () => {
     expect(child.kill).toHaveBeenCalled()
   })
 
+  it('rejects gh executions that never call back using the default timeout', async () => {
+    const child = createMockChildProcess(1234)
+    execFileMock.mockReturnValue(child)
+
+    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+      cwd: '/repo'
+    })
+    const rejection = expect(promise).rejects.toThrow('gh timed out.')
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('honors explicit gh timeouts', async () => {
+    const child = createMockChildProcess(1234)
+    execFileMock.mockReturnValue(child)
+
+    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+      cwd: '/repo',
+      timeout: 1234
+    })
+    const rejection = expect(promise).rejects.toThrow('gh timed out.')
+    await vi.advanceTimersByTimeAsync(1233)
+    expect(child.kill).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('runs gh non-interactively while preserving explicit env', async () => {
+    const child = createMockChildProcess(1234)
+    let capturedEnv: NodeJS.ProcessEnv | undefined
+    execFileMock.mockImplementation((_cmd, _args, opts, cb) => {
+      capturedEnv = opts.env
+      cb(null, 'ok', '')
+      return child
+    })
+
+    await ghExecFileAsync(['api', 'user'], {
+      cwd: '/repo',
+      env: { ...process.env, GH_PROMPT_DISABLED: '0', ORCA_TEST_ENV: 'kept' },
+      timeout: 1234
+    })
+
+    expect(capturedEnv?.GH_PROMPT_DISABLED).toBe('0')
+    expect(capturedEnv?.ORCA_TEST_ENV).toBe('kept')
+  })
+
   // Issue #5308: git read-path calls must be forced non-interactive so a
   // credential / SSH host-key prompt fails fast instead of blocking forever on
   // stdin and wedging the serve runtime for all clients.
@@ -229,6 +286,52 @@ describe('runner execFile timeout handling', () => {
     expect(capturedEnv?.GIT_ASKPASS).toBe('')
     expect(capturedEnv?.SSH_ASKPASS).toBe('')
     expect(capturedEnv?.GIT_SSH_COMMAND).toContain('BatchMode=yes')
+  })
+
+  it('routes git through the selected WSL distro login shell when requested', async () => {
+    await withPlatform('win32', async () => {
+      const child = createMockChildProcess(1234)
+      execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+        cb(null, 'ok', '')
+        return child
+      })
+
+      await gitExecFileAsync(['status', '--short'], {
+        cwd: String.raw`C:\repo`,
+        wslDistro: 'Ubuntu'
+      })
+
+      expect(execFileMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu', '--', 'sh', '-lc', expect.any(String)],
+        expect.objectContaining({ cwd: undefined }),
+        expect.any(Function)
+      )
+      const shellCommand = execFileMock.mock.calls[0]?.[1]?.[5] as string
+      expect(shellCommand).toContain('getent passwd')
+      expect(shellCommand).toContain('exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('/mnt/c/repo')
+      expect(shellCommand).toContain("'git'")
+      expect(shellCommand).toContain('status')
+      expect(shellCommand).toContain('--short')
+    })
+  })
+
+  it('quotes WSL-routed executables before entering the shell', async () => {
+    await withPlatform('win32', async () => {
+      const child = createMockChildProcess(1234)
+      spawnMock.mockReturnValue(child)
+
+      wslAwareSpawn('codex; touch /tmp/pwned', ['--version'], {
+        cwd: String.raw`C:\repo`,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        wslDistro: 'Ubuntu',
+        useWslLoginShell: true
+      })
+
+      const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
+      expect(shellCommand).toContain(String.raw`'\''codex; touch /tmp/pwned'\'' '\''--version'\''`)
+    })
   })
 })
 
@@ -320,5 +423,15 @@ describe('gitStreamStdout', () => {
 
     await rejection
     expect(child.kill).toHaveBeenCalled()
+  })
+})
+
+describe('translateWslOutputPaths', () => {
+  it('translates WSL output paths with an explicit distro for Windows cwd routing', () => {
+    expect(
+      translateWslOutputPaths('worktree /mnt/c/Users/me/repo-feature\n', 'C:\\Users\\me\\repo', {
+        wslDistro: 'Ubuntu'
+      })
+    ).toBe('worktree C:\\Users\\me\\repo-feature\n')
   })
 })

@@ -18,33 +18,11 @@ import type { DiffComment } from '../../../../shared/types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut } from './editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
-
-type DiffViewerProps = {
-  modelKey: string
-  originalModelKey?: string
-  modifiedModelKey?: string
-  originalContent: string
-  modifiedContent: string
-  language: string
-  filePath: string
-  relativePath: string
-  sideBySide: boolean
-  editable?: boolean
-  // Why: optional because DiffViewer is also used by GitHubItemDialog for PR
-  // review, where there is no local worktree to attach comments to. When
-  // omitted, the per-line comment decorator is skipped.
-  worktreeId?: string
-  onAddLineComment?: (args: {
-    lineNumber: number
-    startLine?: number
-    body: string
-  }) => Promise<boolean>
-  commentableLineNumbers?: readonly number[]
-  addLineCommentLabel?: string
-  addLineCommentPlaceholder?: string
-  onContentChange?: (content: string) => void
-  onSave?: (content: string) => void
-}
+import { LargeDiffFallback } from './LargeDiffFallback'
+import { getLargeDiffRenderLimit } from './large-diff-render-limit'
+import { useDiffViewerLargeDiffLifecycle } from './useDiffViewerLargeDiffLifecycle'
+import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-action'
+import type { DiffViewerProps } from './diff-viewer-props'
 
 export default function DiffViewer({
   modelKey,
@@ -63,7 +41,9 @@ export default function DiffViewer({
   addLineCommentLabel,
   addLineCommentPlaceholder,
   onContentChange,
-  onSave
+  onSave,
+  largeDiffRenderLimit,
+  largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
@@ -101,6 +81,10 @@ export default function DiffViewer({
     left?: number
   } | null>(null)
 
+  const renderLimit = useMemo(
+    () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
+    [largeDiffRenderLimit, originalContent, modifiedContent]
+  )
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
   // Why: only forward the pending scroll id when this viewer owns the matching
@@ -253,6 +237,16 @@ export default function DiffViewer({
     }
   }, [modifiedEditor, modelKey, pendingScrollForThisViewer])
 
+  const handleEnterLargeDiffFallback = useCallback(() => {
+    // Why: when a tab transitions to the safety fallback, stale Monaco refs
+    // must not keep comment decorators or save handlers talking to disposed UI.
+    lineNumberOptionsSubRef.current?.dispose()
+    lineNumberOptionsSubRef.current = null
+    diffEditorRef.current = null
+    setModifiedEditor(null)
+    setPopover(null)
+  }, [])
+
   const handleSubmitComment = async (body: string): Promise<void> => {
     if (!popover) {
       return
@@ -300,8 +294,13 @@ export default function DiffViewer({
 
   const propsRef = useRef({ relativePath, language, onSave })
   propsRef.current = { relativePath, language, onSave }
-  const resolvedOriginalModelKey = originalModelKey ?? modelKey
-  const resolvedModifiedModelKey = modifiedModelKey ?? modelKey
+  const currentDiffModelPaths = useDiffViewerLargeDiffLifecycle({
+    limited: renderLimit.limited,
+    modelKey,
+    originalModelKey,
+    modifiedModelKey,
+    onEnterFallback: handleEnterLargeDiffFallback
+  })
 
   const handleMount: DiffOnMount = useCallback(
     (diffEditor, monaco) => {
@@ -396,7 +395,7 @@ export default function DiffViewer({
   return (
     <div className="flex flex-col flex-1 min-h-0">
       <div ref={diffBodyRef} className="flex-1 min-h-0 relative">
-        {popover && hasLineCommentAction && (
+        {popover && hasLineCommentAction && !renderLimit.limited && (
           <DiffCommentPopover
             key={popover.lineNumber}
             lineNumber={popover.lineNumber}
@@ -410,44 +409,57 @@ export default function DiffViewer({
             onSubmit={handleSubmitComment}
           />
         )}
-        <DiffEditor
-          height="100%"
-          language={language}
-          original={originalContent}
-          modified={modifiedContent}
-          theme={isDark ? 'vs-dark' : 'vs'}
-          onMount={handleMount}
-          // Why: A single file can have multiple live diff tabs at once
-          // (staged, unstaged, branch compare versions). The kept Monaco models
-          // must therefore key off the tab identity, not the raw file path, or
-          // one diff tab can incorrectly reuse another tab's model contents.
-          // Why: Changes mode sometimes needs to rotate only the original-side
-          // model after HEAD moves, while preserving the modified-side model's
-          // undo stack for continued editing.
-          originalModelPath={`diff:original:${resolvedOriginalModelKey}`}
-          modifiedModelPath={`diff:modified:${resolvedModifiedModelKey}`}
-          keepCurrentOriginalModel
-          keepCurrentModifiedModel
-          options={{
-            readOnly: !editable,
-            originalEditable: false,
-            renderSideBySide: sideBySide,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            fontSize: diffEditorFontSize,
-            fontFamily: settings?.terminalFontFamily || 'monospace',
-            lineNumbers: 'on',
-            automaticLayout: true,
-            renderOverviewRuler: true,
-            scrollbar: diffEditorScrollbarOptions,
-            padding: { top: 0 },
-            find: {
-              addExtraSpaceOnTop: false,
-              autoFindInSelection: 'never',
-              seedSearchStringFromSelection: 'never'
-            }
-          }}
-        />
+        {renderLimit.limited ? (
+          <LargeDiffFallback
+            filePath={relativePath}
+            renderLimit={renderLimit}
+            action={getDiffViewerLargeDiffSaveAction({
+              editable,
+              modifiedContent,
+              onSave,
+              saveContentAvailable: largeDiffSaveContentAvailable
+            })}
+          />
+        ) : (
+          <DiffEditor
+            height="100%"
+            language={language}
+            original={originalContent}
+            modified={modifiedContent}
+            theme={isDark ? 'vs-dark' : 'vs'}
+            onMount={handleMount}
+            // Why: A single file can have multiple live diff tabs at once
+            // (staged, unstaged, branch compare versions). The kept Monaco models
+            // must therefore key off the tab identity, not the raw file path, or
+            // one diff tab can incorrectly reuse another tab's model contents.
+            // Why: Changes mode sometimes needs to rotate only the original-side
+            // model after HEAD moves, while preserving the modified-side model's
+            // undo stack for continued editing.
+            originalModelPath={currentDiffModelPaths.originalModelPath}
+            modifiedModelPath={currentDiffModelPaths.modifiedModelPath}
+            keepCurrentOriginalModel
+            keepCurrentModifiedModel
+            options={{
+              readOnly: !editable,
+              originalEditable: false,
+              renderSideBySide: sideBySide,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              fontSize: diffEditorFontSize,
+              fontFamily: settings?.terminalFontFamily || 'monospace',
+              lineNumbers: 'on',
+              automaticLayout: true,
+              renderOverviewRuler: true,
+              scrollbar: diffEditorScrollbarOptions,
+              padding: { top: 0 },
+              find: {
+                addExtraSpaceOnTop: false,
+                autoFindInSelection: 'never',
+                seedSearchStringFromSelection: 'never'
+              }
+            }}
+          />
+        )}
       </div>
       {toastNode}
     </div>

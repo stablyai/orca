@@ -49,7 +49,6 @@ import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
-import { warmSystemFontFamilies } from '../system-fonts'
 import { registerUpdaterHandlers } from '../window/attach-main-window-services'
 import { registerClipboardHandlers } from '../window/clipboard-ipc-handlers'
 import type { ClaudeUsageStore } from '../claude-usage/store'
@@ -66,7 +65,7 @@ import type { KeybindingService } from '../keybindings/keybinding-service'
 let registered = false
 
 type CoreHandlerLifecycleOptions = {
-  onBeforeRelaunch?: () => void
+  onBeforeRelaunch?: () => void | Promise<void>
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
 }
 
@@ -163,5 +162,4 @@ export function registerCoreHandlers(
   registerClipboardHandlers()
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
-  warmSystemFontFamilies()
 }

@@ -10,7 +10,8 @@ import type {
   FolderWorkspace,
   LocalBaseRefRefreshResult,
   Worktree,
-  WorktreeLineage
+  WorktreeLineage,
+  WorkspaceLineage
 } from '../../../../shared/types'
 import { toast } from 'sonner'
 import {
@@ -90,7 +91,7 @@ import {
   unregisterPersistentWebview
 } from '../../components/browser-pane/webview-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -198,6 +199,19 @@ function makeLineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage 
     origin: 'manual',
     capture: { source: 'manual-action', confidence: 'explicit' },
     createdAt: 1,
+    ...overrides
+  }
+}
+
+function makeWorkspaceLineage(overrides: Partial<WorkspaceLineage> = {}): WorkspaceLineage {
+  return {
+    childWorkspaceKey: 'worktree:repo1::/path/child',
+    childInstanceId: 'child-instance',
+    parentWorkspaceKey: 'folder:folder-1',
+    parentInstanceId: null,
+    origin: 'cli',
+    capture: { source: 'env-workspace', confidence: 'inferred' },
+    createdAt: 2,
     ...overrides
   }
 }
@@ -923,6 +937,39 @@ describe('worktree lineage state', () => {
 
     expect(mockApi.worktrees.listLineage).toHaveBeenCalled()
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
+  })
+
+  it('fetches workspace lineage from the expanded local lineage response', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const workspaceLineage = makeWorkspaceLineage()
+    mockApi.worktrees.listLineage.mockResolvedValue({
+      lineage: { [lineage.worktreeId]: lineage },
+      workspaceLineage: { [workspaceLineage.childWorkspaceKey]: workspaceLineage }
+    })
+
+    await store.getState().fetchWorktreeLineage()
+
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [workspaceLineage.childWorkspaceKey]: workspaceLineage
+    })
+  })
+
+  it('clears workspace lineage on successful old-shape lineage refresh', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage()
+    const workspaceLineage = makeWorkspaceLineage()
+    store.setState({
+      workspaceLineageByChildKey: { [workspaceLineage.childWorkspaceKey]: workspaceLineage }
+    } as Partial<AppState>)
+    mockApi.worktrees.listLineage.mockResolvedValue({ [lineage.worktreeId]: lineage })
+
+    await store.getState().fetchWorktreeLineage()
+
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
   })
 
   it('updates a child lineage entry and bumps sortEpoch', async () => {
@@ -943,19 +990,56 @@ describe('worktree lineage state', () => {
     expect(store.getState().sortEpoch).toBe(4)
   })
 
-  it('removes a child lineage entry when the backend clears the parent link', async () => {
+  it('removes child lineage entries when the backend clears the parent link', async () => {
     const store = createTestStore()
     const lineage = makeLineage()
+    const workspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId)
+    })
     mockApi.worktrees.updateLineage.mockResolvedValue(null)
     store.setState({
       worktreeLineageById: { [lineage.worktreeId]: lineage },
+      workspaceLineageByChildKey: { [workspaceLineage.childWorkspaceKey]: workspaceLineage },
       sortEpoch: 3
     } as Partial<AppState>)
 
     await store.getState().updateWorktreeLineage(lineage.worktreeId, { noParent: true })
 
     expect(store.getState().worktreeLineageById).toEqual({})
+    expect(store.getState().workspaceLineageByChildKey).toEqual({})
     expect(store.getState().sortEpoch).toBe(4)
+  })
+
+  it('syncs workspace lineage when a child is manually reparented', async () => {
+    const store = createTestStore()
+    const lineage = makeLineage({
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' }
+    })
+    const oldWorkspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId),
+      parentWorkspaceKey: folderWorkspaceKey('folder-1')
+    })
+    mockApi.worktrees.updateLineage.mockResolvedValue(lineage)
+    store.setState({
+      workspaceLineageByChildKey: { [oldWorkspaceLineage.childWorkspaceKey]: oldWorkspaceLineage }
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeLineage(lineage.worktreeId, {
+      parentWorktreeId: lineage.parentWorktreeId
+    })
+
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [worktreeWorkspaceKey(lineage.worktreeId)]: {
+        childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId),
+        childInstanceId: lineage.worktreeInstanceId,
+        parentWorkspaceKey: worktreeWorkspaceKey(lineage.parentWorktreeId),
+        parentInstanceId: lineage.parentWorktreeInstanceId,
+        origin: lineage.origin,
+        capture: lineage.capture,
+        createdAt: lineage.createdAt
+      }
+    })
   })
 
   it('refetches lineage after an update failure', async () => {
@@ -1341,6 +1425,39 @@ describe('createWorktree base status merge', () => {
       linkedLinearIssue: 'ENG-123',
       workspaceStatus: 'in-review',
       pendingFirstAgentMessageRename: true
+    })
+  })
+
+  it('passes the active folder workspace as parent for in-app worktree creates', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      instanceId: 'child-instance'
+    })
+    const workspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(wt.id),
+      childInstanceId: 'child-instance',
+      parentWorkspaceKey: folderWorkspaceKey('folder-1'),
+      capture: { source: 'active-workspace', confidence: 'explicit' }
+    })
+    store.setState({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1')
+    } as Partial<AppState>)
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt, workspaceLineage })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo1',
+        name: 'feature',
+        parentWorkspace: folderWorkspaceKey('folder-1')
+      })
+    )
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [workspaceLineage.childWorkspaceKey]: workspaceLineage
     })
   })
 
@@ -3332,6 +3449,67 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(store.getState().hasHydratedWorktreePurge).toBe(true)
   })
 
+  it('bounds concurrent repo scans during hydration-time refresh', async () => {
+    const store = createTestStore()
+    const repos = Array.from({ length: 7 }, (_, index) => ({
+      id: `repo-${index}`,
+      path: `/repos/${index}`,
+      displayName: `repo-${index}`,
+      badgeColor: '#000',
+      addedAt: 0
+    }))
+    let activeScans = 0
+    let maxActiveScans = 0
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+      activeScans += 1
+      maxActiveScans = Math.max(maxActiveScans, activeScans)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      activeScans -= 1
+      return [makeWorktree({ id: `${repoId}::/wt`, repoId, path: `/wt/${repoId}` })]
+    })
+
+    store.setState({ repos } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(maxActiveScans).toBeLessThanOrEqual(5)
+    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(repos.length)
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+  })
+
+  it('bounds concurrent repo scans after the hydration purge has run', async () => {
+    const store = createTestStore()
+    const repos = Array.from({ length: 7 }, (_, index) => ({
+      id: `repo-${index}`,
+      path: `/repos/${index}`,
+      displayName: `repo-${index}`,
+      badgeColor: '#000',
+      addedAt: 0
+    }))
+    let activeScans = 0
+    let maxActiveScans = 0
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+      activeScans += 1
+      maxActiveScans = Math.max(maxActiveScans, activeScans)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      activeScans -= 1
+      return [makeWorktree({ id: `${repoId}::/wt`, repoId, path: `/wt/${repoId}` })]
+    })
+
+    store.setState({
+      hasHydratedWorktreePurge: true,
+      repos
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(maxActiveScans).toBeLessThanOrEqual(5)
+    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(repos.length)
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+  })
+
   it('preserves floating workspace state while purging a real stale worktree', async () => {
     const store = createTestStore()
     const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
@@ -3775,7 +3953,7 @@ describe('setRenamingWorktreeId', () => {
     expect(store.getState().renamingWorktreeId).toBeNull()
 
     store.getState().setRenamingWorktreeId('repo1::/feature')
-    expect(store.getState().renamingWorktreeId).toBe('repo1::/feature')
+    expect(store.getState().renamingWorktreeId).toEqual({ worktreeId: 'repo1::/feature' })
 
     store.getState().setRenamingWorktreeId(null)
     expect(store.getState().renamingWorktreeId).toBeNull()
@@ -3886,6 +4064,111 @@ describe('setWorktreesPinnedAndReveal', () => {
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[2].isPinned).toBe(true)
+  })
+})
+
+describe('migrateWorktreeIdentity', () => {
+  const OLD = 'repo1::/ws/cunner'
+  const NEW = 'repo1::/ws/worktree-creation-spinner'
+
+  it('re-keys worktree-scoped maps, pointers, the Set, and openFiles old->new', () => {
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: OLD,
+      activeWorkspaceKey: worktreeWorkspaceKey(OLD),
+      renamingWorktreeId: { worktreeId: OLD, rowKey: 'all:old' },
+      tabsByWorktree: { [OLD]: [{ id: 'tab1', worktreeId: OLD }] },
+      rightSidebarExplorerViewByWorktree: { [OLD]: 'search' },
+      activeTabIdByWorktree: { [OLD]: 'tab1' },
+      browserTabsByWorktree: { [OLD]: [{ id: 'browser1', worktreeId: OLD }] },
+      browserPagesByWorkspace: { browser1: [{ id: 'page1', worktreeId: OLD }] },
+      recentlyClosedBrowserTabsByWorktree: {
+        [OLD]: [
+          { workspace: { id: 'closed-browser', worktreeId: OLD }, pages: [{ worktreeId: OLD }] }
+        ]
+      },
+      recentlyClosedBrowserPagesByWorkspace: { browser1: [{ id: 'closed-page', worktreeId: OLD }] },
+      unifiedTabsByWorktree: { [OLD]: [{ id: 'unified1', worktreeId: OLD }] },
+      groupsByWorktree: { [OLD]: [{ id: 'group1', worktreeId: OLD }] },
+      gitStatusByWorktree: { [OLD]: [{ path: 'a.ts' }] },
+      lastVisitedAtByWorktreeId: { [OLD]: 123 },
+      defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
+      recentlyClosedEditorTabsByWorktree: { [OLD]: [{ id: 'f1', worktreeId: OLD }] },
+      remoteStatusesByWorktree: { [OLD]: { ahead: 1 } },
+      everActivatedWorktreeIds: new Set([OLD]),
+      openFiles: [{ id: 'f1', worktreeId: OLD }],
+      pendingReconnectWorktreeIds: [OLD],
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:leaf': {
+          paneKey: 'tab1:leaf',
+          tabId: 'tab1',
+          worktreeId: OLD,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          prompt: 'Do work',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      },
+      // Tab-id-keyed: must NOT be re-keyed (the tab keeps its id across rename).
+      terminalLayoutsByTabId: { tab1: { root: { type: 'leaf', leafId: '0' } } }
+    } as unknown as Partial<AppState>)
+
+    store.getState().migrateWorktreeIdentity(OLD, NEW)
+    const s = store.getState()
+
+    expect(s.tabsByWorktree[OLD]).toBeUndefined()
+    expect(s.tabsByWorktree[NEW]).toEqual([{ id: 'tab1', worktreeId: NEW }])
+    expect(s.activeWorktreeId).toBe(NEW)
+    expect(s.activeWorkspaceKey).toBe(worktreeWorkspaceKey(NEW))
+    expect(s.renamingWorktreeId).toEqual({ worktreeId: NEW, rowKey: 'all:old' })
+    expect(s.activeTabIdByWorktree[NEW]).toBe('tab1')
+    expect(s.browserTabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(s.browserPagesByWorkspace.browser1?.[0]?.worktreeId).toBe(NEW)
+    expect(s.recentlyClosedBrowserTabsByWorktree[NEW]?.[0]?.workspace.worktreeId).toBe(NEW)
+    expect(s.recentlyClosedBrowserTabsByWorktree[NEW]?.[0]?.pages[0]?.worktreeId).toBe(NEW)
+    expect(s.recentlyClosedBrowserPagesByWorkspace.browser1?.[0]?.worktreeId).toBe(NEW)
+    expect(s.unifiedTabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(s.groupsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(s.gitStatusByWorktree[NEW]).toEqual([{ path: 'a.ts' }])
+    expect(s.rightSidebarExplorerViewByWorktree[OLD]).toBeUndefined()
+    expect(s.rightSidebarExplorerViewByWorktree[NEW]).toBe('search')
+    expect(s.lastVisitedAtByWorktreeId[NEW]).toBe(123)
+    expect(s.defaultTerminalTabsAppliedByWorktreeId[NEW]).toBe(true)
+    // The two maps absent from the purge list are still re-keyed.
+    expect(s.recentlyClosedEditorTabsByWorktree[NEW]).toEqual([{ id: 'f1', worktreeId: NEW }])
+    expect(s.remoteStatusesByWorktree[NEW]).toEqual({ ahead: 1 })
+    expect(s.everActivatedWorktreeIds.has(NEW)).toBe(true)
+    expect(s.everActivatedWorktreeIds.has(OLD)).toBe(false)
+    expect(s.openFiles[0].worktreeId).toBe(NEW)
+    expect(s.pendingReconnectWorktreeIds).toEqual([NEW])
+    expect(s.sleepingAgentSessionsByPaneKey['tab1:leaf']?.worktreeId).toBe(NEW)
+    // Tab-id-keyed state is untouched — the tab survives with the same id.
+    expect(s.terminalLayoutsByTabId.tab1).toBeDefined()
+  })
+
+  it('is a no-op when the ids match', () => {
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: OLD,
+      tabsByWorktree: { [OLD]: [{ id: 'tab1' }] }
+    } as unknown as Partial<AppState>)
+    store.getState().migrateWorktreeIdentity(OLD, OLD)
+    expect(store.getState().tabsByWorktree[OLD]).toEqual([{ id: 'tab1' }])
+    expect(store.getState().activeWorktreeId).toBe(OLD)
+  })
+
+  it('leaves an unrelated active worktree pointer alone', () => {
+    const store = createTestStore()
+    const OTHER = 'repo1::/ws/other'
+    store.setState({
+      activeWorktreeId: OTHER,
+      tabsByWorktree: { [OLD]: [{ id: 'tab1' }] }
+    } as unknown as Partial<AppState>)
+    store.getState().migrateWorktreeIdentity(OLD, NEW)
+    expect(store.getState().activeWorktreeId).toBe(OTHER)
+    expect(store.getState().tabsByWorktree[NEW]).toEqual([{ id: 'tab1' }])
   })
 })
 

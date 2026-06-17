@@ -29,9 +29,12 @@ const PATH_SHAPED_PTY_ID = [
   'feature@@a1b2c3d4'
 ].join(sep)
 
-function overlayPath(kind: 'pi' | 'omp', ptyId: string): string {
+function overlayPath(kind: 'pi' | 'omp', sourceAgentDir: string): string {
   const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
-  const safeName = createHash('sha256').update(ptyId).digest('hex').slice(0, 32)
+  const safeName = createHash('sha256')
+    .update(`source:${sourceAgentDir}`)
+    .digest('hex')
+    .slice(0, 32)
   return join(userDataDir, rootDir, safeName)
 }
 
@@ -46,14 +49,14 @@ describe('PiTitlebarExtensionService overlay paths', () => {
     rmSync(join(userDataDir, 'omp-agent-overlays'), { recursive: true, force: true })
   })
 
-  it('hashes daemon-shaped pty ids into bounded overlay directory names', () => {
+  it('hashes source agent dirs into bounded shared overlay directory names', () => {
     const piHome = mkdtempSync(join(tmpdir(), 'orca-pi-overlay-path-home-'))
     const svc = new PiTitlebarExtensionService()
 
     try {
       const env = svc.buildPtyEnv(PATH_SHAPED_PTY_ID, piHome, 'pi')
 
-      expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('pi', PATH_SHAPED_PTY_ID))
+      expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('pi', piHome))
       expect(basename(env.PI_CODING_AGENT_DIR!)).toMatch(/^[a-f0-9]{32}$/)
       expect(readdirSync(join(env.PI_CODING_AGENT_DIR!, 'extensions')).sort()).toEqual([
         'orca-agent-status.ts',

@@ -63,12 +63,20 @@ export function readHooksJson(configPath: string): HooksConfig | null {
 export function createManagedCommandMatcher(
   scriptFileName: string
 ): (command: string | undefined) => boolean {
-  const needle = `agent-hooks/${scriptFileName}`
+  const scriptStem = scriptFileName.replace(/\.(?:cmd|sh)$/, '')
+  // Why: local Windows installs use .cmd, while SSH/POSIX installs and older
+  // entries use .sh. A platform switch should still sweep stale Orca hooks.
+  const needles = [
+    `agent-hooks/${scriptFileName}`,
+    `agent-hooks/${scriptStem}.cmd`,
+    `agent-hooks/${scriptStem}.sh`
+  ]
   return (command) => {
     if (!command) {
       return false
     }
-    return command.replaceAll('\\', '/').includes(needle)
+    const normalizedCommand = command.replaceAll('\\', '/')
+    return needles.some((needle) => normalizedCommand.includes(needle))
   }
 }
 

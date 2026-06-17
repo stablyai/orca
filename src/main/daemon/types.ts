@@ -3,8 +3,10 @@
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 13
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
+export const PROTOCOL_VERSION = 14
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
+] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -134,6 +136,7 @@ export type KillRequest = {
   type: 'kill'
   payload: {
     sessionId: string
+    immediate?: boolean
   }
 }
 

@@ -666,7 +666,7 @@ export class SshRelaySession {
   }
 
   // Why: ship the OpenCode plugin / Pi extension source bodies to the relay
-  // so it can materialize per-PTY overlay dirs and inject OPENCODE_CONFIG_DIR
+  // so it can materialize overlay dirs and inject OPENCODE_CONFIG_DIR
   // / PI_CODING_AGENT_DIR into spawn env. The strings change as we add agent
   // events (recent additions: cursor, pi); pinning them to the relay binary
   // would force a relay redeploy on every Orca update. See

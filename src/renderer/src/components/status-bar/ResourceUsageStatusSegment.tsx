@@ -414,7 +414,7 @@ function SessionRow({
           className={cn(
             'rounded p-0.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive',
             session.bound &&
-              'opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
+              'can-hover:opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
           )}
           aria-label={translate(
             'auto.components.status.bar.ResourceUsageStatusSegment.fa6d36758d',
@@ -528,18 +528,20 @@ function WorktreeRow({
         </button>
         <div className="flex items-center gap-2 shrink-0 pr-3">
           <div className="relative">
+            {/* Why: no-hover devices show the action overlay by default, so
+                the sparkline yields there just like it does during hover. */}
             <span
               className={cn(
                 'block transition-opacity',
                 showWorktreeActions &&
-                  'group-hover/wtrow:opacity-0 group-hover/wtrow:pointer-events-none group-focus-within/wtrow:opacity-0 group-focus-within/wtrow:pointer-events-none'
+                  'group-hover/wtrow:opacity-0 group-hover/wtrow:pointer-events-none group-focus-within/wtrow:opacity-0 group-focus-within/wtrow:pointer-events-none [@media(hover:none)]:opacity-0 [@media(hover:none)]:pointer-events-none'
               )}
               aria-hidden={showWorktreeActions ? undefined : true}
             >
               <Sparkline samples={worktree.history} />
             </span>
             {showWorktreeActions && (
-              <div className="absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 pointer-events-none transition-opacity group-hover/wtrow:opacity-100 group-hover/wtrow:pointer-events-auto group-focus-within/wtrow:opacity-100 group-focus-within/wtrow:pointer-events-auto">
+              <div className="absolute inset-0 flex items-center justify-end gap-0.5 can-hover:opacity-0 can-hover:pointer-events-none transition-opacity group-hover/wtrow:opacity-100 group-hover/wtrow:pointer-events-auto group-focus-within/wtrow:opacity-100 group-focus-within/wtrow:pointer-events-auto">
                 <Tooltip delayDuration={300}>
                   <TooltipTrigger asChild>
                     <button

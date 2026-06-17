@@ -54,6 +54,7 @@ const ORCA_SHELL_WRAPPER_ENV = [
 ] as const
 const POWERSHELL_OSC133_COMMAND_ARGS = ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)]
 const ZSH_SHELL_READY_DIR = /shell-ready[\\/]zsh/
+const itOnMacHost = process.platform === 'darwin' ? it : it.skip
 
 function mockPtyProcess(pid = 12345) {
   const onDataListeners: ((data: string) => void)[] = []
@@ -148,7 +149,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('repairs a deleted macOS daemon cwd before spawning node-pty', () => {
+  itOnMacHost('repairs a deleted macOS daemon cwd before spawning node-pty', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -231,10 +232,264 @@ describe('createPtySubprocess', () => {
       })
 
       expect(handle.getForegroundProcess()).toBe('node')
-      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(proc.pid, 'node')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        proc.pid,
+        'node',
+        expect.any(Object)
+      )
 
       resolveForeground('codex')
       await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('serves daemon Windows wrapper agent foreground from an async cache', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'node.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    let resolveForeground!: (processName: string) => void
+    resolveAgentForegroundProcessMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveForeground = resolve
+      })
+    )
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('node.exe')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        proc.pid,
+        'node.exe',
+        expect.any(Object)
+      )
+
+      resolveForeground('codex')
+      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('serves daemon shell-rooted agent foreground from an async cache', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'powershell.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    let resolveForeground!: (processName: string) => void
+    resolveAgentForegroundProcessMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveForeground = resolve
+      })
+    )
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('powershell.exe')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        proc.pid,
+        'powershell.exe',
+        expect.any(Object)
+      )
+
+      resolveForeground('codex')
+      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('does not let stale shell enrichment clear a newer direct agent foreground cache', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'powershell.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    let resolveForeground!: (processName: string) => void
+    resolveAgentForegroundProcessMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveForeground = resolve
+      })
+    )
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('powershell.exe')
+      proc.process = 'codex'
+      expect(handle.getForegroundProcess()).toBe('codex')
+
+      resolveForeground('powershell.exe')
+      await Promise.resolve()
+      await Promise.resolve()
+
+      proc.process = 'powershell.exe'
+      expect(handle.getForegroundProcess()).toBe('codex')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('keeps menu startup agent foreground through early negative shell enrichment', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
+    const proc = mockPtyProcess()
+    proc.process = 'powershell.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    resolveAgentForegroundProcessMock.mockResolvedValue('powershell.exe')
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        command: 'codex'
+      })
+
+      expect(handle.getForegroundProcess()).toBe('codex')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        proc.pid,
+        'powershell.exe',
+        expect.any(Object)
+      )
+
+      await Promise.resolve()
+      expect(handle.getForegroundProcess()).toBe('codex')
+
+      vi.advanceTimersByTime(4_999)
+      expect(handle.getForegroundProcess()).toBe('codex')
+
+      vi.advanceTimersByTime(2)
+      expect(handle.getForegroundProcess()).toBe('powershell.exe')
+    } finally {
+      vi.useRealTimers()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('keeps menu startup agent foreground during a slow Windows shell enrichment window', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-16T12:00:00.000Z'))
+    const proc = mockPtyProcess()
+    proc.process = 'powershell.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    let resolveForeground!: (processName: string) => void
+    resolveAgentForegroundProcessMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveForeground = resolve
+      })
+    )
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'repo::C:\\repo\\orca@@deadbeef',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo\\orca',
+        command: 'codex'
+      })
+
+      expect(handle.getForegroundProcess()).toBe('codex')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        proc.pid,
+        'powershell.exe',
+        expect.objectContaining({
+          contextPaths: expect.arrayContaining(['C:\\repo\\orca'])
+        })
+      )
+
+      vi.advanceTimersByTime(2_500)
+      expect(handle.getForegroundProcess()).toBe('codex')
+
+      resolveForeground('powershell.exe')
+      await vi.runAllTimersAsync()
+    } finally {
+      vi.useRealTimers()
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('uses the spawned Windows shell when node-pty reports only the terminal name', async () => {
+    const proc = mockPtyProcess()
+    proc.process = 'xterm-256color'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    resolveAgentForegroundProcessMock.mockResolvedValue('codex')
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe'
+      })
+
+      expect(handle.getForegroundProcess()).toBe('powershell.exe')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        proc.pid,
+        'powershell.exe',
+        expect.any(Object)
+      )
+
+      await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('does not schedule foreground enrichment for arbitrary Windows TUIs', () => {
+    const proc = mockPtyProcess()
+    proc.process = 'vim.exe'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
+
+      expect(handle.getForegroundProcess()).toBe('vim.exe')
+      expect(resolveAgentForegroundProcessMock).not.toHaveBeenCalled()
     } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
@@ -246,14 +501,22 @@ describe('createPtySubprocess', () => {
     const proc = mockPtyProcess()
     proc.process = 'xterm-256color'
     spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
 
-    const handle = createPtySubprocess({
-      sessionId: 'test',
-      cols: 80,
-      rows: 24
-    })
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24
+      })
 
-    expect(handle.getForegroundProcess()).toBeNull()
+      expect(handle.getForegroundProcess()).toBeNull()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 
   it('does not inherit parent Orca pane identity when caller omits pane env', () => {

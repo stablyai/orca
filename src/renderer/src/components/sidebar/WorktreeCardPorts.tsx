@@ -242,7 +242,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
             </span>
           </TooltipContent>
         </Tooltip>
-        <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
+        <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 can-hover:opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
           <PortAction
             label={translate(
               'auto.components.sidebar.WorktreeCardPorts.33bc7d7495',

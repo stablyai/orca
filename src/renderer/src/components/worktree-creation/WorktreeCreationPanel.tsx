@@ -15,9 +15,11 @@ import { translate } from '@/i18n/i18n'
  * debounced upstream so fast creates never paint it.
  */
 export default function WorktreeCreationPanel({
-  creationId
+  creationId,
+  reserveCollapsedSidebarHeaderSpace = false
 }: {
   creationId: string
+  reserveCollapsedSidebarHeaderSpace?: boolean
 }): React.JSX.Element | null {
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   if (!entry) {
@@ -34,6 +36,19 @@ export default function WorktreeCreationPanel({
           create reads as a workspace tab. Carries only the worktree name + a
           cancel control — the live status lives in the body below. */}
       <div className="flex h-[36px] shrink-0 items-stretch border-b border-border bg-card">
+        {reserveCollapsedSidebarHeaderSpace ? (
+          // Why: collapsed sidebar chrome floats above this strip, so reserve
+          // the same measured width real tabs use to keep title/cancel clear.
+          <div
+            className="shrink-0"
+            style={
+              {
+                width: 'var(--collapsed-sidebar-header-width)',
+                WebkitAppRegion: 'no-drag'
+              } as React.CSSProperties
+            }
+          />
+        ) : null}
         <div className="flex h-full max-w-[240px] items-center gap-1.5 border-r border-border px-2.5 text-xs">
           {isError ? (
             <AlertTriangle className="size-3.5 shrink-0 text-destructive" />

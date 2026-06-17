@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: () => '⌘F'
+  useShortcutLabel: () => '⌘F',
+  useShortcutKeyCombos: () => [['⌘', 'F']]
 }))
 
 vi.mock('./settings-setup-guide-progress', () => ({

@@ -18,6 +18,10 @@ import type { SFTPWrapper } from 'ssh2'
 import { ClaudeHookService } from './hook-service'
 import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
+const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
+const OPENCLAUDE_SCRIPT_FILE_NAME =
+  process.platform === 'win32' ? 'openclaude-hook.cmd' : 'openclaude-hook.sh'
+
 type FakeFs = {
   files: Map<string, string>
   dirs: Set<string>
@@ -106,6 +110,7 @@ describe('ClaudeHookService.install', () => {
   it('installs managed hooks into Claude settings and preserves user Bedrock settings', () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-hooks-'))
     vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
     try {
       const legacyPath = join(tmpHome, '.claude', 'settings.json')
       mkdirSync(join(tmpHome, '.claude'), { recursive: true })
@@ -155,15 +160,15 @@ describe('ClaudeHookService.install', () => {
           definition.hooks.map((hook) => hook.command)
       )
       expect(legacyCommands).toContain('/usr/local/bin/user-hook')
-      expect(legacyCommands.some((command: string) => command.includes('claude-hook.sh'))).toBe(
-        true
-      )
+      expect(
+        legacyCommands.some((command: string) => command.includes(CLAUDE_SCRIPT_FILE_NAME))
+      ).toBe(true)
       expect(
         legacyCommands.some((command: string) =>
           command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
         )
       ).toBe(false)
-      expect(legacy.hooks.StopFailure[0].hooks[0].command).toContain('claude-hook.sh')
+      expect(legacy.hooks.StopFailure[0].hooks[0].command).toContain(CLAUDE_SCRIPT_FILE_NAME)
     } finally {
       vi.unstubAllEnvs()
       rmSync(tmpHome, { recursive: true, force: true })
@@ -261,6 +266,7 @@ describe('OpenClaudeHookService-compatible install', () => {
   it('installs managed hooks into OpenClaude settings without touching Claude settings', () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-openclaude-hooks-'))
     vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
     try {
       const openClaudeSettings = join(tmpHome, '.openclaude', 'settings.json')
       mkdirSync(join(tmpHome, '.openclaude'), { recursive: true })
@@ -276,10 +282,10 @@ describe('OpenClaudeHookService-compatible install', () => {
       const parsed = JSON.parse(readFileSync(openClaudeSettings, 'utf-8'))
       for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
         const command = parsed.hooks[event][0].hooks[0].command as string
-        expect(command).toContain('openclaude-hook.sh')
+        expect(command).toContain(OPENCLAUDE_SCRIPT_FILE_NAME)
       }
       expect(
-        readFileSync(join(tmpHome, '.orca', 'agent-hooks', 'openclaude-hook.sh'), 'utf-8')
+        readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('/hook/claude')
       expect(existsSync(join(tmpHome, '.claude', 'settings.json'))).toBe(false)
     } finally {

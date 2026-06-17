@@ -42,11 +42,12 @@ import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-opti
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
-const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
 const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
+const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
 
 type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
@@ -66,6 +67,10 @@ type NewWorkspaceComposerCardProps = {
   projectHostSetupOptions?: ProjectHostSetupOption[]
   selectedProjectHostSetupId?: string | null
   onProjectHostSetupChange?: (setupId: string) => void
+  repoBackedSearchRepos?: RepoOption[]
+  repoBackedSourcesDisabled?: boolean
+  allowSmartNameAddProject?: boolean
+  smartNameRepoSwitchTarget?: 'project' | 'task-source'
   primaryActionLabel: string
   projectLabel?: string
   projectPlaceholder?: string
@@ -79,6 +84,7 @@ type NewWorkspaceComposerCardProps = {
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
+  smartNameGitHubSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
@@ -294,6 +300,10 @@ export default function NewWorkspaceComposerCard({
   projectHostSetupOptions = EMPTY_PROJECT_HOST_SETUP_OPTIONS,
   selectedProjectHostSetupId = null,
   onProjectHostSetupChange,
+  repoBackedSearchRepos,
+  repoBackedSourcesDisabled = false,
+  allowSmartNameAddProject = true,
+  smartNameRepoSwitchTarget = 'project',
   primaryActionLabel,
   projectLabel,
   projectPlaceholder,
@@ -307,6 +317,7 @@ export default function NewWorkspaceComposerCard({
   onSmartLinearIssueSelect,
   smartNameSelection,
   onClearSmartNameSelection,
+  smartNameGitHubSourceContext,
   forkPushWarning,
   detectedAgentIds,
   onOpenAgentSettings,
@@ -353,6 +364,10 @@ export default function NewWorkspaceComposerCard({
     const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
     return repo?.displayName ?? repo?.path ?? 'This project'
   }, [eligibleRepos, repoId])
+  const selectedProjectName = React.useMemo(() => {
+    const option = projectOptions.find((candidate) => candidate.id === selectedProjectId)
+    return option?.displayName ?? selectedRepoName
+  }, [projectOptions, selectedProjectId, selectedRepoName])
   const sshStatusLabel = selectedRepoSshStatus
     ? getSshStatusLabel(selectedRepoSshStatus)
     : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
@@ -455,7 +470,7 @@ export default function NewWorkspaceComposerCard({
   )
   useContextualTour(
     'workspace-creation',
-    eligibleRepos.length > 0 && Boolean(repoId),
+    projectOptions.length > 0 && Boolean(selectedProjectId),
     contextualTourSource ??
       (activeModal === 'new-workspace-composer'
         ? 'workspace_creation_modal'
@@ -465,6 +480,7 @@ export default function NewWorkspaceComposerCard({
   return (
     <div
       ref={setComposerNode}
+      data-workspace-composer-root="true"
       // Why: preload classifies native OS file drops by the nearest
       // `data-native-file-drop-target` marker in the composedPath. Tagging
       // the composer root makes drops anywhere on the card route to the
@@ -518,12 +534,10 @@ export default function NewWorkspaceComposerCard({
               projectPlaceholder ??
               translate('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
             }
-            // Why: programmatic .focus() from the Dialog's onOpenAutoFocus
-            // handler does not reliably trigger :focus-visible in Chromium.
-            // Mirror the Input component's standard ring (border-ring +
-            // ring-ring/50, 3px) onto :focus so the autofocused repo trigger
-            // paints the familiar field ring instead of leaving no visible
-            // focus state.
+            // Why: programmatic .focus() does not reliably trigger
+            // :focus-visible in Chromium. Mirror the Input component's
+            // standard ring (border-ring + ring-ring/50, 3px) onto :focus so
+            // keyboard navigation paints the familiar field ring.
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             invalid={Boolean(projectError)}
             describedBy={projectDescriptionId}
@@ -532,7 +546,7 @@ export default function NewWorkspaceComposerCard({
             <p id={projectDescriptionId} className="text-[11px] text-destructive">
               {projectError}
             </p>
-          ) : eligibleRepos.length === 0 ? (
+          ) : projectOptions.length === 0 ? (
             <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
               {emptyProjectMessage ??
                 translate(
@@ -562,7 +576,7 @@ export default function NewWorkspaceComposerCard({
               <div className="min-w-0">
                 <div className="truncate text-xs font-medium text-foreground">
                   {translate('auto.components.NewWorkspaceComposerCard.b5a0796911', 'Connect')}{' '}
-                  {selectedRepoName}
+                  {selectedProjectName}
                 </div>
                 <div className="mt-0.5 text-[11px] text-muted-foreground">{sshStatusLabel}</div>
               </div>
@@ -615,10 +629,18 @@ export default function NewWorkspaceComposerCard({
             onLinearIssueSelect={onSmartLinearIssueSelect}
             selectedSource={smartNameSelection}
             onClearSelectedSource={onClearSmartNameSelection}
+            githubSourceContext={smartNameGitHubSourceContext}
             disabled={selectedRepoRequiresConnection}
-            disabledPlaceholder="Connect this repo first"
+            disabledPlaceholder={translate(
+              'auto.components.NewWorkspaceComposerCard.connectProjectFirst',
+              'Connect this project first'
+            )}
             textOnly={!selectedRepoIsGit}
             branchesEnabled={branchesEnabled}
+            repoBackedSourcesDisabled={repoBackedSourcesDisabled}
+            repoBackedSearchRepos={repoBackedSearchRepos}
+            allowCrossRepoProjectAdd={allowSmartNameAddProject}
+            crossRepoSwitchTarget={smartNameRepoSwitchTarget}
             onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user

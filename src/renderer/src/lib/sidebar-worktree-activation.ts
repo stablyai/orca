@@ -51,7 +51,9 @@ export function activateWorktreeFromSidebar(worktreeId: string): void {
     if (pendingSidebarWorktreeActivation?.worktreeId === worktreeId) {
       pendingSidebarWorktreeActivation = null
     }
-    activateAndRevealWorktree(worktreeId)
+    // Why: sidebar clicks already happen on a visible row; revealing again can
+    // jump duplicate pinned/canonical entries back to the first mounted copy.
+    activateAndRevealWorktree(worktreeId, { revealInSidebar: false })
   }
 
   if (!shouldDeferSidebarWorktreeActivation(worktreeId)) {

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildNewWorkspaceProjectOptions } from './new-workspace-project-options'
-import type { Project, ProjectHostSetup, Repo } from '../../../shared/types'
+import {
+  buildNewWorkspaceFolderSourceOptions,
+  buildNewWorkspaceProjectOptions,
+  getRepoIdFromNewWorkspaceFolderSourceOptionId
+} from './new-workspace-project-options'
+import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../shared/types'
 
 function repo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
@@ -43,6 +47,22 @@ function setup(overrides: Partial<ProjectHostSetup>): ProjectHostSetup {
   }
 }
 
+function group(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
+  return {
+    id: 'group-1',
+    name: 'Platform',
+    parentPath: '/tmp/platform',
+    parentGroupId: null,
+    createdFrom: 'folder-scan',
+    tabOrder: 1,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
 describe('buildNewWorkspaceProjectOptions', () => {
   it('deduplicates a logical project across local and SSH setups', () => {
     const options = buildNewWorkspaceProjectOptions({
@@ -57,6 +77,8 @@ describe('buildNewWorkspaceProjectOptions', () => {
     expect(options).toEqual([
       {
         id: 'github:stablyai/orca',
+        kind: 'project',
+        projectId: 'github:stablyai/orca',
         displayName: 'orca',
         badgeColor: '#111111',
         detail: 'stablyai/orca'
@@ -80,5 +102,51 @@ describe('buildNewWorkspaceProjectOptions', () => {
     })
 
     expect(options.map((option) => option.id)).toEqual(['github:stablyai/orca'])
+  })
+})
+
+describe('buildNewWorkspaceFolderSourceOptions', () => {
+  it('keeps concrete source repos separate even when they are the same logical project', () => {
+    const options = buildNewWorkspaceFolderSourceOptions([
+      repo('local-repo', { displayName: 'orca', path: '/tmp/orca' }),
+      repo('ssh-repo', {
+        displayName: 'orca',
+        path: '/srv/orca',
+        connectionId: 'ssh:builder'
+      })
+    ])
+
+    expect(options.map((option) => option.id).sort()).toEqual([
+      'folder-source:local-repo',
+      'folder-source:ssh-repo'
+    ])
+    expect(options.map((option) => option.detail).sort()).toEqual(['/srv/orca', '/tmp/orca'])
+    expect(getRepoIdFromNewWorkspaceFolderSourceOptionId('folder-source:ssh-repo')).toBe('ssh-repo')
+  })
+})
+
+describe('buildNewWorkspaceCreateTargetOptions', () => {
+  it('includes folder-backed repo groups and excludes organizational groups', async () => {
+    const { buildNewWorkspaceCreateTargetOptions } = await import('./new-workspace-project-options')
+    const options = buildNewWorkspaceCreateTargetOptions({
+      projects: [project()],
+      projectHostSetups: [setup({ id: 'local-setup', repoId: 'local-repo' })],
+      eligibleRepos: [repo('local-repo')],
+      projectGroups: [
+        group({ id: 'folder-group', name: 'Platform', parentPath: '/tmp/platform' }),
+        group({ id: 'org-group', name: 'Org', parentPath: null })
+      ]
+    })
+
+    expect(options.map((option) => option.id).sort()).toEqual([
+      'github:stablyai/orca',
+      'project-group:folder-group'
+    ])
+    expect(options.find((option) => option.id === 'project-group:folder-group')).toMatchObject({
+      kind: 'project-group',
+      projectGroupId: 'folder-group',
+      displayName: 'Platform',
+      detail: '/tmp/platform'
+    })
   })
 })

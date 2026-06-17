@@ -36,6 +36,7 @@ export type WorktreeCreationRequest = {
   name: string
   displayName?: string
   baseBranch?: string
+  compareBaseRef?: string
   setupDecision: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
   telemetrySource?: WorkspaceCreateTelemetrySource
@@ -81,10 +82,9 @@ export type PendingWorktreeCreation = {
    *  progress — the panel shows a single indeterminate spinner rather than a
    *  stepped checklist that would freeze on the first step. */
   indeterminate: boolean
-  /** Gates the in-frame loader so fast creates never flash it: false until the
-   *  create has been pending past the debounce delay (or it errors). Until then
-   *  the prior workspace content stays visible and a fast create swaps straight
-   *  to its terminal. */
+  /** Whether older callers have explicitly revealed the in-frame loader. New
+   *  background creates set this immediately so the faux tab strip stays stable
+   *  from create start through terminal handoff. */
   loaderVisible: boolean
   error?: string
   request: WorktreeCreationRequest

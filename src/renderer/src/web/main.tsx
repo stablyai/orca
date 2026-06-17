@@ -46,7 +46,7 @@ function WebRoot(): React.JSX.Element {
 
   installWebPreloadApi()
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+    <Suspense fallback={<div className="min-h-dvh bg-background" />}>
       <App />
     </Suspense>
   )

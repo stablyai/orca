@@ -665,13 +665,14 @@ export class PtyHandler {
     if (!managed || managed.disposed) {
       return null
     }
-    return await getForegroundProcessName(managed.pty.pid)
+    return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
   }
 
   private async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
     const results: { id: string; cwd: string; title: string }[] = []
     for (const [id, managed] of this.ptys) {
-      const title = (await getForegroundProcessName(managed.pty.pid)) || 'shell'
+      const title =
+        (await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
       results.push({ id, cwd: managed.initialCwd, title })
     }
     return results

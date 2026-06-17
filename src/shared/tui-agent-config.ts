@@ -94,6 +94,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'autohand',
     promptInjectionMode: 'stdin-after-start'
   },
+  ante: {
+    detectCmd: 'ante',
+    launchCmd: 'ante',
+    expectedProcess: 'ante',
+    // Why: `ante --prompt` is Ante's documented headless mode (runs the task
+    // once and exits), so Orca launches the bare interactive TUI and injects
+    // the composed prompt after startup to keep the hosted session alive.
+    promptInjectionMode: 'stdin-after-start'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',

@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
+import { getNewWorktreeCardStyleSearchEntry } from './new-worktree-card-style-search-entry'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -146,6 +147,47 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     },
     {
       title: translate(
+        'auto.components.settings.experimental.search.agentHibernation.title',
+        'Agent hibernation'
+      ),
+      description: translate(
+        'auto.components.settings.experimental.search.agentHibernation.description',
+        'Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.agent',
+          'agent'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.agents',
+          'agents'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.hibernate',
+          'hibernate'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.sleep',
+          'sleep'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.minutes',
+          'minutes'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentHibernation.terminal',
+          'terminal'
+        )
+      ]
+    },
+    getNewWorktreeCardStyleSearchEntry(),
+    {
+      title: translate(
         'auto.components.settings.experimental.search.78c2a8dc74',
         'Symlinks on worktrees'
       ),
@@ -215,6 +257,18 @@ export function getExperimentalSearchEntry() {
     ),
     terminalAttention: findEntry(
       translate('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')
+    ),
+    agentHibernation: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.agentHibernation.title',
+        'Agent hibernation'
+      )
+    ),
+    newWorktreeCardStyle: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
+        'New card style'
+      )
     ),
     symlinksOnWorktrees: findEntry(
       translate('auto.components.settings.experimental.search.78c2a8dc74', 'Symlinks on worktrees')

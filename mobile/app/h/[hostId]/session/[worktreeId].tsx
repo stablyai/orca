@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Animated, AppState, type AppStateStatus } from 'react-native'
+import { Animated, AppState, Linking, type AppStateStatus } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
 import {
   BackHandler,
   FlatList,
+  Image,
   View,
   Text,
   ScrollView,
@@ -32,6 +33,7 @@ import {
   FileText,
   GitBranch,
   Globe,
+  ImagePlus,
   Keyboard as KeyboardIcon,
   MessageSquare,
   Mic,
@@ -44,7 +46,15 @@ import {
   X
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
+import type { RuntimeTerminalPathResolution } from '../../../../../src/shared/runtime-types'
 import { loadHosts } from '../../../../src/transport/host-store'
+import {
+  loadTerminalAutocompleteEnabled,
+  loadTerminalLinkOpenMode,
+  loadTerminalTextScale,
+  saveTerminalTextScale,
+  type MobileTerminalLinkOpenMode
+} from '../../../../src/storage/preferences'
 import {
   useHostClient,
   useForceReconnect,
@@ -125,6 +135,18 @@ import {
   buildMobileImagePastePayload,
   saveMobileClipboardImageAsTempFile
 } from '../../../../src/session/mobile-clipboard-image'
+import { useMobileImageAttachment } from '../../../../src/session/use-mobile-image-attachment'
+import { classifyMobileArtifact } from '../../../../src/session/mobile-artifact-kind'
+import {
+  buildMarkdownDiskFallbackDoc,
+  shouldReadMarkdownFromDiskAfterReadTabFailure
+} from '../../../../src/session/mobile-markdown-disk-fallback'
+import { MobileHtmlPreview } from '../../../../src/components/MobileHtmlPreview'
+import { MobileDictationSetupSheet } from '../../../../src/components/MobileDictationSetupSheet'
+import {
+  fetchDictationSetup,
+  isDictationSetupRequiredError
+} from '../../../../src/dictation/mobile-dictation-setup'
 import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
 import {
   getRepoIdFromMobileWorktreeId,
@@ -589,7 +611,8 @@ function FileReader({
     // Why: highlighting can create many nested Text nodes; defer it one tick so
     // large files show immediately as plain text before colors are applied.
     const timer = setTimeout(() => {
-      if (doc.kind === 'file') {
+      // file + html share the syntax-segment source view (html's "Source" toggle).
+      if (doc.kind === 'file' || doc.kind === 'html') {
         setFileSyntax({
           doc,
           language: syntaxLanguage,
@@ -597,11 +620,14 @@ function FileReader({
         })
         return
       }
-      setDiffSyntax({
-        doc,
-        language: syntaxLanguage,
-        lines: highlightMobileDiffLines(doc.lines, syntaxLanguage)
-      })
+      if (doc.kind === 'diff') {
+        setDiffSyntax({
+          doc,
+          language: syntaxLanguage,
+          lines: highlightMobileDiffLines(doc.lines, syntaxLanguage)
+        })
+      }
+      // image: no syntax highlighting.
     }, 0)
 
     return () => clearTimeout(timer)
@@ -689,7 +715,28 @@ function FileReader({
     )
   }
 
-  return (
+  if (doc.kind === 'image') {
+    return (
+      <View style={styles.imagePreviewContainer}>
+        <ScrollView
+          style={styles.imagePreviewScroll}
+          contentContainerStyle={styles.imagePreviewContent}
+          maximumZoomScale={4}
+          minimumZoomScale={1}
+          centerContent
+        >
+          <Image
+            source={{ uri: doc.dataUri }}
+            style={styles.imagePreview}
+            resizeMode="contain"
+            accessibilityLabel={`${title} image`}
+          />
+        </ScrollView>
+      </View>
+    )
+  }
+
+  const renderSourceText = (content: string) => (
     <View style={styles.markdownEditor}>
       <ScrollView
         style={styles.filePreviewScroll}
@@ -700,13 +747,23 @@ function FileReader({
             segments={
               fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage
                 ? fileSyntax.segments
-                : [{ text: doc.content, kind: 'plain' }]
+                : [{ text: content, kind: 'plain' }]
             }
           />
         </Text>
       </ScrollView>
     </View>
   )
+
+  if (doc.kind === 'html') {
+    return (
+      <View style={styles.markdownEditor}>
+        <MobileHtmlPreview html={doc.content} renderSource={() => renderSourceText(doc.content)} />
+      </View>
+    )
+  }
+
+  return renderSourceText(doc.content)
 }
 
 export default function SessionScreen() {
@@ -738,6 +795,14 @@ export default function SessionScreen() {
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
   const [terminalsLoaded, setTerminalsLoaded] = useState(false)
   const [input, setInput] = useState('')
+  // Why: baseline terminal zoom, reloaded on focus so a Settings → Terminal change
+  // applies in place (the terminal panes stay mounted).
+  const [terminalTextScale, setTerminalTextScale] = useState(1)
+  // Why: local opt-in for keyboard autocomplete/autocorrect on the terminal
+  // command bar; reloaded on focus so a Settings → Terminal toggle takes effect on return.
+  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
+  const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
+    useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
   const [liveInputTerminalHandles, setLiveInputTerminalHandles] = useState<Set<string>>(
     () => new Set()
@@ -815,6 +880,10 @@ export default function SessionScreen() {
   >(new Map())
   const [selectModeActive, setSelectModeActive] = useState(false)
   const [canPaste, setCanPaste] = useState(false)
+  const [showDictationSetup, setShowDictationSetup] = useState(false)
+  // 'hold' makes the mic press-and-hold; 'toggle' makes it tap-to-start/stop.
+  // Mirrors Settings ▸ Voice ▸ Dictation Mode so the button matches the setting.
+  const [dictationMode, setDictationMode] = useState<'toggle' | 'hold'>('toggle')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastOpacityRef = useRef(new Animated.Value(0))
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -848,6 +917,13 @@ export default function SessionScreen() {
   const activeSessionTabTypeRef = useRef<MobileSessionTabType | null>(null)
   const pendingActiveSessionTabIdRef = useRef<string | null>(null)
   const pendingActiveTerminalHandleRef = useRef<string | null>(null)
+  // Why: a browser tab opened from a terminal-tapped HTML must be focused as an
+  // Orca session tab (bridge auto-activate only flags the live webContents, not
+  // the app-level active tab). We remember the page id and, once its session tab
+  // syncs, activate it through the normal switchSessionTab path (which also makes
+  // switching back to the terminal work). A ref breaks the callback dep cycle.
+  const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
+  const switchSessionTabRef = useRef<((tab: MobileSessionTab) => void) | null>(null)
   const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
   const markdownSaveInFlightRef = useRef<Set<string>>(new Set())
@@ -877,6 +953,10 @@ export default function SessionScreen() {
     activeSessionTab?.type !== 'browser'
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
+  // Why: stable callbacks (handleFileTap) read the live value via this ref, since
+  // the capability probe resolves after the callbacks are created.
+  const browserScreencastSupportedRef = useRef(browserScreencastSupported)
+  browserScreencastSupportedRef.current = browserScreencastSupported
   // Why: terminal gesture/input callbacks are intentionally stable and
   // imperative; keep their refs current before commit instead of one effect later.
   clientRef.current = client
@@ -963,10 +1043,72 @@ export default function SessionScreen() {
       showToast('Dictation inserted')
     },
     onError: (err) => {
+      // Dictation isn't set up on the desktop yet → open the setup sheet so the
+      // user can download a model + enable it from here, instead of a dead-end toast.
+      if (isDictationSetupRequiredError(err.message)) {
+        setShowDictationSetup(true)
+        return
+      }
       triggerError()
       showToast(err.message)
     }
   })
+
+  const startDictation = useCallback(() => {
+    void dictation.start().catch((err) => {
+      triggerError()
+      showToast(err instanceof Error ? err.message : String(err))
+    })
+  }, [dictation, triggerError, showToast])
+
+  // Toggle mode: one tap starts, the next stops; long-press cancels mid-record.
+  const handleDictationToggle = useCallback(() => {
+    if (dictation.isProcessing) {
+      void dictation.cancel()
+    } else if (dictation.isStarting) {
+      return
+    } else if (dictation.isRecording) {
+      void dictation.stop()
+    } else {
+      startDictation()
+    }
+  }, [dictation, startDictation])
+
+  // Hold mode: press starts, release stops — like a walkie-talkie.
+  const handleDictationPressIn = useCallback(() => {
+    if (!dictation.isStarting && !dictation.isRecording && !dictation.isProcessing) {
+      startDictation()
+    }
+  }, [dictation, startDictation])
+
+  const handleDictationPressOut = useCallback(() => {
+    if (dictation.isRecording) {
+      void dictation.stop()
+    } else if (dictation.isStarting) {
+      // Released before recording began: cancel so we don't leave a live mic.
+      void dictation.cancel()
+    }
+  }, [dictation])
+
+  const refreshDictationMode = useCallback(async () => {
+    if (!client) {
+      return
+    }
+    try {
+      const setup = await fetchDictationSetup(client)
+      setDictationMode(setup.dictationMode)
+    } catch {
+      // Non-fatal: fall back to the default toggle behavior.
+    }
+  }, [client])
+
+  // Re-read on focus so a Dictation Mode change made in Settings ▸ Voice is
+  // reflected when the user returns to the session.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshDictationMode()
+    }, [refreshDictationMode])
+  )
 
   useEffect(() => {
     diffCommentsRef.current = diffComments
@@ -1509,27 +1651,56 @@ export default function SessionScreen() {
           worktree: `id:${worktreeId}`,
           tabId: tab.id
         })
-        if (!response.ok) {
+        if (response.ok) {
+          const result = (response as RpcSuccess).result as {
+            content: string
+            version: string
+            isDirty: boolean
+            editable?: boolean
+            readOnlyReason?: string
+          }
+          setMarkdownDocs((prev) =>
+            new Map(prev).set(tab.id, {
+              status: 'ready',
+              content: result.content,
+              localContent: result.content,
+              baseVersion: result.version,
+              isDirty: false,
+              editable: result.editable === true,
+              stale: result.isDirty,
+              readOnlyReason: result.readOnlyReason
+            })
+          )
+          return
+        }
+        if (!shouldReadMarkdownFromDiskAfterReadTabFailure(response as RpcFailure)) {
+          throw new Error((response as RpcFailure).error.message)
+        }
+        // Why: a headless host (no desktop renderer) can't serve the live editor
+        // document and fails markdown.readTab with renderer_unavailable. Fall back
+        // to the on-disk file so markdown still renders read-only, matching how
+        // other file types load via files.read.
+        const fallback = await client.sendRequest('files.read', {
+          worktree: `id:${worktreeId}`,
+          relativePath: tab.relativePath
+        })
+        if (!fallback.ok) {
           throw new Error('Unable to read markdown')
         }
-        const result = (response as RpcSuccess).result as {
+        const fileResult = (fallback as RpcSuccess).result as {
           content: string
-          version: string
-          isDirty: boolean
-          editable?: boolean
-          readOnlyReason?: string
+          truncated: boolean
+          byteLength: number
         }
         setMarkdownDocs((prev) =>
-          new Map(prev).set(tab.id, {
-            status: 'ready',
-            content: result.content,
-            localContent: result.content,
-            baseVersion: result.version,
-            isDirty: false,
-            editable: result.editable === true,
-            stale: result.isDirty,
-            readOnlyReason: result.readOnlyReason
-          })
+          new Map(prev).set(
+            tab.id,
+            buildMarkdownDiskFallbackDoc({
+              content: fileResult.content,
+              truncated: fileResult.truncated,
+              tabIsDirty: tab.isDirty
+            })
+          )
         )
       } catch {
         setMarkdownDocs((prev) =>
@@ -1580,6 +1751,32 @@ export default function SessionScreen() {
           )
           return
         }
+        const artifactKind = classifyMobileArtifact(tab.relativePath)
+        if (artifactKind === 'image') {
+          const preview = await client.sendRequest('files.readPreview', {
+            worktree: `id:${worktreeId}`,
+            relativePath: tab.relativePath
+          })
+          if (!preview.ok) {
+            throw new Error((preview as RpcFailure).error.message)
+          }
+          const result = (preview as RpcSuccess).result as {
+            content: string
+            isImage?: boolean
+            mimeType?: string
+          }
+          if (!result.isImage || !result.mimeType || result.content.length === 0) {
+            throw new Error('binary_file')
+          }
+          setFileDocs((prev) =>
+            new Map(prev).set(tab.id, {
+              status: 'ready',
+              kind: 'image',
+              dataUri: `data:${result.mimeType};base64,${result.content}`
+            })
+          )
+          return
+        }
         const response = await client.sendRequest('files.read', {
           worktree: `id:${worktreeId}`,
           relativePath: tab.relativePath
@@ -1591,6 +1788,16 @@ export default function SessionScreen() {
           content: string
           truncated: boolean
           byteLength: number
+        }
+        if (artifactKind === 'html') {
+          setFileDocs((prev) =>
+            new Map(prev).set(tab.id, {
+              status: 'ready',
+              kind: 'html',
+              content: result.content
+            })
+          )
+          return
         }
         setFileDocs((prev) =>
           new Map(prev).set(tab.id, {
@@ -1957,6 +2164,18 @@ export default function SessionScreen() {
       }
       const result = (response as RpcSuccess).result as SessionTabsResult
       applySessionTabs(result)
+      // Focus a just-opened browser tab once it appears in the snapshot, via the
+      // normal activate path so it sticks and the user can still switch away.
+      const pendingPageId = pendingBrowserFocusPageIdRef.current
+      if (pendingPageId) {
+        const browserTab = result.tabs.find(
+          (tab) => tab.type === 'browser' && tab.browserPageId === pendingPageId
+        )
+        if (browserTab) {
+          pendingBrowserFocusPageIdRef.current = null
+          switchSessionTabRef.current?.(browserTab)
+        }
+      }
     } catch {
       // Keep the last tab snapshot visible during reconnect/backoff.
     } finally {
@@ -2078,6 +2297,7 @@ export default function SessionScreen() {
     deviceTokenRef,
     initializedHandlesRef,
     tabStripVisible: terminals.length > 1,
+    textScale: terminalTextScale,
     unsubscribeTerminal,
     subscribeToTerminal
   })
@@ -2156,6 +2376,7 @@ export default function SessionScreen() {
     activeSessionTabTypeRef.current = null
     pendingActiveSessionTabIdRef.current = null
     pendingActiveTerminalHandleRef.current = null
+    pendingBrowserFocusPageIdRef.current = null
     initialEmptySessionAutoCreateRef.current = null
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
@@ -2302,6 +2523,52 @@ export default function SessionScreen() {
     }, [connState, fetchSessionTabs, fetchTerminals])
   )
 
+  // Why: pick up the Settings → Terminal text size when returning here — the
+  // terminal panes stay mounted, so they update in place.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      void loadTerminalTextScale().then((scale) => {
+        if (active) {
+          setTerminalTextScale(scale)
+        }
+      })
+      return () => {
+        active = false
+      }
+    }, [])
+  )
+
+  // Why: pick up the Settings → Terminal autocomplete toggle when returning here.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      void loadTerminalAutocompleteEnabled().then((enabled) => {
+        if (active) {
+          setAutocompleteEnabled(enabled)
+        }
+      })
+      return () => {
+        active = false
+      }
+    }, [])
+  )
+
+  // Why: link routing is a phone-local choice; reload after Settings → Browser.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      void loadTerminalLinkOpenMode().then((mode) => {
+        if (active) {
+          setTerminalLinkOpenMode(mode)
+        }
+      })
+      return () => {
+        active = false
+      }
+    }, [])
+  )
+
   // Why: unsubscribe the old terminal so the server restores its desktop dims
   // (clearing the phone-fit banner), then subscribe the new terminal with the
   // measured viewport so the server phone-fits it. Also call terminal.focus
@@ -2412,6 +2679,9 @@ export default function SessionScreen() {
     },
     [client, markdownDocs, readFileTab, readMarkdownTab, switchTab, unsubscribeTerminal, worktreeId]
   )
+  // Keep the ref pointing at the latest switchSessionTab so fetchSessionTabs can
+  // activate a freshly-synced browser tab without a callback dependency cycle.
+  switchSessionTabRef.current = switchSessionTab
 
   // Why: just store the ref. Subscription is deferred to handleTerminalWebReady
   // which fires after the WebView has loaded xterm.js and is ready to process
@@ -2588,6 +2858,73 @@ export default function SessionScreen() {
       focusLiveInput()
     },
     [focusLiveInput]
+  )
+
+  // Tap on a file path in terminal output → resolve it on the host and open it
+  // as a file tab (mirrors desktop Cmd/Ctrl-click). Silent on a miss; the
+  // WebView only emits this when the tap landed on a detected path.
+  const handleFileTap = useCallback(
+    (handle: string, pathText: string) => {
+      if (handle !== activeHandleRef.current || !client) {
+        return
+      }
+      void (async () => {
+        try {
+          const worktree = `id:${worktreeId}`
+          const response = await client.sendRequest(
+            'files.resolveTerminalPath',
+            { worktree, pathText },
+            { timeoutMs: 10_000 }
+          )
+          if (!response.ok) {
+            return
+          }
+          const resolved = (response as RpcSuccess).result as RuntimeTerminalPathResolution
+          if (!resolved.exists || resolved.isDirectory || !resolved.relativePath) {
+            return
+          }
+          // Confirm the tap landed on something openable before giving feedback.
+          triggerSelection()
+          // Why: HTML opens in a browser pane (streamed from the desktop),
+          // matching desktop's terminal-click behavior, instead of a file view.
+          if (classifyMobileArtifact(resolved.relativePath) === 'html' && resolved.absolutePath) {
+            void handleCreateBrowser('file://' + resolved.absolutePath)
+            return
+          }
+          const openResponse = await client.sendRequest(
+            'files.open',
+            { worktree, relativePath: resolved.relativePath },
+            { timeoutMs: 15_000 }
+          )
+          if (!openResponse.ok) {
+            return
+          }
+          // Why: the desktop creates the file tab asynchronously; a single poll
+          // can race it, so refresh a few times to reliably pick it up and
+          // switch to it (the file browser gets this for free via router.back).
+          scheduleDelayedAction(() => void fetchSessionTabs(), 300)
+          scheduleDelayedAction(() => void fetchSessionTabs(), 900)
+          scheduleDelayedAction(() => void fetchSessionTabs(), 1800)
+        } catch {
+          // Resolution/open is best-effort; a failed tap silently no-ops.
+        }
+      })()
+    },
+    [client, worktreeId, scheduleDelayedAction, fetchSessionTabs]
+  )
+
+  const handleTerminalOpenUrl = useCallback(
+    (handle: string, url: string) => {
+      if (handle !== activeHandleRef.current) {
+        return
+      }
+      if (terminalLinkOpenMode === 'phone-browser') {
+        void Linking.openURL(url).catch(() => {})
+        return
+      }
+      void handleCreateBrowser(url)
+    },
+    [terminalLinkOpenMode]
   )
 
   const toggleLiveInput = useCallback(() => {
@@ -3088,6 +3425,18 @@ export default function SessionScreen() {
     showToast
   ])
 
+  const { attachImage, isAttaching } = useMobileImageAttachment({
+    client,
+    activeHandle,
+    canSend,
+    connState,
+    deviceTokenRef,
+    getActiveWorktreeConnectionId,
+    showToast,
+    onSuccess: triggerSelection,
+    onError: triggerError
+  })
+
   // Why: refresh canPaste on mount, AppState active, after paste.
   useEffect(() => {
     let mounted = true
@@ -3340,7 +3689,9 @@ export default function SessionScreen() {
     if (!client || creatingBrowser) {
       return false
     }
-    if (browserScreencastSupported !== true) {
+    // Why: read via ref so a tap that fires before the capability probe resolves
+    // (or from a stale callback) still sees the live support value.
+    if (browserScreencastSupportedRef.current !== true) {
       showToast('Desktop update required for mobile browser streaming', 1600)
       return false
     }
@@ -3359,14 +3710,25 @@ export default function SessionScreen() {
         'browser.tabCreate',
         {
           worktree: `id:${worktreeId}`,
-          url
+          url,
+          // The user opened this tab (tapped HTML / address bar) → focus it.
+          activate: true
         },
         { timeoutMs: 30_000 }
       )
       if (!response.ok) {
         throw new Error((response as RpcFailure).error.message)
       }
-      scheduleDelayedAction(() => void fetchSessionTabs(), 300)
+      // Focus the new browser tab once it syncs (fetchSessionTabs activates it
+      // via the normal path). Refresh a few times since the desktop registers
+      // the tab asynchronously.
+      const created = (response as RpcSuccess).result as { browserPageId?: string }
+      if (created.browserPageId) {
+        pendingBrowserFocusPageIdRef.current = created.browserPageId
+      }
+      void fetchSessionTabs()
+      scheduleDelayedAction(() => void fetchSessionTabs(), 400)
+      scheduleDelayedAction(() => void fetchSessionTabs(), 1200)
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create browser'
@@ -3978,6 +4340,13 @@ export default function SessionScreen() {
                 active={terminal.handle === activeHandle}
                 keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
                 terminalTheme={terminal.terminalTheme}
+                textScale={terminalTextScale}
+                onTextScaleChange={(scale) => {
+                  // Why: pinch-to-zoom in the WebView reports a new preset; persist
+                  // it so the size sticks across panes and app launches.
+                  setTerminalTextScale(scale)
+                  void saveTerminalTextScale(scale)
+                }}
                 onRef={setTerminalWebViewRef}
                 onWebReady={handleTerminalWebReady}
                 onSelectionMode={handleSelectionMode}
@@ -3988,6 +4357,8 @@ export default function SessionScreen() {
                 onHaptic={handleHaptic}
                 onTerminalInput={handleTerminalInput}
                 onTerminalTap={handleTerminalTap}
+                onFileTap={handleFileTap}
+                onOpenUrl={handleTerminalOpenUrl}
               />
             ))}
             {toastMessage && (
@@ -4196,6 +4567,15 @@ export default function SessionScreen() {
             ) : (
               <View style={styles.inputBar}>
                 <TextInput
+                  // Why: Android caches the IME inputType at mount, so toggling
+                  // autocomplete must remount there; iOS can update without a focus-costly remount.
+                  key={
+                    Platform.OS === 'android'
+                      ? autocompleteEnabled
+                        ? 'cmd-input-ac-on'
+                        : 'cmd-input-ac-off'
+                      : 'cmd-input'
+                  }
                   style={styles.textInput}
                   value={input}
                   onChangeText={(text) =>
@@ -4204,10 +4584,18 @@ export default function SessionScreen() {
                   placeholder="Type a command…"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
-                  autoCorrect={false}
-                  spellCheck={false}
+                  autoCorrect={autocompleteEnabled}
+                  spellCheck={autocompleteEnabled}
                   smartInsertDelete={false}
-                  keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
+                  // Why: the default keyboard exposes autocomplete/autocorrect;
+                  // ascii-capable (iOS) / visible-password (Android) suppress it.
+                  keyboardType={
+                    autocompleteEnabled
+                      ? 'default'
+                      : Platform.OS === 'ios'
+                        ? 'ascii-capable'
+                        : 'visible-password'
+                  }
                   returnKeyType="send"
                   editable={canSend}
                   onSubmitEditing={() => void handleSend()}
@@ -4215,29 +4603,42 @@ export default function SessionScreen() {
                 <Pressable
                   style={[
                     styles.dictationButton,
+                    (!canSend || isAttaching) && styles.sendButtonDisabled
+                  ]}
+                  disabled={!canSend || isAttaching}
+                  // Tap opens the photo library straight away (one-tap, like
+                  // Discord); long-press is the escape hatch for picking a file.
+                  onPress={() => void attachImage('library')}
+                  onLongPress={() => void attachImage('files')}
+                  delayLongPress={350}
+                  accessibilityLabel={isAttaching ? 'Sending image' : 'Attach a photo'}
+                  accessibilityHint="Long press to attach a file instead"
+                >
+                  {isAttaching ? (
+                    <ActivityIndicator size="small" color={colors.textSecondary} />
+                  ) : (
+                    <ImagePlus size={17} color={colors.textSecondary} strokeWidth={2.4} />
+                  )}
+                </Pressable>
+                <Pressable
+                  style={[
+                    styles.dictationButton,
                     (dictation.isStarting || dictation.isRecording) && styles.dictationButtonActive,
                     !canSend && styles.sendButtonDisabled
                   ]}
                   disabled={!canSend}
-                  onPress={() => {
-                    if (dictation.isProcessing) {
-                      void dictation.cancel()
-                    } else if (dictation.isStarting) {
-                      return
-                    } else if (dictation.isRecording) {
-                      void dictation.stop()
-                    } else {
-                      void dictation.start().catch((err) => {
-                        triggerError()
-                        showToast(err instanceof Error ? err.message : String(err))
-                      })
-                    }
-                  }}
-                  onLongPress={() => {
-                    if (dictation.isRecording || dictation.isProcessing) {
-                      void dictation.cancel()
-                    }
-                  }}
+                  onPress={dictationMode === 'toggle' ? handleDictationToggle : undefined}
+                  onPressIn={dictationMode === 'hold' ? handleDictationPressIn : undefined}
+                  onPressOut={dictationMode === 'hold' ? handleDictationPressOut : undefined}
+                  onLongPress={
+                    dictationMode === 'toggle'
+                      ? () => {
+                          if (dictation.isRecording || dictation.isProcessing) {
+                            void dictation.cancel()
+                          }
+                        }
+                      : undefined
+                  }
                   accessibilityLabel={
                     dictation.isRecording
                       ? 'Stop voice dictation'
@@ -4596,6 +4997,12 @@ export default function SessionScreen() {
         onClose={() => setShowCustomKeyModal(false)}
         onKeysChanged={setCustomKeys}
         onManageShortcuts={handleManageShortcuts}
+      />
+      <MobileDictationSetupSheet
+        visible={showDictationSetup}
+        client={client}
+        onClose={() => setShowDictationSetup(false)}
+        onReady={() => setShowDictationSetup(false)}
       />
       <ActionSheetModal
         visible={deleteKeyTarget != null}

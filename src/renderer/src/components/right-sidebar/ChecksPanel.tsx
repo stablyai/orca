@@ -25,6 +25,10 @@ import { openHttpLink } from '@/lib/http-link-routing'
 import { Button } from '@/components/ui/button'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
+  getTerminalUrlSystemBrowserHint,
+  isMacPlatform
+} from '../terminal-pane/terminal-link-open-hints'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -70,6 +74,7 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
+import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
 import { toast } from 'sonner'
@@ -127,6 +132,7 @@ import {
   type SourceControlAiWriteTarget
 } from '../../../../shared/source-control-ai-recipe-save'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
 import { formatCreateError } from './create-pull-request-review-copy'
@@ -134,6 +140,7 @@ import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullR
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
 import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import { openChecksPanelHostedReviewUrl } from './checks-panel-hosted-review-click-routing'
 
 const RUNTIME_SSH_STATUS_REFRESH_MS = 3000
 const GIT_STATUS_FAILURE_RETRY_MS = 3000
@@ -163,8 +170,9 @@ type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
   isRefreshing: boolean
   canUnlinkPullRequest: boolean
+  showSystemBrowserHint: boolean
   onRefresh: () => void
-  onOpenReview: () => void
+  onOpenReview: (event: React.MouseEvent<HTMLButtonElement>) => void
   onUnlinkPullRequest: () => void
   onLinkAnotherPullRequest: () => void
 }
@@ -173,6 +181,7 @@ export function ChecksPanelReviewHeader({
   review,
   isRefreshing,
   canUnlinkPullRequest,
+  showSystemBrowserHint,
   onRefresh,
   onOpenReview,
   onUnlinkPullRequest,
@@ -182,6 +191,14 @@ export function ChecksPanelReviewHeader({
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
   const showPullRequestMenu = review.provider === 'github'
+  const openTitle = translate(
+    'auto.components.right.sidebar.ChecksPanel.5c88c6db07',
+    'Open on {{value0}}',
+    { value0: reviewHostLabel }
+  )
+  const title = showSystemBrowserHint
+    ? `${openTitle}. ${getTerminalUrlSystemBrowserHint()}`
+    : openTitle
 
   return (
     <div className="flex items-center gap-2">
@@ -189,11 +206,7 @@ export function ChecksPanelReviewHeader({
       <button
         type="button"
         className="rounded px-0.5 text-[12px] font-semibold text-foreground underline decoration-border underline-offset-2 hover:text-foreground hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        title={translate(
-          'auto.components.right.sidebar.ChecksPanel.5c88c6db07',
-          'Open on {{value0}}',
-          { value0: reviewHostLabel }
-        )}
+        title={title}
         onClick={onOpenReview}
       >
         {reviewNumberLabel}
@@ -460,7 +473,10 @@ export default function ChecksPanel(): React.JSX.Element {
   const activeWorktreePushTarget = activeWorktree?.pushTarget ?? null
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
-    worktreePath: activeWorktreePath
+    worktreePath: activeWorktreePath,
+    projectRuntime: activeConnectionId
+      ? undefined
+      : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), activeWorktreeId)
   })
   const runtimeEnvironmentId = useAppStore((s) =>
     getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
@@ -694,8 +710,9 @@ export default function ChecksPanel(): React.JSX.Element {
     hostedReviewCreationSnapshot?.requestKey === hostedReviewCreationRequestKey
       ? hostedReviewCreationSnapshot.data
       : null
-  const hostedReviewCreateProvider: HostedReviewProvider =
-    hostedReviewCreation?.provider === 'gitlab' ? 'gitlab' : 'github'
+  const hostedReviewCreateProvider = resolveHostedReviewCreationProvider(
+    hostedReviewCreation?.provider
+  )
   const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
   const handleBranchChangedByPullRequestGeneration = useCallback(async (): Promise<void> => {
     if (!activeWorktreeId || !activeWorktree?.path) {
@@ -2540,13 +2557,21 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   // Open hosted review in browser
-  const handleOpenPR = useCallback(() => {
-    if (activeReview?.url) {
-      // Why: route through openHttpLink so PR/MR links honor the "open links
-      // in app" setting instead of always launching the system browser.
-      openHttpLink(activeReview.url, { worktreeId: activeWorktreeId })
-    }
-  }, [activeReview, activeWorktreeId])
+  const handleOpenPR = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (activeReview?.url) {
+        // Why: route through openHttpLink so PR/MR links honor the "open links
+        // in app" setting; Shift+Cmd/Ctrl keeps the terminal-link escape hatch.
+        openChecksPanelHostedReviewUrl({
+          url: activeReview.url,
+          event: event.nativeEvent,
+          isMac: isMacPlatform(),
+          worktreeId: activeWorktreeId
+        })
+      }
+    },
+    [activeReview, activeWorktreeId]
+  )
 
   const handleUnlinkPullRequest = useCallback(() => {
     if (!activeWorktreeId || activeReview?.provider !== 'github' || linkedPR === null) {
@@ -2669,17 +2694,27 @@ export default function ChecksPanel(): React.JSX.Element {
         if (activeWorktreeId && result.provider === 'gitlab') {
           await updateWorktreeMeta(activeWorktreeId, { linkedGitLabMR: result.number })
         }
+        if (activeWorktreeId && result.provider === 'azure-devops') {
+          await updateWorktreeMeta(activeWorktreeId, { linkedAzureDevOpsPR: result.number })
+        }
+        if (activeWorktreeId && result.provider === 'gitea') {
+          await updateWorktreeMeta(activeWorktreeId, { linkedGiteaPR: result.number })
+        }
+        const linkedReviewNumbers = {
+          linkedGitHubPR: result.provider === 'github' ? result.number : linkedPR,
+          fallbackGitHubPR: fallbackGitHubPRNumber,
+          linkedGitLabMR: result.provider === 'gitlab' ? result.number : linkedGitLabMR,
+          linkedBitbucketPR,
+          linkedAzureDevOpsPR:
+            result.provider === 'azure-devops' ? result.number : linkedAzureDevOpsPR,
+          linkedGiteaPR: result.provider === 'gitea' ? result.number : linkedGiteaPR
+        }
         if (result.provider === 'gitlab') {
           const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
             repoPath: repo.path,
             repoId: repo.id,
             branch,
-            linkedGitHubPR: linkedPR,
-            fallbackGitHubPR: fallbackGitHubPRNumber,
-            linkedGitLabMR: result.number,
-            linkedBitbucketPR,
-            linkedAzureDevOpsPR,
-            linkedGiteaPR
+            ...linkedReviewNumbers
           })
           const refreshedGitLabReview =
             refreshedReview?.provider === 'gitlab' ? refreshedReview : null
@@ -2687,6 +2722,15 @@ export default function ChecksPanel(): React.JSX.Element {
             mrNumberOverride: result.number,
             headShaOverride: refreshedGitLabReview?.headSha,
             commitAsCurrent: true
+          })
+          return
+        }
+        if (result.provider !== 'github') {
+          await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+            repoPath: repo.path,
+            repoId: repo.id,
+            branch,
+            ...linkedReviewNumbers
           })
           return
         }
@@ -2703,6 +2747,7 @@ export default function ChecksPanel(): React.JSX.Element {
       linkedAzureDevOpsPR,
       linkedBitbucketPR,
       linkedGiteaPR,
+      linkedGitLabMR,
       linkedPR,
       refreshLinkedGitHubPullRequest,
       repo,
@@ -3046,6 +3091,12 @@ export default function ChecksPanel(): React.JSX.Element {
   const reviewShortLabel = activeReview.provider === 'gitlab' ? 'MR' : 'PR'
   const shouldShowReviewTriageStrip =
     activeConflictReview !== null || getBrokenChecks(checks).length > 0
+  // Why: mirror openHttpLink's global routing inputs so the hint only appears
+  // when the actual plain-click path would open inside Orca.
+  const showHostedReviewSystemBrowserHint =
+    Boolean(activeWorktreeId) &&
+    settings?.openLinksInApp === true &&
+    !settings.activeRuntimeEnvironmentId
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {/* Hosted review header */}
@@ -3055,6 +3106,7 @@ export default function ChecksPanel(): React.JSX.Element {
           review={activeReview}
           isRefreshing={isRefreshing}
           canUnlinkPullRequest={linkedPR !== null}
+          showSystemBrowserHint={showHostedReviewSystemBrowserHint}
           onRefresh={() => void handleRefresh()}
           onOpenReview={handleOpenPR}
           onUnlinkPullRequest={handleUnlinkPullRequest}
@@ -3103,7 +3155,7 @@ export default function ChecksPanel(): React.JSX.Element {
             <span className="text-[12px] text-foreground leading-snug flex-1">
               {activeReview.title}
             </span>
-            <Pencil className="size-3 text-muted-foreground/40 opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0 mt-0.5" />
+            <Pencil className="size-3 text-muted-foreground/40 can-hover:opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0 mt-0.5" />
           </div>
         )}
 

@@ -162,12 +162,12 @@ export function VoiceSpeechModelSection({
                           )
                         )
                     }}
-                    className="shrink-0 p-1 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all rounded"
+                    className="shrink-0 p-1 text-muted-foreground can-hover:opacity-0 group-hover:opacity-100 hover:text-destructive transition-all rounded"
                   >
                     <Trash2 className="size-3" />
                   </button>
                 ) : !isCloud && !isReady && !isDownloading ? (
-                  <span className="shrink-0 p-1 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="shrink-0 p-1 text-muted-foreground can-hover:opacity-0 group-hover:opacity-100 transition-opacity">
                     <Download className="size-3" />
                   </span>
                 ) : null}

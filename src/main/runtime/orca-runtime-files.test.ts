@@ -16,10 +16,12 @@ const {
   statMock,
   watchInWorkerMock,
   checkRgAvailableMock,
+  getLocalGitOptionsForRegisteredWorktreeMock,
   wslAwareSpawnMock,
   watchMock
 } = vi.hoisted(() => ({
   checkRgAvailableMock: vi.fn(),
+  getLocalGitOptionsForRegisteredWorktreeMock: vi.fn(),
   lstatMock: vi.fn(),
   readdirMock: vi.fn(),
   renameMock: vi.fn(),
@@ -71,6 +73,10 @@ vi.mock('../git/runner', async () => {
 
 vi.mock('../ipc/rg-availability', () => ({
   checkRgAvailable: checkRgAvailableMock
+}))
+
+vi.mock('../ipc/local-worktree-runtime-options', () => ({
+  getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
@@ -163,7 +169,9 @@ describe('RuntimeFileCommands', () => {
     watchInWorkerMock.mockReset()
     watchMock.mockReset()
     checkRgAvailableMock.mockReset()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
     wslAwareSpawnMock.mockReset()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
     readdirMock.mockResolvedValue([])
     lstatMock.mockRejectedValue(enoent())
     renameMock.mockResolvedValue(undefined)
@@ -220,6 +228,41 @@ describe('RuntimeFileCommands', () => {
       relativePath: 'docs/readme.md',
       kind: 'markdown',
       opened: true
+    })
+  })
+
+  it('opens previewable images through the renderer host as an image tab', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'assets/logo.png')
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/assets/logo.png',
+      'assets/logo.png',
+      undefined
+    )
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'assets/logo.png',
+      kind: 'image',
+      opened: true
+    })
+  })
+
+  it('leaves non-previewable binaries unavailable on mobile', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'dist/bundle.zip')
+
+    expect(openFile).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'dist/bundle.zip',
+      kind: 'binary',
+      opened: false
     })
   })
 
@@ -365,6 +408,10 @@ describe('RuntimeFileCommands', () => {
   })
 
   it('delegates local recursive watching to the worker thread', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     const dispose = vi.fn()
@@ -410,5 +457,156 @@ describe('RuntimeFileCommands', () => {
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
     expect(child.listenerCount('close')).toBe(0)
+  })
+
+  it('routes runtime rg searches through the registered WSL project runtime', async () => {
+    const resolveRuntimeGitTarget = vi.fn(async () => ({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: 'C:\\repo'
+      },
+      connectionId: null
+    }))
+    const { commands, store } = createRuntimeFileCommands({ resolveRuntimeGitTarget })
+    const child = createRuntimeSearchChild()
+    resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
+    checkRgAvailableMock.mockResolvedValue(true)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    wslAwareSpawnMock.mockReturnValue(child)
+
+    const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+      query: 'needle',
+      maxResults: 10
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    child.emit('close')
+
+    await expect(resultPromise).resolves.toMatchObject({ files: [] })
+    expect(getLocalGitOptionsForRegisteredWorktreeMock).toHaveBeenCalledWith(
+      store,
+      'C:\\repo',
+      'C:\\repo'
+    )
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      'rg',
+      expect.any(Array),
+      expect.objectContaining({
+        cwd: 'C:\\repo',
+        wslDistro: 'Ubuntu'
+      })
+    )
+  })
+
+  describe('resolveTerminalPath', () => {
+    function statAsFile() {
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockResolvedValue({ isDirectory: () => false })
+    }
+
+    it('resolves an absolute path inside the worktree to a relative path', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '/repo/src/index.ts')
+
+      expect(result).toEqual({
+        worktree: 'wt-1',
+        relativePath: 'src/index.ts',
+        absolutePath: '/repo/src/index.ts',
+        exists: true,
+        isDirectory: false
+      })
+    })
+
+    it('resolves a relative path against the provided cwd', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath('id:wt-1', 'index.ts', '/repo/src')
+
+      expect(result).toMatchObject({ relativePath: 'src/index.ts', exists: true })
+    })
+
+    it('resolves a relative path against the worktree root when no cwd is given', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath('id:wt-1', 'docs/readme.md')
+
+      expect(result).toMatchObject({ relativePath: 'docs/readme.md', exists: true })
+    })
+
+    it('reports a directory', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockResolvedValue({ isDirectory: () => true })
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '/repo/src')
+
+      expect(result).toMatchObject({ relativePath: 'src', isDirectory: true, exists: true })
+    })
+
+    it('returns null relativePath for a path outside the worktree', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '/etc/passwd')
+
+      expect(result).toEqual({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: null,
+        exists: false,
+        isDirectory: false
+      })
+      expect(statMock).not.toHaveBeenCalled()
+    })
+
+    it('reports a nonexistent in-worktree path as not existing', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+
+      const result = await commands.resolveTerminalPath('id:wt-1', 'src/missing.ts')
+
+      expect(result).toMatchObject({ relativePath: 'src/missing.ts', exists: false })
+    })
+
+    it('does not expand ~/ on a remote worktree (home is unknown)', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const stat = vi.fn()
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat } as never)
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '~/notes.md')
+
+      expect(result).toMatchObject({ relativePath: null, exists: false })
+      expect(stat).not.toHaveBeenCalled()
+    })
+
+    it('reports a missing remote file as not existing', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat } as never)
+
+      const result = await commands.resolveTerminalPath('id:wt-1', 'src/missing.ts')
+
+      expect(result).toMatchObject({ relativePath: 'src/missing.ts', exists: false })
+    })
+
+    it('rethrows a remote transport error instead of reporting not-found', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const stat = vi.fn().mockRejectedValue(new Error('Remote connection dropped'))
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat } as never)
+
+      await expect(commands.resolveTerminalPath('id:wt-1', 'src/x.ts')).rejects.toThrow(
+        'Remote connection dropped'
+      )
+    })
   })
 })

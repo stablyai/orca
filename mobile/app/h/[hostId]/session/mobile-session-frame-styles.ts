@@ -89,7 +89,9 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     borderBottomColor: 'transparent'
   },
   tabActive: {
-    borderBottomColor: colors.accentBlue
+    // Neutral grey underline, matching the desktop terminal tab's active
+    // indicator (a muted foreground/card mix), not a blue accent.
+    borderBottomColor: colors.textSecondary
   },
   tabLabelRow: {
     maxWidth: '100%',

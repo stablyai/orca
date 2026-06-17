@@ -1,10 +1,16 @@
 /* eslint-disable max-lines -- Why: one Quick Open file-list suite covers both rg and git fallback process lifecycles. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { spawnMock, resolveAuthorizedPathMock, checkRgAvailableMock } = vi.hoisted(() => ({
+const {
+  spawnMock,
+  resolveAuthorizedPathMock,
+  checkRgAvailableMock,
+  getLocalGitOptionsForRegisteredWorktreeMock
+} = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   resolveAuthorizedPathMock: vi.fn(),
-  checkRgAvailableMock: vi.fn()
+  checkRgAvailableMock: vi.fn(),
+  getLocalGitOptionsForRegisteredWorktreeMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
@@ -21,6 +27,10 @@ vi.mock('./filesystem-auth', () => ({
 
 vi.mock('./rg-availability', () => ({
   checkRgAvailable: checkRgAvailableMock
+}))
+
+vi.mock('./local-worktree-runtime-options', () => ({
+  getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
 }))
 
 import { listQuickOpenFiles } from './filesystem-list-files'
@@ -53,6 +63,7 @@ describe('filesystem-list-files', () => {
     vi.clearAllMocks()
     resolveAuthorizedPathMock.mockImplementation(async (path) => path)
     checkRgAvailableMock.mockResolvedValue(true)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
   })
 
   it('merges normal files and ignored files and filters correctly', async () => {
@@ -96,6 +107,60 @@ describe('filesystem-list-files', () => {
       '.env.local',
       'dist/generated.js'
     ])
+  })
+
+  it('checks rg availability inside the registered WSL runtime for Windows-path worktrees', async () => {
+    const p1 = createMockProcess()
+    const p2 = createMockProcess()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+
+    spawnMock.mockImplementation((_cmd, args: string[]) => {
+      if (isIgnoredRgPass(args)) {
+        return p2
+      }
+      return p1
+    })
+
+    const storeMock = {} as unknown as Store
+    const promise = listQuickOpenFiles('C:\\repo', storeMock)
+
+    setTimeout(() => {
+      ;(p1.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
+      p1.emit('close', 0, null)
+      p2.emit('close', 0, null)
+    }, 10)
+
+    await expect(promise).resolves.toEqual(['src/index.ts'])
+    expect(getLocalGitOptionsForRegisteredWorktreeMock).toHaveBeenCalledWith(
+      storeMock,
+      'C:\\repo',
+      'C:\\repo'
+    )
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+  })
+
+  it('normalizes absolute WSL rg output for Windows-path worktrees', async () => {
+    const p1 = createMockProcess()
+    const p2 = createMockProcess()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+
+    spawnMock.mockImplementation((_cmd, args: string[]) => {
+      if (isIgnoredRgPass(args)) {
+        return p2
+      }
+      return p1
+    })
+
+    const storeMock = {} as unknown as Store
+    const promise = listQuickOpenFiles('C:\\repo', storeMock)
+
+    setTimeout(() => {
+      ;(p1.stdout as unknown as EventEmitter).emit('data', '/mnt/c/repo/src/index.ts\n')
+      p1.emit('close', 0, null)
+      p2.emit('close', 0, null)
+    }, 10)
+
+    await expect(promise).resolves.toEqual(['src/index.ts'])
   })
 
   it('rejects rg failures instead of resolving a false-empty list', async () => {

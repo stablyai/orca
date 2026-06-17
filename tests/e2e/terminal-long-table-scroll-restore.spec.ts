@@ -17,6 +17,10 @@ import {
   waitForActiveTerminalManager
 } from './helpers/terminal'
 import { scrollActiveTerminalToText } from './artificial-opencode-active-terminal-scroll'
+import {
+  waitForPtyColumnsAtMost,
+  waitForRenderedTerminalColumnsAtMost
+} from './terminal-column-probes'
 
 type TerminalRenderDiagnostics = {
   cols: number
@@ -52,6 +56,7 @@ const EMOJI_TABLE_FIXTURE = readFileSync(
   path.join(__dirname, 'fixtures', 'terminal-emoji-table.md'),
   'utf8'
 )
+const NARROW_TERMINAL_MAX_COLS = 120
 
 function longMarkdownTableScript(runId: string): string {
   const names = [
@@ -137,6 +142,7 @@ const timer = setInterval(() => {
 
 function emojiFixtureMarkdownTableScript(table: string, runId: string): string {
   const marker = `EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
+  const widthMarker = `EMOJI_FIXTURE_TABLE_WIDTH_${runId}`
   return `
 const table = ${JSON.stringify(table)}
 const minimumWidths = [2, 5, 4, 7, 7, 4, 3, 4]
@@ -158,6 +164,7 @@ const widths = preferredWidths.map((preferred, index) => {
   remainingPreferred -= preferred
   return width
 })
+const generatedTableWidth = widths.reduce((sum, width) => sum + width, 0) + tableOverhead
 const border = {
   top: ['┌', '┬', '┐'],
   middle: ['├', '┼', '┤'],
@@ -254,9 +261,14 @@ for (const [index, row] of parsedRows.entries()) {
 process.stdout.write('\\x1b[?2026h\\x1b[2J\\x1b[H')
 process.stdout.write(rendered.join('\\r\\n'))
 process.stdout.write('\\r\\n')
+process.stdout.write('\\r\\n${widthMarker}:' + generatedTableWidth + '\\r\\n')
 process.stdout.write('\\r\\n${marker}\\r\\n')
 process.stdout.write('\\x1b[?2026l')
 `
+}
+
+function emojiFixtureTableWidthMarker(runId: string): string {
+  return `EMOJI_FIXTURE_TABLE_WIDTH_${runId}:`
 }
 
 function narrowSignerMarkdownTableScript(runId: string): string {
@@ -283,12 +295,12 @@ process.stdout.write('\\x1b[?2026l')
 }
 
 async function setNarrowTerminalViewport(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 920, height: 820 })
+  await page.setViewportSize({ width: 900, height: 820 })
   await page.waitForTimeout(250)
   await page.evaluate(() => {
     const store = window.__store
     if (store?.getState().rightSidebarOpen) {
-      store.setState({ rightSidebarOpen: false })
+      store.getState().setRightSidebarOpen(false)
     }
   })
   await page.waitForTimeout(250)
@@ -300,7 +312,7 @@ async function setRenderedTableViewport(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
     if (store?.getState().rightSidebarOpen) {
-      store.setState({ rightSidebarOpen: false })
+      store.getState().setRightSidebarOpen(false)
     }
   })
   await page.waitForTimeout(250)
@@ -733,10 +745,15 @@ test.describe('Terminal long table scroll restore repro', () => {
       return
     }
 
-    await setNarrowTerminalViewport(orcaPage)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
+    await setNarrowTerminalViewport(orcaPage)
+    const renderedTableTerminalCols = await waitForRenderedTerminalColumnsAtMost(
+      orcaPage,
+      NARROW_TERMINAL_MAX_COLS
+    )
     const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyColumnsAtMost(orcaPage, ptyId, renderedTableTerminalCols)
     const runId = randomUUID()
     const marker = `EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
     const scriptPath = path.join(testRepoPath, `.orca-emoji-fixture-table-${runId}.mjs`)
@@ -749,14 +766,24 @@ test.describe('Terminal long table scroll restore repro', () => {
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await orcaPage.waitForTimeout(1_000)
       await switchToWorktree(orcaPage, firstWorktreeId)
+      // Why: worktree activation can restore the right sidebar. This repro is
+      // intentionally narrow, but it must stay wide enough for its generated table.
       await ensureTerminalVisible(orcaPage)
       await waitForActiveTerminalManager(orcaPage, 30_000)
+      await setNarrowTerminalViewport(orcaPage)
+      await waitForRenderedTerminalColumnsAtMost(orcaPage, NARROW_TERMINAL_MAX_COLS)
       await expect
         .poll(() => getTerminalContent(orcaPage, 30_000), {
           timeout: 10_000,
           message: 'real emoji table marker did not survive workspace switch'
         })
         .toContain(marker)
+      const generatedWidthContent = await getTerminalContent(orcaPage, 30_000)
+      const generatedWidthMatch = generatedWidthContent.match(
+        new RegExp(`${emojiFixtureTableWidthMarker(runId)}(\\d+)`)
+      )
+      expect(generatedWidthMatch).not.toBeNull()
+      const generatedTableWidth = Number(generatedWidthMatch?.[1] ?? 0)
 
       // Why: rows near the top of this heavily wrapped table can fall out of
       // xterm scrollback on CI, and narrow columns split names like "Peacock"
@@ -778,7 +805,8 @@ test.describe('Terminal long table scroll restore repro', () => {
         (window as LongTableDebugWindow).__terminalPtyOutputDebug?.snapshot()
       )
       expect(hiddenDebug?.hiddenRendererSkipCount).toBe(0)
-      expect(diagnostics.cols).toBeLessThan(100)
+      expect(diagnostics.cols).toBeLessThanOrEqual(NARROW_TERMINAL_MAX_COLS)
+      expect(wrapDiagnostics.cols).toBeGreaterThanOrEqual(generatedTableWidth)
       expect(diagnostics.cursorHidden).toBe(false)
       testInfo.annotations.push({
         type: 'real-emoji-table-overpaint',

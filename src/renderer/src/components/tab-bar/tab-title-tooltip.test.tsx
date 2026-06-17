@@ -61,6 +61,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuContent: () => null,
   DropdownMenuItem: ({ children }: { children?: ReactNode }) => <>{children}</>,
   DropdownMenuSeparator: () => null,
+  DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => <>{children}</>,
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
@@ -160,6 +161,23 @@ function openingTag(markup: string, attr: string, value: string): string {
   return match[0]
 }
 
+function firstOpeningTag(markup: string): string {
+  const match = markup.match(/^<div[^>]*>/)
+  if (!match) {
+    throw new Error(`first opening div not found in ${markup}`)
+  }
+  return match[0]
+}
+
+function expectTabContainerWidth(markup: string, root: string): void {
+  const container = firstOpeningTag(markup)
+  const widthClasses = 'min-w-[88px] max-w-[280px] flex-[1_1_180px] min-[1280px]:flex-[1_1_220px]'
+  expect(container).toContain(widthClasses)
+  expect(root).not.toContain('min-w-[88px]')
+  expect(root).not.toContain('max-w-[280px]')
+  expect(root).not.toContain('flex-[1_1_180px]')
+}
+
 function expectTooltipContent(markup: string, text: string): void {
   expect(markup).toContain('data-tooltip-content="true"')
   expect(markup).toContain('data-side="bottom"')
@@ -247,6 +265,7 @@ describe('tab title tooltips', () => {
     const root = openingTag(markup, 'data-testid', 'sortable-tab')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
+    expectTabContainerWidth(markup, root)
   })
 
   it("shows the provider icon while stripping the agent's leading status glyph from the label", () => {
@@ -303,6 +322,8 @@ describe('tab title tooltips', () => {
     expect(root).toContain('data-tooltip-trigger="true"')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
+    expect(root).toContain('data-tab-id="browser-1"')
+    expectTabContainerWidth(markup, root)
   })
 
   it('uses the editor display label while leaving adjacent adornments outside the label', () => {
@@ -331,5 +352,7 @@ describe('tab title tooltips', () => {
     expect(root).toContain('data-tooltip-trigger="true"')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
+    expect(root).toContain('data-tab-id="editor-tab-1"')
+    expectTabContainerWidth(markup, root)
   })
 })

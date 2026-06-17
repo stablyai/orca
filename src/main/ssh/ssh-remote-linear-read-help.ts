@@ -20,6 +20,9 @@ export function getRemoteLinearReadHelp(commandPath: string[]): string | null {
   if (matchesRemoteCommand(commandPath, 'linear', 'team', 'labels')) {
     return LINEAR_TEAM_LABELS_HELP
   }
+  if (matchesRemoteCommand(commandPath, 'linear', 'project', 'list')) {
+    return LINEAR_PROJECT_LIST_HELP
+  }
   if (matchesRemoteCommand(commandPath, 'linear', 'list')) {
     return LINEAR_LIST_HELP
   }
@@ -44,6 +47,7 @@ Commands:
   team members       List Linear team members
   team states        List Linear team workflow states
   team labels        List Linear team labels
+  project list       List connected Linear projects
   list               List Linear issues
   assignee set       Set a Linear issue assignee
   assignee clear     Clear a Linear issue assignee
@@ -131,6 +135,12 @@ const LINEAR_TEAM_LABELS_HELP = `orca linear team labels
 Usage: orca linear team labels --team <key|id> [--workspace <id>] [--json]
 
 List Linear team labels`
+
+const LINEAR_PROJECT_LIST_HELP = `orca linear project list
+
+Usage: orca linear project list [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
+
+List connected Linear projects`
 
 const LINEAR_LIST_HELP = `orca linear list
 

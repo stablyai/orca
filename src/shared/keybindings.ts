@@ -34,10 +34,10 @@ export type KeybindingActionId =
   | 'worktree.navigateDown'
   | 'app.settings'
   | 'app.forceReload'
-  | 'file.exportPdf'
   | 'workspace.create'
   | 'workspace.rename'
   | 'workspace.delete'
+  | 'workspace.openBoard'
   | 'voice.dictation'
   | 'view.tasks'
   | 'sidebar.left.toggle'
@@ -62,6 +62,7 @@ export type KeybindingActionId =
   | 'tab.newMarkdown'
   | 'tab.openMarkdown'
   | 'tab.close'
+  | 'tab.closeAll'
   | 'tab.rename'
   | 'tab.reopenClosed'
   | 'tab.nextSameType'
@@ -72,6 +73,8 @@ export type KeybindingActionId =
   | 'tab.nextTerminal'
   | 'tab.previousTerminal'
   | 'browser.find'
+  | 'browser.back'
+  | 'browser.forward'
   | 'browser.reload'
   | 'browser.hardReload'
   | 'browser.focusAddressBar'
@@ -205,15 +208,6 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     conflictGroup: 'menu'
   },
   {
-    id: 'file.exportPdf',
-    title: 'Export as PDF',
-    group: 'Global',
-    scope: 'global',
-    searchKeywords: ['shortcut', 'export', 'pdf', 'markdown'],
-    defaultBindings: platformBindings(['Mod+Shift+E']),
-    conflictGroup: 'menu'
-  },
-  {
     id: 'worktree.palette',
     title: 'Switch worktree',
     group: 'Global',
@@ -282,6 +276,17 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     ],
     // Why: ship the command now without claiming a default chord; user
     // overrides still win automatically when a future default is assigned.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'workspace.openBoard',
+    title: 'Open Workspace Board',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'workspace', 'board', 'kanban', 'worktree'],
+    // Why: make the command configurable without taking a global chord from
+    // terminal/browser/editor users by default.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },
@@ -488,6 +493,14 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+W'])
   },
   {
+    id: 'tab.closeAll',
+    title: 'Close all editor tabs',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'close', 'all', 'tabs', 'files', 'editors'],
+    defaultBindings: platformBindings(['Mod+Alt+W'])
+  },
+  {
     id: 'tab.rename',
     title: 'Rename active tab',
     group: 'Tabs',
@@ -577,6 +590,30 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'browser',
     searchKeywords: ['shortcut', 'browser', 'find', 'search'],
     defaultBindings: platformBindings(['Mod+F'])
+  },
+  {
+    id: 'browser.back',
+    title: 'Go Back in Browser',
+    group: 'Browser',
+    scope: 'browser',
+    searchKeywords: ['shortcut', 'browser', 'history', 'back', 'previous'],
+    defaultBindings: {
+      darwin: ['Mod+BracketLeft'],
+      linux: ['Alt+ArrowLeft'],
+      win32: ['Alt+ArrowLeft']
+    }
+  },
+  {
+    id: 'browser.forward',
+    title: 'Go Forward in Browser',
+    group: 'Browser',
+    scope: 'browser',
+    searchKeywords: ['shortcut', 'browser', 'history', 'forward', 'next'],
+    defaultBindings: {
+      darwin: ['Mod+BracketRight'],
+      linux: ['Alt+ArrowRight'],
+      win32: ['Alt+ArrowRight']
+    }
   },
   {
     id: 'browser.reload',
@@ -1329,7 +1366,10 @@ function keyTokenFromInput(input: KeybindingInput, platform: NodeJS.Platform): s
 
 // Why: the platform primary modifier canonicalizes to Mod, mirroring normal
 // capture where Cmd on macOS / Ctrl elsewhere both become Mod.
-function canonicalDoubleTapToken(modifier: ModifierToken, platform: NodeJS.Platform): ModifierToken {
+function canonicalDoubleTapToken(
+  modifier: ModifierToken,
+  platform: NodeJS.Platform
+): ModifierToken {
   const isMac = platform === 'darwin'
   if (modifier === 'Cmd' && isMac) {
     return 'Mod'

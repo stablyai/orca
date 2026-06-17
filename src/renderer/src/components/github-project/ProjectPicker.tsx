@@ -663,7 +663,7 @@ function PickerRow({
         <button
           type="button"
           title={translate('auto.components.github.project.ProjectPicker.8ab5447c64', 'Pin')}
-          className="opacity-0 group-hover:opacity-100"
+          className="can-hover:opacity-0 group-hover:opacity-100"
           onClick={onPin}
         >
           <Pin className="size-3.5" />

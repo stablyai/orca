@@ -3,6 +3,7 @@ import { getGeneralEditorSearchEntries } from './general-editor-search'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 
 export { getGeneralEditorSearchEntries } from './general-editor-search'
 
@@ -272,13 +273,22 @@ export const getGeneralSupportSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getGeneralPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
-  ...getGeneralWorkspaceSearchEntries(),
-  ...getGeneralNetworkSearchEntries(),
-  ...getGeneralNavigationSearchEntries(),
-  ...getGeneralEditorSearchEntries(),
-  ...getGeneralCliSearchEntries(),
-  ...getGeneralCacheTimerSearchEntries(),
-  ...getGeneralUpdateSearchEntries(),
-  ...getGeneralSupportSearchEntries()
-])
+type GeneralPaneSearchOptions = {
+  includeProjectRuntime?: boolean
+}
+
+export function getGeneralPaneSearchEntries(
+  options: GeneralPaneSearchOptions = {}
+): SettingsSearchEntry[] {
+  return [
+    ...getGeneralWorkspaceSearchEntries(),
+    ...getGeneralNetworkSearchEntries(),
+    ...getGeneralNavigationSearchEntries(),
+    ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),
+    ...getGeneralEditorSearchEntries(),
+    ...getGeneralCliSearchEntries(),
+    ...getGeneralCacheTimerSearchEntries(),
+    ...getGeneralUpdateSearchEntries(),
+    ...getGeneralSupportSearchEntries()
+  ]
+}

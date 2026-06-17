@@ -24,6 +24,7 @@ import {
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { translate } from '@/i18n/i18n'
+import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -172,10 +173,11 @@ export default function BrowserTab({
   const tabRoot = (
     <div
       ref={setNodeRef}
+      data-tab-id={tab.id}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         if (e.button !== 0) {
           return
@@ -210,7 +212,7 @@ export default function BrowserTab({
           muted-foreground made the icon read as "disabled" in practice. */}
       <BrowserTabFavicon tabId={tab.id} faviconUrl={tab.faviconUrl} />
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
-      <span className="truncate max-w-[100px] mr-1">{tabLabel}</span>
+      <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
       {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
         <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
       )}
@@ -236,6 +238,7 @@ export default function BrowserTab({
   return (
     <>
       <div
+        className={TAB_CONTAINER_WIDTH_CLASSES}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))

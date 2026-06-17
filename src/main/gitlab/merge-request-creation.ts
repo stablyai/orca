@@ -7,15 +7,20 @@ import {
 } from '../../shared/hosted-review-refs'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
+import {
+  getHostedReviewLocalGitOptions,
+  hasHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from '../source-control/hosted-review-git-options'
 import { getProjectSlug } from './client'
 import {
   acquire,
   glabExecFileAsync,
   glabHostnameArgs,
   glabRepoExecOptions,
-  release,
-  type ProjectRef
+  release
 } from './gl-utils'
+import { findOpenMRByHeadBase, parseMergeRequestPayload } from './merge-request-creation-lookup'
 
 function execErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -77,77 +82,10 @@ function classifyCreateMRError(error: unknown): CreateHostedReviewResult {
   }
 }
 
-function parseMergeRequestPayload(stdout: string): { number: number; url: string } | null {
-  const trimmed = stdout.trim()
-  if (!trimmed) {
-    return null
-  }
-  try {
-    const parsed = JSON.parse(trimmed) as {
-      iid?: unknown
-      number?: unknown
-      web_url?: unknown
-      webUrl?: unknown
-      url?: unknown
-    }
-    const number = Number(parsed.iid ?? parsed.number)
-    const url =
-      typeof parsed.web_url === 'string'
-        ? parsed.web_url.trim()
-        : typeof parsed.webUrl === 'string'
-          ? parsed.webUrl.trim()
-          : typeof parsed.url === 'string'
-            ? parsed.url.trim()
-            : ''
-    if (Number.isInteger(number) && number > 0 && url) {
-      return { number, url }
-    }
-  } catch {
-    // Fall through to URL parsing for glab's normal text output.
-  }
-  const urlMatch = trimmed.match(/https?:\/\/[^\s]+\/-\/merge_requests\/(\d+)/)
-  if (!urlMatch) {
-    return null
-  }
-  return { number: Number(urlMatch[1]), url: urlMatch[0] }
-}
-
-async function findOpenMRByHeadBase(args: {
-  repoPath: string
-  projectRef: ProjectRef
-  head: string
-  base: string
-  connectionId?: string | null
-}): Promise<{ number: number; url: string } | null> {
-  const { stdout } = await glabExecFileAsync(
-    [
-      'mr',
-      'list',
-      '-R',
-      args.projectRef.path,
-      '--source-branch',
-      args.head,
-      '--target-branch',
-      args.base,
-      '--per-page',
-      '2',
-      '--output',
-      'json',
-      ...glabHostnameArgs(args.projectRef, args.connectionId)
-    ],
-    glabRepoExecOptions(args.repoPath, args.connectionId)
-  )
-  const list = JSON.parse(stdout) as {
-    iid?: number
-    number?: number
-    web_url?: string
-    webUrl?: string
-    url?: string
-  }[]
-  if (list.length !== 1) {
-    return null
-  }
-  return parseMergeRequestPayload(JSON.stringify(list[0]))
+function hostedReviewExecutionOptionArgs(
+  options: HostedReviewExecutionOptions
+): [] | [HostedReviewExecutionOptions] {
+  return hasHostedReviewLocalGitOptions(options) ? [options] : []
 }
 
 async function readMergeRequestTemplate(
@@ -186,7 +124,8 @@ async function readMergeRequestTemplate(
 export async function createGitLabMergeRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult> {
   if (input.provider !== 'gitlab') {
     return {
@@ -196,7 +135,11 @@ export async function createGitLabMergeRequest(
     }
   }
 
-  const projectRef = await getProjectSlug(repoPath, connectionId)
+  const projectRef = await getProjectSlug(
+    repoPath,
+    connectionId,
+    ...hostedReviewExecutionOptionArgs(options)
+  )
   if (!projectRef) {
     return {
       ok: false,
@@ -252,6 +195,7 @@ export async function createGitLabMergeRequest(
     try {
       const { stdout } = await glabExecFileAsync(createArgs, {
         ...glabRepoExecOptions(repoPath, connectionId),
+        ...(connectionId ? {} : getHostedReviewLocalGitOptions(options)),
         timeout: 60_000,
         idempotent: false
       })
@@ -260,9 +204,14 @@ export async function createGitLabMergeRequest(
         return { ok: true, ...created }
       }
       const found = head
-        ? await findOpenMRByHeadBase({ repoPath, projectRef, head, base, connectionId }).catch(
-            () => null
-          )
+        ? await findOpenMRByHeadBase({
+            repoPath,
+            projectRef,
+            head,
+            base,
+            connectionId,
+            options
+          }).catch(() => null)
         : null
       if (found) {
         return { ok: true, ...found }
@@ -284,7 +233,8 @@ export async function createGitLabMergeRequest(
           projectRef,
           head,
           base,
-          connectionId
+          connectionId,
+          options
         }).catch(() => null)
         if (existing) {
           return {

@@ -5,6 +5,11 @@ import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
+import {
+  buildCheckRunDetailsTabId,
+  getCheckRunDetailsTabLabel,
+  type OpenCheckRunDetailsState
+} from '@/components/editor/check-run-details-tab'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
@@ -35,6 +40,7 @@ import {
   stripCredentialsFromMessage
 } from '../../../../shared/git-remote-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
@@ -216,7 +222,18 @@ export type OpenFile = {
    * tab from the tree bumps this so the panel refetches instead of reusing a
    * stale snapshot. */
   diffContentReloadNonce?: number
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview'
+  /** Why: terminal/agent links can be the user's manual recovery path when a
+   * remote watcher misses an external write. Bumping this refetches clean tabs. */
+  fileContentReloadNonce?: number
+  /** Why: CI check full-details tabs are virtual editor tabs backed by fetched
+   *  PR check-run metadata instead of a file on disk. */
+  checkRunDetails?: OpenCheckRunDetailsState
+  /** Why: on the web client an editor tab can either be mirrored from the host
+   *  runtime's session snapshot or opened locally by the web user. Only mirrored
+   *  tabs may be culled when they vanish from a later host snapshot; locally
+   *  opened tabs have no host counterpart and must survive snapshot syncs. */
+  mirroredFromRuntimeSession?: boolean
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
 }
 
 export type ActivityBarPosition = 'top' | 'side'
@@ -231,7 +248,12 @@ export type MarkdownViewMode = 'source' | 'rich' | 'preview'
 export type EditorViewMode = 'edit' | 'changes'
 
 /** Enough state to restore a tab via `openFile` after `closeFile` (id is always filePath). */
-export type ClosedEditorTabSnapshot = Omit<OpenFile, 'id' | 'isDirty'>
+// Why: omit mirroredFromRuntimeSession so a user-reopened tab is never treated
+// as host-owned; otherwise the web session sync could cull it on the next snapshot.
+export type ClosedEditorTabSnapshot = Omit<
+  OpenFile,
+  'id' | 'isDirty' | 'mirroredFromRuntimeSession'
+>
 
 const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 
@@ -239,6 +261,7 @@ type EditorOpenTargetOptions = {
   targetGroupId?: string
   preview?: boolean
   runtimeEnvironmentId?: string | null
+  forceContentReload?: boolean
 }
 
 type GitRuntimeOperationOptions = {
@@ -333,6 +356,10 @@ export type EditorSlice = {
   markdownFrontmatterVisible: Record<string, boolean>
   setMarkdownFrontmatterVisible: (fileId: string, visible: boolean) => void
 
+  // Markdown table of contents
+  markdownTocPanelWidth: number
+  setMarkdownTocPanelWidth: (width: number) => void
+
   // Right sidebar
   rightSidebarOpen: boolean
   rightSidebarWidth: number
@@ -381,6 +408,7 @@ export type EditorSlice = {
       targetGroupId?: string
       recordReplacedPreview?: boolean
       suppressActiveRuntimeFallback?: boolean
+      forceContentReload?: boolean
     }
   ) => void
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
@@ -466,6 +494,19 @@ export type EditorSlice = {
     entries: ConflictReviewEntry[],
     source: ConflictReviewState['source']
   ) => void
+  openCheckRunDetails: (
+    worktreeId: string,
+    contextKey: string,
+    check: OpenCheckRunDetailsState['check'],
+    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+  ) => void
+  patchOpenCheckRunDetails: (
+    worktreeId: string,
+    contextKey: string,
+    check: OpenCheckRunDetailsState['check'],
+    state: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>
+  ) => void
+  reloadOpenCheckRunDetailsTab: (fileId: string) => Promise<void>
   openBranchAllDiffs: (
     worktreeId: string,
     worktreePath: string,
@@ -618,7 +659,7 @@ function openWorkspaceEditorItem(
   fileId: string,
   worktreeId: string,
   label: string,
-  contentType: 'editor' | 'diff' | 'conflict-review',
+  contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
   isPreview?: boolean,
   targetGroupId?: string
 ): string {
@@ -647,7 +688,12 @@ function openWorkspaceEditorItem(
 }
 
 function isEditorTabContentType(contentType: Tab['contentType']): boolean {
-  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+  return (
+    contentType === 'editor' ||
+    contentType === 'diff' ||
+    contentType === 'conflict-review' ||
+    contentType === 'check-details'
+  )
 }
 
 function getReplaceablePreviewFileId(
@@ -856,6 +902,19 @@ function withDiffContentReloadRequest(file: OpenFile): OpenFile {
     ...file,
     diffContentReloadNonce: (file.diffContentReloadNonce ?? 0) + 1
   }
+}
+
+function shouldRequestExistingFileContentReload(
+  existing: OpenFile,
+  nextMode: OpenFile['mode'],
+  options: EditorOpenTargetOptions | undefined
+): boolean {
+  return (
+    options?.forceContentReload === true &&
+    !existing.isDirty &&
+    (existing.mode === 'edit' || existing.mode === 'markdown-preview') &&
+    (nextMode === 'edit' || nextMode === 'markdown-preview')
+  )
 }
 
 function isEditorFileIdOccupiedByOtherOwner(
@@ -1451,6 +1510,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: true } }
     }),
 
+  // Markdown table of contents
+  markdownTocPanelWidth: 240,
+  setMarkdownTocPanelWidth: (width) =>
+    set((s) => ({
+      markdownTocPanelWidth: clampMarkdownTocPanelWidth(width, undefined, s.markdownTocPanelWidth)
+    })),
+
   // Right sidebar
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
@@ -1618,8 +1684,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     let editorItemWorktreeId = file.worktreeId
     let editorItemFileId = file.filePath
     let editorItemLabel = file.relativePath
-    let editorItemContentType: 'editor' | 'diff' | 'conflict-review' =
-      file.mode === 'conflict-review' ? 'conflict-review' : file.mode === 'diff' ? 'diff' : 'editor'
+    let editorItemContentType: 'editor' | 'diff' | 'conflict-review' | 'check-details' =
+      file.mode === 'conflict-review'
+        ? 'conflict-review'
+        : file.mode === 'check-details'
+          ? 'check-details'
+          : file.mode === 'diff'
+            ? 'diff'
+            : 'editor'
     let editorItemTargetGroupId = options?.targetGroupId
     set((s) => {
       const worktreeId = file.worktreeId
@@ -1649,6 +1721,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       if (existing) {
         // If opening as non-preview, also pin the existing tab
         const updatedPreview = isPreview ? existing.isPreview : false
+        const fileContentReloadNonce = shouldRequestExistingFileContentReload(
+          existing,
+          file.mode,
+          options
+        )
+          ? (existing.fileContentReloadNonce ?? 0) + 1
+          : existing.fileContentReloadNonce
         const needsExistingUpdate =
           existing.mode !== file.mode ||
           existing.diffSource !== file.diffSource ||
@@ -1662,7 +1741,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.language !== file.language ||
           existing.relativePath !== file.relativePath ||
           existing.worktreeId !== file.worktreeId ||
-          existing.runtimeEnvironmentId !== runtimeEnvironmentId
+          existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
+          existing.fileContentReloadNonce !== fileContentReloadNonce
         if (!needsExistingUpdate) {
           return activeResult
         }
@@ -1686,7 +1766,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   conflict: file.conflict,
                   skippedConflicts: file.skippedConflicts,
                   conflictReview: file.conflictReview,
-                  isPreview: updatedPreview
+                  isPreview: updatedPreview,
+                  fileContentReloadNonce
                 }
               : f
           ),
@@ -1782,7 +1863,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           // semantically *wants* silent eviction) is unaffected.
           let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
           if (recordReplacedPreview && replacedPreview.id !== id) {
-            const { id: _rid, isDirty: _rdirty, ...snap } = replacedPreview
+            const {
+              id: _rid,
+              isDirty: _rdirty,
+              mirroredFromRuntimeSession: _rmirrored,
+              ...snap
+            } = replacedPreview
             const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
             nextRecentlyClosed = {
               ...s.recentlyClosedEditorTabsByWorktree,
@@ -2147,7 +2233,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         !shouldDeleteFromDisk &&
         closedFile.mode !== 'markdown-preview'
       ) {
-        const { id: _id, isDirty: _dirty, ...snap } = closedFile
+        const {
+          id: _id,
+          isDirty: _dirty,
+          mirroredFromRuntimeSession: _mirrored,
+          ...snap
+        } = closedFile
         const stack = s.recentlyClosedEditorTabsByWorktree[wtRecent] ?? []
         nextRecentlyClosed = {
           ...s.recentlyClosedEditorTabsByWorktree,
@@ -2206,7 +2297,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           entry.entityId === fileId &&
           (entry.contentType === 'editor' ||
             entry.contentType === 'diff' ||
-            entry.contentType === 'conflict-review')
+            entry.contentType === 'conflict-review' ||
+            entry.contentType === 'check-details')
       )
       if (unifiedTab) {
         get().closeUnifiedTab(unifiedTab.id)
@@ -2249,7 +2341,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         (item) =>
           (item.contentType === 'editor' ||
             item.contentType === 'diff' ||
-            item.contentType === 'conflict-review') &&
+            item.contentType === 'conflict-review' ||
+            item.contentType === 'check-details') &&
           (!activeWorktreeId || item.worktreeId === activeWorktreeId)
       )
       .map((item) => item.id)
@@ -2324,7 +2417,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ) {
           continue
         }
-        const { id: _id, isDirty: _dirty, ...snap } = f
+        const { id: _id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snap } = f
         nextRecentClosed = [snap as ClosedEditorTabSnapshot, ...nextRecentClosed].slice(
           0,
           MAX_RECENT_CLOSED_EDITOR_TABS
@@ -3083,6 +3176,152 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       }
     })
     void openWorkspaceEditorItem(get(), id, worktreeId, 'Conflict Review', 'conflict-review')
+  },
+
+  // Why: the checks sidebar only has room for inline summaries; full logs and
+  // annotations belong in the center editor pane like diff tabs.
+  openCheckRunDetails: (worktreeId, contextKey, check, state) => {
+    const id = buildCheckRunDetailsTabId(worktreeId, check)
+    const label = getCheckRunDetailsTabLabel(check)
+    const checkRunDetails: OpenCheckRunDetailsState = {
+      contextKey,
+      check,
+      details: state.details,
+      loading: state.loading,
+      error: state.error
+    }
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (existing) {
+        return {
+          openFiles: s.openFiles.map((f) =>
+            f.id === id
+              ? {
+                  ...f,
+                  mode: 'check-details' as const,
+                  relativePath: label,
+                  language: 'plaintext',
+                  checkRunDetails
+                }
+              : f
+          ),
+          activeFileId: id,
+          activeTabType: 'editor',
+          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+        }
+      }
+
+      const newFile: OpenFile = {
+        id,
+        filePath: id,
+        relativePath: label,
+        worktreeId,
+        language: 'plaintext',
+        isDirty: false,
+        mode: 'check-details',
+        checkRunDetails
+      }
+
+      return {
+        openFiles: [...s.openFiles, newFile],
+        activeFileId: id,
+        activeTabType: 'editor',
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
+      }
+    })
+    void openWorkspaceEditorItem(get(), id, worktreeId, label, 'check-details')
+  },
+
+  // Why: sidebar detail fetches can finish after a full-details tab is already
+  // open; this updates the tab snapshot without stealing focus from the user.
+  patchOpenCheckRunDetails: (worktreeId, contextKey, check, state) => {
+    const id = buildCheckRunDetailsTabId(worktreeId, check)
+    const nextCheckRunDetails: OpenCheckRunDetailsState = {
+      contextKey,
+      check,
+      details: state.details,
+      loading: state.loading,
+      error: state.error
+    }
+    set((s) => {
+      const existing = s.openFiles.find((f) => f.id === id)
+      if (!existing?.checkRunDetails) {
+        return s
+      }
+      const current = existing.checkRunDetails
+      if (
+        current.contextKey === nextCheckRunDetails.contextKey &&
+        current.check.status === nextCheckRunDetails.check.status &&
+        current.check.conclusion === nextCheckRunDetails.check.conclusion &&
+        current.loading === nextCheckRunDetails.loading &&
+        current.error === nextCheckRunDetails.error &&
+        current.details === nextCheckRunDetails.details
+      ) {
+        return s
+      }
+      return {
+        openFiles: s.openFiles.map((f) =>
+          f.id === id ? { ...f, checkRunDetails: nextCheckRunDetails } : f
+        )
+      }
+    })
+  },
+
+  reloadOpenCheckRunDetailsTab: async (fileId) => {
+    const state = get()
+    const file = state.openFiles.find((candidate) => candidate.id === fileId)
+    const checkRunDetails = file?.checkRunDetails
+    if (!file || file.mode !== 'check-details' || !checkRunDetails) {
+      return
+    }
+    const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
+    const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
+    const repo = state.repos.find((candidate) => candidate.id === repoId)
+    if (!repo?.path) {
+      return
+    }
+    const { contextKey, check } = checkRunDetails
+    const patch = (next: Pick<OpenCheckRunDetailsState, 'details' | 'loading' | 'error'>): void => {
+      get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, next)
+    }
+    patch({ details: checkRunDetails.details, loading: true, error: null })
+    try {
+      const details = await get().fetchPRCheckDetails(
+        repo.path,
+        {
+          checkRunId: check.checkRunId,
+          workflowRunId: check.workflowRunId,
+          checkName: check.name,
+          url: check.url,
+          prRepo: null
+        },
+        { repoId: repo.id }
+      )
+      patch({
+        details,
+        loading: false,
+        error: details
+          ? null
+          : translate(
+              'auto.store.slices.editor.checkRunDetailsUnavailable',
+              'No details are available for this check.'
+            )
+      })
+    } catch (error) {
+      patch({
+        details: null,
+        loading: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.store.slices.editor.checkRunDetailsLoadFailed',
+                'Failed to load check details.'
+              )
+      })
+    }
   },
 
   openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) => {
@@ -4242,6 +4481,7 @@ function areUpstreamStatusesEqual(
     prev.upstreamName === next.upstreamName &&
     prev.ahead === next.ahead &&
     prev.behind === next.behind &&
+    prev.hasConfiguredPushTarget === next.hasConfiguredPushTarget &&
     prev.behindCommitsArePatchEquivalent === next.behindCommitsArePatchEquivalent
   )
 }
@@ -4259,7 +4499,7 @@ function reconcileOpenFilesForStatus(
       return [file]
     }
 
-    if (file.mode === 'conflict-review') {
+    if (file.mode === 'conflict-review' || file.mode === 'check-details') {
       return [file]
     }
 

@@ -6,6 +6,7 @@ import { mkdtempSync, rmSync } from 'fs'
 import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { healthCheckDaemon } from './daemon-health'
+import { getDaemonSocketPath } from './daemon-spawner'
 import type { ListSessionsResult } from './types'
 import type { SubprocessHandle } from './session'
 
@@ -73,8 +74,8 @@ describe('slow daemon session verification', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-slow-verification-test-'))
-    daemonSocketPath = join(dir, 'daemon.sock')
-    proxySocketPath = join(dir, 'proxy.sock')
+    daemonSocketPath = getDaemonSocketPath(join(dir, 'daemon'))
+    proxySocketPath = getDaemonSocketPath(join(dir, 'proxy'))
     tokenPath = join(dir, 'daemon.token')
   })
 
@@ -82,8 +83,12 @@ describe('slow daemon session verification', () => {
     for (const client of clients.splice(0)) {
       client.disconnect()
     }
-    await new Promise<void>((resolve) => proxy?.close(() => resolve()))
-    await server?.shutdown()
+    if (proxy) {
+      await new Promise<void>((resolve) => proxy.close(() => resolve()))
+    }
+    if (server) {
+      await server.shutdown()
+    }
     rmSync(dir, { recursive: true, force: true })
   })
 

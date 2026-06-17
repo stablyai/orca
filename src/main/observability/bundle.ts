@@ -17,8 +17,8 @@
 //      a) POST `/diagnostics/token` → token + upload_url
 //      b) POST `<upload_url>` with `Authorization: Bearer <token>` and the
 //         collected NDJSON payload. Returns ticket ID.
-//   4. (renderer) — surface the ticket ID; offer "Copy ticket" and
-//      "Delete this bundle" controls. Delete posts only the ticket ID.
+//   4. (renderer) — surface the support reference ID; offer copy/delete
+//      controls. Delete posts only the server-issued ID.
 //
 // Server-side endpoint contract is fully specified in
 // telemetry-error-tracking.md §Endpoint contract. Implementation of those
@@ -53,7 +53,7 @@ export type CollectedBundle = {
   readonly bundleSubmissionId: string
   /** UTF-8 NDJSON payload — header line + N redacted span lines. */
   readonly payload: string
-  /** Byte length of `payload`. Pre-checked against the 10 MB upload cap. */
+  /** Byte length of `payload`. Pre-checked against the 4 MiB upload cap. */
   readonly bytes: number
   /** Span-line count, for the preview window's "N spans" label. */
   readonly spanCount: number
@@ -179,7 +179,7 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
         continue
       }
       if (currentBytes + redactedBytes > MAX_BUNDLE_BYTES) {
-        // Hard ceiling at the same 10 MB the upload endpoint enforces (F4).
+        // Hard ceiling at the same 4 MiB the upload endpoint enforces.
         // Check before appending so the preview can be uploaded as-is.
         break outer
       }

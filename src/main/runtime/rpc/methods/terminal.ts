@@ -389,7 +389,8 @@ const TerminalHandle = z.object({
 
 const TerminalListParams = z.object({
   worktree: OptionalString,
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  requireFreshPtyLiveness: z.boolean().optional()
 })
 
 const TerminalResolveActive = z.object({
@@ -483,6 +484,11 @@ const TerminalSplit = TerminalHandle.extend({
 
 const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')
+})
+
+const TerminalStopExact = TerminalStop.extend({
+  expectedPtyIds: z.array(requiredString('Missing PTY ID')).min(1),
+  keepHistory: z.boolean().optional()
 })
 
 const AgentTeamsTmuxCompat = z.object({
@@ -617,7 +623,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.list',
     params: TerminalListParams,
-    handler: async (params, { runtime }) => runtime.listTerminals(params.worktree, params.limit)
+    handler: async (params, { runtime }) =>
+      runtime.listTerminals(params.worktree, params.limit, {
+        requireFreshPtyLiveness: params.requireFreshPtyLiveness
+      })
   }),
   defineMethod({
     name: 'terminal.resolveActive',
@@ -746,6 +755,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.stop',
     params: TerminalStop,
     handler: async (params, { runtime }) => runtime.stopTerminalsForWorktree(params.worktree)
+  }),
+  defineMethod({
+    name: 'terminal.stopExact',
+    params: TerminalStopExact,
+    handler: async (params, { runtime }) =>
+      runtime.stopExactTerminalsForWorktree(params.worktree, params.expectedPtyIds, {
+        keepHistory: params.keepHistory
+      })
   }),
   defineMethod({
     name: 'terminal.resizeForClient',

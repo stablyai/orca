@@ -194,7 +194,7 @@ Common Commands:
   orca environment show --environment <selector> [--json]
   orca environment rm --environment <selector> [--json]
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
-  orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
+  orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-workspace <selector>|--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
   orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
@@ -230,6 +230,7 @@ Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
   --worktree <selector>     Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
+  --parent-workspace <selector> Parent workspace selector such as folder:<id> or worktree:<id>
   --parent-worktree <selector> Parent worktree selector; create infers a child of the caller/current worktree by default
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 
@@ -252,6 +253,11 @@ Behavior:
   Most commands require a running Orca runtime. If Orca is not open yet, run \`orca open\` first.
   Remote runtime access can also be supplied with ORCA_PAIRING_CODE or ORCA_ENVIRONMENT.
   Use selectors for discovery and handles for repeated live terminal operations.
+
+Agent Sessions And Worktrees:
+  \`worktree create --agent\` creates a new checkout/workspace with an agent.
+  To start a fresh agent in the current worktree, use:
+    orca terminal create --worktree active --command "codex"
 
 Browser Workflow:
   1. Create or navigate:  orca tab create --url https://example.com
@@ -302,6 +308,7 @@ Examples:
   $ orca worktree ps --limit 10
   $ orca file open-changed --mode diff
   $ orca file open src/App.tsx
+  $ orca terminal create --worktree active --command "codex"
   $ orca terminal list --worktree path:/Users/me/orca/workspaces/orca/cli-test-1 --json
   $ orca terminal send --terminal term_123 --text "hi" --enter
   $ orca terminal wait --terminal term_123 --for exit --timeout-ms 60000 --json
@@ -472,6 +479,8 @@ export function formatFlagHelp(flag: string): string {
     'no-parent': '--no-parent            Force no parent lineage for unrelated work',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
     pages: '--pages <n>           Number of scroll pages',
+    'parent-workspace':
+      '--parent-workspace <selector> Parent workspace selector such as folder:<id>',
     'parent-worktree':
       '--parent-worktree <selector> Parent selector; create infers the caller/current worktree by default',
     path: '--path <path>          Path argument for the command',

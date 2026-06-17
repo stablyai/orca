@@ -23,7 +23,7 @@ import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
 
 type RegisterAppHandlersOptions = {
-  onBeforeRelaunch?: () => void
+  onBeforeRelaunch?: () => void | Promise<void>
 }
 
 async function pickFloatingMarkdownDocument(
@@ -206,24 +206,24 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }
   })
 
-  ipcMain.handle('app:relaunch', () => {
+  ipcMain.handle('app:relaunch', async () => {
     // Why: small delay lets the renderer finish painting any "Restarting…"
     // UI state before the window tears down. `app.relaunch()` schedules a
     // spawn; `app.exit(0)` triggers the actual quit without invoking
     // before-quit handlers that could block on confirmation dialogs.
     // Mark shutdown first because app.exit() can bypass the usual quit latch.
-    options.onBeforeRelaunch?.()
+    await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
       app.relaunch()
       app.exit(0)
     }, 150)
   })
 
-  ipcMain.handle('app:restart', () => {
+  ipcMain.handle('app:restart', async () => {
     // Why: the hidden admin restart should mirror the update relaunch path:
     // schedule a new Orca process, then use the normal quit pipeline so daemon
     // checkpoints, runtime metadata, and telemetry flush before exit.
-    options.onBeforeRelaunch?.()
+    await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
       app.relaunch()
       app.quit()
@@ -245,4 +245,19 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:pickFloatingWorkspaceDirectory', (event) =>
     pickFloatingWorkspaceDirectory(event, store)
   )
+}
+
+async function runBeforeRelaunchCleanup(
+  onBeforeRelaunch?: () => void | Promise<void>
+): Promise<void> {
+  try {
+    await onBeforeRelaunch?.()
+  } catch (error) {
+    // Why: restart/relaunch must not get trapped if best-effort shutdown
+    // cleanup fails; the cleanup path logs without exposing secret contents.
+    console.warn(
+      '[app] Pre-relaunch cleanup failed; continuing relaunch:',
+      error instanceof Error ? error.name : typeof error
+    )
+  }
 }

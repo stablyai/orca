@@ -17,6 +17,8 @@ import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
+export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
+
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
  * Strips unsafe characters and collapses runs of special chars to a single hyphen.
@@ -75,24 +77,6 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
   }
 
   return resolvedTargetPath
-}
-
-/**
- * Compute the full branch name by applying the configured prefix strategy.
- */
-export function computeBranchName(
-  sanitizedName: string,
-  settings: { branchPrefix: string; branchPrefixCustom?: string },
-  gitUsername: string | null
-): string {
-  if (settings.branchPrefix === 'git-username') {
-    if (gitUsername) {
-      return `${gitUsername}/${sanitizedName}`
-    }
-  } else if (settings.branchPrefix === 'custom' && settings.branchPrefixCustom) {
-    return `${settings.branchPrefixCustom}/${sanitizedName}`
-  }
-  return sanitizedName
 }
 
 /**
@@ -182,6 +166,17 @@ export function areWorktreePathsEqual(
   rightPath: string,
   platform = process.platform
 ): boolean {
+  if (looksLikePosixAbsolutePath(leftPath) || looksLikePosixAbsolutePath(rightPath)) {
+    // Why: local WSL projects run POSIX paths on a Windows desktop; comparing
+    // them with win32 rules can delete or dedupe the wrong runtime-owned path.
+    if (!looksLikePosixAbsolutePath(leftPath) || !looksLikePosixAbsolutePath(rightPath)) {
+      return false
+    }
+    const left = normalizePosixWorktreePathForComparison(leftPath, platform)
+    const right = normalizePosixWorktreePathForComparison(rightPath, platform)
+    return left === right
+  }
+
   if (platform === 'win32' || looksLikeWindowsPath(leftPath) || looksLikeWindowsPath(rightPath)) {
     const left = win32.normalize(win32.resolve(leftPath))
     const right = win32.normalize(win32.resolve(rightPath))
@@ -200,6 +195,10 @@ function looksLikeWindowsPath(pathValue: string): boolean {
   return (
     /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\') || pathValue.startsWith('//')
   )
+}
+
+function looksLikePosixAbsolutePath(pathValue: string): boolean {
+  return pathValue.startsWith('/') && !pathValue.startsWith('//')
 }
 
 function normalizePosixWorktreePathForComparison(

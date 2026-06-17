@@ -13,6 +13,36 @@ export type ParsedExecutionHost =
   | { kind: 'ssh'; id: `ssh:${string}`; targetId: string }
   | { kind: 'runtime'; id: `runtime:${string}`; environmentId: string }
 
+function getCurrentLocalPlatform(): NodeJS.Platform | null {
+  const globalNavigator = (globalThis as { navigator?: { userAgent?: string; platform?: string } })
+    .navigator
+  const userAgent = globalNavigator?.userAgent || globalNavigator?.platform || ''
+  if (/Windows/i.test(userAgent)) {
+    return 'win32'
+  }
+  if (/Mac/i.test(userAgent)) {
+    return 'darwin'
+  }
+  if (/Linux|X11/i.test(userAgent)) {
+    return 'linux'
+  }
+  return typeof process === 'undefined' ? null : process.platform
+}
+
+export function getLocalExecutionHostLabel(platform: NodeJS.Platform | null = null): string {
+  const localPlatform = platform ?? getCurrentLocalPlatform()
+  if (localPlatform === 'darwin') {
+    return 'Local Mac'
+  }
+  if (localPlatform === 'win32') {
+    return 'Local Windows'
+  }
+  if (localPlatform === 'linux') {
+    return 'Local Linux'
+  }
+  return 'This computer'
+}
+
 function normalizeHostPart(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
@@ -129,7 +159,7 @@ export function getExecutionHostLabel(id: ExecutionHostScope): string {
   }
   switch (parsed.kind) {
     case 'local':
-      return 'Local Mac'
+      return getLocalExecutionHostLabel()
     case 'ssh':
       return parsed.targetId
     case 'runtime':

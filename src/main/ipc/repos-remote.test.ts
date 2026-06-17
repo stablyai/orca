@@ -19,7 +19,9 @@ const {
   mockGitProvider,
   mockFilesystemProvider,
   mockMultiplexer,
-  gitSpawnMock
+  gitSpawnMock,
+  invalidateAuthorizedRootsCacheMock,
+  prepareLocalWorktreeRootForRepoMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   mockStore: {
@@ -28,6 +30,9 @@ const {
     removeProject: vi.fn(),
     getRepo: vi.fn(),
     updateRepo: vi.fn(),
+    getProjects: vi.fn().mockReturnValue([]),
+    getProjectHostSetups: vi.fn().mockReturnValue([]),
+    updateProjectHostSetup: vi.fn(),
     getProjectGroups: vi.fn().mockReturnValue([]),
     createProjectGroup: vi.fn(),
     updateProjectGroup: vi.fn(),
@@ -62,7 +67,9 @@ const {
     request: vi.fn(),
     notify: vi.fn()
   },
-  gitSpawnMock: vi.fn()
+  gitSpawnMock: vi.fn(),
+  invalidateAuthorizedRootsCacheMock: vi.fn(),
+  prepareLocalWorktreeRootForRepoMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -97,7 +104,11 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('./filesystem-auth', () => ({
-  invalidateAuthorizedRootsCache: vi.fn()
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+}))
+
+vi.mock('../worktree-root-preparation', () => ({
+  prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -147,6 +158,9 @@ describe('projectGroups IPC validation', () => {
     mockStore.updateProjectGroup.mockReset()
     mockStore.deleteProjectGroup.mockReset()
     mockStore.moveProjectToGroup.mockReset()
+    mockStore.getProjects.mockReset().mockReturnValue([])
+    mockStore.getProjectHostSetups.mockReset().mockReturnValue([])
+    mockStore.updateProjectHostSetup.mockReset()
     mockStore.getRepos.mockReset()
     mockStore.getRepos.mockReturnValue([])
     mockFilesystemProvider.readDir.mockReset()
@@ -161,6 +175,8 @@ describe('projectGroups IPC validation', () => {
     vi.mocked(isGitRepo).mockReturnValue(true)
     mockMultiplexer.notify.mockReset()
     mockMultiplexer.request.mockReset()
+    invalidateAuthorizedRootsCacheMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -752,6 +768,7 @@ describe('repos:getGitUsername', () => {
     mockStore.getRepo.mockReset()
     mockGitProvider.exec.mockReset()
     mockWindow.webContents.send.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -845,6 +862,7 @@ describe('repos:addRemote', () => {
     mockMultiplexer.request.mockReset()
     mockMultiplexer.notify.mockReset()
     gitSpawnMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
@@ -1543,8 +1561,13 @@ describe('repos:add + repos:clone', () => {
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
     mockStore.updateRepo.mockReset()
+    mockStore.getProjects.mockReset().mockReturnValue([])
+    mockStore.getProjectHostSetups.mockReset().mockReturnValue([])
+    mockStore.updateProjectHostSetup.mockReset()
     mockWindow.webContents.send.mockReset()
     gitSpawnMock.mockReset()
+    invalidateAuthorizedRootsCacheMock.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = createMockCloneProcess()
       queueMicrotask(() => proc.emit('close', 0, null))
@@ -1582,6 +1605,15 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'hide')
   })
 
+  it('prepares the worktree root when adding a local git repo', async () => {
+    await handlers.get('repos:add')!(null, { path: '/tmp/from-add', kind: 'git' })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(
+      mockStore,
+      expect.objectContaining({ path: '/tmp/from-add', kind: 'git' })
+    )
+  })
+
   it('returns existing badgeColor unchanged on repos:add dedupe', async () => {
     const existing = {
       id: 'repo-add-existing',
@@ -1601,6 +1633,132 @@ describe('repos:add + repos:clone', () => {
     expect(result).toEqual({ repo: existing })
     expect(result).toHaveProperty('repo.badgeColor', '#22c55e')
     expect(result).toHaveProperty('repo.externalWorktreeVisibility', 'show')
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('prepares the worktree root when repos:add returns an existing local git repo', async () => {
+    const existing = {
+      id: 'repo-add-existing-git',
+      path: '/tmp/from-add-existing-git',
+      displayName: 'from-add-existing-git',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    await handlers.get('repos:add')!(null, {
+      path: '/tmp/from-add-existing-git',
+      kind: 'git'
+    })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, existing)
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('prepares the aligned worktree root when project setup uses an existing local git repo', async () => {
+    const existing = {
+      id: 'repo-setup-existing-git',
+      path: '/tmp/from-setup-existing-git',
+      displayName: 'from-setup-existing-git',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    const aligned = { ...existing, projectHostSetupMethod: 'imported-existing-folder' }
+    const project = { id: 'project-1', displayName: 'Project' }
+    const setup = {
+      id: 'setup-1',
+      projectId: project.id,
+      repoId: existing.id,
+      hostId: 'local',
+      path: existing.path,
+      displayName: existing.displayName,
+      setupState: 'ready',
+      setupMethod: 'imported-existing-folder'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+    mockStore.getProjects.mockReturnValue([project])
+    mockStore.getProjectHostSetups.mockReturnValue([setup])
+    mockStore.updateRepo.mockReturnValue(aligned)
+
+    await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: project.id,
+      hostId: 'local',
+      path: existing.path,
+      kind: 'git',
+      setupMethod: 'imported-existing-folder'
+    })
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, aligned)
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('prepares and invalidates roots when repos:update changes worktree base path', () => {
+    const updated = {
+      id: 'repo-update-root',
+      path: '/tmp/repo-update-root',
+      displayName: 'repo-update-root',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      worktreeBasePath: '../worktrees'
+    }
+    mockStore.updateRepo.mockReturnValue(updated)
+
+    const result = handlers.get('repos:update')!(null, {
+      repoId: updated.id,
+      updates: { worktreeBasePath: ' ../worktrees ' }
+    })
+
+    expect(result).toBe(updated)
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(updated.id, {
+      worktreeBasePath: '../worktrees'
+    })
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, updated)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+  })
+
+  it('prepares and invalidates roots when project host setup update changes worktree base path', () => {
+    const repo = {
+      id: 'repo-setup-update-root',
+      path: '/tmp/repo-setup-update-root',
+      displayName: 'repo-setup-update-root',
+      kind: 'git',
+      badgeColor: '#22c55e',
+      worktreeBasePath: '../worktrees'
+    }
+    const result = {
+      project: { id: 'project-1', displayName: 'Project' },
+      setup: { id: 'setup-1', projectId: 'project-1', repoId: repo.id, hostId: 'local' },
+      repo
+    }
+    mockStore.updateProjectHostSetup.mockReturnValue(result)
+
+    expect(
+      handlers.get('projectHostSetups:update')!(null, {
+        setupId: 'setup-1',
+        updates: { worktreeBasePath: '../worktrees' }
+      })
+    ).toBe(result)
+
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, repo)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+  })
+
+  it('dedupes repos:add by normalized local path on Windows', async () => {
+    const existing = {
+      id: 'repo-add-windows-existing',
+      path: 'C:\\Users\\Ava\\Repo',
+      displayName: 'Repo',
+      kind: 'folder',
+      badgeColor: '#22c55e'
+    }
+    mockStore.getRepos.mockReturnValue([existing])
+
+    const result = await handlers.get('repos:add')!(null, {
+      path: 'c:/Users/Ava/Repo',
+      kind: 'folder'
+    })
+
+    expect(result).toEqual({ repo: existing })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
@@ -1651,6 +1809,8 @@ describe('repos:add + repos:clone', () => {
     })
     expect(result).toEqual(upgraded)
     expect(result).toHaveProperty('badgeColor', '#8b5cf6')
+    expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenCalledWith(mockStore, upgraded)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
@@ -2021,6 +2181,7 @@ describe('repos:getBaseRefDefault envelope', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     // Reset exec to default: later SSH tests replace this with custom mocks, and
     // without this reset any future test added to this block would inherit the
     // last test's exec mock — latent fragility we guard against here.
@@ -2208,6 +2369,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
+    prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })

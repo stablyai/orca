@@ -141,19 +141,46 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('does not eagerly import inactive sidebar dialog flows on startup', () => {
-    const source = readFileSync(
+    const appSource = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const sidebarSource = readFileSync(
       join(process.cwd(), 'src/renderer/src/components/sidebar/index.tsx'),
       'utf8'
     )
 
-    expect(source).toContain("React.lazy(() => import('./AddRepoDialog'))")
-    expect(source).toContain("React.lazy(() => import('./WorktreeMetaDialog'))")
-    expect(source).not.toContain("from './AddRepoDialog'")
-    expect(source).not.toContain("from './WorktreeMetaDialog'")
-    expect(source).toContain("activeModal === 'add-repo'")
-    expect(source).toContain('shouldMountAddRepoDialog ? <AddRepoDialog /> : null')
-    expect(source).toContain('setTimeout(() =>')
-    expect(source).toContain("activeModal === 'edit-meta' ? <WorktreeMetaDialog /> : null")
+    expect(appSource).toContain("lazy(() => import('./components/sidebar/AddRepoDialog'))")
+    expect(appSource).toContain("lazy(() => import('./components/sidebar/NonGitFolderDialog'))")
+    expect(appSource).toContain("import('./components/sidebar/AddProjectFromFolderDialog')")
+    expect(appSource).toContain("lazy(() => import('./components/sidebar/ProjectAddedDialog'))")
+    expect(appSource).toContain("activeModal === 'add-repo'")
+    expect(appSource).toContain("activeModal === 'confirm-non-git-folder'")
+    expect(appSource).toContain("activeModal === 'confirm-add-project-from-folder'")
+    expect(appSource).toContain("activeModal === 'project-added'")
+    expect(appSource).toContain('shouldMountAddRepoDialog ? (')
+    expect(appSource).toContain('boundaryId="modal.add-repo"')
+    expect(appSource).toContain('boundaryId="modal.confirm-non-git-folder"')
+    expect(appSource).toContain('boundaryId="modal.confirm-add-project-from-folder"')
+    expect(appSource).toContain('boundaryId="modal.project-added"')
+    expect(appSource).toContain('setTimeout(() =>')
+    expect(sidebarSource).toContain("React.lazy(() => import('./WorktreeMetaDialog'))")
+    expect(sidebarSource).not.toContain("from './AddRepoDialog'")
+    expect(sidebarSource).not.toContain("React.lazy(() => import('./AddRepoDialog'))")
+    expect(sidebarSource).not.toContain("React.lazy(() => import('./NonGitFolderDialog'))")
+    expect(sidebarSource).not.toContain("React.lazy(() => import('./AddProjectFromFolderDialog'))")
+    expect(sidebarSource).not.toContain("React.lazy(() => import('./ProjectAddedDialog'))")
+    expect(sidebarSource).not.toContain('shouldMountAddRepoDialog ? <AddRepoDialog /> : null')
+    expect(sidebarSource).not.toContain(
+      "activeModal === 'confirm-non-git-folder' ? <NonGitFolderDialog /> : null"
+    )
+    expect(sidebarSource).not.toContain(
+      "activeModal === 'confirm-add-project-from-folder' ? <AddProjectFromFolderDialog /> : null"
+    )
+    expect(sidebarSource).not.toContain(
+      "activeModal === 'project-added' ? <ProjectAddedDialog /> : null"
+    )
+    expect(sidebarSource).toContain("activeModal === 'edit-meta' ? <WorktreeMetaDialog /> : null")
+    expect(sidebarSource).toContain(
+      "activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null"
+    )
   })
 
   it('does not eagerly import optional status-bar segments on startup', () => {

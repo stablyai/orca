@@ -12,7 +12,12 @@ import {
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
-const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>(['editor', 'diff', 'conflict-review'])
+const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
+  'editor',
+  'diff',
+  'conflict-review',
+  'check-details'
+])
 
 type TerminalTabActionState = ReturnType<typeof useAppStore.getState>
 

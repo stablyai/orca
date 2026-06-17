@@ -7,6 +7,7 @@
  */
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
@@ -365,6 +366,7 @@ export type IpcPtyTransportOptions = {
   activate?: boolean
   /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
   shellOverride?: string
+  projectRuntime?: ProjectExecutionRuntimeResolution
   /** Telemetry metadata for the `agent_started` event. Forwarded verbatim
    *  to `pty:spawn` so main can fire the event after confirmed launch. The
    *  IPC handler re-validates the schema; this type is the renderer-side

@@ -239,7 +239,12 @@ function applyTabOrderSortValues(tabs: Tab[], tabOrder: string[]): Tab[] {
 }
 
 function isReplaceablePreviewContentType(contentType: Tab['contentType']): boolean {
-  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+  return (
+    contentType === 'editor' ||
+    contentType === 'diff' ||
+    contentType === 'conflict-review' ||
+    contentType === 'check-details'
+  )
 }
 
 function canReplacePreviewContentType(
@@ -382,7 +387,8 @@ function deriveActiveSurfaceForWorktree(
     activeFileId =
       activeUnifiedTab.contentType === 'editor' ||
       activeUnifiedTab.contentType === 'diff' ||
-      activeUnifiedTab.contentType === 'conflict-review'
+      activeUnifiedTab.contentType === 'conflict-review' ||
+      activeUnifiedTab.contentType === 'check-details'
         ? activeUnifiedTab.entityId
         : fileStillOpen
           ? restoredFileId

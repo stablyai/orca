@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
+  getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
   normalizeExecutionHostOrder,
@@ -25,6 +26,13 @@ describe('execution host identity', () => {
       id: 'runtime:prod%2Fserver',
       environmentId: 'prod/server'
     })
+  })
+
+  it('labels the local host by platform', () => {
+    expect(getLocalExecutionHostLabel('darwin')).toBe('Local Mac')
+    expect(getLocalExecutionHostLabel('win32')).toBe('Local Windows')
+    expect(getLocalExecutionHostLabel('linux')).toBe('Local Linux')
+    expect(getLocalExecutionHostLabel('freebsd')).toBe('This computer')
   })
 
   it('falls back invalid scopes to all hosts', () => {
@@ -62,5 +70,11 @@ describe('execution host identity', () => {
     expect(getSettingsFocusedExecutionHostId({ activeRuntimeEnvironmentId: 'runtime-1' })).toBe(
       'runtime:runtime-1'
     )
+  })
+
+  it('labels local execution hosts by platform', () => {
+    expect(getLocalExecutionHostLabel('darwin')).toBe('Local Mac')
+    expect(getLocalExecutionHostLabel('linux')).toBe('Local Linux')
+    expect(getLocalExecutionHostLabel('win32')).toBe('Local Windows')
   })
 })

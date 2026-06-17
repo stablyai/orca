@@ -1,7 +1,8 @@
 /* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
-import React, { useEffect, useMemo, useState } from 'react'
-import { Plug, Files, GitBranch, ListChecks, PanelRight } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Plug, Files, GitBranch, ListChecks, PanelRight, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
+import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
@@ -69,9 +70,9 @@ function RightSidebarInner(): React.JSX.Element {
     activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
   )
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
-  const isFolder =
-    parseWorkspaceKey(activeWorktreeId ?? '')?.type === 'folder' ||
-    (activeRepo ? isFolderRepo(activeRepo) : false)
+  const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
+  const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
+  const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
 
   const activityItems = useMemo<ActivityBarItem[]>(
@@ -87,6 +88,23 @@ function RightSidebarInner(): React.JSX.Element {
         icon: AgentSessionHistoryIcon,
         title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
         shortcut: ''
+      },
+      {
+        id: 'workspaces',
+        icon: Workflow,
+        title: translate(
+          'auto.components.right.sidebar.index.folderWorkspaces',
+          'Attached worktrees'
+        ),
+        shortcut: '',
+        folderOnly: true
+      },
+      {
+        id: 'pr-checks',
+        icon: ListChecks,
+        title: translate('auto.components.right.sidebar.index.parentPrChecks', 'PR Checks'),
+        shortcut: '',
+        folderOnly: true
       },
       {
         id: 'source-control',
@@ -114,23 +132,41 @@ function RightSidebarInner(): React.JSX.Element {
   )
 
   const visibleItems = useMemo(
-    () => getVisibleRightSidebarActivityItems(activityItems, { isFolder, isSshRepo }),
-    [activityItems, isFolder, isSshRepo]
+    () =>
+      getVisibleRightSidebarActivityItems(activityItems, {
+        isFolder,
+        isFolderWorkspace,
+        isSshRepo
+      }),
+    [activityItems, isFolder, isFolderWorkspace, isSshRepo]
   )
 
-  // If the active tab is hidden (e.g. switched from a git repo to a folder),
-  // fall back to the first visible tab.
+  const rememberedFolderTabByWorkspaceKeyRef = useRef<Record<string, ActiveRightSidebarTab>>({})
+  const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null
+
+  // If the active tab is hidden (e.g. switched from a folder workspace to a git
+  // worktree), render a visible fallback without overwriting the stored route.
+  // Folder workspaces keep a session-local effective-tab memory so a PR Checks
+  // row can open a child Checks tab without erasing the parent's overview tab.
   const normalizedActiveTab = normalizeRightSidebarRoute(rightSidebarTab).rightSidebarTab
-  const effectiveTab = visibleItems.some((item) => item.id === normalizedActiveTab)
+  const rememberedFolderTab = activeFolderWorkspaceKey
+    ? rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey]
+    : null
+  const visibleNormalizedTab = visibleItems.some((item) => item.id === normalizedActiveTab)
+  const visibleRememberedFolderTab =
+    rememberedFolderTab && visibleItems.some((item) => item.id === rememberedFolderTab)
+      ? rememberedFolderTab
+      : null
+  const effectiveTab = visibleNormalizedTab
     ? normalizedActiveTab
-    : visibleItems[0].id
+    : (visibleRememberedFolderTab ?? visibleItems[0].id)
+
   useEffect(() => {
-    if (effectiveTab !== rightSidebarTab) {
-      // Why: folder workspaces hide git-only panels. Persist the fallback so
-      // panels and activity-button refs do not churn against a hidden tab.
-      setRightSidebarTab(effectiveTab)
+    if (!activeFolderWorkspaceKey || !visibleItems.some((item) => item.id === effectiveTab)) {
+      return
     }
-  }, [effectiveTab, rightSidebarTab, setRightSidebarTab])
+    rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = effectiveTab
+  }, [activeFolderWorkspaceKey, effectiveTab, visibleItems])
   const selectActivityTab = (tab: typeof effectiveTab): void => {
     if (tab === 'explorer') {
       showRightSidebarFiles()

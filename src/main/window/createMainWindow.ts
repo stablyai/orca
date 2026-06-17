@@ -677,9 +677,6 @@ export function createMainWindow(
       case 'openSettings':
         mainWindow.webContents.send('ui:openSettings')
         return
-      case 'exportPdf':
-        mainWindow.webContents.send('export:requestPdf')
-        return
       case 'forceReload':
         opts?.onBeforeReload?.({ ignoreCache: true, webContentsId: mainWindow.webContents.id })
         mainWindow.webContents.reloadIgnoringCache()
@@ -704,6 +701,9 @@ export function createMainWindow(
         return
       case 'deleteCurrentWorkspace':
         mainWindow.webContents.send('ui:deleteCurrentWorkspace')
+        return
+      case 'openWorkspaceBoard':
+        mainWindow.webContents.send('ui:openWorkspaceBoard')
         return
       case 'openTasks':
         mainWindow.webContents.send('ui:openTasks')

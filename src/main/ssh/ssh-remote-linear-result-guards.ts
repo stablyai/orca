@@ -5,6 +5,7 @@ import type {
   LinearIssueContextResult,
   LinearIssueListResult,
   LinearIssueTaskUpdateResult,
+  LinearProjectListResult,
   LinearSearchResult,
   LinearStatusSetResult,
   LinearTeamLabelsResult,
@@ -42,6 +43,21 @@ export function isLinearIssueListResult(result: unknown): result is LinearIssueL
     isRecord(result.meta) &&
     typeof result.meta.filter === 'string' &&
     typeof result.meta.hasMore === 'boolean'
+  )
+}
+
+export function isLinearProjectListResult(result: unknown): result is LinearProjectListResult {
+  return (
+    isRecord(result) &&
+    Array.isArray(result.projects) &&
+    result.projects.every(isLinearProjectListProject) &&
+    isRecord(result.meta) &&
+    typeof result.meta.limit === 'number' &&
+    typeof result.meta.returned === 'number' &&
+    typeof result.meta.hasMore === 'boolean' &&
+    typeof result.meta.partial === 'boolean' &&
+    Array.isArray(result.meta.workspaceErrors) &&
+    result.meta.workspaceErrors.every(isLinearWorkspaceError)
   )
 }
 
@@ -122,4 +138,35 @@ export function isLinearCreateResult(result: unknown): result is LinearCreateRes
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object'
+}
+
+function isLinearProjectListProject(project: unknown): boolean {
+  return (
+    isRecord(project) &&
+    typeof project.id === 'string' &&
+    typeof project.name === 'string' &&
+    (project.workspaceId === undefined || typeof project.workspaceId === 'string') &&
+    (project.workspaceName === undefined || typeof project.workspaceName === 'string') &&
+    (project.teams === undefined ||
+      (Array.isArray(project.teams) && project.teams.every(isLinearProjectTeam)))
+  )
+}
+
+function isLinearProjectTeam(team: unknown): boolean {
+  return (
+    isRecord(team) &&
+    typeof team.id === 'string' &&
+    typeof team.name === 'string' &&
+    (team.key === undefined || typeof team.key === 'string')
+  )
+}
+
+function isLinearWorkspaceError(error: unknown): boolean {
+  return (
+    isRecord(error) &&
+    isRecord(error.workspace) &&
+    typeof error.workspace.name === 'string' &&
+    typeof error.code === 'string' &&
+    typeof error.message === 'string'
+  )
 }

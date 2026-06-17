@@ -153,6 +153,13 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls[0][0]).toContain(
       'project setup-delete      Remove a project host setup'
     )
+    expect(logSpy.mock.calls[0][0]).toContain('Agent Sessions And Worktrees:')
+    expect(logSpy.mock.calls[0][0]).toContain(
+      '`worktree create --agent` creates a new checkout/workspace with an agent.'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'orca terminal create --worktree active --command "codex"'
+    )
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -213,6 +220,28 @@ describe('orca root help', () => {
     expect(setHelp).toContain('--linear-issue <id|url|null> Linked Linear issue identifier or URL')
     expect(callMock).not.toHaveBeenCalled()
   })
+
+  it('distinguishes new worktrees from fresh agent terminals in command help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['worktree', 'create', '--help'], '/tmp/repo')
+
+    expect(String(logSpy.mock.calls[0][0])).toContain('This creates a new checkout/workspace')
+    expect(String(logSpy.mock.calls[0][0])).toContain(
+      'orca terminal create --worktree active --command "codex"'
+    )
+
+    logSpy.mockClear()
+    await main(['terminal', 'create', '--help'], '/tmp/repo')
+
+    const terminalHelp = String(logSpy.mock.calls[0][0])
+    expect(terminalHelp).toContain('Use this, not worktree create')
+    expect(terminalHelp).toContain(
+      'orca terminal create --worktree active --command "codex" --json'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })
 
 describe('orca cli worktree awareness', () => {
@@ -221,11 +250,15 @@ describe('orca cli worktree awareness', () => {
   const originalPairingCode = process.env.ORCA_PAIRING_CODE
   const originalRemotePairing = process.env.ORCA_REMOTE_PAIRING
   const originalEnvironment = process.env.ORCA_ENVIRONMENT
+  const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
+  const originalWorktreeId = process.env.ORCA_WORKTREE_ID
 
   beforeEach(() => {
     callMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.ORCA_WORKSPACE_ID
+    delete process.env.ORCA_WORKTREE_ID
     serveOrcaAppMock.mockReset()
     getDefaultUserDataPathMock.mockClear()
     addEnvironmentFromPairingCodeMock.mockReset()
@@ -279,6 +312,16 @@ describe('orca cli worktree awareness', () => {
       delete process.env.ORCA_ENVIRONMENT
     } else {
       process.env.ORCA_ENVIRONMENT = originalEnvironment
+    }
+    if (originalWorkspaceId === undefined) {
+      delete process.env.ORCA_WORKSPACE_ID
+    } else {
+      process.env.ORCA_WORKSPACE_ID = originalWorkspaceId
+    }
+    if (originalWorktreeId === undefined) {
+      delete process.env.ORCA_WORKTREE_ID
+    } else {
+      process.env.ORCA_WORKTREE_ID = originalWorktreeId
     }
   })
 
@@ -1208,6 +1251,112 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('passes an explicit parent workspace through worktree.create without cwd inference', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
+          workspaceLineage: {
+            childWorkspaceKey: 'worktree:repo-1::/tmp/repo/child',
+            childInstanceId: 'child-instance',
+            parentWorkspaceKey: 'folder:folder-1',
+            parentInstanceId: null,
+            origin: 'cli',
+            capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+            createdAt: 1
+          }
+        },
+        lineage: null,
+        workspaceLineage: {
+          childWorkspaceKey: 'worktree:repo-1::/tmp/repo/child',
+          childInstanceId: 'child-instance',
+          parentWorkspaceKey: 'folder:folder-1',
+          parentInstanceId: null,
+          origin: 'cli',
+          capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+          createdAt: 1
+        },
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'child',
+        '--parent-workspace',
+        'folder:folder-1',
+        '--json'
+      ],
+      '/tmp/repo/parent/src'
+    )
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      repo: 'id:repo-1',
+      name: 'child',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      parentWorkspace: 'folder:folder-1',
+      noParent: false,
+      callerTerminalHandle: undefined
+    })
+  })
+
+  it('passes folder workspace environment lineage through worktree.create', async () => {
+    process.env.ORCA_WORKSPACE_ID = 'folder:folder-1'
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
+        lineage: null,
+        workspaceLineage: {
+          childWorkspaceKey: 'worktree:repo-1::/tmp/repo/child',
+          childInstanceId: 'child-instance',
+          parentWorkspaceKey: 'folder:folder-1',
+          parentInstanceId: null,
+          origin: 'cli',
+          capture: { source: 'env-workspace', confidence: 'inferred' },
+          createdAt: 1
+        },
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+      repo: 'id:repo-1',
+      name: 'child',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      envParentWorkspace: 'folder:folder-1',
+      cwdParentWorktree: 'id:repo-1::/tmp/repo',
+      noParent: false,
+      callerTerminalHandle: undefined
+    })
+  })
+
   it('resolves current for explicit parent-worktree on create', async () => {
     queueFixtures(
       callMock,
@@ -1274,6 +1423,37 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).not.toHaveBeenCalled()
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
       'Choose either --parent-worktree or --no-parent, not both.'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects contradictory parent workspace flags on worktree.create', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'child',
+        '--parent-workspace',
+        'folder:folder-1',
+        '--parent-worktree',
+        'current',
+        '--json'
+      ],
+      '/tmp/not-managed'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Choose either --parent-workspace or --parent-worktree, not both.'
     )
     expect(process.exitCode).toBe(1)
 

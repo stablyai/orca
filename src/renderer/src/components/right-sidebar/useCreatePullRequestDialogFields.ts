@@ -369,7 +369,9 @@ export function useCreatePullRequestDialogFields({
             base: stripBaseRef(base.trim()),
             title,
             body,
-            draft
+            draft,
+            provider: eligibility?.provider,
+            useTemplate: resolvedPrDefaults.useTemplate
           },
           overrides
         )
@@ -417,9 +419,11 @@ export function useCreatePullRequestDialogFields({
       draft,
       effectiveGenerating,
       applyGeneratedFields,
+      eligibility?.provider,
       generation,
       generateDisabled,
       onBranchChangedByGeneration,
+      resolvedPrDefaults.useTemplate,
       settings,
       title,
       worktreeId,

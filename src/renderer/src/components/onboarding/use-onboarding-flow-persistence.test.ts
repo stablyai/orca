@@ -7,6 +7,7 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 import {
+  buildCompletedOnboardingNotificationSettings,
   buildOnboardingDismissedPayload,
   trackOnboardingDismissed
 } from './use-onboarding-flow-persistence'
@@ -39,6 +40,28 @@ describe('onboarding flow persistence', () => {
       last_step: 3,
       duration_ms: 250,
       advanced_via: 'keyboard'
+    })
+  })
+
+  it('preserves explicit focus notification suppression when completing onboarding', () => {
+    const notifications = buildCompletedOnboardingNotificationSettings({
+      enabled: false,
+      agentTaskComplete: false,
+      terminalBell: false,
+      suppressWhenFocused: false,
+      customSoundId: 'two-tone',
+      customSoundPath: null,
+      customSoundVolume: 60
+    })
+
+    expect(notifications).toEqual({
+      enabled: true,
+      agentTaskComplete: true,
+      terminalBell: true,
+      suppressWhenFocused: false,
+      customSoundId: 'two-tone',
+      customSoundPath: null,
+      customSoundVolume: 60
     })
   })
 })

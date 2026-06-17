@@ -4,7 +4,8 @@ import { ArrowLeft, Search, Server } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
 import type { GitHubRepositoryIdentity, GlobalSettings } from '../../../../shared/types'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyCombos } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '../repo/repo-icon'
 import { RepoForkIndicator } from '../repo/repo-fork-indicator'
@@ -137,13 +138,13 @@ export function SettingsSidebar({
   // Settings should remain a stable place to reopen the checklist.
   const showSetupGuideTopRow =
     setupGuideProgress.ready && setupGuideProgress.doneCount < setupGuideProgress.total
-  const searchShortcutHint = useShortcutLabel('settings.search')
+  const searchShortcutCombos = useShortcutKeyCombos('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
-      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
+      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
       isActive
-        ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground'
-        : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
+        ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground ring-1 ring-worktree-sidebar-ring/25'
+        : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-accent/60 hover:text-worktree-sidebar-foreground'
     )
   const installStatusLabel = (status: SettingsNavInstallStatus): string => {
     switch (status) {
@@ -196,12 +197,19 @@ export function SettingsSidebar({
               'auto.components.settings.SettingsSidebar.dbceaa8840',
               'Search settings'
             )}
-            className="pl-9 pr-14 text-[13px]"
+            className="bg-background/60 pl-9 pr-14 text-[13px]"
           />
           {searchQuery === '' ? (
-            <kbd className="pointer-events-none absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center rounded border border-border/60 bg-background/40 px-1.5 py-px font-mono text-[10px] font-medium text-muted-foreground">
-              {searchShortcutHint}
-            </kbd>
+            <span className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center">
+              {searchShortcutCombos.map((keys) => (
+                <ShortcutKeyCombo
+                  key={keys.join('-')}
+                  keys={keys}
+                  className="inline-flex gap-0.5"
+                  separatorClassName="text-[10px] text-muted-foreground"
+                />
+              ))}
+            </span>
           ) : null}
         </div>
       </div>

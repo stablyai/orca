@@ -64,8 +64,8 @@ export class DaemonPtyProvider {
     this.client.notify('resize', { sessionId: id, cols, rows })
   }
 
-  async shutdown(id: string, _opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.client.request('kill', { sessionId: id })
+  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+    await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
   }
 
   onData(callback: (payload: { id: string; data: string }) => void): () => void {

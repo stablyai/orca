@@ -62,6 +62,7 @@ import {
   anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout
 } from './terminal/split-group-mount'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { setForegroundTerminalWorktreeIds } from '@/lib/foreground-terminal-worktrees'
 import { appendUniqueOpenFileIds } from './terminal/unsaved-close-queue'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import CodexRestartChip from './CodexRestartChip'
@@ -111,7 +112,12 @@ const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 // feel responsive on a deliberate follow-up click; long enough to absorb the
 // trailing edge of a physical double-click (~150 ms on most hardware).
 const CLOSE_DIALOG_DEBOUNCE_MS = 200
-const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>(['editor', 'diff', 'conflict-review'])
+const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
+  'editor',
+  'diff',
+  'conflict-review',
+  'check-details'
+])
 
 type TerminalStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -269,6 +275,23 @@ function Terminal(): React.JSX.Element | null {
   const activityTerminalPortals: ActivityTerminalPortalTarget[] = useActivityTerminalPortals(
     activeView === 'activity'
   )
+  const foregroundTerminalWorktreeIds = useMemo(() => {
+    const ids = new Set<string>()
+    if (activeView === 'terminal' && renderedActiveWorktreeId) {
+      ids.add(renderedActiveWorktreeId)
+    }
+    for (const portal of activityTerminalPortals) {
+      ids.add(portal.worktreeId)
+    }
+    return Array.from(ids)
+  }, [activeView, activityTerminalPortals, renderedActiveWorktreeId])
+
+  useEffect(() => {
+    // Why: hibernation must treat terminals portaled into foreground surfaces
+    // as visible even when they are not the singular active worktree.
+    setForegroundTerminalWorktreeIds(foregroundTerminalWorktreeIds)
+    return () => setForegroundTerminalWorktreeIds([])
+  }, [foregroundTerminalWorktreeIds])
 
   const tabs = useMemo(
     () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),
@@ -1431,6 +1454,16 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
+      // Cmd/Ctrl+Alt+W - close every editor file tab in the active worktree.
+      // Why: reuse the context-menu close-all path so pinned and dirty-file
+      // rules stay identical; terminal focus still honors shortcut policy.
+      if (!e.repeat && matchShortcut('tab.closeAll')) {
+        e.preventDefault()
+        notifyTerminalCapture('tab.closeAll')
+        handleCloseAllFiles()
+        return
+      }
+
       // Ctrl+Tab - quick-toggle to the previously focused tab in this group.
       if (
         matchesRecentTabSwitcherChord(e, shortcutPlatform, keybindings, {
@@ -1544,6 +1577,7 @@ function Terminal(): React.JSX.Element | null {
     handleCloseBrowserTab,
     closeBrowserTab,
     handleCloseFile,
+    handleCloseAllFiles,
     keybindings,
     mobileEmulatorEnabled,
     terminalShortcutPolicy

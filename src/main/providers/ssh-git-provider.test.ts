@@ -753,6 +753,27 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('syncForkDefaultBranch sends git.forkSync request', async () => {
+    const syncResult = {
+      status: 'synced',
+      originRemote: 'origin',
+      upstreamRemote: 'upstream',
+      branchName: 'main',
+      ahead: 0,
+      behind: 2
+    }
+    mux.request.mockResolvedValue(syncResult)
+
+    const expectedUpstream = { owner: 'stablyai', repo: 'orca' }
+    const result = await provider.syncForkDefaultBranch('/home/user/repo', expectedUpstream)
+
+    expect(mux.request).toHaveBeenCalledWith('git.forkSync', {
+      worktreePath: '/home/user/repo',
+      expectedUpstream
+    })
+    expect(result).toEqual(syncResult)
+  })
+
   it('fetchRemoteTrackingRef sends git.fetchRemoteTrackingRef request', async () => {
     await provider.fetchRemoteTrackingRef(
       '/home/user/repo',
@@ -766,6 +787,16 @@ describe('SshGitProvider', () => {
       remote: 'origin',
       branch: 'main',
       ref: 'refs/remotes/origin/main'
+    })
+  })
+
+  it('fetchGitLabMergeRequestHead sends git.fetchGitLabMergeRequestHead request', async () => {
+    await provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetchGitLabMergeRequestHead', {
+      worktreePath: '/home/user/repo',
+      remote: 'origin',
+      mrIid: 42
     })
   })
 

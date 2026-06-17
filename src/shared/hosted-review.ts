@@ -21,9 +21,12 @@ export type HostedReviewInfo = {
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null
   autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   headSha?: string
+  /** Target branch name for review-created worktree compare-base repair. */
+  baseRefName?: string
   conflictSummary?: PRConflictSummary
 }
 

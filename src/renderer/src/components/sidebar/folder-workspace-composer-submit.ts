@@ -9,7 +9,10 @@ import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/worktree-activation'
 import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { FolderWorkspace, ProjectGroup, TuiAgent } from '../../../../shared/types'
+import { isWslUncPath } from '../../../../shared/wsl-paths'
+import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {
   getLinkedItemDisplayName,
   toFolderWorkspaceLinkedTask
@@ -18,6 +21,7 @@ import {
 type FolderWorkspaceCreateInput = {
   projectGroupId: string
   name: string
+  connectionId?: string | null
   linkedTask: FolderWorkspace['linkedTask']
   createdWithAgent?: TuiAgent
   pendingFirstAgentMessageRename?: boolean
@@ -32,9 +36,23 @@ type SubmitFolderWorkspaceCreateParams = {
   quickAgent: TuiAgent | null
   autoRenameBranchFromWork: boolean | undefined
   agentCmdOverrides: Record<string, string> | undefined
+  agentArgs?: string | null
+  agentEnv?: Record<string, string>
   isRemote?: boolean
+  launchSource?: LaunchSource
+  runtimeEnvironmentId?: string | null
   createFolderWorkspace: (input: FolderWorkspaceCreateInput) => Promise<FolderWorkspace | null>
   onOpenChange: (open: boolean) => void
+}
+
+export function getFolderWorkspaceAgentLaunchPlatform(
+  projectGroup: Pick<ProjectGroup, 'connectionId' | 'parentPath'>
+): NodeJS.Platform {
+  const parentPath = projectGroup.parentPath?.trim() ?? ''
+  if (projectGroup.connectionId) {
+    return isWindowsAbsolutePathLike(parentPath) ? 'win32' : 'linux'
+  }
+  return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
 }
 
 export async function submitFolderWorkspaceCreate({
@@ -46,10 +64,14 @@ export async function submitFolderWorkspaceCreate({
   quickAgent,
   autoRenameBranchFromWork,
   agentCmdOverrides,
+  agentArgs,
+  agentEnv,
   isRemote,
+  launchSource = 'sidebar',
+  runtimeEnvironmentId = null,
   createFolderWorkspace,
   onOpenChange
-}: SubmitFolderWorkspaceCreateParams): Promise<void> {
+}: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
   const linkedName = linkedWorkItem ? getLinkedItemDisplayName(linkedWorkItem) : null
   const nameIsAutoManaged = !name.trim() || name === lastAutoName || isWorkItemLookupText(name)
   const workspaceName =
@@ -82,12 +104,15 @@ export async function submitFolderWorkspaceCreate({
   const workspace = await createFolderWorkspace({
     projectGroupId: projectGroup.id,
     name: workspaceName,
+    // Why: SSH folder groups must keep their target provenance even when the
+    // focused runtime is local or another host.
+    connectionId: projectGroup.connectionId ?? null,
     linkedTask: toFolderWorkspaceLinkedTask(linkedWorkItem),
     ...(quickAgent ? { createdWithAgent: quickAgent } : {}),
     ...(pendingFirstAgentMessageRename ? { pendingFirstAgentMessageRename: true } : {})
   })
   if (!workspace) {
-    return
+    return false
   }
 
   const startupPlan = quickAgent
@@ -95,7 +120,9 @@ export async function submitFolderWorkspaceCreate({
         agent: quickAgent,
         prompt: startupPrompt,
         cmdOverrides: agentCmdOverrides ?? {},
-        platform: CLIENT_PLATFORM,
+        agentArgs,
+        agentEnv,
+        platform: getFolderWorkspaceAgentLaunchPlatform(projectGroup),
         allowEmptyPromptLaunch: true
       })
     : null
@@ -106,17 +133,21 @@ export async function submitFolderWorkspaceCreate({
           ...(startupPlan.env ? { env: startupPlan.env } : {}),
           telemetry: {
             agent_kind: tuiAgentToAgentKind(quickAgent),
-            launch_source: 'sidebar' as const,
+            launch_source: launchSource,
             request_kind: 'new' as const
           }
         }
       : undefined
   onOpenChange(false)
   try {
-    activateAndRevealFolderWorkspace(workspace.id, startup ? { startup } : undefined)
+    activateAndRevealFolderWorkspace(workspace.id, {
+      ...(startup ? { startup } : {}),
+      runtimeEnvironmentId
+    })
   } catch (error) {
     // Why: creation already succeeded. Do not leave the completed create modal
     // open if the follow-up reveal/startup path hits a transient issue.
     console.error('Failed to activate folder workspace after create:', error)
   }
+  return true
 }

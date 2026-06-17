@@ -7,10 +7,12 @@ import {
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive,
@@ -135,10 +137,20 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
-    launchPlatform = CLIENT_PLATFORM,
+    launchPlatform,
     onPromptDelivered
   } = args
   const store = useAppStore.getState()
+  const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
+  const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
+  const resolvedLaunchPlatform =
+    launchPlatform ??
+    (repo
+      ? getAgentLaunchPlatformForRepo(
+          repo,
+          repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
+        )
+      : CLIENT_PLATFORM)
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
   const effectiveAgentArgs =
     agentArgs !== undefined
@@ -166,7 +178,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: '',
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: true
@@ -179,11 +191,11 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
       agentArgs: effectiveAgentArgs,
       agentEnv
     })
-    if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, launchPlatform)) {
+    if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, resolvedLaunchPlatform)) {
       startupPlan = {
         agent: draftLaunchPlan.agent,
         launchCommand: draftLaunchPlan.launchCommand,
@@ -196,7 +208,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         agent,
         prompt: '',
         cmdOverrides,
-        platform: launchPlatform,
+        platform: resolvedLaunchPlatform,
         agentArgs: effectiveAgentArgs,
         agentEnv,
         allowEmptyPromptLaunch: true
@@ -208,7 +220,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: '',
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: true
@@ -219,7 +231,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
-      platform: launchPlatform,
+      platform: resolvedLaunchPlatform,
       agentArgs: effectiveAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: !hasPrompt

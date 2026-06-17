@@ -120,21 +120,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     click: (_menuItem, window) => onOpenCrashReport(window)
   }
 
-  const exportPdfItem: Electron.MenuItemConstructorOptions = {
-    label: `${translateMain('menu.exportPdf', 'Export as PDF...')}\t${shortcutLabel('file.exportPdf')}`,
-    click: () => {
-      // Why: fire a one-way event into the focused renderer. The renderer
-      // owns the knowledge of whether a markdown surface is active and
-      // what DOM to extract — when no markdown surface is active this is
-      // a silent no-op on that side (see design doc §4 "Renderer UI
-      // trigger"). Keeping this as a send (not an invoke) avoids main
-      // needing to reason about surface state. Using
-      // BrowserWindow.getFocusedWindow() rather than the menu's
-      // focusedWindow param avoids the BaseWindow typing gap.
-      BrowserWindow.getFocusedWindow()?.webContents.send('export:requestPdf')
-    }
-  }
-
   // Why: the macOS app-menu (named after the app) is mandatory on darwin and
   // owns hide/hideOthers/unhide/services/quit roles that only make sense in
   // the system menu bar. On Windows/Linux that menu would render as a
@@ -159,19 +144,13 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const fileMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.file', 'File'),
+    // Why: on Windows/Linux there is no app-named menu, so Settings and
+    // Quit live under File — matching the common platform convention and
+    // keeping all user-facing actions reachable from the in-window menu bar.
     submenu: [
-      exportPdfItem,
-      // Why: on Windows/Linux there is no app-named menu, so Settings and
-      // Quit live under File — matching the common platform convention and
-      // keeping all user-facing actions reachable from the in-window menu bar.
-      ...(isMac
-        ? []
-        : ([
-            { type: 'separator' },
-            settingsItem,
-            { type: 'separator' },
-            { role: 'quit', label: translateMain('menu.exit', 'Exit') }
-          ] satisfies Electron.MenuItemConstructorOptions[]))
+      settingsItem,
+      { type: 'separator' },
+      { role: 'quit', label: translateMain('menu.exit', 'Exit') }
     ]
   }
 
@@ -312,7 +291,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac ? [macAppMenu] : []),
-    fileMenu,
+    ...(isMac ? [] : [fileMenu]),
     editMenu,
     viewMenu,
     windowMenu,

@@ -15,6 +15,7 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
+import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
 import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-refs'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import {
@@ -68,7 +69,7 @@ export function CreatePullRequestDialog({
   const submitInFlightRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const provider = eligibility?.provider === 'gitlab' ? 'gitlab' : 'github'
+  const provider = resolveHostedReviewCreationProvider(eligibility?.provider)
   const copy = reviewCopy(provider)
   const prCreationDefaults = React.useMemo(() => {
     if (!settings) {

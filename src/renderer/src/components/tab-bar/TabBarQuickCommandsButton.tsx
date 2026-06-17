@@ -136,7 +136,7 @@ export function TabBarQuickCommandsButton({
     return null
   }
 
-  // Empty state: single "Add command" button that opens the dialog directly.
+  // Empty state: single "+ Command" button that opens the dialog directly.
   if (!hasAnyCommands) {
     return (
       <>
@@ -155,7 +155,7 @@ export function TabBarQuickCommandsButton({
               <span className="text-[12px] font-medium">
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
-                  'Add command'
+                  'Command'
                 )}
               </span>
             </button>

@@ -4,12 +4,14 @@ import {
   createHttpProxyBypassRulesDraftState,
   createHttpProxyUrlDraftState,
   getDesktopPlatformFromUserAgent,
+  getGeneralPaneSearchEntries,
   setHttpProxyUrlDraftErrorState,
   shouldCommitOpenInApplicationsDraft,
   updateAutoSaveDelayDraftState,
   updateHttpProxyBypassRulesDraftState,
   updateHttpProxyUrlDraftState
 } from './GeneralPane'
+import { matchesSettingsSearch } from './settings-search'
 
 describe('GeneralPane auto-save delay drafts', () => {
   it('keeps a committed draft tied to the current persisted source while settings save is pending', () => {
@@ -128,5 +130,23 @@ describe('GeneralPane desktop platform detection', () => {
       'darwin'
     )
     expect(getDesktopPlatformFromUserAgent('Mozilla/5.0 (X11; Linux x86_64)')).toBe('other')
+  })
+})
+
+describe('GeneralPane search entries', () => {
+  it('includes the default project runtime setting', () => {
+    const entries = getGeneralPaneSearchEntries()
+
+    expect(matchesSettingsSearch('default project runtime', entries)).toBe(true)
+    expect(matchesSettingsSearch('windows host', entries)).toBe(true)
+    expect(matchesSettingsSearch('wsl', entries)).toBe(true)
+  })
+
+  it('omits the default project runtime setting when Windows runtimes are unsupported', () => {
+    const entries = getGeneralPaneSearchEntries({ includeProjectRuntime: false })
+
+    expect(matchesSettingsSearch('default project runtime', entries)).toBe(false)
+    expect(matchesSettingsSearch('windows host', entries)).toBe(false)
+    expect(matchesSettingsSearch('wsl', entries)).toBe(false)
   })
 })

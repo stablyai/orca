@@ -1,14 +1,18 @@
-/* oxlint-disable max-lines -- Why: crash-reporting IPC handlers share one
-   dedupe/submission state machine and one crash-store contract. */
+/* oxlint-disable max-lines -- Why: crash-reporting IPC handlers share renderer
+   error capture, diagnostic upload, and crash-store submission state. */
 import os from 'node:os'
 import { app, clipboard, ipcMain } from 'electron'
 import {
   type CrashReportBreadcrumbData,
-  formatCrashReportText,
+  type CrashReportDiagnosticBundle,
   type ReactErrorBoundaryReportArgs,
   type ReactErrorBoundaryReportResult,
   type CrashReportSubmitArgs,
-  type CrashReportSubmitResult
+  type CrashReportSubmitResult,
+  formatCrashReportText,
+  formatUncapturedCrashReportText,
+  sanitizeCrashReportDetails,
+  sanitizeCrashReportString
 } from '../../shared/crash-reporting'
 import { submitFeedback } from './feedback'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
@@ -16,6 +20,10 @@ import {
   getCrashBreadcrumbSnapshot,
   recordCrashBreadcrumb
 } from '../crash-reporting/crash-breadcrumb-store'
+import { collectDiagnosticBundle, getDiagnosticsStatus } from '../observability'
+import { resolveDiagnosticOrcaChannel } from '../observability/diagnostic-upload-endpoint'
+import { startSpan } from '../observability/tracer'
+import type { FeedbackDiagnosticBundleAttachment } from './feedback'
 
 const inFlightSubmissions = new Set<string>()
 const submittedReportIds = new Set<string>()
@@ -25,6 +33,7 @@ const RENDERER_ERROR_DEDUPE_MS = 10 * 60 * 1000
 const MAX_RENDERER_ERROR_KEY_AGE_MS = RENDERER_ERROR_DEDUPE_MS * 2
 const MAX_RECENT_RENDERER_ERROR_REPORT_KEYS = 256
 const MAX_SUBMITTED_REPORT_IDS = 256
+const CRASH_REPORT_LOG_LOOKBACK_MINUTES = 3 * 24 * 60
 
 const REACT_ERROR_BOUNDARY_SURFACES = new Set<ReactErrorBoundaryReportArgs['surface']>([
   'app-root',
@@ -38,6 +47,11 @@ const REACT_ERROR_BOUNDARY_SURFACES = new Set<ReactErrorBoundaryReportArgs['surf
   'overlay',
   'rich-markdown-editor'
 ])
+
+type CrashDiagnosticBundleAttachment = {
+  readonly diagnosticBundle: CrashReportDiagnosticBundle
+  readonly feedbackDiagnosticBundle?: FeedbackDiagnosticBundleAttachment
+}
 
 function stringField(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') {
@@ -240,19 +254,123 @@ async function getLatestSendableReport(
   )
 }
 
+async function getRequestedCrashReport(
+  store: CrashReportStore,
+  args?: { reportId?: string }
+): Promise<Awaited<ReturnType<CrashReportStore['getLatestPending']>>> {
+  if (args?.reportId) {
+    return store.getById(args.reportId)
+  }
+  // Why: Help > Report Crash can intentionally submit without a report ID.
+  // Do not replace that uncaptured report with a pending crash that appears later.
+  return args ? null : getLatestPendingReport(store)
+}
+
 function sanitizeRendererBreadcrumbData(value: unknown): CrashReportBreadcrumbData | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
   }
-  const sanitized: CrashReportBreadcrumbData = {}
+  const primitiveData: Record<string, unknown> = {}
   for (const [key, entry] of Object.entries(value)) {
     if (typeof entry === 'string' || typeof entry === 'boolean' || entry === null) {
-      sanitized[key] = entry
+      primitiveData[key] = entry
     } else if (typeof entry === 'number' && Number.isFinite(entry)) {
-      sanitized[key] = entry
+      primitiveData[key] = entry
     }
   }
+  const sanitized = sanitizeCrashReportDetails(primitiveData)
   return Object.keys(sanitized).length > 0 ? sanitized : undefined
+}
+
+function recordRendererBreadcrumbTrace(
+  name: string,
+  data: CrashReportBreadcrumbData | undefined
+): void {
+  const span = startSpan('renderer.breadcrumb', {
+    attributes: {
+      kind: 'crash-breadcrumb',
+      'breadcrumb.name': sanitizeCrashReportString(name),
+      ...(data ? { 'breadcrumb.data': data } : {})
+    }
+  })
+  // Why: main-process native crashes cannot persist memory-only breadcrumbs.
+  // A tiny trace span gives the next crash report durable pre-crash context.
+  span.end()
+}
+
+function formatUnknownError(error: unknown): string {
+  return sanitizeCrashReportString(error instanceof Error ? error.message : String(error))
+}
+
+function buildUncapturedCrashReportText(
+  notes: string | undefined,
+  diagnosticBundle?: CrashReportDiagnosticBundle
+): string {
+  return formatUncapturedCrashReportText(
+    {
+      createdAt: new Date().toISOString(),
+      appVersion: app.getVersion(),
+      platform: os.platform(),
+      osRelease: os.release(),
+      arch: os.arch(),
+      electronVersion: process.versions.electron ?? 'unknown',
+      chromeVersion: process.versions.chrome ?? 'unknown'
+    },
+    notes,
+    diagnosticBundle
+  )
+}
+
+function skippedCrashDiagnosticBundle(): CrashDiagnosticBundleAttachment {
+  return {
+    diagnosticBundle: {
+      status: 'not_uploaded',
+      reason: 'diagnostic log upload skipped by user'
+    }
+  }
+}
+
+function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachment {
+  const status = getDiagnosticsStatus()
+  if (!status.bundleEnabled) {
+    return {
+      diagnosticBundle: {
+        status: 'not_uploaded',
+        reason: status.disabledReason ?? 'diagnostic bundle collection is disabled'
+      }
+    }
+  }
+
+  let bundle: ReturnType<typeof collectDiagnosticBundle>
+  try {
+    bundle = collectDiagnosticBundle({
+      appVersion: app.getVersion(),
+      platform: os.platform(),
+      arch: os.arch(),
+      osRelease: os.release(),
+      orcaChannel: resolveDiagnosticOrcaChannel(),
+      // Why: Help > Report Crash is often used after relaunch, long after the
+      // default 30 minute support bundle window would miss the failure context.
+      lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES
+    })
+  } catch (error) {
+    return { diagnosticBundle: { status: 'not_uploaded', reason: formatUnknownError(error) } }
+  }
+
+  return {
+    diagnosticBundle: {
+      status: 'attached',
+      bundleSubmissionId: bundle.bundleSubmissionId,
+      bytes: bundle.bytes,
+      spanCount: bundle.spanCount
+    },
+    feedbackDiagnosticBundle: {
+      bundleSubmissionId: bundle.bundleSubmissionId,
+      content: bundle.payload,
+      bytes: bundle.bytes,
+      spanCount: bundle.spanCount
+    }
+  }
 }
 
 export function registerCrashReportingHandlers(store: CrashReportStore): void {
@@ -281,7 +399,9 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
       if (!args || typeof args.name !== 'string') {
         return
       }
-      recordCrashBreadcrumb(args.name, sanitizeRendererBreadcrumbData(args.data))
+      const data = sanitizeRendererBreadcrumbData(args.data)
+      recordCrashBreadcrumb(args.name, data)
+      recordRendererBreadcrumbTrace(args.name, data)
     }
   )
 
@@ -289,11 +409,10 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
   ipcMain.handle(
     'crashReports:copyLatestDiagnostics',
     async (_event, args?: { reportId?: string; notes?: string }) => {
-      const report = args?.reportId
-        ? await store.getById(args.reportId)
-        : await getLatestPendingReport(store)
+      const report = await getRequestedCrashReport(store, args)
       if (!report) {
-        return { ok: false as const, error: 'No crash report available.' }
+        clipboard.writeText(buildUncapturedCrashReportText(args?.notes))
+        return { ok: true as const }
       }
       clipboard.writeText(formatCrashReportText(report, args?.notes))
       return { ok: true as const }
@@ -314,11 +433,29 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
   ipcMain.handle(
     'crashReports:submit',
     async (_event, args: CrashReportSubmitArgs): Promise<CrashReportSubmitResult> => {
-      const report = args.reportId
-        ? await store.getById(args.reportId)
-        : await getLatestPendingReport(store)
+      const report = await getRequestedCrashReport(store, args)
       if (!report) {
-        return { ok: false, status: null, error: 'No crash report available.' }
+        const diagnosticUpload =
+          args.includeDiagnosticLogs === false
+            ? skippedCrashDiagnosticBundle()
+            : collectCrashDiagnosticBundleAttachment()
+        const diagnosticBundle = diagnosticUpload.diagnosticBundle
+        const result = await submitFeedback({
+          feedback: buildUncapturedCrashReportText(args.notes, diagnosticBundle),
+          submissionType: 'crash',
+          submitAnonymously: args.submitAnonymously,
+          githubLogin: args.githubLogin,
+          githubEmail: args.githubEmail,
+          ...(diagnosticUpload.feedbackDiagnosticBundle
+            ? { diagnosticBundle: diagnosticUpload.feedbackDiagnosticBundle }
+            : {})
+        })
+        return result.ok
+          ? { ok: true, report: null, diagnosticBundle }
+          : {
+              ...result,
+              report: null
+            }
       }
       const canSubmitDismissedReport = Boolean(args.reportId && report.status === 'dismissed')
       if (
@@ -341,15 +478,26 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
 
       inFlightSubmissions.add(report.id)
       try {
+        const diagnosticUpload =
+          args.includeDiagnosticLogs === false
+            ? skippedCrashDiagnosticBundle()
+            : collectCrashDiagnosticBundleAttachment()
+        const diagnosticBundle = diagnosticUpload.diagnosticBundle
         const result = await submitFeedback({
-          feedback: formatCrashReportText(report, args.notes),
+          feedback: formatCrashReportText(report, args.notes, diagnosticBundle),
           submissionType: 'crash',
           submitAnonymously: args.submitAnonymously,
           githubLogin: args.githubLogin,
-          githubEmail: args.githubEmail
+          githubEmail: args.githubEmail,
+          ...(diagnosticUpload.feedbackDiagnosticBundle
+            ? { diagnosticBundle: diagnosticUpload.feedbackDiagnosticBundle }
+            : {})
         })
         if (!result.ok) {
-          return { ...result, report }
+          return {
+            ...result,
+            report
+          }
         }
         rememberSubmittedReportId(report.id)
         if (report.status === 'dismissed') {
@@ -357,21 +505,21 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
             // Why: startup prompts are dismissed before the user can send from
             // the still-open dialog, so successful uploads must update storage.
             const sent = await store.markDismissedSent(report.id)
-            return { ok: true, report: sent ?? { ...report, status: 'sent' } }
+            return { ok: true, report: sent ?? { ...report, status: 'sent' }, diagnosticBundle }
           } catch (error) {
             console.error('[crash-reporting] Failed to mark dismissed crash report sent:', error)
-            return { ok: true, report: { ...report, status: 'sent' } }
+            return { ok: true, report: { ...report, status: 'sent' }, diagnosticBundle }
           }
         }
         try {
           const sent = await store.markSent(report.id)
-          return { ok: true, report: sent ?? { ...report, status: 'sent' } }
+          return { ok: true, report: sent ?? { ...report, status: 'sent' }, diagnosticBundle }
         } catch (error) {
           // Why: the upstream submission already succeeded. A local persistence
           // failure must not present as upload failure or invite duplicate sends
           // during this app session.
           console.error('[crash-reporting] Failed to mark crash report sent:', error)
-          return { ok: true, report: { ...report, status: 'sent' } }
+          return { ok: true, report: { ...report, status: 'sent' }, diagnosticBundle }
         }
       } finally {
         inFlightSubmissions.delete(report.id)

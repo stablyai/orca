@@ -43,6 +43,7 @@ import { getAgentsPaneSearchEntries } from '@/components/settings/agents-search'
 import { getAccountsPaneSearchEntries } from '@/components/settings/accounts-search'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations-search'
 import { getGitPaneSearchEntries } from '@/components/settings/git-search'
+import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-provider-api-budget-search'
 import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/commit-message-ai-search'
 import { getTasksPaneSearchEntries } from '@/components/settings/tasks-search'
 import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspace-search'
@@ -97,7 +98,8 @@ export function buildSettingsNavigationMetadata({
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   const terminalPaneSearchEntries = getTerminalPaneSearchEntries({
-    isWindows: isWindowsTerminalHost,
+    isWindows,
+    isWindowsTerminalHost,
     isMac
   })
   const runtimeEnvironmentsSearchEntry = isWebClient
@@ -212,7 +214,7 @@ export function buildSettingsNavigationMetadata({
         'Workspace defaults, app setup, and maintenance.'
       ),
       icon: SlidersHorizontal,
-      searchEntries: getGeneralPaneSearchEntries(),
+      searchEntries: getGeneralPaneSearchEntries({ includeProjectRuntime: isWindowsTerminalHost }),
       group: 'setup'
     },
     {
@@ -239,7 +241,11 @@ export function buildSettingsNavigationMetadata({
       icon: GitBranch,
       // Why: Git AI Author is rendered inside Git, so shared
       // metadata must search both surfaces wherever Git appears.
-      searchEntries: [...getGitPaneSearchEntries(), ...getCommitMessageAiPaneSearchEntries()],
+      searchEntries: [
+        ...getGitPaneSearchEntries(),
+        ...getCommitMessageAiPaneSearchEntries(),
+        ...getGitProviderApiBudgetSearchEntries()
+      ],
       group: 'workflows'
     },
     {
@@ -484,7 +490,9 @@ export function buildSettingsNavigationMetadata({
       title: repo.displayName,
       description: `${getRepoKindLabel(repo)} • ${repo.path}`,
       icon: SlidersHorizontal,
-      searchEntries: getRepositoryPaneSearchEntries(repo),
+      searchEntries: getRepositoryPaneSearchEntries(repo, {
+        windowsRuntimeSupported: isWindowsTerminalHost
+      }),
       group: 'repositories'
     }))
   ]

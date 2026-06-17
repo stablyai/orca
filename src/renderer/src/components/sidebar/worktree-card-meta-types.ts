@@ -34,11 +34,12 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   children: React.ReactElement
   branchName?: string
   workspaceTitle?: string
+  identityOrder?: 'workspace-first' | 'branch-first'
   detailsAfter?: React.ReactNode
   openDelay?: number
   closeDelay?: number
-  onEditIssue: (event: React.MouseEvent) => void
-  onEditComment: (event: React.MouseEvent) => void
+  onEditIssue?: (event: React.MouseEvent) => void
+  onEditComment?: (event: React.MouseEvent) => void
   onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
   onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
   onOpenReviewInOrca?: (event: React.MouseEvent) => void
