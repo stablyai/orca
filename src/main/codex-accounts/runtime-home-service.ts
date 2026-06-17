@@ -43,6 +43,7 @@ import { syncSystemCodexSessionsIntoManagedHome } from '../codex/codex-session-b
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
+  getWslSelectionKey,
   getSelectedCodexAccountIdForTarget,
   normalizeCodexRuntimeSelection,
   setSelectedCodexAccountIdForTarget,
@@ -146,16 +147,17 @@ export class CodexRuntimeHomeService {
     }
 
     const settings = this.store.getSettings()
-    const selectedAccountIds = new Set(
-      Object.values(normalizeCodexRuntimeSelection(settings).wsl).filter((id): id is string =>
-        Boolean(id)
-      )
-    )
-    for (const account of settings.codexManagedAccounts) {
-      if (!selectedAccountIds.has(account.id) || account.managedHomeRuntime !== 'wsl') {
+    for (const [selectedDistroKey, accountId] of Object.entries(
+      normalizeCodexRuntimeSelection(settings).wsl
+    )) {
+      if (!accountId) {
         continue
       }
-      this.safeReadBackActiveWslAccountBeforeRestart(account)
+      const account = this.getActiveAccount(settings.codexManagedAccounts, accountId)
+      if (!account || account.managedHomeRuntime !== 'wsl') {
+        continue
+      }
+      this.safeReadBackActiveWslAccountBeforeRestart(account, selectedDistroKey)
     }
   }
 
@@ -565,16 +567,25 @@ export class CodexRuntimeHomeService {
       : null
   }
 
-  private safeReadBackActiveWslAccountBeforeRestart(account: CodexManagedAccount): void {
+  private safeReadBackActiveWslAccountBeforeRestart(
+    account: CodexManagedAccount,
+    selectedDistroKey: string
+  ): void {
     try {
-      this.readBackActiveWslAccountBeforeRestart(account)
+      this.readBackActiveWslAccountBeforeRestart(account, selectedDistroKey)
     } catch (error) {
       console.warn('[codex-runtime-home] Failed to preserve WSL Codex auth before restart:', error)
     }
   }
 
-  private readBackActiveWslAccountBeforeRestart(account: CodexManagedAccount): void {
-    const distro = account.wslDistro?.trim()
+  private readBackActiveWslAccountBeforeRestart(
+    account: CodexManagedAccount,
+    selectedDistroKey: string
+  ): void {
+    const distro =
+      selectedDistroKey === getWslSelectionKey(null)
+        ? account.wslDistro?.trim()
+        : selectedDistroKey.trim() || account.wslDistro?.trim()
     if (!distro) {
       return
     }

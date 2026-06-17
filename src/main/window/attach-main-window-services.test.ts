@@ -232,7 +232,7 @@ describe('attachMainWindowServices', () => {
     expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenLastCalledWith(store)
   })
 
-  it('passes injected update quit cleanup to the auto-updater', () => {
+  it('passes injected update quit cleanup to the auto-updater', async () => {
     const onBeforeUpdateQuit = vi.fn()
     const store = createStore()
 
@@ -246,15 +246,18 @@ describe('attachMainWindowServices', () => {
     )
 
     expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
-    expect(setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit).toBe(onBeforeUpdateQuit)
+    await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
+
+    expect(onBeforeUpdateQuit).toHaveBeenCalledTimes(1)
+    expect(store.flush).toHaveBeenCalledTimes(1)
   })
 
-  it('flushes the store before update quit when no cleanup is injected', () => {
+  it('flushes the store before update quit when no cleanup is injected', async () => {
     const store = createStore()
 
     attachMainWindowServices(createMainWindow() as never, store, createRuntime() as never)
 
-    setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
+    await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(store.flush).toHaveBeenCalledTimes(1)
   })

@@ -253,6 +253,8 @@ async function runBeforeRelaunchCleanup(
   try {
     await onBeforeRelaunch?.()
   } catch (error) {
+    // Why: restart/relaunch must not get trapped if best-effort shutdown
+    // cleanup fails; the cleanup path logs without exposing secret contents.
     console.warn(
       '[app] Pre-relaunch cleanup failed; continuing relaunch:',
       error instanceof Error ? error.name : typeof error

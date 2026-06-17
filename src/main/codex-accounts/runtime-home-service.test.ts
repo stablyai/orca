@@ -1550,7 +1550,7 @@ describe('CodexRuntimeHomeService', () => {
     }
   })
 
-  it('reads active WSL token refreshes back before restart without rematerializing runtime auth', async () => {
+  it('reads active WSL token refreshes back before restart using the selected distro', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const wslHome = join(testState.userDataDir, 'wsl-home')
@@ -1575,7 +1575,7 @@ describe('CodexRuntimeHomeService', () => {
             email: 'wsl@example.com',
             managedHomePath,
             managedHomeRuntime: 'wsl',
-            wslDistro: 'Ubuntu',
+            wslDistro: null,
             wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/account-1/home',
             providerAccountId: 'acct-wsl',
             workspaceLabel: null,
