@@ -78,7 +78,11 @@ import { createCommandCodeOutputStatusDetector } from './command-code-output-sta
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-link-detector'
-import { installConptyDeviceAttributesHandler } from './terminal-conpty-device-attributes'
+import {
+  CONPTY_DA1_RESPONSE,
+  createTerminalPixelSizeQueryResponder,
+  installTerminalCapabilityReplyHandlers
+} from './terminal-capability-replies'
 import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
@@ -460,7 +464,12 @@ function isStatelessRendererReplyCsiQuery(sequence: string): boolean {
   if (sequence.endsWith('c')) {
     return true
   }
-  return sequence === '\x1b[5n'
+  return (
+    sequence === '\x1b[5n' ||
+    sequence === '\x1b[>q' ||
+    sequence === '\x1b[14t' ||
+    sequence === '\x1b[16t'
+  )
 }
 
 function isStatefulRendererReplyCsiQuery(sequence: string): boolean {
@@ -1695,13 +1704,17 @@ export function connectPanePty(
     ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
     : createIpcPtyTransport(transportOptions)
   deps.paneTransportsRef.current.set(pane.id, transport)
-  const conptyDeviceAttributesDisposable = isNativeWindowsConpty
-    ? installConptyDeviceAttributesHandler({
-        parser: pane.terminal.parser,
-        sendInput: (data) => transport.sendInput(data),
-        isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id)
-      })
-    : null
+  const terminalCapabilityRepliesDisposable = installTerminalCapabilityReplyHandlers({
+    terminal: pane.terminal,
+    parser: pane.terminal.parser,
+    sendInput: (data) => transport.sendInput(data),
+    isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id),
+    ...(isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
+  })
+  const respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(
+    pane.terminal,
+    (data) => transport.sendInput(data)
+  )
 
   const onDataDisposable = pane.terminal.onData((data) => {
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
@@ -2955,6 +2968,7 @@ export function connectPanePty(
         recordAgentHibernationPaneOutput(cacheKey)
       }
       resetHiddenOutputRestoreIfPtyChanged()
+      respondToTerminalPixelSizeQueries(data)
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       for (const link of observeTerminalGitHubPRLink(data)) {
         useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link)
@@ -3701,7 +3715,7 @@ export function connectPanePty(
         connectFrame = null
       }
       onDataDisposable.dispose()
-      conptyDeviceAttributesDisposable?.dispose()
+      terminalCapabilityRepliesDisposable.dispose()
       onResizeDisposable.dispose()
       pane.container.removeEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
       geometryReportObserver?.disconnect()

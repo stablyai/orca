@@ -308,6 +308,7 @@ function createPane(paneId: number) {
       onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
       hasSelection: vi.fn(() => false),
       parser: {
+        registerCsiHandler: vi.fn(() => ({ dispose: vi.fn() })),
         registerOscHandler: vi.fn(() => ({ dispose: vi.fn() }))
       }
     },
@@ -3908,6 +3909,38 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.(coalescedChunk)
 
     expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[c', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(coalescedChunk, expect.any(Function))
+
+    binding.dispose()
+  })
+
+  it('keeps a Yazi-style hidden capability-query burst on the live xterm path', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const binding = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({
+        isVisibleRef: { current: false },
+        startup: { command: 'codex' }
+      }) as never
+    )
+    await flushAsyncTicks(6)
+
+    const queryBurst = '\x1b[c\x1b]11;?\x1b\\\x1b[>q\x1b[14t\x1b[16t'
+    const coalescedChunk = `${queryBurst}\x1b[?2026h${'codex redraw '.repeat(8_000)}`
+    capturedDataCallback.current?.(coalescedChunk)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith(queryBurst, expect.any(Function))
     expect(pane.terminal.write).not.toHaveBeenCalledWith(coalescedChunk, expect.any(Function))
 
     binding.dispose()
