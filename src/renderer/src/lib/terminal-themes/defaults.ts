@@ -7,7 +7,7 @@ export const DEFAULT_TERMINAL_THEMES: TerminalThemeMap = {
     foreground: '#ffffff',
     cursor: '#ffffff',
     cursorAccent: '#282c34',
-    selectionBackground: '#3e4451',
+    selectionBackground: '#3d5a80',
     selectionForeground: '#ffffff',
     black: '#1d1f21',
     red: '#cc6666',
