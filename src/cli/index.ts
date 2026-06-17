@@ -18,7 +18,13 @@ export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selec
 
 function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
   return (
-    commandPath[0] === 'environment' || commandPath[0] === 'serve' || commandPath[0] === 'agent'
+    commandPath[0] === 'environment' ||
+    commandPath[0] === 'serve' ||
+    commandPath[0] === 'agent' ||
+    // Why: matrix-mcp runs a long-lived stdio server that bridges to the
+    // agent-hooks loopback server via inherited env, not the Orca runtime, so
+    // it must not try to reach a running Orca instance.
+    commandPath[0] === 'matrix-mcp'
   )
 }
 

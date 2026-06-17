@@ -6,6 +6,7 @@ import {
   GitLabIntegrationCard
 } from './source-control-integration-cards'
 import { JiraIntegrationCard, LinearIntegrationCard } from './task-tracker-integration-cards'
+import { MatrixAdapterPane } from './MatrixAdapterPane'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
 import { translate } from '@/i18n/i18n'
 export { getIntegrationsPaneSearchEntries } from './integrations-search'
@@ -52,6 +53,21 @@ export function IntegrationsPane(): React.JSX.Element {
           <LinearIntegrationCard />
           <JiraIntegrationCard />
         </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold text-foreground">
+            {translate('matrix.settings.section_title', 'Matrix adapter')}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'matrix.settings.section_desc',
+              'Forward agent and system messages to a Matrix room and route replies back to sessions.'
+            )}
+          </p>
+        </div>
+        <MatrixAdapterPane />
       </section>
     </div>
   )

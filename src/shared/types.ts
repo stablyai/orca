@@ -2312,6 +2312,27 @@ export type GlobalSettings = {
   /** One-shot migration guard for the default-on rollout. Existing profiles
    *  without the guard are flipped on once; later explicit opt-outs stick. */
   autoRenameBranchFromWorkDefaultedOn?: boolean
+  /** Matrix adapter: when enabled, Orca connects the configured Matrix account
+   *  and relays messages to/from the configured room. The access token is held
+   *  in the OS keychain (safeStorage), never in settings. Empty/disabled keeps
+   *  the adapter inert. */
+  matrixEnabled?: boolean
+  /** Matrix homeserver base URL, e.g. https://portal.xinfty.space. */
+  matrixHomeserver?: string
+  /** Full Matrix user id of the relay account, e.g. @orca:xinfty.space. */
+  matrixUserId?: string
+  /** Target room id or alias the adapter sends to and listens on, e.g.
+   *  !abc:server or #orca:server. A single shared room; sessions are addressed
+   *  by a short handle prefix. */
+  matrixRoomId?: string
+  /** Master switch for forwarding Orca system/status messages into the Matrix
+   *  room. Off (default) means only explicit agent/user messages flow. */
+  matrixForwardSystemMessages?: boolean
+  /** When forwarding is on, include agent status transitions
+   *  (working/waiting/blocked/done) per session. */
+  matrixForwardAgentStatus?: boolean
+  /** When forwarding is on, include error/failure notifications. */
+  matrixForwardErrors?: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   enableGitHubAttribution: boolean

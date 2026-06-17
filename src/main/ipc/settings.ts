@@ -18,6 +18,7 @@ import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
+import { getMatrixService } from '../matrix/matrix-service'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -39,6 +40,12 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
+  // Why: reconcile the Matrix adapter against persisted settings at startup so
+  // an enabled+configured account reconnects without the user reopening the
+  // settings pane. configure() is idempotent, so the per-set call below is a
+  // no-op when nothing relevant changed (no polling loop).
+  getMatrixService().configure(store.getSettings())
+
   store.onSettingsChanged((updates, _settings, originWebContentsId) => {
     for (const window of BrowserWindow.getAllWindows()) {
       const isOrigin =
@@ -128,6 +135,11 @@ export function registerSettingsHandlers(
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
       applyAppIcon(result.appIcon)
     }
+
+    // Why: Matrix enable/homeserver/user/room changes must (re)start or stop the
+    // adapter. configure() reconciles idempotently against the merged settings,
+    // so calling it on every persist is safe and avoids a separate watcher.
+    getMatrixService().configure(result)
 
     // Why: telemetry-plan.md§Settings — fire `settings_changed` only for
     // whitelisted keys, with `value_kind` distinguishing booleans from

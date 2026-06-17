@@ -8,6 +8,7 @@ import type {
   HostedReviewInfo,
   HostedReviewProvider
 } from '../shared/hosted-review'
+import type { MatrixConnectionStatus, MatrixOutboundResult } from '../shared/matrix-adapter-types'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { AppIdentity } from '../shared/app-identity'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
@@ -1660,6 +1661,15 @@ export type PreloadApi = {
     teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
     teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
     teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
+  }
+  // Why: Matrix adapter surface. Shapes come from shared/matrix-adapter-types
+  // (the renderer-facing mirror of src/main/matrix/types.ts) so this file stays
+  // free of src/main imports, matching the gl/linear convention.
+  matrix: {
+    status: () => Promise<MatrixConnectionStatus>
+    connect: (args: { token: string }) => Promise<{ ok: boolean; error?: string }>
+    disconnect: () => Promise<void>
+    sendTest: (args: { message: string }) => Promise<MatrixOutboundResult>
   }
   jira: {
     connect: (args: {
