@@ -62,6 +62,16 @@ describe('terminal viewport refit', () => {
     expect(resubscribeIndex).toBeGreaterThan(rpcIndex)
   })
 
+  it('reflows the local xterm scrollback after a successful updateViewport', () => {
+    // Why: updateViewport reflows only the server PTY's visible screen; without a
+    // local reflow the WebView's scrollback stays wrapped at the old width.
+    const appliedIndex = hookSource.indexOf('isTerminalUpdateViewportApplied(response)')
+    const reflowIndex = hookSource.indexOf('ref.reflow(dims.cols, dims.rows)')
+    const cacheUpdateIndex = hookSource.indexOf('updateTerminalSubscriptionViewport(handle, dims)')
+    expect(reflowIndex).toBeGreaterThan(appliedIndex)
+    expect(reflowIndex).toBeGreaterThan(cacheUpdateIndex)
+  })
+
   it('only treats updateViewport as applied when the runtime updated the subscriber', () => {
     const okUpdated = {
       id: '1',

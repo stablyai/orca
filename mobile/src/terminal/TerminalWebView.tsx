@@ -47,6 +47,10 @@ export type TerminalWebViewHandle = {
   write: (data: string) => void
   init: (cols: number, rows: number, initialData?: string) => void
   resize: (cols: number, rows: number) => void
+  // Why: reflow the local xterm buffer (scrollback included) to a new width
+  // after a server-side PTY reflow, so older wrapped lines rewrap to match the
+  // latest output. No-op on the alternate screen.
+  reflow: (cols: number, rows: number) => void
   clear: () => void
   measureFitDimensions: (containerHeight?: number) => Promise<{ cols: number; rows: number } | null>
   resetZoom: () => void
@@ -335,6 +339,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       },
       resize(cols: number, rows: number) {
         postMessage({ type: 'resize', cols, rows })
+      },
+      reflow(cols: number, rows: number) {
+        postMessage({ type: 'reflow', cols, rows })
       },
       clear() {
         postMessage({ type: 'clear' })

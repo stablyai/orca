@@ -13,6 +13,7 @@ export type TerminalWebViewCommand =
     }
   | { type: 'set-font-scale'; id?: number; fontScale: number }
   | { type: 'resize'; id?: number; cols: number; rows: number }
+  | { type: 'reflow'; id?: number; cols: number; rows: number }
   | { type: 'clear'; id?: number }
   | { type: 'measure'; id?: number; containerHeight?: number }
   | { type: 'reset-zoom'; id?: number }

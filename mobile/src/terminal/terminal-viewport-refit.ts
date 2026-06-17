@@ -114,6 +114,11 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
             })
             if (isTerminalUpdateViewportApplied(response)) {
               rpc.updateTerminalSubscriptionViewport(handle, dims)
+              // Why: updateViewport reflows the server PTY and re-streams only
+              // the visible screen, so the WebView's local xterm scrollback
+              // stays wrapped at the old width. Reflow it locally to the new
+              // cols so older lines rewrap to match the latest output.
+              ref.reflow(dims.cols, dims.rows)
               return
             }
           } catch {

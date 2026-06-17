@@ -4,6 +4,7 @@ import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-typ
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
+import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
@@ -756,6 +757,9 @@ export const XTERM_HTML = `<!DOCTYPE html>
     notify({ type: 'ready', cols: cols, rows: rows });
   }
 
+  // reflow(): see terminal-webview-reflow-injected.ts (extracted for max-lines).
+  ${TERMINAL_REFLOW_JS}
+
   function notify(msg) {
     if (window.ReactNativeWebView) {
       window.ReactNativeWebView.postMessage(JSON.stringify(msg));
@@ -835,6 +839,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
       }
     } else if (msg.type === 'resize') {
       resize(msg.cols, msg.rows);
+    } else if (msg.type === 'reflow') { reflow(msg.cols, msg.rows);
     } else if (msg.type === 'write') {
       write(msg.data);
     } else if (msg.type === 'clear') {
