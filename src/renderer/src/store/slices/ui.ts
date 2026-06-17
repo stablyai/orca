@@ -68,7 +68,6 @@ import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   normalizeBrowserPageZoomLevel
 } from '../../../../shared/browser-page-zoom'
-import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
 import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
@@ -436,12 +435,6 @@ function sanitizeWorkspaceCleanupDismissals(
     }
   }
   return out
-}
-
-function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlice>): boolean {
-  return Object.entries(hydrated).every(([key, value]) =>
-    persistedUIValuesEqual(state[key as keyof AppState], value)
-  )
 }
 
 function agentKindForTarget(agentType: Parameters<typeof agentTypeToIconAgent>[0]) {
@@ -2154,7 +2147,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ui.rightSidebarTab,
         ui.rightSidebarExplorerView
       )
-      const hydrated = {
+      return {
         // Why: persisted UI data comes from disk and may be stale, corrupted,
         // or manually edited. Clamp widths during hydration so invalid values
         // cannot push the renderer into broken layouts before the user drags a
@@ -2276,9 +2269,6 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ),
         persistedUIReady: true
       }
-      // Why: main rebroadcasts UI written by any client. Identical hydration must
-      // not create fresh references that App's debounced writer echoes to main.
-      return hydratedUIPartialMatchesState(s, hydrated) ? s : hydrated
     }),
 
   updateStatus: { state: 'idle' },

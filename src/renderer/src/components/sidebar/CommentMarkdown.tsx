@@ -405,7 +405,7 @@ const commentMarkdownSanitizeSchema = {
   },
   protocols: {
     ...defaultSchema.protocols,
-    src: [...(defaultSchema.protocols?.src ?? []), 'data', 'blob']
+    src: [...(defaultSchema.protocols?.src ?? []), 'data', 'blob', 'http', 'https']
   }
 }
 

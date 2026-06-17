@@ -1634,6 +1634,7 @@ export async function createRemoteWorktree(
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+    ...(args.linkedTrelloCard !== undefined ? { linkedTrelloCard: args.linkedTrelloCard } : {}),
     ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
     ...(args.linkedAzureDevOpsPR !== undefined
       ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
@@ -2171,6 +2172,7 @@ export async function createLocalWorktree(
       : {}),
     ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
     ...(args.linkedGitLabIssue !== undefined ? { linkedGitLabIssue: args.linkedGitLabIssue } : {}),
+    ...(args.linkedTrelloCard !== undefined ? { linkedTrelloCard: args.linkedTrelloCard } : {}),
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
     ...(args.linkedBitbucketPR !== undefined ? { linkedBitbucketPR: args.linkedBitbucketPR } : {}),
     ...(args.linkedAzureDevOpsPR !== undefined

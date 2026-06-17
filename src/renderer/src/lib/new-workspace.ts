@@ -50,9 +50,10 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
 export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
 
 export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
-  provider?: FolderWorkspaceLinkedTask['provider']
+  provider?: FolderWorkspaceLinkedTask['provider'] | 'trello'
   linearWorkspaceId?: string
   linearOrganizationUrlKey?: string
+  trelloCardId?: string
   linkedContext?: LinkedWorkItemContext
 }
 

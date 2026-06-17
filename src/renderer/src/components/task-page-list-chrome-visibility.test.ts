@@ -66,5 +66,17 @@ describe('shouldHideTaskPageListChrome', () => {
         hasLinearIssueDetail: true
       })
     ).toBe(false)
+    expect(
+      shouldHideTaskPageListChrome({
+        ...baseState,
+        taskSource: 'trello',
+        hasGitHubDetail: true,
+        hasGitLabDetail: true,
+        hasJiraDetail: true,
+        hasLinearIssueDetail: true,
+        hasLinearProjectContext: true,
+        hasLinearViewContext: true
+      })
+    ).toBe(false)
   })
 })

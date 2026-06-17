@@ -2,6 +2,7 @@ import React from 'react'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { TrelloIcon } from '@/components/icons/TrelloIcon'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -245,6 +246,18 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'jira' })}
               >
                 <JiraIcon className="size-3.5" />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('trello') ? (
+              <TaskProviderShortcut
+                canBrowseTasks={canBrowseTasks}
+                label={translate(
+                  'auto.components.sidebar.SidebarNav.trelloShortcut',
+                  'Open Trello tasks'
+                )}
+                onOpen={() => openTaskPage({ taskSource: 'trello' })}
+              >
+                <TrelloIcon className="size-3.5" />
               </TaskProviderShortcut>
             ) : null}
           </span>

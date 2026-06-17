@@ -83,6 +83,12 @@ import type {
   JiraIssueFilter,
   JiraIssueUpdate,
   JiraSiteSelection,
+  TrelloAttachment,
+  TrelloCardFilter,
+  TrelloCardUpdate,
+  TrelloConnectArgs,
+  TrelloCreateCardArgs,
+  TrelloUploadAttachmentArgs,
   LinearIssueUpdate,
   LinearProjectSummary,
   LinearWorkspaceSelection,
@@ -452,6 +458,27 @@ import {
   searchIssues as searchJiraIssues,
   updateIssue as updateJiraIssue
 } from '../jira/issues'
+import {
+  connect as connectTrello,
+  disconnect as disconnectTrello,
+  getStatus as getTrelloStatus,
+  testConnection as testTrelloConnection,
+  trelloDownload
+} from '../trello/client'
+import {
+  addCardComment as addTrelloCardComment,
+  cardComments as getTrelloCardComments,
+  createCard as createTrelloCard,
+  getCard as getTrelloCard,
+  listBoardLabels as listTrelloBoardLabels,
+  listBoardMembers as listTrelloBoardMembers,
+  listBoards as listTrelloBoards,
+  listCards as listTrelloCards,
+  listLists as listTrelloLists,
+  searchCards as searchTrelloCards,
+  uploadCardAttachment as uploadTrelloCardAttachment,
+  updateCard as updateTrelloCard
+} from '../trello/cards'
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
@@ -1138,6 +1165,7 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedLinearIssueOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? null,
     linkedGitLabMR: meta.linkedGitLabMR ?? null,
     linkedGitLabIssue: meta.linkedGitLabIssue ?? null,
+    ...(meta.linkedTrelloCard !== undefined ? { linkedTrelloCard: meta.linkedTrelloCard } : {}),
     linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
@@ -9958,6 +9986,7 @@ export class OrcaRuntimeService {
     linkedLinearIssueOrganizationUrlKey?: string | null
     linkedGitLabMR?: number | null
     linkedGitLabIssue?: number | null
+    linkedTrelloCard?: string
     linkedBitbucketPR?: number | null
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
@@ -10049,6 +10078,7 @@ export class OrcaRuntimeService {
           ? { linkedGitLabIssue: args.linkedGitLabIssue }
           : {}),
         ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+        ...(args.linkedTrelloCard !== undefined ? { linkedTrelloCard: args.linkedTrelloCard } : {}),
         ...(args.linkedBitbucketPR !== undefined
           ? { linkedBitbucketPR: args.linkedBitbucketPR }
           : {}),
@@ -10467,6 +10497,7 @@ export class OrcaRuntimeService {
       ...(args.linkedGitLabIssue !== undefined
         ? { linkedGitLabIssue: args.linkedGitLabIssue }
         : {}),
+      ...(args.linkedTrelloCard !== undefined ? { linkedTrelloCard: args.linkedTrelloCard } : {}),
       ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
       ...(args.linkedBitbucketPR !== undefined
         ? { linkedBitbucketPR: args.linkedBitbucketPR }
@@ -10732,6 +10763,7 @@ export class OrcaRuntimeService {
       linkedLinearIssueOrganizationUrlKey?: string | null
       linkedGitLabMR?: number | null
       linkedGitLabIssue?: number | null
+      linkedTrelloCard?: string
       linkedBitbucketPR?: number | null
       linkedAzureDevOpsPR?: number | null
       linkedGiteaPR?: number | null
@@ -18139,7 +18171,6 @@ export class OrcaRuntimeService {
   ): ReturnType<typeof listJiraCreateFields> {
     return listJiraCreateFields(projectIdOrKey, issueTypeId, siteId)
   }
-
   jiraListPriorities(siteId?: string): ReturnType<typeof listJiraPriorities> {
     return listJiraPriorities(siteId)
   }
@@ -18154,6 +18185,139 @@ export class OrcaRuntimeService {
 
   jiraListTransitions(key: string, siteId?: string): ReturnType<typeof listJiraTransitions> {
     return listJiraTransitions(key, siteId)
+  }
+
+  // ── Trello integration ──
+
+  trelloConnect(args: TrelloConnectArgs): ReturnType<typeof connectTrello> {
+    return connectTrello(args)
+  }
+
+  trelloDisconnect(): { ok: true } {
+    disconnectTrello()
+    return { ok: true }
+  }
+
+  trelloStatus(): ReturnType<typeof getTrelloStatus> {
+    return getTrelloStatus()
+  }
+
+  trelloTestConnection(): ReturnType<typeof testTrelloConnection> {
+    return testTrelloConnection()
+  }
+
+  trelloListBoards(): ReturnType<typeof listTrelloBoards> {
+    return listTrelloBoards()
+  }
+
+  trelloListLists(boardId: string): ReturnType<typeof listTrelloLists> {
+    return listTrelloLists(boardId)
+  }
+
+  trelloListBoardMembers(boardId: string): ReturnType<typeof listTrelloBoardMembers> {
+    return listTrelloBoardMembers(boardId)
+  }
+
+  trelloListBoardLabels(boardId: string): ReturnType<typeof listTrelloBoardLabels> {
+    return listTrelloBoardLabels(boardId)
+  }
+
+  trelloListCards(
+    filter?: TrelloCardFilter,
+    limit = 30,
+    boardIds?: string[]
+  ): ReturnType<typeof listTrelloCards> {
+    return listTrelloCards(filter, Math.min(Math.max(1, limit), 100), boardIds)
+  }
+
+  trelloSearchCards(
+    query: string,
+    limit = 30,
+    boardIds?: string[]
+  ): ReturnType<typeof searchTrelloCards> {
+    return searchTrelloCards(query, Math.min(Math.max(1, limit), 100), boardIds)
+  }
+
+  trelloGetCard(cardId: string): ReturnType<typeof getTrelloCard> {
+    return getTrelloCard(cardId)
+  }
+
+  async trelloCreateCard(
+    args: TrelloCreateCardArgs
+  ): Promise<
+    { ok: true; id: string; shortLink: string; url: string } | { ok: false; error: string }
+  > {
+    try {
+      const card = await createTrelloCard(args)
+      return { ok: true, id: card.id, shortLink: card.shortLink, url: card.url }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Create failed.' }
+    }
+  }
+
+  async trelloUpdateCard(
+    cardId: string,
+    updates: TrelloCardUpdate
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    try {
+      await updateTrelloCard(cardId, updates)
+      return { ok: true }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Update failed.' }
+    }
+  }
+
+  async trelloAddCardComment(
+    cardId: string,
+    text: string
+  ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+    try {
+      const comment = await addTrelloCardComment(cardId, text)
+      return { ok: true, id: comment.id }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : 'Comment failed.' }
+    }
+  }
+
+  trelloCardComments(cardId: string): ReturnType<typeof getTrelloCardComments> {
+    return getTrelloCardComments(cardId)
+  }
+
+  async trelloUploadAttachment(
+    args: TrelloUploadAttachmentArgs
+  ): Promise<{ ok: true; attachment: TrelloAttachment } | { ok: false; error: string }> {
+    const VALID_MIME_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const
+    if (!(VALID_MIME_TYPES as readonly string[]).includes(args.mimeType)) {
+      return {
+        ok: false,
+        error: `Unsupported MIME type: ${args.mimeType}. Allowed: image/png, image/jpeg, image/gif, image/webp`
+      }
+    }
+    try {
+      const attachment = await uploadTrelloCardAttachment(args)
+      return { ok: true, attachment }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Attachment upload failed.'
+      }
+    }
+  }
+
+  async trelloDownloadImage(
+    url: string
+  ): Promise<
+    { ok: true; contentType: string; contentBase64: string } | { ok: false; error: string }
+  > {
+    try {
+      const result = await trelloDownload(url)
+      return { ok: true, ...result }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Image download failed.'
+      }
+    }
   }
 
   // ── Browser automation ──

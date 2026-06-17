@@ -171,7 +171,6 @@ import {
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
-import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
 import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
@@ -2525,8 +2524,15 @@ export class Store {
           : rawTaskProviderSettings.visibleTaskProviders.includes('jira')
             ? rawTaskProviderSettings.visibleTaskProviders
             : [...rawTaskProviderSettings.visibleTaskProviders, 'jira' as const]
+        const visibleTaskProvidersDefaultedForTrello =
+          parsed.settings?.visibleTaskProvidersDefaultedForTrello === true
+        const migratedVisibleTaskProvidersWithTrello = visibleTaskProvidersDefaultedForTrello
+          ? migratedVisibleTaskProviders
+          : migratedVisibleTaskProviders.includes('trello')
+            ? migratedVisibleTaskProviders
+            : [...migratedVisibleTaskProviders, 'trello' as const]
         const taskProviderSettings = normalizeTaskProviderSettings({
-          visibleTaskProviders: migratedVisibleTaskProviders,
+          visibleTaskProviders: migratedVisibleTaskProvidersWithTrello,
           defaultTaskSource: rawTaskProviderSettings.defaultTaskSource
         })
         const primarySelectionDefaultedForLinux =
@@ -2570,7 +2576,7 @@ export class Store {
         ) {
           migratedDisabledTuiAgents.push('claude-agent-teams')
         }
-        if (!autoRenameBranchFromWorkDefaultedOn) {
+        if (!visibleTaskProvidersDefaultedForTrello || !autoRenameBranchFromWorkDefaultedOn) {
           this.loadNeedsSave = true
         }
         const normalizedOnboarding = normalizeLoadedOnboardingState(
@@ -2644,6 +2650,7 @@ export class Store {
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             visibleTaskProvidersDefaultedForJira: true,
+            visibleTaskProvidersDefaultedForTrello: true,
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),
@@ -4457,6 +4464,9 @@ export class Store {
       if ('visibleTaskProviders' in updates) {
         sanitizedUpdates.visibleTaskProvidersDefaultedForJira = true
       }
+      if ('visibleTaskProviders' in updates) {
+        sanitizedUpdates.visibleTaskProvidersDefaultedForTrello = true
+      }
     }
     if ('autoRenameBranchFromWork' in updates || 'autoRenameBranchFromWorkDefaultedOn' in updates) {
       sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
@@ -4576,7 +4586,6 @@ export class Store {
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
     const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
-    const previousUI = this.getUI()
     const currentUI = {
       ...getDefaultUIState(),
       ...stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
@@ -4597,7 +4606,7 @@ export class Store {
               this.state.ui?.rightSidebarExplorerView,
               nextRightSidebarTab
             )
-    const nextUI = {
+    this.state.ui = {
       ...currentUI,
       ...sanitizedUpdates,
       groupBy: sanitizedUpdates.groupBy
@@ -4671,10 +4680,6 @@ export class Store {
             )
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
-    if (persistedUIValuesEqual(previousUI, nextUI)) {
-      return
-    }
-    this.state.ui = nextUI
     this.scheduleSave()
     this.notifyUIChanged()
   }
@@ -5475,6 +5480,7 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     linkedLinearIssue: null,
     linkedGitLabMR: null,
     linkedGitLabIssue: null,
+    linkedTrelloCard: undefined,
     linkedBitbucketPR: null,
     linkedAzureDevOpsPR: null,
     linkedGiteaPR: null,

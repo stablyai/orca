@@ -64,6 +64,13 @@ export function getTaskSourceContextSummary(args: {
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
       })
+    case 'trello':
+      return getAccountBackedTaskSourceSummary(args.providerLabel, {
+        accountLabel: undefined,
+        accountHostId: args.accountHostId,
+        hostLabelById: args.hostLabelById,
+        hostAvailability: args.hostAvailability
+      })
   }
 }
 
@@ -218,60 +225,48 @@ function uniqueLabels(labels: readonly (string | null | undefined)[]): string[] 
 function getUnavailableHosts(
   hostAvailability: readonly TaskSourceHostAvailability[],
   hostLabelById?: HostLabelLookup
-): {
-  hostLabel: string
-  statusLabel: string
-}[] {
+): { hostLabel: string; statusLabel: string }[] {
   const seen = new Set<string>()
-  const unavailableHosts: { hostLabel: string; statusLabel: string }[] = []
-  for (const availability of hostAvailability) {
-    const statusLabel = getAvailabilityStatusLabel(availability)
+  const result: { hostLabel: string; statusLabel: string }[] = []
+  for (const a of hostAvailability) {
+    const statusLabel = getAvailabilityStatusLabel(a)
     if (!statusLabel) {
       continue
     }
-    const hostLabel = getHostLabel(availability.hostId, hostLabelById)
+    const hostLabel = getHostLabel(a.hostId, hostLabelById)
     const key = `${hostLabel}\u0000${statusLabel}`
     if (seen.has(key)) {
       continue
     }
     seen.add(key)
-    unavailableHosts.push({ hostLabel, statusLabel })
+    result.push({ hostLabel, statusLabel })
   }
-  return unavailableHosts
+  return result
 }
 
 function getAvailabilityStatusLabel(availability: TaskSourceHostAvailability): string | null {
-  switch (availability.reason) {
-    case undefined:
-      break
-    case 'checking-task-source-capability':
-      return 'checking server capabilities'
-    case 'missing-task-source-capability':
-      return 'server update needed for task sources'
-    case 'missing-provider-auth':
-      return 'provider auth needed'
-    case 'unavailable-source-tool':
-      return 'source tool unavailable'
-    case 'unsupported-provider':
-      return 'provider unsupported on this host'
+  const reasonMap: Record<string, string> = {
+    'checking-task-source-capability': 'checking server capabilities',
+    'missing-task-source-capability': 'server update needed for task sources',
+    'missing-provider-auth': 'provider auth needed',
+    'unavailable-source-tool': 'source tool unavailable',
+    'unsupported-provider': 'provider unsupported on this host'
+  }
+  if (availability.reason && availability.reason in reasonMap) {
+    return reasonMap[availability.reason]
   }
   if (availability.status) {
     return availability.status === 'connected' ? null : getSshStatusLabel(availability.status)
   }
-  switch (availability.health) {
-    case 'local':
-    case 'available':
-    case undefined:
-      return null
-    case 'connecting':
-      return 'connecting'
-    case 'blocked':
-      return 'server update needed'
-    case 'disconnected':
-      return 'disconnected'
-    case 'error':
-      return 'connection issue'
+  const healthMap: Record<string, string | null> = {
+    local: null,
+    available: null,
+    connecting: 'connecting',
+    blocked: 'server update needed',
+    disconnected: 'disconnected',
+    error: 'connection issue'
   }
+  return availability.health ? (healthMap[availability.health] ?? null) : null
 }
 
 function getAvailabilityLabel(
@@ -287,28 +282,21 @@ function getAvailabilityLabel(
 }
 
 function getSshStatusLabel(status: SshConnectionStatus): string {
-  switch (status) {
-    case 'connected':
-      return 'connected'
-    case 'connecting':
-    case 'deploying-relay':
-    case 'reconnecting':
-      return 'connecting'
-    case 'auth-failed':
-      return 'auth needed'
-    case 'reconnection-failed':
-    case 'error':
-      return 'connection issue'
-    case 'disconnected':
-      return 'disconnected'
+  const map: Record<SshConnectionStatus, string> = {
+    connected: 'connected',
+    connecting: 'connecting',
+    'deploying-relay': 'connecting',
+    reconnecting: 'connecting',
+    'auth-failed': 'auth needed',
+    'reconnection-failed': 'connection issue',
+    error: 'connection issue',
+    disconnected: 'disconnected'
   }
+  return map[status]
 }
 
 function formatShortList(labels: readonly string[]): string {
-  if (labels.length <= 2) {
-    return labels.join(', ')
-  }
-  return `${labels[0]} +${labels.length - 1}`
+  return labels.length <= 2 ? labels.join(', ') : `${labels[0]} +${labels.length - 1}`
 }
 
 function formatLongList(labels: readonly string[]): string {

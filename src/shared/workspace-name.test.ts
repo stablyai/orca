@@ -209,6 +209,23 @@ describe('getWorkspaceIntentName', () => {
     })
   })
 
+  it('uses Trello card identity without falling back to issue zero', () => {
+    expect(
+      getWorkspaceIntentName({
+        workItem: {
+          type: 'issue',
+          provider: 'trello',
+          number: 0,
+          title: 'Add board picker',
+          trelloCardId: 'AbC123'
+        }
+      })
+    ).toEqual({
+      displayName: 'Trello AbC123 Add Board Picker',
+      seedName: 'trello-abc123-add-board-picker'
+    })
+  })
+
   it('summarizes unlinked task text into a shared display and seed', () => {
     expect(getWorkspaceIntentName({ sourceText: 'add keyboard shortcut settings' })).toEqual({
       displayName: 'Add Keyboard Shortcut Settings',

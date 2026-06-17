@@ -82,6 +82,7 @@ import {
   type FeatureInteractionState
 } from '../../../shared/feature-interactions'
 import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
+import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { translate } from '@/i18n/i18n'
 import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
 
@@ -556,6 +557,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     emulator: createEmulatorApi(),
     gh: createGitHubApi(),
     gl: createGitLabApi(),
+    trello: createRuntimeNamespaceApi('trello'),
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
     linear: createRuntimeNamespaceApi('linear'),
     hooks: createHooksApi(),
@@ -1106,6 +1108,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
         linkedGitLabIssue: args.linkedGitLabIssue,
         linkedGitLabMR: args.linkedGitLabMR,
+        linkedTrelloCard: args.linkedTrelloCard,
         linkedBitbucketPR: args.linkedBitbucketPR,
         linkedAzureDevOpsPR: args.linkedAzureDevOpsPR,
         linkedGiteaPR: args.linkedGiteaPR,
@@ -2605,7 +2608,8 @@ function getStoredSettings(): GlobalSettings {
       rightSidebarOpenByDefault: false,
       activeRuntimeEnvironmentId: environment?.id ?? null
     },
-    migratedStored
+    migratedStored,
+    { migrateTrelloProviderDefault: true }
   )
 }
 
@@ -2742,16 +2746,55 @@ function mergeContextualTourSeenIds(
   }
   return [...merged]
 }
+function mergeTaskProviderSettings(
+  base: GlobalSettings,
+  updates: Partial<GlobalSettings>,
+  options?: { migrateTrelloProviderDefault?: boolean }
+): Pick<
+  GlobalSettings,
+  'visibleTaskProviders' | 'defaultTaskSource' | 'visibleTaskProvidersDefaultedForTrello'
+> {
+  const raw = normalizeTaskProviderSettings({
+    visibleTaskProviders: updates.visibleTaskProviders ?? base.visibleTaskProviders,
+    defaultTaskSource:
+      options?.migrateTrelloProviderDefault === true
+        ? updates.defaultTaskSource
+        : (updates.defaultTaskSource ?? base.defaultTaskSource)
+  })
+  const trelloDefaulted =
+    options?.migrateTrelloProviderDefault === true
+      ? updates.visibleTaskProvidersDefaultedForTrello === true
+      : updates.visibleTaskProvidersDefaultedForTrello === true ||
+        base.visibleTaskProvidersDefaultedForTrello === true
+  const visibleTaskProviders =
+    trelloDefaulted || raw.visibleTaskProviders.includes('trello')
+      ? raw.visibleTaskProviders
+      : [...raw.visibleTaskProviders, 'trello' as const]
+  const normalized = normalizeTaskProviderSettings({
+    visibleTaskProviders,
+    defaultTaskSource: raw.defaultTaskSource
+  })
+  return {
+    visibleTaskProviders: normalized.visibleTaskProviders,
+    defaultTaskSource: normalized.defaultTaskSource,
+    visibleTaskProvidersDefaultedForTrello: true
+  }
+}
 
 function mergeSettings(
   base: GlobalSettings,
   updates: Partial<GlobalSettings>,
-  options: { preserveAutoRenameBranchFromWorkUpdate?: boolean } = {}
+  options: {
+    migrateTrelloProviderDefault?: boolean
+    preserveAutoRenameBranchFromWorkUpdate?: boolean
+  } = {}
 ): GlobalSettings {
   const defaults = getDefaultSettings('~')
+  const taskProviders = mergeTaskProviderSettings(base, updates, options)
   const merged = {
     ...base,
     ...updates,
+    ...taskProviders,
     notifications: {
       ...base.notifications,
       ...updates.notifications

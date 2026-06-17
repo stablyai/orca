@@ -7,11 +7,15 @@ import {
 } from './source-control-integration-cards'
 import { JiraIntegrationCard, LinearIntegrationCard } from './task-tracker-integration-cards'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
+import { useState } from 'react'
+import { TrelloCard } from '@/components/trello-card'
+import { TrelloConnectDialog } from '@/components/trello-connect-dialog'
 import { translate } from '@/i18n/i18n'
 export { getIntegrationsPaneSearchEntries } from './integrations-search'
 
 export function IntegrationsPane(): React.JSX.Element {
   useIntegrationProviderStatusRefresh()
+  const [trelloDialogOpen, setTrelloDialogOpen] = useState(false)
 
   return (
     <div className="space-y-5">
@@ -52,7 +56,10 @@ export function IntegrationsPane(): React.JSX.Element {
           <LinearIntegrationCard />
           <JiraIntegrationCard />
         </div>
+        <TrelloCard onOpenConnectDialog={() => setTrelloDialogOpen(true)} />
       </section>
+
+      <TrelloConnectDialog open={trelloDialogOpen} onOpenChange={setTrelloDialogOpen} />
     </div>
   )
 }

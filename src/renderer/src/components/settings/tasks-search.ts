@@ -17,6 +17,7 @@ export const getTasksPaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.tasks.search.11f001cdd4', 'gitlab'),
       ...translateSearchKeyword('auto.components.settings.tasks.search.412ec3c702', 'linear'),
       ...translateSearchKeyword('auto.components.settings.tasks.search.5430396e11', 'jira'),
+      ...translateSearchKeyword('auto.components.settings.tasks.search.trello', 'trello'),
       ...translateSearchKeyword('auto.components.settings.tasks.search.604d8e4089', 'atlassian'),
       ...translateSearchKeyword('auto.components.settings.tasks.search.44083ae418', 'display'),
       ...translateSearchKeyword('auto.components.settings.tasks.search.58cda6f9c0', 'hide')

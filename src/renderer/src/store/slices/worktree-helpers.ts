@@ -137,6 +137,7 @@ export type WorktreeSlice = {
     workspaceStatus?: WorkspaceStatus,
     linkedGitLabMR?: number,
     linkedGitLabIssue?: number,
+    linkedTrelloCard?: string,
     startup?: WorktreeStartupLaunch,
     pendingFirstAgentMessageRename?: boolean,
     /** When set, correlates the backend's `createWorktree:progress` events to a

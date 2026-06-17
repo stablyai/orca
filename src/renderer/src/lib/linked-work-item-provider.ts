@@ -20,6 +20,14 @@ function isJiraIssueUrl(url: string): boolean {
     return false
   }
 }
+function isTrelloCardUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return /trello\.com$/i.test(parsed.hostname) && /\/c\//i.test(parsed.pathname)
+  } catch {
+    return false
+  }
+}
 
 export function getLinkedWorkItemProvider(
   item: LinkedWorkItemSummary
@@ -32,6 +40,9 @@ export function getLinkedWorkItemProvider(
   }
   if (item.jiraIdentifier || isJiraIssueUrl(item.url)) {
     return 'jira'
+  }
+  if (item.trelloCardId || isTrelloCardUrl(item.url)) {
+    return 'trello'
   }
   if (item.type === 'mr') {
     return 'gitlab'

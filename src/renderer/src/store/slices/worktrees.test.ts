@@ -1403,6 +1403,7 @@ describe('createWorktree base status merge', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         true
       )
 
@@ -1426,6 +1427,106 @@ describe('createWorktree base status merge', () => {
       workspaceStatus: 'in-review',
       pendingFirstAgentMessageRename: true
     })
+  })
+
+  it('includes linkedTrelloCard in the local create IPC payload when provided', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      linkedTrelloCard: 'abc123'
+    })
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature',
+        undefined,
+        'inherit',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'abc123'
+      )
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({ linkedTrelloCard: 'abc123' })
+    )
+  })
+
+  it('omits linkedTrelloCard from local create IPC payload when undefined', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+
+    await store.getState().createWorktree('repo1', 'feature')
+
+    const callArgs = vi.mocked(mockApi.worktrees.create).mock.calls[0]![0]
+    expect(callArgs).not.toHaveProperty('linkedTrelloCard')
+  })
+
+  it('includes linkedTrelloCard in remote runtime worktree.create payload', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature',
+        undefined,
+        'inherit',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'trello-card-id'
+      )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'worktree.create',
+        params: expect.objectContaining({ linkedTrelloCard: 'trello-card-id' })
+      })
+    )
   })
 
   it('passes the active folder workspace as parent for in-app worktree creates', async () => {
@@ -2306,6 +2407,7 @@ describe('worktree remote runtime mutations', () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         {
           command: "codex 'summarize repo'",
           env: { ORCA_AGENT_MODE: 'direct' }
@@ -2359,6 +2461,7 @@ describe('worktree remote runtime mutations', () => {
         undefined,
         undefined,
         'claude',
+        undefined,
         undefined,
         undefined,
         undefined,

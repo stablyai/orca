@@ -959,6 +959,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     []
   )
+  /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- The composer must clear repo-derived slug state immediately when the selected repo context disappears. */
   useEffect(() => {
     if (!selectedRepo || !selectedRepoPath || !selectedRepoIsGit) {
       setSelectedRepoSlug(null)
@@ -1293,6 +1294,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [connectionId, isRemote, selectedRepoSshStatus, disabledTuiAgents])
 
   // Per-repo: load yaml hooks + issue command template.
+  /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Repo changes intentionally reset hook and issue-command state before the next async load resolves. */
   useEffect(() => {
     if (!repoId) {
       return
@@ -1356,6 +1358,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRepoIsGit,
     selectedRepoSettings
   ])
+  /* oxlint-enable react-doctor/no-adjust-state-on-prop-change */
 
   const onConnectSelectedRepo = useCallback(async (): Promise<void> => {
     const targetId = selectedRepoConnectionIdRef.current
@@ -1441,6 +1444,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   ])
 
   // Reset setup decision when config / policy changes.
+  /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Setup policy changes intentionally replace the pending user decision with the new derived default. */
   useEffect(() => {
     if (shouldWaitForSetupCheck) {
       setSetupDecision(null)
@@ -1456,6 +1460,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
     setSetupDecision(setupPolicy === 'run-by-default' ? 'run' : 'skip')
   }, [setupConfig, setupPolicy, shouldWaitForSetupCheck])
+  /* oxlint-enable react-doctor/no-adjust-state-on-prop-change */
 
   // Link popover: debounce + load recent items + resolve direct number.
   useEffect(() => {
@@ -1463,6 +1468,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     return () => window.clearTimeout(timeout)
   }, [linkQuery])
 
+  /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Opening or switching the link picker intentionally resets loading state before the current repo query starts. */
   useEffect(() => {
     if (!linkPopoverOpen || !selectedRepo || !selectedRepoIsGit) {
       return
@@ -1521,7 +1527,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       cancelled = true
     }
   }, [linkPopoverOpen, selectedRepo, selectedRepoIsGit])
+  /* oxlint-enable react-doctor/no-adjust-state-on-prop-change */
 
+  /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Direct-link lookups must clear stale result/loading state when the popover closes or the repo/query stops matching. */
   useEffect(() => {
     if (
       !linkPopoverOpen ||
@@ -2571,13 +2579,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         ? 'linear'
         : provider === 'jira'
           ? 'jira'
-          : provider === 'gitlab'
-            ? linkedWorkItem.type === 'mr'
-              ? 'gitlab-mr'
-              : 'gitlab-issue'
-            : linkedWorkItem.type === 'pr'
-              ? 'github-pr'
-              : 'github-issue'
+          : provider === 'trello'
+            ? 'trello'
+            : provider === 'gitlab'
+              ? linkedWorkItem.type === 'mr'
+                ? 'gitlab-mr'
+                : 'gitlab-issue'
+              : linkedWorkItem.type === 'pr'
+                ? 'github-pr'
+                : 'github-issue'
       return {
         kind,
         label:
@@ -2830,6 +2840,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
           ? submitLinkedWorkItem.linearOrganizationUrlKey
           : undefined
+      const linkedTrelloCard =
+        submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'trello'
+          ? submitLinkedWorkItem.trelloCardId
+          : undefined
       const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
         branchNameOverride,
         branchAutoName: branchAutoNameRef.current,
@@ -2895,6 +2909,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         resolvedInitialWorkspaceStatus,
         linkedGitLabMR ?? undefined,
         linkedGitLabIssue ?? undefined,
+        linkedTrelloCard,
         backendStartup,
         pendingFirstAgentMessageRename,
         undefined,
@@ -3115,6 +3130,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'linear'
             ? submitLinkedWorkItem.linearOrganizationUrlKey
             : undefined
+        const linkedTrelloCard =
+          submitLinkedWorkItem && getLinkedWorkItemProvider(submitLinkedWorkItem) === 'trello'
+            ? submitLinkedWorkItem.trelloCardId
+            : undefined
         const effectiveBranchNameOverride = resolveComposerBranchNameOverrideForCreate({
           branchNameOverride,
           branchAutoName: branchAutoNameRef.current,
@@ -3142,6 +3161,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           Boolean(agent) &&
           !effectiveBranchNameOverride &&
           !createDisplayName
+
         const trimmedNote = note.trim()
         // Why: backend startup is safe only when the launch command is
         // self-contained. Agents that need post-ready paste/follow-up stay on
@@ -3252,6 +3272,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : {}),
           ...(linkedGitLabMR != null ? { linkedGitLabMR } : {}),
           ...(linkedGitLabIssue != null ? { linkedGitLabIssue } : {}),
+          ...(linkedTrelloCard != null ? { linkedTrelloCard } : {}),
           ...(backendStartup ? { startup: backendStartup } : {}),
           pendingFirstAgentMessageRename,
           note: trimmedNote,

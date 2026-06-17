@@ -13,6 +13,7 @@ import { createHostedReviewSlice } from './slices/hosted-review'
 import { createLinearSlice } from './slices/linear'
 import { createPreflightSlice } from './slices/preflight'
 import { createJiraSlice } from './slices/jira'
+import { createTrelloSlice } from './slices/trello'
 import { createEditorSlice } from './slices/editor'
 import { createStatsSlice } from './slices/stats'
 import { createMemorySlice } from './slices/memory'
@@ -48,6 +49,7 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createHostedReviewSlice(...a),
   ...createLinearSlice(...a),
   ...createPreflightSlice(...a),
+  ...createTrelloSlice(...a),
   ...createJiraSlice(...a),
   ...createEditorSlice(...a),
   ...createStatsSlice(...a),

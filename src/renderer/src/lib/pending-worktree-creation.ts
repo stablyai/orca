@@ -51,6 +51,7 @@ export type WorktreeCreationRequest = {
   workspaceStatus?: WorkspaceStatus
   linkedGitLabMR?: number
   linkedGitLabIssue?: number
+  linkedTrelloCard?: string
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null

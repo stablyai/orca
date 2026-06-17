@@ -127,6 +127,49 @@ function installClipboardImageBase64(contentBase64: string): void {
   })
 }
 
+describe('web settings preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('adds Trello to legacy visible task providers when the migration flag is absent', async () => {
+    const { api, storage } = await installApi('Linux')
+    storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({
+        visibleTaskProviders: ['gitlab'],
+        visibleTaskProvidersDefaultedForJira: true
+      })
+    )
+
+    const settings = await api.settings.get()
+
+    expect(settings.visibleTaskProviders).toEqual(['gitlab', 'trello'])
+    expect(settings.visibleTaskProvidersDefaultedForTrello).toBe(true)
+  })
+
+  it('preserves deliberate Trello opt-out when the migration flag is already set', async () => {
+    const { api, storage } = await installApi('Linux')
+    storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({
+        visibleTaskProviders: ['gitlab'],
+        visibleTaskProvidersDefaultedForJira: true,
+        visibleTaskProvidersDefaultedForTrello: true
+      })
+    )
+
+    const settings = await api.settings.get()
+
+    expect(settings.visibleTaskProviders).toEqual(['gitlab'])
+    expect(settings.visibleTaskProvidersDefaultedForTrello).toBe(true)
+  })
+})
+
 describe('web keybindings preload API', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -2380,6 +2423,81 @@ describe('web GitLab preload API', () => {
           iid: 7,
           state: 'closed'
         }
+      }
+    ])
+  })
+})
+
+describe('web Trello preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('provides a trello namespace that proxies every key to the runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: null,
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    expect(typeof globals.window.api.trello.connect).toBe('function')
+    expect(typeof globals.window.api.trello.disconnect).toBe('function')
+    expect(typeof globals.window.api.trello.status).toBe('function')
+    expect(typeof globals.window.api.trello.listBoards).toBe('function')
+    expect(typeof globals.window.api.trello.listCards).toBe('function')
+    expect(typeof globals.window.api.trello.getCard).toBe('function')
+    expect(typeof globals.window.api.trello.createCard).toBe('function')
+    expect(typeof globals.window.api.trello.searchCards).toBe('function')
+  })
+
+  it('routes trello.listCards through the runtime RPC', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: [],
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.trello.listCards({ filter: 'assigned' })
+
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'trello.listCards',
+        params: { filter: 'assigned' }
       }
     ])
   })

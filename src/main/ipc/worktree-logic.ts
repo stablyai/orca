@@ -283,6 +283,7 @@ export function mergeWorktree(
     linkedLinearIssueWorkspaceId: meta?.linkedLinearIssueWorkspaceId ?? null,
     linkedLinearIssueOrganizationUrlKey: meta?.linkedLinearIssueOrganizationUrlKey ?? null,
     ...getLinkedWorkItemMetadata(meta),
+    ...(meta?.linkedTrelloCard !== undefined ? { linkedTrelloCard: meta.linkedTrelloCard } : {}),
     isArchived: meta?.isArchived ?? false,
     isUnread: meta?.isUnread ?? false,
     isPinned: meta?.isPinned ?? false,

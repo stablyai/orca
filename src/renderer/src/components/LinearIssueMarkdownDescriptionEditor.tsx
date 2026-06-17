@@ -5,7 +5,11 @@ import type { Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import { LoaderCircle } from 'lucide-react'
 
-import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown-extensions'
+import {
+  createRichMarkdownExtensions,
+  notifyRichMarkdownImageResolverChanged,
+  type RichMarkdownImageSrcResolver
+} from '@/components/editor/rich-markdown-extensions'
 import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/raw-markdown-html'
 import { LinearIssueMarkdownToolbar } from '@/components/LinearIssueMarkdownToolbar'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -19,10 +23,11 @@ type LinearIssueMarkdownDescriptionEditorProps = {
   density: 'page' | 'drawer'
   disabled: boolean
   submitShortcutLabel: string
+  resolveImageSrc?: RichMarkdownImageSrcResolver
 }
 
-function createLinearIssueMarkdownExtensions() {
-  const extensions = createRichMarkdownExtensions()
+function createLinearIssueMarkdownExtensions(resolveImageSrc?: RichMarkdownImageSrcResolver) {
+  const extensions = createRichMarkdownExtensions(resolveImageSrc ? { resolveImageSrc } : undefined)
   return [
     ...extensions,
     Placeholder.configure({
@@ -40,18 +45,29 @@ export function LinearIssueMarkdownDescriptionEditor({
   onSave,
   density,
   disabled,
-  submitShortcutLabel
+  submitShortcutLabel,
+  resolveImageSrc
 }: LinearIssueMarkdownDescriptionEditorProps): React.JSX.Element {
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const lastEditorMarkdownRef = useRef(value)
   const editorRef = useRef<Editor | null>(null)
+  // Why: the image nodeviews capture the resolver at extension-creation time.
+  // A ref-backed stable resolver lets every node view reach the latest resolver
+  // without recreating the editor (which would lose unsaved edits).
+  const resolverRef = useRef(resolveImageSrc)
+  resolverRef.current = resolveImageSrc
+  const stableResolver = useMemo<RichMarkdownImageSrcResolver>(
+    () => (src) => resolverRef.current?.(src) ?? Promise.resolve(undefined),
+    []
+  )
+
   const linearIssueMarkdownExtensions = useMemo(() => {
     // Why: Tiptap freezes extension options when the editor is created; the
     // language value is the recreation key for translated extension options.
     void language
-    return createLinearIssueMarkdownExtensions()
-  }, [language])
+    return createLinearIssueMarkdownExtensions(stableResolver)
+  }, [language, stableResolver])
 
   const editor = useEditor(
     {
@@ -101,6 +117,24 @@ export function LinearIssueMarkdownDescriptionEditor({
   useEffect(() => {
     editor?.setEditable(!disabled)
   }, [disabled, editor])
+  // Why: when the image resolver identity changes (runtime/account switch),
+  // existing node views still hold stale blob URLs. Re-parsing with the same
+  // markdown content triggers every image node view to re-resolve through the
+  // ref-backed resolver, picking up the new identity. emitUpdate: false
+  // prevents the reparse from triggering onChange/onSave callbacks.
+  const prevResolverRef = useRef(resolveImageSrc)
+  useEffect(() => {
+    if (!editor || prevResolverRef.current === resolveImageSrc) {
+      return
+    }
+    prevResolverRef.current = resolveImageSrc
+    const currentMarkdown = editor.getMarkdown()
+    editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(currentMarkdown), {
+      contentType: 'markdown',
+      emitUpdate: false
+    })
+    notifyRichMarkdownImageResolverChanged()
+  }, [editor, resolveImageSrc])
 
   useEffect(() => {
     if (!editor || value === lastEditorMarkdownRef.current) {

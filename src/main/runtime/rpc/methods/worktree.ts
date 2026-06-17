@@ -72,6 +72,9 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
         linkedGitLabMR: params.linkedGitLabMR,
         linkedGitLabIssue: params.linkedGitLabIssue,
+        ...(params.linkedTrelloCard !== undefined
+          ? { linkedTrelloCard: params.linkedTrelloCard }
+          : {}),
         linkedBitbucketPR: params.linkedBitbucketPR,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
         linkedGiteaPR: params.linkedGiteaPR,
@@ -130,6 +133,9 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
         linkedGitLabMR: params.linkedGitLabMR,
         linkedGitLabIssue: params.linkedGitLabIssue,
+        ...(params.linkedTrelloCard !== undefined
+          ? { linkedTrelloCard: params.linkedTrelloCard }
+          : {}),
         linkedBitbucketPR: params.linkedBitbucketPR,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
         linkedGiteaPR: params.linkedGiteaPR,

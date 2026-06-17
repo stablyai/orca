@@ -145,6 +145,7 @@ import {
 } from '@/components/linear-project-view-surfaces'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { TrelloTaskSourcePanel } from '@/components/trello-task-source-panel'
 import { cn } from '@/lib/utils'
 import {
   getLinkedWorkItemSuggestedName,
@@ -155,6 +156,7 @@ import {
 } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import { buildTrelloCardLinkedWorkItem } from '@/lib/trello-linked-work-item'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
@@ -222,6 +224,7 @@ import type {
   LinearTeam,
   LinearWorkspaceSelection,
   LinearWorkflowState,
+  TrelloCard,
   Repo,
   TaskProvider,
   TaskViewPresetId
@@ -2758,6 +2761,8 @@ export default function TaskPage(): React.JSX.Element {
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const trelloStatusChecked = useAppStore((s) => s.trelloStatusChecked)
+  const checkTrelloConnection = useAppStore((s) => s.checkTrelloConnection)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const providerRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
   providerRuntimeContextKeyRef.current = providerRuntimeContextKey
@@ -6725,9 +6730,13 @@ export default function TaskPage(): React.JSX.Element {
     if (!jiraStatusReady) {
       void checkJiraConnection()
     }
+    if (!trelloStatusChecked) {
+      void checkTrelloConnection()
+    }
   }, [
     checkJiraConnection,
     checkLinearConnection,
+    checkTrelloConnection,
     expectedPreflightContextKey,
     jiraStatusContextKey,
     jiraStatusReady,
@@ -6737,7 +6746,8 @@ export default function TaskPage(): React.JSX.Element {
     preflightStatusContextKey,
     preflightStatusChecked,
     preflightStatusCurrent,
-    refreshPreflightStatus
+    refreshPreflightStatus,
+    trelloStatusChecked
   ])
 
   // Why: debounce the Linear search input so we don't fire a request on every
@@ -7445,6 +7455,18 @@ export default function TaskPage(): React.JSX.Element {
       openComposerForJiraItem(issue)
     },
     [openComposerForJiraItem]
+  )
+
+  const handleUseTrelloCard = useCallback(
+    (card: TrelloCard, renderedText?: string): void => {
+      const linkedWorkItem = buildTrelloCardLinkedWorkItem(card, renderedText)
+      openModal('new-workspace-composer', {
+        linkedWorkItem,
+        prefilledName: card.name,
+        telemetrySource: 'sidebar'
+      })
+    },
+    [openModal]
   )
 
   const handleJiraConnect = useCallback(async (): Promise<void> => {
@@ -9635,6 +9657,8 @@ export default function TaskPage(): React.JSX.Element {
                 />
               </div>
             )
+          ) : taskSource === 'trello' ? (
+            <TrelloTaskSourcePanel onUseCard={handleUseTrelloCard} />
           ) : taskSource === 'linear' && selectedLinearIssue ? (
             <LinearIssueWorkspace
               issue={selectedLinearIssue}

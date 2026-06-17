@@ -15,6 +15,7 @@ import { normalizeTaskProviderSettings } from '../../../../shared/task-providers
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { clearTrelloInflight } from './trello-cache-state'
 import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
@@ -143,9 +144,9 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
         activeRuntimeEnvironmentId: nextId
       })
       bumpProviderRuntimeSessionGeneration()
+      clearTrelloInflight()
       set((s) => ({
-        // Why: in the multi-host model this is a focus/default-host change,
-        // not a teardown boundary. Existing host-owned sessions stay alive.
+        trelloCacheGeneration: (s.trelloCacheGeneration ?? 0) + 1,
         settings:
           (nextSettings as GlobalSettings | undefined) ??
           (s.settings ? { ...s.settings, activeRuntimeEnvironmentId: nextId } : null)

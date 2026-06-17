@@ -188,6 +188,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       undefined,
       undefined,
       undefined,
+      undefined,
       item.linearWorkspaceId,
       item.linearOrganizationUrlKey,
       undefined,

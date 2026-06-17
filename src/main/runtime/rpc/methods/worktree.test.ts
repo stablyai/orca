@@ -349,4 +349,73 @@ describe('worktree RPC methods', () => {
     expect(runtime.persistManagedWorktreeSortOrder).toHaveBeenCalledWith(['wt-1', 'wt-2'])
     expect(response).toMatchObject({ ok: true, result: { updated: 2 } })
   })
+
+  it('forwards linkedTrelloCard through worktree.create when provided', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'feature',
+        linkedTrelloCard: 'abc123'
+      })
+    )
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ linkedTrelloCard: 'abc123' })
+    )
+  })
+
+  it('omits linkedTrelloCard from worktree.create when not provided', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch(makeRequest('worktree.create', { repo: 'repo-1', name: 'feature' }))
+
+    const callArgs = vi.mocked(runtime.createManagedWorktree).mock.calls[0]![0]
+    expect(callArgs).not.toHaveProperty('linkedTrelloCard')
+  })
+
+  it('forwards linkedTrelloCard through worktree.set for both string and null', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateManagedWorktreeMeta: vi.fn().mockResolvedValue({
+        worktree: { id: 'wt-1', linkedTrelloCard: 'xyz789' }
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('worktree.set', {
+        worktree: 'id:wt-1',
+        linkedTrelloCard: 'xyz789'
+      })
+    )
+
+    expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ linkedTrelloCard: 'xyz789' })
+    )
+
+    vi.mocked(runtime.updateManagedWorktreeMeta).mockClear()
+
+    await dispatcher.dispatch(
+      makeRequest('worktree.set', {
+        worktree: 'id:wt-1',
+        linkedTrelloCard: null
+      })
+    )
+
+    expect(runtime.updateManagedWorktreeMeta).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({ linkedTrelloCard: null })
+    )
+  })
 })

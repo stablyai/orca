@@ -92,6 +92,20 @@ import type {
   JiraTransition,
   JiraUser,
   JiraViewer,
+  TrelloAttachment,
+  TrelloBoard,
+  TrelloCard,
+  TrelloCardFilter,
+  TrelloCardUpdate,
+  TrelloComment,
+  TrelloConnectionStatus,
+  TrelloCreateCardArgs,
+  TrelloImageDownloadResult,
+  TrelloLabel,
+  TrelloList,
+  TrelloMember,
+  TrelloUploadAttachmentArgs,
+  TrelloViewer,
   LinearViewer,
   LinearCollectionResult,
   LinearConnectionStatus,
@@ -1712,6 +1726,48 @@ export type PreloadApi = {
       siteId?: string
     }) => Promise<JiraUser[]>
     listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
+  }
+  trello: {
+    connect: (args: {
+      apiKey: string
+      token: string
+    }) => Promise<{ ok: true; viewer: TrelloViewer } | { ok: false; error: string }>
+    disconnect: () => Promise<void>
+    status: () => Promise<TrelloConnectionStatus>
+    testConnection: () => Promise<{ ok: true; viewer: TrelloViewer } | { ok: false; error: string }>
+    listBoards: () => Promise<TrelloBoard[]>
+    listLists: (args: { boardId: string }) => Promise<TrelloList[]>
+    listBoardMembers: (args: { boardId: string }) => Promise<TrelloMember[]>
+    listBoardLabels: (args: { boardId: string }) => Promise<TrelloLabel[]>
+    listCards: (args?: {
+      filter?: TrelloCardFilter
+      limit?: number
+      boardIds?: string[]
+    }) => Promise<TrelloCard[]>
+    searchCards: (args: {
+      query: string
+      limit?: number
+      boardIds?: string[]
+    }) => Promise<TrelloCard[]>
+    getCard: (args: { cardId: string }) => Promise<TrelloCard | null>
+    createCard: (
+      args: TrelloCreateCardArgs
+    ) => Promise<
+      { ok: true; id: string; shortLink: string; url: string } | { ok: false; error: string }
+    >
+    updateCard: (args: {
+      cardId: string
+      updates: TrelloCardUpdate
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addCardComment: (args: {
+      cardId: string
+      text: string
+    }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
+    cardComments: (args: { cardId: string }) => Promise<TrelloComment[]>
+    uploadAttachment: (
+      args: TrelloUploadAttachmentArgs
+    ) => Promise<{ ok: true; attachment: TrelloAttachment } | { ok: false; error: string }>
+    downloadImage: (args: { url: string }) => Promise<TrelloImageDownloadResult>
   }
   starNag: {
     onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void) => () => void

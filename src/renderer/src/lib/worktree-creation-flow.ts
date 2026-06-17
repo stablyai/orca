@@ -84,6 +84,7 @@ async function executeWorktreeCreation(
         request.workspaceStatus,
         request.linkedGitLabMR,
         request.linkedGitLabIssue,
+        request.linkedTrelloCard,
         request.startup,
         request.pendingFirstAgentMessageRename,
         creationId,

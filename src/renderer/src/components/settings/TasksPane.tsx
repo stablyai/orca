@@ -8,6 +8,7 @@ import {
 import { cn } from '@/lib/utils'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { TrelloIcon } from '@/components/icons/TrelloIcon'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
@@ -75,6 +76,12 @@ const TASK_PROVIDER_OPTIONS: readonly {
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  {
+    id: 'trello',
+    label: 'Trello',
+    description: 'Show Trello in the Tasks source picker and sidebar shortcuts.',
+    Icon: ({ className }) => <TrelloIcon className={className} />
   }
 ]
 
@@ -122,6 +129,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
             'gitlab',
             'linear',
             'jira',
+            'trello',
             'atlassian',
             'display',
             'hide'

@@ -1518,6 +1518,96 @@ const api = {
       ipcRenderer.invoke('jira:listTransitions', args)
   },
 
+  trello: {
+    connect: (args: {
+      apiKey: string
+      token: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('trello:connect', args),
+
+    disconnect: (): Promise<void> => ipcRenderer.invoke('trello:disconnect'),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('trello:status'),
+
+    testConnection: (): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('trello:testConnection'),
+
+    listBoards: (): Promise<unknown[]> => ipcRenderer.invoke('trello:listBoards'),
+
+    listLists: (args: { boardId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('trello:listLists', args),
+
+    listBoardMembers: (args: { boardId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('trello:listBoardMembers', args),
+
+    listBoardLabels: (args: { boardId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('trello:listBoardLabels', args),
+
+    listCards: (args?: {
+      filter?: 'assigned' | 'allOpen' | 'archived'
+      limit?: number
+      boardIds?: string[]
+    }): Promise<unknown[]> => ipcRenderer.invoke('trello:listCards', args),
+
+    searchCards: (args: {
+      query: string
+      limit?: number
+      boardIds?: string[]
+    }): Promise<unknown[]> => ipcRenderer.invoke('trello:searchCards', args),
+
+    getCard: (args: { cardId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('trello:getCard', args),
+
+    createCard: (args: {
+      idBoard: string
+      idList: string
+      name: string
+      desc?: string
+    }): Promise<
+      { ok: true; id: string; shortLink: string; url: string } | { ok: false; error: string }
+    > => ipcRenderer.invoke('trello:createCard', args),
+
+    updateCard: (args: {
+      cardId: string
+      updates: unknown
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('trello:updateCard', args),
+
+    addCardComment: (args: {
+      cardId: string
+      text: string
+    }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('trello:addCardComment', args),
+
+    cardComments: (args: { cardId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('trello:cardComments', args),
+
+    uploadAttachment: (args: {
+      cardId: string
+      name: string
+      mimeType: string
+      contentBase64: string
+    }): Promise<
+      | {
+          ok: true
+          attachment: {
+            id: string
+            name: string
+            fileName: string
+            mimeType: string
+            url: string
+          }
+        }
+      | { ok: false; error: string }
+    > => ipcRenderer.invoke('trello:uploadAttachment', args),
+
+    downloadImage: (args: {
+      url: string
+    }): Promise<
+      { ok: true; contentType: string; contentBase64: string } | { ok: false; error: string }
+    > => ipcRenderer.invoke('trello:downloadImage', args)
+  },
+
   starNag: {
     onShow: (callback: (payload?: { mode?: 'gh' | 'web' }) => void): (() => void) => {
       const listener = (
