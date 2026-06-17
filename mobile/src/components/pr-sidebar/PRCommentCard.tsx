@@ -178,7 +178,11 @@ export const PRCommentCard = memo(function PRCommentCard({
           {canMutate ? (
             <Pressable
               style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
-              onPress={() => setEditOpen(true)}
+              onPress={() => {
+              // Only one composer open at a time: entering Edit closes any open Reply.
+              setReplyOpen(false)
+              setEditOpen(true)
+            }}
               disabled={editBusy}
               hitSlop={6}
               accessibilityRole="button"
@@ -222,7 +226,7 @@ export const PRCommentCard = memo(function PRCommentCard({
           ) : null}
         </View>
       ) : null}
-      {replyOpen && actions ? (
+      {replyOpen && !editOpen && actions ? (
         <View style={styles.composer}>
           <PRCommentComposer
             placeholder="Write a reply…"
