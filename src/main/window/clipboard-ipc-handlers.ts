@@ -4,6 +4,20 @@ import {
   type SaveClipboardImageAsTempFileArgs
 } from './clipboard-image-temp-file'
 
+function writeClipboardTextAndVerify(text: string, clipboardType?: 'selection'): void {
+  if (clipboardType) {
+    clipboard.writeText(text, clipboardType)
+  } else {
+    clipboard.writeText(text)
+  }
+  // Why: Electron can return without throwing even when the OS clipboard keeps
+  // its previous contents. Read back so renderer success states mean pasteable.
+  const writtenText = clipboardType ? clipboard.readText(clipboardType) : clipboard.readText()
+  if (writtenText !== text) {
+    throw new Error('Clipboard write verification failed')
+  }
+}
+
 export function registerClipboardHandlers(): void {
   ipcMain.removeHandler('clipboard:readText')
   ipcMain.removeHandler('clipboard:readSelectionText')
@@ -27,9 +41,9 @@ export function registerClipboardHandlers(): void {
       return saveClipboardImageBufferAsTempFile(image.toPNG(), args)
     }
   )
-  ipcMain.handle('clipboard:writeText', (_event, text: string) => clipboard.writeText(text))
+  ipcMain.handle('clipboard:writeText', (_event, text: string) => writeClipboardTextAndVerify(text))
   ipcMain.handle('clipboard:writeSelectionText', (_event, text: string) =>
-    clipboard.writeText(text, 'selection')
+    writeClipboardTextAndVerify(text, 'selection')
   )
   ipcMain.handle('clipboard:writeImage', (_event, dataUrl: string) => {
     // Why: only accept validated PNG data URIs to prevent writing arbitrary

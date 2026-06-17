@@ -44,7 +44,10 @@ import {
   mode2031SequenceFor
 } from './terminal-appearance'
 import { handleOsc52ClipboardRequest } from './osc52-clipboard'
-import { showOsc52ClipboardBlockedToast } from './osc52-clipboard-blocked-toast'
+import {
+  showOsc52ClipboardBlockedToast,
+  showOsc52ClipboardFailedToast
+} from './osc52-clipboard-blocked-toast'
 import { parseOsc7 } from './parse-osc7'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import {
@@ -80,6 +83,7 @@ import {
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
+import { copyTerminalSelection } from './terminal-selection-copy'
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -599,7 +603,8 @@ export function useTerminalPaneLifecycle({
           handleOsc52ClipboardRequest(data, {
             allowClipboardWrite: settingsRef.current?.terminalAllowOsc52Clipboard === true,
             writeClipboardText: window.api.ui.writeClipboardText,
-            onBlockedWrite: showOsc52ClipboardBlockedToast
+            onBlockedWrite: showOsc52ClipboardBlockedToast,
+            onWriteFailure: showOsc52ClipboardFailedToast
           })
         )
         osc52DisposablesRef.current.set(pane.id, osc52Disposable)
@@ -763,11 +768,10 @@ export function useTerminalPaneLifecycle({
           if (!shouldWriteClipboard) {
             return
           }
-          const selection = pane.terminal.getSelection()
-          if (!selection) {
-            return
-          }
-          void window.api.ui.writeClipboardText(selection).catch(() => {
+          void copyTerminalSelection({
+            terminal: pane.terminal,
+            writeClipboardText: window.api.ui.writeClipboardText
+          }).catch(() => {
             /* ignore clipboard write failures */
           })
         })

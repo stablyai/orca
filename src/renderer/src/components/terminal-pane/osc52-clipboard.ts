@@ -26,6 +26,7 @@ export type Osc52ClipboardRequestOptions = {
   allowClipboardWrite: boolean
   writeClipboardText: (text: string) => Promise<void>
   onBlockedWrite?: () => void
+  onWriteFailure?: () => void
 }
 
 const MAX_OSC52_BYTES = 128 * 1024
@@ -45,7 +46,7 @@ export function handleOsc52ClipboardRequest(
   }
 
   void options.writeClipboardText(parsed.text).catch(() => {
-    /* ignore clipboard write failures */
+    options.onWriteFailure?.()
   })
   return true
 }

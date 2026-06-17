@@ -20,6 +20,7 @@ import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-w
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { copyTerminalSelection } from './terminal-selection-copy'
 
 export function recordKeyboardCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -270,13 +271,15 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        const selection = pane.terminal.getSelection()
-        if (!selection) {
+        if (!pane.terminal.getSelection()) {
           return
         }
         e.preventDefault()
         e.stopImmediatePropagation()
-        void window.api.ui.writeClipboardText(selection).catch(() => {
+        void copyTerminalSelection({
+          terminal: pane.terminal,
+          writeClipboardText: window.api.ui.writeClipboardText
+        }).catch(() => {
           /* ignore clipboard write failures */
         })
         return

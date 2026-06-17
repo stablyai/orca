@@ -69,7 +69,7 @@ describe('parseOsc52', () => {
 })
 
 describe('handleOsc52ClipboardRequest', () => {
-  it('writes valid OSC 52 clipboard payloads when enabled', () => {
+  it('writes valid OSC 52 clipboard payloads when enabled', async () => {
     const writeClipboardText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
 
     expect(
@@ -80,6 +80,7 @@ describe('handleOsc52ClipboardRequest', () => {
     ).toBe(true)
 
     expect(writeClipboardText).toHaveBeenCalledWith('from remote')
+    await vi.waitFor(() => expect(writeClipboardText).toHaveBeenCalledTimes(1))
   })
 
   it('surfaces a blocked valid write when OSC 52 clipboard writes are disabled', () => {
@@ -108,5 +109,19 @@ describe('handleOsc52ClipboardRequest', () => {
     })
 
     expect(onBlockedWrite).not.toHaveBeenCalled()
+  })
+
+  it('surfaces host clipboard write failures for OSC 52 requests', async () => {
+    const onWriteFailure = vi.fn()
+
+    handleOsc52ClipboardRequest(`c;${b64('from copilot')}`, {
+      allowClipboardWrite: true,
+      writeClipboardText: vi
+        .fn<(text: string) => Promise<void>>()
+        .mockRejectedValue(new Error('clipboard unchanged')),
+      onWriteFailure
+    })
+
+    await vi.waitFor(() => expect(onWriteFailure).toHaveBeenCalledTimes(1))
   })
 })

@@ -4,6 +4,7 @@ import { OSC52_CLIPBOARD_SETTING_ID } from './osc52-clipboard-setting-anchor'
 import { translate } from '@/i18n/i18n'
 
 let hasShownOsc52ClipboardBlockedToast = false
+let hasShownOsc52ClipboardFailedToast = false
 
 export function showOsc52ClipboardBlockedToast(): void {
   if (hasShownOsc52ClipboardBlockedToast) {
@@ -40,6 +41,27 @@ export function showOsc52ClipboardBlockedToast(): void {
           store.openSettingsPage()
         }
       }
+    }
+  )
+}
+
+export function showOsc52ClipboardFailedToast(): void {
+  if (hasShownOsc52ClipboardFailedToast) {
+    return
+  }
+  hasShownOsc52ClipboardFailedToast = true
+
+  toast.error(
+    translate(
+      'auto.components.terminal.pane.osc52.clipboard.failed.toast.62a0af2cb4',
+      'Terminal clipboard write failed'
+    ),
+    {
+      description: translate(
+        'auto.components.terminal.pane.osc52.clipboard.failed.toast.fdd3e7e977',
+        'The terminal app requested a copy, but the system clipboard did not update.'
+      ),
+      duration: 12_000
     }
   )
 }

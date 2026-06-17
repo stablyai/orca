@@ -27,6 +27,7 @@ import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { copyTerminalSelection } from './terminal-selection-copy'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -133,10 +134,10 @@ export function useTerminalPaneContextMenu({
     if (!pane) {
       return
     }
-    const selection = pane.terminal.getSelection()
-    if (selection) {
-      await window.api.ui.writeClipboardText(selection)
-    }
+    await copyTerminalSelection({
+      terminal: pane.terminal,
+      writeClipboardText: window.api.ui.writeClipboardText
+    })
     // Why: Radix returns focus to the menu trigger (the pane container) on
     // close, but xterm.js only accepts input when its own helper textarea is
     // focused. Without this, the user has to click the pane again before
@@ -339,9 +340,14 @@ export function useTerminalPaneContextMenu({
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
       const selection = clickedPane?.terminal.getSelection()
-      if (selection) {
-        void window.api.ui.writeClipboardText(selection)
-        clickedPane?.terminal.clearSelection()
+      if (clickedPane && selection) {
+        void copyTerminalSelection({
+          terminal: clickedPane.terminal,
+          writeClipboardText: window.api.ui.writeClipboardText,
+          clearSelectionOnSuccess: true
+        }).catch(() => {
+          /* ignore clipboard write failures */
+        })
       } else {
         void onPaste()
       }

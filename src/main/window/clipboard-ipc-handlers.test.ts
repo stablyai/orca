@@ -101,9 +101,18 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('registers normal and selection text clipboard IPC handlers', () => {
+    let normalClipboard = 'standard text'
+    let selectionClipboard = 'selection text'
     clipboardReadTextMock.mockImplementation((clipboardType?: string) =>
-      clipboardType === 'selection' ? 'selection text' : 'standard text'
+      clipboardType === 'selection' ? selectionClipboard : normalClipboard
     )
+    clipboardWriteTextMock.mockImplementation((text: string, clipboardType?: string) => {
+      if (clipboardType === 'selection') {
+        selectionClipboard = text
+      } else {
+        normalClipboard = text
+      }
+    })
 
     registerClipboardHandlers()
 
@@ -117,6 +126,18 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardReadTextMock).toHaveBeenCalledWith('selection')
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('normal text')
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('primary text', 'selection')
+  })
+
+  it('rejects text writes when the clipboard read-back does not match', () => {
+    clipboardReadTextMock.mockReturnValue('old clipboard')
+
+    registerClipboardHandlers()
+
+    const handlers = getRegisteredHandlers()
+    expect(() => handlers.get('clipboard:writeText')?.({}, 'copilot answer')).toThrow(
+      'Clipboard write verification failed'
+    )
+    expect(clipboardWriteTextMock).toHaveBeenCalledWith('copilot answer')
   })
 
   it('removes stale clipboard IPC handlers before registering replacements', () => {
