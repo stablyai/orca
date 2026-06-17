@@ -72,6 +72,9 @@ type TerminalMultiplexStream = {
   pendingOutput: TerminalOutputChunk[]
   pendingOutputBytes: number
   pendingOutputOverflowed: boolean
+  // Why: the cols the mobile client last rewrapped to. Re-stream the full
+  // scrollback only when a reflow actually changes the width.
+  lastResizeCols: number | undefined
   outputBatcher: ReturnType<typeof createTerminalOutputBatcher>
   unsubscribeData: () => void
   unsubscribeResize: () => void
@@ -367,6 +370,42 @@ async function serializeBudgetedMobileSnapshot(
     }
   }
   return null
+}
+
+// Why: mobile xterm can only re-wrap SOFT-wrapped lines on a client-side
+// term.resize(); the restored scrollback snapshot contains HARD newlines from
+// the host serialization, so a width change leaves prior output wrapped at the
+// old column count. On a real reflow we re-serialize the FULL buffer at the new
+// cols and replay it, so scrollback rewraps. Alt-screen TUIs are PTY-repainted
+// and have no scrollback, so they keep the geometry-only Resized frame.
+async function sendMobileResizeRestream(
+  runtime: OrcaRuntimeService,
+  ptyId: string,
+  sendFrame: (opcode: TerminalStreamOpcode, payload?: Uint8Array<ArrayBufferLike>) => void,
+  event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
+): Promise<boolean> {
+  // Why: only a true PTY geometry reflow rewraps scrollback; mode-change ticks
+  // that did not change dims would re-send the whole buffer for nothing.
+  if (event.reason !== 'apply-layout' || runtime.isTerminalAlternateScreen(ptyId)) {
+    return false
+  }
+  const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, true)
+  if (!serialized) {
+    return false
+  }
+  sendSnapshotFrames(sendFrame, {
+    kind: 'resized',
+    cols: serialized.cols,
+    rows: serialized.rows,
+    displayMode: event.displayMode,
+    reason: event.reason,
+    seq: event.seq ?? serialized.seq,
+    source: serialized.source,
+    truncated: false,
+    truncatedByByteBudget: serialized.truncatedByByteBudget,
+    data: serialized.data
+  })
+  return true
 }
 
 async function updateViewportForClient(
@@ -923,6 +962,23 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         sendFrame(streamId, TerminalStreamOpcode.Error, encodeTerminalStreamText(message))
         emit({ type: 'error', streamId, message })
       }
+      const sendResizedFrame = (
+        stream: TerminalMultiplexStream,
+        event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
+      ): void => {
+        stream.lastResizeCols = event.cols
+        sendFrame(
+          stream.streamId,
+          TerminalStreamOpcode.Resized,
+          encodeTerminalStreamJson({
+            cols: event.cols,
+            rows: event.rows,
+            displayMode: event.displayMode,
+            reason: event.reason,
+            seq: event.seq
+          })
+        )
+      }
       const detachStream = (streamId: number, emitEnd: boolean): void => {
         const stream = streams.get(streamId)
         if (!stream) {
@@ -1131,6 +1187,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           pendingOutput: [],
           pendingOutputBytes: 0,
           pendingOutputOverflowed: false,
+          lastResizeCols: undefined,
           outputBatcher: createTerminalOutputBatcher((data, meta) => {
             for (const chunk of splitTerminalOutputFrameChunks(data, meta)) {
               sendFrame(request.streamId, TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
@@ -1238,6 +1295,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             source: serialized?.source,
             data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')
           })
+          // Why: baseline for resize re-stream gating; the client already
+          // rewrapped to these cols via the initial snapshot replay.
+          stream.lastResizeCols = serialized?.cols ?? size?.cols
           stream.buffering = false
           for (const chunk of stream.pendingOutput.splice(0)) {
             stream.outputBatcher.push(chunk.data, chunk.meta)
@@ -1248,17 +1308,29 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
           stream.unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
             stream.outputBatcher.flush()
-            sendFrame(
-              request.streamId,
-              TerminalStreamOpcode.Resized,
-              encodeTerminalStreamJson({
-                cols: event.cols,
-                rows: event.rows,
-                displayMode: event.displayMode,
-                reason: event.reason,
-                seq: event.seq
+            const widthChanged = stream.isMobile && event.cols !== stream.lastResizeCols
+            if (widthChanged) {
+              // Why: re-serialize+replay the full scrollback at the new cols so
+              // restored hard-wrapped lines rewrap; the await means later live
+              // output still flows on this stream after the snapshot lands.
+              void sendMobileResizeRestream(
+                runtime,
+                ptyId,
+                (opcode, payload) => sendFrame(request.streamId, opcode, payload),
+                event
+              ).then((restreamed) => {
+                if (closed || streams.get(request.streamId) !== stream) {
+                  return
+                }
+                if (restreamed) {
+                  stream.lastResizeCols = event.cols
+                  return
+                }
+                sendResizedFrame(stream, event)
               })
-            )
+              return
+            }
+            sendResizedFrame(stream, event)
           })
           void runtime
             .waitForTerminal(request.terminal, { condition: 'exit' })
@@ -1408,6 +1480,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let cursor = 0
       let closed = false
       let buffering = true
+      // Why: the cols the mobile client last rewrapped to; gate the
+      // resize re-stream so it only fires on an actual width change.
+      let lastResizeCols: number | undefined
       const pendingOutput: string[] = []
       let pendingOutputBytes = 0
       let unsubscribeData = (): void => {}
@@ -1565,6 +1640,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           scrollbackRows: serialized?.scrollbackRows,
           truncatedByByteBudget: serialized?.truncatedByByteBudget === true
         })
+        // Why: baseline for resize re-stream gating; the client already
+        // rewrapped to these cols via the initial snapshot replay.
+        lastResizeCols = serialized?.cols ?? size?.cols
         buffering = false
         for (const item of pendingOutput.splice(0)) {
           outputBatcher.push(item)
@@ -1572,11 +1650,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         pendingOutputBytes = 0
         outputBatcher.flush()
 
-        unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
-          // Why: true PTY geometry changes should be followed by the TUI's
-          // redraw output, not a full scrollback replay. The client resizes
-          // xterm geometry and consumes subsequent live output on this stream.
-          outputBatcher?.flush()
+        const sendResizedFrame = (event: {
+          cols: number
+          rows: number
+          displayMode: string
+          reason: string
+          seq?: number
+        }): void => {
+          lastResizeCols = event.cols
           sendFrame(
             TerminalStreamOpcode.Resized,
             encodeTerminalStreamJson({
@@ -1587,6 +1668,29 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               seq: event.seq
             })
           )
+        }
+        unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
+          outputBatcher?.flush()
+          // Why: a width reflow rewraps scrollback. xterm can only re-wrap
+          // soft-wrapped lines, so a geometry-only Resized frame leaves the
+          // hard-wrapped restored snapshot at the old cols. Re-serialize and
+          // replay the full buffer at the new width instead. Non-mobile and
+          // alt-screen TUIs keep the geometry-only frame + TUI redraw.
+          const widthChanged = isMobile && event.cols !== lastResizeCols
+          if (widthChanged) {
+            void sendMobileResizeRestream(runtime, ptyId, sendFrame, event).then((restreamed) => {
+              if (closed) {
+                return
+              }
+              if (restreamed) {
+                lastResizeCols = event.cols
+                return
+              }
+              sendResizedFrame(event)
+            })
+            return
+          }
+          sendResizedFrame(event)
         })
 
         // Legacy fit-override-changed for non-mobile (desktop) subscribers

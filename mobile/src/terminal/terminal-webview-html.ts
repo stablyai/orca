@@ -403,34 +403,11 @@ export const XTERM_HTML = `<!DOCTYPE html>
     }
   }
 
-  // Why: the desktop terminal may have fewer rows than needed to fill
-  // the phone's WebView at the current scale (e.g. 40 desktop rows
-  // scaled to 0.3x only covers ~40% of the viewport). Resize xterm's
-  // viewport to fill the available height so there's no blank gap
-  // below the last terminal line. This is display-only — the PTY is
-  // not resized — so the extra rows just show empty terminal background
-  // managed by xterm, not a separate HTML gap. Never shrink below the
-  // original init row count to avoid clipping active terminal content.
-  function adjustRowsForViewport() {
-    // Why: mobile replays a live PTY snapshot and then applies live cursor-
-    // relative chunks from that same PTY. Resizing only the WebView xterm
-    // changes cursor coordinates and makes TUI repaint chunks duplicate or
-    // overlap existing frames. Keep xterm rows identical to the PTY.
-    return;
-    if (!term || !term.element) return;
-    // Why: active alternate-screen TUIs (Claude Code, vim, etc.) are exact
-    // screen snapshots. Locally resizing the mobile xterm after replay can
-    // mutate the alt buffer and drop cell attributes, which shows as white text.
-    if (activeAltScreenSnapshot) return;
-    var cellHeight = getCellHeight();
-    if (cellHeight > 0 && currentScale > 0) {
-      var vpHeight = window.innerHeight;
-      var neededRows = Math.floor(vpHeight / (cellHeight * currentScale));
-      if (neededRows >= initRows && neededRows !== term.rows) {
-        term.resize(term.cols, neededRows);
-      }
-    }
-  }
+  // Why: intentional no-op. Mobile replays a live PTY snapshot then applies
+  // live cursor-relative chunks from that same PTY; resizing only the WebView
+  // xterm changes cursor coordinates and makes TUI repaint chunks duplicate or
+  // overlap. Kept as a no-op so its call sites stay legible.
+  function adjustRowsForViewport() {}
 
   // Why: cold-start fit. After init() opens xterm, the renderer needs
   // several frames before cell dimensions are computed. Reading too early
@@ -644,8 +621,13 @@ export const XTERM_HTML = `<!DOCTYPE html>
     pumpWrites(terminalGeneration);
   }
 
-  function init(cols, rows, initialData, nextTheme, nextFontScale) {
+  function init(cols, rows, initialData, nextTheme, nextFontScale, preserveScroll) {
     if (typeof nextFontScale === 'number' && nextFontScale > 0) currentTextScale = nextFontScale;
+    // Why: a width-reflow re-stream rewraps the same content at new cols.
+    // Distance-from-bottom (rows) is the only stable anchor across reflow,
+    // since line counts and cell positions change. null = stay pinned to bottom.
+    var prevB = preserveScroll && term && term.buffer && term.buffer.active ? term.buffer.active : null;
+    var scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1;
     terminalGeneration++;
     var gen = terminalGeneration;
     ready = false;
@@ -725,6 +707,11 @@ export const XTERM_HTML = `<!DOCTYPE html>
           nextSurface.style.top = '';
           oldSurface.remove();
           if (oldTerm) oldTerm.dispose();
+        }
+        // Why: restore the reader's place after the rewrapped buffer replays.
+        // Replay lands at bottom, so only act when they were scrolled up (rows>0).
+        if (scrollAnchorRows > 0 && term && term.buffer && term.buffer.active) {
+          try { term.scrollToLine(Math.max(0, (term.buffer.active.baseY || 0) - scrollAnchorRows)); } catch (e) {}
         }
         applyFitScale('init-replay');
         notify({ type: 'ready', cols: cols, rows: rows });
@@ -828,7 +815,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
       if (handledMessageIds.length > 256) handledMessageIds.shift();
     }
     if (msg.type === 'init') {
-      init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme, msg.fontScale);
+      init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme, msg.fontScale, msg.preserveScroll);
     } else if (msg.type === 'set-font-scale') {
       // Why: ignore RN echoing back the value a pinch just set (msg.fontScale ===
       // currentTextScale) so the post-pinch state isn't reset; only apply changes.

@@ -4166,6 +4166,16 @@ export class OrcaRuntimeService {
     return this.ptyController?.getSize?.(ptyId) ?? null
   }
 
+  // Why: a width reflow on a normal-buffer PTY must re-stream the full
+  // scrollback to mobile so it rewraps at the new cols, but alternate-screen
+  // TUIs (vim, Claude Code) own their repaint and have no scrollback — for
+  // those the mobile client just resizes xterm geometry and consumes the
+  // TUI's own redraw, so the resize re-stream must be skipped. Returns false
+  // when there is no headless emulator (resize falls back to geometry-only).
+  isTerminalAlternateScreen(ptyId: string): boolean {
+    return this.headlessTerminals.get(ptyId)?.emulator.isAlternateScreen ?? false
+  }
+
   // Why: daemon-backed PTYs that the runtime adopted after an Orca relaunch
   // start with a fresh headless emulator that has zero scrollback, even though
   // the daemon's on-disk checkpoint and the desktop xterm both contain the
