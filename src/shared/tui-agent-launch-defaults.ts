@@ -23,7 +23,7 @@ export function hasUnsupportedTuiAgentArgs(agent: TuiAgent, value: unknown): boo
   return (UNSUPPORTED_TUI_AGENT_ARGS[agent] ?? []).some((arg) => argPattern(arg).test(value))
 }
 
-function sanitizeTuiAgentLaunchArgs(agent: TuiAgent, args: string): string {
+export function sanitizeTuiAgentLaunchArgs(agent: TuiAgent, args: string): string {
   const unsupportedArgs = UNSUPPORTED_TUI_AGENT_ARGS[agent]
   if (!unsupportedArgs) {
     return args.trim()

@@ -29,7 +29,13 @@ const BASE_DRAFT: AutomationDraft = {
   dayOfWeek: '1',
   customSchedule: '',
   missedRunGraceMinutes: '720',
-  scheduleWarning: null
+  scheduleWarning: null,
+  webhookEnabled: false,
+  webhookSecretMode: 'none',
+  webhookSecret: '',
+  agentModel: '',
+  agentLaunchArgs: '',
+  agentEnv: []
 }
 
 describe('AutomationSchedulePicker', () => {

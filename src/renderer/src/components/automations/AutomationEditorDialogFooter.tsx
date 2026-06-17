@@ -10,6 +10,7 @@ import type { AutomationWorkspaceMode } from '../../../../shared/automations-typ
 import type { GlobalSettings, Repo, Worktree } from '../../../../shared/types'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { Field } from './automation-page-parts'
+import { AutomationAgentConfigSection } from './AutomationAgentConfigSection'
 import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'
 import { AutomationSessionField } from './AutomationSessionField'
 import { CreateFromPicker } from './CreateFromPicker'
@@ -209,16 +210,24 @@ export function AutomationEditorDialogFooter({
                 'Agent'
               )}
             >
-              <AgentCombobox
-                agents={visibleAgents}
-                value={draft.agentId}
-                onValueChange={(agentId) =>
-                  agentId && onDraftChange((current) => ({ ...current, agentId }))
-                }
-                defaultAgent={settings?.defaultTuiAgent ?? null}
-                triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
-                allowNarrowTrigger
-              />
+              <div className="grid gap-2">
+                <AgentCombobox
+                  agents={visibleAgents}
+                  value={draft.agentId}
+                  onValueChange={(agentId) =>
+                    agentId && onDraftChange((current) => ({ ...current, agentId }))
+                  }
+                  defaultAgent={settings?.defaultTuiAgent ?? null}
+                  triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
+                  allowNarrowTrigger
+                />
+                <AutomationAgentConfigSection
+                  agentId={draft.agentId}
+                  draft={draft}
+                  triggerClassName={pickerTriggerClassName}
+                  onDraftChange={onDraftChange}
+                />
+              </div>
             </Field>
             <AutomationSessionField
               draft={draft}

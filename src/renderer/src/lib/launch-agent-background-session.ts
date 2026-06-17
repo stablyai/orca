@@ -5,10 +5,11 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
+  resolveAutomationAgentArgs,
+  resolveAutomationAgentEnv
+} from '../../../shared/automation-agent-launch'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import type { AutomationAgentConfig } from '../../../shared/automations-types'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { makePaneKey } from '../../../shared/stable-pane-id'
@@ -38,6 +39,9 @@ export type LaunchAgentBackgroundSessionArgs = {
   prompt?: string
   launchSource?: LaunchSource
   title?: string
+  /** Per-automation agent launch override (issue #7). When set, its args/env/
+   *  model win over the global per-agent defaults for this launch. */
+  agentConfig?: AutomationAgentConfig | null
   onData?: (chunk: string) => void
   onExit?: (ptyId: string, code: number) => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
@@ -52,7 +56,17 @@ export type LaunchAgentBackgroundSessionResult = {
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
 ): Promise<LaunchAgentBackgroundSessionResult | null> {
-  const { agent, worktreeId, prompt, launchSource, title, onData, onExit, onAgentStatus } = args
+  const {
+    agent,
+    worktreeId,
+    prompt,
+    launchSource,
+    title,
+    agentConfig,
+    onData,
+    onExit,
+    onAgentStatus
+  } = args
   const store = useAppStore.getState()
   const worktree = store.allWorktrees().find((entry) => entry.id === worktreeId)
   const repo = worktree ? store.repos.find((entry) => entry.id === worktree.repoId) : null
@@ -71,8 +85,14 @@ export async function launchAgentBackgroundSession(
     }
   }
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  const launchDefaults = {
+    agentDefaultArgs: store.settings?.agentDefaultArgs,
+    agentDefaultEnv: store.settings?.agentDefaultEnv
+  }
+  // Why: an automation may override the agent's launch args/env/model; with no
+  // override these resolve to the same global defaults used everywhere else.
+  const agentArgs = resolveAutomationAgentArgs(agent, agentConfig, launchDefaults)
+  const agentEnv = resolveAutomationAgentEnv(agent, agentConfig, launchDefaults)
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'

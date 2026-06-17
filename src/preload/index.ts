@@ -140,7 +140,10 @@ import type {
   ExternalAutomationUpdateInput,
   AutomationRun,
   AutomationPrecheckResult,
-  AutomationUpdateInput
+  AutomationUpdateInput,
+  UserAutomationTemplate,
+  UserAutomationTemplateInput,
+  WebhookServerEndpoint
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 import type { AiVaultListArgs } from '../shared/ai-vault-types'
@@ -3640,6 +3643,20 @@ const api = {
     snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }): Promise<number> =>
       ipcRenderer.invoke('automations:snapshotWorkspaceName', args),
     rendererReady: (): Promise<void> => ipcRenderer.invoke('automations:rendererReady'),
+    listTemplates: (): Promise<UserAutomationTemplate[]> =>
+      ipcRenderer.invoke('automations:listTemplates'),
+    createTemplate: (input: UserAutomationTemplateInput): Promise<UserAutomationTemplate> =>
+      ipcRenderer.invoke('automations:createTemplate', input),
+    updateTemplate: (args: {
+      id: string
+      input: UserAutomationTemplateInput
+    }): Promise<UserAutomationTemplate> => ipcRenderer.invoke('automations:updateTemplate', args),
+    deleteTemplate: (args: { id: string }): Promise<void> =>
+      ipcRenderer.invoke('automations:deleteTemplate', args),
+    getWebhookEndpoint: (): Promise<WebhookServerEndpoint | null> =>
+      ipcRenderer.invoke('automations:webhookEndpoint'),
+    generateWebhookSecret: (): Promise<string> =>
+      ipcRenderer.invoke('automations:generateWebhookSecret'),
     onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, request: AutomationDispatchRequest) =>
         callback(request)

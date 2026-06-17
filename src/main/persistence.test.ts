@@ -1162,6 +1162,123 @@ describe('Store', () => {
     expect(persisted.automations[0].baseBranch).toBeNull()
   })
 
+  it('persists and normalizes a webhook trigger config', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const automation = store.createAutomation({
+      name: 'MR review',
+      prompt: 'Review the merge request',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime(),
+      webhook: { enabled: true, secretMode: 'token', secret: '  s3cret  ' }
+    })
+
+    expect(automation.webhook).toEqual({ enabled: true, secretMode: 'token', secret: 's3cret' })
+
+    // A 'none' mode update drops the secret.
+    const cleared = store.updateAutomation(automation.id, {
+      webhook: { enabled: true, secretMode: 'none', secret: 'ignored' }
+    })
+    expect(cleared.webhook).toEqual({ enabled: true, secretMode: 'none', secret: null })
+    store.flush()
+    const persisted = readDataFile() as {
+      automations: { webhook: { secret: string | null } }[]
+    }
+    expect(persisted.automations[0].webhook.secret).toBeNull()
+  })
+
+  it('persists and normalizes a per-automation agent config', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Configured',
+      prompt: 'Run',
+      agentId: 'claude',
+      agentConfig: {
+        launchArgs: '  --verbose ',
+        model: ' opus ',
+        env: { GOOD: 'v', '  ': 'drop' }
+      },
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    expect(automation.agentConfig).toEqual({
+      launchArgs: '--verbose',
+      model: 'opus',
+      env: { GOOD: 'v' }
+    })
+
+    const cleared = store.updateAutomation(automation.id, { agentConfig: null })
+    expect(cleared.agentConfig).toBeNull()
+  })
+
+  it('manages user automation templates with CRUD', async () => {
+    const store = await createStore()
+    const template = store.createAutomationTemplate({
+      label: '  Nightly  ',
+      name: 'Nightly run',
+      prompt: 'review',
+      agentId: 'codex',
+      agentConfig: { model: 'gpt-5' },
+      preset: 'daily',
+      time: '02:00',
+      missedRunGraceMinutes: '60'
+    })
+    expect(template.label).toBe('Nightly')
+    expect(template.agentConfig).toEqual({ model: 'gpt-5' })
+    expect(store.listAutomationTemplates()).toHaveLength(1)
+
+    const updated = store.updateAutomationTemplate(template.id, {
+      label: 'Nightly v2',
+      name: 'Nightly run',
+      prompt: 'review carefully',
+      agentId: 'codex',
+      preset: 'daily',
+      time: '02:00'
+    })
+    expect(updated.id).toBe(template.id)
+    expect(updated.label).toBe('Nightly v2')
+    expect(updated.prompt).toBe('review carefully')
+    expect(updated.agentConfig).toBeNull()
+
+    store.deleteAutomationTemplate(template.id)
+    expect(store.listAutomationTemplates()).toEqual([])
+  })
+
+  it('stores the captured webhook delivery on a webhook-triggered run', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'MR review',
+      prompt: 'Review the merge request',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime(),
+      webhook: { enabled: true, secretMode: 'none', secret: null }
+    })
+
+    const run = store.createAutomationRun(automation, Date.now(), 'webhook', {
+      body: '{"object_kind":"merge_request"}',
+      contentType: 'application/json',
+      truncated: false,
+      receivedAt: 123
+    })
+
+    expect(run.trigger).toBe('webhook')
+    expect(run.webhookDelivery?.body).toBe('{"object_kind":"merge_request"}')
+  })
+
   it('persists session reuse only for existing-workspace automations', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())

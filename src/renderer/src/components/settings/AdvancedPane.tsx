@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitch } from './SettingsFormControls'
 import { getAdvancedPaneSearchEntries, getAdvancedSearchEntry } from './advanced-search'
+import { WebhookServerSetting } from './WebhookServerSetting'
 import { translate } from '@/i18n/i18n'
 
 export { getAdvancedPaneSearchEntries }
@@ -135,6 +136,8 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
           ) : null}
         </SearchableSetting>
       </section>
+
+      <WebhookServerSetting settings={settings} updateSettings={updateSettings} />
     </div>
   )
 }

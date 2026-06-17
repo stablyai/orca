@@ -36,6 +36,7 @@ import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
 import type {
   Automation,
+  AutomationAgentConfig,
   AutomationCreateInput,
   AutomationRun,
   AutomationUpdateInput,
@@ -158,6 +159,10 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
+import {
+  resolveAutomationAgentArgs,
+  resolveAutomationAgentEnv
+} from '../../shared/automation-agent-launch'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { detectInstalledAgents, detectRemoteAgents } from '../ipc/preflight'
 import {
@@ -2116,6 +2121,7 @@ export class OrcaRuntimeService {
       prompt: input.prompt,
       precheck: input.precheck,
       agentId: input.agentId,
+      agentConfig: input.agentConfig,
       runContext: input.runContext,
       sourceContext: input.sourceContext,
       projectId: target.projectId,
@@ -2127,7 +2133,8 @@ export class OrcaRuntimeService {
       rrule: input.rrule,
       dtstart: input.dtstart,
       enabled: input.enabled,
-      missedRunGraceMinutes: input.missedRunGraceMinutes
+      missedRunGraceMinutes: input.missedRunGraceMinutes,
+      webhook: input.webhook
     })
   }
 
@@ -2148,6 +2155,9 @@ export class OrcaRuntimeService {
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'agentId')) {
       patch.agentId = updates.agentId
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'agentConfig')) {
+      patch.agentConfig = updates.agentConfig
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'runContext')) {
       patch.runContext = updates.runContext
@@ -2175,6 +2185,9 @@ export class OrcaRuntimeService {
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'missedRunGraceMinutes')) {
       patch.missedRunGraceMinutes = updates.missedRunGraceMinutes
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'webhook')) {
+      patch.webhook = updates.webhook
     }
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||
@@ -9629,7 +9642,8 @@ export class OrcaRuntimeService {
   private buildStartupForAgent(
     repo: Repo,
     agent: TuiAgent,
-    prompt: string | undefined
+    prompt: string | undefined,
+    agentConfig?: AutomationAgentConfig | null
   ): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -9641,12 +9655,14 @@ export class OrcaRuntimeService {
     // Why: CLI clients may target SSH runtimes from macOS/Windows, so quote for
     // the workspace shell rather than the client shell.
     const agentLaunchPlatform = getAgentLaunchPlatformForRepo(repo)
+    // Why: an automation can override the agent's launch args/env/model; with no
+    // override these resolve to the same global defaults used elsewhere.
     const startupPlan = buildAgentStartupPlan({
       agent,
       prompt: prompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentArgs: resolveAutomationAgentArgs(agent, agentConfig, settings),
+      agentEnv: resolveAutomationAgentEnv(agent, agentConfig, settings),
       platform: agentLaunchPlatform,
       allowEmptyPromptLaunch: true
     })
@@ -9974,6 +9990,9 @@ export class OrcaRuntimeService {
     createdWithAgent?: TuiAgent
     startupAgent?: TuiAgent
     startupPrompt?: string
+    /** Per-automation agent launch override applied when startupAgent launches
+     *  (issue #7). Ignored for non-automation creates that leave it unset. */
+    startupAgentConfig?: AutomationAgentConfig | null
     pendingFirstAgentMessageRename?: boolean
     startup?: WorktreeStartupLaunch
     startupDraft?: string
@@ -10003,7 +10022,12 @@ export class OrcaRuntimeService {
     }
     const agentStartup =
       !args.startup && args.startupAgent
-        ? this.buildStartupForAgent(repo, args.startupAgent, args.startupPrompt)
+        ? this.buildStartupForAgent(
+            repo,
+            args.startupAgent,
+            args.startupPrompt,
+            args.startupAgentConfig
+          )
         : null
     const draftStartup =
       !args.startup && !agentStartup && args.startupDraft
@@ -12421,14 +12445,19 @@ export class OrcaRuntimeService {
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string }
+    opts: {
+      agent: TuiAgent
+      prompt: string
+      title?: string
+      agentConfig?: AutomationAgentConfig | null
+    }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = this.store?.getRepo(worktree.repoId)
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt)
+    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, opts.agentConfig)
     if (repo.connectionId) {
       await this.markRemoteWorkspaceTrustedForAgent(opts.agent, repo.connectionId, worktree.path)
     } else {

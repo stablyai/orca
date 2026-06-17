@@ -4,7 +4,10 @@ import { getAgentCatalog } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type {
   AutomationSchedulePreset,
-  AutomationWorkspaceMode
+  AutomationWebhookSecretMode,
+  AutomationWorkspaceMode,
+  UserAutomationTemplate,
+  WebhookServerEndpoint
 } from '../../../../shared/automations-types'
 import type { GlobalSettings, Repo, TuiAgent, Worktree } from '../../../../shared/types'
 import {
@@ -17,6 +20,7 @@ import { AutomationEditorDialogHeader } from './AutomationEditorDialogHeader'
 import { AutomationEditorPromptSection } from './AutomationEditorPromptSection'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
+import type { AgentConfigDraftFields } from './automation-agent-config-draft'
 import { translate } from '@/i18n/i18n'
 
 const PICKER_TRIGGER_CLASS =
@@ -24,7 +28,7 @@ const PICKER_TRIGGER_CLASS =
 const MODE_TOGGLE_ITEM_CLASS =
   'w-full border-input bg-input/30 shadow-xs hover:bg-accent/60 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90 dark:bg-input/30 dark:data-[state=on]:bg-primary dark:data-[state=on]:text-primary-foreground dark:data-[state=on]:hover:bg-primary/90'
 
-export type AutomationDraft = {
+export type AutomationDraft = AgentConfigDraftFields & {
   name: string
   prompt: string
   agentId: TuiAgent
@@ -41,6 +45,9 @@ export type AutomationDraft = {
   customSchedule: string
   missedRunGraceMinutes: string
   scheduleWarning: string | null
+  webhookEnabled: boolean
+  webhookSecretMode: AutomationWebhookSecretMode
+  webhookSecret: string
 }
 
 export type AutomationCreateTarget = 'orca' | 'hermes'
@@ -57,12 +64,21 @@ type AutomationEditorDialogProps = {
   worktrees: Worktree[]
   settings: GlobalSettings | null
   draft: AutomationDraft
+  automationId: string | null
+  webhookEndpoint: WebhookServerEndpoint | null
   onProjectChange: (projectId: string) => void
+  onGenerateWebhookSecret: () => void
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
   onCreateTargetChange: (target: AutomationCreateTarget) => void
   onOpenChange: (open: boolean) => void
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
   onApplyTemplate: (template: AutomationTemplate) => void
+  userTemplates: UserAutomationTemplate[]
+  isEditingTemplate: boolean
+  onApplyUserTemplate: (template: UserAutomationTemplate) => void
+  onEditUserTemplate: (template: UserAutomationTemplate) => void
+  onDeleteUserTemplate: (id: string) => void
+  onSaveAsTemplate: () => void
   onSave: () => void
 }
 
@@ -78,12 +94,21 @@ export function AutomationEditorDialog({
   worktrees,
   settings,
   draft,
+  automationId,
+  webhookEndpoint,
   onProjectChange,
   getRepoHostLabel,
   onCreateTargetChange,
   onOpenChange,
   onDraftChange,
   onApplyTemplate,
+  userTemplates,
+  isEditingTemplate,
+  onApplyUserTemplate,
+  onEditUserTemplate,
+  onDeleteUserTemplate,
+  onSaveAsTemplate,
+  onGenerateWebhookSecret,
   onSave
 }: AutomationEditorDialogProps): React.JSX.Element {
   const [templateOpen, setTemplateOpen] = React.useState(false)
@@ -133,6 +158,8 @@ export function AutomationEditorDialog({
           draftName={draft.name}
           templateOpen={templateOpen}
           templates={getAutomationTemplates()}
+          userTemplates={userTemplates}
+          isEditingTemplate={isEditingTemplate}
           modeToggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
           pickerTriggerClassName={PICKER_TRIGGER_CLASS}
           onCreateTargetChange={onCreateTargetChange}
@@ -142,13 +169,28 @@ export function AutomationEditorDialog({
             onApplyTemplate(template)
             setTemplateOpen(false)
           }}
+          onApplyUserTemplate={(template) => {
+            onApplyUserTemplate(template)
+            setTemplateOpen(false)
+          }}
+          onEditUserTemplate={(template) => {
+            onEditUserTemplate(template)
+            setTemplateOpen(false)
+          }}
+          onDeleteUserTemplate={onDeleteUserTemplate}
+          onSaveAsTemplate={onSaveAsTemplate}
         />
 
         <AutomationEditorPromptSection
           draft={draft}
           isHermesCreate={isHermesCreate}
+          allowWebhook={createTarget === 'orca' && !isEditingExternal}
+          automationId={automationId}
+          webhookEndpoint={webhookEndpoint}
           pickerTriggerClassName={PICKER_TRIGGER_CLASS}
+          toggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
           onDraftChange={onDraftChange}
+          onGenerateWebhookSecret={onGenerateWebhookSecret}
         />
 
         <AutomationEditorDialogFooter

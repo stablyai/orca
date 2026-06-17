@@ -26,7 +26,10 @@ import type {
   AutomationRun,
   AutomationSchedulerOwner,
   AutomationRunTrigger,
-  AutomationUpdateInput
+  AutomationUpdateInput,
+  AutomationWebhookDelivery,
+  UserAutomationTemplate,
+  UserAutomationTemplateInput
 } from '../shared/automations-types'
 import {
   latestAutomationOccurrenceAtOrBefore,
@@ -34,6 +37,12 @@ import {
 } from '../shared/automation-schedules'
 import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
+import { normalizeAutomationAgentConfig } from '../shared/automation-agent-config'
+import {
+  buildUserAutomationTemplate,
+  normalizeUserAutomationTemplate
+} from '../shared/automation-user-templates'
+import { normalizeAutomationWebhookConfig } from '../shared/automation-webhook'
 import type {
   PersistedState,
   Project,
@@ -86,6 +95,7 @@ import {
   getDefaultWorkspaceSession,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
+  normalizeWebhookServerSettings,
   ONBOARDING_FLOW_VERSION,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
@@ -2874,6 +2884,11 @@ export class Store {
           ),
           automations: Array.isArray(parsed.automations) ? parsed.automations : [],
           automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
+          automationTemplates: Array.isArray(parsed.automationTemplates)
+            ? parsed.automationTemplates
+                .map(normalizeUserAutomationTemplate)
+                .filter((template): template is UserAutomationTemplate => template !== null)
+            : [],
           onboarding: normalizedOnboarding
         }
       }
@@ -3868,6 +3883,7 @@ export class Store {
       prompt: input.prompt,
       precheck: normalizeAutomationPrecheck(input.precheck),
       agentId: input.agentId,
+      agentConfig: normalizeAutomationAgentConfig(input.agentConfig),
       runContext: input.runContext ?? contexts.runContext,
       sourceContext: input.sourceContext ?? contexts.sourceContext,
       projectId: input.projectId,
@@ -3885,6 +3901,7 @@ export class Store {
       nextRunAt: nextAutomationOccurrenceAfter(input.rrule, input.dtstart, now),
       missedRunPolicy: 'run_once_within_grace',
       missedRunGraceMinutes: input.missedRunGraceMinutes ?? 720,
+      webhook: normalizeAutomationWebhookConfig(input.webhook ?? null),
       createdAt: now,
       updatedAt: now
     }
@@ -3917,6 +3934,12 @@ export class Store {
       precheck: Object.hasOwn(updates, 'precheck')
         ? normalizeAutomationPrecheck(updates.precheck)
         : normalizeAutomationPrecheck(current.precheck),
+      agentConfig: Object.hasOwn(updates, 'agentConfig')
+        ? normalizeAutomationAgentConfig(updates.agentConfig)
+        : normalizeAutomationAgentConfig(current.agentConfig),
+      webhook: Object.hasOwn(updates, 'webhook')
+        ? normalizeAutomationWebhookConfig(updates.webhook)
+        : normalizeAutomationWebhookConfig(current.webhook ?? null),
       projectId: repoId,
       runContext: Object.hasOwn(updates, 'runContext')
         ? (updates.runContext ?? null)
@@ -3968,10 +3991,49 @@ export class Store {
     this.flush()
   }
 
+  listAutomationTemplates(): UserAutomationTemplate[] {
+    return [...(this.state.automationTemplates ?? [])].sort((left, right) =>
+      left.label.localeCompare(right.label)
+    )
+  }
+
+  createAutomationTemplate(input: UserAutomationTemplateInput): UserAutomationTemplate {
+    const now = Date.now()
+    const template = buildUserAutomationTemplate(input, { id: randomUUID(), createdAt: now, now })
+    this.state.automationTemplates = [...(this.state.automationTemplates ?? []), template]
+    this.flush()
+    return template
+  }
+
+  updateAutomationTemplate(id: string, input: UserAutomationTemplateInput): UserAutomationTemplate {
+    const templates = this.state.automationTemplates ?? []
+    const index = templates.findIndex((entry) => entry.id === id)
+    if (index === -1) {
+      throw new Error('Automation template not found.')
+    }
+    const current = templates[index]
+    const updated = buildUserAutomationTemplate(input, {
+      id: current.id,
+      createdAt: current.createdAt,
+      now: Date.now()
+    })
+    this.state.automationTemplates = templates.map((entry) => (entry.id === id ? updated : entry))
+    this.flush()
+    return updated
+  }
+
+  deleteAutomationTemplate(id: string): void {
+    this.state.automationTemplates = (this.state.automationTemplates ?? []).filter(
+      (entry) => entry.id !== id
+    )
+    this.flush()
+  }
+
   createAutomationRun(
     automation: Automation,
     scheduledFor: number,
-    trigger: AutomationRunTrigger = 'scheduled'
+    trigger: AutomationRunTrigger = 'scheduled',
+    webhookDelivery: AutomationWebhookDelivery | null = null
   ): AutomationRun {
     const existing = (this.state.automationRuns ?? []).find(
       (run) => run.automationId === automation.id && run.scheduledFor === scheduledFor
@@ -4000,6 +4062,7 @@ export class Store {
       outputSnapshot: null,
       precheckResult: null,
       usage: null,
+      webhookDelivery,
       error: null,
       startedAt: null,
       dispatchedAt: null,
@@ -4470,6 +4533,12 @@ export class Store {
     }
     if ('appIcon' in updates) {
       sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)
+    }
+    if ('webhookServer' in updates) {
+      sanitizedUpdates.webhookServer = normalizeWebhookServerSettings(
+        updates.webhookServer,
+        this.state.settings.webhookServer
+      )
     }
     if ('uiLanguage' in updates) {
       sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)

@@ -12,6 +12,7 @@ import type {
   AutomationPrecheckResult
 } from '../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
+import { composeAutomationDispatchPrompt } from '../../../shared/automation-webhook'
 import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
@@ -300,6 +301,9 @@ export function useAutomationDispatchEvents(): void {
           checkCurrentStatus()
         }
         const dispatchStartedAt = Date.now()
+        // Why: webhook-triggered runs append the request body to the prompt as
+        // additional context; scheduled/manual runs get the bare prompt.
+        const dispatchPrompt = composeAutomationDispatchPrompt(automation, run)
         if (automation.reuseSession) {
           const reusableSession = findReusableAutomationSession({
             automationId: automation.id,
@@ -316,7 +320,7 @@ export function useAutomationDispatchEvents(): void {
               try {
                 const submitted = await submitPromptToAgentTab({
                   tabId: reusableSession.tabId,
-                  content: automation.prompt
+                  content: dispatchPrompt
                 })
                 if (!submitted) {
                   cleanupRunObservers()
@@ -385,9 +389,10 @@ export function useAutomationDispatchEvents(): void {
         const result = await launchAgentBackgroundSession({
           agent: automation.agentId,
           worktreeId: worktree.id,
-          prompt: automation.prompt,
+          prompt: dispatchPrompt,
           launchSource: 'unknown',
           title: run.title,
+          agentConfig: automation.agentConfig,
           onData: (chunk) => {
             outputSnapshotBuffer.append(chunk)
           },

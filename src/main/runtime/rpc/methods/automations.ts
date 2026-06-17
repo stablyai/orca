@@ -47,6 +47,24 @@ const AutomationPrecheck = z
   .nullable()
   .optional()
 
+const AutomationWebhook = z
+  .object({
+    enabled: z.boolean(),
+    secretMode: z.enum(['none', 'token', 'hmac_sha256']),
+    secret: z.union([z.string(), z.null()])
+  })
+  .nullable()
+  .optional()
+
+const AutomationAgentConfig = z
+  .object({
+    launchArgs: z.union([z.string(), z.null()]).optional(),
+    env: z.union([z.record(z.string(), z.string()), z.null()]).optional(),
+    model: z.union([z.string(), z.null()]).optional()
+  })
+  .nullable()
+  .optional()
+
 const OptionalNullablePlainString = z
   .unknown()
   .transform((value) => (value === null || typeof value === 'string' ? value : undefined))
@@ -103,6 +121,7 @@ const AutomationCreate = z.object({
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,
   agentId: TuiAgent,
+  agentConfig: AutomationAgentConfig,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -114,7 +133,8 @@ const AutomationCreate = z.object({
   rrule: AutomationSchedule,
   dtstart: requiredNumber('Missing trigger start time'),
   enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
+  missedRunGraceMinutes: OptionalPositiveInt,
+  webhook: AutomationWebhook
 })
 
 const AutomationUpdateFields = z.object({
@@ -122,6 +142,7 @@ const AutomationUpdateFields = z.object({
   prompt: OptionalString,
   precheck: AutomationPrecheck,
   agentId: TuiAgent.optional(),
+  agentConfig: AutomationAgentConfig,
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -134,7 +155,8 @@ const AutomationUpdateFields = z.object({
   rrule: AutomationSchedule.optional(),
   dtstart: requiredNumber('Missing trigger start time').optional(),
   enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
+  missedRunGraceMinutes: OptionalPositiveInt,
+  webhook: AutomationWebhook
 })
 
 const AutomationUpdate = z.object({

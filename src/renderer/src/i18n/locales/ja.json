@@ -7925,6 +7925,17 @@
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration."
         },
+        "WebhookServerSetting": {
+          "08a0db238d": "0.0.0.0 exposes the receiver to your whole network. Set a per-automation secret on each webhook trigger.",
+          "fabf4be778": "Listener is not running.",
+          "657a5c0ffb": "Listening on {{value0}}:{{value1}}.",
+          "56f3edce73": "Listener error: {{value0}}",
+          "029f99d666": "Port",
+          "0471c7e071": "Use 127.0.0.1 for local only, or a LAN IP / 0.0.0.0 to accept requests from other hosts.",
+          "2c8ce1e9b1": "Bind address",
+          "d799d4c875": "Let incoming webhooks trigger automations.",
+          "fde97ffd63": "Enable webhook receiver"
+        },
         "RepositoryForkSyncSection": {
           "defaultBranch": "デフォルトブランチ",
           "synced": "フォークを更新しました",
@@ -10892,7 +10903,13 @@
           "4133d33862": "オートメーションの作成",
           "0a75e5e2fa": "エルメスオートメーションを作成する",
           "03142e7721": "エルメスオートメーションを編集する",
-          "17086b48ee": "オートメーションの編集"
+          "17086b48ee": "オートメーションの編集",
+          "editTemplate": "Edit template",
+          "deleteTemplate": "Delete template",
+          "updateTemplate": "Update template",
+          "saveAsTemplate": "Save as template",
+          "yourTemplates": "Your templates",
+          "builtInTemplates": "Built-in"
         },
         "AutomationMissedRunGraceField": {
           "0f4459e91d": "48時間",
@@ -11018,7 +11035,12 @@
           "d441032f7e": "一時停止",
           "5918020edc": "走る",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "c31810054d": "Could not generate a secret.",
+          "42677009ba": "Add a secret for token or HMAC verification, or choose No verification.",
+          "templateDeleteFailed": "Could not delete the template.",
+          "templateSaved": "Template saved.",
+          "templateSaveFailed": "Could not save the template."
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo ブランチを検索...",
@@ -11126,6 +11148,51 @@
           "chooseHost": "Choose automation host",
           "adding": "Adding project…",
           "addProject": "Add project"
+        },
+        "AutomationWebhookSection": {
+          "684540740d": "Used to verify the request body signature (X-Hub-Signature-256 / X-Gitea-Signature).",
+          "e501cb7525": "Sent by the provider as a token header (X-Gitlab-Token or X-Webhook-Token).",
+          "fee8c4240e": "Copy secret",
+          "9ebd9e13cd": "Generate a new secret",
+          "0edb757986": "Shared secret",
+          "800e24053b": "Secret",
+          "ef7a29878b": "HMAC SHA-256 (e.g. GitHub, Gitea)",
+          "8691ec4306": "Shared token (e.g. GitLab)",
+          "ae89a70e09": "No verification",
+          "b638783b07": "Verification",
+          "5ef250560e": "Copy webhook URL",
+          "2ece8e0bc1": "Webhook URL",
+          "3e0c1dbf7b": "An incoming POST runs this automation with the request body appended to the prompt.",
+          "c56469bd09": "On",
+          "dad1ed1360": "Off",
+          "3a6a84f68c": "Webhook trigger",
+          "8bf8cbbbbd": "Could not copy to clipboard.",
+          "a3bd440808": "Copied to clipboard.",
+          "f9cc4a7f5e": "With no verification, anyone who learns this URL can trigger the automation. The receiver is bound to a non-local address — set a token or HMAC secret."
+        },
+        "AutomationAgentConfigSection": {
+          "configure": "Configure",
+          "model": "Model",
+          "modelDefault": "Agent default",
+          "modelCustom": "Custom…",
+          "modelPlaceholder": "Model name",
+          "cliArgs": "CLI arguments",
+          "cliArgsPlaceholder": "Overrides the global default for this agent",
+          "env": "Environment variables",
+          "envKey": "KEY",
+          "envValue": "value",
+          "envRemove": "Remove variable",
+          "envAdd": "Add variable"
+        },
+        "AutomationTemplateSaveDialog": {
+          "editTitle": "Update template",
+          "createTitle": "Save as template",
+          "label": "Template name",
+          "labelPlaceholder": "Nightly deploy check",
+          "description": "Description (optional)",
+          "descriptionPlaceholder": "What this template is for",
+          "cancel": "Cancel",
+          "save": "Save"
         }
       },
       "agent": {
