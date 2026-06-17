@@ -71,6 +71,7 @@ import {
   isPrimarySelectionEnabled,
   setPrimarySelectionText
 } from '@/lib/primary-selection'
+import { copyTerminalSelection } from './terminal-selection-copy'
 import {
   SPLIT_TERMINAL_PANE_EVENT,
   CLOSE_TERMINAL_PANE_EVENT,
@@ -767,9 +768,7 @@ export function useTerminalPaneLifecycle({
           if (!selection) {
             return
           }
-          void window.api.ui.writeClipboardText(selection).catch(() => {
-            /* ignore clipboard write failures */
-          })
+          void copyTerminalSelection(selection)
         })
         selectionDisposablesRef.current.set(pane.id, selectionDisposable)
         // Hide mouse cursor while typing — classic terminal UX, scoped to the

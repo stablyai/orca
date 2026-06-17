@@ -20,6 +20,7 @@ import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-w
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { copyTerminalSelection } from './terminal-selection-copy'
 
 export function recordKeyboardCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -102,6 +103,17 @@ export function matchFileSearchShortcut(
     context: 'terminal',
     terminalShortcutPolicy
   })
+}
+
+export function matchTerminalSelectionCopyShortcut(
+  e: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'repeat'>,
+  isMac: boolean,
+  hasSelection: boolean
+): boolean {
+  if (e.repeat || !hasSelection || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'c') {
+    return false
+  }
+  return isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
 }
 
 type KeyboardHandlersDeps = {
@@ -229,6 +241,22 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      // Why: native browser copy can report success without updating the OS
+      // clipboard on Windows terminal selections; Electron IPC is verified.
+      const activePane = manager.getActivePane() ?? manager.getPanes()[0]
+      if (
+        matchTerminalSelectionCopyShortcut(e, isMac, activePane?.terminal.hasSelection() === true)
+      ) {
+        const selection = activePane?.terminal.getSelection()
+        if (!selection) {
+          return
+        }
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        void copyTerminalSelection(selection)
+        return
+      }
+
       if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
         return
       }
@@ -276,9 +304,7 @@ export function useTerminalKeyboardShortcuts({
         }
         e.preventDefault()
         e.stopImmediatePropagation()
-        void window.api.ui.writeClipboardText(selection).catch(() => {
-          /* ignore clipboard write failures */
-        })
+        void copyTerminalSelection(selection)
         return
       }
 

@@ -27,10 +27,18 @@ export function registerClipboardHandlers(): void {
       return saveClipboardImageBufferAsTempFile(image.toPNG(), args)
     }
   )
-  ipcMain.handle('clipboard:writeText', (_event, text: string) => clipboard.writeText(text))
-  ipcMain.handle('clipboard:writeSelectionText', (_event, text: string) =>
+  ipcMain.handle('clipboard:writeText', (_event, text: string) => {
+    clipboard.writeText(text)
+    if (clipboard.readText() !== text) {
+      throw new Error('Clipboard write verification failed')
+    }
+  })
+  ipcMain.handle('clipboard:writeSelectionText', (_event, text: string) => {
     clipboard.writeText(text, 'selection')
-  )
+    if (clipboard.readText('selection') !== text) {
+      throw new Error('Clipboard selection write verification failed')
+    }
+  })
   ipcMain.handle('clipboard:writeImage', (_event, dataUrl: string) => {
     // Why: only accept validated PNG data URIs to prevent writing arbitrary
     // data to the clipboard. The renderer already validates the prefix, but

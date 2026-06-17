@@ -27,6 +27,7 @@ import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { copyTerminalSelection } from './terminal-selection-copy'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -135,7 +136,7 @@ export function useTerminalPaneContextMenu({
     }
     const selection = pane.terminal.getSelection()
     if (selection) {
-      await window.api.ui.writeClipboardText(selection)
+      await copyTerminalSelection(selection)
     }
     // Why: Radix returns focus to the menu trigger (the pane container) on
     // close, but xterm.js only accepts input when its own helper textarea is
@@ -333,15 +334,18 @@ export function useTerminalPaneContextMenu({
     contextPaneIdRef.current = clickedPane?.id ?? null
 
     // Why: Windows terminals treat right-click as copy-or-paste depending on
-    // whether text is selected. With a selection, right-click copies it and
-    // clears the selection; without one, it pastes. Ctrl+right-click still
+    // whether text is selected. With a selection, verified copy clears it;
+    // without one, it pastes. Ctrl+right-click still
     // reaches the app menu so the menu remains discoverable.
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
       const selection = clickedPane?.terminal.getSelection()
       if (selection) {
-        void window.api.ui.writeClipboardText(selection)
-        clickedPane?.terminal.clearSelection()
+        void copyTerminalSelection(selection).then((copied) => {
+          if (copied) {
+            clickedPane?.terminal.clearSelection()
+          }
+        })
       } else {
         void onPaste()
       }

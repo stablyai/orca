@@ -101,15 +101,17 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('registers normal and selection text clipboard IPC handlers', () => {
+    let standardText = 'normal text'
+    let selectionText = 'primary text'
     clipboardReadTextMock.mockImplementation((clipboardType?: string) =>
-      clipboardType === 'selection' ? 'selection text' : 'standard text'
+      clipboardType === 'selection' ? selectionText : standardText
     )
 
     registerClipboardHandlers()
 
     const handlers = getRegisteredHandlers()
-    expect(handlers.get('clipboard:readText')?.()).toBe('standard text')
-    expect(handlers.get('clipboard:readSelectionText')?.()).toBe('selection text')
+    expect(handlers.get('clipboard:readText')?.()).toBe('normal text')
+    expect(handlers.get('clipboard:readSelectionText')?.()).toBe('primary text')
     handlers.get('clipboard:writeText')?.({}, 'normal text')
     handlers.get('clipboard:writeSelectionText')?.({}, 'primary text')
 
@@ -117,6 +119,24 @@ describe('registerClipboardHandlers', () => {
     expect(clipboardReadTextMock).toHaveBeenCalledWith('selection')
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('normal text')
     expect(clipboardWriteTextMock).toHaveBeenCalledWith('primary text', 'selection')
+  })
+
+  it('throws an error if normal clipboard write verification fails', () => {
+    clipboardReadTextMock.mockReturnValue('not the written text')
+    registerClipboardHandlers()
+    const handlers = getRegisteredHandlers()
+    expect(() => handlers.get('clipboard:writeText')?.({}, 'some text')).toThrow(
+      'Clipboard write verification failed'
+    )
+  })
+
+  it('throws an error if selection clipboard write verification fails', () => {
+    clipboardReadTextMock.mockReturnValue('not the written text')
+    registerClipboardHandlers()
+    const handlers = getRegisteredHandlers()
+    expect(() => handlers.get('clipboard:writeSelectionText')?.({}, 'some text')).toThrow(
+      'Clipboard selection write verification failed'
+    )
   })
 
   it('removes stale clipboard IPC handlers before registering replacements', () => {

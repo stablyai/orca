@@ -1,6 +1,10 @@
 // src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts
 import { describe, it, expect } from 'vitest'
-import { matchFileSearchShortcut, matchSearchNavigate } from './keyboard-handlers'
+import {
+  matchFileSearchShortcut,
+  matchSearchNavigate,
+  matchTerminalSelectionCopyShortcut
+} from './keyboard-handlers'
 
 function makeKeyEvent(
   overrides: Partial<{
@@ -141,6 +145,56 @@ describe('matchFileSearchShortcut', () => {
       matchFileSearchShortcut(makeKeyEvent({ key: 'F', metaKey: true, shiftKey: true }), 'darwin', {
         'sidebar.search.toggle': []
       })
+    ).toBe(false)
+  })
+})
+
+describe('matchTerminalSelectionCopyShortcut', () => {
+  it('matches Ctrl+C with a terminal selection on Windows/Linux', () => {
+    expect(
+      matchTerminalSelectionCopyShortcut(makeKeyEvent({ key: 'c', ctrlKey: true }), false, true)
+    ).toBe(true)
+  })
+
+  it('does not match Ctrl+C without a terminal selection', () => {
+    expect(
+      matchTerminalSelectionCopyShortcut(makeKeyEvent({ key: 'c', ctrlKey: true }), false, false)
+    ).toBe(false)
+  })
+
+  it('leaves Ctrl+Shift+C to the configured terminal copy shortcut', () => {
+    expect(
+      matchTerminalSelectionCopyShortcut(
+        makeKeyEvent({ key: 'C', ctrlKey: true, shiftKey: true }),
+        false,
+        true
+      )
+    ).toBe(false)
+  })
+
+  it('matches Cmd+C with a terminal selection on macOS', () => {
+    expect(
+      matchTerminalSelectionCopyShortcut(makeKeyEvent({ key: 'c', metaKey: true }), true, true)
+    ).toBe(true)
+  })
+
+  it('does not match repeats or alternate modifiers', () => {
+    expect(
+      matchTerminalSelectionCopyShortcut(
+        makeKeyEvent({ key: 'c', ctrlKey: true, repeat: true }),
+        false,
+        true
+      )
+    ).toBe(false)
+    expect(
+      matchTerminalSelectionCopyShortcut(
+        makeKeyEvent({ key: 'c', ctrlKey: true, altKey: true }),
+        false,
+        true
+      )
+    ).toBe(false)
+    expect(
+      matchTerminalSelectionCopyShortcut(makeKeyEvent({ key: 'x', ctrlKey: true }), false, true)
     ).toBe(false)
   })
 })
