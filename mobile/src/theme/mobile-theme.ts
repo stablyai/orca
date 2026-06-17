@@ -17,6 +17,8 @@ export const colors = {
   statusGreen: '#22c55e',
   statusAmber: '#f59e0b',
   statusRed: '#ef4444',
+  // Merged-PR purple, mirroring the desktop ReviewIcon's purple-400/70 tone.
+  statusPurple: '#a78bfa',
   gitDecorationAdded: '#81b88b',
   gitDecorationDeleted: '#c74e39',
   diffAddedBg: 'rgba(129, 184, 139, 0.1)',

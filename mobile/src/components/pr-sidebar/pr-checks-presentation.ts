@@ -1,4 +1,5 @@
 import type { PRCheckDetail, PRState } from '../../../../src/shared/types'
+import { prStateToken } from '../pr-state-token'
 
 // Pure presentation logic for the PR sidebar's checks + state badge. No React /
 // native imports so it is unit-testable under the node Vitest config (KTD5).
@@ -8,7 +9,12 @@ import type { PRCheckDetail, PRState } from '../../../../src/shared/types'
 // The mobile-theme color tokens this logic maps to. Section components resolve
 // the token name to an actual color from `mobile-theme`, keeping this module
 // free of style imports.
-export type MobileStatusToken = 'statusGreen' | 'statusAmber' | 'statusRed' | 'textSecondary'
+export type MobileStatusToken =
+  | 'statusGreen'
+  | 'statusAmber'
+  | 'statusRed'
+  | 'statusPurple'
+  | 'textSecondary'
 
 export type CheckOutcome = 'success' | 'pending' | 'failure' | 'neutral'
 
@@ -163,23 +169,18 @@ export type PRStateBadge = {
   token: MobileStatusToken
 }
 
-// State-badge mapping mirrors desktop merge-state presentation tones: merged is
-// neutral, open is green (active), draft is muted, closed is red.
+const PR_STATE_LABELS: Record<PRState, string> = {
+  open: 'Open',
+  merged: 'Merged',
+  draft: 'Draft',
+  closed: 'Closed'
+}
+
+// State-badge color comes from the shared prStateToken so the sidebar badge and
+// the workspace-list linked-PR badge resolve the SAME color per state (merged =
+// purple, open = green, closed = red, draft/unknown = muted).
 export function prStateBadge(state: PRState): PRStateBadge {
-  // Why: the state badge is a neutral monochrome chip (the label carries the
-  // state) so the sidebar stays muted/black-and-white per the design direction.
-  switch (state) {
-    case 'open':
-      return { label: 'Open', token: 'textSecondary' }
-    case 'merged':
-      return { label: 'Merged', token: 'textSecondary' }
-    case 'draft':
-      return { label: 'Draft', token: 'textSecondary' }
-    case 'closed':
-      return { label: 'Closed', token: 'textSecondary' }
-    default:
-      return { label: state, token: 'textSecondary' }
-  }
+  return { label: PR_STATE_LABELS[state] ?? state, token: prStateToken(state) }
 }
 
 export type ReviewerRow = {

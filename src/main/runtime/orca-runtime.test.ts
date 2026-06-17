@@ -12227,6 +12227,48 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('reads the linked-PR state from the renderer repoId-keyed GitHub cache', async () => {
+    // Regression: the renderer keys the PR cache by `repoId::branch`, so reading
+    // only by `path::branch` missed every entry and left mobile's badge muted.
+    const runtimeStore = {
+      ...store,
+      getGitHubCache: () => ({
+        pr: {
+          [`${TEST_REPO_ID}::feature/foo`]: {
+            data: { number: 42, state: 'merged' },
+            fetchedAt: 1
+          }
+        },
+        issue: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
+    expect(summary?.linkedPR).toEqual({ number: 42, state: 'merged' })
+  })
+
+  it('falls back to the path-keyed GitHub cache entry', async () => {
+    const runtimeStore = {
+      ...store,
+      getGitHubCache: () => ({
+        pr: {
+          [`${TEST_REPO_PATH}::feature/foo`]: {
+            data: { number: 7, state: 'open' },
+            fetchedAt: 1
+          }
+        },
+        issue: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
+    expect(summary?.linkedPR).toEqual({ number: 7, state: 'open' })
+  })
+
   it('attaches inline agent rows from the latest OSC 9999 status', async () => {
     const runtime = new OrcaRuntimeService(store)
     const leafId = '22222222-2222-4222-8222-222222222222'

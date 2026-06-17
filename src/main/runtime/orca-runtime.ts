@@ -7017,9 +7017,14 @@ export class OrcaRuntimeService {
       const repo = repoById.get(worktree.repoId)
       let linkedPR: { number: number; state: string } | null = null
       const branch = worktree.branch.replace(/^refs\/heads\//, '')
-      if (repo?.path && branch && ghCache) {
-        const prCacheKey = `${repo.path}::${branch}`
-        const cached = ghCache.pr[prCacheKey]
+      if (branch && ghCache) {
+        // Why: the renderer keys the PR cache by `repoId::branch` (getGitHubPRCacheKey
+        // prefers repo.id over repo.path), so read by id first and fall back to path
+        // for legacy/path-keyed entries. Reading only by path missed every cached
+        // entry, leaving mobile's linked-PR badge stuck on the 'unknown' fallback.
+        const cached =
+          (repo?.id ? ghCache.pr[`${repo.id}::${branch}`] : undefined) ??
+          (repo?.path ? ghCache.pr[`${repo.path}::${branch}`] : undefined)
         if (cached?.data) {
           linkedPR = { number: cached.data.number, state: cached.data.state }
         }
