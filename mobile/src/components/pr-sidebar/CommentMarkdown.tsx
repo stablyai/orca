@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { MermaidDiagram } from './MermaidDiagram'
 import {
   parseInline,
   parseMarkdownBlocks,
+  type CellAlign,
   type InlineToken,
   type MarkdownBlock
 } from './markdown-blocks'
@@ -87,11 +89,17 @@ function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
         </Text>
       )
     case 'code':
+      // Mermaid fences render as diagrams (WebView), not as raw code.
+      if (block.lang === 'mermaid') {
+        return <MermaidDiagram source={block.text} base={base} />
+      }
       return (
         <View style={styles.codeBlock}>
           <Text style={[styles.codeText, { fontSize: base - 1 }]}>{block.text}</Text>
         </View>
       )
+    case 'table':
+      return <TableBlock block={block} base={base} />
     case 'quote':
       return (
         <View style={styles.quote}>
@@ -130,6 +138,60 @@ function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
         </Text>
       )
   }
+}
+
+function alignToFlex(align: CellAlign | undefined): 'flex-start' | 'center' | 'flex-end' {
+  if (align === 'center') {
+    return 'center'
+  }
+  if (align === 'right') {
+    return 'flex-end'
+  }
+  return 'flex-start'
+}
+
+// GFM table rendered with Views. A horizontal ScrollView keeps wide tables from
+// breaking the sidebar layout; fixed-width columns give cells room to sit side by side.
+function TableBlock({
+  block,
+  base
+}: {
+  block: Extract<MarkdownBlock, { kind: 'table' }>
+  base: number
+}) {
+  const columnCount = Math.max(block.headers.length, ...block.rows.map((r) => r.length), 1)
+  const columns = Array.from({ length: columnCount }, (_, c) => c)
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.tableScroll}
+      contentContainerStyle={styles.table}
+    >
+      <View>
+        <View style={[styles.tableRow, styles.tableHeaderRow]}>
+          {columns.map((c) => (
+            <View key={c} style={[styles.tableCell, { alignItems: alignToFlex(block.align[c]) }]}>
+              <Text style={[styles.tableHeaderText, { fontSize: base - 1 }]}>
+                <Inline text={block.headers[c] ?? ''} base={base} />
+              </Text>
+            </View>
+          ))}
+        </View>
+        {block.rows.map((row, r) => (
+          <View key={r} style={styles.tableRow}>
+            {columns.map((c) => (
+              <View key={c} style={[styles.tableCell, { alignItems: alignToFlex(block.align[c]) }]}>
+                <Text style={[styles.tableCellText, { fontSize: base - 1 }]}>
+                  <Inline text={row[c] ?? ''} base={base} />
+                </Text>
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+    </ScrollView>
+  )
 }
 
 function Inline({ text, base }: { text: string; base: number }) {
@@ -226,5 +288,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised
   },
   detailsSummaryText: { color: colors.textPrimary, fontWeight: '600', flexShrink: 1 },
-  detailsBody: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs }
+  detailsBody: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs },
+  tableScroll: { marginBottom: spacing.sm },
+  table: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.row,
+    overflow: 'hidden'
+  },
+  tableRow: {
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle
+  },
+  tableHeaderRow: { borderTopWidth: 0, backgroundColor: colors.bgRaised },
+  tableCell: {
+    minWidth: 96,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.borderSubtle
+  },
+  tableHeaderText: { color: colors.textPrimary, fontWeight: '700' },
+  tableCellText: { color: colors.textPrimary }
 })

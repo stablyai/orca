@@ -11,18 +11,27 @@ export type InlineToken =
   | { kind: 'code'; text: string }
   | { kind: 'link'; text: string; url: string }
 
+export type CellAlign = 'left' | 'center' | 'right'
+
 export type MarkdownBlock =
   | { kind: 'heading'; level: number; text: string }
-  | { kind: 'code'; text: string }
+  // `lang` carries the fence info string (e.g. 'mermaid'); empty when unspecified.
+  | { kind: 'code'; text: string; lang: string }
   | { kind: 'quote'; text: string }
   | { kind: 'list'; ordered: boolean; items: string[] }
   | { kind: 'hr' }
   | { kind: 'paragraph'; text: string }
   // GitHub comments use <details><summary>…</summary>…</details> for collapsibles.
   | { kind: 'details'; summary: string; body: MarkdownBlock[] }
+  // GFM pipe table. `align` is per-column, parallel to `headers`.
+  | { kind: 'table'; headers: string[]; rows: string[][]; align: CellAlign[] }
 
 const HEADING = /^(#{1,6})\s+(.*)$/
 const FENCE = /^```/
+// Captures the fence info string (language) on the opening fence, e.g. ```mermaid.
+const FENCE_OPEN = /^```\s*([^\s`]*)/
+// A GFM table delimiter row: cells of dashes with optional leading/trailing colons.
+const TABLE_DELIM = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/
 const QUOTE = /^>\s?(.*)$/
 const HR = /^(?:---+|\*\*\*+|___+)\s*$/
 const UNORDERED = /^\s*[-*+]\s+(.*)$/
@@ -91,6 +100,7 @@ function parseLines(content: string): MarkdownBlock[] {
 
     if (FENCE.test(line)) {
       flushParagraph()
+      const lang = (FENCE_OPEN.exec(line)?.[1] ?? '').toLowerCase()
       const code: string[] = []
       i += 1
       while (i < lines.length && !FENCE.test(lines[i])) {
@@ -98,7 +108,23 @@ function parseLines(content: string): MarkdownBlock[] {
         i += 1
       }
       i += 1 // consume closing fence (or EOF)
-      blocks.push({ kind: 'code', text: code.join('\n') })
+      blocks.push({ kind: 'code', text: code.join('\n'), lang })
+      continue
+    }
+
+    // GFM pipe table: a header row immediately followed by a delimiter row.
+    // Requires the delimiter row so plain prose with a stray `|` isn't captured.
+    if (line.includes('|') && i + 1 < lines.length && TABLE_DELIM.test(lines[i + 1])) {
+      flushParagraph()
+      const headers = splitTableRow(line)
+      const align = parseAlignRow(lines[i + 1])
+      i += 2
+      const rows: string[][] = []
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') {
+        rows.push(splitTableRow(lines[i]))
+        i += 1
+      }
+      blocks.push({ kind: 'table', headers, rows, align })
       continue
     }
 
@@ -159,6 +185,51 @@ function parseLines(content: string): MarkdownBlock[] {
   }
   flushParagraph()
   return blocks
+}
+
+// Splits a `| a | b |` table row into trimmed cells. Tolerates missing outer
+// pipes and escaped `\|` inside cells. Total: never throws on odd input.
+function splitTableRow(line: string): string[] {
+  const cells: string[] = []
+  let cell = ''
+  let trimmed = line.trim()
+  if (trimmed.startsWith('|')) {
+    trimmed = trimmed.slice(1)
+  }
+  if (trimmed.endsWith('|')) {
+    trimmed = trimmed.slice(0, -1)
+  }
+  for (let j = 0; j < trimmed.length; j += 1) {
+    const ch = trimmed[j]
+    if (ch === '\\' && trimmed[j + 1] === '|') {
+      cell += '|'
+      j += 1
+      continue
+    }
+    if (ch === '|') {
+      cells.push(cell.trim())
+      cell = ''
+      continue
+    }
+    cell += ch
+  }
+  cells.push(cell.trim())
+  return cells
+}
+
+// Reads alignment from a delimiter row's colons: `:--` left, `:-:` center, `--:` right.
+function parseAlignRow(line: string): CellAlign[] {
+  return splitTableRow(line).map((spec) => {
+    const left = spec.startsWith(':')
+    const right = spec.endsWith(':')
+    if (left && right) {
+      return 'center'
+    }
+    if (right) {
+      return 'right'
+    }
+    return 'left'
+  })
 }
 
 // Inline emphasis/code/link tokenizer. Walks the string once, longest-match first,
