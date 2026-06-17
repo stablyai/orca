@@ -264,9 +264,11 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   'qwen-code': {
-    detectCmd: 'qwen-code',
-    launchCmd: 'qwen-code',
-    expectedProcess: 'qwen-code',
+    // Why: upstream package/project remains qwen-code, but the installed CLI
+    // executable is `qwen`.
+    detectCmd: 'qwen',
+    launchCmd: 'qwen',
+    expectedProcess: 'qwen',
     promptInjectionMode: 'stdin-after-start'
   },
   rovo: {

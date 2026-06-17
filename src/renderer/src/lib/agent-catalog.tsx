@@ -232,7 +232,9 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'qwen-code',
     label: translate('auto.lib.agent.catalog.bee242fe3d', 'Qwen Code'),
-    cmd: 'qwen-code',
+    // Why: upstream package/project remains qwen-code, but users launch it
+    // as `qwen`.
+    cmd: 'qwen',
     faviconDomain: 'qwenlm.github.io',
     homepageUrl: 'https://github.com/QwenLM/qwen-code'
   },

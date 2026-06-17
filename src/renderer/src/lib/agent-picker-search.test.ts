@@ -12,7 +12,7 @@ const agents = [
   entry('copilot', 'GitHub Copilot', 'copilot'),
   entry('opencode', 'OpenCode', 'opencode'),
   entry('mistral-vibe', 'Mistral Vibe', 'vibe'),
-  entry('qwen-code', 'Qwen Code', 'qwen-code'),
+  entry('qwen-code', 'Qwen Code', 'qwen'),
   entry('crush', 'Charm', 'crush'),
   entry('antigravity', 'Antigravity', 'agy'),
   entry('cursor', 'Cursor', 'cursor-agent')
@@ -42,6 +42,7 @@ describe('agent picker search', () => {
   it('matches command aliases that do not appear in the display label', () => {
     expect(searchAgentPickerEntries(agents, 'agy')[0]?.id).toBe('antigravity')
     expect(searchAgentPickerEntries(agents, 'cursor-agent')[0]?.id).toBe('cursor')
+    expect(searchAgentPickerEntries(agents, 'qwen')[0]?.id).toBe('qwen-code')
   })
 
   it('resolves every catalog command alias to its agent first', () => {

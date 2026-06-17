@@ -37,6 +37,16 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('powershell.exe', 'claude')).toBe(false)
   })
 
+  it('recognizes Qwen Code through the qwen executable', () => {
+    expect(recognizeAgentProcess('qwen')).toEqual({
+      agent: 'qwen-code',
+      processName: 'qwen'
+    })
+    expect(
+      isExpectedAgentProcess(String.raw`C:\Users\dev\AppData\Roaming\npm\qwen.cmd`, 'qwen')
+    ).toBe(true)
+  })
+
   it('does not recognize Claude print-mode hook subprocesses as interactive agents', () => {
     expect(
       recognizeAgentProcessFromCommandLine(
