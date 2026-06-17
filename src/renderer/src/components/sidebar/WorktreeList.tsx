@@ -160,6 +160,7 @@ import {
   setSidebarPointerDragDocumentStyles,
   updateSidebarDragPreviewPosition
 } from './worktree-sidebar-pointer-drag-dom'
+import { shouldStartWorkspaceBoardDragPreview } from './workspace-board-drag-preview-intent'
 import {
   getWorktreeSidebarDragAutoscroll,
   getWorktreeSidebarDragRectsForGroup,
@@ -742,6 +743,7 @@ type WorktreePointerDrag = {
   preview: HTMLElement | null
   previewOffsetX: number
   previewOffsetY: number
+  workspaceBoardDragPreviewRequested: boolean
   frameId: number | null
   latestBoardDropTarget: WorkspaceKanbanCardTrackedDropTarget | null
   latestStatusDropTarget: WorktreeSidebarTrackedStatusDropTarget | null
@@ -2136,6 +2138,25 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       clearWorktreeDrag()
       return
     }
+    const previewSidebarContainer = scrollRef.current
+    if (
+      !drag.workspaceBoardDragPreviewRequested &&
+      !workspaceBoardOpen &&
+      previewSidebarContainer
+    ) {
+      const sidebarRect = previewSidebarContainer.getBoundingClientRect()
+      if (
+        shouldStartWorkspaceBoardDragPreview({
+          pointerX: drag.currentX,
+          startX: drag.startX,
+          sidebarRight: sidebarRect.right
+        }) &&
+        !hasWorkspaceKanbanSidebarDropBoard()
+      ) {
+        drag.workspaceBoardDragPreviewRequested = true
+        onWorkspaceBoardDragPreviewStart()
+      }
+    }
     const boardTarget = updateWorkspaceKanbanSidebarDropTargetVisual({
       x: drag.currentX,
       y: drag.currentY,
@@ -2299,9 +2320,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     clearWorktreeDrag,
     computeWorktreeDrop,
     computeWorktreeStatusDrop,
+    onWorkspaceBoardDragPreviewStart,
     refreshWorktreeDragSession,
     onWorkspaceBoardDragPreviewCommit,
     shouldShowWorkspaceBoardDropIndicator,
+    workspaceBoardOpen,
     workspaceStatuses
   ])
 
@@ -2383,9 +2406,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       drag.previewOffsetY = offsetY
       suppressWorktreeClickUntilRef.current = window.performance.now() + 500
       setSidebarPointerDragDocumentStyles(true)
-      if (!workspaceBoardOpen && !hasWorkspaceKanbanSidebarDropBoard()) {
-        onWorkspaceBoardDragPreviewStart()
-      }
       worktreeDragSessionRef.current = {
         draggingWorktreeId: drag.worktreeId,
         sourceGroupKey: drag.sourceGroupKey,
@@ -2405,12 +2425,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       startWorktreePointerAutoscroll()
       scheduleWorktreePointerDragFrame(drag)
     },
-    [
-      onWorkspaceBoardDragPreviewStart,
-      scheduleWorktreePointerDragFrame,
-      startWorktreePointerAutoscroll,
-      workspaceBoardOpen
-    ]
+    [scheduleWorktreePointerDragFrame, startWorktreePointerAutoscroll]
   )
 
   const handleWorktreeRowPointerDown = useCallback(
@@ -2461,6 +2476,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         preview: null,
         previewOffsetX: 0,
         previewOffsetY: 0,
+        workspaceBoardDragPreviewRequested: false,
         frameId: null,
         latestBoardDropTarget: null,
         latestStatusDropTarget: null
