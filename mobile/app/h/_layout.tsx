@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Pressable, StyleSheet, PanResponder } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
 import { PanelLeftOpen } from 'lucide-react-native'
 import { colors, radii } from '../../src/theme/mobile-theme'
@@ -56,6 +57,7 @@ function HostStack({ animation }: { animation: 'none' | 'default' }) {
 export default function HostGroupLayout() {
   // Wide layout = tablet/foldable canvas (see responsive-layout-metrics).
   const { isWideLayout, width: windowWidth } = useResponsiveLayout()
+  const insets = useSafeAreaInsets()
   const { hostId, action } = useGlobalSearchParams<{ hostId?: string; action?: string }>()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -149,11 +151,12 @@ export default function HostGroupLayout() {
       <View style={styles.detail}>
         <HostStack animation={showSidebar ? 'none' : 'default'} />
       </View>
-      {/* Rendered last (and elevated) so the reveal control reliably paints
-          above the detail pane on Android when the sidebar is hidden. */}
+      {/* Rendered last (and elevated) so the reveal control reliably paints above
+          the detail pane on Android. Positioned in the header band just right of the
+          detail screen's back arrow so it's discoverable (not a mid-edge tab). */}
       {canCollapseSidebar && !sidebarOpen ? (
         <Pressable
-          style={styles.revealTab}
+          style={[styles.revealButton, { top: insets.top + 10 }]}
           onPress={() => setSidebarOpen(true)}
           accessibilityRole="button"
           accessibilityLabel="Show sidebar"
@@ -191,24 +194,20 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0
   },
-  // When the sidebar is hidden, a pull tab floats over the detail pane's left
-  // edge (mid-height to avoid the screen's own header) to reveal it again.
-  revealTab: {
+  // When the sidebar is hidden, a button sits in the header band just right of the
+  // detail screen's back arrow (top set dynamically from the safe-area inset).
+  revealButton: {
     position: 'absolute',
-    top: '50%',
-    left: 0,
-    marginTop: -32,
+    left: 52,
     zIndex: 10,
     elevation: 12,
-    width: 30,
-    height: 64,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgPanel,
-    borderTopRightRadius: radii.card,
-    borderBottomRightRadius: radii.card,
+    borderRadius: radii.card,
     borderWidth: 1,
-    borderLeftWidth: 0,
     borderColor: colors.borderSubtle
   }
 })
