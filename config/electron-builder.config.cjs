@@ -102,6 +102,8 @@ module.exports = {
     'out/main/win32-utils.js',
     'out/main/daemon-entry.js',
     'out/main/computer-sidecar.js',
+    'out/main/file-watcher-worker.js',
+    'out/main/filesystem-watcher-child.js',
     'out/main/chunks/**',
     'resources/**',
     'node_modules/ws/**',

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock } = vi.hoisted(() => ({
   handleMock: vi.fn()
@@ -35,12 +35,17 @@ type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unk
 
 describe('local filesystem watcher large batches', () => {
   const handlers: HandlerMap = {}
+  const originalPlatform = process.platform
 
   beforeEach(async () => {
     vi.useRealTimers()
     handleMock.mockReset()
     vi.mocked(stat).mockReset()
     vi.mocked(subscribeParcelWatcher).mockReset()
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
@@ -48,6 +53,14 @@ describe('local filesystem watcher large batches', () => {
       handlers[channel] = handler
     })
     registerFilesystemWatcherHandlers()
+    await closeAllWatchers()
+  })
+
+  afterEach(async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: originalPlatform
+    })
     await closeAllWatchers()
   })
 

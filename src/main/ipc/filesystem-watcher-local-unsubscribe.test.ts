@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock } = vi.hoisted(() => ({
-  handleMock: vi.fn()
+const { handleMock, watchFilesystemOutOfProcessMock } = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  watchFilesystemOutOfProcessMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -26,6 +27,10 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn()
 }))
 
+vi.mock('./filesystem-watcher-process-host', () => ({
+  watchFilesystemOutOfProcess: watchFilesystemOutOfProcessMock
+}))
+
 import {
   closeAllWatchers,
   closeLocalWatcherForWorktreePath,
@@ -33,16 +38,23 @@ import {
 } from './filesystem-watcher'
 import { stat } from 'fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
+import { watchFilesystemOutOfProcess } from './filesystem-watcher-process-host'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
 
 describe('local filesystem watcher unsubscribe cleanup', () => {
   const handlers: HandlerMap = {}
+  const originalPlatform = process.platform
 
   beforeEach(async () => {
     handleMock.mockReset()
+    vi.mocked(watchFilesystemOutOfProcess).mockReset()
     vi.mocked(stat).mockReset()
     vi.mocked(subscribeParcelWatcher).mockReset()
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
@@ -54,6 +66,10 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
   })
 
   afterEach(async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: originalPlatform
+    })
     await closeAllWatchers()
   })
 
@@ -329,5 +345,96 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     await Promise.all([watchPromise, closePromise])
 
     expect(unsubscribeMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses the process-isolated local watcher on macOS and disposes it after unwatch', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin'
+    })
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    const unsubscribeMock = vi.fn()
+    vi.mocked(watchFilesystemOutOfProcess).mockResolvedValue(unsubscribeMock)
+    const sender = {
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn(),
+      id: 1
+    }
+
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
+
+    expect(watchFilesystemOutOfProcess).toHaveBeenCalledWith(
+      '/tmp/repo',
+      expect.arrayContaining(['.git', 'node_modules']),
+      expect.any(Function)
+    )
+    expect(subscribeParcelWatcher).not.toHaveBeenCalled()
+
+    const onEvents = vi.mocked(watchFilesystemOutOfProcess).mock.calls[0][2]
+    onEvents([{ kind: 'update', absolutePath: '/tmp/repo/package.json', isDirectory: false }])
+    expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+      worktreePath: '/tmp/repo',
+      events: [{ kind: 'update', absolutePath: '/tmp/repo/package.json', isDirectory: false }]
+    })
+
+    vi.useFakeTimers()
+    try {
+      handlers['fs:unwatchWorktree']({ sender: { id: 1 } }, { worktreePath: '/tmp/repo' })
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(unsubscribeMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the direct local watcher on Linux and disposes it after unwatch', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
+    vi.mocked(stat)
+      .mockResolvedValueOnce({ isDirectory: () => true } as never)
+      .mockResolvedValue({ isDirectory: () => false } as never)
+    const unsubscribeMock = vi.fn()
+    let watcherCallback: (
+      err: Error | null,
+      events: { type: 'create' | 'update' | 'delete'; path: string }[]
+    ) => void = () => {}
+    vi.mocked(subscribeParcelWatcher).mockImplementation(async (_root, callback) => {
+      watcherCallback = callback as typeof watcherCallback
+      return { unsubscribe: unsubscribeMock } as never
+    })
+    const sender = {
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn(),
+      id: 1
+    }
+
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
+
+    expect(subscribeParcelWatcher).toHaveBeenCalledWith(
+      '/tmp/repo',
+      expect.any(Function),
+      expect.objectContaining({ ignore: expect.arrayContaining(['.git', 'node_modules']) })
+    )
+    expect(watchFilesystemOutOfProcess).not.toHaveBeenCalled()
+
+    vi.useFakeTimers()
+    try {
+      watcherCallback(null, [{ type: 'update', path: '/tmp/repo/package.json' }])
+      await vi.advanceTimersByTimeAsync(150)
+      expect(sender.send).toHaveBeenCalledWith('fs:changed', {
+        worktreePath: '/tmp/repo',
+        events: [{ kind: 'update', absolutePath: '/tmp/repo/package.json', isDirectory: false }]
+      })
+
+      handlers['fs:unwatchWorktree']({ sender: { id: 1 } }, { worktreePath: '/tmp/repo' })
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(unsubscribeMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

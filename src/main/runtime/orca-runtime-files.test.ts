@@ -15,6 +15,7 @@ const {
   resolveAuthorizedPathMock,
   statMock,
   watchInWorkerMock,
+  watchOutOfProcessMock,
   checkRgAvailableMock,
   wslAwareSpawnMock,
   watchMock
@@ -26,6 +27,7 @@ const {
   resolveAuthorizedPathMock: vi.fn(),
   statMock: vi.fn(),
   watchInWorkerMock: vi.fn(),
+  watchOutOfProcessMock: vi.fn(),
   wslAwareSpawnMock: vi.fn(),
   watchMock: vi.fn()
 }))
@@ -50,7 +52,8 @@ vi.mock('fs/promises', async () => {
 })
 
 vi.mock('./file-watcher-host', () => ({
-  watchFileExplorerInWorker: watchInWorkerMock
+  watchFileExplorerInWorker: watchInWorkerMock,
+  watchFileExplorerOutOfProcess: watchOutOfProcessMock
 }))
 
 vi.mock('../ipc/filesystem-auth', async () => {
@@ -161,6 +164,7 @@ describe('RuntimeFileCommands', () => {
     resolveAuthorizedPathMock.mockReset()
     statMock.mockReset()
     watchInWorkerMock.mockReset()
+    watchOutOfProcessMock.mockReset()
     watchMock.mockReset()
     checkRgAvailableMock.mockReset()
     wslAwareSpawnMock.mockReset()
@@ -400,6 +404,10 @@ describe('RuntimeFileCommands', () => {
   })
 
   it('delegates local recursive watching to the worker thread', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     const dispose = vi.fn()

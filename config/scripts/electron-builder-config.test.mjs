@@ -63,6 +63,17 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('unpacks forked main-process entries', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining([
+        'out/main/daemon-entry.js',
+        'out/main/computer-sidecar.js',
+        'out/main/file-watcher-worker.js',
+        'out/main/filesystem-watcher-child.js'
+      ])
+    )
+  })
+
   it('uses the multi-size icon source for Linux packages', () => {
     expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
   })
@@ -99,6 +110,33 @@ describe('electron-builder config', () => {
       ])
       const asar = {
         listPackage: () => [...sources.keys()].map((entry) => `\\${entry}`),
+        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('verifies unpacked forked runtime deps with dynamic imports', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-unpacked-runtime-deps-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+      await mkdir(join(resourcesDir, 'node_modules', '@parcel', 'watcher'), { recursive: true })
+      await mkdir(join(resourcesDir, 'app.asar.unpacked', 'out', 'main'), { recursive: true })
+      await writeFile(
+        join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'filesystem-watcher-child.js'),
+        'await import("@parcel/watcher")',
+        'utf8'
+      )
+
+      const sources = new Map([
+        ['out/main/index.js', ''],
+        ['out/main/agent-hooks/managed-agent-hook-controls.js', '']
+      ])
+      const asar = {
+        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
         extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
       }
 

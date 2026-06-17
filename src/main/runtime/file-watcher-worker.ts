@@ -2,10 +2,10 @@
 // recursively walks the whole tree on a libuv threadpool thread before
 // subscribe() resolves. On a huge tree backed by slow storage (a home dir on
 // NFS opened as a worktree) that crawl can run for minutes. Running it here, in
-// a dedicated worker thread, keeps it off the main/`serve` process's libuv pool
-// so it can never starve static-asset serving, RPC crypto, or other clients
-// (issue #5308). The worker owns the subscribe, the per-event stat fanout, and
-// the event batching; the main thread only relays results.
+// a dedicated worker thread or subprocess keeps it off the main/`serve`
+// process's libuv pool so it can never starve static-asset serving, RPC crypto,
+// or other clients (issue #5308). The worker owns the subscribe, the per-event
+// stat fanout, and the event batching; the host only relays results.
 import { stat } from 'fs/promises'
 import { parentPort, workerData } from 'worker_threads'
 import type * as ParcelWatcher from '@parcel/watcher'
@@ -28,23 +28,65 @@ export type FileWatcherWorkerMessage =
 // Messages the host sends to the worker.
 export type FileWatcherHostMessage = { type: 'unsubscribe' }
 
-const data = workerData as FileWatcherWorkerData
+const CHILD_WORKER_DATA_ENV = 'ORCA_FILE_WATCHER_WORKER_DATA'
 
-if (!parentPort) {
-  throw new Error('File watcher worker must run with a parent port.')
+function readWorkerData(): FileWatcherWorkerData {
+  if (parentPort) {
+    return workerData as FileWatcherWorkerData
+  }
+  const raw = process.env[CHILD_WORKER_DATA_ENV]
+  if (!raw) {
+    throw new Error(`Missing ${CHILD_WORKER_DATA_ENV}`)
+  }
+  return JSON.parse(raw) as FileWatcherWorkerData
 }
 
-const port = parentPort
+const data = readWorkerData()
+let hostDisconnected = false
+let disposeSubscription: (() => void) | undefined
+
+if (!parentPort) {
+  process.once('disconnect', () => {
+    hostDisconnected = true
+    disposeSubscription?.()
+  })
+}
+
+function postToHost(message: FileWatcherWorkerMessage): void {
+  if (parentPort) {
+    parentPort.postMessage(message)
+    return
+  }
+  process.send?.(message)
+}
+
+function onHostMessage(listener: (message: FileWatcherHostMessage) => void): void {
+  if (parentPort) {
+    parentPort.on('message', listener)
+    return
+  }
+  process.on('message', (message) => {
+    listener(message as FileWatcherHostMessage)
+  })
+}
+
+function closeHostChannel(): void {
+  if (parentPort) {
+    parentPort.close()
+    return
+  }
+  process.disconnect?.()
+}
 
 /** Report a watcher failure to the host and ask the renderer to refresh from
  *  scratch (the overflow event), so a mid-stream error never leaves the
  *  explorer silently stale. */
 function reportWatchError(err: unknown): void {
-  port.postMessage({
+  postToHost({
     type: 'error',
     message: err instanceof Error ? err.message : String(err)
   } satisfies FileWatcherWorkerMessage)
-  port.postMessage({
+  postToHost({
     type: 'events',
     events: [{ kind: 'overflow', absolutePath: data.rootPath }]
   } satisfies FileWatcherWorkerMessage)
@@ -74,7 +116,7 @@ async function main(): Promise<void> {
   try {
     watcher = await import('@parcel/watcher')
   } catch (err) {
-    port.postMessage({
+    postToHost({
       type: 'error',
       message: err instanceof Error ? err.message : String(err)
     } satisfies FileWatcherWorkerMessage)
@@ -91,7 +133,7 @@ async function main(): Promise<void> {
       // Why: large watcher batches usually mean a generated directory or branch
       // switch. Avoid stat fanout and ask the renderer to refresh.
       if (events.length > RUNTIME_FILE_WATCH_EVENT_STAT_LIMIT) {
-        port.postMessage({
+        postToHost({
           type: 'events',
           events: [{ kind: 'overflow', absolutePath: data.rootPath }]
         } satisfies FileWatcherWorkerMessage)
@@ -101,17 +143,20 @@ async function main(): Promise<void> {
         events,
         RUNTIME_FILE_WATCH_STAT_CONCURRENCY,
         async (event): Promise<FsChangeEvent> => {
-          let isDirectory = false
+          if (event.type === 'delete') {
+            return { kind: event.type, absolutePath: event.path }
+          }
+          let isDirectory: boolean | undefined
           try {
             isDirectory = (await stat(event.path)).isDirectory()
           } catch {
-            isDirectory = false
+            isDirectory = undefined
           }
           return { kind: event.type, absolutePath: event.path, isDirectory }
         }
       )
         .then((mapped) => {
-          port.postMessage({ type: 'events', events: mapped } satisfies FileWatcherWorkerMessage)
+          postToHost({ type: 'events', events: mapped } satisfies FileWatcherWorkerMessage)
         })
         // Why: without this, a throwing postMessage / stat becomes an unhandled
         // rejection that crashes the worker silently. Surface it instead.
@@ -120,20 +165,35 @@ async function main(): Promise<void> {
     { ignore: data.ignore }
   )
 
-  // The crawl finished and the subscription is live.
-  port.postMessage({ type: 'ready' } satisfies FileWatcherWorkerMessage)
+  let disposed = false
+  const dispose = (): void => {
+    if (disposed) {
+      return
+    }
+    disposed = true
+    void subscription.unsubscribe().finally(() => {
+      closeHostChannel()
+    })
+  }
+  disposeSubscription = dispose
 
-  port.on('message', (message: FileWatcherHostMessage) => {
+  if (hostDisconnected) {
+    dispose()
+    return
+  }
+
+  // The crawl finished and the subscription is live.
+  postToHost({ type: 'ready' } satisfies FileWatcherWorkerMessage)
+
+  onHostMessage((message: FileWatcherHostMessage) => {
     if (message.type === 'unsubscribe') {
-      void subscription.unsubscribe().finally(() => {
-        port.close()
-      })
+      dispose()
     }
   })
 }
 
 void main().catch((err: unknown) => {
-  port.postMessage({
+  postToHost({
     type: 'error',
     message: err instanceof Error ? err.message : String(err)
   } satisfies FileWatcherWorkerMessage)

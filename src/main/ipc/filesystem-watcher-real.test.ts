@@ -24,6 +24,24 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock }
 }))
 
+vi.mock('./filesystem-watcher-process-host', () => ({
+  watchFilesystemOutOfProcess: async (
+    rootPath: string,
+    _ignore: string[],
+    callback: (events: { kind: string; absolutePath: string }[]) => void
+  ) => {
+    const watcher = await import('@parcel/watcher')
+    const subscription = await watcher.subscribe(rootPath, (err, events) => {
+      if (err) {
+        callback([{ kind: 'overflow', absolutePath: rootPath }])
+        return
+      }
+      callback(events.map((event) => ({ kind: event.type, absolutePath: event.path })))
+    })
+    return () => subscription.unsubscribe()
+  }
+}))
+
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
@@ -77,9 +95,9 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
     expect(typeof watcher.subscribe).toBe('function')
   })
 
-  // Why: this integration targets the Linux native watcher path described
-  // above; macOS developer sandboxes can load the addon while suppressing
-  // subscribe callbacks, which makes this an environment check instead.
+  // Why: this integration targets Linux native watcher callbacks; macOS
+  // developer sandboxes can load the addon while suppressing subscribe
+  // callbacks, which makes this an environment check instead.
   it.runIf(process.platform === 'linux')(
     'emits fs:changed for a file created in a watched directory',
     async () => {

@@ -6,13 +6,17 @@ helpers and the common batch-flush path across three files. */
 import { ipcMain, type WebContents } from 'electron'
 import * as path from 'path'
 import { stat } from 'fs/promises'
-import type { Event as WatcherEvent } from '@parcel/watcher'
 import type { FsChangeEvent, FsChangedPayload } from '../../shared/types'
 import { isWslPath } from '../wsl'
 import { createWslWatcher } from './filesystem-watcher-wsl'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
+import { watchFilesystemOutOfProcess } from './filesystem-watcher-process-host'
+import {
+  coalesceWatcherEvents,
+  mapWatcherEventsToFsChangeEvents
+} from './filesystem-watcher-event-normalization'
 
 // ── Ignore patterns ──────────────────────────────────────────────────
 // Why: high-churn directories are suppressed at the native watcher level
@@ -125,90 +129,16 @@ function normalizeRootPath(rootPath: string): string {
   return resolved
 }
 
-function normalizeEventPath(eventPath: string): string {
-  let resolved = path.resolve(eventPath)
-  if (/^[a-zA-Z]:/.test(resolved)) {
-    resolved = resolved.charAt(0).toUpperCase() + resolved.slice(1)
-  }
-  return resolved
-}
-
-// ── Event coalescing ─────────────────────────────────────────────────
-// Why: within a single flush window the same path can appear multiple times.
-// Keep the last event per path, except: delete→create emits both (the delete
-// triggers subtree cleanup, the create triggers parent refresh); create→delete
-// is dropped entirely (net no-op). See design §4.4.
-
-function coalesceEvents(
-  raw: WatcherEvent[]
-): { type: 'create' | 'update' | 'delete'; path: string }[] {
-  const lastByPath = new Map<string, { type: 'create' | 'update' | 'delete'; index: number }>()
-  const deleteBeforeCreate = new Set<string>()
-
-  for (let i = 0; i < raw.length; i++) {
-    const evt = raw[i]
-    const p = normalizeEventPath(evt.path)
-    const prev = lastByPath.get(p)
-
-    if (prev) {
-      // delete followed by create → emit both
-      if (prev.type === 'delete' && evt.type === 'create') {
-        deleteBeforeCreate.add(p)
-      }
-      // create followed by delete → net no-op, remove both
-      if (prev.type === 'create' && evt.type === 'delete') {
-        lastByPath.delete(p)
-        deleteBeforeCreate.delete(p)
-        continue
-      }
-    }
-
-    lastByPath.set(p, { type: evt.type, index: i })
-
-    // Why: if a later event (e.g. update) supersedes a delete→create sequence,
-    // the stale delete must be dropped. Otherwise the final output would include
-    // a spurious delete + the new event type (e.g. delete→create→update would
-    // emit delete+update, but the file exists so the delete is wrong). See §4.4.
-    if (evt.type !== 'create' && deleteBeforeCreate.has(p)) {
-      deleteBeforeCreate.delete(p)
-    }
-  }
-
-  const result: { type: 'create' | 'update' | 'delete'; path: string }[] = []
-
-  // Emit delete events first for paths that have delete→create
-  for (const p of deleteBeforeCreate) {
-    result.push({ type: 'delete', path: p })
-  }
-
-  // Emit the last event for each path
-  for (const [p, entry] of lastByPath) {
-    result.push({ type: entry.type, path: p })
-  }
-
-  return result
-}
-
-// ── Stat helper for isDirectory ──────────────────────────────────────
-
-async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined> {
-  try {
-    const s = await stat(filePath)
-    return s.isDirectory()
-  } catch {
-    // Why: if stat fails (EPERM, vanished temp file), return undefined.
-    // The renderer treats undefined the same as a file event (parent-only
-    // invalidation), which is the safe default. See design §4.4.
-    return undefined
-  }
-}
-
 // ── Flush and emit ───────────────────────────────────────────────────
 
 function emitOverflowPayload(rootKey: string, root: WatchedRoot): void {
+  emitFsChangedPayload(rootKey, root, [{ kind: 'overflow', absolutePath: rootKey }])
+}
+
+function emitFsChangedPayload(rootKey: string, root: WatchedRoot, events: FsChangeEvent[]): void {
   const payload: FsChangedPayload = {
     worktreePath: rootKey,
-    events: [{ kind: 'overflow', absolutePath: rootKey }]
+    events
   }
   for (const [, wc] of root.listeners) {
     if (!wc.isDestroyed()) {
@@ -235,23 +165,7 @@ async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
     return
   }
 
-  const coalesced = coalesceEvents(rawEvents)
-
-  // Build the payload with isDirectory info
-  const events: FsChangeEvent[] = await Promise.all(
-    coalesced.map(async (evt) => {
-      // Why: for delete events the path no longer exists on disk, so stat is
-      // not possible. Set isDirectory to undefined and let the renderer infer
-      // from dirCache (if the deleted path is a dirCache key, it's a directory).
-      const isDirectory = evt.type === 'delete' ? undefined : await tryStatIsDirectory(evt.path)
-
-      return {
-        kind: evt.type,
-        absolutePath: evt.path,
-        isDirectory
-      }
-    })
-  )
+  const events = await mapWatcherEventsToFsChangeEvents(coalesceWatcherEvents(rawEvents))
 
   const payload: FsChangedPayload = {
     worktreePath: rootKey,
@@ -365,6 +279,25 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
     throw err
   }
 
+  return root
+}
+
+async function createProcessWatcher(rootKey: string): Promise<WatchedRoot> {
+  const root: WatchedRoot = {
+    subscription: null!,
+    listeners: new Map(),
+    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 }
+  }
+  let unsubscribe: () => Promise<void>
+  try {
+    unsubscribe = await watchFilesystemOutOfProcess(rootKey, WATCHER_IGNORE_DIRS, (events) => {
+      emitFsChangedPayload(rootKey, root, events)
+    })
+  } catch (err) {
+    console.error(`[filesystem-watcher] subprocess failed to subscribe ${rootKey}:`, err)
+    throw err
+  }
+  root.subscription = { unsubscribe }
   return root
 }
 
@@ -506,18 +439,25 @@ async function doInstallLocalWatcher(
   }
 
   try {
-    // Why: WSL paths use inotifywait inside the Linux distro where
-    // inotify works natively; native Windows paths use @parcel/watcher.
-    root = isWslPath(worktreePath)
-      ? await createWslWatcher(rootKey, worktreePath, {
-          ignoreDirs: WATCHER_IGNORE_DIRS,
-          scheduleBatchFlush,
-          watchedRoots
-        })
-      : await createWatcher(rootKey, rootKey)
+    if (isWslPath(worktreePath)) {
+      // Why: WSL paths use inotifywait inside the Linux distro where inotify
+      // works natively; @parcel/watcher cannot watch WSL UNC paths reliably.
+      root = await createWslWatcher(rootKey, worktreePath, {
+        ignoreDirs: WATCHER_IGNORE_DIRS,
+        scheduleBatchFlush,
+        watchedRoots
+      })
+    } else if (process.platform === 'darwin') {
+      // Why: the prod sleep-wake crash points at @parcel/watcher/FSEvents.
+      // Keep precise Parcel events, but isolate the native addon in a child
+      // process so a SIGTRAP cannot take down Electron's main process.
+      root = await createProcessWatcher(rootKey)
+    } else {
+      root = await createWatcher(rootKey, rootKey)
+    }
   } catch {
-    // Why: createWatcher / createWslWatcher already logged the error. Swallow
-    // it here so the renderer's watchWorktree call resolves without crashing.
+    // Why: watcher creation already logged the error. Swallow it here so the
+    // renderer's watchWorktree call resolves without crashing.
     rememberUnwatchableRoot(rootKey)
     return 'unavailable'
   } finally {

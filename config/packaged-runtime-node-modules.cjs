@@ -188,17 +188,40 @@ function findAsarEntry(entries, expectedPath) {
   return entries.find((entry) => normalizeAsarEntryPath(entry) === expectedPath)
 }
 
+const PACKAGED_MAIN_ASAR_RUNTIME_FILES = [
+  'out/main/index.js',
+  'out/main/agent-hooks/managed-agent-hook-controls.js'
+]
+const PACKAGED_UNPACKED_MAIN_RUNTIME_FILES = [
+  'out/main/daemon-entry.js',
+  'out/main/computer-sidecar.js',
+  'out/main/file-watcher-worker.js',
+  'out/main/filesystem-watcher-child.js'
+]
+
+function addMissingPackagedRuntimeDeps(resourcesDir, source, missing) {
+  for (const match of source.matchAll(/(?:require|import)\(["']([^"']+)["']\)/g)) {
+    const specifier = match[1]
+    if (!isPackagedExternalSpecifier(specifier)) {
+      continue
+    }
+    const packageName = packageNameFromSpecifier(specifier)
+    if (!existsSync(join(resourcesDir, 'node_modules', ...packageName.split('/')))) {
+      missing.add(packageName)
+    }
+  }
+}
+
 function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/asar')) {
   const asarPath = join(resourcesDir, 'app.asar')
   if (!existsSync(asarPath)) {
     return
   }
 
-  const mainFiles = ['out/main/index.js', 'out/main/agent-hooks/managed-agent-hook-controls.js']
   const entries = asar.listPackage(asarPath)
   const missing = new Set()
 
-  for (const file of mainFiles) {
+  for (const file of PACKAGED_MAIN_ASAR_RUNTIME_FILES) {
     const entry = findAsarEntry(entries, file)
     if (!entry) {
       throw new Error(`Packaged main file ${file} was not found in ${asarPath}`)
@@ -208,16 +231,16 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
     // backslashes, and extractFile expects that same host-style path.
     const internalPath = entry.replace(/^[\\/]+/, '')
     const source = asar.extractFile(asarPath, internalPath).toString('utf8')
-    for (const match of source.matchAll(/require\(["']([^"']+)["']\)/g)) {
-      const specifier = match[1]
-      if (!isPackagedExternalSpecifier(specifier)) {
-        continue
-      }
-      const packageName = packageNameFromSpecifier(specifier)
-      if (!existsSync(join(resourcesDir, 'node_modules', ...packageName.split('/')))) {
-        missing.add(packageName)
-      }
+    addMissingPackagedRuntimeDeps(resourcesDir, source, missing)
+  }
+
+  const unpackedRoot = join(resourcesDir, 'app.asar.unpacked')
+  for (const file of PACKAGED_UNPACKED_MAIN_RUNTIME_FILES) {
+    const filePath = join(unpackedRoot, ...file.split('/'))
+    if (!existsSync(filePath)) {
+      continue
     }
+    addMissingPackagedRuntimeDeps(resourcesDir, readFileSync(filePath, 'utf8'), missing)
   }
 
   if (missing.size > 0) {

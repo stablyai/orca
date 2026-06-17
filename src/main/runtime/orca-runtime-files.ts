@@ -37,7 +37,7 @@ import type {
   RuntimeFileReadResult,
   RuntimeTerminalPathResolution
 } from '../../shared/runtime-types'
-import { watchFileExplorerInWorker } from './file-watcher-host'
+import { watchFileExplorerInWorker, watchFileExplorerOutOfProcess } from './file-watcher-host'
 import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { isENOENT, resolveAuthorizedPath } from '../ipc/filesystem-auth'
@@ -415,6 +415,15 @@ export class RuntimeFileCommands {
     }
     if (process.platform === 'win32') {
       return watchWindowsRuntimeFileExplorer(rootPath, callback)
+    }
+    if (process.platform === 'darwin') {
+      // Why: the prod sleep-wake crash points at @parcel/watcher/FSEvents.
+      // Keep precise Parcel events, but isolate the native addon in a child
+      // process so a SIGTRAP cannot take down Electron's main process.
+      const dispose = await watchFileExplorerOutOfProcess(rootPath, callback)
+      return () => {
+        trackRuntimeFileWatcherUnsubscribe(rootPath, dispose)
+      }
     }
     // Why: the watcher runs in a worker thread so @parcel/watcher's blocking
     // recursive crawl can't starve the main/`serve` process (issue #5308).

@@ -4,12 +4,14 @@ import type * as FsPromises from 'fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
 import type { FsChangeEvent } from '../../shared/types'
 
-const { resolveAuthorizedPathMock, statMock, watchMock, watchInWorkerMock } = vi.hoisted(() => ({
-  resolveAuthorizedPathMock: vi.fn(),
-  statMock: vi.fn(),
-  watchMock: vi.fn(),
-  watchInWorkerMock: vi.fn()
-}))
+const { resolveAuthorizedPathMock, statMock, watchMock, watchInWorkerMock, watchOutOfProcessMock } =
+  vi.hoisted(() => ({
+    resolveAuthorizedPathMock: vi.fn(),
+    statMock: vi.fn(),
+    watchMock: vi.fn(),
+    watchInWorkerMock: vi.fn(),
+    watchOutOfProcessMock: vi.fn()
+  }))
 
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof Fs>('fs')
@@ -27,9 +29,11 @@ vi.mock('fs/promises', async () => {
   }
 })
 
-// The local (non-Windows, non-SSH) watch path now delegates to a worker thread.
+// Local non-Windows watches delegate to file-watcher-host:
+// macOS uses a process boundary; Linux uses a worker thread.
 vi.mock('./file-watcher-host', () => ({
-  watchFileExplorerInWorker: watchInWorkerMock
+  watchFileExplorerInWorker: watchInWorkerMock,
+  watchFileExplorerOutOfProcess: watchOutOfProcessMock
 }))
 
 vi.mock('../ipc/filesystem-auth', async () => {
@@ -67,6 +71,7 @@ describe('RuntimeFileCommands file watching', () => {
     statMock.mockReset()
     watchMock.mockReset()
     watchInWorkerMock.mockReset()
+    watchOutOfProcessMock.mockReset()
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: originalPlatform
@@ -90,7 +95,7 @@ describe('RuntimeFileCommands file watching', () => {
 
     const close = vi.fn()
     const on = vi.fn()
-    let listener: (() => void) | null = null
+    let listener: ((eventType: string, filename: string) => void) | null = null
     watchMock.mockImplementation((_rootPath, _options, callback) => {
       listener = callback
       return { close, on }
@@ -121,9 +126,46 @@ describe('RuntimeFileCommands file watching', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
-  // Issue #5308: the local recursive watch runs in a worker thread so
+  it('uses a process-isolated precise watcher for macOS runtime file watches', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'darwin'
+    })
+
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    const captured: { cb?: (events: FsChangeEvent[]) => void } = {}
+    const dispose = vi.fn()
+    watchOutOfProcessMock.mockImplementation((_rootPath, cb) => {
+      captured.cb = cb
+      return Promise.resolve(dispose)
+    })
+    const { commands } = createRuntimeFileCommands('/repo')
+    const onEvents = vi.fn()
+
+    const unsubscribe = await commands.watchFileExplorer('id:wt-1', onEvents)
+
+    expect(watchOutOfProcessMock).toHaveBeenCalledWith('/repo', expect.any(Function))
+    expect(watchInWorkerMock).not.toHaveBeenCalled()
+    expect(watchMock).not.toHaveBeenCalled()
+
+    captured.cb?.([{ kind: 'update', absolutePath: '/repo/src/index.ts', isDirectory: false }])
+    expect(onEvents).toHaveBeenCalledWith([
+      { kind: 'update', absolutePath: '/repo/src/index.ts', isDirectory: false }
+    ])
+
+    unsubscribe()
+    await awaitRuntimeFileWatcherUnsubscribes()
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  // Issue #5308: Linux local recursive watches run in a worker thread so
   // @parcel/watcher's blocking initial crawl can't starve the serve runtime.
   it('delegates local recursive watching to the worker thread', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
     resolveAuthorizedPathMock.mockResolvedValue('/home5/Brian')
     statMock.mockResolvedValue({ isDirectory: () => true })
 
@@ -154,6 +196,10 @@ describe('RuntimeFileCommands file watching', () => {
   })
 
   it('propagates a worker watch failure to the caller', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     watchInWorkerMock.mockRejectedValue(new Error('worker_failed'))
@@ -163,6 +209,10 @@ describe('RuntimeFileCommands file watching', () => {
   })
 
   it('tracks worker unsubscribe work so shutdown can await it', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
 
