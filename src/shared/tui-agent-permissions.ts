@@ -25,6 +25,10 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   rovo: '--yolo',
   hermes: '--yolo',
   copilot: '--yolo',
+  // Why: these CLIs gate tool use behind a permission flag rather than a
+  // skip-permissions switch; the flag value is each tool's own name for its
+  // unattended/bypass mode, so Orca's yolo default launches them without
+  // per-action prompts like the other agents.
   grok: '--permission-mode bypassPermissions',
   devin: '--permission-mode bypass',
   ante: '--yolo',
