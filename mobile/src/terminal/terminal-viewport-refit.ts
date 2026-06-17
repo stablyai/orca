@@ -22,6 +22,10 @@ type TerminalViewportRefitOptions = {
   // Why: terminal text size (font scale) — changing it changes the cell size, so
   // the PTY must be re-fitted to a new column count and reflowed.
   textScale: number
+  // Why: on wide layouts a docked side panel takes a fixed slice of the row, so
+  // opening/closing it changes the terminal column width without any window-dim or
+  // tab-strip change. Without this trigger the PTY stays fitted to the pre-dock width.
+  dockOpen: boolean
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }
@@ -44,6 +48,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     initializedHandlesRef,
     tabStripVisible,
     textScale,
+    dockOpen,
     unsubscribeTerminal,
     subscribeToTerminal
   } = options
@@ -181,6 +186,20 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
   }, [textScale, viewportMeasuredRef, scheduleViewportRefit])
+
+  // Why: docking/undocking a side panel on a wide layout changes the terminal's
+  // column width (the dock takes a fixed slice of the row) without any window-dim
+  // or tab-strip change, so the cached viewport goes stale and the PTY keeps the
+  // pre-dock width. Mark un-measured and refit on the toggle.
+  const prevDockOpenRef = useRef(dockOpen)
+  useEffect(() => {
+    if (prevDockOpenRef.current === dockOpen) {
+      return
+    }
+    prevDockOpenRef.current = dockOpen
+    viewportMeasuredRef.current = false
+    scheduleViewportRefit()
+  }, [dockOpen, viewportMeasuredRef, scheduleViewportRefit])
 
   useEffect(() => {
     disposedRef.current = false
