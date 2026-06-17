@@ -1,7 +1,11 @@
 import React, { useCallback } from 'react'
-import { ChevronDown, Send, X } from 'lucide-react'
+import { ChevronDown, GitFork, Send, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import {
+  AgentSessionForkPointMenu,
+  type AgentSessionForkPointOption
+} from './AgentSessionForkPointMenu'
 
 type DashboardAgentRowTrailingControlsProps = {
   paneKey: string
@@ -9,9 +13,12 @@ type DashboardAgentRowTrailingControlsProps = {
   expanded: boolean
   hideExpand: boolean
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
+  forkSessionPending?: boolean
   onDismiss: (paneKey: string) => void
   onToggleExpanded: () => void
   onSendTargetClick?: (paneKey: string) => void
+  forkPointOptions?: AgentSessionForkPointOption[]
+  onForkSession?: (paneKey: string, messageId?: string) => void
 }
 
 export function DashboardAgentRowTrailingControls({
@@ -20,9 +27,12 @@ export function DashboardAgentRowTrailingControls({
   expanded,
   hideExpand,
   sendTargetStatus,
+  forkSessionPending = false,
   onDismiss,
   onToggleExpanded,
-  onSendTargetClick
+  onSendTargetClick,
+  forkPointOptions,
+  onForkSession
 }: DashboardAgentRowTrailingControlsProps): React.JSX.Element {
   // Why: stop propagation so clicking nested row controls does not also
   // activate the agent row or parent worktree card.
@@ -59,9 +69,45 @@ export function DashboardAgentRowTrailingControls({
     },
     [onSendTargetClick, paneKey, sendTargetStatus]
   )
+  const handleForkSession = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      onForkSession?.(paneKey)
+    },
+    [onForkSession, paneKey]
+  )
+  const stopForkMenuTriggerClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+  }, [])
+  const forkButton = onForkSession ? (
+    <button
+      type="button"
+      onClick={forkPointOptions?.length ? stopForkMenuTriggerClick : handleForkSession}
+      onMouseDown={stopMouseDown}
+      onKeyDown={stopKeyDown}
+      disabled={forkSessionPending}
+      className={cn(
+        'inline-flex shrink-0 items-center justify-center text-muted-foreground/70 hover:text-foreground',
+        'can-hover:opacity-0 transition-opacity duration-150',
+        'group-hover/agent-row:opacity-100 focus-visible:opacity-100',
+        forkSessionPending && 'cursor-progress opacity-75'
+      )}
+      aria-label={translate(
+        'auto.components.dashboard.DashboardAgentRow.forkSession',
+        'Fork agent session'
+      )}
+      title={translate(
+        'auto.components.dashboard.DashboardAgentRow.forkSession',
+        'Fork agent session'
+      )}
+    >
+      <GitFork className="size-3.5" />
+    </button>
+  ) : null
 
   return (
-    <span className="relative ml-auto flex h-3.5 w-12 shrink-0 items-center justify-end">
+    <span className="relative ml-auto flex h-3.5 w-16 shrink-0 items-center justify-end gap-1">
       {(sendTargetStatus === 'eligible' || sendTargetStatus === 'sending') && (
         <button
           type="button"
@@ -88,6 +134,17 @@ export function DashboardAgentRowTrailingControls({
       )}
       {/* Why: timestamp and dismiss-X share one slot. On no-hover devices the X
           is visible by default, so the timestamp must yield there too. */}
+      {!sendTargetStatus && forkButton && forkPointOptions?.length && onForkSession ? (
+        <AgentSessionForkPointMenu
+          paneKey={paneKey}
+          forkPointOptions={forkPointOptions}
+          onForkSession={onForkSession}
+        >
+          {forkButton}
+        </AgentSessionForkPointMenu>
+      ) : !sendTargetStatus ? (
+        forkButton
+      ) : null}
       {!sendTargetStatus && relativeTimestamp !== null && (
         <span className="relative grid grid-cols-1 grid-rows-1 shrink-0 items-center justify-items-end">
           <span

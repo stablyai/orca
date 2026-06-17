@@ -31,7 +31,7 @@ export type HostIdByWorktreeId = (worktreeId: string) => ExecutionHostId
  *  - browserWorkspaceKeyed: Record keyed by browser-workspace id; follows the
  *    page record's own worktreeId.
  *  - fileKeyed: Record keyed by editor file id; follows the open file's worktree.
- *  - sleepingAgentKeyed: Record keyed by pane key; follows the record's worktreeId. */
+ *  - agentSessionKeyed: Record keyed by pane key; follows the record's worktreeId. */
 type FieldOwnership =
   | 'global'
   | 'worktreeKeyed'
@@ -39,7 +39,7 @@ type FieldOwnership =
   | 'tabKeyed'
   | 'browserWorkspaceKeyed'
   | 'fileKeyed'
-  | 'sleepingAgentKeyed'
+  | 'agentSessionKeyed'
 
 const FIELD_OWNERSHIP = {
   activeRepoId: 'global',
@@ -69,7 +69,8 @@ const FIELD_OWNERSHIP = {
   remoteSessionIdsByTabId: 'tabKeyed',
   browserPagesByWorkspace: 'browserWorkspaceKeyed',
   markdownFrontmatterVisible: 'fileKeyed',
-  sleepingAgentSessionsByPaneKey: 'sleepingAgentKeyed'
+  sleepingAgentSessionsByPaneKey: 'agentSessionKeyed',
+  archivedForkableAgentSessionsByPaneKey: 'agentSessionKeyed'
 } as const satisfies Record<keyof WorkspaceSessionState, FieldOwnership>
 
 // Why: a new WorkspaceSessionState field must be classified above or the split
@@ -290,7 +291,7 @@ export function splitWorkspaceSessionByHost(
           ctx
         )
         break
-      case 'sleepingAgentKeyed':
+      case 'agentSessionKeyed':
         assignKeyedByResolvedWorktree(
           slices,
           template,

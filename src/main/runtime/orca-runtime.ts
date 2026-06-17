@@ -14,13 +14,15 @@ import {
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload,
   type AgentStatusOrchestrationContext,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type AgentStatusPromptInteraction,
+  normalizePromptInteractionHistory
 } from '../../shared/agent-status-types'
 import {
   createAgentStatusOscProcessor,
   type ProcessedAgentStatusChunk
 } from '../../shared/agent-status-osc'
-import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
+import { DEFAULT_GIT_MAX_BUFFER, gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import {
   cleanupClaimedCloneTarget,
   claimCloneTarget,
@@ -147,7 +149,29 @@ import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId } from '../../shared/terminal-tab-id'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentForkStartupPlan,
+  buildAgentStartupPlan
+} from '../../shared/tui-agent-startup'
+import {
+  buildAgentSessionForkPrompt,
+  buildAgentSessionMessageForkPrompt,
+  buildAgentSessionStructuredHistoryForkPrompt,
+  normalizeAgentSessionForkPoint,
+  type AgentSessionForkPoint,
+  type AgentSessionForkPromptInteraction
+} from '../../shared/agent-session-fork'
+import {
+  isForkableTuiAgent,
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from '../../shared/agent-session-resume'
+import {
+  copyFolderWorkspaceForFork,
+  resolveFolderWorkspaceForkDestinationPath
+} from '../folder-workspace-fork-copy'
+import { diffFolderWorkspaceFork } from '../folder-workspace-fork-diff'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
@@ -178,6 +202,7 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../shared/workspace-scope'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -247,6 +272,18 @@ import type {
   RuntimeTerminalDriverState,
   RuntimeSyncWindowGraph,
   RuntimeWorktreeListResult,
+  RuntimeWorktreeCreateResult,
+  RuntimeWorktreeRecord,
+  RuntimeAgentSessionForkContextDelivery,
+  RuntimeAgentSessionForkCreateResult,
+  RuntimeAgentSessionForkDiffResult,
+  RuntimeAgentSessionForkListResult,
+  RuntimeAgentSessionForkNativeProviderReason,
+  RuntimeAgentSessionForkPointOption,
+  RuntimeAgentSessionForkPreflightResult,
+  RuntimeAgentSessionForkRecord,
+  RuntimeAgentSessionForkRemoveResult,
+  RuntimeAgentSessionForkShowResult,
   BrowserTabInfo,
   BrowserScreencastResult
 } from '../../shared/runtime-types'
@@ -926,11 +963,43 @@ type WorktreeStartupFollowup = {
   prompt: string
 }
 
+type AgentSessionForkSourceStatus = {
+  agent: TuiAgent
+  providerSession?: AgentProviderSessionMetadata
+  promptInteractionKey?: string
+  promptInteractions?: AgentStatusPromptInteraction[]
+}
+
+type AgentSessionForkResolvedSource = {
+  terminalHandle?: string
+  sourceWorktree: ResolvedWorktree
+  sourceStatus: AgentSessionForkSourceStatus | null
+  allowTranscriptFallback: boolean
+}
+
+type AgentSessionForkStartupArgs =
+  | { startup: WorktreeStartupLaunch; createdWithAgent: TuiAgent }
+  | { startupAgent: TuiAgent; startupPrompt: string }
+  | { startupDraft: string }
+
+type AgentSessionForkPlan = AgentSessionForkResolvedSource & {
+  sourceRepo: Repo
+  sourceLabel: string
+  workspaceMode: 'child-workspace' | 'same-workspace'
+  forkPoint?: AgentSessionForkPoint
+  contextDelivery: RuntimeAgentSessionForkContextDelivery
+  startupArgs: AgentSessionForkStartupArgs
+}
+
 function getAgentLaunchPlatformForRepo(repo: Pick<Repo, 'connectionId' | 'path'>): NodeJS.Platform {
   if (!repo.connectionId) {
     return process.platform
   }
   return isWindowsAbsolutePathLike(repo.path) ? 'win32' : 'linux'
+}
+
+function parseGitNullDelimitedPaths(stdout: string): string[] {
+  return stdout.split('\0').filter((entry) => entry.length > 0)
 }
 
 const FOREGROUND_AGENT_WRAPPER_RETRY_INTERVAL_MS = 150
@@ -1124,7 +1193,7 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     ...(meta.projectHostSetupId !== undefined
       ? { projectHostSetupId: meta.projectHostSetupId }
       : {}),
-    path: repo.path,
+    path: meta.folderPath || repo.path,
     head: '',
     branch: '',
     isBare: false,
@@ -1489,6 +1558,7 @@ type WorktreeLineageInput = {
   cwdParentWorktree?: string
   noParent?: boolean
   callerTerminalHandle?: string
+  agentSessionForkPoint?: AgentSessionForkPoint
   comment?: string
   orchestrationContext?: {
     parentWorktreeId?: string
@@ -1522,6 +1592,7 @@ type WorktreeLineageResolution =
       taskId?: string
       coordinatorHandle?: string
       createdByTerminalHandle?: string
+      agentSessionForkPoint?: AgentSessionForkPoint
     }
   | {
       kind: 'none'
@@ -9745,6 +9816,9 @@ export class OrcaRuntimeService {
         ...(lineageResolution.createdByTerminalHandle
           ? { createdByTerminalHandle: lineageResolution.createdByTerminalHandle }
           : {}),
+        ...(lineageResolution.agentSessionForkPoint
+          ? { agentSessionForkPoint: lineageResolution.agentSessionForkPoint }
+          : {}),
         createdAt
       })
     } else if (lineageResolution.parent.type === 'worktree') {
@@ -9776,6 +9850,9 @@ export class OrcaRuntimeService {
           : {}),
         ...(lineageResolution.createdByTerminalHandle
           ? { createdByTerminalHandle: lineageResolution.createdByTerminalHandle }
+          : {}),
+        ...(lineageResolution.agentSessionForkPoint
+          ? { agentSessionForkPoint: lineageResolution.agentSessionForkPoint }
           : {}),
         createdAt
       })
@@ -10017,13 +10094,37 @@ export class OrcaRuntimeService {
         draftStartup?.agent ??
         (requestedAgentEnabled ? requestedAgent : undefined))
     const effectiveDraftPaste = args.startupDraftPaste ?? draftStartup?.draftPaste
+    const lineageInput =
+      args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
+    const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput)
     if (isFolderRepo(repo)) {
       const now = Date.now()
       const settings = createSettings
       const instanceId = randomUUID()
       const worktreeId = getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
+      let folderPath = repo.path
+      if (
+        args.lineage?.callerTerminalHandle &&
+        lineageResolution.kind === 'lineage' &&
+        lineageResolution.parent.type === 'worktree'
+      ) {
+        const copy = await copyFolderWorkspaceForFork(
+          {
+            sourcePath: lineageResolution.parent.worktree.path,
+            destinationPath: resolveFolderWorkspaceForkDestinationPath({
+              repo,
+              settings,
+              name: args.name
+            }),
+            connectionId: repo.connectionId
+          },
+          { getSshFilesystemProvider }
+        )
+        folderPath = copy.destinationPath
+      }
       const meta = this.store.setWorktreeMeta(worktreeId, {
         instanceId,
+        folderPath,
         ...getProjectHostSetupWorktreeMeta(this.store.getProjectHostSetups?.() ?? [], repo),
         displayName: args.displayName?.trim() || args.name,
         lastActivityAt: now,
@@ -10062,6 +10163,7 @@ export class OrcaRuntimeService {
         ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
       })
       const worktree = mergeRuntimeFolderWorkspace(repo, worktreeId, meta)
+      const recordedLineage = this.recordCreatedWorktreeLineage(worktree, lineageResolution)
       this.invalidateResolvedWorktreeCache()
       this.notifyWorktreesChanged(repo.id)
       const shouldActivate = args.activate === true || args.runHooks === true
@@ -10111,9 +10213,10 @@ export class OrcaRuntimeService {
       return {
         worktree: {
           ...worktree,
-          parentWorktreeId: null,
+          parentWorktreeId: recordedLineage.lineage?.parentWorktreeId ?? null,
           childWorktreeIds: [],
-          lineage: null,
+          lineage: recordedLineage.lineage,
+          workspaceLineage: recordedLineage.workspaceLineage,
           git: {
             path: worktree.path,
             head: worktree.head,
@@ -10122,12 +10225,16 @@ export class OrcaRuntimeService {
             isMainWorktree: worktree.isMainWorktree
           }
         },
+        ...(lineageInput
+          ? {
+              lineage: recordedLineage.lineage,
+              workspaceLineage: recordedLineage.workspaceLineage,
+              warnings: recordedLineage.warnings
+            }
+          : {}),
         ...(warning ? { warning } : {})
       }
     }
-    const lineageInput =
-      args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
-    const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput)
     if (repo.connectionId) {
       const result = await this.createManagedRemoteWorktree(repo, {
         ...args,
@@ -11368,6 +11475,786 @@ export class OrcaRuntimeService {
     }
     const recentSubjects = getRecentDriftSubjects(wt.path, 'HEAD', base, DRIFT_PROBE_SUBJECT_LIMIT)
     return { base, behind: drift.behind, recentSubjects }
+  }
+
+  private getAgentSessionForkSourcePaneKey(handle: string): string | null {
+    let paneKey: string | null = null
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty?.pty.paneKey) {
+      paneKey = pty.pty.paneKey
+    }
+    if (!paneKey) {
+      try {
+        const { leaf } = this.getLiveLeafForHandle(handle)
+        paneKey = this.makeRuntimePaneKey(leaf)
+      } catch {
+        paneKey = null
+      }
+    }
+    return paneKey
+  }
+
+  private getAgentSessionForkSourceStatus(handle: string): AgentSessionForkSourceStatus | null {
+    const paneKey = this.getAgentSessionForkSourcePaneKey(handle)
+    if (!paneKey) {
+      return null
+    }
+    const latestPayload = this.latestAgentStatusByPaneKey.get(paneKey)?.payload
+    const snapshotPayload = this.getAgentStatusSnapshotFn?.().find(
+      (entry) => entry.paneKey === paneKey
+    )
+    const agentType = latestPayload?.agentType ?? snapshotPayload?.agentType
+    if (!isTuiAgent(agentType)) {
+      return null
+    }
+    const settings = this.store?.getSettings()
+    if (settings && !isTuiAgentEnabled(agentType, settings.disabledTuiAgents)) {
+      return null
+    }
+    const latestProviderSession =
+      latestPayload?.agentType === agentType ? latestPayload.providerSession : undefined
+    const snapshotProviderSession =
+      snapshotPayload?.agentType === agentType ? snapshotPayload.providerSession : undefined
+    const providerSession = latestProviderSession ?? snapshotProviderSession
+    const promptInteractionKey =
+      snapshotPayload?.agentType === agentType ? snapshotPayload.promptInteractionKey : undefined
+    const promptInteractions =
+      snapshotPayload?.agentType === agentType ? snapshotPayload.promptInteractions : undefined
+    return {
+      agent: agentType,
+      ...(providerSession ? { providerSession } : {}),
+      ...(promptInteractionKey ? { promptInteractionKey } : {}),
+      ...(promptInteractions ? { promptInteractions } : {})
+    }
+  }
+
+  private getStoredAgentSessionForkPromptInteractions(args: {
+    sourceWorktree: ResolvedWorktree
+    agent: TuiAgent
+    providerSession: AgentProviderSessionMetadata
+  }): AgentStatusPromptInteraction[] | undefined {
+    const store = this.store
+    const repo = store?.getRepo(args.sourceWorktree.repoId)
+    if (!repo || !store?.getWorkspaceSession) {
+      return undefined
+    }
+    const session = store.getWorkspaceSession(getRepoExecutionHostId(repo))
+    const records = [
+      ...Object.values(session.sleepingAgentSessionsByPaneKey ?? {}),
+      ...Object.values(session.archivedForkableAgentSessionsByPaneKey ?? {})
+    ]
+      .filter(
+        (record) =>
+          record.worktreeId === args.sourceWorktree.id &&
+          record.agent === args.agent &&
+          record.providerSession.key === args.providerSession.key &&
+          record.providerSession.id === args.providerSession.id
+      )
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+    for (const record of records) {
+      const promptInteractions = normalizePromptInteractionHistory(record.promptInteractions)
+      if (promptInteractions) {
+        return promptInteractions
+      }
+    }
+    return undefined
+  }
+
+  private getExplicitAgentSessionForkSourceStatus(args: {
+    sourceWorktree: ResolvedWorktree
+    agent?: TuiAgent
+    providerSession?: AgentProviderSessionMetadata
+    promptInteractions?: AgentStatusPromptInteraction[]
+  }): AgentSessionForkSourceStatus {
+    if (!isTuiAgent(args.agent)) {
+      throw new Error('A forkable agent is required for provider-session forking.')
+    }
+    const settings = this.store?.getSettings()
+    if (settings && !isTuiAgentEnabled(args.agent, settings.disabledTuiAgents)) {
+      throw new Error('This agent is disabled.')
+    }
+    const providerSession = normalizeAgentProviderSession(args.providerSession)
+    if (!providerSession) {
+      throw new Error('Provider session metadata is required for this fork.')
+    }
+    const promptInteractions =
+      normalizePromptInteractionHistory(args.promptInteractions) ??
+      this.getStoredAgentSessionForkPromptInteractions({
+        sourceWorktree: args.sourceWorktree,
+        agent: args.agent,
+        providerSession
+      })
+    return {
+      agent: args.agent,
+      providerSession,
+      ...(promptInteractions ? { promptInteractions } : {})
+    }
+  }
+
+  private async resolveAgentSessionForkSource(args: {
+    terminalHandle?: string
+    worktreeSelector?: string
+    agent?: TuiAgent
+    providerSession?: AgentProviderSessionMetadata
+    promptInteractions?: AgentStatusPromptInteraction[]
+  }): Promise<AgentSessionForkResolvedSource> {
+    const hasExplicitSource =
+      args.worktreeSelector !== undefined ||
+      args.agent !== undefined ||
+      args.providerSession !== undefined ||
+      args.promptInteractions !== undefined
+    if (args.terminalHandle && hasExplicitSource) {
+      throw new Error('Pass either a terminal or a provider-session source, not both.')
+    }
+    if (hasExplicitSource) {
+      if (!args.worktreeSelector) {
+        throw new Error('A source workspace is required for provider-session forking.')
+      }
+      const sourceWorktree = await this.resolveWorktreeSelector(args.worktreeSelector)
+      return {
+        sourceWorktree,
+        sourceStatus: this.getExplicitAgentSessionForkSourceStatus({
+          ...args,
+          sourceWorktree
+        }),
+        allowTranscriptFallback: false
+      }
+    }
+
+    const terminalHandle = args.terminalHandle ?? (await this.resolveActiveTerminal())
+    const terminal = await this.showTerminal(terminalHandle)
+    const sourceWorktree = (await this.showManagedWorktree(
+      `id:${terminal.worktreeId}`
+    )) as RuntimeWorktreeRecord
+    return {
+      terminalHandle,
+      sourceWorktree,
+      sourceStatus: this.getAgentSessionForkSourceStatus(terminalHandle),
+      allowTranscriptFallback: true
+    }
+  }
+
+  private buildStartupForNativeAgentSessionFork(
+    repo: Repo,
+    source: AgentSessionForkSourceStatus | null
+  ): {
+    agent: TuiAgent
+    startup: WorktreeStartupLaunch
+    contextDelivery: RuntimeAgentSessionForkContextDelivery
+  } | null {
+    if (!source?.providerSession || !isForkableTuiAgent(source.agent) || !this.store) {
+      return null
+    }
+    const settings = this.store.getSettings()
+    const startupPlan = buildAgentForkStartupPlan({
+      agent: source.agent,
+      providerSession: source.providerSession,
+      cmdOverrides: settings.agentCmdOverrides ?? {},
+      agentArgs: resolveTuiAgentLaunchArgs(source.agent, settings.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(source.agent, settings.agentDefaultEnv),
+      platform: getAgentLaunchPlatformForRepo(repo)
+    })
+    if (!startupPlan) {
+      return null
+    }
+    return {
+      agent: source.agent,
+      startup: {
+        command: startupPlan.launchCommand,
+        ...(startupPlan.env ? { env: startupPlan.env } : {})
+      },
+      contextDelivery: {
+        mode: 'native-provider',
+        promptDelivery: 'startup-agent',
+        providerSession: source.providerSession,
+        agent: source.agent
+      }
+    }
+  }
+
+  private buildStartupForMessageAgentSessionFork(
+    source: AgentSessionForkSourceStatus | null,
+    sourceLabel: string,
+    forkPointInput: AgentSessionForkPoint
+  ): {
+    forkPoint: AgentSessionForkPoint
+    contextDelivery: RuntimeAgentSessionForkContextDelivery
+    startupArgs: AgentSessionForkStartupArgs
+  } {
+    const forkPoint = normalizeAgentSessionForkPoint(forkPointInput)
+    if (!forkPoint) {
+      throw new Error('Invalid message fork point.')
+    }
+    const interactions = source?.promptInteractions ?? []
+    const forkIndex = interactions.findIndex((interaction) => interaction.id === forkPoint.id)
+    if (!source || forkIndex === -1) {
+      throw new Error(
+        'Message fork point was not found for this source. Message forks require recorded structured prompt history.'
+      )
+    }
+    const included = interactions.slice(0, forkIndex + 1)
+    const promptInteractions: AgentSessionForkPromptInteraction[] = included.map((interaction) => ({
+      id: interaction.id,
+      prompt: interaction.prompt,
+      observedAt: interaction.observedAt
+    }))
+    const prompt = buildAgentSessionMessageForkPrompt({
+      forkPoint,
+      interactions: promptInteractions,
+      sourceLabel,
+      agentLabel: source.agent
+    })
+    if (!prompt) {
+      throw new Error('No structured message history was available for this fork point.')
+    }
+    return {
+      forkPoint,
+      contextDelivery: {
+        mode: 'structured-message-fallback',
+        promptDelivery: 'startup-agent',
+        forkPoint,
+        includedPromptCount: included.length,
+        nativeProviderReason: 'message-fork-point-selected',
+        agent: source.agent
+      },
+      startupArgs: { startupAgent: source.agent, startupPrompt: prompt }
+    }
+  }
+
+  private buildStartupForStructuredHistoryAgentSessionFork(
+    source: AgentSessionForkSourceStatus | null,
+    sourceLabel: string
+  ): {
+    contextDelivery: RuntimeAgentSessionForkContextDelivery
+    startupArgs: AgentSessionForkStartupArgs
+  } | null {
+    const interactions = source?.promptInteractions ?? []
+    if (!source || interactions.length === 0) {
+      return null
+    }
+    const promptInteractions: AgentSessionForkPromptInteraction[] = interactions.map(
+      (interaction) => ({
+        id: interaction.id,
+        prompt: interaction.prompt,
+        observedAt: interaction.observedAt
+      })
+    )
+    const prompt = buildAgentSessionStructuredHistoryForkPrompt({
+      interactions: promptInteractions,
+      sourceLabel,
+      agentLabel: source.agent
+    })
+    if (!prompt) {
+      return null
+    }
+    return {
+      contextDelivery: {
+        mode: 'structured-history-fallback',
+        promptDelivery: 'startup-agent',
+        includedPromptCount: promptInteractions.length,
+        nativeProviderReason: this.getAgentSessionForkNativeFallbackReason(source),
+        agent: source.agent
+      },
+      startupArgs: { startupAgent: source.agent, startupPrompt: prompt }
+    }
+  }
+
+  private getAgentSessionForkPointOptions(
+    source: AgentSessionForkSourceStatus | null
+  ): RuntimeAgentSessionForkPointOption[] {
+    if (!source) {
+      return []
+    }
+    const seen = new Set<string>()
+    const options: RuntimeAgentSessionForkPointOption[] = []
+    for (const interaction of source.promptInteractions ?? []) {
+      const forkPoint = normalizeAgentSessionForkPoint({ kind: 'message', id: interaction.id })
+      if (!forkPoint || seen.has(forkPoint.id)) {
+        continue
+      }
+      seen.add(forkPoint.id)
+      options.push({
+        forkPoint,
+        prompt: interaction.prompt,
+        observedAt: interaction.observedAt,
+        agent: source.agent
+      })
+    }
+    return options
+  }
+
+  private getAgentSessionForkNativeFallbackReason(
+    source: AgentSessionForkSourceStatus | null
+  ): RuntimeAgentSessionForkNativeProviderReason {
+    if (!source) {
+      return 'provider-session-metadata-unavailable'
+    }
+    if (!isForkableTuiAgent(source.agent)) {
+      return 'provider-native-fork-unsupported'
+    }
+    if (!source.providerSession) {
+      return 'provider-session-metadata-unavailable'
+    }
+    return 'provider-native-fork-plan-unavailable'
+  }
+
+  private toAgentSessionForkRecord(
+    worktree: RuntimeWorktreeRecord
+  ): RuntimeAgentSessionForkRecord | null {
+    if (!worktree.lineage) {
+      return null
+    }
+    return {
+      id: worktree.id,
+      worktreeId: worktree.id,
+      parentWorktreeId: worktree.lineage.parentWorktreeId,
+      createdAt: worktree.lineage.createdAt,
+      worktree,
+      lineage: worktree.lineage,
+      ...(worktree.lineage.agentSessionForkPoint
+        ? { forkPoint: worktree.lineage.agentSessionForkPoint }
+        : {})
+    }
+  }
+
+  private toForkWorktreeSelector(fork: string): string {
+    const trimmed = fork.trim()
+    if (!trimmed) {
+      throw new Error('Missing fork selector.')
+    }
+    if (
+      trimmed === 'active' ||
+      trimmed === 'current' ||
+      trimmed.startsWith('id:') ||
+      trimmed.startsWith('path:') ||
+      trimmed.startsWith('branch:') ||
+      trimmed.startsWith('issue:')
+    ) {
+      return trimmed
+    }
+    return `id:${trimmed}`
+  }
+
+  private async runLocalAgentForkDiffGit(worktreePath: string, args: string[]): Promise<string> {
+    const { stdout } = await gitExecFileAsync(args, {
+      cwd: worktreePath,
+      maxBuffer: DEFAULT_GIT_MAX_BUFFER,
+      timeout: 60_000
+    })
+    return stdout
+  }
+
+  private async resolveExistingWorkspaceForkStartup(
+    repo: Repo,
+    startupArgs: AgentSessionForkStartupArgs
+  ): Promise<{
+    startup: WorktreeStartupLaunch
+    createdWithAgent?: TuiAgent
+    startupFollowup?: WorktreeStartupFollowup
+    startupDraftPaste?: WorktreeStartupDraftPaste
+  }> {
+    if ('startup' in startupArgs) {
+      return {
+        startup: startupArgs.startup,
+        createdWithAgent: startupArgs.createdWithAgent
+      }
+    }
+    if ('startupAgent' in startupArgs) {
+      const agentStartup = this.buildStartupForAgent(
+        repo,
+        startupArgs.startupAgent,
+        startupArgs.startupPrompt
+      )
+      return {
+        startup: agentStartup.startup,
+        createdWithAgent: agentStartup.agent,
+        ...(agentStartup.followup ? { startupFollowup: agentStartup.followup } : {})
+      }
+    }
+    const draftStartup = await this.buildStartupForDraft(repo, startupArgs.startupDraft)
+    if (!draftStartup) {
+      throw new Error('Could not build a same-workspace fork startup command.')
+    }
+    return {
+      startup: draftStartup.startup,
+      createdWithAgent: draftStartup.agent,
+      ...(draftStartup.draftPaste ? { startupDraftPaste: draftStartup.draftPaste } : {})
+    }
+  }
+
+  private async launchExistingWorkspaceAgentSessionFork(args: {
+    sourceWorktree: ResolvedWorktree
+    repo: Repo
+    sourceLabel: string
+    startupArgs: AgentSessionForkStartupArgs
+    activate: boolean
+  }): Promise<RuntimeTerminalCreate> {
+    const startup = await this.resolveExistingWorkspaceForkStartup(args.repo, args.startupArgs)
+    const startupTrustAgent = startup.startupDraftPaste?.agent ?? startup.createdWithAgent
+    if (startupTrustAgent) {
+      if (args.repo.connectionId) {
+        await this.markRemoteWorkspaceTrustedForAgent(
+          startupTrustAgent,
+          args.repo.connectionId,
+          args.sourceWorktree.path
+        )
+      } else {
+        this.markLocalWorkspaceTrustedForAgent(startupTrustAgent, args.sourceWorktree.path)
+      }
+    }
+    const terminal = await this.createTerminal(`id:${args.sourceWorktree.id}`, {
+      command: startup.startup.command,
+      env: startup.startup.env,
+      telemetry: startup.startup.telemetry,
+      title: `Fork of ${args.sourceLabel}`,
+      activate: args.activate
+    })
+    if (startup.startupDraftPaste) {
+      this.pasteStartupDraftWhenReady(terminal.handle, startup.startupDraftPaste)
+    }
+    if (startup.startupFollowup) {
+      this.sendStartupFollowupWhenReady(terminal.handle, startup.startupFollowup)
+    }
+    return terminal
+  }
+
+  private async planAgentSessionFork(args: {
+    terminalHandle?: string
+    worktreeSelector?: string
+    agent?: TuiAgent
+    providerSession?: AgentProviderSessionMetadata
+    promptInteractions?: AgentStatusPromptInteraction[]
+    forkPoint?: AgentSessionForkPoint
+    noCopyFiles?: boolean
+  }): Promise<AgentSessionForkPlan> {
+    const source = await this.resolveAgentSessionForkSource(args)
+    const { sourceWorktree, sourceStatus, allowTranscriptFallback } = source
+    if (sourceWorktree.isArchived || sourceWorktree.isBare) {
+      throw new Error('This workspace cannot be forked.')
+    }
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const sourceRepo = this.store.getRepo(sourceWorktree.repoId)
+    if (!sourceRepo) {
+      throw new Error('repo_not_found')
+    }
+    const sourceLabel =
+      sourceWorktree.displayName ||
+      sourceWorktree.branch ||
+      sourceWorktree.path ||
+      sourceWorktree.id
+    const nativeStartup = this.buildStartupForNativeAgentSessionFork(sourceRepo, sourceStatus)
+    const structuredHistoryStartup = this.buildStartupForStructuredHistoryAgentSessionFork(
+      sourceStatus,
+      sourceLabel
+    )
+    let contextDelivery: RuntimeAgentSessionForkContextDelivery
+    let startupArgs: AgentSessionForkStartupArgs
+    let forkPoint: AgentSessionForkPoint | undefined
+    if (args.forkPoint) {
+      const messageStartup = this.buildStartupForMessageAgentSessionFork(
+        sourceStatus,
+        sourceLabel,
+        args.forkPoint
+      )
+      forkPoint = messageStartup.forkPoint
+      contextDelivery = messageStartup.contextDelivery
+      startupArgs = messageStartup.startupArgs
+    } else if (nativeStartup) {
+      contextDelivery = nativeStartup.contextDelivery
+      startupArgs = {
+        startup: nativeStartup.startup,
+        createdWithAgent: nativeStartup.agent
+      }
+    } else if (!allowTranscriptFallback) {
+      if (structuredHistoryStartup) {
+        contextDelivery = structuredHistoryStartup.contextDelivery
+        startupArgs = structuredHistoryStartup.startupArgs
+      } else {
+        const reason = this.getAgentSessionForkNativeFallbackReason(sourceStatus)
+        if (reason === 'provider-native-fork-unsupported') {
+          throw new Error(
+            'This agent does not support native session forking, and no recorded structured prompt history is available for an Orca fallback.'
+          )
+        }
+        if (reason === 'provider-session-metadata-unavailable') {
+          throw new Error('Provider session metadata is required for this fork.')
+        }
+        throw new Error(
+          'Provider-native fork startup could not be built for this session, and no recorded structured prompt history is available for an Orca fallback.'
+        )
+      }
+    } else {
+      if (!source.terminalHandle) {
+        throw new Error('A source terminal is required for transcript fallback.')
+      }
+      const read = await this.readTerminal(source.terminalHandle, { limit: 800 })
+      const sourceAgent = sourceStatus?.agent ?? null
+      const prompt = buildAgentSessionForkPrompt({
+        capturedText: read.tail.join('\n'),
+        sourceLabel,
+        agentLabel: sourceAgent
+      })
+      if (!prompt && structuredHistoryStartup) {
+        contextDelivery = structuredHistoryStartup.contextDelivery
+        startupArgs = structuredHistoryStartup.startupArgs
+      } else if (!prompt) {
+        throw new Error('No terminal transcript was available for this fork.')
+      } else {
+        contextDelivery = {
+          mode: 'transcript-fallback',
+          promptDelivery: sourceAgent ? 'startup-agent' : 'startup-draft',
+          transcriptLineCount: read.returnedLineCount ?? read.tail.length,
+          transcriptTruncated: read.truncated || read.limited === true,
+          nativeProviderReason: this.getAgentSessionForkNativeFallbackReason(sourceStatus),
+          agent: sourceAgent
+        }
+        startupArgs = sourceAgent
+          ? { startupAgent: sourceAgent, startupPrompt: prompt }
+          : { startupDraft: prompt }
+      }
+    }
+    return {
+      ...source,
+      sourceRepo,
+      sourceLabel,
+      workspaceMode: args.noCopyFiles === true ? 'same-workspace' : 'child-workspace',
+      ...(forkPoint ? { forkPoint } : {}),
+      contextDelivery,
+      startupArgs
+    }
+  }
+
+  async preflightAgentSessionFork(args: {
+    terminalHandle?: string
+    worktreeSelector?: string
+    agent?: TuiAgent
+    providerSession?: AgentProviderSessionMetadata
+    promptInteractions?: AgentStatusPromptInteraction[]
+    forkPoint?: AgentSessionForkPoint
+    noCopyFiles?: boolean
+  }): Promise<RuntimeAgentSessionForkPreflightResult> {
+    const plan = await this.planAgentSessionFork(args)
+    const availableForkPoints = this.getAgentSessionForkPointOptions(plan.sourceStatus)
+    return {
+      ...(plan.terminalHandle ? { sourceTerminalHandle: plan.terminalHandle } : {}),
+      sourceWorktreeId: plan.sourceWorktree.id,
+      workspaceMode: plan.workspaceMode,
+      ...(plan.forkPoint ? { forkPoint: plan.forkPoint } : {}),
+      ...(availableForkPoints.length > 0 ? { availableForkPoints } : {}),
+      contextDelivery: plan.contextDelivery
+    }
+  }
+
+  async createAgentSessionFork(args: {
+    terminalHandle?: string
+    worktreeSelector?: string
+    agent?: TuiAgent
+    providerSession?: AgentProviderSessionMetadata
+    promptInteractions?: AgentStatusPromptInteraction[]
+    forkPoint?: AgentSessionForkPoint
+    name?: string
+    activate?: boolean
+    noCopyFiles?: boolean
+  }): Promise<RuntimeAgentSessionForkCreateResult> {
+    const plan = await this.planAgentSessionFork(args)
+    const {
+      terminalHandle,
+      sourceWorktree,
+      sourceRepo,
+      sourceLabel,
+      forkPoint,
+      contextDelivery,
+      startupArgs
+    } = plan
+    const activateFork = args.activate !== false
+    if (args.noCopyFiles === true) {
+      const terminal = await this.launchExistingWorkspaceAgentSessionFork({
+        sourceWorktree,
+        repo: sourceRepo,
+        sourceLabel,
+        startupArgs,
+        activate: activateFork
+      })
+      return {
+        worktree: sourceWorktree as RuntimeWorktreeRecord,
+        lineage: null,
+        warnings: [],
+        fork: {
+          id: terminal.handle,
+          ...(terminalHandle ? { sourceTerminalHandle: terminalHandle } : {}),
+          sourceWorktreeId: sourceWorktree.id,
+          targetWorktreeId: sourceWorktree.id,
+          workspaceMode: 'same-workspace',
+          terminalHandle: terminal.handle,
+          ...(terminal.tabId ? { terminalTabId: terminal.tabId } : {}),
+          ...(forkPoint ? { forkPoint } : {}),
+          contextDelivery
+        }
+      }
+    }
+    const createResult = (await this.createManagedWorktree({
+      repoSelector: `id:${sourceWorktree.repoId}`,
+      name: args.name?.trim() || `${sourceLabel}-fork`,
+      displayName: `Fork of ${sourceLabel}`,
+      baseBranch: sourceWorktree.branch || sourceWorktree.head || undefined,
+      telemetrySource: 'unknown',
+      // Why: fork context is delivered by the child startup terminal, whether
+      // provider-native or transcript fallback.
+      activate: activateFork,
+      ...startupArgs,
+      lineage: {
+        parentWorktree: `id:${sourceWorktree.id}`,
+        ...(terminalHandle ? { callerTerminalHandle: terminalHandle } : {}),
+        ...(forkPoint ? { agentSessionForkPoint: forkPoint } : {})
+      }
+    })) as RuntimeWorktreeCreateResult
+
+    return {
+      ...createResult,
+      fork: {
+        id: createResult.worktree.id,
+        ...(terminalHandle ? { sourceTerminalHandle: terminalHandle } : {}),
+        sourceWorktreeId: sourceWorktree.id,
+        targetWorktreeId: createResult.worktree.id,
+        workspaceMode: 'child-workspace',
+        childWorktreeId: createResult.worktree.id,
+        ...(forkPoint ? { forkPoint } : {}),
+        contextDelivery
+      }
+    }
+  }
+
+  async listAgentSessionForks(
+    args: {
+      worktreeSelector?: string
+      limit?: number
+    } = {}
+  ): Promise<RuntimeAgentSessionForkListResult> {
+    const limit = args.limit ?? DEFAULT_WORKTREE_LIST_LIMIT
+    if (!Number.isInteger(limit) || limit <= 0) {
+      throw new Error('invalid_limit')
+    }
+    const targetWorktree = args.worktreeSelector
+      ? await this.resolveWorktreeSelector(args.worktreeSelector)
+      : null
+    const listed = await this.listManagedWorktrees(undefined, 10_000)
+    const forks = listed.worktrees
+      .map((worktree) => this.toAgentSessionForkRecord(worktree))
+      .filter((fork): fork is RuntimeAgentSessionForkRecord => {
+        if (!fork) {
+          return false
+        }
+        if (!targetWorktree) {
+          return true
+        }
+        return fork.worktreeId === targetWorktree.id || fork.parentWorktreeId === targetWorktree.id
+      })
+      .sort((a, b) => b.createdAt - a.createdAt)
+    return {
+      forks: forks.slice(0, limit),
+      totalCount: forks.length,
+      truncated: forks.length > limit
+    }
+  }
+
+  async showAgentSessionFork(fork: string): Promise<RuntimeAgentSessionForkShowResult> {
+    const worktree = (await this.showManagedWorktree(
+      this.toForkWorktreeSelector(fork)
+    )) as RuntimeWorktreeRecord
+    const record = this.toAgentSessionForkRecord(worktree)
+    if (!record) {
+      throw new Error(`Fork not found: ${fork}`)
+    }
+    return { fork: record }
+  }
+
+  async diffAgentSessionFork(fork: string): Promise<RuntimeAgentSessionForkDiffResult> {
+    const { fork: forkRecord } = await this.showAgentSessionFork(fork)
+    const parentWorktree = (await this.resolveWorktreeSelector(
+      `id:${forkRecord.parentWorktreeId}`
+    )) as RuntimeWorktreeRecord
+    const repo = this.store?.getRepo(forkRecord.worktree.repoId)
+    if (!repo) {
+      throw new Error('repo_not_found')
+    }
+    if (parentWorktree.repoId !== forkRecord.worktree.repoId) {
+      throw new Error('fork_diff_requires_same_repo')
+    }
+    if (isFolderRepo(repo)) {
+      const diffResult = await diffFolderWorkspaceFork(
+        {
+          parentPath: parentWorktree.path,
+          childPath: forkRecord.worktree.path,
+          connectionId: repo.connectionId
+        },
+        { getSshFilesystemProvider }
+      )
+      return {
+        fork: forkRecord,
+        parentWorktree,
+        baseRef: parentWorktree.path,
+        targetRef: forkRecord.worktree.path,
+        includesWorkingTree: true,
+        diff: diffResult.diff,
+        untrackedFiles: []
+      }
+    }
+    const baseRef = parentWorktree.git.head || parentWorktree.head
+    if (!baseRef) {
+      throw new Error('fork_diff_base_unavailable')
+    }
+    const diffResult = repo.connectionId
+      ? await requireSshGitProvider(repo.connectionId).getForkDiff(
+          forkRecord.worktree.path,
+          baseRef
+        )
+      : await (async () => {
+          const [diff, untrackedStdout] = await Promise.all([
+            this.runLocalAgentForkDiffGit(forkRecord.worktree.path, [
+              'diff',
+              '--no-ext-diff',
+              '--no-color',
+              '--binary',
+              baseRef,
+              '--'
+            ]),
+            this.runLocalAgentForkDiffGit(forkRecord.worktree.path, [
+              'ls-files',
+              '--others',
+              '--exclude-standard',
+              '-z'
+            ])
+          ])
+          return {
+            diff,
+            untrackedFiles: parseGitNullDelimitedPaths(untrackedStdout)
+          }
+        })()
+    return {
+      fork: forkRecord,
+      parentWorktree,
+      baseRef,
+      targetRef: forkRecord.worktree.git.head || forkRecord.worktree.head || 'working-tree',
+      includesWorkingTree: true,
+      diff: diffResult.diff,
+      untrackedFiles: diffResult.untrackedFiles
+    }
+  }
+
+  async removeAgentSessionFork(
+    fork: string,
+    force?: boolean,
+    runHooks?: boolean
+  ): Promise<RuntimeAgentSessionForkRemoveResult> {
+    const forkRecord = await this.showAgentSessionFork(fork)
+    const result = await this.removeManagedWorktree(
+      `id:${forkRecord.fork.worktreeId}`,
+      force === true,
+      runHooks === true
+    )
+    return { forkId: forkRecord.fork.id, removed: true, ...result }
   }
 
   async updateManagedWorktreeMeta(
@@ -13544,7 +14431,10 @@ export class OrcaRuntimeService {
           kind: 'lineage',
           parent: await this.resolveWorkspaceParentSelector(input.parentWorkspace),
           origin: 'cli',
-          capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+          capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+          ...(input.agentSessionForkPoint
+            ? { agentSessionForkPoint: input.agentSessionForkPoint }
+            : {})
         }
       } catch {
         throw new RuntimeLineageError(
@@ -13572,7 +14462,16 @@ export class OrcaRuntimeService {
             instanceId: parent.instanceId ?? null
           },
           origin: 'cli',
-          capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+          capture: {
+            source: input.callerTerminalHandle ? 'terminal-context' : 'explicit-cli-flag',
+            confidence: 'explicit'
+          },
+          ...(input.callerTerminalHandle
+            ? { createdByTerminalHandle: input.callerTerminalHandle }
+            : {}),
+          ...(input.agentSessionForkPoint
+            ? { agentSessionForkPoint: input.agentSessionForkPoint }
+            : {})
         }
       } catch {
         throw new RuntimeLineageError(
@@ -13753,7 +14652,8 @@ export class OrcaRuntimeService {
         : {}),
       ...(terminalContextResolved && input.callerTerminalHandle
         ? { createdByTerminalHandle: input.callerTerminalHandle }
-        : {})
+        : {}),
+      ...(input.agentSessionForkPoint ? { agentSessionForkPoint: input.agentSessionForkPoint } : {})
     }
   }
 

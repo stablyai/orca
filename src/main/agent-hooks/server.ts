@@ -38,12 +38,16 @@ import {
 } from '../../shared/agent-hook-listener'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import {
+  AGENT_STATUS_PROMPT_INTERACTION_HISTORY_MAX,
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusIpcPayload,
+  type AgentStatusPromptInteraction,
   type AgentType,
   type AgentStatusState,
   type ParsedAgentStatusPayload,
-  normalizeAgentStatusPayload
+  normalizeAgentStatusPayload,
+  normalizePromptInteractionHistory,
+  normalizePromptInteractionKey
 } from '../../shared/agent-status-types'
 import {
   resolveAgentStatusIdentity,
@@ -70,6 +74,7 @@ export type { AgentHookSource }
 type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   receivedAt: number
   stateStartedAt: number
+  promptInteractions?: AgentStatusPromptInteraction[]
 }
 
 export type AgentHookStatusChangeEntry = {
@@ -151,6 +156,34 @@ function equivalentInterruptAgentType(
   return normalizedActual === normalizedBaseline
 }
 
+function resolvePromptInteractionHistory(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  payload: AgentHookEventPayload,
+  now: number
+): AgentStatusPromptInteraction[] | undefined {
+  const previousHistory = previous?.promptInteractions ?? []
+  const id = normalizePromptInteractionKey(payload.promptInteractionKey)
+  if (!id) {
+    return previousHistory.length > 0 ? previousHistory : undefined
+  }
+  const existingIndex = previousHistory.findIndex((interaction) => interaction.id === id)
+  const existing = existingIndex === -1 ? undefined : previousHistory[existingIndex]
+  const nextEntry: AgentStatusPromptInteraction = {
+    id,
+    prompt: payload.payload.prompt || existing?.prompt || '',
+    observedAt: existing?.observedAt ?? now,
+    ...(payload.payload.agentType ? { agentType: payload.payload.agentType } : {})
+  }
+  const next = [...previousHistory]
+  if (existingIndex === -1) {
+    next.push(nextEntry)
+  } else {
+    next[existingIndex] = nextEntry
+  }
+  const capped = next.slice(-AGENT_STATUS_PROMPT_INTERACTION_HISTORY_MAX)
+  return capped.length > 0 ? capped : undefined
+}
+
 // Why: paneKey is `${tabId}:${leafUuid}` — validate the durable leaf suffix
 // at write/hydrate time so legacy numeric rows fail closed.
 export function isValidPaneKey(value: unknown): value is string {
@@ -220,6 +253,8 @@ function sanitizeHydratedEntry(
     connectionId,
     hasExplicitPrompt: record.hasExplicitPrompt === true ? true : undefined,
     hookEventName: typeof record.hookEventName === 'string' ? record.hookEventName : undefined,
+    promptInteractionKey: normalizePromptInteractionKey(record.promptInteractionKey),
+    promptInteractions: normalizePromptInteractionHistory(record.promptInteractions),
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
@@ -238,6 +273,8 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     connectionId: entry.connectionId,
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
+    ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
+    ...(entry.promptInteractions ? { promptInteractions: entry.promptInteractions } : {}),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...entry.payload
   }
@@ -578,10 +615,12 @@ export class AgentHookServer {
       | undefined
     const stateStartedAt =
       previous && previous.payload.state === payload.payload.state ? previous.stateStartedAt : now
+    const promptInteractions = resolvePromptInteractionHistory(previous, payload, now)
     return {
       ...payload,
       receivedAt: now,
-      stateStartedAt
+      stateStartedAt,
+      ...(promptInteractions ? { promptInteractions } : {})
     }
   }
 
@@ -606,11 +645,7 @@ export class AgentHookServer {
     }
     const agentKind = agentTypeToPromptSentAgentKind(payload.payload.agentType)
     const promptHash = this.hashPromptForTelemetryDedupe(prompt)
-    const promptInteractionKey =
-      typeof payload.promptInteractionKey === 'string' &&
-      payload.promptInteractionKey.trim().length > 0
-        ? payload.promptInteractionKey.trim()
-        : undefined
+    const promptInteractionKey = normalizePromptInteractionKey(payload.promptInteractionKey)
     const previousDedupe = this.promptSentDedupeByPaneKey.get(payload.paneKey)
     const isCompletedTurnBoundary =
       previousStatus?.payload.state === 'done' && payload.payload.state === 'working'
@@ -727,7 +762,14 @@ export class AgentHookServer {
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
-    const enriched = this.attachStatusTiming(effectivePayload, now)
+    const normalizedPromptInteractionKey = normalizePromptInteractionKey(
+      effectivePayload.promptInteractionKey
+    )
+    const cachedPayload =
+      normalizedPromptInteractionKey === effectivePayload.promptInteractionKey
+        ? effectivePayload
+        : { ...effectivePayload, promptInteractionKey: normalizedPromptInteractionKey }
+    const enriched = this.attachStatusTiming(cachedPayload, now)
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     this.scheduleStatusPersist()
@@ -1044,11 +1086,7 @@ export class AgentHookServer {
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
         ? envelope.hookEventName.trim()
         : undefined
-    const promptInteractionKey =
-      typeof envelope.promptInteractionKey === 'string' &&
-      envelope.promptInteractionKey.trim().length > 0
-        ? envelope.promptInteractionKey.trim()
-        : undefined
+    const promptInteractionKey = normalizePromptInteractionKey(envelope.promptInteractionKey)
     const toolUseId =
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
@@ -1427,8 +1465,7 @@ export class AgentHookServer {
       if (!isValidPaneKey(paneKey)) {
         continue
       }
-      const { promptInteractionKey: _promptInteractionKey, ...persistedPayload } = payload
-      entries[paneKey] = persistedPayload as EnrichedAgentHookEventPayload
+      entries[paneKey] = payload as EnrichedAgentHookEventPayload
     }
     const file: LastStatusFile = { version: LAST_STATUS_FILE_VERSION, entries }
     return JSON.stringify(file)

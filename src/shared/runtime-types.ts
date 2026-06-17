@@ -27,6 +27,8 @@ import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
 } from './mobile-markdown-document'
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentSessionForkPoint } from './agent-session-fork'
 import type { RuntimeCapability } from './protocol-version'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
 
@@ -514,6 +516,108 @@ export type RuntimeWorktreeCreateResult = {
 export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {
   removed: boolean
   warning?: string
+}
+
+export type RuntimeAgentSessionForkNativeProviderReason =
+  | 'provider-session-metadata-unavailable'
+  | 'provider-native-fork-unsupported'
+  | 'provider-native-fork-plan-unavailable'
+  | 'message-fork-point-selected'
+
+export type RuntimeAgentSessionForkContextDelivery =
+  | {
+      mode: 'native-provider'
+      promptDelivery: 'startup-agent'
+      providerSession: AgentProviderSessionMetadata
+      agent: TuiAgent
+    }
+  | {
+      mode: 'transcript-fallback'
+      promptDelivery: 'startup-agent' | 'startup-draft'
+      transcriptLineCount: number
+      transcriptTruncated: boolean
+      nativeProviderReason: RuntimeAgentSessionForkNativeProviderReason
+      agent: TuiAgent | null
+    }
+  | {
+      mode: 'structured-message-fallback'
+      promptDelivery: 'startup-agent' | 'startup-draft'
+      forkPoint: AgentSessionForkPoint
+      includedPromptCount: number
+      nativeProviderReason: RuntimeAgentSessionForkNativeProviderReason
+      agent: TuiAgent | null
+    }
+  | {
+      mode: 'structured-history-fallback'
+      promptDelivery: 'startup-agent' | 'startup-draft'
+      includedPromptCount: number
+      nativeProviderReason: RuntimeAgentSessionForkNativeProviderReason
+      agent: TuiAgent | null
+    }
+
+export type RuntimeAgentSessionForkRecord = {
+  id: string
+  worktreeId: string
+  parentWorktreeId: string
+  createdAt: number
+  worktree: RuntimeWorktreeRecord
+  lineage: WorktreeLineage
+  forkPoint?: AgentSessionForkPoint
+}
+
+export type RuntimeAgentSessionForkPointOption = {
+  forkPoint: AgentSessionForkPoint
+  prompt: string
+  observedAt?: number
+  agent?: TuiAgent
+}
+
+export type RuntimeAgentSessionForkCreateResult = RuntimeWorktreeCreateResult & {
+  fork: {
+    id: string
+    sourceTerminalHandle?: string
+    sourceWorktreeId: string
+    targetWorktreeId: string
+    workspaceMode: 'child-workspace' | 'same-workspace'
+    childWorktreeId?: string
+    terminalHandle?: string
+    terminalTabId?: string
+    forkPoint?: AgentSessionForkPoint
+    contextDelivery: RuntimeAgentSessionForkContextDelivery
+  }
+}
+
+export type RuntimeAgentSessionForkPreflightResult = {
+  sourceTerminalHandle?: string
+  sourceWorktreeId: string
+  workspaceMode: 'child-workspace' | 'same-workspace'
+  forkPoint?: AgentSessionForkPoint
+  availableForkPoints?: RuntimeAgentSessionForkPointOption[]
+  contextDelivery: RuntimeAgentSessionForkContextDelivery
+}
+
+export type RuntimeAgentSessionForkListResult = {
+  forks: RuntimeAgentSessionForkRecord[]
+  totalCount: number
+  truncated: boolean
+}
+
+export type RuntimeAgentSessionForkShowResult = {
+  fork: RuntimeAgentSessionForkRecord
+}
+
+export type RuntimeAgentSessionForkDiffResult = {
+  fork: RuntimeAgentSessionForkRecord
+  parentWorktree: RuntimeWorktreeRecord
+  baseRef: string
+  targetRef: string
+  includesWorkingTree: boolean
+  diff: string
+  untrackedFiles: string[]
+}
+
+export type RuntimeAgentSessionForkRemoveResult = RuntimeWorktreeRemoveResult & {
+  forkId: string
 }
 
 export type RuntimeWorktreePsResult = {

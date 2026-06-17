@@ -1,7 +1,9 @@
 import { isShellProcess } from './agent-detection'
 import {
+  getAgentForkArgv,
   getAgentResumeArgv,
   type AgentProviderSessionMetadata,
+  type ForkableTuiAgent,
   type ResumableTuiAgent
 } from './agent-session-resume'
 import { tokenizeCustomCommandTemplate } from './commit-message-prompt'
@@ -215,6 +217,44 @@ export function buildAgentResumeStartupPlan(args: {
     .map((arg) => quoteStartupArg(arg, shell))
     .join(' ')
   const launchCommand = resumeArgs ? `${baseCommand.command} ${resumeArgs}` : baseCommand.command
+  return {
+    agent: args.agent,
+    launchCommand,
+    expectedProcess: config.expectedProcess,
+    followupPrompt: null,
+    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+  }
+}
+
+export function buildAgentForkStartupPlan(args: {
+  agent: ForkableTuiAgent
+  providerSession: AgentProviderSessionMetadata
+  cmdOverrides: Partial<Record<TuiAgent, string>>
+  platform: NodeJS.Platform
+  shell?: AgentStartupShell
+  agentArgs?: string | null
+  agentEnv?: Record<string, string> | null
+}): AgentStartupPlan | null {
+  const argv = getAgentForkArgv(args.agent, args.providerSession)
+  if (!argv) {
+    return null
+  }
+  const shell = resolveStartupShell(args.platform, args.shell)
+  const config = TUI_AGENT_CONFIG[args.agent]
+  const baseCommand = resolveBaseCommand({
+    agent: args.agent,
+    cmdOverrides: args.cmdOverrides,
+    shell,
+    agentArgs: args.agentArgs
+  })
+  if (!baseCommand.ok) {
+    return null
+  }
+  const forkArgs = argv
+    .slice(1)
+    .map((arg) => quoteStartupArg(arg, shell))
+    .join(' ')
+  const launchCommand = forkArgs ? `${baseCommand.command} ${forkArgs}` : baseCommand.command
   return {
     agent: args.agent,
     launchCommand,

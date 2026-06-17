@@ -72,6 +72,7 @@ import {
   buildWorkspaceRunContext
 } from '../shared/task-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
+import { normalizeAgentSessionForkPoint } from '../shared/agent-session-fork'
 import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
 import { getGitUsername } from './git/repo'
@@ -547,6 +548,9 @@ function normalizeWorkspaceLineageByChildKey(
       ...(lineage.coordinatorHandle ? { coordinatorHandle: lineage.coordinatorHandle } : {}),
       ...(lineage.createdByTerminalHandle
         ? { createdByTerminalHandle: lineage.createdByTerminalHandle }
+        : {}),
+      ...(lineage.agentSessionForkPoint
+        ? { agentSessionForkPoint: normalizeAgentSessionForkPoint(lineage.agentSessionForkPoint) }
         : {}),
       createdAt: Number.isFinite(lineage.createdAt) ? Number(lineage.createdAt) : Date.now()
     }
@@ -2048,6 +2052,13 @@ function removeWorkspaceSessionOwner(
     for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
       if (record.worktreeId === ownerKey) {
         delete next.sleepingAgentSessionsByPaneKey[paneKey]
+      }
+    }
+  }
+  if (next.archivedForkableAgentSessionsByPaneKey) {
+    for (const [paneKey, record] of Object.entries(next.archivedForkableAgentSessionsByPaneKey)) {
+      if (record.worktreeId === ownerKey) {
+        delete next.archivedForkableAgentSessionsByPaneKey[paneKey]
       }
     }
   }
@@ -4272,6 +4283,21 @@ export class Store {
         }
         if (sleepingChanged) {
           session.sleepingAgentSessionsByPaneKey = nextSleeping
+          sessionChanged = true
+        }
+      }
+      if (session.archivedForkableAgentSessionsByPaneKey) {
+        let archivedChanged = false
+        const nextArchived = { ...session.archivedForkableAgentSessionsByPaneKey }
+        for (const [paneKey, record] of Object.entries(nextArchived)) {
+          if (record.worktreeId !== oldWorktreeId) {
+            continue
+          }
+          nextArchived[paneKey] = { ...record, worktreeId: newWorktreeId }
+          archivedChanged = true
+        }
+        if (archivedChanged) {
+          session.archivedForkableAgentSessionsByPaneKey = nextArchived
           sessionChanged = true
         }
       }

@@ -1992,12 +1992,21 @@ export function connectPanePty(
       const entry = state.agentStatusByPaneKey[cacheKey]
       const sleepingRecord = state.sleepingAgentSessionsByPaneKey[cacheKey]
       const useLiveEntry = entry && entry.state !== 'done'
-      const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
+      const useSleepingRecord = !useLiveEntry && sleepingRecord?.resumeAvailable !== false
+      const agent = useLiveEntry
+        ? entry.agentType
+        : useSleepingRecord
+          ? sleepingRecord?.agent
+          : null
       if (!agent || !isResumableTuiAgent(agent)) {
         return false
       }
       const providerSession = normalizeAgentProviderSession(
-        useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
+        useLiveEntry
+          ? entry.providerSession
+          : useSleepingRecord
+            ? sleepingRecord?.providerSession
+            : null
       )
       if (!providerSession) {
         return false

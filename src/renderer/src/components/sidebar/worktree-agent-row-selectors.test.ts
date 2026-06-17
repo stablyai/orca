@@ -5,12 +5,14 @@ import type {
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
   selectRuntimeAgentOrchestrationForWorktree,
-  selectRetainedAgentEntriesForWorktree
+  selectRetainedAgentEntriesForWorktree,
+  selectSleepingAgentSessionsForWorktree
 } from './worktree-agent-row-selectors'
 
 const PANE_KEY_1 = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
@@ -55,6 +57,25 @@ function makeRetained(paneKey: string, worktreeId: string, startedAt: number): R
     tab: makeTab(paneKey.slice(0, paneKey.indexOf(':'))),
     agentType: 'claude',
     startedAt
+  }
+}
+
+function makeSleeping(
+  paneKey: string,
+  worktreeId: string,
+  updatedAt: number
+): SleepingAgentSessionRecord {
+  return {
+    paneKey,
+    tabId: paneKey.slice(0, paneKey.indexOf(':')),
+    worktreeId,
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: 'session-1' },
+    prompt: 'sleeping prompt',
+    state: 'done',
+    capturedAt: updatedAt + 100,
+    updatedAt,
+    terminalTitle: 'Claude'
   }
 }
 
@@ -261,5 +282,42 @@ describe('selectRetainedAgentEntriesForWorktree', () => {
     expect(secondWt1).toBe(firstWt1)
     expect(secondWt2).not.toBe(firstWt2)
     expect(secondWt2[0]?.startedAt).toBe(1100)
+  })
+})
+
+describe('selectSleepingAgentSessionsForWorktree', () => {
+  it('reuses unaffected worktree arrays when another worktree sleeping row changes', () => {
+    const wt1Sleeping = makeSleeping(PANE_KEY_1, 'wt-1', 1000)
+    const wt2Sleeping = makeSleeping(PANE_KEY_2, 'wt-2', 1000)
+    const state = {
+      tabsByWorktree: {},
+      agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY_1]: wt1Sleeping,
+        [PANE_KEY_2]: wt2Sleeping
+      }
+    }
+
+    const firstWt1 = selectSleepingAgentSessionsForWorktree(state, 'wt-1')
+    const firstWt2 = selectSleepingAgentSessionsForWorktree(state, 'wt-2')
+    const nextState = {
+      ...state,
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY_1]: wt1Sleeping,
+        [PANE_KEY_2]: {
+          ...wt2Sleeping,
+          updatedAt: 1100
+        }
+      }
+    }
+
+    const secondWt1 = selectSleepingAgentSessionsForWorktree(nextState, 'wt-1')
+    const secondWt2 = selectSleepingAgentSessionsForWorktree(nextState, 'wt-2')
+
+    expect(secondWt1).toBe(firstWt1)
+    expect(secondWt2).not.toBe(firstWt2)
+    expect(secondWt2[0]?.updatedAt).toBe(1100)
   })
 })

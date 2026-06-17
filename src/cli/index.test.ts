@@ -155,6 +155,9 @@ describe('orca root help', () => {
     )
     expect(logSpy.mock.calls[0][0]).toContain('Agent Sessions And Worktrees:')
     expect(logSpy.mock.calls[0][0]).toContain(
+      'creates a child workspace from provider-native, structured-history, or transcript context and records fork lineage'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
       '`worktree create --agent` creates a new checkout/workspace with an agent.'
     )
     expect(logSpy.mock.calls[0][0]).toContain(
@@ -240,6 +243,26 @@ describe('orca root help', () => {
     expect(terminalHelp).toContain(
       'orca terminal create --worktree active --command "codex" --json'
     )
+    expect(callMock).not.toHaveBeenCalled()
+  })
+  it('advertises agent session fork commands', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['fork', '--help'], '/tmp/repo')
+
+    const forkHelp = String(logSpy.mock.calls[0][0])
+    expect(forkHelp).toContain(
+      'orca fork [--terminal <handle>] [--message <id>] [--worktree <selector> --agent <id> --provider-session <id>'
+    )
+    expect(forkHelp).toContain(
+      '--message forks from a structured hook message id when Orca has recorded prompt history'
+    )
+    expect(forkHelp).toContain('Creates a child workspace with parent-child lineage')
+    expect(forkHelp).toContain('Use --worktree, --agent, and --provider-session together')
+    expect(forkHelp).toContain('recorded prompt history when available')
+    expect(forkHelp).toContain('session_path')
+    expect(forkHelp).toContain('--no-copy-files        Start the fork in the source workspace')
     expect(callMock).not.toHaveBeenCalled()
   })
 })
@@ -2823,6 +2846,535 @@ describe('orca cli worktree awareness', () => {
       title: undefined,
       focus: false
     })
+  })
+
+  it('creates an agent session fork through runtime RPC', async () => {
+    const forkWorktree = buildWorktree('/tmp/repo-fork', 'feature', 'abc', 'repo-1')
+    queueFixtures(
+      callMock,
+      okFixture('req_fork', {
+        worktree: forkWorktree,
+        lineage: null,
+        warnings: [],
+        fork: {
+          id: forkWorktree.id,
+          sourceTerminalHandle: 'term-1',
+          sourceWorktreeId: 'repo-1::/tmp/repo',
+          childWorktreeId: forkWorktree.id,
+          contextDelivery: {
+            mode: 'transcript-fallback',
+            promptDelivery: 'startup-agent',
+            transcriptLineCount: 12,
+            transcriptTruncated: false,
+            nativeProviderReason: 'provider-session-metadata-unavailable',
+            agent: 'codex'
+          }
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['fork', '--terminal', 'term-1', '--name', 'repo-fork', '--activate', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'fork.create',
+      {
+        terminal: 'term-1',
+        name: 'repo-fork',
+        activate: true,
+        noCopyFiles: false
+      },
+      { timeoutMs: 10 * 60_000 }
+    )
+    expect(String(logSpy.mock.calls[0][0])).toContain('"contextDelivery"')
+  })
+
+  it('creates a structured message agent session fork through runtime RPC', async () => {
+    const forkWorktree = buildWorktree('/tmp/repo-message-fork', 'feature', 'abc', 'repo-1')
+    queueFixtures(
+      callMock,
+      okFixture('req_fork_message', {
+        worktree: forkWorktree,
+        lineage: null,
+        warnings: [],
+        fork: {
+          id: forkWorktree.id,
+          sourceTerminalHandle: 'term-1',
+          sourceWorktreeId: 'repo-1::/tmp/repo',
+          childWorktreeId: forkWorktree.id,
+          forkPoint: { kind: 'message', id: 'opencode-message-1' },
+          contextDelivery: {
+            mode: 'structured-message-fallback',
+            promptDelivery: 'startup-agent',
+            forkPoint: { kind: 'message', id: 'opencode-message-1' },
+            includedPromptCount: 1,
+            nativeProviderReason: 'message-fork-point-selected',
+            agent: 'codex'
+          }
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['fork', '--terminal', 'term-1', '--message', 'opencode-message-1', '--name', 'before-later'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'fork.create',
+      {
+        terminal: 'term-1',
+        message: 'opencode-message-1',
+        name: 'before-later',
+        activate: false,
+        noCopyFiles: false
+      },
+      { timeoutMs: 10 * 60_000 }
+    )
+    const output = String(logSpy.mock.calls[0][0])
+    expect(output).toContain('forkPoint: opencode-message-1')
+    expect(output).toContain('contextDelivery: structured-message-fallback')
+    expect(output).toContain('includedPromptCount: 1')
+  })
+
+  it('creates a same-workspace agent session fork through runtime RPC', async () => {
+    const sourceWorktree = buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')
+    queueFixtures(
+      callMock,
+      okFixture('req_fork_no_copy', {
+        worktree: sourceWorktree,
+        lineage: null,
+        warnings: [],
+        fork: {
+          id: 'term-fork-child',
+          sourceTerminalHandle: 'term-1',
+          sourceWorktreeId: sourceWorktree.id,
+          targetWorktreeId: sourceWorktree.id,
+          workspaceMode: 'same-workspace',
+          terminalHandle: 'term-fork-child',
+          terminalTabId: 'tab-fork-child',
+          contextDelivery: {
+            mode: 'transcript-fallback',
+            promptDelivery: 'startup-agent',
+            transcriptLineCount: 12,
+            transcriptTruncated: false,
+            nativeProviderReason: 'provider-session-metadata-unavailable',
+            agent: 'codex'
+          }
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['fork', '--terminal', 'term-1', '--name', 'same-workspace-fork', '--no-copy-files'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'fork.create',
+      {
+        terminal: 'term-1',
+        name: 'same-workspace-fork',
+        activate: false,
+        noCopyFiles: true
+      },
+      { timeoutMs: 10 * 60_000 }
+    )
+    const output = String(logSpy.mock.calls[0][0])
+    expect(output).toContain('workspaceMode: same-workspace')
+    expect(output).toContain(`targetWorktreeId: ${sourceWorktree.id}`)
+    expect(output).toContain('terminalHandle: term-fork-child')
+  })
+
+  it('creates a provider-session agent fork through runtime RPC', async () => {
+    const forkWorktree = buildWorktree('/tmp/repo-native-fork', 'feature', 'abc', 'repo-1')
+    queueFixtures(
+      callMock,
+      okFixture('req_fork_native_provider', {
+        worktree: forkWorktree,
+        lineage: null,
+        warnings: [],
+        fork: {
+          id: forkWorktree.id,
+          sourceWorktreeId: 'repo-1::/tmp/repo',
+          childWorktreeId: forkWorktree.id,
+          contextDelivery: {
+            mode: 'native-provider',
+            promptDelivery: 'startup-agent',
+            providerSession: { key: 'session_id', id: 'claude-session-1' },
+            agent: 'claude'
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'fork',
+        '--worktree',
+        'id:repo-1::/tmp/repo',
+        '--agent',
+        'claude',
+        '--provider-session',
+        'claude-session-1',
+        '--provider-session-key',
+        'session_id',
+        '--name',
+        'repo-native-fork',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'fork.create',
+      {
+        worktree: 'id:repo-1::/tmp/repo',
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'claude-session-1' },
+        name: 'repo-native-fork',
+        activate: false,
+        noCopyFiles: false
+      },
+      { timeoutMs: 10 * 60_000 }
+    )
+  })
+
+  it('creates a provider-session structured message fork through runtime RPC', async () => {
+    const forkWorktree = buildWorktree(
+      '/tmp/repo-archived-message-fork',
+      'feature',
+      'abc',
+      'repo-1'
+    )
+    queueFixtures(
+      callMock,
+      okFixture('req_fork_archived_message', {
+        worktree: forkWorktree,
+        lineage: null,
+        warnings: [],
+        fork: {
+          id: forkWorktree.id,
+          sourceWorktreeId: 'repo-1::/tmp/repo',
+          childWorktreeId: forkWorktree.id,
+          forkPoint: { kind: 'message', id: 'claude-message-1' },
+          contextDelivery: {
+            mode: 'structured-message-fallback',
+            promptDelivery: 'startup-agent',
+            forkPoint: { kind: 'message', id: 'claude-message-1' },
+            includedPromptCount: 1,
+            nativeProviderReason: 'message-fork-point-selected',
+            agent: 'claude'
+          }
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'fork',
+        '--worktree',
+        'id:repo-1::/tmp/repo',
+        '--agent',
+        'claude',
+        '--provider-session',
+        'claude-session-1',
+        '--message',
+        'claude-message-1',
+        '--name',
+        'repo-archived-message-fork'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'fork.create',
+      {
+        worktree: 'id:repo-1::/tmp/repo',
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'claude-session-1' },
+        message: 'claude-message-1',
+        name: 'repo-archived-message-fork',
+        activate: false,
+        noCopyFiles: false
+      },
+      { timeoutMs: 10 * 60_000 }
+    )
+    const output = String(logSpy.mock.calls[0][0])
+    expect(output).toContain('forkPoint: claude-message-1')
+    expect(output).toContain('contextDelivery: structured-message-fallback')
+  })
+
+  it('formats provider-session structured history fallback forks through runtime RPC', async () => {
+    const forkWorktree = buildWorktree('/tmp/repo-gemini-fork', 'feature', 'abc', 'repo-1')
+    queueFixtures(
+      callMock,
+      okFixture('req_fork_structured_history', {
+        worktree: forkWorktree,
+        lineage: null,
+        warnings: [],
+        fork: {
+          id: forkWorktree.id,
+          sourceWorktreeId: 'repo-1::/tmp/repo',
+          childWorktreeId: forkWorktree.id,
+          contextDelivery: {
+            mode: 'structured-history-fallback',
+            promptDelivery: 'startup-agent',
+            includedPromptCount: 2,
+            nativeProviderReason: 'provider-native-fork-unsupported',
+            agent: 'gemini'
+          }
+        }
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'fork',
+        '--worktree',
+        'id:repo-1::/tmp/repo',
+        '--agent',
+        'gemini',
+        '--provider-session',
+        'gemini-session-1',
+        '--name',
+        'repo-gemini-fork'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'fork.create',
+      {
+        worktree: 'id:repo-1::/tmp/repo',
+        agent: 'gemini',
+        providerSession: { key: 'session_id', id: 'gemini-session-1' },
+        name: 'repo-gemini-fork',
+        activate: false,
+        noCopyFiles: false
+      },
+      { timeoutMs: 10 * 60_000 }
+    )
+    const output = String(logSpy.mock.calls[0][0])
+    expect(output).toContain('contextDelivery: structured-history-fallback')
+    expect(output).toContain('nativeProviderReason: provider-native-fork-unsupported')
+    expect(output).toContain('includedPromptCount: 2')
+  })
+
+  it('creates a Pi provider-session-path fork through runtime RPC', async () => {
+    const sessionPath = '/home/dev/.pi/agent/sessions/--repo--/20260617_session.jsonl'
+    const forkWorktree = buildWorktree('/tmp/repo-pi-fork', 'feature', 'abc', 'repo-1')
+    queueFixtures(
+      callMock,
+      okFixture('req_fork_pi_native_provider', {
+        worktree: forkWorktree,
+        lineage: null,
+        warnings: [],
+        fork: {
+          id: forkWorktree.id,
+          sourceWorktreeId: 'repo-1::/tmp/repo',
+          childWorktreeId: forkWorktree.id,
+          contextDelivery: {
+            mode: 'native-provider',
+            promptDelivery: 'startup-agent',
+            providerSession: { key: 'session_path', id: sessionPath },
+            agent: 'pi'
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'fork',
+        '--worktree',
+        'id:repo-1::/tmp/repo',
+        '--agent',
+        'pi',
+        '--provider-session',
+        sessionPath,
+        '--provider-session-key',
+        'session_path',
+        '--name',
+        'repo-pi-fork',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'fork.create',
+      {
+        worktree: 'id:repo-1::/tmp/repo',
+        agent: 'pi',
+        providerSession: { key: 'session_path', id: sessionPath },
+        name: 'repo-pi-fork',
+        activate: false,
+        noCopyFiles: false
+      },
+      { timeoutMs: 10 * 60_000 }
+    )
+  })
+
+  it('rejects mixing terminal and provider-session fork sources', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'fork',
+        '--terminal',
+        'term-1',
+        '--worktree',
+        'id:repo-1::/tmp/repo',
+        '--agent',
+        'claude',
+        '--provider-session',
+        'claude-session-1'
+      ],
+      '/tmp/repo'
+    )
+
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Pass either --terminal or --provider-session source flags, not both.'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects provider-session fork sources without a provider session id', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      ['fork', '--worktree', 'id:repo-1::/tmp/repo', '--agent', 'gemini', '--name', 'missing-id'],
+      '/tmp/repo'
+    )
+
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'Missing required --provider-session'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects invalid provider-session key values', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'fork',
+        '--worktree',
+        'id:repo-1::/tmp/repo',
+        '--agent',
+        'pi',
+        '--provider-session',
+        '/home/dev/session.jsonl',
+        '--provider-session-key',
+        'path'
+      ],
+      '/tmp/repo'
+    )
+
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--provider-session-key must be session_id, conversation_id, or session_path'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('normalizes positional fork ids for fork show', async () => {
+    const forkWorktree = buildWorktree('/tmp/repo-fork', 'feature', 'abc', 'repo-1')
+    queueFixtures(
+      callMock,
+      okFixture('req_fork_show', {
+        fork: {
+          id: forkWorktree.id,
+          worktreeId: forkWorktree.id,
+          parentWorktreeId: 'repo-1::/tmp/repo',
+          createdAt: 1,
+          worktree: forkWorktree,
+          lineage: {
+            worktreeId: forkWorktree.id,
+            worktreeInstanceId: 'child-instance',
+            parentWorktreeId: 'repo-1::/tmp/repo',
+            parentWorktreeInstanceId: 'parent-instance',
+            origin: 'manual',
+            capture: { source: 'terminal-context', confidence: 'explicit' },
+            createdAt: 1
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['fork', 'show', forkWorktree.id, '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('fork.show', { fork: forkWorktree.id })
+  })
+
+  it('normalizes positional fork ids for fork diff and formats untracked files', async () => {
+    const forkWorktree = buildWorktree('/tmp/repo-fork', 'feature', 'abc', 'repo-1')
+    const parentWorktree = buildWorktree('/tmp/repo', 'main', 'parent-sha', 'repo-1')
+    queueFixtures(
+      callMock,
+      okFixture('req_fork_diff', {
+        fork: {
+          id: forkWorktree.id,
+          worktreeId: forkWorktree.id,
+          parentWorktreeId: parentWorktree.id,
+          createdAt: 1,
+          worktree: forkWorktree,
+          lineage: {
+            worktreeId: forkWorktree.id,
+            worktreeInstanceId: 'child-instance',
+            parentWorktreeId: parentWorktree.id,
+            parentWorktreeInstanceId: 'parent-instance',
+            origin: 'manual',
+            capture: { source: 'terminal-context', confidence: 'explicit' },
+            createdAt: 1
+          }
+        },
+        parentWorktree,
+        baseRef: 'parent-sha',
+        targetRef: 'abc',
+        includesWorkingTree: true,
+        diff: 'diff --git a/app.ts b/app.ts\n+change\n',
+        untrackedFiles: ['scratch.txt']
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['fork', 'diff', forkWorktree.id], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'fork.diff',
+      { fork: forkWorktree.id },
+      { timeoutMs: 60_000 }
+    )
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain('diff --git a/app.ts b/app.ts')
+    expect(output).toContain('Untracked files:')
+    expect(output).toContain('scratch.txt')
   })
 
   it('collects and formats memory diagnostics', async () => {

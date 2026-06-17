@@ -18,6 +18,7 @@ import {
 } from './methods/browser-schemas'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { WORKTREE_METHODS } from './methods/worktree'
+import { FORK_METHODS } from './methods/fork'
 
 function expectParses(schema: ZodType, value: unknown): void {
   const result = schema.safeParse(value)
@@ -83,5 +84,37 @@ describe('RPC optional pipe schemas', () => {
       linkedLinearIssueOrganizationUrlKey: 'stably'
     })
     expectParses(methodParams(WORKTREE_METHODS, 'worktree.prefetchCreateBase'), { repo: 'repo-1' })
+    expectParses(methodParams(FORK_METHODS, 'fork.create'), {
+      terminal: 'term-1',
+      name: 'child',
+      activate: true
+    })
+    expectParses(methodParams(FORK_METHODS, 'fork.preflight'), {
+      terminal: 'term-1',
+      noCopyFiles: true
+    })
+    expectParses(methodParams(FORK_METHODS, 'fork.create'), {
+      worktree: 'id:wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'claude-session-1' },
+      promptInteractions: [
+        {
+          id: 'claude-message-1',
+          prompt: 'first prompt',
+          observedAt: 1_000,
+          agentType: 'claude'
+        }
+      ]
+    })
+    expectParses(methodParams(FORK_METHODS, 'fork.create'), {
+      worktree: 'id:wt-1',
+      agent: 'pi',
+      providerSession: {
+        key: 'session_path',
+        id: '/home/dev/.pi/agent/sessions/--repo--/20260617_session.jsonl'
+      }
+    })
+    expectParses(methodParams(FORK_METHODS, 'fork.show'), { fork: 'repo::/tmp/child' })
+    expectParses(methodParams(FORK_METHODS, 'fork.diff'), { fork: 'repo::/tmp/child' })
   })
 })

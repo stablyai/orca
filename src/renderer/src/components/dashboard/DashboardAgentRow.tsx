@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
+import type { AgentSessionForkPointOption } from './AgentSessionForkPointMenu'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
@@ -126,6 +127,9 @@ type Props = {
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
   sendTargetDisabledReason?: string
   onSendTargetClick?: (paneKey: string) => void
+  forkSessionPending?: boolean
+  forkPointOptions?: AgentSessionForkPointOption[]
+  onForkSession?: (paneKey: string, messageId?: string) => void
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
@@ -145,7 +149,10 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   hideLineageConnectors = false,
   sendTargetStatus,
   sendTargetDisabledReason,
-  onSendTargetClick
+  onSendTargetClick,
+  forkSessionPending = false,
+  forkPointOptions,
+  onForkSession
 }: Props) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -388,6 +395,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           onDismiss={onDismiss}
           onToggleExpanded={handleToggleExpanded}
           onSendTargetClick={onSendTargetClick}
+          forkSessionPending={forkSessionPending}
+          forkPointOptions={forkPointOptions}
+          onForkSession={onForkSession}
         />
       </div>
       <DashboardAgentRowToolStep

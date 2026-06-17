@@ -2955,6 +2955,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     toolName?: string
     toolInput?: string
     lastAssistantMessage?: string
+    promptInteractionKey?: string
     interrupted?: boolean
     terminalHandle?: string
     orchestration?: {
@@ -3543,6 +3544,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       prompt: 'inactive prompt',
       agentType: 'codex',
       lastAssistantMessage: 'inactive completion',
+      promptInteractionKey: 'command-code-transcript-1',
       receivedAt: 1_700_000_000_200,
       stateStartedAt: 1_699_999_999_100
     })
@@ -3559,7 +3561,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       'Inactive Tab',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
       expectWorktreeRouting('wt-1'),
-      undefined
+      { promptInteractionKey: 'command-code-transcript-1' }
     )
   })
 

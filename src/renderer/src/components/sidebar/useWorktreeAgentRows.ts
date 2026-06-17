@@ -14,6 +14,7 @@ import {
   selectMigrationUnsupportedEntriesForWorktree,
   selectRuntimeAgentOrchestrationForWorktree,
   selectRetainedAgentEntriesForWorktree,
+  selectSleepingAgentSessionsForWorktree,
   selectTerminalLayoutsForWorktree
 } from './worktree-agent-row-selectors'
 
@@ -22,13 +23,15 @@ export {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
   selectRuntimeAgentOrchestrationForWorktree,
-  selectRetainedAgentEntriesForWorktree
+  selectRetainedAgentEntriesForWorktree,
+  selectSleepingAgentSessionsForWorktree
 } from './worktree-agent-row-selectors'
 
 /**
  * Narrow per-worktree agent row hook used by the WorktreeCard inline agents
- * list. Produces live hook-reported agents plus retained "done" snapshots,
- * stale-decayed to 'idle' when the hook stream has gone quiet.
+ * list. Produces live hook-reported agents, retained "done" snapshots, and
+ * sleeping provider-session snapshots, stale-decayed to 'idle' when the hook
+ * stream has gone quiet.
  *
  * Uses indexed per-worktree selectors rather than reusing useDashboardData's
  * cross-worktree aggregate. The index is rebuilt once per relevant immutable
@@ -53,6 +56,9 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
   )
   const retained = useAppStore(
     useShallow((s) => selectRetainedAgentEntriesForWorktree(s, worktreeId))
+  )
+  const sleeping = useAppStore(
+    useShallow((s) => selectSleepingAgentSessionsForWorktree(s, worktreeId))
   )
   const runtimePaneTitlesByTabId = useAppStore(
     useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktreeId))
@@ -90,6 +96,7 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
         tabs: tabs ?? [],
         entries,
         retained,
+        sleeping,
         runtimePaneTitlesByTabId,
         ptyIdsByTabId,
         terminalLayoutsByTabId,
@@ -103,6 +110,7 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
     liveEntries,
     migrationUnsupported,
     retained,
+    sleeping,
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
     terminalLayoutsByTabId,

@@ -88,6 +88,10 @@ import { clearProviderPtyState, getLocalPtyProvider } from './pty'
 import { removeWorktreeSymlinks } from './worktree-symlinks'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
+import {
+  copyFolderWorkspaceForFork,
+  resolveFolderWorkspaceForkDestinationPath
+} from '../folder-workspace-fork-copy'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
@@ -585,7 +589,7 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
     ...(meta.projectHostSetupId !== undefined
       ? { projectHostSetupId: meta.projectHostSetupId }
       : {}),
-    path: repo.path,
+    path: meta.folderPath || repo.path,
     head: '',
     branch: '',
     isBare: false,
@@ -680,16 +684,55 @@ function listVisibleFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
     })
 }
 
-function createFolderWorkspace(
+async function createFolderWorkspace(
   args: CreateWorktreeArgs,
   repo: Repo,
   store: Store
-): CreateWorktreeResult {
+): Promise<CreateWorktreeResult> {
+  if (args.noParent === true && (args.parentWorkspace || args.parentWorktree)) {
+    throw new Error('Choose either a parent workspace flag or no parent, not both.')
+  }
+  if (args.parentWorkspace && args.parentWorktree) {
+    throw new Error('Choose either a parent workspace or a parent worktree, not both.')
+  }
   const now = Date.now()
   const instanceId = randomUUID()
   const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
+  const rawParentWorktree = args.parentWorktree?.trim()
+  const parentWorktreeSelector = rawParentWorktree?.startsWith('id:')
+    ? rawParentWorktree.slice('id:'.length)
+    : rawParentWorktree
+  const parsedParentWorkspace = parentWorktreeSelector
+    ? parseWorkspaceKey(parentWorktreeSelector)
+    : null
+  const parentWorktreeId =
+    parsedParentWorkspace?.type === 'worktree'
+      ? parsedParentWorkspace.worktreeId
+      : parentWorktreeSelector
+  const parentWorktreeMeta = parentWorktreeId ? store.getWorktreeMeta(parentWorktreeId) : undefined
+  if (args.parentWorktree && (!parentWorktreeId || !parentWorktreeMeta?.instanceId)) {
+    throw new Error(`Parent worktree not found: ${args.parentWorktree}`)
+  }
+  let folderPath = repo.path
+  if (args.callerTerminalHandle && parentWorktreeId && parentWorktreeMeta?.instanceId) {
+    const destinationPath = resolveFolderWorkspaceForkDestinationPath({
+      repo,
+      settings: store.getSettings(),
+      name: args.name
+    })
+    const copy = await copyFolderWorkspaceForFork(
+      {
+        sourcePath: parentWorktreeMeta.folderPath || repo.path,
+        destinationPath,
+        connectionId: repo.connectionId
+      },
+      { getSshFilesystemProvider }
+    )
+    folderPath = copy.destinationPath
+  }
   const meta = store.setWorktreeMeta(worktreeId, {
     instanceId,
+    folderPath,
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
       : {}),
@@ -718,7 +761,66 @@ function createFolderWorkspace(
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {})
   })
-  return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }
+  const worktree = mergeFolderWorkspace(repo, worktreeId, meta)
+  const lineage =
+    parentWorktreeId && parentWorktreeMeta?.instanceId && worktree.instanceId
+      ? store.setWorktreeLineage(worktree.id, {
+          worktreeId: worktree.id,
+          worktreeInstanceId: worktree.instanceId,
+          parentWorktreeId,
+          parentWorktreeInstanceId: parentWorktreeMeta.instanceId,
+          origin: 'manual',
+          capture: {
+            source: args.callerTerminalHandle ? 'terminal-context' : 'manual-action',
+            confidence: 'explicit'
+          },
+          ...(args.callerTerminalHandle
+            ? { createdByTerminalHandle: args.callerTerminalHandle }
+            : {}),
+          createdAt: now
+        })
+      : null
+  const parentWorkspaceKey =
+    lineage?.parentWorktreeId && worktree.instanceId
+      ? worktreeWorkspaceKey(lineage.parentWorktreeId)
+      : args.parentWorkspace
+  const parentWorkspaceScope = parentWorkspaceKey ? parseWorkspaceKey(parentWorkspaceKey) : null
+  const parentWorkspaceMeta =
+    parentWorkspaceScope?.type === 'worktree'
+      ? store.getWorktreeMeta(parentWorkspaceScope.worktreeId)
+      : null
+  const workspaceLineage =
+    parentWorkspaceKey && worktree.instanceId
+      ? store.setWorkspaceLineage({
+          childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+          childInstanceId: worktree.instanceId,
+          parentWorkspaceKey,
+          parentInstanceId:
+            lineage?.parentWorktreeInstanceId ?? parentWorkspaceMeta?.instanceId ?? null,
+          origin: lineage?.origin ?? 'manual',
+          capture:
+            lineage?.capture ??
+            ({
+              source: args.callerTerminalHandle ? 'terminal-context' : 'active-workspace',
+              confidence: 'explicit'
+            } as const),
+          ...(args.callerTerminalHandle
+            ? { createdByTerminalHandle: args.callerTerminalHandle }
+            : {}),
+          createdAt: now
+        })
+      : null
+  return {
+    worktree: {
+      ...worktree,
+      parentWorktreeId: lineage?.parentWorktreeId ?? null,
+      childWorktreeIds: [],
+      lineage,
+      workspaceLineage
+    },
+    ...(lineage ? { lineage } : {}),
+    ...(workspaceLineage ? { workspaceLineage } : {})
+  }
 }
 
 function buildDisconnectedDetectedWorktrees(
@@ -1007,7 +1109,7 @@ export function registerWorktreeHandlers(
           // git/filesystem failures the funnel cares about — bucketing them
           // into `unknown` would pollute the failure taxonomy.
           result = isFolderRepo(repo)
-            ? createFolderWorkspace(args, repo, store)
+            ? await createFolderWorkspace(args, repo, store)
             : repo.connectionId
               ? await createRemoteWorktree(args, repo, store, mainWindow)
               : await createLocalWorktree(args, repo, store, mainWindow, runtime)

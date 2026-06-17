@@ -196,6 +196,37 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('preserves Pi session paths as provider fork metadata', () => {
+    const sessionPath = '/home/dev/.pi/agent/sessions/--repo--/20260617_session.jsonl'
+    const event = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'before_agent_start',
+          prompt: 'fork pi status',
+          session_path: sessionPath
+        }
+      },
+      'production'
+    )
+
+    expect(event?.providerSession).toEqual({
+      key: 'session_path',
+      id: sessionPath
+    })
+    expect(event?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'fork pi status',
+      agentType: 'pi'
+    })
+  })
+
   it('normalizes Command Code hooks and reads turn text from the transcript', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-transcript-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')

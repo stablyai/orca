@@ -126,13 +126,38 @@ describe('parseWorkspaceSession', () => {
           capturedAt: 10,
           updatedAt: 9,
           terminalTitle: 'Codex',
-          lastAssistantMessage: 'done'
+          lastAssistantMessage: 'done',
+          promptInteractions: [
+            {
+              id: ' codex-message-1\nretry ',
+              prompt: 'first\nprompt',
+              observedAt: 8,
+              agentType: 'codex'
+            },
+            { id: '', prompt: 'ignore me', observedAt: 7 }
+          ],
+          resumeAvailable: false,
+          origin: 'quit'
         }
       }
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('codex')
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.resumeAvailable).toBe(
+        false
+      )
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('quit')
+      expect(
+        result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.promptInteractions
+      ).toEqual([
+        {
+          id: 'codex-message-1 retry',
+          prompt: 'first prompt',
+          observedAt: 8,
+          agentType: 'codex'
+        }
+      ])
     }
   })
 
@@ -279,6 +304,130 @@ describe('parseWorkspaceSession', () => {
         'codex-session'
       )
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab2:pane-1']).toBeUndefined()
+    }
+  })
+
+  it('preserves valid archived forkable agent session records', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      archivedForkableAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session' },
+          prompt: 'continue',
+          state: 'done',
+          archivedAt: 10,
+          updatedAt: 9,
+          terminalTitle: 'Claude',
+          lastAssistantMessage: 'done',
+          promptInteractions: [
+            {
+              id: 'claude-message-1',
+              prompt: 'review the diff',
+              observedAt: 8,
+              agentType: 'claude'
+            }
+          ],
+          archiveReason: 'retained-dismissed'
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.archivedForkableAgentSessionsByPaneKey?.['tab1:pane-1']).toMatchObject({
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'claude-session' },
+        promptInteractions: [
+          {
+            id: 'claude-message-1',
+            prompt: 'review the diff',
+            observedAt: 8,
+            agentType: 'claude'
+          }
+        ],
+        archiveReason: 'retained-dismissed'
+      })
+    }
+  })
+
+  it('preserves archived Pi forkable records with session paths', () => {
+    const sessionPath = '/home/dev/.pi/agent/sessions/--repo--/20260617_session.jsonl'
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      archivedForkableAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'pi',
+          providerSession: { key: 'session_path', id: sessionPath },
+          prompt: 'continue',
+          state: 'done',
+          archivedAt: 10,
+          updatedAt: 9,
+          archiveReason: 'retained-dismissed'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.archivedForkableAgentSessionsByPaneKey?.['tab1:pane-1']).toMatchObject({
+        agent: 'pi',
+        providerSession: { key: 'session_path', id: sessionPath }
+      })
+    }
+  })
+
+  it('drops malformed archived forkable session records without dropping valid siblings', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      archivedForkableAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          worktreeId: 'wt',
+          agent: 'droid',
+          providerSession: { key: 'session_id', id: 'droid-session' },
+          prompt: 'continue',
+          state: 'done',
+          archivedAt: 10,
+          updatedAt: 9,
+          archiveReason: 'retained-dismissed'
+        },
+        'tab2:pane-1': {
+          paneKey: 'different:pane-1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'ignore me',
+          state: 'done',
+          archivedAt: 10,
+          updatedAt: 9,
+          archiveReason: 'retained-dismissed'
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.archivedForkableAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe(
+        'droid'
+      )
+      expect(result.value.archivedForkableAgentSessionsByPaneKey?.['tab2:pane-1']).toBeUndefined()
     }
   })
 

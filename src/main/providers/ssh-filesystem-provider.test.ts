@@ -332,6 +332,15 @@ describe('SshFilesystemProvider', () => {
     })
   })
 
+  it('copy forwards ignore patterns', async () => {
+    await provider.copy('/home/src', '/home/dst', { ignorePatterns: ['node_modules/'] })
+    expect(mux.request).toHaveBeenCalledWith('fs.copy', {
+      source: '/home/src',
+      destination: '/home/dst',
+      ignorePatterns: ['node_modules/']
+    })
+  })
+
   it('realpath sends fs.realpath request', async () => {
     mux.request.mockResolvedValue('/home/user/real/path')
     const result = await provider.realpath('/home/user/link')

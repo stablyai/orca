@@ -9,6 +9,36 @@ import { createTestStore } from './store-test-helpers'
 // user-dismissal paths (dropAgentStatus, retentionSuppressedPaneKeys,
 // clearRetentionSuppressedPaneKeys) introduced alongside the dashboard.
 
+function makeRetainedAgent(args: {
+  paneKey: string
+  worktreeId: string
+  state?: AgentStatusEntry['state']
+  providerSessionId?: string
+  promptInteractions?: AgentStatusEntry['promptInteractions']
+}): RetainedAgentEntry {
+  const now = Date.now()
+  const entry: AgentStatusEntry = {
+    state: args.state ?? 'done',
+    prompt: 'implement the feature',
+    updatedAt: now,
+    stateStartedAt: now,
+    paneKey: args.paneKey,
+    stateHistory: [],
+    agentType: 'claude',
+    ...(args.promptInteractions ? { promptInteractions: args.promptInteractions } : {}),
+    ...(args.providerSessionId
+      ? { providerSession: { key: 'session_id', id: args.providerSessionId } }
+      : {})
+  }
+  return {
+    entry,
+    worktreeId: args.worktreeId,
+    tab: { id: args.paneKey.split(':')[0], title: 'Claude' } as unknown as TerminalTab,
+    agentType: 'claude',
+    startedAt: now
+  }
+}
+
 describe('dropAgentStatus + retention suppressor', () => {
   // Why: setAgentStatus schedules a real 30-minute freshness setTimeout via
   // queueMicrotask. Use fake timers so the handle does not leak into the
@@ -191,5 +221,106 @@ describe('dropAgentStatus + retention suppressor', () => {
     // Why: preserving object identity on no-op clears avoids spurious
     // re-renders in any selector subscribed to retentionSuppressedPaneKeys.
     expect(afterNoop).toBe(afterRemove)
+  })
+
+  it('archives a dismissed completed provider session for later forking', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const store = createTestStore()
+    store.getState().retainAgents([
+      makeRetainedAgent({
+        paneKey: 'tab-retained:0',
+        worktreeId: 'wt-x',
+        providerSessionId: 'session-1',
+        promptInteractions: [
+          {
+            id: 'claude-message-1',
+            prompt: 'implement the feature',
+            observedAt: 1_500,
+            agentType: 'claude'
+          }
+        ]
+      })
+    ])
+
+    vi.setSystemTime(2_000)
+    store.getState().dismissRetainedAgent('tab-retained:0')
+
+    const s = store.getState()
+    expect(s.retainedAgentsByPaneKey['tab-retained:0']).toBeUndefined()
+    expect(s.archivedForkableAgentSessionsByPaneKey['tab-retained:0']).toMatchObject({
+      paneKey: 'tab-retained:0',
+      worktreeId: 'wt-x',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      promptInteractions: [
+        {
+          id: 'claude-message-1',
+          prompt: 'implement the feature',
+          observedAt: 1_500,
+          agentType: 'claude'
+        }
+      ],
+      state: 'done',
+      archivedAt: 2_000,
+      archiveReason: 'retained-dismissed'
+    })
+  })
+
+  it('does not archive dismissed retained rows that are not completed fork sources', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().retainAgents([
+      makeRetainedAgent({
+        paneKey: 'tab-blocked:0',
+        worktreeId: 'wt-x',
+        state: 'blocked',
+        providerSessionId: 'session-1'
+      }),
+      makeRetainedAgent({
+        paneKey: 'tab-missing-provider:0',
+        worktreeId: 'wt-x'
+      })
+    ])
+
+    store.getState().dismissRetainedAgent('tab-blocked:0')
+    store.getState().dismissRetainedAgent('tab-missing-provider:0')
+
+    expect(store.getState().archivedForkableAgentSessionsByPaneKey).toEqual({})
+  })
+
+  it('archives all matching forkable rows when dismissing retained rows by worktree', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const store = createTestStore()
+    store.getState().retainAgents([
+      makeRetainedAgent({
+        paneKey: 'tab-a:0',
+        worktreeId: 'wt-a',
+        providerSessionId: 'session-a'
+      }),
+      makeRetainedAgent({
+        paneKey: 'tab-a-blocked:0',
+        worktreeId: 'wt-a',
+        state: 'blocked',
+        providerSessionId: 'session-blocked'
+      }),
+      makeRetainedAgent({
+        paneKey: 'tab-b:0',
+        worktreeId: 'wt-b',
+        providerSessionId: 'session-b'
+      })
+    ])
+
+    vi.setSystemTime(3_000)
+    store.getState().dismissRetainedAgentsByWorktree('wt-a')
+
+    const s = store.getState()
+    expect(Object.keys(s.retainedAgentsByPaneKey)).toEqual(['tab-b:0'])
+    expect(Object.keys(s.archivedForkableAgentSessionsByPaneKey)).toEqual(['tab-a:0'])
+    expect(s.archivedForkableAgentSessionsByPaneKey['tab-a:0']).toMatchObject({
+      providerSession: { key: 'session_id', id: 'session-a' },
+      archivedAt: 3_000
+    })
   })
 })

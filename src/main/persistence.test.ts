@@ -3493,7 +3493,32 @@ describe('Store', () => {
         ]
       },
       activeTabIdByWorktree: { [key]: tab.id },
-      lastVisitedAtByWorktreeId: { [key]: 10 }
+      lastVisitedAtByWorktreeId: { [key]: 10 },
+      sleepingAgentSessionsByPaneKey: {
+        'folder-tab:leaf': {
+          paneKey: 'folder-tab:leaf',
+          worktreeId: key,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'sleep-session' },
+          prompt: 'p',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      },
+      archivedForkableAgentSessionsByPaneKey: {
+        'folder-tab:archive': {
+          paneKey: 'folder-tab:archive',
+          worktreeId: key,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'archive-session' },
+          prompt: 'p',
+          state: 'done',
+          archivedAt: 1,
+          updatedAt: 1,
+          archiveReason: 'retained-dismissed'
+        }
+      }
     })
 
     expect(store.removeFolderWorkspace(workspace.id)).toBe(true)
@@ -3510,6 +3535,8 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId['folder-tab']).toBeUndefined()
     expect(session.terminalLayoutsByTabId['repo-tab']).toBeDefined()
     expect(session.browserPagesByWorkspace?.['browser-workspace']).toBeUndefined()
+    expect(session.sleepingAgentSessionsByPaneKey?.['folder-tab:leaf']).toBeUndefined()
+    expect(session.archivedForkableAgentSessionsByPaneKey?.['folder-tab:archive']).toBeUndefined()
   })
 
   // ── 9. Settings: get/update ────────────────────────────────────────
@@ -7998,6 +8025,20 @@ describe('Store.migrateWorktreeIdentity', () => {
           updatedAt: 1
         }
       },
+      archivedForkableAgentSessionsByPaneKey: {
+        'tab1:archive': {
+          paneKey: 'tab1:archive',
+          tabId: 'tab1',
+          worktreeId: OLD,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'archive-1' },
+          prompt: 'Do work',
+          state: 'done',
+          archivedAt: 2,
+          updatedAt: 1,
+          archiveReason: 'retained-dismissed'
+        }
+      },
       terminalLayoutsByTabId: {}
     } as unknown as WorkspaceSessionState)
     store.setWorkspaceSession(
@@ -8052,6 +8093,7 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(session.lastVisitedAtByWorktreeId?.[NEW]).toBe(123)
     expect(session.defaultTerminalTabsAppliedByWorktreeId?.[NEW]).toBe(true)
     expect(session.sleepingAgentSessionsByPaneKey?.['tab1:leaf']?.worktreeId).toBe(NEW)
+    expect(session.archivedForkableAgentSessionsByPaneKey?.['tab1:archive']?.worktreeId).toBe(NEW)
 
     const hostSession = store.getWorkspaceSession('runtime:env-a')
     expect(hostSession.tabsByWorktree[OLD]).toBeUndefined()

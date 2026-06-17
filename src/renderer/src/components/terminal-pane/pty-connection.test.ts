@@ -3173,6 +3173,67 @@ describe('connectPanePty', () => {
     expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
   })
 
+  it('does not cold-restore a completed record captured only for fork', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: 'fresh-pty',
+          coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+        }
+      }
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session-1' },
+          prompt: 'finish the task',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1,
+          resumeAvailable: false,
+          origin: 'quit'
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('cold-payload', expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      expect.stringContaining('--- session restored ---'),
+      expect.any(Function)
+    )
+    expect(transport.sendInput).not.toHaveBeenCalled()
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+  })
+
   it('shows the restored banner when a sleeping resume falls back to a fresh shell', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const staleSessionId = 'wt-1@@stale-session'

@@ -29,11 +29,15 @@ import type {
   SourceControlAiSettings
 } from './source-control-ai-types'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
-import type { SleepingAgentSessionRecord } from './agent-session-resume'
+import type {
+  ArchivedForkableAgentSessionRecord,
+  SleepingAgentSessionRecord
+} from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { ForkSyncMode } from './git-fork-sync'
+import type { AgentSessionForkPoint } from './agent-session-fork'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -517,6 +521,8 @@ export type WorktreeMeta = {
   hostId?: ExecutionHostId
   /** See Worktree.projectHostSetupId. Persisted for project-first workspace ownership. */
   projectHostSetupId?: string
+  /** Filesystem root for synthetic folder worktree instances that fork by copying a folder. */
+  folderPath?: string
   displayName: string
   comment: string
   linkedIssue: number | null
@@ -618,6 +624,7 @@ export type WorktreeLineage = {
   taskId?: string
   coordinatorHandle?: string
   createdByTerminalHandle?: string
+  agentSessionForkPoint?: AgentSessionForkPoint
   createdAt: number
 }
 
@@ -632,6 +639,7 @@ export type WorkspaceLineage = {
   orchestrationRunId?: string
   coordinatorHandle?: string
   createdByTerminalHandle?: string
+  agentSessionForkPoint?: AgentSessionForkPoint
   createdAt: number
 }
 
@@ -1012,6 +1020,8 @@ export type WorkspaceSessionState = {
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
   /** Provider-session resume records captured when workspaces sleep. */
   sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
+  /** Fork-only provider-session records for completed agent rows the user dismissed. */
+  archivedForkableAgentSessionsByPaneKey?: Record<string, ArchivedForkableAgentSessionRecord>
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>
@@ -1923,6 +1933,12 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Parent workspace for in-app creates launched from a folder workspace. */
   parentWorkspace?: WorkspaceKey
+  /** Explicit parent worktree selector for creates that should persist lineage. */
+  parentWorktree?: string
+  /** Runtime terminal handle used to infer parent context when available. */
+  callerTerminalHandle?: string
+  /** Force no lineage when an inferred parent would otherwise be available. */
+  noParent?: boolean
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Set when the renderer knows this auto-generated branch should be renamed

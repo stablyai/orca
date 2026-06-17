@@ -88,6 +88,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fastForward')
     expect(methods).toContain('git.rebaseFromBase')
     expect(methods).toContain('git.branchDiff')
+    expect(methods).toContain('git.forkDiff')
     expect(methods).toContain('git.listWorktrees')
     expect(methods).toContain('git.addWorktree')
     expect(methods).toContain('git.removeWorktree')
@@ -854,6 +855,41 @@ describe('GitHandler', () => {
       // were left at default, the entry's path would be the octal-quoted
       // form and the filter at git-handler-ops.ts:230-237 would not match.
       expect(result).toHaveLength(1)
+    })
+  })
+
+  describe('forkDiff', () => {
+    it('returns tracked diff text and untracked paths against a base ref', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'app.ts'), 'base\n')
+      gitCommit(tmpDir, 'initial')
+      const baseRef = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+
+      writeFileSync(path.join(tmpDir, 'app.ts'), 'base\nchange\n')
+      writeFileSync(path.join(tmpDir, 'scratch.txt'), 'scratch\n')
+
+      const result = (await dispatcher.callRequest('git.forkDiff', {
+        worktreePath: tmpDir,
+        baseRef
+      })) as { diff: string; untrackedFiles: string[] }
+
+      expect(result.diff).toContain('diff --git a/app.ts b/app.ts')
+      expect(result.diff).toContain('+change')
+      expect(result.untrackedFiles).toEqual(['scratch.txt'])
+    })
+
+    it('rejects option-shaped fork diff base refs', async () => {
+      gitInit(tmpDir)
+
+      await expect(
+        dispatcher.callRequest('git.forkDiff', {
+          worktreePath: tmpDir,
+          baseRef: '--cached'
+        })
+      ).rejects.toThrow('Invalid fork diff base ref.')
     })
   })
 

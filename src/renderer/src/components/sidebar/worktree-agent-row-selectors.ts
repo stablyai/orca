@@ -1,5 +1,6 @@
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { AppState } from '@/store/types'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
@@ -11,6 +12,7 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
 const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES: MigrationUnsupportedPtyEntry[] = []
 const EMPTY_RETAINED: RetainedAgentEntry[] = []
+const EMPTY_SLEEPING: SleepingAgentSessionRecord[] = []
 const EMPTY_RUNTIME_AGENT_ORCHESTRATION: Record<string, AgentStatusOrchestrationContext> = {}
 
 type WorktreeAgentRowsState = Pick<
@@ -19,7 +21,8 @@ type WorktreeAgentRowsState = Pick<
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
   | 'tabsByWorktree'
->
+> &
+  Partial<Pick<AppState, 'sleepingAgentSessionsByPaneKey'>>
 
 type TabWorktreeIndexCache = {
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
@@ -43,10 +46,16 @@ type RetainedEntriesByWorktreeCache = {
   entriesByWorktree: Map<string, RetainedAgentEntry[]>
 }
 
+type SleepingEntriesByWorktreeCache = {
+  sleepingAgentSessionsByPaneKey: WorktreeAgentRowsState['sleepingAgentSessionsByPaneKey']
+  entriesByWorktree: Map<string, SleepingAgentSessionRecord[]>
+}
+
 let tabWorktreeIndexCache: TabWorktreeIndexCache | null = null
 let liveEntriesByWorktreeCache: LiveEntriesByWorktreeCache | null = null
 let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
 let retainedEntriesByWorktreeCache: RetainedEntriesByWorktreeCache | null = null
+let sleepingEntriesByWorktreeCache: SleepingEntriesByWorktreeCache | null = null
 
 function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] {
   if (!previous || previous.length !== next.length) {
@@ -182,6 +191,34 @@ function getRetainedEntriesByWorktree(
   return entriesByWorktree
 }
 
+function getSleepingEntriesByWorktree(
+  state: WorktreeAgentRowsState
+): Map<string, SleepingAgentSessionRecord[]> {
+  const cached = sleepingEntriesByWorktreeCache
+  if (cached && cached.sleepingAgentSessionsByPaneKey === state.sleepingAgentSessionsByPaneKey) {
+    return cached.entriesByWorktree
+  }
+
+  const previous = cached?.entriesByWorktree
+  const entriesByWorktree = new Map<string, SleepingAgentSessionRecord[]>()
+  for (const sleeping of Object.values(state.sleepingAgentSessionsByPaneKey ?? {})) {
+    const bucket = entriesByWorktree.get(sleeping.worktreeId)
+    if (bucket) {
+      bucket.push(sleeping)
+    } else {
+      entriesByWorktree.set(sleeping.worktreeId, [sleeping])
+    }
+  }
+  for (const [worktreeId, entries] of entriesByWorktree) {
+    entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
+  }
+  sleepingEntriesByWorktreeCache = {
+    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+    entriesByWorktree
+  }
+  return entriesByWorktree
+}
+
 export function selectLiveAgentStatusEntriesForWorktree(
   state: WorktreeAgentRowsState,
   worktreeId: string
@@ -203,6 +240,13 @@ export function selectRetainedAgentEntriesForWorktree(
   worktreeId: string
 ): RetainedAgentEntry[] {
   return getRetainedEntriesByWorktree(state).get(worktreeId) ?? EMPTY_RETAINED
+}
+
+export function selectSleepingAgentSessionsForWorktree(
+  state: WorktreeAgentRowsState,
+  worktreeId: string
+): SleepingAgentSessionRecord[] {
+  return getSleepingEntriesByWorktree(state).get(worktreeId) ?? EMPTY_SLEEPING
 }
 
 export function selectRuntimeAgentOrchestrationForWorktree(

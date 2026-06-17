@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getContextMenuArchivedForkSessions,
+  getContextMenuChildWorkspaceRecords,
+  getContextMenuChildWorkspaces,
   hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
   shouldUseNativeContextMenu,
@@ -8,6 +11,51 @@ import {
   shouldSuppressContextMenuFollowUpClick,
   shouldContinueDeleteSiblingPositionRestore
 } from './WorktreeContextMenu'
+import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { ArchivedForkableAgentSessionRecord } from '../../../../shared/agent-session-resume'
+
+function makeWorktree(id: string, instanceId: string, label = id): Worktree {
+  return {
+    id,
+    repoId: 'repo-1',
+    path: `/tmp/${id}`,
+    branch: label,
+    head: null,
+    isBare: false,
+    isMainWorktree: false,
+    instanceId
+  } as unknown as Worktree
+}
+
+function makeLineage(child: Worktree, parent: Worktree, createdAt: number): WorktreeLineage {
+  return {
+    worktreeId: child.id,
+    worktreeInstanceId: child.instanceId!,
+    parentWorktreeId: parent.id,
+    parentWorktreeInstanceId: parent.instanceId!,
+    origin: 'cli',
+    capture: { source: 'terminal-context', confidence: 'explicit' },
+    createdAt
+  }
+}
+
+function makeArchivedForkSession(
+  paneKey: string,
+  worktreeId: string,
+  archivedAt: number
+): ArchivedForkableAgentSessionRecord {
+  return {
+    paneKey,
+    worktreeId,
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: `session-${paneKey}` },
+    prompt: `prompt ${paneKey}`,
+    state: 'done',
+    archivedAt,
+    updatedAt: archivedAt - 1,
+    archiveReason: 'retained-dismissed'
+  }
+}
 
 describe('shouldUseNativeContextMenu', () => {
   it('uses the browser context menu for marked hovercard content', () => {
@@ -145,5 +193,93 @@ describe('project removal from workspace context menus', () => {
     expect(isContextWorktreeDeletable({ isMainWorktree: false }, folderRepo)).toBe(true)
     expect(isContextWorktreeDeletable({ isMainWorktree: true }, folderRepo)).toBe(false)
     expect(isContextWorktreeDeletable({ isMainWorktree: false }, null)).toBe(false)
+  })
+})
+
+describe('getContextMenuChildWorkspaces', () => {
+  it('returns valid children newest first', () => {
+    const parent = makeWorktree('parent', 'parent-instance')
+    const older = makeWorktree('older', 'older-instance')
+    const newer = makeWorktree('newer', 'newer-instance')
+    const worktreeMap = new Map([
+      [parent.id, parent],
+      [older.id, older],
+      [newer.id, newer]
+    ])
+
+    expect(
+      getContextMenuChildWorkspaces(
+        parent,
+        {
+          [older.id]: makeLineage(older, parent, 10),
+          [newer.id]: makeLineage(newer, parent, 20)
+        },
+        worktreeMap
+      ).map((child) => child.id)
+    ).toEqual(['newer', 'older'])
+  })
+
+  it('drops children with stale parent or child instance lineage', () => {
+    const parent = makeWorktree('parent', 'parent-instance')
+    const valid = makeWorktree('valid', 'valid-instance')
+    const staleParent = makeWorktree('stale-parent', 'stale-parent-instance')
+    const staleChild = makeWorktree('stale-child', 'stale-child-current-instance')
+    const worktreeMap = new Map([
+      [parent.id, parent],
+      [valid.id, valid],
+      [staleParent.id, staleParent],
+      [staleChild.id, staleChild]
+    ])
+    const staleParentLineage = makeLineage(staleParent, parent, 20)
+    staleParentLineage.parentWorktreeInstanceId = 'old-parent-instance'
+    const staleChildLineage = makeLineage(staleChild, parent, 30)
+    staleChildLineage.worktreeInstanceId = 'old-child-instance'
+
+    expect(
+      getContextMenuChildWorkspaces(
+        parent,
+        {
+          [valid.id]: makeLineage(valid, parent, 10),
+          [staleParent.id]: staleParentLineage,
+          [staleChild.id]: staleChildLineage
+        },
+        worktreeMap
+      ).map((child) => child.id)
+    ).toEqual(['valid'])
+  })
+
+  it('returns child workspace records with lineage for fork management', () => {
+    const parent = makeWorktree('parent', 'parent-instance')
+    const older = makeWorktree('older', 'older-instance')
+    const newer = makeWorktree('newer', 'newer-instance')
+    const olderLineage = makeLineage(older, parent, 10)
+    const newerLineage = makeLineage(newer, parent, 20)
+    const records = getContextMenuChildWorkspaceRecords(
+      parent,
+      {
+        [older.id]: olderLineage,
+        [newer.id]: newerLineage
+      },
+      new Map([
+        [older.id, older],
+        [newer.id, newer]
+      ])
+    )
+
+    expect(records.map((record) => record.worktree.id)).toEqual(['newer', 'older'])
+    expect(records[0].lineage).toBe(newerLineage)
+    expect(records[0].createdAt).toBe(20)
+  })
+})
+
+describe('getContextMenuArchivedForkSessions', () => {
+  it('returns archived fork sessions for the selected worktree newest first', () => {
+    expect(
+      getContextMenuArchivedForkSessions('wt-1', {
+        older: makeArchivedForkSession('older', 'wt-1', 10),
+        other: makeArchivedForkSession('other', 'wt-2', 30),
+        newer: makeArchivedForkSession('newer', 'wt-1', 20)
+      }).map((record) => record.paneKey)
+    ).toEqual(['newer', 'older'])
   })
 })

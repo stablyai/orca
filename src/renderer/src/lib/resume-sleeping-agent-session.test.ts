@@ -92,4 +92,23 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.pendingStartupByTabId[tabs[0]!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
+
+  it('skips records explicitly captured only for fork', () => {
+    const record = makeRecord({
+      origin: 'worktree-sleep',
+      state: 'done',
+      resumeAvailable: false
+    })
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    const state = useAppStore.getState()
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(0)
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
 })

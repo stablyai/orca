@@ -1,9 +1,10 @@
 /* eslint-disable max-lines -- Why: relay filesystem request handling shares
    path expansion, file IO, search, streaming reads, Space scans, and watch lifecycle state. */
+import { constants } from 'fs'
 import { readdir, writeFile, stat, lstat, mkdir, rename, cp, rm, realpath } from 'fs/promises'
 import { execFile } from 'child_process'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { join, relative } from 'path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 // Why: RelayContext is accepted in the constructor for protocol back-compat
@@ -24,6 +25,7 @@ import { RelayStreamRegistry } from './fs-stream-registry'
 import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 import { buildRelayCommandEnv } from './relay-command-env'
 import { assertNoClobberRenameDestinationAvailable } from '../shared/filesystem-rename-collision'
+import { shouldExcludeFolderWorkspaceCopyPath } from '../shared/folder-workspace-copy-rules'
 
 type WatchState = {
   rootPath: string
@@ -222,8 +224,31 @@ export class FsHandler {
   private async copy(params: Record<string, unknown>) {
     const source = expandTilde(params.source as string)
     const destination = expandTilde(params.destination as string)
+    const ignorePatterns = Array.isArray(params.ignorePatterns)
+      ? params.ignorePatterns.filter((pattern): pattern is string => typeof pattern === 'string')
+      : []
     try {
-      await cp(source, destination, { recursive: true, force: false, errorOnExist: true })
+      await cp(source, destination, {
+        recursive: true,
+        force: false,
+        errorOnExist: true,
+        mode: constants.COPYFILE_FICLONE,
+        filter: async (candidate) => {
+          if (ignorePatterns.length === 0) {
+            return true
+          }
+          const relativePath = relative(source, candidate)
+          if (!relativePath) {
+            return true
+          }
+          const stat = await lstat(candidate)
+          return !shouldExcludeFolderWorkspaceCopyPath({
+            relativePath,
+            isDirectory: stat.isDirectory(),
+            ignorePatterns
+          })
+        }
+      })
     } catch (error) {
       const code = error instanceof Error ? (error as NodeJS.ErrnoException).code : undefined
       if (code === 'EEXIST' || code === 'ERR_FS_CP_EEXIST') {

@@ -12,6 +12,7 @@ import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
+import { buildArchivedForkableAgentSessionData } from './workspace-session-archived-fork-sessions'
 
 /** Why (issue #1158): the debounced + shutdown session writers share this
  *  gate so a hydration failure cannot overwrite orca-data.json with the
@@ -61,6 +62,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'defaultTerminalTabsAppliedByWorktreeId'
 > & {
   sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
+  archivedForkableAgentSessionsByPaneKey?: AppState['archivedForkableAgentSessionsByPaneKey']
 }
 
 // Why: the App-level Zustand subscriber that debounces session writes uses
@@ -97,7 +99,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'lastKnownRelayPtyIdByTabId',
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId',
-  'sleepingAgentSessionsByPaneKey'
+  'sleepingAgentSessionsByPaneKey',
+  'archivedForkableAgentSessionsByPaneKey'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
 
 type _MissingSessionField = Exclude<
@@ -377,7 +380,8 @@ export function buildWorkspaceSessionPayload(
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined,
-    ...buildSleepingAgentSessionData(snapshot)
+    ...buildSleepingAgentSessionData(snapshot),
+    ...buildArchivedForkableAgentSessionData(snapshot)
   }
 
   return pruneLocalTerminalScrollbackBuffers(payload, snapshot.repos)

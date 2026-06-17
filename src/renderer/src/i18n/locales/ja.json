@@ -2254,7 +2254,36 @@
             "619b5a35d2": "最上位のワークスペース フォークを作成し、キャプチャされたコンテキストを使用して新しい agent タブを開始します。",
             "64e292e8e3": "Agent セッションをフォークする",
             "9d25de2920": "フォークの作成",
-            "2b10412cfc": "作成..."
+            "2b10412cfc": "作成...",
+            "targetModeLabel": "Target",
+            "targetModeAriaLabel": "Fork target",
+            "childWorkspaceOption": "Child workspace",
+            "currentWorkspaceOption": "Current workspace",
+            "currentWorkspaceTitle": "Current workspace fork",
+            "currentWorkspaceDescription": "No files are copied. The new agent opens in the source workspace with the same captured context.",
+            "nameLabel": "Workspace name",
+            "namePlaceholder": "Auto-generate from source workspace",
+            "nameDisabledForCurrentWorkspace": "Current workspace forks do not create a new workspace to name.",
+            "openAfterCreateLabel": "Open after creating",
+            "openAfterCreateDescription": "When off, Orca creates the fork without switching to the target workspace or terminal.",
+            "runtimeContextDelivery": "Orca will request a provider-native fork when the source agent supports it. Otherwise it uses a transcript fallback from this terminal.",
+            "transcriptOnlyContextDelivery": "A runtime terminal handle is not available, so this fork uses the captured transcript fallback.",
+            "preflightLoading": "Checking context delivery...",
+            "preflightError": "Could not check context delivery. Orca will re-check when creating the fork.",
+            "preflightNativeProvider": "Provider-native fork available for {{agent}}.",
+            "preflightStructuredMessageFallback": "Message fork planned at {{message}} with {{count}} structured {{promptLabel}}. Native fork unavailable: {{reason}}.",
+            "preflightTranscriptTruncated": ", truncated to the newest output",
+            "preflightTranscriptFallback": "Transcript fallback planned: {{count}} terminal {{lineLabel}}{{truncation}}. Native fork unavailable: {{reason}}.",
+            "preflightUnknownError": "Preflight failed",
+            "preflightReasonMetadataUnavailable": "provider session metadata is unavailable",
+            "preflightReasonUnsupported": "the source agent does not support native forking",
+            "preflightReasonPlanUnavailable": "a native fork startup plan could not be built",
+            "preflightReasonMessageForkPoint": "a message fork point was selected",
+            "promptUnavailable": "Prompt text unavailable",
+            "messageForkPointOption": "Message {{index}}: {{prompt}}",
+            "forkPointLabel": "Fork point",
+            "currentForkPointOption": "Current end",
+            "preflightStructuredHistoryFallback": "Structured history fallback planned with {{count}} recorded {{promptLabel}}. Native fork unavailable: {{reason}}."
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "クリアスクリーン",
@@ -2323,7 +2352,11 @@
                   "38e41edc6e": "このワークスペースを git ワークツリーにフォークすることはできません。",
                   "f867385bb5": "このフォークのソース ワークスペースが見つかりませんでした。",
                   "046e8d853c": "フォークする terminal コンテキストがありません",
-                  "c00421d320": "フォークコンテキストがコピーされました。agent を起動し、貼り付けてフォークを開始します。"
+                  "c00421d320": "フォークコンテキストがコピーされました。agent を起動し、貼り付けてフォークを開始します。",
+                  "5e69cf039a": "Session fork opened in this workspace",
+                  "537d126b34": "Native session fork opened",
+                  "6b108da085": "Failed to fork agent session.",
+                  "3ac98a9c04": "This workspace cannot be forked."
                 }
               }
             },
@@ -3668,7 +3701,11 @@
           "021538e1d1": "SSHが切断されました"
         },
         "WorktreeCardAgents": {
-          "1b0a156717": "Agents"
+          "1b0a156717": "Agents",
+          "forkMissingTerminal": "This agent row cannot be forked because session context is unavailable.",
+          "nativeForkCreated": "Native session fork opened in a child workspace",
+          "transcriptForkCreated": "Session fork opened in a child workspace",
+          "forkFailed": "Failed to fork agent session."
         },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}"
@@ -3735,7 +3772,15 @@
           "8dacff1fe0": "既読マークを付ける",
           "3baa7d6507": "ピン",
           "697d0f6e1b": "固定を解除する",
-          "250de158fd": "Remove Workspace"
+          "250de158fd": "Remove Workspace",
+          "forkChildren": "Child Workspaces",
+          "manageForks": "Manage Forks",
+          "previousAgentSessions": "Previous Agent Sessions",
+          "forkingSession": "Forking...",
+          "archivedForkCreated": "Previous agent session fork opened in a child workspace",
+          "archivedForkFailed": "Failed to fork previous agent session.",
+          "archivedForkPointMessage": "Message {{value0}}: {{value1}}",
+          "archivedForkPointCurrentEnd": "Current end"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -3962,7 +4007,8 @@
               "agents": {
                 "a128d7006b": "{{value0}} {{value1}} 子 {{value2}}",
                 "289a1d2ca7": "{{value0}} を展開します。 {{value1}}",
-                "0c1debfe84": "{{value0}} を折りたたむ"
+                "0c1debfe84": "{{value0}} を折りたたむ",
+                "forkSession": "Fork agent session"
               }
             }
           },
@@ -4105,6 +4151,20 @@
           "2d3e4f5a6b": "Check connection",
           "3c4d5e6f7a": "Manage host…",
           "6e7f8a9b0c": "Remove host…"
+        },
+        "WorktreeForkManagementDialog": {
+          "unknownTime": "Unknown",
+          "removeTitle": "Remove Fork",
+          "removeDescription": "Orca will ask the runtime to remove this child workspace. Dirty worktrees are not removed.",
+          "removeConfirm": "Remove",
+          "removeSuccess": "Fork removed",
+          "removeFailed": "Failed to remove fork.",
+          "title": "Manage Forks",
+          "empty": "No forks found.",
+          "open": "Open",
+          "removing": "Removing",
+          "remove": "Remove",
+          "close": "Close"
         }
       },
       "shared": {
@@ -10564,11 +10624,16 @@
           "b06e13fcf7": "agent を閉じる",
           "0272969e28": "この agent に送信",
           "92a7017987": "送信中",
-          "019b74d93a": "適格"
+          "019b74d93a": "適格",
+          "forkSession": "Fork agent session"
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "中断された",
           "1ec01cef03": "ユーザーによる中断"
+        },
+        "AgentSessionForkPointMenu": {
+          "message": "Message {{value0}}: {{value1}}",
+          "currentEnd": "Current end"
         }
       },
       "crash": {

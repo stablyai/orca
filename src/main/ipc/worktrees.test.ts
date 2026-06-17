@@ -1,9 +1,10 @@
 /* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { CreateWorktreeResult } from '../../shared/types'
+import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 
 const {
   handleMock,
@@ -238,6 +239,9 @@ describe('registerWorktreeHandlers', () => {
     getProjectHostSetups: vi.fn(),
     removeWorktreeMeta: vi.fn(),
     getAllWorktreeLineage: vi.fn(),
+    getAllWorkspaceLineage: vi.fn(),
+    setWorktreeLineage: vi.fn(),
+    setWorkspaceLineage: vi.fn(),
     removeWorktreeLineage: vi.fn()
   }
   let runtimeStub: {
@@ -305,6 +309,9 @@ describe('registerWorktreeHandlers', () => {
       store.getProjectHostSetups,
       store.removeWorktreeMeta,
       store.getAllWorktreeLineage,
+      store.getAllWorkspaceLineage,
+      store.setWorktreeLineage,
+      store.setWorkspaceLineage,
       store.removeWorktreeLineage,
       killAllProcessesForWorktreeMock,
       clearProviderPtyStateMock,
@@ -364,6 +371,9 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
     store.getAllWorktreeLineage.mockReturnValue({})
+    store.getAllWorkspaceLineage.mockReturnValue({})
+    store.setWorktreeLineage.mockImplementation((_worktreeId, lineage) => lineage)
+    store.setWorkspaceLineage.mockImplementation((lineage) => lineage)
     getGitUsernameMock.mockReturnValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
     getDefaultRemoteMock.mockResolvedValue('origin')
@@ -742,7 +752,7 @@ describe('registerWorktreeHandlers', () => {
     const listWorktreesCallsAfterCreate = listWorktreesMock.mock.calls.length
     await expect(
       resolveRegisteredWorktreePath('/workspace/improve-dashboard', store as never)
-    ).resolves.toBe('/workspace/improve-dashboard')
+    ).resolves.toMatch(/[\\/]workspace[\\/]improve-dashboard$/)
     expect(listWorktreesMock).toHaveBeenCalledTimes(listWorktreesCallsAfterCreate)
   })
 
@@ -778,6 +788,80 @@ describe('registerWorktreeHandlers', () => {
       worktree: expect.objectContaining({
         path: '/workspace/feature-something',
         branch: 'feature/something'
+      })
+    })
+  })
+
+  it('records explicit parent worktree lineage during local create', async () => {
+    const parentWorktreeId = 'repo-1::/workspace/repo'
+    const childWorktreeId = 'repo-1::/workspace/improve-dashboard'
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
+      worktreeId === parentWorktreeId
+        ? makeWorktreeMeta({ instanceId: 'parent-instance' })
+        : undefined
+    )
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) =>
+      makeWorktreeMeta(meta as Record<string, unknown>)
+    )
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'base',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      parentWorktree: `id:${parentWorktreeId}`,
+      callerTerminalHandle: 'terminal-1'
+    })) as CreateWorktreeResult
+
+    expect(store.setWorktreeLineage).toHaveBeenCalledWith(
+      childWorktreeId,
+      expect.objectContaining({
+        worktreeId: childWorktreeId,
+        worktreeInstanceId: expect.any(String),
+        parentWorktreeId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: { source: 'terminal-context', confidence: 'explicit' },
+        createdByTerminalHandle: 'terminal-1',
+        createdAt: expect.any(Number)
+      })
+    )
+    expect(store.setWorkspaceLineage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        childWorkspaceKey: worktreeWorkspaceKey(childWorktreeId),
+        childInstanceId: expect.any(String),
+        parentWorkspaceKey: worktreeWorkspaceKey(parentWorktreeId),
+        parentInstanceId: 'parent-instance',
+        capture: { source: 'terminal-context', confidence: 'explicit' },
+        createdByTerminalHandle: 'terminal-1'
+      })
+    )
+    expect(result).toMatchObject({
+      worktree: expect.objectContaining({
+        id: childWorktreeId,
+        parentWorktreeId
+      }),
+      lineage: expect.objectContaining({
+        worktreeId: childWorktreeId,
+        parentWorktreeId
+      }),
+      workspaceLineage: expect.objectContaining({
+        childWorkspaceKey: worktreeWorkspaceKey(childWorktreeId),
+        parentWorkspaceKey: worktreeWorkspaceKey(parentWorktreeId)
       })
     })
   })
@@ -826,6 +910,153 @@ describe('registerWorktreeHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-folder'
     })
+  })
+
+  it('records explicit parent lineage for folder-mode workspace creates', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-ipc-folder-fork-'))
+    const sourcePath = join(tempRoot, 'source')
+    const destinationPath = join(tempRoot, 'folder-session')
+    const parentWorktreeId = `repo-folder::${sourcePath}`
+    const repo = {
+      id: 'repo-folder',
+      path: sourcePath,
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder' as const
+    }
+    try {
+      await mkdir(join(sourcePath, 'src'), { recursive: true })
+      await mkdir(join(sourcePath, 'node_modules', 'pkg'), { recursive: true })
+      await mkdir(join(sourcePath, 'cache'), { recursive: true })
+      await writeFile(join(sourcePath, 'src', 'app.ts'), 'source')
+      await writeFile(join(sourcePath, 'node_modules', 'pkg', 'index.js'), 'generated')
+      await writeFile(join(sourcePath, 'cache', 'trace.log'), 'generated')
+      await writeFile(join(sourcePath, '.orcaignore'), 'cache/\n')
+      computeWorktreePathMock.mockReturnValue(destinationPath)
+      store.getRepo.mockReturnValue(repo)
+      store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
+        worktreeId === parentWorktreeId
+          ? makeWorktreeMeta({ instanceId: 'parent-instance', folderPath: sourcePath })
+          : undefined
+      )
+      store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({
+        displayName: '',
+        comment: '',
+        linkedIssue: null,
+        linkedPR: null,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0,
+        ...meta
+      }))
+
+      const result = (await handlers['worktrees:create'](null, {
+        repoId: 'repo-folder',
+        name: 'folder-session',
+        parentWorktree: `id:${parentWorktreeId}`,
+        callerTerminalHandle: 'terminal-folder'
+      })) as CreateWorktreeResult
+
+      expect(await readFile(join(destinationPath, 'src', 'app.ts'), 'utf8')).toBe('source')
+      await expect(stat(join(destinationPath, 'node_modules'))).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
+      await expect(stat(join(destinationPath, 'cache'))).rejects.toMatchObject({ code: 'ENOENT' })
+      expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+        result.worktree.id,
+        expect.objectContaining({ folderPath: destinationPath })
+      )
+      expect(store.setWorktreeLineage).toHaveBeenCalledWith(
+        result.worktree.id,
+        expect.objectContaining({
+          worktreeId: result.worktree.id,
+          parentWorktreeId,
+          parentWorktreeInstanceId: 'parent-instance',
+          capture: { source: 'terminal-context', confidence: 'explicit' },
+          createdByTerminalHandle: 'terminal-folder'
+        })
+      )
+      expect(store.setWorkspaceLineage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          childWorkspaceKey: worktreeWorkspaceKey(result.worktree.id),
+          parentWorkspaceKey: worktreeWorkspaceKey(parentWorktreeId),
+          parentInstanceId: 'parent-instance',
+          createdByTerminalHandle: 'terminal-folder'
+        })
+      )
+      expect(result.worktree).toEqual(
+        expect.objectContaining({
+          path: destinationPath,
+          parentWorktreeId,
+          lineage: expect.objectContaining({ parentWorktreeId }),
+          workspaceLineage: expect.objectContaining({
+            parentWorkspaceKey: worktreeWorkspaceKey(parentWorktreeId)
+          })
+        })
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('routes SSH folder-mode fork copies through the remote filesystem provider', async () => {
+    const parentWorktreeId = 'repo-folder::/remote/folder'
+    const repo = {
+      id: 'repo-folder',
+      path: '/remote/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder' as const,
+      connectionId: 'ssh-1'
+    }
+    const fsProvider = {
+      readFile: vi.fn().mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' })),
+      createDir: vi.fn().mockResolvedValue(undefined),
+      copy: vi.fn().mockResolvedValue(undefined)
+    }
+    computeWorktreePathMock.mockReturnValue('/remote/folder-session')
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    store.getRepo.mockReturnValue(repo)
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
+      worktreeId === parentWorktreeId
+        ? makeWorktreeMeta({ instanceId: 'parent-instance', folderPath: '/remote/folder' })
+        : undefined
+    )
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({
+      displayName: '',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      ...meta
+    }))
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-folder',
+      name: 'folder-session',
+      parentWorktree: `id:${parentWorktreeId}`,
+      callerTerminalHandle: 'terminal-folder'
+    })) as CreateWorktreeResult
+
+    expect(fsProvider.createDir).toHaveBeenCalledWith('/remote')
+    expect(fsProvider.copy).toHaveBeenCalledWith('/remote/folder', '/remote/folder-session', {
+      ignorePatterns: expect.arrayContaining(['node_modules/'])
+    })
+    expect(result.worktree.path).toBe('/remote/folder-session')
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      result.worktree.id,
+      expect.objectContaining({ folderPath: '/remote/folder-session' })
+    )
   })
 
   it('spawns a startup terminal and setup terminal after local worktree registration', async () => {
@@ -1903,6 +2134,100 @@ describe('registerWorktreeHandlers', () => {
         createdWithAgent: 'codex',
         linkedLinearIssue: 'ENG-123',
         manualOrder: 123_456
+      })
+    })
+  })
+
+  it('records explicit parent worktree lineage during SSH create', async () => {
+    const parentWorktreeId = 'repo-ssh::/remote/repo'
+    const childWorktreeId = 'repo-ssh::/remote/improve-dashboard'
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/improve-dashboard',
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
+      worktreeId === parentWorktreeId
+        ? makeWorktreeMeta({ instanceId: 'parent-instance' })
+        : undefined
+    )
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) =>
+      makeWorktreeMeta(meta as Record<string, unknown>)
+    )
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard',
+      parentWorktree: `id:${parentWorktreeId}`,
+      callerTerminalHandle: 'terminal-ssh'
+    })) as CreateWorktreeResult
+
+    expect(store.setWorktreeLineage).toHaveBeenCalledWith(
+      childWorktreeId,
+      expect.objectContaining({
+        worktreeId: childWorktreeId,
+        worktreeInstanceId: expect.any(String),
+        parentWorktreeId,
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: { source: 'terminal-context', confidence: 'explicit' },
+        createdByTerminalHandle: 'terminal-ssh',
+        createdAt: expect.any(Number)
+      })
+    )
+    expect(store.setWorkspaceLineage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        childWorkspaceKey: worktreeWorkspaceKey(childWorktreeId),
+        childInstanceId: expect.any(String),
+        parentWorkspaceKey: worktreeWorkspaceKey(parentWorktreeId),
+        parentInstanceId: 'parent-instance',
+        capture: { source: 'terminal-context', confidence: 'explicit' },
+        createdByTerminalHandle: 'terminal-ssh'
+      })
+    )
+    expect(result).toMatchObject({
+      worktree: expect.objectContaining({
+        id: childWorktreeId,
+        parentWorktreeId
+      }),
+      lineage: expect.objectContaining({
+        worktreeId: childWorktreeId,
+        parentWorktreeId
+      }),
+      workspaceLineage: expect.objectContaining({
+        childWorkspaceKey: worktreeWorkspaceKey(childWorktreeId),
+        parentWorkspaceKey: worktreeWorkspaceKey(parentWorktreeId)
       })
     })
   })

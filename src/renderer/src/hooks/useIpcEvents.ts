@@ -2738,6 +2738,16 @@ export function useIpcEvents(): void {
       }
       const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
       const statusWorktreeId = data.worktreeId ?? owningWorktreeId
+      const statusMetadata =
+        data.providerSession || data.promptInteractionKey || data.promptInteractions
+          ? {
+              ...(data.providerSession ? { providerSession: data.providerSession } : {}),
+              ...(data.promptInteractionKey
+                ? { promptInteractionKey: data.promptInteractionKey }
+                : {}),
+              ...(data.promptInteractions ? { promptInteractions: data.promptInteractions } : {})
+            }
+          : undefined
       store.setAgentStatus(
         data.paneKey,
         statusPayload,
@@ -2751,7 +2761,7 @@ export function useIpcEvents(): void {
           worktreeId: statusWorktreeId,
           terminalHandle: data.terminalHandle
         },
-        data.providerSession ? { providerSession: data.providerSession } : undefined
+        statusMetadata
       )
       applyResolvedAgentTerminalTitleToTab(store, data.paneKey, title, terminalTitle)
       if (options?.replay !== true && statusWorktreeId) {

@@ -143,6 +143,8 @@ describe('PiTitlebarExtensionService', () => {
     expect(statusExtensionSource).toContain('/hook/pi')
     expect(statusExtensionSource).toContain('process.title')
     expect(statusExtensionSource).toContain("return '/hook/omp'")
+    expect(statusExtensionSource).toContain('getSessionFile')
+    expect(statusExtensionSource).toContain('session_path')
     expect(
       JSON.parse(readFileSync(join(env.PI_CODING_AGENT_DIR!, 'settings.json'), 'utf-8'))
     ).toEqual({
