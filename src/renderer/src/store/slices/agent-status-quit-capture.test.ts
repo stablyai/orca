@@ -7,6 +7,7 @@ function makeAgentEntry(overrides: {
   paneKey: string
   worktreeId: string
   sessionId?: string
+  providerSessionKey?: 'session_id' | 'conversation_id' | 'session_path'
   agentType?: AgentStatusEntry['agentType']
   promptInteractions?: AgentStatusEntry['promptInteractions']
 }): AgentStatusEntry {
@@ -21,7 +22,12 @@ function makeAgentEntry(overrides: {
     worktreeId: overrides.worktreeId,
     ...(overrides.promptInteractions ? { promptInteractions: overrides.promptInteractions } : {}),
     ...(overrides.sessionId
-      ? { providerSession: { key: 'session_id' as const, id: overrides.sessionId } }
+      ? {
+          providerSession: {
+            key: overrides.providerSessionKey ?? 'session_id',
+            id: overrides.sessionId
+          }
+        }
       : {})
   }
 }
@@ -67,7 +73,7 @@ describe('captureAllSleepingAgentSessions', () => {
     })
   })
 
-  it('captures done forkable agents as non-resumable fork sources', () => {
+  it('captures done forkable agents as archived fork sources', () => {
     const store = createTestStore()
     const entry = makeAgentEntry({
       paneKey: 'tab-1:leaf-1',
@@ -92,7 +98,8 @@ describe('captureAllSleepingAgentSessions', () => {
 
     store.getState().captureAllSleepingAgentSessions()
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
+    expect(store.getState().archivedForkableAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
       agent: 'claude',
       providerSession: { key: 'session_id', id: 'sess-1' },
       promptInteractions: [
@@ -103,8 +110,37 @@ describe('captureAllSleepingAgentSessions', () => {
           agentType: 'claude'
         }
       ],
-      origin: 'quit',
-      resumeAvailable: false
+      archiveReason: 'quit'
+    })
+  })
+
+  it('captures done Pi session-path agents as archived fork sources', () => {
+    const store = createTestStore()
+    const entry = makeAgentEntry({
+      paneKey: 'tab-1:leaf-1',
+      worktreeId: 'wt-1',
+      sessionId: '/home/dev/.pi/sessions/session.jsonl',
+      providerSessionKey: 'session_path',
+      agentType: 'pi'
+    })
+    entry.state = 'done'
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      },
+      agentStatusByPaneKey: { 'tab-1:leaf-1': entry }
+    } as Partial<AppState>)
+
+    store.getState().captureAllSleepingAgentSessions()
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
+    expect(store.getState().archivedForkableAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'pi',
+      providerSession: {
+        key: 'session_path',
+        id: '/home/dev/.pi/sessions/session.jsonl'
+      },
+      archiveReason: 'quit'
     })
   })
 
@@ -127,9 +163,10 @@ describe('captureAllSleepingAgentSessions', () => {
     store.getState().captureAllSleepingAgentSessions()
 
     expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
+    expect(store.getState().archivedForkableAgentSessionsByPaneKey).toEqual({})
   })
 
-  it('captures retained forkable agents as non-resumable fork sources', () => {
+  it('captures retained forkable agents as archived fork sources', () => {
     const store = createTestStore()
     const entry = makeAgentEntry({
       paneKey: 'tab-1:leaf-1',
@@ -152,13 +189,13 @@ describe('captureAllSleepingAgentSessions', () => {
 
     store.getState().captureAllSleepingAgentSessions()
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+    expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
+    expect(store.getState().archivedForkableAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
       agent: 'claude',
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       providerSession: { key: 'session_id', id: 'sess-1' },
-      origin: 'quit',
-      resumeAvailable: false
+      archiveReason: 'quit'
     })
   })
 
@@ -198,6 +235,10 @@ describe('captureAllSleepingAgentSessions', () => {
     store.getState().captureAllSleepingAgentSessions()
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(existingRecord)
+    expect(store.getState().archivedForkableAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'claude',
+      archiveReason: 'quit'
+    })
   })
 
   it('skips retained agents that are not complete', () => {
@@ -223,6 +264,7 @@ describe('captureAllSleepingAgentSessions', () => {
     store.getState().captureAllSleepingAgentSessions()
 
     expect(store.getState().sleepingAgentSessionsByPaneKey).toEqual({})
+    expect(store.getState().archivedForkableAgentSessionsByPaneKey).toEqual({})
   })
 
   it('skips agents without a resumable provider session', () => {

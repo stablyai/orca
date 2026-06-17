@@ -13,10 +13,13 @@ function makeRetainedAgent(args: {
   paneKey: string
   worktreeId: string
   state?: AgentStatusEntry['state']
+  agentType?: AgentStatusEntry['agentType']
+  providerSessionKey?: 'session_id' | 'conversation_id' | 'session_path'
   providerSessionId?: string
   promptInteractions?: AgentStatusEntry['promptInteractions']
 }): RetainedAgentEntry {
   const now = Date.now()
+  const agentType = args.agentType ?? 'claude'
   const entry: AgentStatusEntry = {
     state: args.state ?? 'done',
     prompt: 'implement the feature',
@@ -24,17 +27,22 @@ function makeRetainedAgent(args: {
     stateStartedAt: now,
     paneKey: args.paneKey,
     stateHistory: [],
-    agentType: 'claude',
+    agentType,
     ...(args.promptInteractions ? { promptInteractions: args.promptInteractions } : {}),
     ...(args.providerSessionId
-      ? { providerSession: { key: 'session_id', id: args.providerSessionId } }
+      ? {
+          providerSession: {
+            key: args.providerSessionKey ?? 'session_id',
+            id: args.providerSessionId
+          }
+        }
       : {})
   }
   return {
     entry,
     worktreeId: args.worktreeId,
     tab: { id: args.paneKey.split(':')[0], title: 'Claude' } as unknown as TerminalTab,
-    agentType: 'claude',
+    agentType,
     startedAt: now
   }
 }
@@ -263,6 +271,45 @@ describe('dropAgentStatus + retention suppressor', () => {
       ],
       state: 'done',
       archivedAt: 2_000,
+      archiveReason: 'retained-dismissed'
+    })
+  })
+
+  it('archives dismissed completed provider sessions with structured prompt history', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const store = createTestStore()
+    store.getState().retainAgents([
+      makeRetainedAgent({
+        paneKey: 'tab-gemini:0',
+        worktreeId: 'wt-x',
+        agentType: 'gemini',
+        providerSessionId: 'gemini-session-1',
+        promptInteractions: [
+          {
+            id: 'gemini-message-1',
+            prompt: 'explain the failure',
+            observedAt: 1_500,
+            agentType: 'gemini'
+          }
+        ]
+      })
+    ])
+
+    vi.setSystemTime(2_000)
+    store.getState().dismissRetainedAgent('tab-gemini:0')
+
+    expect(store.getState().archivedForkableAgentSessionsByPaneKey['tab-gemini:0']).toMatchObject({
+      agent: 'gemini',
+      providerSession: { key: 'session_id', id: 'gemini-session-1' },
+      promptInteractions: [
+        {
+          id: 'gemini-message-1',
+          prompt: 'explain the failure',
+          observedAt: 1_500,
+          agentType: 'gemini'
+        }
+      ],
       archiveReason: 'retained-dismissed'
     })
   })

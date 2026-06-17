@@ -624,6 +624,7 @@ export type WorktreeLineage = {
   taskId?: string
   coordinatorHandle?: string
   createdByTerminalHandle?: string
+  agentSessionFork?: boolean
   agentSessionForkPoint?: AgentSessionForkPoint
   createdAt: number
 }
@@ -639,6 +640,7 @@ export type WorkspaceLineage = {
   orchestrationRunId?: string
   coordinatorHandle?: string
   createdByTerminalHandle?: string
+  agentSessionFork?: boolean
   agentSessionForkPoint?: AgentSessionForkPoint
   createdAt: number
 }

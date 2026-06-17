@@ -58,7 +58,7 @@ export type ArchivedForkableAgentSessionRecord = {
   paneKey: string
   tabId?: string
   worktreeId: string
-  agent: ForkableTuiAgent
+  agent: TuiAgent
   providerSession: AgentProviderSessionMetadata
   prompt: string
   state: 'done'
@@ -67,7 +67,7 @@ export type ArchivedForkableAgentSessionRecord = {
   terminalTitle?: string
   lastAssistantMessage?: string
   promptInteractions?: AgentStatusPromptInteraction[]
-  archiveReason: 'retained-dismissed'
+  archiveReason: 'retained-dismissed' | 'quit'
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)

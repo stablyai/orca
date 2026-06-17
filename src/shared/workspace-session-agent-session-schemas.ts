@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import {
-  FORKABLE_TUI_AGENTS,
   normalizeAgentProviderSession,
   PROVIDER_SESSION_VALUE_MAX_LENGTH,
   RESUMABLE_TUI_AGENTS
@@ -9,6 +8,8 @@ import {
   normalizePromptInteractionHistory,
   type AgentStatusPromptInteraction
 } from './agent-status-types'
+import { isTuiAgent } from './tui-agent-config'
+import type { TuiAgent } from './types'
 
 const terminalTabIdSchema = z.string().min(1)
 
@@ -72,7 +73,7 @@ const archivedForkableAgentSessionRecordSchema = z.object({
   paneKey: z.string().refine((value) => value.length > 0),
   tabId: terminalTabIdSchema.optional(),
   worktreeId: z.string().min(1),
-  agent: z.enum(FORKABLE_TUI_AGENTS),
+  agent: z.custom<TuiAgent>((value) => isTuiAgent(value)),
   providerSession: agentProviderSessionSchema,
   prompt: z.string(),
   state: z.literal('done'),
@@ -81,7 +82,7 @@ const archivedForkableAgentSessionRecordSchema = z.object({
   terminalTitle: z.string().optional(),
   lastAssistantMessage: z.string().optional(),
   promptInteractions: promptInteractionHistorySchema,
-  archiveReason: z.literal('retained-dismissed')
+  archiveReason: z.enum(['retained-dismissed', 'quit'])
 })
 
 export const archivedForkableAgentSessionsByPaneKeySchema = z.preprocess((raw) => {

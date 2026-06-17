@@ -11,8 +11,10 @@ import type { GlobalSettings, Repo } from '../shared/types'
 import type { IFilesystemProvider } from './providers/types'
 import { SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE } from './providers/ssh-filesystem-dispatch'
 import {
+  computeRemoteWorktreePath,
   computeWorktreePath,
   getWorktreePathSettings,
+  hasRepoWorktreeBasePath,
   sanitizeWorktreeName
 } from './ipc/worktree-logic'
 
@@ -30,11 +32,14 @@ export function resolveFolderWorkspaceForkDestinationPath(args: {
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>
   name: string
 }): string {
-  return computeWorktreePath(
-    sanitizeWorktreeName(args.name),
-    args.repo.path,
-    getWorktreePathSettings(args.repo, args.settings)
-  )
+  const sanitizedName = sanitizeWorktreeName(args.name)
+  const worktreePathSettings = getWorktreePathSettings(args.repo, args.settings)
+  if (args.repo.connectionId) {
+    return computeRemoteWorktreePath(sanitizedName, args.repo.path, worktreePathSettings, {
+      useConfiguredAbsolutePath: hasRepoWorktreeBasePath(args.repo)
+    })
+  }
+  return computeWorktreePath(sanitizedName, args.repo.path, worktreePathSettings)
 }
 
 export async function copyFolderWorkspaceForFork(

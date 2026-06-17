@@ -28,7 +28,8 @@ import { toast } from 'sonner'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import type { RuntimeAgentSessionForkCreateResult } from '../../../../shared/runtime-types'
-import { isForkableTuiAgent } from '../../../../shared/agent-session-resume'
+import { getAgentForkArgv, isForkableTuiAgent } from '../../../../shared/agent-session-resume'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -47,9 +48,16 @@ function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
 }
 
 function canForkAgentSession(agent: DashboardAgentRowData): boolean {
+  const providerSession = agent.entry.providerSession
   return (
     Boolean(agent.entry.terminalHandle) ||
-    (isForkableTuiAgent(agent.agentType) && agent.entry.providerSession !== undefined)
+    Boolean(
+      providerSession &&
+      isTuiAgent(agent.agentType) &&
+      ((isForkableTuiAgent(agent.agentType) &&
+        getAgentForkArgv(agent.agentType, providerSession)) ||
+        agent.entry.promptInteractions?.length)
+    )
   )
 }
 
@@ -138,8 +146,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
   const handleDismissAgent = useCallback(
     (paneKey: string) => {
-      dropAgentStatus(paneKey)
       dismissRetainedAgent(paneKey)
+      dropAgentStatus(paneKey)
     },
     [dropAgentStatus, dismissRetainedAgent]
   )
@@ -291,12 +299,17 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       const providerSession = sourceAgent?.entry.providerSession
       const promptInteractions = sourceAgent?.entry.promptInteractions
       const providerSessionForkParams =
-        sourceAgent && isForkableTuiAgent(sourceAgent.agentType) && providerSession
+        sourceAgent &&
+        providerSession &&
+        isTuiAgent(sourceAgent.agentType) &&
+        (isForkableTuiAgent(sourceAgent.agentType) ||
+          (promptInteractions && promptInteractions.length > 0))
           ? {
               worktree: `id:${worktreeId}`,
               agent: sourceAgent.agentType,
               providerSession,
-              ...(messageId ? { message: messageId, promptInteractions } : {}),
+              ...(promptInteractions ? { promptInteractions } : {}),
+              ...(messageId ? { message: messageId } : {}),
               activate: true
             }
           : null

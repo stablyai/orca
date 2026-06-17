@@ -549,6 +549,7 @@ function normalizeWorkspaceLineageByChildKey(
       ...(lineage.createdByTerminalHandle
         ? { createdByTerminalHandle: lineage.createdByTerminalHandle }
         : {}),
+      ...(lineage.agentSessionFork === true ? { agentSessionFork: true } : {}),
       ...(lineage.agentSessionForkPoint
         ? { agentSessionForkPoint: normalizeAgentSessionForkPoint(lineage.agentSessionForkPoint) }
         : {}),

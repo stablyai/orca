@@ -4,13 +4,17 @@ import {
   normalizePromptInteractionHistory,
   type AgentStatusPromptInteraction
 } from '../../../../shared/agent-status-types'
+import { normalizeAgentProviderSession } from '../../../../shared/agent-session-resume'
 
-export const ForkProviderSession = z
-  .object({
-    key: z.enum(['session_id', 'conversation_id', 'session_path']),
-    id: z.string()
-  })
-  .optional()
+export const ForkProviderSession = z.preprocess(
+  (raw) => normalizeAgentProviderSession(raw) ?? undefined,
+  z
+    .object({
+      key: z.enum(['session_id', 'conversation_id', 'session_path']),
+      id: z.string()
+    })
+    .optional()
+)
 
 const ForkPromptInteraction: z.ZodType<AgentStatusPromptInteraction> = z.object({
   id: z.string().min(1),
@@ -26,7 +30,7 @@ export const ForkPromptInteractions = z
   )
   .optional()
 
-export const ForkCreate = z.object({
+const ForkCreateBase = z.object({
   terminal: OptionalString,
   worktree: OptionalString,
   agent: OptionalString,
@@ -38,7 +42,50 @@ export const ForkCreate = z.object({
   noCopyFiles: OptionalBoolean
 })
 
-export const ForkPreflight = ForkCreate.pick({
+function refineForkSourceShape(value: z.infer<typeof ForkCreateBase>, ctx: z.RefinementCtx): void {
+  const hasTerminal = value.terminal !== undefined
+  const hasProviderSource =
+    value.worktree !== undefined ||
+    value.agent !== undefined ||
+    value.providerSession !== undefined ||
+    value.promptInteractions !== undefined
+  if (hasTerminal && hasProviderSource) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['terminal'],
+      message: 'Pass either terminal or provider-session source fields, not both.'
+    })
+    return
+  }
+  if (!hasProviderSource) {
+    return
+  }
+  if (!value.worktree) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['worktree'],
+      message: 'Provider-session forks require worktree.'
+    })
+  }
+  if (!value.agent) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['agent'],
+      message: 'Provider-session forks require agent.'
+    })
+  }
+  if (!value.providerSession) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['providerSession'],
+      message: 'Provider-session forks require providerSession.'
+    })
+  }
+}
+
+export const ForkCreate = ForkCreateBase.superRefine(refineForkSourceShape)
+
+export const ForkPreflight = ForkCreateBase.pick({
   terminal: true,
   worktree: true,
   agent: true,
@@ -46,7 +93,7 @@ export const ForkPreflight = ForkCreate.pick({
   promptInteractions: true,
   message: true,
   noCopyFiles: true
-})
+}).superRefine(refineForkSourceShape)
 
 export const ForkList = z.object({
   worktree: OptionalString,

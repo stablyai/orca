@@ -582,9 +582,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               worktree: `id:${record.worktreeId}`,
               agent: record.agent,
               providerSession: record.providerSession,
-              ...(messageId
-                ? { message: messageId, promptInteractions: record.promptInteractions }
+              ...(record.promptInteractions
+                ? { promptInteractions: record.promptInteractions }
                 : {}),
+              ...(messageId ? { message: messageId } : {}),
               activate: true
             },
             { timeoutMs: 10 * 60_000 }

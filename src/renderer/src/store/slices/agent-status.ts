@@ -28,6 +28,7 @@ import {
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import type { TerminalTab } from '../../../../shared/types'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
@@ -240,10 +241,53 @@ function sleepingRecordFromEntry(args: {
 
 function canForkProviderSession(entry: AgentStatusEntry): boolean {
   const agent = entry.agentType
-  return (
-    isForkableTuiAgent(agent) &&
-    Boolean(entry.providerSession && getAgentForkArgv(agent, entry.providerSession))
-  )
+  const providerSession = entry.providerSession
+  if (!isTuiAgent(agent) || !providerSession) {
+    return false
+  }
+  if (isForkableTuiAgent(agent) && getAgentForkArgv(agent, providerSession)) {
+    return true
+  }
+  return Boolean(normalizePromptInteractionHistory(entry.promptInteractions))
+}
+
+function archivedForkableRecordFromEntry(args: {
+  entry: AgentStatusEntry
+  worktreeId: string
+  tab?: TerminalTab
+  archivedAt: number
+  archiveReason: ArchivedForkableAgentSessionRecord['archiveReason']
+}): ArchivedForkableAgentSessionRecord | null {
+  const agent = args.entry.agentType
+  const providerSession = args.entry.providerSession
+  if (
+    args.entry.state !== 'done' ||
+    !isTuiAgent(agent) ||
+    !providerSession ||
+    !canForkProviderSession(args.entry)
+  ) {
+    return null
+  }
+  const tabId = args.entry.tabId ?? args.tab?.id
+  return {
+    paneKey: args.entry.paneKey,
+    ...(tabId ? { tabId } : {}),
+    worktreeId: args.worktreeId,
+    agent,
+    providerSession,
+    prompt: args.entry.prompt,
+    state: args.entry.state,
+    archivedAt: args.archivedAt,
+    updatedAt: args.entry.updatedAt,
+    ...((args.entry.terminalTitle ?? args.tab?.title)
+      ? { terminalTitle: (args.entry.terminalTitle ?? args.tab?.title)! }
+      : {}),
+    ...(args.entry.lastAssistantMessage
+      ? { lastAssistantMessage: args.entry.lastAssistantMessage }
+      : {}),
+    ...(args.entry.promptInteractions ? { promptInteractions: args.entry.promptInteractions } : {}),
+    archiveReason: args.archiveReason
+  }
 }
 
 function archivedForkableRecordFromRetained(
@@ -252,36 +296,16 @@ function archivedForkableRecordFromRetained(
 ): ArchivedForkableAgentSessionRecord | null {
   const agent = retained.entry.agentType
   const providerSession = retained.entry.providerSession
-  if (
-    retained.entry.state !== 'done' ||
-    !isForkableTuiAgent(agent) ||
-    !providerSession ||
-    !getAgentForkArgv(agent, providerSession)
-  ) {
+  if (!isTuiAgent(agent) || !providerSession || !canForkProviderSession(retained.entry)) {
     return null
   }
-  const tabId = retained.entry.tabId ?? retained.tab.id
-  return {
-    paneKey: retained.entry.paneKey,
-    ...(tabId ? { tabId } : {}),
+  return archivedForkableRecordFromEntry({
+    entry: retained.entry,
     worktreeId: retained.worktreeId,
-    agent,
-    providerSession,
-    prompt: retained.entry.prompt,
-    state: retained.entry.state,
+    tab: retained.tab,
     archivedAt,
-    updatedAt: retained.entry.updatedAt,
-    ...((retained.entry.terminalTitle ?? retained.tab.title)
-      ? { terminalTitle: (retained.entry.terminalTitle ?? retained.tab.title)! }
-      : {}),
-    ...(retained.entry.lastAssistantMessage
-      ? { lastAssistantMessage: retained.entry.lastAssistantMessage }
-      : {}),
-    ...(retained.entry.promptInteractions
-      ? { promptInteractions: retained.entry.promptInteractions }
-      : {}),
     archiveReason: 'retained-dismissed'
-  }
+  })
 }
 
 export function collectSleepingAgentSessionRecordsForWorktree(
@@ -1183,32 +1207,46 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const next: Record<string, SleepingAgentSessionRecord> = {
           ...s.sleepingAgentSessionsByPaneKey
         }
+        const nextArchived: Record<string, ArchivedForkableAgentSessionRecord> = {
+          ...s.archivedForkableAgentSessionsByPaneKey
+        }
         let changed = false
+        let archivedChanged = false
         for (const retained of Object.values(s.retainedAgentsByPaneKey)) {
           if (retained.entry.state !== 'done' || !canForkProviderSession(retained.entry)) {
             continue
           }
-          const record = sleepingRecordFromEntry({
-            state: s,
+          const archived = archivedForkableRecordFromEntry({
             entry: retained.entry,
             worktreeId: retained.worktreeId,
             tab: retained.tab,
-            capturedAt,
-            origin: 'quit',
-            resumeAvailable: false
+            archivedAt: capturedAt,
+            archiveReason: 'quit'
           })
-          if (record && !(record.paneKey in next)) {
-            next[record.paneKey] = record
-            changed = true
+          if (archived && nextArchived[archived.paneKey] !== archived) {
+            nextArchived[archived.paneKey] = archived
+            archivedChanged = true
           }
         }
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
           const resumeAvailable = entry.state !== 'done'
-          if (!resumeAvailable && !canForkProviderSession(entry)) {
-            continue
-          }
           const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)
           if (!worktreeId) {
+            continue
+          }
+          if (!resumeAvailable) {
+            if (canForkProviderSession(entry)) {
+              const archived = archivedForkableRecordFromEntry({
+                entry,
+                worktreeId,
+                archivedAt: capturedAt,
+                archiveReason: 'quit'
+              })
+              if (archived && nextArchived[archived.paneKey] !== archived) {
+                nextArchived[archived.paneKey] = archived
+                archivedChanged = true
+              }
+            }
             continue
           }
           const record = sleepingRecordFromEntry({
@@ -1224,7 +1262,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             changed = true
           }
         }
-        return changed ? { sleepingAgentSessionsByPaneKey: next } : s
+        if (!changed && !archivedChanged) {
+          return s
+        }
+        return {
+          ...(changed ? { sleepingAgentSessionsByPaneKey: next } : {}),
+          ...(archivedChanged ? { archivedForkableAgentSessionsByPaneKey: nextArchived } : {})
+        }
       })
     },
 

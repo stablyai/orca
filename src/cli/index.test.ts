@@ -3320,6 +3320,7 @@ describe('orca cli worktree awareness', () => {
             parentWorktreeInstanceId: 'parent-instance',
             origin: 'manual',
             capture: { source: 'terminal-context', confidence: 'explicit' },
+            agentSessionFork: true,
             createdAt: 1
           }
         }
@@ -3330,6 +3331,48 @@ describe('orca cli worktree awareness', () => {
     await main(['fork', 'show', forkWorktree.id, '--json'], '/tmp/repo')
 
     expect(callMock).toHaveBeenCalledWith('fork.show', { fork: forkWorktree.id })
+  })
+
+  it('lists agent session forks through runtime RPC', async () => {
+    const forkWorktree = buildWorktree('/tmp/repo-fork', 'feature', 'abc', 'repo-1')
+    queueFixtures(
+      callMock,
+      okFixture('req_fork_list', {
+        forks: [
+          {
+            id: forkWorktree.id,
+            worktreeId: forkWorktree.id,
+            parentWorktreeId: 'repo-1::/tmp/repo',
+            createdAt: 1,
+            worktree: forkWorktree,
+            lineage: {
+              worktreeId: forkWorktree.id,
+              worktreeInstanceId: 'child-instance',
+              parentWorktreeId: 'repo-1::/tmp/repo',
+              parentWorktreeInstanceId: 'parent-instance',
+              origin: 'cli',
+              capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+              agentSessionFork: true,
+              createdAt: 1
+            }
+          }
+        ],
+        totalCount: 2,
+        truncated: true
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['fork', 'list', '--worktree', 'id:repo-1::/tmp/repo', '--limit', '1'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('fork.list', {
+      worktree: 'id:repo-1::/tmp/repo',
+      limit: 1
+    })
+    const output = logSpy.mock.calls.flat().join('\n')
+    expect(output).toContain(forkWorktree.id)
+    expect(output).toContain('/tmp/repo-fork')
+    expect(output).toContain('truncated: showing 1 of 2')
   })
 
   it('normalizes positional fork ids for fork diff and formats untracked files', async () => {
@@ -3351,6 +3394,7 @@ describe('orca cli worktree awareness', () => {
             parentWorktreeInstanceId: 'parent-instance',
             origin: 'manual',
             capture: { source: 'terminal-context', confidence: 'explicit' },
+            agentSessionFork: true,
             createdAt: 1
           }
         },
@@ -3375,6 +3419,21 @@ describe('orca cli worktree awareness', () => {
     expect(output).toContain('diff --git a/app.ts b/app.ts')
     expect(output).toContain('Untracked files:')
     expect(output).toContain('scratch.txt')
+  })
+
+  it('removes agent session forks through runtime RPC', async () => {
+    const forkWorktree = buildWorktree('/tmp/repo-fork', 'feature', 'abc', 'repo-1')
+    queueFixtures(callMock, okFixture('req_fork_rm', { forkId: forkWorktree.id, removed: true }))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['fork', 'rm', forkWorktree.id, '--force', '--run-hooks'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith(
+      'fork.rm',
+      { fork: forkWorktree.id, force: true, runHooks: true },
+      { timeoutMs: 60_000 }
+    )
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(`removed fork: ${forkWorktree.id}`)
   })
 
   it('collects and formats memory diagnostics', async () => {

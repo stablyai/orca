@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ReactModule from 'react'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
 
 const reactHookRuntime = vi.hoisted(() => ({
@@ -6,8 +7,8 @@ const reactHookRuntime = vi.hoisted(() => ({
   index: 0
 }))
 
-vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof ReactModule>()
   return {
     ...actual,
     useEffect: () => {},

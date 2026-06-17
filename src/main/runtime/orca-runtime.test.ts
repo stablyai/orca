@@ -2620,7 +2620,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('copies folder-mode runtime forks into an isolated child folder', async () => {
+  it('copies folder-mode agent session forks without a live source terminal', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-fork-'))
     const sourcePath = join(tempRoot, 'source')
     const destinationPath = join(tempRoot, 'folder-child')
@@ -2675,7 +2675,7 @@ describe('OrcaRuntimeService', () => {
         name: 'folder-child',
         lineage: {
           parentWorktree: `id:${parentId}`,
-          callerTerminalHandle: 'terminal-folder'
+          agentSessionFork: true
         }
       })
 
@@ -2690,14 +2690,15 @@ describe('OrcaRuntimeService', () => {
         result.worktree.id,
         expect.objectContaining({
           parentWorktreeId: parentId,
-          capture: { source: 'terminal-context', confidence: 'explicit' },
-          createdByTerminalHandle: 'terminal-folder'
+          capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+          agentSessionFork: true
         })
       )
       expect(setWorkspaceLineage).toHaveBeenCalledWith(
         expect.objectContaining({
           childWorkspaceKey: `worktree:${result.worktree.id}`,
-          parentWorkspaceKey: `worktree:${parentId}`
+          parentWorkspaceKey: `worktree:${parentId}`,
+          agentSessionFork: true
         })
       )
     } finally {
@@ -2730,6 +2731,7 @@ describe('OrcaRuntimeService', () => {
       parentWorktreeInstanceId: 'parent-instance',
       origin: 'manual',
       capture: { source: 'terminal-context', confidence: 'explicit' },
+      agentSessionFork: true,
       createdAt: 1_000
     }
     try {
@@ -15123,6 +15125,103 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('lists shows and removes only marked agent session fork lineages', async () => {
+    const parentPath = '/tmp/worktree-parent'
+    const childPath = '/tmp/worktree-child'
+    const manualPath = '/tmp/worktree-manual'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const manualId = `${TEST_REPO_ID}::${manualPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance' }),
+      [manualId]: makeWorktreeMeta({ instanceId: 'manual-instance' })
+    }
+    const forkLineage: WorktreeLineage = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+      agentSessionFork: true,
+      createdAt: 2_000
+    }
+    const manualLineage: WorktreeLineage = {
+      worktreeId: manualId,
+      worktreeInstanceId: 'manual-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 3_000
+    }
+    const lineageById: Record<string, WorktreeLineage> = {
+      [childId]: forkLineage,
+      [manualId]: manualLineage
+    }
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: parentPath,
+        head: 'parent-sha',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: childPath,
+        head: 'child-sha',
+        branch: 'fork-child',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: manualPath,
+        head: 'manual-sha',
+        branch: 'manual-child',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getAllWorktreeLineage: () => lineageById,
+      getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId]
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const listed = await runtime.listAgentSessionForks({
+      worktreeSelector: `id:${parentId}`,
+      limit: 10
+    })
+    expect(listed).toMatchObject({ totalCount: 1, truncated: false })
+    expect(listed.forks.map((fork) => fork.id)).toEqual([childId])
+
+    await expect(runtime.showAgentSessionFork(manualId)).rejects.toThrow(
+      `Fork not found: ${manualId}`
+    )
+    const shown = await runtime.showAgentSessionFork(childId)
+    expect(shown.fork).toMatchObject({ id: childId, parentWorktreeId: parentId })
+
+    const removeManagedWorktree = vi
+      .spyOn(runtime, 'removeManagedWorktree')
+      .mockResolvedValue({ removed: true } as never)
+    const removed = await runtime.removeAgentSessionFork(childId, true, true)
+    expect(removeManagedWorktree).toHaveBeenCalledWith(`id:${childId}`, true, true)
+    expect(removed).toMatchObject({ forkId: childId, removed: true })
+
+    await expect(runtime.removeAgentSessionFork(manualId, true)).rejects.toThrow(
+      `Fork not found: ${manualId}`
+    )
+    expect(removeManagedWorktree).toHaveBeenCalledTimes(1)
+  })
+
   it('uses explicit Pi provider session path metadata to fork without a live source terminal', async () => {
     const piSessionPath = '/home/dev/.pi/agent/sessions/--repo--/20260617_session.jsonl'
     const metaById: Record<string, WorktreeMeta> = {
@@ -15245,6 +15344,7 @@ describe('OrcaRuntimeService', () => {
       parentWorktreeInstanceId: 'parent-instance',
       origin: 'manual',
       capture: { source: 'terminal-context', confidence: 'explicit' },
+      agentSessionFork: true,
       createdAt: 1_000
     }
     vi.mocked(listWorktrees).mockResolvedValue([
@@ -15334,6 +15434,7 @@ describe('OrcaRuntimeService', () => {
       parentWorktreeInstanceId: 'parent-instance',
       origin: 'manual',
       capture: { source: 'terminal-context', confidence: 'explicit' },
+      agentSessionFork: true,
       createdAt: 1_000
     }
     const provider = {

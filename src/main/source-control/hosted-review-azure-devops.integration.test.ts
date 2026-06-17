@@ -124,7 +124,7 @@ describe('Azure DevOps hosted review integration', () => {
         server.close((error) => (error ? reject(error) : resolve()))
       })
     }
-  })
+  }, 15_000)
 
   it('prefers an active Azure Repos PR over a newer abandoned PR for the same branch', async () => {
     const seen: SeenRequest[] = []

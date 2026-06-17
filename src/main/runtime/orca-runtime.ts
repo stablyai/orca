@@ -1558,6 +1558,7 @@ type WorktreeLineageInput = {
   cwdParentWorktree?: string
   noParent?: boolean
   callerTerminalHandle?: string
+  agentSessionFork?: boolean
   agentSessionForkPoint?: AgentSessionForkPoint
   comment?: string
   orchestrationContext?: {
@@ -1592,6 +1593,7 @@ type WorktreeLineageResolution =
       taskId?: string
       coordinatorHandle?: string
       createdByTerminalHandle?: string
+      agentSessionFork?: boolean
       agentSessionForkPoint?: AgentSessionForkPoint
     }
   | {
@@ -9816,6 +9818,7 @@ export class OrcaRuntimeService {
         ...(lineageResolution.createdByTerminalHandle
           ? { createdByTerminalHandle: lineageResolution.createdByTerminalHandle }
           : {}),
+        ...(lineageResolution.agentSessionFork ? { agentSessionFork: true } : {}),
         ...(lineageResolution.agentSessionForkPoint
           ? { agentSessionForkPoint: lineageResolution.agentSessionForkPoint }
           : {}),
@@ -9851,6 +9854,7 @@ export class OrcaRuntimeService {
         ...(lineageResolution.createdByTerminalHandle
           ? { createdByTerminalHandle: lineageResolution.createdByTerminalHandle }
           : {}),
+        ...(lineageResolution.agentSessionFork ? { agentSessionFork: true } : {}),
         ...(lineageResolution.agentSessionForkPoint
           ? { agentSessionForkPoint: lineageResolution.agentSessionForkPoint }
           : {}),
@@ -10104,7 +10108,7 @@ export class OrcaRuntimeService {
       const worktreeId = getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
       let folderPath = repo.path
       if (
-        args.lineage?.callerTerminalHandle &&
+        args.lineage?.agentSessionFork &&
         lineageResolution.kind === 'lineage' &&
         lineageResolution.parent.type === 'worktree'
       ) {
@@ -11801,7 +11805,7 @@ export class OrcaRuntimeService {
   private toAgentSessionForkRecord(
     worktree: RuntimeWorktreeRecord
   ): RuntimeAgentSessionForkRecord | null {
-    if (!worktree.lineage) {
+    if (!worktree.lineage?.agentSessionFork) {
       return null
     }
     return {
@@ -12106,6 +12110,7 @@ export class OrcaRuntimeService {
       ...startupArgs,
       lineage: {
         parentWorktree: `id:${sourceWorktree.id}`,
+        agentSessionFork: true,
         ...(terminalHandle ? { callerTerminalHandle: terminalHandle } : {}),
         ...(forkPoint ? { agentSessionForkPoint: forkPoint } : {})
       }
@@ -14432,6 +14437,7 @@ export class OrcaRuntimeService {
           parent: await this.resolveWorkspaceParentSelector(input.parentWorkspace),
           origin: 'cli',
           capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+          ...(input.agentSessionFork ? { agentSessionFork: true } : {}),
           ...(input.agentSessionForkPoint
             ? { agentSessionForkPoint: input.agentSessionForkPoint }
             : {})
@@ -14469,6 +14475,7 @@ export class OrcaRuntimeService {
           ...(input.callerTerminalHandle
             ? { createdByTerminalHandle: input.callerTerminalHandle }
             : {}),
+          ...(input.agentSessionFork ? { agentSessionFork: true } : {}),
           ...(input.agentSessionForkPoint
             ? { agentSessionForkPoint: input.agentSessionForkPoint }
             : {})
@@ -14653,6 +14660,7 @@ export class OrcaRuntimeService {
       ...(terminalContextResolved && input.callerTerminalHandle
         ? { createdByTerminalHandle: input.callerTerminalHandle }
         : {}),
+      ...(input.agentSessionFork ? { agentSessionFork: true } : {}),
       ...(input.agentSessionForkPoint ? { agentSessionForkPoint: input.agentSessionForkPoint } : {})
     }
   }

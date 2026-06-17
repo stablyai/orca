@@ -190,6 +190,7 @@ function areLineageRecordsEqual(
     a.taskId === b.taskId &&
     a.coordinatorHandle === b.coordinatorHandle &&
     a.createdByTerminalHandle === b.createdByTerminalHandle &&
+    a.agentSessionFork === b.agentSessionFork &&
     a.agentSessionForkPoint?.kind === b.agentSessionForkPoint?.kind &&
     a.agentSessionForkPoint?.id === b.agentSessionForkPoint?.id &&
     a.createdAt === b.createdAt
@@ -703,6 +704,7 @@ function projectWorktreeLineageToWorkspaceLineage(
     ...(lineage.createdByTerminalHandle
       ? { createdByTerminalHandle: lineage.createdByTerminalHandle }
       : {}),
+    ...(lineage.agentSessionFork ? { agentSessionFork: true } : {}),
     ...(lineage.agentSessionForkPoint
       ? { agentSessionForkPoint: lineage.agentSessionForkPoint }
       : {}),

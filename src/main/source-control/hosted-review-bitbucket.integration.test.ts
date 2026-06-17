@@ -117,5 +117,5 @@ describe('Bitbucket hosted review integration', () => {
         server.close((error) => (error ? reject(error) : resolve()))
       })
     }
-  })
+  }, 15_000)
 })

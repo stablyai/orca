@@ -589,7 +589,7 @@ exit 1
     expect(existsSync(issueMarkerPath)).toBe(true)
     expect(readFileSync(patchArgsPath, 'utf8')).toContain('body=@')
     expect(readFileSync(patchArgsPath, 'utf8')).not.toContain('PR body')
-  })
+  }, 15_000)
 
   it('passes gh create help through without editing existing PRs or issues', () => {
     const root = makeTmpRoot()

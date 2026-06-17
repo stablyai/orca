@@ -114,6 +114,27 @@ describe('RPC optional pipe schemas', () => {
         id: '/home/dev/.pi/agent/sessions/--repo--/20260617_session.jsonl'
       }
     })
+    expectRejects(methodParams(FORK_METHODS, 'fork.create'), {
+      terminal: 'term-1',
+      worktree: 'id:wt-1',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'claude-session-1' }
+    })
+    expectRejects(methodParams(FORK_METHODS, 'fork.create'), {
+      promptInteractions: [
+        {
+          id: 'gemini-message-1',
+          prompt: 'first prompt',
+          observedAt: 1_000,
+          agentType: 'gemini'
+        }
+      ]
+    })
+    expectRejects(methodParams(FORK_METHODS, 'fork.preflight'), {
+      worktree: 'id:wt-1',
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: '--unsafe' }
+    })
     expectParses(methodParams(FORK_METHODS, 'fork.show'), { fork: 'repo::/tmp/child' })
     expectParses(methodParams(FORK_METHODS, 'fork.diff'), { fork: 'repo::/tmp/child' })
   })
