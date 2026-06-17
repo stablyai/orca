@@ -3692,10 +3692,11 @@ describe('ClaudeRuntimeAuthService', () => {
 
     markClaudePtySpawned('pty-live-1')
     try {
-      await service.syncForCurrentSelection()
+      const preparation = await service.prepareForRateLimitFetch()
       // A live Claude owns the credentials; refreshing here would race its
       // rotation, so the proactive refresh must be skipped entirely.
       expect(refreshClaudeOauthCredentials).not.toHaveBeenCalled()
+      expect(preparation.managedRefreshDeferredByLivePty).toBe(true)
     } finally {
       markClaudePtyExited('pty-live-1')
       vi.mocked(isOauthTokenExpiring).mockReturnValue(false)
