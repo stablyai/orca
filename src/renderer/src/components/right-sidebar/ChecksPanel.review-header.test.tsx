@@ -29,10 +29,12 @@ afterEach(() => {
 
 function renderHeader({
   canUnlinkPullRequest = true,
-  provider = 'github'
+  provider = 'github',
+  showSystemBrowserHint = true
 }: {
   canUnlinkPullRequest?: boolean
   provider?: 'github' | 'gitlab'
+  showSystemBrowserHint?: boolean
 } = {}): string {
   const isGitLab = provider === 'gitlab'
   return renderToStaticMarkup(
@@ -51,6 +53,7 @@ function renderHeader({
       }}
       isRefreshing={false}
       canUnlinkPullRequest={canUnlinkPullRequest}
+      showSystemBrowserHint={showSystemBrowserHint}
       onRefresh={vi.fn()}
       onOpenReview={vi.fn()}
       onUnlinkPullRequest={vi.fn()}
@@ -74,6 +77,14 @@ describe('ChecksPanelReviewHeader', () => {
     expect(markup).toContain('Link another PR')
     expect(markup).toContain('lucide-ellipsis')
     expect(markup).not.toContain('lucide-external-link')
+  })
+
+  it('omits the system-browser hint when plain clicks already open externally', () => {
+    const markup = renderHeader({ showSystemBrowserHint: false })
+
+    expect(markup).toContain('Open on GitHub')
+    expect(markup).not.toContain('system browser')
+    expect(markup).not.toContain('⇧⌘+click')
   })
 
   it('shows the Ctrl system-browser hint off macOS', () => {

@@ -169,6 +169,7 @@ type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
   isRefreshing: boolean
   canUnlinkPullRequest: boolean
+  showSystemBrowserHint: boolean
   onRefresh: () => void
   onOpenReview: (event: React.MouseEvent<HTMLButtonElement>) => void
   onUnlinkPullRequest: () => void
@@ -179,6 +180,7 @@ export function ChecksPanelReviewHeader({
   review,
   isRefreshing,
   canUnlinkPullRequest,
+  showSystemBrowserHint,
   onRefresh,
   onOpenReview,
   onUnlinkPullRequest,
@@ -188,11 +190,14 @@ export function ChecksPanelReviewHeader({
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
   const showPullRequestMenu = review.provider === 'github'
-  const title = `${translate(
+  const openTitle = translate(
     'auto.components.right.sidebar.ChecksPanel.5c88c6db07',
     'Open on {{value0}}',
     { value0: reviewHostLabel }
-  )}. ${getTerminalUrlSystemBrowserHint()}`
+  )
+  const title = showSystemBrowserHint
+    ? `${openTitle}. ${getTerminalUrlSystemBrowserHint()}`
+    : openTitle
 
   return (
     <div className="flex items-center gap-2">
@@ -3082,6 +3087,12 @@ export default function ChecksPanel(): React.JSX.Element {
   const reviewShortLabel = activeReview.provider === 'gitlab' ? 'MR' : 'PR'
   const shouldShowReviewTriageStrip =
     activeConflictReview !== null || getBrokenChecks(checks).length > 0
+  // Why: mirror openHttpLink's global routing inputs so the hint only appears
+  // when the actual plain-click path would open inside Orca.
+  const showHostedReviewSystemBrowserHint =
+    Boolean(activeWorktreeId) &&
+    settings?.openLinksInApp === true &&
+    !settings.activeRuntimeEnvironmentId
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {/* Hosted review header */}
@@ -3091,6 +3102,7 @@ export default function ChecksPanel(): React.JSX.Element {
           review={activeReview}
           isRefreshing={isRefreshing}
           canUnlinkPullRequest={linkedPR !== null}
+          showSystemBrowserHint={showHostedReviewSystemBrowserHint}
           onRefresh={() => void handleRefresh()}
           onOpenReview={handleOpenPR}
           onUnlinkPullRequest={handleUnlinkPullRequest}
