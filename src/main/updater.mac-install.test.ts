@@ -163,6 +163,7 @@ describe('updater mac install handoff', () => {
       expect(nativeDownloadedHandler).toBeTypeOf('function')
 
       nativeDownloadedHandler?.()
+      await Promise.resolve()
 
       expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
       expect(sendMock).toHaveBeenCalledWith('updater:status', {
@@ -170,6 +171,53 @@ describe('updater mac install handoff', () => {
         percent: 100,
         version: '1.0.61'
       })
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
+    'ignores duplicate quit requests while deferred mac install cleanup is running',
+    async () => {
+      vi.useFakeTimers()
+
+      let finishCleanup!: () => void
+      const onBeforeQuit = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishCleanup = resolve
+          })
+      )
+      const mainWindow = { webContents: { send: vi.fn() } }
+
+      autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+      const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+      setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+      autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      await vi.advanceTimersByTimeAsync(0)
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
+      const preventDefault = vi.fn()
+      appMock.emit('before-quit', { preventDefault })
+      expect(preventDefault).toHaveBeenCalledTimes(1)
+
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      expect(nativeDownloadedHandler).toBeTypeOf('function')
+
+      nativeDownloadedHandler?.()
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+
+      quitAndInstall()
+      finishCleanup()
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+      expect(killAllPtyMock).toHaveBeenCalledTimes(1)
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
     }
   )
 

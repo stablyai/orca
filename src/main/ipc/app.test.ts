@@ -57,34 +57,89 @@ describe('registerAppHandlers', () => {
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
 
-  it('marks relaunch as expected shutdown before exiting', () => {
+  it('marks relaunch as expected shutdown before exiting', async () => {
     const onBeforeRelaunch = vi.fn()
     registerAppHandlers({} as never, { onBeforeRelaunch })
 
-    handlers.get('app:relaunch')?.(null)
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.(null))
 
     expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
     expect(appRelaunchMock).not.toHaveBeenCalled()
     expect(appExitMock).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(150)
+    await relaunchPromise
+    await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
   })
 
-  it('marks restart as expected shutdown before quitting through the normal pipeline', () => {
+  it('waits for pre-relaunch cleanup before exiting', async () => {
+    let finishCleanup!: () => void
+    const onBeforeRelaunch = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve
+        })
+    )
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+
+    const relaunchPromise = Promise.resolve(handlers.get('app:relaunch')?.(null))
+
+    expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appRelaunchMock).not.toHaveBeenCalled()
+    expect(appExitMock).not.toHaveBeenCalled()
+
+    finishCleanup()
+    await relaunchPromise
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).toHaveBeenCalledWith(0)
+  })
+
+  it('marks restart as expected shutdown before quitting through the normal pipeline', async () => {
     const onBeforeRelaunch = vi.fn()
     registerAppHandlers({} as never, { onBeforeRelaunch })
 
-    handlers.get('app:restart')?.(null)
+    const restartPromise = Promise.resolve(handlers.get('app:restart')?.(null))
 
     expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
     expect(appRelaunchMock).not.toHaveBeenCalled()
     expect(appQuitMock).not.toHaveBeenCalled()
     expect(appExitMock).not.toHaveBeenCalled()
 
-    vi.advanceTimersByTime(150)
+    await restartPromise
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(appQuitMock).toHaveBeenCalledTimes(1)
+    expect(appExitMock).not.toHaveBeenCalled()
+  })
+
+  it('waits for pre-relaunch cleanup before restarting through the normal pipeline', async () => {
+    let finishCleanup!: () => void
+    const onBeforeRelaunch = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve
+        })
+    )
+    registerAppHandlers({} as never, { onBeforeRelaunch })
+
+    const restartPromise = Promise.resolve(handlers.get('app:restart')?.(null))
+
+    expect(onBeforeRelaunch).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(150)
+    expect(appRelaunchMock).not.toHaveBeenCalled()
+    expect(appQuitMock).not.toHaveBeenCalled()
+
+    finishCleanup()
+    await restartPromise
+    await vi.advanceTimersByTimeAsync(150)
 
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appQuitMock).toHaveBeenCalledTimes(1)

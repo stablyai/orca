@@ -112,14 +112,14 @@ export function deferMacQuitUntilInstallerReady(
 
 export function handleMacInstallerReady(
   hasNewerDownloadedVersion: boolean,
-  onReadyToInstall: () => void,
+  onReadyToInstall: () => void | Promise<void>,
   onReadyToReportDownloaded: () => void
 ): void {
   squirrelReady = true
   clearPendingInstallTimeout()
 
   if (installRequestedAfterSquirrelReady && hasNewerDownloadedVersion) {
-    onReadyToInstall()
+    void onReadyToInstall()
     return
   }
 

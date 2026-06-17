@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: attachMainWindowServices centralizes main-window IPC wiring; keeping its integration-style mocks together avoids brittle cross-file setup. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Store } from '../persistence'
 
 const {
   onMock,
@@ -133,8 +134,8 @@ function createMainWindow(extraWebContents: { on?: MockFn; send?: MockFn } = {})
   }
 }
 
-function createStore(): never {
-  return { flush: vi.fn() } as never
+function createStore(): Store & { flush: MockFn } {
+  return { flush: vi.fn() } as Store & { flush: MockFn }
 }
 
 function createRuntime(): RuntimeStub {
@@ -229,6 +230,33 @@ describe('attachMainWindowServices', () => {
 
     expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(2)
     expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenLastCalledWith(store)
+  })
+
+  it('passes injected update quit cleanup to the auto-updater', () => {
+    const onBeforeUpdateQuit = vi.fn()
+    const store = createStore()
+
+    attachMainWindowServices(
+      createMainWindow() as never,
+      store,
+      createRuntime() as never,
+      undefined,
+      undefined,
+      { onBeforeUpdateQuit }
+    )
+
+    expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
+    expect(setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit).toBe(onBeforeUpdateQuit)
+  })
+
+  it('flushes the store before update quit when no cleanup is injected', () => {
+    const store = createStore()
+
+    attachMainWindowServices(createMainWindow() as never, store, createRuntime() as never)
+
+    setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
+
+    expect(store.flush).toHaveBeenCalledTimes(1)
   })
 
   it('ignores app reload requests from non-main webContents', async () => {

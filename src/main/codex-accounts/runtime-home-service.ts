@@ -97,6 +97,7 @@ export class CodexRuntimeHomeService {
   // newer than managed storage.
   private readonly lastWrittenWslAuthJsonByDistro = new Map<string, string | null>()
   private readonly lastSyncedWslAccountIdByDistro = new Map<string, string | null>()
+  private readonly wslRuntimeHomePathByDistro = new Map<string, string>()
   private skipNextReadBackForAccountId: string | null = null
 
   constructor(private readonly store: Store) {
@@ -137,6 +138,25 @@ export class CodexRuntimeHomeService {
 
   getHostRuntimeHomePath(): string {
     return this.getRuntimeHomePath()
+  }
+
+  syncActiveWslSelectionsBeforeRestart(): void {
+    if (process.platform !== 'win32') {
+      return
+    }
+
+    const settings = this.store.getSettings()
+    const selectedAccountIds = new Set(
+      Object.values(normalizeCodexRuntimeSelection(settings).wsl).filter((id): id is string =>
+        Boolean(id)
+      )
+    )
+    for (const account of settings.codexManagedAccounts) {
+      if (!selectedAccountIds.has(account.id) || account.managedHomeRuntime !== 'wsl') {
+        continue
+      }
+      this.safeReadBackActiveWslAccountBeforeRestart(account)
+    }
   }
 
   private getWslSystemCodexHomePath(target: CodexAccountSelectionTarget): string | null {
@@ -452,6 +472,7 @@ export class CodexRuntimeHomeService {
     if (!runtimeHomePath) {
       return null
     }
+    this.wslRuntimeHomePathByDistro.set(distro, runtimeHomePath)
 
     mkdirSync(runtimeHomePath, { recursive: true })
     this.safeMigrateLegacyWslActiveHomePointer(distro, runtimeHomePath)
@@ -542,6 +563,35 @@ export class CodexRuntimeHomeService {
     return home
       ? this.joinWslPath(home, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
       : null
+  }
+
+  private safeReadBackActiveWslAccountBeforeRestart(account: CodexManagedAccount): void {
+    try {
+      this.readBackActiveWslAccountBeforeRestart(account)
+    } catch (error) {
+      console.warn('[codex-runtime-home] Failed to preserve WSL Codex auth before restart:', error)
+    }
+  }
+
+  private readBackActiveWslAccountBeforeRestart(account: CodexManagedAccount): void {
+    const distro = account.wslDistro?.trim()
+    if (!distro) {
+      return
+    }
+
+    const runtimeHomePath = this.wslRuntimeHomePathByDistro.get(distro)
+    if (!runtimeHomePath) {
+      return
+    }
+
+    this.readBackRefreshedTokensFromPath(join(runtimeHomePath, 'auth.json'), {
+      updateLastWrittenAuthJson: true,
+      lastWrittenAuthJson: this.lastWrittenWslAuthJsonByDistro.get(distro) ?? null,
+      setLastWrittenAuthJson: (contents) => {
+        this.lastWrittenWslAuthJsonByDistro.set(distro, contents)
+      },
+      expectedAccountId: account.id
+    })
   }
 
   private safeMigrateLegacyWslActiveHomePointer(distro: string, runtimeHomePath: string): void {
