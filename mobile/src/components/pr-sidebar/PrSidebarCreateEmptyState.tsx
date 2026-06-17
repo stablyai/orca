@@ -126,7 +126,9 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
         accessibilityLabel="Link existing pull request"
       >
         <Link2 size={16} color={colors.textPrimary} strokeWidth={2.2} />
-        <Text style={actionStyles.actionButtonText}>Link existing pull request</Text>
+        <Text style={actionStyles.actionButtonText} numberOfLines={1}>
+          Link existing pull request
+        </Text>
       </Pressable>
       {orphanLinkedPR ? (
         <Pressable

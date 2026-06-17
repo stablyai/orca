@@ -57,6 +57,10 @@ export const prActionsStyles = StyleSheet.create({
     opacity: 0.5
   },
   actionButtonText: {
+    // Why: shrink + single-line (numberOfLines=1 at call sites) so a long label
+    // like "Link existing pull request" can't wrap and inflate the button's
+    // effective padding on a narrow sidebar.
+    flexShrink: 1,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontWeight: '700'
