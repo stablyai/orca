@@ -94,6 +94,36 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup).not.toContain('aria-label="Unlink PR"')
   })
 
+  it('puts issue edit before open actions and keeps GitHub last', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        issue={{
+          number: 5518,
+          title: 'Agent monitor lists ephemeral headless subprocesses',
+          state: 'closed',
+          url: 'https://github.com/acme/orca/issues/5518',
+          labels: []
+        }}
+        linearIssue={null}
+        review={null}
+        comment={null}
+        onEditIssue={vi.fn()}
+        onEditComment={vi.fn()}
+        onOpenGitHubIssueInOrca={vi.fn()}
+      >
+        <span>Linked issue</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    const editIssueIndex = markup.indexOf('aria-label="Edit issue"')
+    const openInOrcaIndex = markup.indexOf('aria-label="Open in Orca"')
+    const viewOnGitHubIndex = markup.indexOf('aria-label="View on GitHub"')
+
+    expect(editIssueIndex).toBeGreaterThan(-1)
+    expect(editIssueIndex).toBeLessThan(openInOrcaIndex)
+    expect(openInOrcaIndex).toBeLessThan(viewOnGitHubIndex)
+  })
+
   it('labels GitLab unlink actions with MR terminology', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
