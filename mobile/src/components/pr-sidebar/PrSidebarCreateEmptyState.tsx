@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { GitPullRequest, Link2, Link2Off } from 'lucide-react-native'
+import { GitPullRequestArrow, Link2, Link2Off } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
 import { resolveMobilePrPrefill, type MobilePrPrefill } from '../../source-control/mobile-pr-create'
@@ -112,7 +112,7 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
         {loading ? (
           <ActivityIndicator color={colors.bgBase} />
         ) : (
-          <GitPullRequest size={16} color={colors.bgBase} strokeWidth={2.2} />
+          <GitPullRequestArrow size={16} color={colors.bgBase} strokeWidth={2.2} />
         )}
         <Text style={[actionStyles.actionButtonText, actionStyles.actionButtonTextPrimary]}>
           Create pull request

@@ -5,7 +5,7 @@ import {
   Check,
   CloudUpload,
   GitBranch,
-  GitPullRequest,
+  GitPullRequestArrow,
   History,
   RefreshCw,
   type LucideIcon
@@ -92,7 +92,7 @@ export const SOURCE_CONTROL_ACTION_ICONS: Record<MobileSourceControlActionIcon, 
   fetch: RefreshCw,
   publish: CloudUpload,
   rebase: GitBranch,
-  pr: GitPullRequest,
+  pr: GitPullRequestArrow,
   branch: GitBranch,
   history: History
 }
