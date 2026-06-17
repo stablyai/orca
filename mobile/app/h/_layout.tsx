@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { View, Pressable, StyleSheet, PanResponder } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { View, StyleSheet, PanResponder } from 'react-native'
 import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
-import { PanelLeftOpen } from 'lucide-react-native'
-import { colors, radii } from '../../src/theme/mobile-theme'
+import { colors } from '../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../src/layout/responsive-layout'
 import {
   HOST_SIDEBAR_DEFAULT_WIDTH,
@@ -57,7 +55,6 @@ function HostStack({ animation }: { animation: 'none' | 'default' }) {
 export default function HostGroupLayout() {
   // Wide layout = tablet/foldable canvas (see responsive-layout-metrics).
   const { isWideLayout, width: windowWidth } = useResponsiveLayout()
-  const insets = useSafeAreaInsets()
   const { hostId, action } = useGlobalSearchParams<{ hostId?: string; action?: string }>()
   const pathname = usePathname()
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -95,9 +92,10 @@ export default function HostGroupLayout() {
   const detailHasContent = !!hostId && pathname !== `/h/${hostId}`
   const canCollapseSidebar = showSidebar && detailHasContent
 
+  // Why: there is no reveal button — navigating Back to the base host route brings
+  // the sidebar back (and that route's detail pane is only a placeholder, so a
+  // hidden sidebar would leave nothing useful).
   useEffect(() => {
-    // Why: on the base host route the detail pane is only a placeholder, so
-    // hiding the sidebar removes the only useful navigation surface.
     if (showSidebar && !detailHasContent) {
       setSidebarOpen(true)
     }
@@ -151,20 +149,6 @@ export default function HostGroupLayout() {
       <View style={styles.detail}>
         <HostStack animation={showSidebar ? 'none' : 'default'} />
       </View>
-      {/* Rendered last (and elevated) so the reveal control reliably paints above
-          the detail pane on Android. Positioned in the header band just right of the
-          detail screen's back arrow so it's discoverable (not a mid-edge tab). */}
-      {canCollapseSidebar && !sidebarOpen ? (
-        <Pressable
-          style={[styles.revealButton, { top: insets.top + 10 }]}
-          onPress={() => setSidebarOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Show sidebar"
-          hitSlop={12}
-        >
-          <PanelLeftOpen size={20} color={colors.textSecondary} />
-        </Pressable>
-      ) : null}
     </View>
   )
 }
@@ -193,21 +177,5 @@ const styles = StyleSheet.create({
   detail: {
     flex: 1,
     minWidth: 0
-  },
-  // When the sidebar is hidden, a button sits in the header band just right of the
-  // detail screen's back arrow (top set dynamically from the safe-area inset).
-  revealButton: {
-    position: 'absolute',
-    left: 52,
-    zIndex: 10,
-    elevation: 12,
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
   }
 })
