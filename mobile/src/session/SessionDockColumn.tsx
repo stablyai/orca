@@ -1,4 +1,4 @@
-import { View } from 'react-native'
+import { View, StyleSheet, type GestureResponderHandlers } from 'react-native'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
@@ -16,6 +16,9 @@ type Props = {
   connState: ConnectionState
   branch: string | null
   headSha: string | null
+  width: number
+  // Spread onto the dedicated left-edge drag handle (see use-mobile-dock-resize).
+  resizeHandlers: GestureResponderHandlers
   onRequestClose: () => void
 }
 
@@ -31,10 +34,15 @@ export function SessionDockColumn({
   connState,
   branch,
   headSha,
+  width,
+  resizeHandlers,
   onRequestClose
 }: Props) {
   return (
-    <View style={mobilePrSidebarStyles.dockColumn}>
+    <View style={[mobilePrSidebarStyles.dockColumn, { width }]}>
+      {/* Dedicated drag handle over the dock's left border — a leaf overlay so the
+          inner ScrollView can't intercept the gesture on Android. */}
+      <View style={styles.resizeHandle} {...resizeHandlers} />
       {activePanel === 'sourceControl' ? (
         <MobileSourceControlPanel
           hostId={hostId}
@@ -66,3 +74,19 @@ export function SessionDockColumn({
     </View>
   )
 }
+
+const RESIZE_EDGE_WIDTH = 24
+
+const styles = StyleSheet.create({
+  // Invisible grab strip over the dock's left edge. Absolute + elevated so it sits
+  // above the panel content and reliably owns the drag on Android.
+  resizeHandle: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: RESIZE_EDGE_WIDTH,
+    zIndex: 20,
+    elevation: 20
+  }
+})

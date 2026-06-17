@@ -8,6 +8,7 @@ import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { getPRReviewerRows } from './pr-checks-presentation'
 import { statusColor } from './pr-sidebar-status-color'
 import { ReviewerPickerDrawer } from './ReviewerPickerDrawer'
+import { PRSection } from './PRSection'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 
 type Props = {
@@ -47,9 +48,9 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
   }, [authoritativeRows, details])
 
   return (
-    <View style={styles.section}>
-      <View style={styles.summaryRow}>
-        <Text style={styles.sectionLabel}>Reviewers</Text>
+    <PRSection
+      title="Reviewers"
+      trailing={
         <Pressable
           style={styles.iconButton}
           onPress={() => setPickerOpen(true)}
@@ -58,7 +59,8 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
         >
           <UserPlus size={16} color={colors.accentBlue} strokeWidth={2.2} />
         </Pressable>
-      </View>
+      }
+    >
       {rows.length === 0 ? (
         <Text style={styles.emptyText}>No reviewers requested</Text>
       ) : (
@@ -106,6 +108,6 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
           }
         }}
       />
-    </View>
+    </PRSection>
   )
 }

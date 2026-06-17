@@ -8,7 +8,12 @@ import type { PRCheckDetail, PRState } from '../../../../src/shared/types'
 // The mobile-theme color tokens this logic maps to. Section components resolve
 // the token name to an actual color from `mobile-theme`, keeping this module
 // free of style imports.
-export type MobileStatusToken = 'statusGreen' | 'statusAmber' | 'statusRed' | 'textSecondary'
+export type MobileStatusToken =
+  | 'statusGreen'
+  | 'statusAmber'
+  | 'statusRed'
+  | 'statusPurple'
+  | 'textSecondary'
 
 export type CheckOutcome = 'success' | 'pending' | 'failure' | 'neutral'
 
@@ -158,7 +163,7 @@ export function prStateBadge(state: PRState): PRStateBadge {
     case 'open':
       return { label: 'Open', token: 'statusGreen' }
     case 'merged':
-      return { label: 'Merged', token: 'textSecondary' }
+      return { label: 'Merged', token: 'statusPurple' }
     case 'draft':
       return { label: 'Draft', token: 'textSecondary' }
     case 'closed':

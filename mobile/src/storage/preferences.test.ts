@@ -1,9 +1,12 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  HOST_DOCK_MAX_WIDTH,
+  HOST_DOCK_MIN_WIDTH,
   HOST_SIDEBAR_DEFAULT_WIDTH,
   HOST_SIDEBAR_MAX_WIDTH,
   HOST_SIDEBAR_MIN_WIDTH,
+  clampHostDockWidth,
   clampHostSidebarWidth,
   loadHostSidebarWidth,
   loadTerminalAutocompleteEnabled,
@@ -97,6 +100,14 @@ describe('host sidebar width preference', () => {
       'orca:hostSidebarWidth',
       String(HOST_SIDEBAR_MIN_WIDTH)
     )
+  })
+})
+
+describe('host dock width preference', () => {
+  it('clamps saved widths to the supported dock range', () => {
+    expect(clampHostDockWidth(HOST_DOCK_MIN_WIDTH - 10)).toBe(HOST_DOCK_MIN_WIDTH)
+    expect(clampHostDockWidth(HOST_DOCK_MAX_WIDTH + 10)).toBe(HOST_DOCK_MAX_WIDTH)
+    expect(clampHostDockWidth(337.6)).toBe(338)
   })
 })
 

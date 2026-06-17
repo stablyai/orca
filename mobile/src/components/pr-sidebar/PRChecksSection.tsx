@@ -14,6 +14,7 @@ import {
   summarizePRChecks
 } from './pr-checks-presentation'
 import { statusColor } from './pr-sidebar-status-color'
+import { PRSection } from './PRSection'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 
 type Props = {
@@ -89,31 +90,37 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions }:
   )
 
   return (
-    <View style={styles.section}>
-      <View style={styles.summaryRow}>
-        <Text style={styles.sectionLabel}>Checks</Text>
-        <Text
-          style={[styles.summaryLabel, { color: statusColor(checkOutcomeToken(summary.outcome)) }]}
-        >
-          {summary.label}
-        </Text>
-        {/* Rerun is offered only when something failed; spinner-in-place while in-flight. */}
-        {actions && summary.failed > 0 ? (
-          <Pressable
-            style={styles.iconButton}
-            onPress={() => actions.rerunFailingChecks()}
-            disabled={rerunBusy}
-            accessibilityRole="button"
-            accessibilityLabel="Rerun failing checks"
+    <PRSection
+      title="Checks"
+      trailing={
+        <>
+          <Text
+            style={[
+              styles.summaryLabel,
+              { color: statusColor(checkOutcomeToken(summary.outcome)) }
+            ]}
           >
-            {rerunBusy ? (
-              <ActivityIndicator color={colors.textSecondary} />
-            ) : (
-              <RotateCw size={14} color={colors.accentBlue} strokeWidth={2.2} />
-            )}
-          </Pressable>
-        ) : null}
-      </View>
+            {summary.label}
+          </Text>
+          {/* Rerun is offered only when something failed; spinner-in-place while in-flight. */}
+          {actions && summary.failed > 0 ? (
+            <Pressable
+              style={styles.iconButton}
+              onPress={() => actions.rerunFailingChecks()}
+              disabled={rerunBusy}
+              accessibilityRole="button"
+              accessibilityLabel="Rerun failing checks"
+            >
+              {rerunBusy ? (
+                <ActivityIndicator color={colors.textSecondary} />
+              ) : (
+                <RotateCw size={14} color={colors.accentBlue} strokeWidth={2.2} />
+              )}
+            </Pressable>
+          ) : null}
+        </>
+      }
+    >
       {sorted.map((check) => {
         const key = prCheckKey(check)
         const isOpen = expanded.has(key)
@@ -139,7 +146,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions }:
           </View>
         )
       })}
-    </View>
+    </PRSection>
   )
 }
 

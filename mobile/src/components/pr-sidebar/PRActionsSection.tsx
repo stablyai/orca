@@ -5,7 +5,8 @@ import { colors } from '../../theme/mobile-theme'
 import type { GitHubPRMergeMethod, PRInfo } from '../../../../src/shared/types'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { ConfirmModal } from '../ConfirmModal'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { PRSection } from './PRSection'
+import { prActionsStyles as styles } from './pr-actions-styles'
 
 type Props = {
   pr: PRInfo
@@ -90,9 +91,7 @@ export function PRActionsSection({ pr, actions }: Props) {
   const copy = confirmCopy()
 
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionLabel}>Actions</Text>
-
+    <PRSection title="Actions">
       {/* Merge-method picker: one-step selection, then a single Merge CTA. */}
       <View style={styles.methodRow}>
         {availableMethods.map((m) => {
@@ -173,6 +172,7 @@ export function PRActionsSection({ pr, actions }: Props) {
 
       {actions.error ? <Text style={styles.actionError}>{actions.error}</Text> : null}
 
+      {/* A Modal is taken out of the flex flow, so it adds no body gap here. */}
       <ConfirmModal
         visible={confirm !== null}
         title={copy.title}
@@ -182,7 +182,7 @@ export function PRActionsSection({ pr, actions }: Props) {
         onConfirm={runConfirmed}
         onCancel={() => setConfirm(null)}
       />
-    </View>
+    </PRSection>
   )
 }
 

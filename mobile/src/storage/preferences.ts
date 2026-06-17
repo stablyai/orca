@@ -105,6 +105,40 @@ export async function saveHostSidebarWidth(width: number): Promise<void> {
   await AsyncStorage.setItem(SIDEBAR_WIDTH_KEY, String(clampHostSidebarWidth(width)))
 }
 
+const DOCK_WIDTH_KEY = 'orca:hostDockWidth'
+
+// Bounds for the draggable right-hand session dock (Source Control / Files / PR)
+// on wide layouts. Mirrors the left worktree-list sidebar's bounds so the two
+// resizable columns read as a matched pair; the default matches the left default.
+// The caller additionally caps the max against the window so the terminal keeps
+// usable space.
+export const HOST_DOCK_MIN_WIDTH = 280
+export const HOST_DOCK_MAX_WIDTH = 560
+export const HOST_DOCK_DEFAULT_WIDTH = 340
+
+export function clampHostDockWidth(width: number): number {
+  if (!Number.isFinite(width)) {
+    return HOST_DOCK_DEFAULT_WIDTH
+  }
+  return Math.min(HOST_DOCK_MAX_WIDTH, Math.max(HOST_DOCK_MIN_WIDTH, Math.round(width)))
+}
+
+export async function loadHostDockWidth(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(DOCK_WIDTH_KEY)
+    if (raw === null) {
+      return HOST_DOCK_DEFAULT_WIDTH
+    }
+    return clampHostDockWidth(Number(raw))
+  } catch {
+    return HOST_DOCK_DEFAULT_WIDTH
+  }
+}
+
+export async function saveHostDockWidth(width: number): Promise<void> {
+  await AsyncStorage.setItem(DOCK_WIDTH_KEY, String(clampHostDockWidth(width)))
+}
+
 export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
 
 const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'

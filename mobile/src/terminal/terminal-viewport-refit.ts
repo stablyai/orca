@@ -23,9 +23,11 @@ type TerminalViewportRefitOptions = {
   // the PTY must be re-fitted to a new column count and reflowed.
   textScale: number
   // Why: on wide layouts a docked side panel takes a fixed slice of the row, so
-  // opening/closing it changes the terminal column width without any window-dim or
-  // tab-strip change. Without this trigger the PTY stays fitted to the pre-dock width.
-  dockOpen: boolean
+  // opening/closing OR resizing it changes the terminal column width without any
+  // window-dim or tab-strip change. Carries the dock's effective width (0 when no
+  // dock) so a drag-resize re-fits too — the refit's 150ms debounce coalesces the
+  // stream of drag widths into a single settle-time refit.
+  dockWidth: number
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }
@@ -48,7 +50,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     initializedHandlesRef,
     tabStripVisible,
     textScale,
-    dockOpen,
+    dockWidth,
     unsubscribeTerminal,
     subscribeToTerminal
   } = options
@@ -187,19 +189,19 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     scheduleViewportRefit()
   }, [textScale, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Why: docking/undocking a side panel on a wide layout changes the terminal's
-  // column width (the dock takes a fixed slice of the row) without any window-dim
-  // or tab-strip change, so the cached viewport goes stale and the PTY keeps the
-  // pre-dock width. Mark un-measured and refit on the toggle.
-  const prevDockOpenRef = useRef(dockOpen)
+  // Why: docking/undocking OR resizing a side panel on a wide layout changes the
+  // terminal's column width (the dock takes a slice of the row) without any
+  // window-dim or tab-strip change, so the cached viewport goes stale and the PTY
+  // keeps the pre-change width. Mark un-measured and refit when the width changes.
+  const prevDockWidthRef = useRef(dockWidth)
   useEffect(() => {
-    if (prevDockOpenRef.current === dockOpen) {
+    if (prevDockWidthRef.current === dockWidth) {
       return
     }
-    prevDockOpenRef.current = dockOpen
+    prevDockWidthRef.current = dockWidth
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
-  }, [dockOpen, viewportMeasuredRef, scheduleViewportRefit])
+  }, [dockWidth, viewportMeasuredRef, scheduleViewportRefit])
 
   useEffect(() => {
     disposedRef.current = false

@@ -101,15 +101,18 @@ export default function HostGroupLayout() {
     }
   }, [detailHasContent, showSidebar])
 
+  // Why: the resizer lives on a dedicated edge handle (a leaf overlay at the
+  // sidebar's right border), NOT on the sidebar container. On Android a child
+  // ScrollView/FlatList claims the native touch responder, so a parent-View
+  // PanResponder never sees the move events and the drag silently no-ops; a
+  // dedicated handle on top of the content captures the gesture on both
+  // platforms. It claims on start (capture too) since nothing sits under it.
   const resizer = useRef(
     PanResponder.create({
-      // Let row/button taps win; only claim horizontal drags that start near
-      // the sidebar's right edge.
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_evt, g) =>
-        g.x0 >= widthRef.current - RESIZE_EDGE_WIDTH &&
-        Math.abs(g.dx) > 4 &&
-        Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: () => {
         dragStartRef.current = widthRef.current
@@ -132,13 +135,15 @@ export default function HostGroupLayout() {
   return (
     <View style={styles.row}>
       {showSidebar && sidebarOpen ? (
-        <View style={[styles.sidebar, { width: sidebarWidth }]} {...resizer.panHandlers}>
+        <View style={[styles.sidebar, { width: sidebarWidth }]}>
           <HostScreen
             embedded
             hostId={hostId}
             action={action}
             onHideSidebar={canCollapseSidebar ? hideSidebar : undefined}
           />
+          {/* Dedicated drag handle straddling the right border — see resizer note. */}
+          <View style={styles.resizeHandle} {...resizer.panHandlers} />
         </View>
       ) : null}
       <View style={styles.detail}>
@@ -170,6 +175,17 @@ const styles = StyleSheet.create({
   sidebar: {
     borderRightWidth: 1,
     borderRightColor: colors.borderSubtle
+  },
+  // Invisible grab strip over the sidebar's right edge. Absolute + elevated so it
+  // sits above the worktree list and reliably owns the drag on Android.
+  resizeHandle: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: RESIZE_EDGE_WIDTH,
+    zIndex: 20,
+    elevation: 20
   },
   detail: {
     flex: 1,

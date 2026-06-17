@@ -23,20 +23,22 @@ export function PRSidebarHeader({ pr, details }: Props) {
 
   return (
     <View style={styles.section}>
-      <View style={[styles.badge, { borderColor: badgeColor }]}>
-        <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
-      </View>
-      <Text style={styles.prTitle}>
-        {title} <Text style={styles.prMeta}>#{pr.number}</Text>
-      </Text>
-      {author ? <Text style={styles.prMeta}>by {author}</Text> : null}
-      {baseRef && headRef ? (
-        <View style={styles.branchRow}>
-          <Text style={styles.branchPill}>{baseRef}</Text>
-          <ArrowLeft size={12} color={colors.textSecondary} strokeWidth={2.2} />
-          <Text style={styles.branchPill}>{headRef}</Text>
+      <View style={styles.sectionBody}>
+        <View style={[styles.badge, { borderColor: badgeColor }]}>
+          <Text style={[styles.badgeText, { color: badgeColor }]}>{badge.label}</Text>
         </View>
-      ) : null}
+        <Text style={styles.prTitle}>
+          {title} <Text style={styles.prMeta}>#{pr.number}</Text>
+        </Text>
+        {author ? <Text style={styles.prMeta}>by {author}</Text> : null}
+        {baseRef && headRef ? (
+          <View style={styles.branchRow}>
+            <Text style={styles.branchPill}>{baseRef}</Text>
+            <ArrowLeft size={12} color={colors.textSecondary} strokeWidth={2.2} />
+            <Text style={styles.branchPill}>{headRef}</Text>
+          </View>
+        ) : null}
+      </View>
     </View>
   )
 }
