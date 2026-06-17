@@ -8733,7 +8733,9 @@
             "74727df633": "“{{value0}}”已删除",
             "d979a4fbb5": "永久删除“{{value0}}”？",
             "a76c74f105": "destructive",
-            "92276aceb7": "删除"
+            "92276aceb7": "删除",
+            "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
+            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "无法打开符号链接目标"

@@ -8733,7 +8733,9 @@
             "74727df633": "'{{value0}}' eliminado",
             "d979a4fbb5": "¿Eliminar permanentemente '{{value0}}'?",
             "a76c74f105": "destructivo",
-            "92276aceb7": "Borrar"
+            "92276aceb7": "Borrar",
+            "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
+            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "No se puede abrir el destino del enlace simbólico"

@@ -8733,7 +8733,9 @@
             "74727df633": "'{{value0}}'이(가) 삭제되었습니다.",
             "d979a4fbb5": "'{{value0}}'을(를) 영구적으로 삭제하시겠습니까?",
             "a76c74f105": "파괴적인",
-            "92276aceb7": "삭제"
+            "92276aceb7": "삭제",
+            "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
+            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "심볼릭 링크 대상을 열 수 없습니다"
