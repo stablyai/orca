@@ -75,7 +75,8 @@ export const PRCommentCard = memo(function PRCommentCard({
     ? `${comment.path.split('/').pop()}${comment.line ? `:L${comment.line}` : ''}`
     : null
   const canResolve = actions ? isResolvableComment(comment) : false
-  const resolveBusy = canResolve && actions ? actions.isResolveBusy(comment.threadId as string) : false
+  const resolveBusy =
+    canResolve && actions ? actions.isResolveBusy(comment.threadId as string) : false
   const replyBusy = actions ? actions.isReplyBusy(comment.id) : false
   // Edit/delete are offered only on mutable root conversation comments with a repo
   // slug; GitHub enforces authorship server-side (no client viewer-identity field).
@@ -135,7 +136,7 @@ export const PRCommentCard = memo(function PRCommentCard({
         {comment.url ? (
           <Pressable
             style={styles.openButton}
-            onPress={() => void Linking.openURL(comment.url)}
+            onPress={() => void Linking.openURL(comment.url).catch(() => {})}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Open comment on GitHub"
@@ -179,10 +180,10 @@ export const PRCommentCard = memo(function PRCommentCard({
             <Pressable
               style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
               onPress={() => {
-              // Only one composer open at a time: entering Edit closes any open Reply.
-              setReplyOpen(false)
-              setEditOpen(true)
-            }}
+                // Only one composer open at a time: entering Edit closes any open Reply.
+                setReplyOpen(false)
+                setEditOpen(true)
+              }}
               disabled={editBusy}
               hitSlop={6}
               accessibilityRole="button"

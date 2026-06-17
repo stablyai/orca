@@ -12,7 +12,8 @@ export function resolveRightDrawerPanelWidth(
   widthPx: number | undefined
 ): number {
   if (widthPx != null) {
-    return Math.min(widthPx, windowWidth)
+    // Clamp to [0, windowWidth] so a negative explicit width can't yield a negative panel.
+    return Math.max(Math.min(widthPx, windowWidth), 0)
   }
   if (isWideLayout) {
     return Math.min(WIDE_PANEL_MAX_WIDTH, windowWidth)

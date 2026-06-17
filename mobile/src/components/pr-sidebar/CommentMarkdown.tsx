@@ -3,6 +3,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { MermaidDiagram } from './MermaidDiagram'
+import { isAllowedMarkdownLinkUrl } from './markdown-link-scheme'
 import {
   parseInline,
   parseMarkdownBlocks,
@@ -140,6 +141,13 @@ function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
   }
 }
 
+function openMarkdownLink(url: string): void {
+  if (!isAllowedMarkdownLinkUrl(url)) {
+    return
+  }
+  void Linking.openURL(url).catch(() => {})
+}
+
 function alignToFlex(align: CellAlign | undefined): 'flex-start' | 'center' | 'flex-end' {
   if (align === 'center') {
     return 'center'
@@ -228,7 +236,7 @@ function Inline({ text, base }: { text: string; base: number }) {
         }
         if (token.kind === 'link') {
           return (
-            <Text key={i} style={styles.link} onPress={() => void Linking.openURL(token.url)}>
+            <Text key={i} style={styles.link} onPress={() => openMarkdownLink(token.url)}>
               {token.text}
             </Text>
           )

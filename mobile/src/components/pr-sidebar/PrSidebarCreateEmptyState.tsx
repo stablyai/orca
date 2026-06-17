@@ -42,11 +42,17 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
       setOrphanLinkedPR(null)
       return
     }
-    void fetchWorktreeLinkedPR(client, worktreeId).then((n) => {
-      if (!cancelled) {
-        setOrphanLinkedPR(n)
-      }
-    })
+    void fetchWorktreeLinkedPR(client, worktreeId)
+      .then((n) => {
+        if (!cancelled) {
+          setOrphanLinkedPR(n)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOrphanLinkedPR(null)
+        }
+      })
     return () => {
       cancelled = true
     }
@@ -63,6 +69,8 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
         setOrphanLinkedPR(null)
         onCreated()
       }
+    } catch {
+      // Best-effort: a failed unlink leaves the orphan state so the user can retry.
     } finally {
       setUnlinking(false)
     }
@@ -87,6 +95,9 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
       })
       setPrefill(resolved)
       setMode('create')
+    } catch {
+      // Best-effort: if prefill resolution rejects, leave the empty state so the
+      // user can retry rather than surfacing an unhandled rejection.
     } finally {
       setLoading(false)
     }

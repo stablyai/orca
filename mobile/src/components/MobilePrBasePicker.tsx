@@ -46,6 +46,9 @@ export function MobilePrBasePicker({
         clearTimeout(timer.current)
       }
       if (!client || query.trim().length === 0) {
+        // Advance the generation so an earlier in-flight search can't land and
+        // repopulate results after the input was cleared.
+        seq.current += 1
         setResults([])
         return
       }

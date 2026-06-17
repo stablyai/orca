@@ -68,6 +68,11 @@ describe('terminal viewport refit', () => {
     const appliedIndex = hookSource.indexOf('isTerminalUpdateViewportApplied(response)')
     const reflowIndex = hookSource.indexOf('ref.reflow(dims.cols, dims.rows)')
     const cacheUpdateIndex = hookSource.indexOf('updateTerminalSubscriptionViewport(handle, dims)')
+    // Assert each anchor exists before ordering: a missing marker yields -1 and would
+    // let the ordering comparisons pass vacuously.
+    expect(appliedIndex).toBeGreaterThanOrEqual(0)
+    expect(cacheUpdateIndex).toBeGreaterThanOrEqual(0)
+    expect(reflowIndex).toBeGreaterThanOrEqual(0)
     expect(reflowIndex).toBeGreaterThan(appliedIndex)
     expect(reflowIndex).toBeGreaterThan(cacheUpdateIndex)
   })

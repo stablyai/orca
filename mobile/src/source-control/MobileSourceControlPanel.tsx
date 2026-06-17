@@ -51,7 +51,9 @@ export function MobileSourceControlPanel({
 
   // Embedded mode docks beside the terminal: close the dock instead of popping
   // a route, and skip the full-screen safe-area chrome (the dock column owns it).
-  const onBack = embedded ? () => onRequestClose?.() : () => router.back()
+  // Fall back to router.back() when embedded without a close handler so the button
+  // never silently no-ops.
+  const onBack = embedded ? (onRequestClose ?? (() => router.back())) : () => router.back()
   const header = (
     <MobileSourceControlHeader
       embedded={embedded}

@@ -22,4 +22,8 @@ describe('resolveRightDrawerPanelWidth', () => {
   it('never returns a negative width on tiny windows', () => {
     expect(resolveRightDrawerPanelWidth(20, false, undefined)).toBe(0)
   })
+
+  it('clamps a negative explicit widthPx to zero', () => {
+    expect(resolveRightDrawerPanelWidth(400, false, -10)).toBe(0)
+  })
 })
