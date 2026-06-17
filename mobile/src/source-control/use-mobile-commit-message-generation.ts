@@ -48,6 +48,13 @@ export function useMobileCommitMessageGeneration(params: Params) {
         triggerError()
         setActionError(result.error)
       }
+    } catch (err) {
+      // Why: a transport drop rejects the RPC; without this the error haptic +
+      // message are skipped and the rejection escapes the void-called handler.
+      if (mountedRef.current) {
+        triggerError()
+        setActionError(err instanceof Error ? err.message : 'Failed to generate commit message')
+      }
     } finally {
       if (mountedRef.current) {
         setGeneratingMessage(false)

@@ -22,4 +22,17 @@ describe('parseGitHubPrReference', () => {
     expect(parseGitHubPrReference('https://example.com/foo/bar')).toBeNull()
     expect(parseGitHubPrReference('ftp://github.com/o/r/pull/1')).toBeNull()
   })
+
+  it('rejects a non-GitHub host even when the path looks like a PR', () => {
+    // Why: this parser is GitHub-specific; a look-alike host must not parse.
+    expect(parseGitHubPrReference('https://example.com/owner/repo/pull/7')).toBeNull()
+    expect(parseGitHubPrReference('https://gitlab.com/owner/repo/pull/7')).toBeNull()
+    expect(parseGitHubPrReference('https://notgithub.com/o/r/pull/1')).toBeNull()
+  })
+
+  it('accepts github.com and enterprise *.github.com subdomains', () => {
+    expect(parseGitHubPrReference('https://github.com/o/r/pull/12')).toBe(12)
+    expect(parseGitHubPrReference('https://GitHub.com/o/r/pull/12')).toBe(12)
+    expect(parseGitHubPrReference('https://corp.github.com/o/r/pull/34')).toBe(34)
+  })
 })

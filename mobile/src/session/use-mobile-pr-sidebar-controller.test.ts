@@ -138,6 +138,16 @@ describe('loadPrSidebarData', () => {
     )
     expect(out.kind).toBe('blocked')
   })
+
+  it('returns an error state when a dep rejects (no escaping rejection)', async () => {
+    const d = deps({
+      fetchPRForBranch: vi.fn(async () => {
+        throw new Error('transport closed')
+      })
+    })
+    const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
+    expect(out).toEqual({ kind: 'error', message: 'transport closed' })
+  })
 })
 
 describe('loadPrSidebarDetails (phase 2)', () => {
@@ -159,6 +169,15 @@ describe('loadPrSidebarDetails (phase 2)', () => {
   it('is non-fatal — a details failure yields null rather than erroring the sidebar', async () => {
     const d = deps({
       fetchWorkItemDetails: vi.fn(async () => fail<GitHubWorkItemDetails | null>('network down'))
+    })
+    expect(await loadPrSidebarDetails(d, 'w', 7)).toBeNull()
+  })
+
+  it('is non-fatal when fetchWorkItemDetails rejects (no escaping rejection)', async () => {
+    const d = deps({
+      fetchWorkItemDetails: vi.fn(async () => {
+        throw new Error('transport closed')
+      })
     })
     expect(await loadPrSidebarDetails(d, 'w', 7)).toBeNull()
   })

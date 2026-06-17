@@ -387,4 +387,14 @@ describe('fetch wrappers', () => {
     const out = await fetchPRChecks(client, WORKTREE_ID, { prNumber: 1 })
     expect(out).toEqual({ ok: false, error: 'permission denied' })
   })
+
+  it('normalizes a thrown sendRequest into { ok:false, error } (no escaping rejection)', async () => {
+    const client = {
+      sendRequest: vi.fn(async () => {
+        throw new Error('transport closed')
+      })
+    }
+    const out = await fetchPRChecks(client, WORKTREE_ID, { prNumber: 1 })
+    expect(out).toEqual({ ok: false, error: 'transport closed' })
+  })
 })

@@ -22,14 +22,23 @@ async function setLinkedPr(
   worktreeId: string,
   linkedPR: number | null
 ): Promise<MobilePrLinkOutcome> {
-  const response = await client.sendRequest(
-    'worktree.set',
-    buildWorktreeSetLinkParams(worktreeId, linkedPR)
-  )
-  if (!response.ok) {
-    return { ok: false, error: response.error?.message || 'Failed to update linked pull request' }
+  try {
+    const response = await client.sendRequest(
+      'worktree.set',
+      buildWorktreeSetLinkParams(worktreeId, linkedPR)
+    )
+    if (!response.ok) {
+      return { ok: false, error: response.error?.message || 'Failed to update linked pull request' }
+    }
+    return { ok: true }
+  } catch (err) {
+    // Why: a transport drop must not escape as an unhandled rejection — normalize
+    // to the `{ ok:false, error }` outcome the link flow surfaces.
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Failed to update linked pull request'
+    }
   }
-  return { ok: true }
 }
 
 export function linkMobilePr(
@@ -54,11 +63,16 @@ export async function fetchWorktreeLinkedPR(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string
 ): Promise<number | null> {
-  const response = await client.sendRequest('worktree.show', { worktree: `id:${worktreeId}` })
-  if (!response.ok) {
+  try {
+    const response = await client.sendRequest('worktree.show', { worktree: `id:${worktreeId}` })
+    if (!response.ok) {
+      return null
+    }
+    const result = (response as RpcSuccess).result as { worktree?: { linkedPR?: number | null } }
+    const linked = result?.worktree?.linkedPR
+    return typeof linked === 'number' ? linked : null
+  } catch {
+    // Why: a fallback read — a transport drop is non-fatal, fall back to "no link".
     return null
   }
-  const result = (response as RpcSuccess).result as { worktree?: { linkedPR?: number | null } }
-  const linked = result?.worktree?.linkedPR
-  return typeof linked === 'number' ? linked : null
 }

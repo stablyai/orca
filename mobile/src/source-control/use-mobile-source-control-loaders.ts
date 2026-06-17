@@ -53,6 +53,16 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   const branchCompareGenerationRef = useRef(0)
   const mountedRef = useRef(true)
   const statusLoadInFlightRef = useRef<StatusLoadInFlight | null>(null)
+  // Why: the same route can be reused for another worktree/host (identity change);
+  // a kept-on-failure `ready` state would otherwise show the previous worktree's
+  // data until the fresh load resolves. Reset to loading in the render phase (the
+  // React "adjust state on prop change" pattern) before the new load runs.
+  const lastResetIdentityRef = useRef(statusIdentityKey)
+  if (lastResetIdentityRef.current !== statusIdentityKey) {
+    lastResetIdentityRef.current = statusIdentityKey
+    setScreenState({ kind: 'loading' })
+    setBranchCompareState({ kind: 'idle' })
+  }
   currentStatusIdentityRef.current = statusIdentityKey
   currentBranchCompareIdentityRef.current = statusIdentityKey
 

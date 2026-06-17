@@ -2,7 +2,8 @@ import { useCallback, type MutableRefObject } from 'react'
 import { useRouter } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import { resolveMobilePrPrefill, type MobilePrPrefill } from './mobile-pr-create'
+import type { MobilePrPrefill } from './mobile-pr-create'
+import { buildOpenPrPrefill, readFreshGitStatus } from './mobile-open-pr-prefill'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
@@ -186,6 +187,7 @@ export function useMobileSourceControlRunners(params: Params) {
   const openPrSheet = useCallback(
     async (pushFirst: boolean) => {
       setShowActionSheet(false)
+      let effectiveStatus = status
       if (pushFirst) {
         const pushed = await runGitWorkflow('push-create-pr', async () => {
           await sendGitRequest<unknown>('git.push')
@@ -193,18 +195,16 @@ export function useMobileSourceControlRunners(params: Params) {
         if (!pushed || !mountedRef.current) {
           return
         }
+        // Why: the captured `status` predates the push, so its upstream/ahead data is
+        // stale; read fresh git.status so the prefill reflects the just-pushed branch.
+        if (client) {
+          effectiveStatus = await readFreshGitStatus(worktreeId, status, sendGitRequest)
+          if (!mountedRef.current) {
+            return
+          }
+        }
       }
-      const up = status?.upstreamStatus
-      const prefill: MobilePrPrefill = client
-        ? await resolveMobilePrPrefill(client, worktreeId, {
-            branch: status?.branch,
-            title: branchLabel,
-            hasUncommittedChanges: (status?.entries?.length ?? 0) > 0,
-            hasUpstream: up?.hasUpstream === true,
-            ahead: up?.ahead ?? 0,
-            behind: up?.behind ?? 0
-          })
-        : { provider: 'github', base: 'main', title: branchLabel, body: '' }
+      const prefill = await buildOpenPrPrefill(client, worktreeId, effectiveStatus, branchLabel)
       if (!mountedRef.current) {
         return
       }

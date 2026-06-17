@@ -51,12 +51,20 @@ export function MobilePrBasePicker({
       }
       timer.current = setTimeout(() => {
         const requestSeq = ++seq.current
-        void searchBaseRefs(client, worktreeId, query.trim()).then((refs) => {
-          if (!mounted.current || requestSeq !== seq.current) {
-            return
-          }
-          setResults(refs.filter((r) => r !== query).slice(0, 6))
-        })
+        void searchBaseRefs(client, worktreeId, query.trim())
+          .then((refs) => {
+            if (!mounted.current || requestSeq !== seq.current) {
+              return
+            }
+            setResults(refs.filter((r) => r !== query).slice(0, 6))
+          })
+          // Why: a rejected ref search must not escape as an unhandled rejection;
+          // drop to an empty result set (free text stays valid to submit).
+          .catch(() => {
+            if (mounted.current && requestSeq === seq.current) {
+              setResults([])
+            }
+          })
       }, 200)
     },
     [client, worktreeId]

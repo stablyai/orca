@@ -58,7 +58,13 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
       if (!params) {
         return true
       }
-      if (!ready || !mutations || inFlightRef.current) {
+      if (inFlightRef.current) {
+        return false
+      }
+      // Why: surface an explicit error when offline/not-ready so Save doesn't
+      // silently no-op (the editor stays open with a reason instead of nothing).
+      if (!ready || !mutations) {
+        setError('Not connected to desktop.')
         return false
       }
       inFlightRef.current = true
@@ -73,6 +79,12 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
         }
         triggerError()
         setError(outcome.error)
+        return false
+      } catch (err) {
+        // Why: updateTitle/refetch can throw; without this the `void save()`
+        // rejection is unhandled — set the error + error haptic and return false.
+        triggerError()
+        setError(err instanceof Error ? err.message : 'Failed to update title.')
         return false
       } finally {
         inFlightRef.current = false

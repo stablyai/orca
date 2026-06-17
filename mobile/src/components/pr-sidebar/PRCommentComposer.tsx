@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import { isSubmittableCommentBody } from '../../session/pr-comment-actions'
@@ -24,15 +24,23 @@ export function PRCommentComposer({
   autoFocus
 }: Props) {
   const [body, setBody] = useState('')
+  // Why: parent `submitting` flips async; a fast double-tap can fire onSubmit
+  // twice before it flips, so guard locally in the same synchronous tick.
+  const inFlightRef = useRef(false)
   const canSubmit = isSubmittableCommentBody(body) && !submitting
 
   const submit = async () => {
-    if (!canSubmit) {
+    if (!canSubmit || inFlightRef.current) {
       return
     }
-    const ok = await onSubmit(body.trim())
-    if (ok) {
-      setBody('')
+    inFlightRef.current = true
+    try {
+      const ok = await onSubmit(body.trim())
+      if (ok) {
+        setBody('')
+      }
+    } finally {
+      inFlightRef.current = false
     }
   }
 

@@ -43,19 +43,27 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions }:
       if (!client) {
         return
       }
-      const outcome = await fetchPRCheckDetails(client, worktreeId, {
-        checkRunId: check.checkRunId,
-        workflowRunId: check.workflowRunId,
-        checkName: check.name,
-        url: check.url,
-        prRepo
-      })
-      setDetailCache((prev) => ({
-        ...prev,
-        [key]: outcome.ok
+      let entry: DetailEntry
+      try {
+        const outcome = await fetchPRCheckDetails(client, worktreeId, {
+          checkRunId: check.checkRunId,
+          workflowRunId: check.workflowRunId,
+          checkName: check.name,
+          url: check.url,
+          prRepo
+        })
+        entry = outcome.ok
           ? { status: 'loaded', details: outcome.result }
           : { status: 'error', message: outcome.error }
-      }))
+      } catch (err) {
+        // Why: a rejection must clear the entry's `loading` state, not leave it
+        // spinning forever — fall back to an error detail.
+        entry = {
+          status: 'error',
+          message: err instanceof Error ? err.message : 'Failed to load check details'
+        }
+      }
+      setDetailCache((prev) => ({ ...prev, [key]: entry }))
     },
     [client, worktreeId, prRepo]
   )

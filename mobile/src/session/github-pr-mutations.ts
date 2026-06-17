@@ -9,6 +9,29 @@ import { buildGithubPrParams, type GitHubPrRepoSlug } from './github-pr-rpc'
 
 export type GitHubPrMutationOutcome = { ok: true } | { ok: false; error: string }
 
+// Sends a request whose host result is a bare boolean (not the `{ ok }` envelope),
+// normalizing a transport throw into a failure so the raw-boolean callers below
+// never see an unhandled rejection.
+type RawResult =
+  | { ok: true; result: unknown }
+  | { ok: false; error: string }
+
+async function sendRaw(
+  client: Pick<RpcClient, 'sendRequest'>,
+  method: string,
+  params: Record<string, unknown>
+): Promise<RawResult> {
+  try {
+    const response = await client.sendRequest(method, params)
+    if (!response.ok) {
+      return { ok: false, error: response.error?.message || `Request failed: ${method}` }
+    }
+    return { ok: true, result: response.result }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : `Request failed: ${method}` }
+  }
+}
+
 // The host returns the success/failure shape inside `result`; a transport-level
 // `response.ok === false` (timeout/connection) is also a failure. Both collapse
 // into one outcome the action hook classifies via classifyPrSidebarFailure.
@@ -17,20 +40,29 @@ async function sendGithubPrMutation(
   method: string,
   params: Record<string, unknown>
 ): Promise<GitHubPrMutationOutcome> {
-  const response = await client.sendRequest(method, params)
-  if (!response.ok) {
-    return { ok: false, error: response.error?.message || `Request failed: ${method}` }
-  }
-  const result = response.result
-  if (result && typeof result === 'object' && 'ok' in result) {
-    const r = result as { ok: boolean; error?: unknown }
-    if (r.ok === true) {
-      return { ok: true }
+  try {
+    const response = await client.sendRequest(method, params)
+    if (!response.ok) {
+      return { ok: false, error: response.error?.message || `Request failed: ${method}` }
     }
-    return { ok: false, error: typeof r.error === 'string' ? r.error : `Request failed: ${method}` }
+    const result = response.result
+    if (result && typeof result === 'object' && 'ok' in result) {
+      const r = result as { ok: boolean; error?: unknown }
+      if (r.ok === true) {
+        return { ok: true }
+      }
+      return {
+        ok: false,
+        error: typeof r.error === 'string' ? r.error : `Request failed: ${method}`
+      }
+    }
+    // No structured status (host returned void/undefined) — treat as success.
+    return { ok: true }
+  } catch (err) {
+    // Why: a transport drop must not escape as an unhandled rejection — normalize
+    // to the `{ ok:false, error }` outcome the action engine routes on.
+    return { ok: false, error: err instanceof Error ? err.message : `Request failed: ${method}` }
   }
-  // No structured status (host returned void/undefined) — treat as success.
-  return { ok: true }
 }
 
 export async function fetchMergePR(
@@ -64,14 +96,17 @@ export async function fetchUpdatePRTitle(
   if (args.prRepo) {
     params.prRepo = { owner: args.prRepo.owner, repo: args.prRepo.repo }
   }
-  const response = await client.sendRequest(
+  const response = await sendRaw(
+    client,
     'github.updatePRTitle',
     buildGithubPrParams('github.updatePRTitle', worktreeId, params)
   )
   if (!response.ok) {
-    return { ok: false, error: response.error?.message || 'Request failed: github.updatePRTitle' }
+    return { ok: false, error: response.error || 'Request failed: github.updatePRTitle' }
   }
-  if (response.result === false) {
+  // Why: the host returns a bare `true` on success; a missing/undefined result is
+  // not a confirmed success, so require an explicit `=== true` rather than `!== false`.
+  if (response.result !== true) {
     return { ok: false, error: 'Failed to update title.' }
   }
   return { ok: true }
@@ -218,7 +253,8 @@ export async function fetchResolveReviewThread(
   worktreeId: string,
   args: { threadId: string; resolve: boolean }
 ): Promise<GitHubPrMutationOutcome> {
-  const response = await client.sendRequest(
+  const response = await sendRaw(
+    client,
     'github.resolveReviewThread',
     buildGithubPrParams('github.resolveReviewThread', worktreeId, {
       threadId: args.threadId,
@@ -228,10 +264,12 @@ export async function fetchResolveReviewThread(
   if (!response.ok) {
     return {
       ok: false,
-      error: response.error?.message || 'Request failed: github.resolveReviewThread'
+      error: response.error || 'Request failed: github.resolveReviewThread'
     }
   }
-  if (response.result === false) {
+  // Why: the host returns a bare `true` on success; a missing/undefined result is
+  // not a confirmed success, so require an explicit `=== true` rather than `!== false`.
+  if (response.result !== true) {
     return { ok: false, error: 'Failed to update review thread.' }
   }
   return { ok: true }

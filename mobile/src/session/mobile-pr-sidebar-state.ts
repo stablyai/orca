@@ -80,38 +80,44 @@ export async function loadPrSidebarData(
     prRepo?: GitHubPrRepoSlug | null
   }
 ): Promise<PrSidebarState> {
-  const [hintOutcome, linkedPR] = await Promise.all([
-    deps.fetchForBranch(args.worktreeId, { branch: args.branch }),
-    deps.fetchWorktreeLinkedPR(args.worktreeId)
-  ])
-  const branchHint = hintOutcome.ok && hintOutcome.result ? hintOutcome.result.number : null
-  const linkedPRNumber = resolveLinkedPrNumber(branchHint, linkedPR)
+  try {
+    const [hintOutcome, linkedPR] = await Promise.all([
+      deps.fetchForBranch(args.worktreeId, { branch: args.branch }),
+      deps.fetchWorktreeLinkedPR(args.worktreeId)
+    ])
+    const branchHint = hintOutcome.ok && hintOutcome.result ? hintOutcome.result.number : null
+    const linkedPRNumber = resolveLinkedPrNumber(branchHint, linkedPR)
 
-  const prOutcome = await deps.fetchPRForBranch(args.worktreeId, {
-    branch: args.branch,
-    linkedPRNumber
-  })
-  if (!prOutcome.ok) {
-    return failureState(prOutcome.error)
+    const prOutcome = await deps.fetchPRForBranch(args.worktreeId, {
+      branch: args.branch,
+      linkedPRNumber
+    })
+    if (!prOutcome.ok) {
+      return failureState(prOutcome.error)
+    }
+    if (!prOutcome.result) {
+      // GitHub repo, but this branch has no open/linked PR — surfaced as an empty state.
+      return { kind: 'none' }
+    }
+    const pr = prOutcome.result
+    const checksOutcome = await deps.fetchPRChecks(args.worktreeId, {
+      prNumber: pr.number,
+      headSha: args.headSha ?? pr.headSha ?? null,
+      // Prefer the fetched PR's own repo identity so fork PRs key their cached
+      // checks correctly; fall back to an explicit override then null.
+      prRepo: pr.prRepo ?? args.prRepo ?? null
+    })
+    if (!checksOutcome.ok) {
+      return failureState(checksOutcome.error)
+    }
+    // details: null = comments still loading (phase 2). The header/reviewers degrade to
+    // the PRInfo fields until it arrives.
+    return { kind: 'ready', data: { pr, details: null, checks: checksOutcome.result } }
+  } catch (err) {
+    // Why: a dep that rejects (instead of returning `{ ok:false }`) must still
+    // resolve to an error state, not escape as an unhandled rejection.
+    return failureState(err instanceof Error ? err.message : 'Unable to load pull request')
   }
-  if (!prOutcome.result) {
-    // GitHub repo, but this branch has no open/linked PR — surfaced as an empty state.
-    return { kind: 'none' }
-  }
-  const pr = prOutcome.result
-  const checksOutcome = await deps.fetchPRChecks(args.worktreeId, {
-    prNumber: pr.number,
-    headSha: args.headSha ?? pr.headSha ?? null,
-    // Prefer the fetched PR's own repo identity so fork PRs key their cached
-    // checks correctly; fall back to an explicit override then null.
-    prRepo: pr.prRepo ?? args.prRepo ?? null
-  })
-  if (!checksOutcome.ok) {
-    return failureState(checksOutcome.error)
-  }
-  // details: null = comments still loading (phase 2). The header/reviewers degrade to
-  // the PRInfo fields until it arrives.
-  return { kind: 'ready', data: { pr, details: null, checks: checksOutcome.result } }
 }
 
 // Phase 2: fetch the work-item details (body + comments + participants). Non-fatal —
@@ -121,8 +127,14 @@ export async function loadPrSidebarDetails(
   worktreeId: string,
   prNumber: number
 ): Promise<GitHubWorkItemDetails | null> {
-  const outcome = await deps.fetchWorkItemDetails(worktreeId, { prNumber })
-  return outcome.ok ? outcome.result : null
+  try {
+    const outcome = await deps.fetchWorkItemDetails(worktreeId, { prNumber })
+    return outcome.ok ? outcome.result : null
+  } catch {
+    // Why: phase 2 is non-fatal — a rejection leaves the PR shown without comments
+    // rather than escaping as an unhandled rejection.
+    return null
+  }
 }
 
 // Stale-response guard (KTD6): a load tagged with an older sequence must not

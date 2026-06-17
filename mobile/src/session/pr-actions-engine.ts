@@ -122,6 +122,14 @@ export class PrActionsEngine {
     this.cfg.onChange()
   }
 
+  // Why: overlapping actions share `busy`; a late-resolving action must only clear
+  // it if it's still the one it set, so it can't wipe a newer action's busy state.
+  private clearBusyIfOwned(key: PrActionBusyKey): void {
+    if (busyKeyEquals(this.busy, key)) {
+      this.setBusy(null)
+    }
+  }
+
   private setError(message: string | null): void {
     this.error = message
     this.cfg.onChange()
@@ -164,7 +172,7 @@ export class PrActionsEngine {
       })
       await this.settle(outcome, { onSuccess: () => {}, onRevert: () => {} })
     } finally {
-      this.setBusy(null)
+      this.clearBusyIfOwned({ kind: 'merge' })
     }
   }
 
@@ -184,7 +192,7 @@ export class PrActionsEngine {
         onRevert: () => this.autoMergeField.settleFailure(seq)
       })
     } finally {
-      this.setBusy(null)
+      this.clearBusyIfOwned({ kind: 'autoMerge' })
     }
   }
 
@@ -202,7 +210,7 @@ export class PrActionsEngine {
         onRevert: () => this.stateField.settleFailure(seq)
       })
     } finally {
-      this.setBusy(null)
+      this.clearBusyIfOwned({ kind: 'state' })
     }
   }
 
@@ -221,7 +229,7 @@ export class PrActionsEngine {
         onRevert: () => field.settleFailure(seq)
       })
     } finally {
-      this.setBusy(null)
+      this.clearBusyIfOwned({ kind: 'reviewer', login })
     }
   }
 
@@ -240,7 +248,7 @@ export class PrActionsEngine {
         onRevert: () => field.settleFailure(seq)
       })
     } finally {
-      this.setBusy(null)
+      this.clearBusyIfOwned({ kind: 'reviewer', login })
     }
   }
 
@@ -255,7 +263,7 @@ export class PrActionsEngine {
       })
       await this.settle(outcome, { onSuccess: () => {}, onRevert: () => {} })
     } finally {
-      this.setBusy(null)
+      this.clearBusyIfOwned({ kind: 'rerun' })
     }
   }
 

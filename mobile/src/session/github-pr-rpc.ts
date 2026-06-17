@@ -76,11 +76,17 @@ async function sendGithubPrRead<T>(
   params: Record<string, unknown>,
   parse: (value: unknown) => T
 ): Promise<GitHubPrReadOutcome<T>> {
-  const response = await client.sendRequest(method, params)
-  if (!response.ok) {
-    return { ok: false, error: response.error?.message || `Request failed: ${method}` }
+  try {
+    const response = await client.sendRequest(method, params)
+    if (!response.ok) {
+      return { ok: false, error: response.error?.message || `Request failed: ${method}` }
+    }
+    return { ok: true, result: parse((response as RpcSuccess).result) }
+  } catch (err) {
+    // Why: a transport drop or a parser throw must not escape as an unhandled
+    // rejection — normalize to the `{ ok:false, error }` contract callers expect.
+    return { ok: false, error: err instanceof Error ? err.message : `Request failed: ${method}` }
   }
-  return { ok: true, result: parse((response as RpcSuccess).result) }
 }
 
 // Probes whether the worktree's repo has a GitHub remote (a non-null slug). Used

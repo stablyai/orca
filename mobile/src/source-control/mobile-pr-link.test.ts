@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { buildWorktreeSetLinkParams, fetchWorktreeLinkedPR } from './mobile-pr-link'
+import { buildWorktreeSetLinkParams, fetchWorktreeLinkedPR, linkMobilePr } from './mobile-pr-link'
 
 describe('buildWorktreeSetLinkParams', () => {
   it('sets linkedPR to a number when linking', () => {
@@ -38,5 +38,25 @@ describe('fetchWorktreeLinkedPR', () => {
 
   it('returns null when the request fails', async () => {
     expect(await fetchWorktreeLinkedPR(client(null, false), 'w')).toBeNull()
+  })
+
+  it('returns null when the request rejects (no escaping rejection)', async () => {
+    const rejecting = {
+      sendRequest: vi.fn(async () => {
+        throw new Error('transport closed')
+      })
+    } as unknown as Pick<RpcClient, 'sendRequest'>
+    expect(await fetchWorktreeLinkedPR(rejecting, 'w')).toBeNull()
+  })
+})
+
+describe('linkMobilePr transport rejection', () => {
+  it('normalizes a thrown sendRequest into { ok:false, error }', async () => {
+    const rejecting = {
+      sendRequest: vi.fn(async () => {
+        throw new Error('socket hung up')
+      })
+    } as unknown as Pick<RpcClient, 'sendRequest'>
+    expect(await linkMobilePr(rejecting, 'w', 5)).toEqual({ ok: false, error: 'socket hung up' })
   })
 })

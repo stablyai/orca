@@ -51,11 +51,19 @@ export function useMobilePrBranchContext(input: {
       setContext({ branch: null, headSha: null, isGithubRepo: false })
       return
     }
-    void loadMobilePrBranchContext(client, worktreeId).then((next) => {
-      if (!cancelled) {
-        setContext(next)
-      }
-    })
+    void loadMobilePrBranchContext(client, worktreeId)
+      .then((next) => {
+        if (!cancelled) {
+          setContext(next)
+        }
+      })
+      // Why: a rejected read must not escape as an unhandled rejection; fall back
+      // to the empty (non-GitHub) context so the PR icon simply stays hidden.
+      .catch(() => {
+        if (!cancelled) {
+          setContext({ branch: null, headSha: null, isGithubRepo: false })
+        }
+      })
     return () => {
       cancelled = true
     }

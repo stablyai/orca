@@ -114,6 +114,12 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
         triggerError()
         setError(outcome.error)
         return false
+      } catch (err) {
+        // Why: if a mutation (or the refetch) throws, still honor the boolean
+        // contract — error haptic + message, return false — rather than rejecting.
+        triggerError()
+        setError(err instanceof Error ? err.message : 'Comment action failed')
+        return false
       } finally {
         inFlightRef.current.delete(key)
         setBusy(key, false)
