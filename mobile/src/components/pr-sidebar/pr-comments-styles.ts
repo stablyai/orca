@@ -57,6 +57,20 @@ export const prCommentsStyles = StyleSheet.create({
   list: {
     gap: spacing.sm
   },
+  showMore: {
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.card,
+    backgroundColor: colors.bgPanel
+  },
+  showMoreText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   group: {
     gap: spacing.sm
   },

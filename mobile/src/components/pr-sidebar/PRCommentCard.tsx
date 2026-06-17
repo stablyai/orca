@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Image, Linking, Pressable, Text, View } from 'react-native'
 import { ExternalLink } from 'lucide-react-native'
 import type { GitHubReaction, GitHubReactionContent, PRComment } from '../../../../src/shared/types'
@@ -37,7 +38,7 @@ function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
 // One PR comment (or review-thread reply), mirroring the desktop comment card:
 // avatar + author + relative time + inline file:line + resolved chip + open-on-
 // GitHub, then the markdown body and reactions. Read-only (no reply/edit yet).
-export function PRCommentCard({
+export const PRCommentCard = memo(function PRCommentCard({
   comment,
   isReply = false
 }: {
@@ -92,4 +93,4 @@ export function PRCommentCard({
       </View>
     </View>
   )
-}
+})

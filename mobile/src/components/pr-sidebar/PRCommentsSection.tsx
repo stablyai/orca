@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/types'
@@ -28,6 +28,11 @@ type Props = {
   details: GitHubWorkItemDetails | null
 }
 
+// Render comments in bounded pages — the whole sidebar is one ScrollView (can't
+// virtualize a nested list), so eagerly rendering a large set parses markdown for
+// every comment synchronously and ANRs the JS thread. Start small, reveal in chunks.
+const COMMENT_PAGE = 12
+
 // PR body + full comment timeline, mirroring the desktop PR page: a Description
 // card, then a Comments section with an audience filter (PRs only), threaded
 // review comments, reactions, and collapsible resolved threads.
@@ -40,6 +45,14 @@ export function PRCommentsSection({ details }: Props) {
   const counts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visible = useMemo(() => filterPRCommentsByAudience(comments, filter), [comments, filter])
   const groups = useMemo(() => groupPRComments(visible), [visible])
+
+  // Bounded render window; reset to the first page whenever the filtered set changes.
+  const [limit, setLimit] = useState(COMMENT_PAGE)
+  useEffect(() => {
+    setLimit(COMMENT_PAGE)
+  }, [filter])
+  const shownGroups = groups.slice(0, limit)
+  const remaining = groups.length - shownGroups.length
 
   return (
     <>
@@ -96,9 +109,21 @@ export function PRCommentsSection({ details }: Props) {
               <Text style={styles.empty}>{getPRCommentAudienceEmptyLabel(filter)}</Text>
             ) : (
               <View style={styles.list}>
-                {groups.map((group) => (
+                {shownGroups.map((group) => (
                   <CommentGroupView key={getPRCommentGroupId(group)} group={group} />
                 ))}
+                {remaining > 0 ? (
+                  <Pressable
+                    style={styles.showMore}
+                    onPress={() => setLimit((l) => l + COMMENT_PAGE)}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.showMoreText}>
+                      Show {Math.min(remaining, COMMENT_PAGE)} more
+                      {remaining > COMMENT_PAGE ? ` of ${remaining}` : ''}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             )}
           </>
