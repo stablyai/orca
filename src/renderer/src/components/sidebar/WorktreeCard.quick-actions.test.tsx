@@ -207,7 +207,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
-  it('renders the pending first-agent rename title button', () => {
+  it('does not render a pending first-agent rename title badge', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard
         worktree={makeWorktree({ pendingFirstAgentMessageRename: true })}
@@ -216,11 +216,41 @@ describe('WorktreeCard quick actions', () => {
       />
     )
 
-    expect(markup).toContain(
+    expect(markup).not.toContain(
       'aria-label="This worktree will be renamed from the first agent message"'
     )
-    expect(markup).toContain('rename pending')
-    expect(markup).toContain('This worktree will be renamed from the first agent message')
+    expect(markup).not.toContain('rename pending')
+    expect(markup).not.toContain('This worktree will be renamed from the first agent message')
+  })
+
+  it('renders the failed first-agent rename title badge', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ firstAgentMessageRenameError: 'model could not name this' })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Auto-rename failed: view error"')
+    expect(markup).toContain('rename failed')
+  })
+
+  it('renders the failed first-agent rename title badge when rename is also pending', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          firstAgentMessageRenameError: 'model could not name this',
+          pendingFirstAgentMessageRename: true
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Auto-rename failed: view error"')
+    expect(markup).toContain('rename failed')
+    expect(markup).not.toContain('rename pending')
   })
 
   it('renders the repeated branch metadata row in detailed cards', () => {
