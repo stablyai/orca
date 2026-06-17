@@ -435,6 +435,7 @@ describe('Store', () => {
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
     expect(settings.notifications.customSoundVolume).toBe(100)
+    expect(settings.notifications.suppressWhenFocused).toBe(true)
   })
 
   it('returns default UI state when no data file exists', async () => {
