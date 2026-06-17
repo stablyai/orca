@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
-import { Linking, StyleSheet, Text, View } from 'react-native'
+import { useMemo, useState } from 'react'
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import {
   parseInline,
@@ -43,8 +44,42 @@ export function CommentMarkdown({ content, variant = 'comment' }: Props) {
   )
 }
 
+function DetailsBlock({
+  summary,
+  body,
+  base
+}: {
+  summary: string
+  body: MarkdownBlock[]
+  base: number
+}) {
+  const [open, setOpen] = useState(false)
+  const Chevron = open ? ChevronDown : ChevronRight
+  return (
+    <View style={styles.details}>
+      <Pressable
+        style={styles.detailsSummary}
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+      >
+        <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
+        <Text style={[styles.detailsSummaryText, { fontSize: base }]}>{summary}</Text>
+      </Pressable>
+      {open ? (
+        <View style={styles.detailsBody}>
+          {body.map((b, i) => (
+            <BlockView key={i} block={b} base={base} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
 function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
   switch (block.kind) {
+    case 'details':
+      return <DetailsBlock summary={block.summary} body={block.body} base={base} />
     case 'heading':
       return (
         <Text style={[styles.heading, { fontSize: base + Math.max(0, 4 - block.level) }]}>
@@ -174,5 +209,22 @@ const styles = StyleSheet.create({
   list: { marginBottom: spacing.sm },
   listItem: { flexDirection: 'row', gap: spacing.xs },
   listItemText: { flex: 1, marginBottom: 2 },
-  bullet: { color: colors.textSecondary }
+  bullet: { color: colors.textSecondary },
+  details: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.row,
+    marginBottom: spacing.sm,
+    overflow: 'hidden'
+  },
+  detailsSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.bgRaised
+  },
+  detailsSummaryText: { color: colors.textPrimary, fontWeight: '600', flexShrink: 1 },
+  detailsBody: { paddingHorizontal: spacing.sm, paddingTop: spacing.xs }
 })

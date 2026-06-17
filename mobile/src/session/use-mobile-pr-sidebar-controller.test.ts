@@ -5,6 +5,7 @@ import type { GitHubPrReadOutcome } from './github-pr-rpc'
 import {
   classifyPrSidebarFailure,
   loadPrSidebarData,
+  loadPrSidebarDetails,
   shouldApplyResult,
   type PrSidebarLoadDeps
 } from './mobile-pr-sidebar-state'
@@ -64,6 +65,7 @@ describe('loadPrSidebarData', () => {
   function deps(over: Partial<PrSidebarLoadDeps> = {}): PrSidebarLoadDeps {
     return {
       fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(ghInfo())),
+      fetchWorktreeLinkedPR: vi.fn(async () => null),
       fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(PR)),
       fetchWorkItemDetails: vi.fn(async () => ok<GitHubWorkItemDetails | null>(DETAILS)),
       fetchPRChecks: vi.fn(async () => ok<PRCheckDetail[]>(CHECKS)),
@@ -71,17 +73,19 @@ describe('loadPrSidebarData', () => {
     }
   }
 
-  it('loads pr + details + checks into ready, threading the forBranch hint', async () => {
+  it('phase 1 loads pr + checks into ready with details=null (comments deferred)', async () => {
     const d = deps()
     const out = await loadPrSidebarData(d, {
       worktreeId: 'w',
       branch: 'feat',
       headSha: 'sha-status'
     })
-    expect(out).toEqual({ kind: 'ready', data: { pr: PR, details: DETAILS, checks: CHECKS } })
-    // forBranch's PR number is threaded into prForBranch as the linked hint
+    expect(out).toEqual({ kind: 'ready', data: { pr: PR, details: null, checks: CHECKS } })
+    // Details (heavy comments payload) are NOT fetched on the critical path.
+    expect(d.fetchWorkItemDetails).not.toHaveBeenCalled()
+    // forBranch's PR number is threaded into prForBranch as the linked hint.
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 7 })
-    // headSha forwarded to checks (status SHA wins over pr.headSha)
+    // headSha forwarded to checks (status SHA wins over pr.headSha).
     expect(d.fetchPRChecks).toHaveBeenCalledWith('w', {
       prNumber: 7,
       headSha: 'sha-status',
@@ -89,7 +93,7 @@ describe('loadPrSidebarData', () => {
     })
   })
 
-  it('passes a null hint when forBranch finds no PR, and still consults prForBranch', async () => {
+  it('passes a null hint when forBranch and the worktree linkedPR are both empty', async () => {
     const d = deps({ fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(null)) })
     await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: null })
@@ -99,18 +103,17 @@ describe('loadPrSidebarData', () => {
     const merged = { ...PR, number: 42, state: 'merged' } as unknown as PRInfo
     const d = deps({
       fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(null)),
+      fetchWorktreeLinkedPR: vi.fn(async () => 42),
       fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(merged))
     })
-    const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat', linkedPR: 42 })
-    // The persisted linkedPR is threaded as the authoritative resolver...
+    const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 42 })
-    // ...and the non-open PR loads to ready (not the 'none' empty state).
-    expect(out).toEqual({ kind: 'ready', data: { pr: merged, details: DETAILS, checks: CHECKS } })
+    expect(out).toEqual({ kind: 'ready', data: { pr: merged, details: null, checks: CHECKS } })
   })
 
   it('prefers the forBranch open hint over the worktree linkedPR', async () => {
-    const d = deps()
-    await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat', linkedPR: 42 })
+    const d = deps({ fetchWorktreeLinkedPR: vi.fn(async () => 42) })
+    await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 7 })
   })
 
@@ -120,7 +123,7 @@ describe('loadPrSidebarData', () => {
     expect(out.kind).toBe('ready')
   })
 
-  it('returns the `none` empty state when the branch has no open PR', async () => {
+  it('returns the `none` empty state when the branch has no open/linked PR', async () => {
     const out = await loadPrSidebarData(
       deps({ fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(null)) }),
       { worktreeId: 'w', branch: 'feat' }
@@ -128,34 +131,36 @@ describe('loadPrSidebarData', () => {
     expect(out).toEqual({ kind: 'none' })
   })
 
-  it('routes a transient details failure to error', async () => {
-    const out = await loadPrSidebarData(
-      deps({
-        fetchWorkItemDetails: vi.fn(async () => fail<GitHubWorkItemDetails | null>('network down'))
-      }),
-      { worktreeId: 'w', branch: 'feat' }
-    )
-    expect(out.kind).toBe('error')
-  })
-
-  it('routes a permission details failure to blocked', async () => {
-    const out = await loadPrSidebarData(
-      deps({
-        fetchWorkItemDetails: vi.fn(async () =>
-          fail<GitHubWorkItemDetails | null>('permission denied')
-        )
-      }),
-      { worktreeId: 'w', branch: 'feat' }
-    )
-    expect(out.kind).toBe('blocked')
-  })
-
-  it('routes a checks failure through the classifier too', async () => {
+  it('routes a checks failure through the classifier', async () => {
     const out = await loadPrSidebarData(
       deps({ fetchPRChecks: vi.fn(async () => fail<PRCheckDetail[]>('403 forbidden')) }),
       { worktreeId: 'w', branch: 'feat' }
     )
     expect(out.kind).toBe('blocked')
+  })
+})
+
+describe('loadPrSidebarDetails (phase 2)', () => {
+  function deps(over: Partial<PrSidebarLoadDeps> = {}): PrSidebarLoadDeps {
+    return {
+      fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(ghInfo())),
+      fetchWorktreeLinkedPR: vi.fn(async () => null),
+      fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(PR)),
+      fetchWorkItemDetails: vi.fn(async () => ok<GitHubWorkItemDetails | null>(DETAILS)),
+      fetchPRChecks: vi.fn(async () => ok<PRCheckDetail[]>(CHECKS)),
+      ...over
+    }
+  }
+
+  it('returns the fetched details', async () => {
+    expect(await loadPrSidebarDetails(deps(), 'w', 7)).toBe(DETAILS)
+  })
+
+  it('is non-fatal — a details failure yields null rather than erroring the sidebar', async () => {
+    const d = deps({
+      fetchWorkItemDetails: vi.fn(async () => fail<GitHubWorkItemDetails | null>('network down'))
+    })
+    expect(await loadPrSidebarDetails(d, 'w', 7)).toBeNull()
   })
 })
 

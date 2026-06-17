@@ -49,6 +49,9 @@ export type PrSidebarLoadDeps = {
   ) => Promise<
     GitHubPrReadOutcome<import('../../../src/shared/hosted-review').HostedReviewInfo | null>
   >
+  // The worktree's persisted linkedPR (fallback resolver for closed/merged PRs).
+  // Fetched in parallel with forBranch to keep it off the critical path.
+  fetchWorktreeLinkedPR: (worktreeId: string) => Promise<number | null>
   fetchPRForBranch: (
     worktreeId: string,
     args: { branch: string; linkedPRNumber?: number | null }
@@ -63,10 +66,11 @@ export type PrSidebarLoadDeps = {
   ) => Promise<GitHubPrReadOutcome<PRCheckDetail[]>>
 }
 
-// Loads the authoritative PR + checks when the user opens the sidebar. The host's
-// forBranch (provider-agnostic) supplies a linked-PR hint that is threaded into
-// github.prForBranch as the authoritative resolver (KTD4). A failed forBranch is
-// non-fatal — prForBranch is still consulted and surfaces its own error.
+// Phase 1: load the PR + checks fast and show the sidebar. The heavy comments/body
+// payload (workItemDetails) is deferred to loadPrSidebarDetails so it never blocks the
+// actionable PR UI — `data.details` starts null and is filled in by the second phase.
+// forBranch + the worktree linkedPR read run in parallel (independent), then combine
+// via resolveLinkedPrNumber so a closed/merged linked PR still resolves (KTD4).
 export async function loadPrSidebarData(
   deps: PrSidebarLoadDeps,
   args: {
@@ -74,14 +78,14 @@ export async function loadPrSidebarData(
     branch: string
     headSha?: string | null
     prRepo?: GitHubPrRepoSlug | null
-    // The worktree's persisted linkedPR — fallback hint so a closed/merged linked
-    // PR is still fetched and shown when the branch lookup finds no open PR.
-    linkedPR?: number | null
   }
 ): Promise<PrSidebarState> {
-  const hintOutcome = await deps.fetchForBranch(args.worktreeId, { branch: args.branch })
+  const [hintOutcome, linkedPR] = await Promise.all([
+    deps.fetchForBranch(args.worktreeId, { branch: args.branch }),
+    deps.fetchWorktreeLinkedPR(args.worktreeId)
+  ])
   const branchHint = hintOutcome.ok && hintOutcome.result ? hintOutcome.result.number : null
-  const linkedPRNumber = resolveLinkedPrNumber(branchHint, args.linkedPR)
+  const linkedPRNumber = resolveLinkedPrNumber(branchHint, linkedPR)
 
   const prOutcome = await deps.fetchPRForBranch(args.worktreeId, {
     branch: args.branch,
@@ -91,30 +95,34 @@ export async function loadPrSidebarData(
     return failureState(prOutcome.error)
   }
   if (!prOutcome.result) {
-    // GitHub repo, but this branch has no open PR — surfaced as an empty state.
+    // GitHub repo, but this branch has no open/linked PR — surfaced as an empty state.
     return { kind: 'none' }
   }
   const pr = prOutcome.result
-  const [detailsOutcome, checksOutcome] = await Promise.all([
-    deps.fetchWorkItemDetails(args.worktreeId, { prNumber: pr.number }),
-    deps.fetchPRChecks(args.worktreeId, {
-      prNumber: pr.number,
-      headSha: args.headSha ?? pr.headSha ?? null,
-      // Prefer the fetched PR's own repo identity so fork PRs key their cached
-      // checks correctly; fall back to an explicit override then null.
-      prRepo: pr.prRepo ?? args.prRepo ?? null
-    })
-  ])
-  if (!detailsOutcome.ok) {
-    return failureState(detailsOutcome.error)
-  }
+  const checksOutcome = await deps.fetchPRChecks(args.worktreeId, {
+    prNumber: pr.number,
+    headSha: args.headSha ?? pr.headSha ?? null,
+    // Prefer the fetched PR's own repo identity so fork PRs key their cached
+    // checks correctly; fall back to an explicit override then null.
+    prRepo: pr.prRepo ?? args.prRepo ?? null
+  })
   if (!checksOutcome.ok) {
     return failureState(checksOutcome.error)
   }
-  return {
-    kind: 'ready',
-    data: { pr, details: detailsOutcome.result, checks: checksOutcome.result }
-  }
+  // details: null = comments still loading (phase 2). The header/reviewers degrade to
+  // the PRInfo fields until it arrives.
+  return { kind: 'ready', data: { pr, details: null, checks: checksOutcome.result } }
+}
+
+// Phase 2: fetch the work-item details (body + comments + participants). Non-fatal —
+// a failure leaves the PR shown with an empty comments section rather than erroring out.
+export async function loadPrSidebarDetails(
+  deps: PrSidebarLoadDeps,
+  worktreeId: string,
+  prNumber: number
+): Promise<GitHubWorkItemDetails | null> {
+  const outcome = await deps.fetchWorkItemDetails(worktreeId, { prNumber })
+  return outcome.ok ? outcome.result : null
 }
 
 // Stale-response guard (KTD6): a load tagged with an older sequence must not

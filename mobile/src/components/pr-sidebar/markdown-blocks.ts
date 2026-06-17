@@ -18,6 +18,8 @@ export type MarkdownBlock =
   | { kind: 'list'; ordered: boolean; items: string[] }
   | { kind: 'hr' }
   | { kind: 'paragraph'; text: string }
+  // GitHub comments use <details><summary>…</summary>…</details> for collapsibles.
+  | { kind: 'details'; summary: string; body: MarkdownBlock[] }
 
 const HEADING = /^(#{1,6})\s+(.*)$/
 const FENCE = /^```/
@@ -25,15 +27,54 @@ const QUOTE = /^>\s?(.*)$/
 const HR = /^(?:---+|\*\*\*+|___+)\s*$/
 const UNORDERED = /^\s*[-*+]\s+(.*)$/
 const ORDERED = /^\s*\d+[.)]\s+(.*)$/
+// A top-level <details>…</details> or <blockquote>…</blockquote> region.
+const HTML_BLOCK = /<(details|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/i
+const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
+
+// Removes residual HTML tags from rendered text so stray <b>/<kbd>/<sub> etc. don't
+// show literally. Conservative: only matches `<tag ...>` / `</tag>` shapes, so a bare
+// "a < b" in prose is left alone.
+export function stripHtmlTags(text: string): string {
+  return text.replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^>]*)?\/?>/g, '')
+}
 
 export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
-  // Drop HTML comments before parsing — GitHub PR/issue templates wrap guidance in
-  // `<!-- ... -->` that should not render (matches how the desktop markdown sanitizer
-  // strips them). Non-greedy + multiline so block comments are removed whole.
-  const lines = content
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/\r\n/g, '\n')
-    .split('\n')
+  // Drop HTML comments and normalize <br> before block parsing.
+  const cleaned = content.replace(/<!--[\s\S]*?-->/g, '').replace(/<br\s*\/?>/gi, '\n')
+  return parseSegment(cleaned)
+}
+
+// Splits a segment at top-level <details>/<blockquote> regions (preserving order),
+// emitting structured blocks for them and line-parsing the text in between. Recurses
+// for nested details bodies. Non-greedy match keeps it total on unbalanced input.
+function parseSegment(text: string): MarkdownBlock[] {
+  const blocks: MarkdownBlock[] = []
+  let rest = text
+  let m = HTML_BLOCK.exec(rest)
+  while (m) {
+    const before = rest.slice(0, m.index)
+    if (before.trim().length > 0) {
+      blocks.push(...parseLines(before))
+    }
+    if (m[1].toLowerCase() === 'details') {
+      const sm = SUMMARY.exec(m[2])
+      const summary = sm ? stripHtmlTags(sm[1]).trim() : 'Details'
+      const body = m[2].replace(SUMMARY, '')
+      blocks.push({ kind: 'details', summary: summary || 'Details', body: parseSegment(body) })
+    } else {
+      blocks.push({ kind: 'quote', text: stripHtmlTags(m[2]).trim() })
+    }
+    rest = rest.slice(m.index + m[0].length)
+    m = HTML_BLOCK.exec(rest)
+  }
+  if (rest.trim().length > 0) {
+    blocks.push(...parseLines(rest))
+  }
+  return blocks
+}
+
+function parseLines(content: string): MarkdownBlock[] {
+  const lines = content.replace(/\r\n/g, '\n').split('\n')
   const blocks: MarkdownBlock[] = []
   let paragraph: string[] = []
   let i = 0
@@ -126,7 +167,9 @@ const INLINE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)|(\[[
 
 export function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = []
-  let rest = text
+  // Strip residual inline HTML tags (<b>, <kbd>, <sub>, …) so they don't render
+  // literally; emphasis/code/links below are markdown, not HTML, so this is safe.
+  let rest = stripHtmlTags(text)
   let guard = 0
   while (rest.length > 0 && guard < 5000) {
     guard += 1

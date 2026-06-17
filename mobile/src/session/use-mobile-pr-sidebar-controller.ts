@@ -10,6 +10,7 @@ import {
 } from './github-pr-rpc'
 import {
   loadPrSidebarData,
+  loadPrSidebarDetails,
   shouldApplyResult,
   type PrSidebarLoadDeps,
   type PrSidebarState
@@ -44,6 +45,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
     return {
       fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
+      fetchWorktreeLinkedPR: (wt) => fetchWorktreeLinkedPR(client, wt),
       fetchPRForBranch: (wt, args) => fetchPRForBranch(client, wt, args),
       fetchWorkItemDetails: (wt, args) => fetchWorkItemDetails(client, wt, args),
       fetchPRChecks: (wt, args) => fetchPRChecks(client, wt, args)
@@ -75,17 +77,23 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     const seq = loadSeqRef.current + 1
     loadSeqRef.current = seq
     setState({ kind: 'loading' })
-    // The worktree's persisted linkedPR is the fallback resolver so a closed/merged
-    // linked PR still shows when forBranch (open-only) finds nothing.
-    const linkedPR = client ? await fetchWorktreeLinkedPR(client, worktreeId) : null
-    // forBranch (inside loadPrSidebarData) supplies the open-PR hint; prForBranch is
-    // authoritative and a branch with no PR (and no linkedPR) resolves to `none`.
-    const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha, linkedPR })
-    // Stale-response guard: a slower earlier load must not clobber a newer one.
-    if (shouldApplyResult(seq, loadSeqRef.current)) {
-      setState(next)
+    // Phase 1: PR + checks (fast) — the worktree linkedPR read is parallelized with
+    // forBranch inside loadPrSidebarData so a closed/merged linked PR still resolves.
+    const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
+    if (!shouldApplyResult(seq, loadSeqRef.current)) {
+      return
     }
-  }, [buildDeps, client, branch, headSha, worktreeId])
+    setState(next)
+    if (next.kind !== 'ready') {
+      return
+    }
+    // Phase 2: lazy-load the heavy comments/body payload and merge it in, so it never
+    // blocks the actionable PR UI. Re-check the seq so a newer load isn't clobbered.
+    const details = await loadPrSidebarDetails(deps, worktreeId, next.data.pr.number)
+    if (shouldApplyResult(seq, loadSeqRef.current)) {
+      setState({ kind: 'ready', data: { ...next.data, details } })
+    }
+  }, [buildDeps, branch, headSha, worktreeId])
 
   const openPRSidebar = useCallback(() => {
     setShowPRSidebar(true)

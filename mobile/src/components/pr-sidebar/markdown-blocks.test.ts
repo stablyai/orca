@@ -49,6 +49,26 @@ describe('parseMarkdownBlocks', () => {
     ])
   })
 
+  it('parses <details>/<summary> into a collapsible block and <blockquote> into a quote', () => {
+    const md = '<details><summary>More</summary>\n\nHidden text.\n\n</details>'
+    const blocks = parseMarkdownBlocks(md)
+    expect(blocks).toEqual([
+      { kind: 'details', summary: 'More', body: [{ kind: 'paragraph', text: 'Hidden text.' }] }
+    ])
+    expect(parseMarkdownBlocks('<blockquote>quoted thing</blockquote>')).toEqual([
+      { kind: 'quote', text: 'quoted thing' }
+    ])
+  })
+
+  it('keeps text around an HTML block in order and strips stray inline tags', () => {
+    const blocks = parseMarkdownBlocks('Before.\n<blockquote>q</blockquote>\nAfter <kbd>X</kbd>.')
+    expect(blocks).toEqual([
+      { kind: 'paragraph', text: 'Before.' },
+      { kind: 'quote', text: 'q' },
+      { kind: 'paragraph', text: 'After <kbd>X</kbd>.' }
+    ])
+  })
+
   it('is total — never throws on empty, whitespace, or an unterminated fence', () => {
     expect(parseMarkdownBlocks('')).toEqual([])
     expect(() => parseMarkdownBlocks('   \n\n  ')).not.toThrow()

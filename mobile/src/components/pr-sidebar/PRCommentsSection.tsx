@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/types'
 import { colors } from '../../theme/mobile-theme'
@@ -37,6 +37,8 @@ const COMMENT_PAGE = 12
 // card, then a Comments section with an audience filter (PRs only), threaded
 // review comments, reactions, and collapsible resolved threads.
 export function PRCommentsSection({ details }: Props) {
+  // details is null while phase 2 (the heavy comments/body payload) is still loading.
+  const loadingDetails = details === null
   const body = details?.body ?? ''
   const comments = useMemo(() => details?.comments ?? [], [details])
   const isPr = details?.item.type === 'pr'
@@ -57,7 +59,9 @@ export function PRCommentsSection({ details }: Props) {
   return (
     <>
       <PRSection title="Description">
-        {body.trim() ? (
+        {loadingDetails ? (
+          <ActivityIndicator color={colors.textSecondary} />
+        ) : body.trim() ? (
           <CommentMarkdown content={body} variant="document" />
         ) : (
           <Text style={styles.noDescription}>No description provided.</Text>
@@ -74,7 +78,9 @@ export function PRCommentsSection({ details }: Props) {
           ) : undefined
         }
       >
-        {comments.length === 0 ? (
+        {loadingDetails ? (
+          <ActivityIndicator color={colors.textSecondary} />
+        ) : comments.length === 0 ? (
           <Text style={styles.empty}>No comments yet.</Text>
         ) : (
           <>
