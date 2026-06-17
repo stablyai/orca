@@ -49,6 +49,34 @@ export async function fetchMergePR(
   )
 }
 
+// Edit the hosted-review title. The host returns a bare boolean (true on success),
+// which sendGithubPrMutation reads via its "no structured status" success branch
+// only when not boolean — so handle the boolean explicitly like resolveReviewThread.
+export async function fetchUpdatePRTitle(
+  client: Pick<RpcClient, 'sendRequest'>,
+  worktreeId: string,
+  args: { prNumber: number; title: string; prRepo?: GitHubPrRepoSlug | null }
+): Promise<GitHubPrMutationOutcome> {
+  const params: Record<string, unknown> = { prNumber: args.prNumber, title: args.title }
+  // updatePRTitle accepts prRepo for fork PRs, but it is not in the centralized
+  // METHODS_ACCEPTING_PR_REPO read allow-list — pass it explicitly so it reaches the
+  // host schema (which declares it optional/nullable).
+  if (args.prRepo) {
+    params.prRepo = { owner: args.prRepo.owner, repo: args.prRepo.repo }
+  }
+  const response = await client.sendRequest(
+    'github.updatePRTitle',
+    buildGithubPrParams('github.updatePRTitle', worktreeId, params)
+  )
+  if (!response.ok) {
+    return { ok: false, error: response.error?.message || 'Request failed: github.updatePRTitle' }
+  }
+  if (response.result === false) {
+    return { ok: false, error: 'Failed to update title.' }
+  }
+  return { ok: true }
+}
+
 export async function fetchSetPRAutoMerge(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string,

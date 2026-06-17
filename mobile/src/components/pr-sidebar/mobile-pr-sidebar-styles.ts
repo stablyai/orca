@@ -78,6 +78,18 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
+  // Title row: tappable area pairing the title with a trailing edit affordance.
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs
+  },
+  titleEditButton: {
+    minWidth: 28,
+    minHeight: 28,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
   branchRow: {
     flexDirection: 'row',
     alignItems: 'center',

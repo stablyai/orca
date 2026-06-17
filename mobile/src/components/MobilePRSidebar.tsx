@@ -9,9 +9,14 @@ import {
   useMobilePrCommentActions,
   type MobilePrCommentActions
 } from '../session/use-mobile-pr-comment-actions'
+import {
+  useMobilePrTitleAction,
+  type MobilePrTitleAction
+} from '../session/use-mobile-pr-title-action'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
 import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
+import { PRConflictingFilesSection } from './pr-sidebar/PRConflictingFilesSection'
 import { PRActionsSection } from './pr-sidebar/PRActionsSection'
 import { PRReviewersSection } from './pr-sidebar/PRReviewersSection'
 import { PRChecksSection } from './pr-sidebar/PRChecksSection'
@@ -77,6 +82,16 @@ export function MobilePRSidebar({
     prRepo,
     refetch
   })
+  // Inline title-edit action. Like the others it must run unconditionally and gates
+  // internally on a client; refetches authoritative PR data after a successful edit.
+  const titleAction = useMobilePrTitleAction({
+    client,
+    connState,
+    worktreeId,
+    prNumber,
+    prRepo,
+    refetch
+  })
 
   return (
     <ScrollView
@@ -94,6 +109,7 @@ export function MobilePRSidebar({
         gitBranch={gitBranch}
         actions={actions}
         commentActions={commentActions}
+        titleAction={titleAction}
       />
     </ScrollView>
   )
@@ -108,7 +124,8 @@ function PrSidebarContent({
   worktreeId,
   gitBranch,
   actions,
-  commentActions
+  commentActions,
+  titleAction
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
@@ -119,6 +136,7 @@ function PrSidebarContent({
   gitBranch: string | null
   actions: MobilePrActions
   commentActions: MobilePrCommentActions
+  titleAction: MobilePrTitleAction
 }) {
   if (branch === 'loading') {
     return (
@@ -179,6 +197,7 @@ function PrSidebarContent({
         worktreeId={worktreeId}
         actions={actions}
         commentActions={commentActions}
+        titleAction={titleAction}
         refetch={refetch}
       />
     )
@@ -192,6 +211,7 @@ function PrSidebarSections({
   worktreeId,
   actions,
   commentActions,
+  titleAction,
   refetch
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
@@ -199,11 +219,15 @@ function PrSidebarSections({
   worktreeId: string
   actions: MobilePrActions
   commentActions: MobilePrCommentActions
+  titleAction: MobilePrTitleAction
   refetch: () => void
 }) {
   return (
     <>
-      <PRSidebarHeader pr={data.pr} details={data.details} />
+      <PRSidebarHeader pr={data.pr} details={data.details} titleAction={titleAction} />
+      {/* Conflicting-files section mirrors desktop order: directly below the header,
+          before actions/checks. Renders only when the PR has merge conflicts. */}
+      <PRConflictingFilesSection pr={data.pr} />
       <PRActionsSection
         pr={data.pr}
         actions={actions}
