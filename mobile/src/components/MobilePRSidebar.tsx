@@ -11,6 +11,7 @@ import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
 import { PRActionsSection } from './pr-sidebar/PRActionsSection'
 import { PRReviewersSection } from './pr-sidebar/PRReviewersSection'
 import { PRChecksSection } from './pr-sidebar/PRChecksSection'
+import { PRCommentsSection } from './pr-sidebar/PRCommentsSection'
 import { PrSidebarCreateEmptyState } from './pr-sidebar/PrSidebarCreateEmptyState'
 
 type Props = {
@@ -194,6 +195,7 @@ function PrSidebarSections({
         prRepo={data.pr.prRepo ?? null}
         actions={actions}
       />
+      <PRCommentsSection details={data.details} />
     </>
   )
 }

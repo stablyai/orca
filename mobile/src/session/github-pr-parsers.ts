@@ -10,6 +10,7 @@ import type {
   PRCheckStep,
   PRInfo
 } from '../../../src/shared/types'
+import { readPRComments } from './github-pr-comment-parsers'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import {
   isRecord,
@@ -155,7 +156,7 @@ export function readWorkItemDetails(value: unknown): GitHubWorkItemDetails | nul
   return {
     item,
     body: readString(value.body) ?? '',
-    comments: [],
+    comments: readPRComments(value.comments),
     headSha: readString(value.headSha),
     baseSha: readString(value.baseSha),
     pullRequestId: readString(value.pullRequestId),
