@@ -41,7 +41,9 @@ export const URL_TAP_WEBVIEW_JS = `
   function urlAtViewportPoint(clientX, clientY) {
     var cell = viewportToCell(clientX, clientY);
     if (!cell) return null;
-    return findUrlAtColumn(getLineText(cell.row), cell.col);
+    // Map the cell column to a string index so wide chars earlier on the line
+    // don't shift the match column off the tapped URL.
+    return findUrlAtColumn(getLineText(cell.row), cellColToStringIndex(cell.row, cell.col));
   }
 
   // Why: OSC 8 links can render as labels like "#1234"; the URI lives in

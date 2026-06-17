@@ -1335,6 +1335,18 @@ export const XTERM_HTML = `<!DOCTYPE html>
     return line.translateToString(false);
   }
 
+  // Why: getLineText collapses wide chars (emoji, CJK) to one string char, so a
+  // tap's CELL column no longer equals the STRING index that url/path matchers use.
+  // Convert by measuring the string length up to the tapped cell (the count of
+  // string chars before it). Without this, taps on lines with a leading wide char
+  // (e.g. agent output prefixed with ⏺) resolve to the wrong column and miss.
+  function cellColToStringIndex(absRow, col) {
+    if (!term) return col;
+    var line = term.buffer.active.getLine(absRow);
+    if (!line) return col;
+    return line.translateToString(false, 0, col).length;
+  }
+
   // File-path-under-tap detection (matchFilePathAtColumn). See
   // terminal-path-tap-injected.ts; mirrors the unit-tested terminal-path-tap.ts.
   ${TERMINAL_PATH_TAP_JS}

@@ -56,6 +56,11 @@ export const TERMINAL_PATH_TAP_JS = String.raw`
   function filePathAtViewportPoint(originX, originY) {
     var tapCell = viewportToCell(originX, originY);
     if (!tapCell) return null;
-    return matchFilePathAtColumn(getLineText(tapCell.row), tapCell.col);
+    // Map the cell column to a string index so wide chars (emoji/CJK) earlier on
+    // the line don't shift the match column off the tapped path.
+    return matchFilePathAtColumn(
+      getLineText(tapCell.row),
+      cellColToStringIndex(tapCell.row, tapCell.col)
+    );
   }
 `
