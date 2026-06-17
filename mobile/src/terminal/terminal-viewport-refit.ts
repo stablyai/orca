@@ -4,6 +4,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalWebViewHandle } from './TerminalWebView'
 import {
   isTerminalUpdateViewportApplied,
+  isTerminalUpdateViewportUpdated,
   isTerminalViewportRefitTargetCurrent
 } from './terminal-viewport-refit-state'
 
@@ -112,13 +113,19 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
               client: { id: deviceToken, type: 'mobile' as const },
               viewport: dims
             })
-            if (isTerminalUpdateViewportApplied(response)) {
+            if (!isCurrentTarget()) {
+              return
+            }
+            if (isTerminalUpdateViewportUpdated(response)) {
               rpc.updateTerminalSubscriptionViewport(handle, dims)
-              // Why: updateViewport reflows the server PTY and re-streams only
-              // the visible screen, so the WebView's local xterm scrollback
-              // stays wrapped at the old width. Reflow it locally to the new
-              // cols so older lines rewrap to match the latest output.
-              ref.reflow(dims.cols, dims.rows)
+              if (isTerminalUpdateViewportApplied(response)) {
+                // Why: updateViewport reflows the server PTY and re-streams only
+                // the visible screen, so the WebView's local xterm scrollback
+                // stays wrapped at the old width. Reflow it locally only when
+                // the server actually applied phone-fit; desktop mode records
+                // the viewport but leaves the PTY at desktop dims.
+                ref.reflow(dims.cols, dims.rows)
+              }
               return
             }
           } catch {

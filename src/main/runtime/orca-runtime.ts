@@ -5432,11 +5432,11 @@ export class OrcaRuntimeService {
     ptyId: string,
     clientId: string,
     viewport: { cols: number; rows: number }
-  ): Promise<boolean> {
+  ): Promise<{ updated: boolean; applied: boolean }> {
     const inner = this.mobileSubscribers.get(ptyId)
     const sub = inner?.get(clientId)
     if (!sub) {
-      return false
+      return { updated: false, applied: false }
     }
     sub.viewport = viewport
     sub.lastActedAt = Date.now()
@@ -5444,12 +5444,12 @@ export class OrcaRuntimeService {
     const mode = this.getMobileDisplayMode(ptyId)
     if (mode === 'desktop') {
       // Watching at desktop dims — viewport is informational only.
-      return true
+      return { updated: true, applied: false }
     }
     // Drive PTY dims by the most-recent-actor (just updated to this client).
     const winner = this.pickMostRecentActor(inner!)
     if (!winner) {
-      return false
+      return { updated: false, applied: false }
     }
     const winnerSub = inner!.get(winner.clientId)
     const driveViewport = winnerSub?.viewport ?? viewport
@@ -5467,8 +5467,9 @@ export class OrcaRuntimeService {
     if (needsFreshSubscribeGuard) {
       this.freshSubscribeGuard.add(ptyId)
     }
+    let result: ApplyLayoutResult
     try {
-      await this.enqueueLayout(ptyId, {
+      result = await this.enqueueLayout(ptyId, {
         kind: 'phone',
         cols: clampedCols,
         rows: clampedRows,
@@ -5479,7 +5480,7 @@ export class OrcaRuntimeService {
         this.freshSubscribeGuard.delete(ptyId)
       }
     }
-    return true
+    return { updated: true, applied: result.ok }
   }
 
   // Why: remote desktop clients do not have the local `pty:resize` IPC path.
@@ -9206,7 +9207,6 @@ export class OrcaRuntimeService {
     reviewers: string[]
   ): Promise<Awaited<ReturnType<typeof removePRReviewers>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
-    this.assertHostIntegrationRepoIsLocal(repo, 'repo_pr_reviewers')
     return removePRReviewers(
       repo.path,
       prNumber,
@@ -14365,12 +14365,6 @@ export class OrcaRuntimeService {
       throw new Error('selector_ambiguous')
     }
     throw new Error('repo_not_found')
-  }
-
-  private assertHostIntegrationRepoIsLocal(repo: Repo, operation: string): void {
-    if (repo.connectionId) {
-      throw new Error(`${operation}_unsupported_for_ssh_repo`)
-    }
   }
 
   private requireStore(): Store {

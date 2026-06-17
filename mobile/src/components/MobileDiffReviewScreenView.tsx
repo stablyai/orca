@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Text, View } from 'react-native'
+import { Text, View, type LayoutChangeEvent } from 'react-native'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { MobileDiffReviewBody } from './MobileDiffReviewBody'
@@ -10,8 +10,8 @@ import { MobileDiffReviewFooter } from './MobileDiffReviewFooter'
 import { MobileDiffReviewHeader } from './MobileDiffReviewHeader'
 import { MobilePRSidebar } from './MobilePRSidebar'
 import { RightDrawer } from './RightDrawer'
-import { mobilePrSidebarStyles } from './pr-sidebar/mobile-pr-sidebar-styles'
-import { resolvePresentationMode } from './mobile-pr-sidebar-presentation'
+import { mobilePrSidebarStyles, PR_SIDEBAR_DOCK_WIDTH } from './pr-sidebar/mobile-pr-sidebar-styles'
+import { canDockPrSidebar, resolvePresentationMode } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 
 type Props = {
@@ -22,7 +22,13 @@ type Props = {
 export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
-  const presentationMode = resolvePresentationMode(isWideLayout)
+  const [contentRowWidth, setContentRowWidth] = useState(0)
+  const canDockSidebar = canDockPrSidebar({
+    isWideLayout,
+    availableWidth: contentRowWidth,
+    dockWidth: PR_SIDEBAR_DOCK_WIDTH
+  })
+  const presentationMode = resolvePresentationMode(isWideLayout, canDockSidebar)
   // Inline-dock the sidebar only when wide and the repo is GitHub; otherwise it
   // lives in the RightDrawer overlay toggled by showPRSidebar.
   const showInlineDock = presentationMode === 'inline' && controller.prSidebarIsGithubRepo
@@ -37,12 +43,18 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
     }
   }, [showInlineDock, prSidebarKind, loadPRSidebar])
 
+  const handleContentRowLayout = useCallback((event: LayoutChangeEvent) => {
+    const width = Math.round(event.nativeEvent.layout.width)
+    setContentRowWidth((prev) => (prev === width ? prev : width))
+  }, [])
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <MobileDiffReviewHeader
         filter={controller.filter}
         isWideLayout={isWideLayout}
         prSidebarIsGithubRepo={controller.prSidebarIsGithubRepo}
+        prSidebarCanDock={presentationMode === 'inline'}
         queueLength={controller.queue.length}
         reviewedCount={controller.reviewedCount}
         unsentCount={controller.unsentComments.length}
@@ -52,7 +64,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
         onOpenPRSidebar={controller.openPRSidebar}
         onSelectFilter={controller.selectFilter}
       />
-      <View style={{ flex: 1, flexDirection: 'row' }}>
+      <View style={{ flex: 1, flexDirection: 'row' }} onLayout={handleContentRowLayout}>
         {/* Diff column keeps its full layout; in wide mode the docked sidebar sits
             beside it and each column scrolls independently. */}
         <View style={{ flex: 1, minWidth: 0 }}>

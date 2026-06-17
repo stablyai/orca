@@ -11,6 +11,7 @@ export type MobilePrBranchContext = {
   branch: string | null
   headSha: string | null
   isGithubRepo: boolean
+  loaded: boolean
 }
 
 // Pure derivation of branch + head SHA from a git.status + git.branchCompare snapshot.
@@ -40,7 +41,8 @@ export function useMobilePrBranchContext(input: {
   const [context, setContext] = useState<MobilePrBranchContext>({
     branch: null,
     headSha: null,
-    isGithubRepo: false
+    isGithubRepo: false,
+    loaded: false
   })
 
   const ready = client !== null && connState === 'connected'
@@ -48,7 +50,7 @@ export function useMobilePrBranchContext(input: {
   useEffect(() => {
     let cancelled = false
     if (!ready || !client) {
-      setContext({ branch: null, headSha: null, isGithubRepo: false })
+      setContext({ branch: null, headSha: null, isGithubRepo: false, loaded: false })
       return
     }
     void loadMobilePrBranchContext(client, worktreeId)
@@ -61,7 +63,7 @@ export function useMobilePrBranchContext(input: {
       // to the empty (non-GitHub) context so the PR icon simply stays hidden.
       .catch(() => {
         if (!cancelled) {
-          setContext({ branch: null, headSha: null, isGithubRepo: false })
+          setContext({ branch: null, headSha: null, isGithubRepo: false, loaded: true })
         }
       })
     return () => {
@@ -72,18 +74,21 @@ export function useMobilePrBranchContext(input: {
   return context
 }
 
-async function loadMobilePrBranchContext(
+export async function loadMobilePrBranchContext(
   client: RpcClient,
   worktreeId: string
 ): Promise<MobilePrBranchContext> {
   const [status, branchCompare, slugOutcome] = await Promise.all([
     readGitStatus(client, worktreeId),
-    readBranchCompare(client, worktreeId),
+    // Why: the standalone PR entry point only needs branchCompare as a head-SHA
+    // fallback; compare failures must not hide the PR panel when git.status works.
+    readBranchCompare(client, worktreeId).catch(() => null),
     fetchGithubRepoSlug(client, worktreeId)
   ])
   return {
     ...deriveMobilePrBranchContext(status, branchCompare),
-    isGithubRepo: slugOutcome.ok && slugOutcome.result !== null
+    isGithubRepo: slugOutcome.ok && slugOutcome.result !== null,
+    loaded: true
   }
 }
 

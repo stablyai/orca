@@ -27,6 +27,12 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'github.requestPRReviewers',
   'github.removePRReviewers',
   'github.rerunPRChecks',
+  'github.updatePRTitle',
+  'github.addPRReviewCommentReply',
+  'github.addIssueComment',
+  'github.resolveReviewThread',
+  'github.project.updateIssueCommentBySlug',
+  'github.project.deleteIssueCommentBySlug',
   'hostedReview.forBranch'
 ]
 

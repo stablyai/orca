@@ -81,3 +81,76 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
     expect(engine.busy).toBeNull()
   })
 })
+
+describe('PrActionsEngine — PR identity changes', () => {
+  it('clears optimistic state when the engine points at a different PR', async () => {
+    const slow = deferred<GitHubPrMutationOutcome>()
+    const mutations: PrActionMutations = {
+      mergePR: async () => ({ ok: true }),
+      setPRAutoMerge: async () => slow.promise,
+      updatePRState: async () => ({ ok: true }),
+      requestReviewers: async () => ({ ok: true }),
+      removeReviewers: async () => ({ ok: true }),
+      rerunChecks: async () => ({ ok: true })
+    }
+    const refetch = vi.fn()
+    const onChange = vi.fn()
+    const engine = new PrActionsEngine({
+      mutations,
+      prNumber: 1,
+      refetch,
+      onChange
+    })
+
+    const action = engine.setAutoMerge(true)
+    expect(engine.resolveAutoMerge(false)).toBe(true)
+
+    engine.updateConfig({
+      mutations,
+      prNumber: 2,
+      refetch,
+      onChange
+    })
+    expect(engine.resolveAutoMerge(false)).toBe(false)
+    expect(engine.busy).toBeNull()
+
+    slow.resolve({ ok: true })
+    await action
+    expect(refetch).not.toHaveBeenCalled()
+  })
+
+  it('clears reviewer optimism when switching PR identity', async () => {
+    const slow = deferred<GitHubPrMutationOutcome>()
+    const mutations: PrActionMutations = {
+      mergePR: async () => ({ ok: true }),
+      setPRAutoMerge: async () => ({ ok: true }),
+      updatePRState: async () => ({ ok: true }),
+      requestReviewers: async () => slow.promise,
+      removeReviewers: async () => ({ ok: true }),
+      rerunChecks: async () => ({ ok: true })
+    }
+    const refetch = vi.fn()
+    const onChange = vi.fn()
+    const engine = new PrActionsEngine({
+      mutations,
+      prNumber: 1,
+      refetch,
+      onChange
+    })
+
+    const action = engine.requestReviewer('alice')
+    expect(engine.resolveReviewerRequested('alice', false)).toBe(true)
+
+    engine.updateConfig({
+      mutations,
+      prNumber: 2,
+      refetch,
+      onChange
+    })
+    expect(engine.resolveReviewerRequested('alice', false)).toBe(false)
+
+    slow.resolve({ ok: true })
+    await action
+    expect(refetch).not.toHaveBeenCalled()
+  })
+})

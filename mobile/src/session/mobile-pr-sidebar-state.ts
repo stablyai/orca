@@ -85,7 +85,8 @@ export async function loadPrSidebarData(
       deps.fetchForBranch(args.worktreeId, { branch: args.branch }),
       deps.fetchWorktreeLinkedPR(args.worktreeId)
     ])
-    const branchHint = hintOutcome.ok && hintOutcome.result ? hintOutcome.result.number : null
+    const branchHint =
+      hintOutcome.ok && hintOutcome.result?.provider === 'github' ? hintOutcome.result.number : null
     const linkedPRNumber = resolveLinkedPrNumber(branchHint, linkedPR)
 
     const prOutcome = await deps.fetchPRForBranch(args.worktreeId, {

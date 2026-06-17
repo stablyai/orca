@@ -28,6 +28,7 @@ export function MobileSourceControlModals({ state, worktreeId, actionSheetAction
     localBranches,
     createdPrUrl,
     setCreatedPrUrl,
+    status,
     branchLabel,
     loadStatus,
     checkoutBranch,
@@ -76,6 +77,7 @@ export function MobileSourceControlModals({ state, worktreeId, actionSheetAction
         client={client}
         worktreeId={worktreeId ?? ''}
         prefill={prPrefill ?? { provider: 'github', base: 'main', title: branchLabel, body: '' }}
+        head={status?.branch ?? null}
         onClose={() => setShowPrSheet(false)}
         onCreated={(url) => {
           setShowPrSheet(false)

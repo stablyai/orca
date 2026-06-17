@@ -67,8 +67,14 @@ export type PrActionsEngineConfig = {
   onChange: () => void
 }
 
+function prActionsIdentity(cfg: PrActionsEngineConfig): string {
+  const repo = cfg.prRepo ? `${cfg.prRepo.owner}/${cfg.prRepo.repo}` : ''
+  return `${cfg.prNumber}:${repo}`
+}
+
 export class PrActionsEngine {
   private cfg: PrActionsEngineConfig
+  private identity: string
   busy: PrActionBusyKey | null = null
   error: string | null = null
   // Permanent failure (R9) — surfaced persistently, no auto-retry.
@@ -80,6 +86,7 @@ export class PrActionsEngine {
 
   constructor(cfg: PrActionsEngineConfig) {
     this.cfg = cfg
+    this.identity = prActionsIdentity(cfg)
     this.autoMergeField = createOptimisticField<boolean>(cfg.onChange)
     this.stateField = createOptimisticField<PRState>(cfg.onChange)
   }
@@ -87,7 +94,12 @@ export class PrActionsEngine {
   // Allows the hook to refresh config (prNumber/headSha/prRepo/refetch) without
   // recreating optimistic fields and losing in-flight guard state.
   updateConfig(cfg: PrActionsEngineConfig): void {
+    const nextIdentity = prActionsIdentity(cfg)
     this.cfg = cfg
+    if (nextIdentity !== this.identity) {
+      this.identity = nextIdentity
+      this.resetForIdentityChange()
+    }
   }
 
   isBusy(key: PrActionBusyKey): boolean {
@@ -124,8 +136,8 @@ export class PrActionsEngine {
 
   // Why: overlapping actions share `busy`; a late-resolving action must only clear
   // it if it's still the one it set, so it can't wipe a newer action's busy state.
-  private clearBusyIfOwned(key: PrActionBusyKey): void {
-    if (busyKeyEquals(this.busy, key)) {
+  private clearBusyIfOwned(identity: string, key: PrActionBusyKey): void {
+    if (this.identity === identity && busyKeyEquals(this.busy, key)) {
       this.setBusy(null)
     }
   }
@@ -142,10 +154,30 @@ export class PrActionsEngine {
 
   // Routes an outcome: success → refetch; transient → revert latest + non-blocking
   // error; permanent (blocked) → no auto-retry, persistent blocked state (KTD7/R9).
+  private resetForIdentityChange(): void {
+    let changed = this.busy !== null || this.error !== null || this.blocked !== null
+    this.busy = null
+    this.error = null
+    this.blocked = null
+    changed = this.autoMergeField.reset() || changed
+    changed = this.stateField.reset() || changed
+    if (this.reviewerFields.size > 0) {
+      this.reviewerFields.clear()
+      changed = true
+    }
+    if (changed) {
+      this.cfg.onChange()
+    }
+  }
+
   private async settle(
+    identity: string,
     outcome: GitHubPrMutationOutcome,
     handlers: { onSuccess: () => void; onRevert: () => void }
   ): Promise<void> {
+    if (this.identity !== identity) {
+      return
+    }
     if (outcome.ok) {
       handlers.onSuccess()
       await this.cfg.refetch()
@@ -162,108 +194,120 @@ export class PrActionsEngine {
   }
 
   async merge(method?: GitHubPRMergeMethod): Promise<void> {
+    const cfg = this.cfg
+    const identity = this.identity
     this.setBusy({ kind: 'merge' })
     this.setError(null)
     try {
-      const outcome = await this.cfg.mutations.mergePR({
-        prNumber: this.cfg.prNumber,
+      const outcome = await cfg.mutations.mergePR({
+        prNumber: cfg.prNumber,
         method,
-        prRepo: this.cfg.prRepo
+        prRepo: cfg.prRepo
       })
-      await this.settle(outcome, { onSuccess: () => {}, onRevert: () => {} })
+      await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
     } finally {
-      this.clearBusyIfOwned({ kind: 'merge' })
+      this.clearBusyIfOwned(identity, { kind: 'merge' })
     }
   }
 
   async setAutoMerge(enabled: boolean, method?: GitHubPRMergeMethod): Promise<void> {
+    const cfg = this.cfg
+    const identity = this.identity
     const seq = this.autoMergeField.begin(enabled)
     this.setBusy({ kind: 'autoMerge' })
     this.setError(null)
     try {
-      const outcome = await this.cfg.mutations.setPRAutoMerge({
-        prNumber: this.cfg.prNumber,
+      const outcome = await cfg.mutations.setPRAutoMerge({
+        prNumber: cfg.prNumber,
         enabled,
         method,
-        prRepo: this.cfg.prRepo
+        prRepo: cfg.prRepo
       })
-      await this.settle(outcome, {
+      await this.settle(identity, outcome, {
         onSuccess: () => this.autoMergeField.settleSuccess(seq),
         onRevert: () => this.autoMergeField.settleFailure(seq)
       })
     } finally {
-      this.clearBusyIfOwned({ kind: 'autoMerge' })
+      this.clearBusyIfOwned(identity, { kind: 'autoMerge' })
     }
   }
 
   async updateState(state: 'open' | 'closed'): Promise<void> {
+    const cfg = this.cfg
+    const identity = this.identity
     const seq = this.stateField.begin(state === 'closed' ? 'closed' : 'open')
     this.setBusy({ kind: 'state' })
     this.setError(null)
     try {
-      const outcome = await this.cfg.mutations.updatePRState({
-        prNumber: this.cfg.prNumber,
+      const outcome = await cfg.mutations.updatePRState({
+        prNumber: cfg.prNumber,
         state
       })
-      await this.settle(outcome, {
+      await this.settle(identity, outcome, {
         onSuccess: () => this.stateField.settleSuccess(seq),
         onRevert: () => this.stateField.settleFailure(seq)
       })
     } finally {
-      this.clearBusyIfOwned({ kind: 'state' })
+      this.clearBusyIfOwned(identity, { kind: 'state' })
     }
   }
 
   async requestReviewer(login: string): Promise<void> {
+    const cfg = this.cfg
+    const identity = this.identity
     const field = this.reviewerField(login)
     const seq = field.begin(true)
     this.setBusy({ kind: 'reviewer', login })
     this.setError(null)
     try {
-      const outcome = await this.cfg.mutations.requestReviewers({
-        prNumber: this.cfg.prNumber,
+      const outcome = await cfg.mutations.requestReviewers({
+        prNumber: cfg.prNumber,
         reviewers: [login]
       })
-      await this.settle(outcome, {
+      await this.settle(identity, outcome, {
         onSuccess: () => field.settleSuccess(seq),
         onRevert: () => field.settleFailure(seq)
       })
     } finally {
-      this.clearBusyIfOwned({ kind: 'reviewer', login })
+      this.clearBusyIfOwned(identity, { kind: 'reviewer', login })
     }
   }
 
   async removeReviewer(login: string): Promise<void> {
+    const cfg = this.cfg
+    const identity = this.identity
     const field = this.reviewerField(login)
     const seq = field.begin(false)
     this.setBusy({ kind: 'reviewer', login })
     this.setError(null)
     try {
-      const outcome = await this.cfg.mutations.removeReviewers({
-        prNumber: this.cfg.prNumber,
+      const outcome = await cfg.mutations.removeReviewers({
+        prNumber: cfg.prNumber,
         reviewers: [login]
       })
-      await this.settle(outcome, {
+      await this.settle(identity, outcome, {
         onSuccess: () => field.settleSuccess(seq),
         onRevert: () => field.settleFailure(seq)
       })
     } finally {
-      this.clearBusyIfOwned({ kind: 'reviewer', login })
+      this.clearBusyIfOwned(identity, { kind: 'reviewer', login })
     }
   }
 
   async rerunFailingChecks(): Promise<void> {
+    const cfg = this.cfg
+    const identity = this.identity
     this.setBusy({ kind: 'rerun' })
     this.setError(null)
     try {
-      const outcome = await this.cfg.mutations.rerunChecks({
-        prNumber: this.cfg.prNumber,
-        headSha: this.cfg.headSha,
+      const outcome = await cfg.mutations.rerunChecks({
+        prNumber: cfg.prNumber,
+        headSha: cfg.headSha,
         failedOnly: true
       })
-      await this.settle(outcome, { onSuccess: () => {}, onRevert: () => {} })
+      await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
     } finally {
-      this.clearBusyIfOwned({ kind: 'rerun' })
+      this.clearBusyIfOwned(identity, { kind: 'rerun' })
     }
   }
 

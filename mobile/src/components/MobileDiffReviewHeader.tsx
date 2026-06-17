@@ -10,6 +10,7 @@ type Props = {
   filter: MobileDiffReviewQueueFilter
   isWideLayout: boolean
   prSidebarIsGithubRepo: boolean
+  prSidebarCanDock: boolean
   queueLength: number
   reviewedCount: number
   unsentCount: number
@@ -24,6 +25,7 @@ export function MobileDiffReviewHeader({
   filter,
   isWideLayout,
   prSidebarIsGithubRepo,
+  prSidebarCanDock,
   queueLength,
   reviewedCount,
   unsentCount,
@@ -35,7 +37,11 @@ export function MobileDiffReviewHeader({
 }: Props) {
   // The dedicated PR icon appears on any GitHub repo in narrow/overlay mode; in wide
   // mode the sidebar is docked, so it is hidden (not disabled).
-  const showPRTrigger = shouldShowTrigger({ isGithubRepo: prSidebarIsGithubRepo, isWideLayout })
+  const showPRTrigger = shouldShowTrigger({
+    isGithubRepo: prSidebarIsGithubRepo,
+    isWideLayout,
+    canDock: prSidebarCanDock
+  })
   return (
     <View style={styles.header}>
       <View style={styles.topBar}>

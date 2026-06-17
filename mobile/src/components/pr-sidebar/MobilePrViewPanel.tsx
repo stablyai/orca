@@ -15,6 +15,8 @@ type Props = {
   worktreeId: string
   branch: string | null
   headSha: string | null
+  isGithubRepo?: boolean
+  branchContextLoaded?: boolean
   // Embedded (docked) drops the full-screen SafeAreaView chrome and shows a close
   // affordance; the dock column owns the safe-area insets. Full-screen otherwise.
   embedded?: boolean
@@ -27,6 +29,8 @@ export function MobilePrViewPanel({
   worktreeId,
   branch,
   headSha,
+  isGithubRepo = true,
+  branchContextLoaded = true,
   embedded = false,
   onRequestClose
 }: Props) {
@@ -46,16 +50,29 @@ export function MobilePrViewPanel({
   const prSidebarKind = controller.prSidebarState.kind
   const refetch = controller.refetchPRSidebar
   useEffect(() => {
-    if (branch && prSidebarKind === 'hidden') {
+    if (branch && isGithubRepo && prSidebarKind === 'hidden') {
       refetch()
     }
-  }, [branch, prSidebarKind, refetch])
+  }, [branch, isGithubRepo, prSidebarKind, refetch])
 
   // Embedded: the dock column applies the bottom inset; full-screen relies on its own
   // SafeAreaView (edges top only), so content must clear the home indicator itself.
+  const sidebarState = !branchContextLoaded
+    ? ({ kind: 'loading' } as const)
+    : !isGithubRepo
+      ? ({
+          kind: 'blocked',
+          message: 'Hosted review panel unavailable for this provider.'
+        } as const)
+      : branch === null
+        ? ({
+            kind: 'error',
+            message: 'Current branch unavailable.'
+          } as const)
+        : controller.prSidebarState
   const sidebar = (
     <MobilePRSidebar
-      state={controller.prSidebarState}
+      state={sidebarState}
       onRetry={controller.retryPRSidebar}
       refetch={controller.refetchPRSidebar}
       client={client}

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  canDockSessionPanel,
   nextActivePanel,
   resolvePanelAction,
   panelRouteDescriptor,
@@ -30,14 +31,14 @@ describe('nextActivePanel', () => {
 
 describe('resolvePanelAction', () => {
   it('docks with the opened panel on wide layouts (open)', () => {
-    expect(resolvePanelAction({ isWideLayout: true, tapped: 'files', current: null })).toEqual({
+    expect(resolvePanelAction({ canDock: true, tapped: 'files', current: null })).toEqual({
       kind: 'dock',
       next: 'files'
     })
   })
 
   it('docks with null on wide layouts when tapping the active panel (close)', () => {
-    expect(resolvePanelAction({ isWideLayout: true, tapped: 'pr', current: 'pr' })).toEqual({
+    expect(resolvePanelAction({ canDock: true, tapped: 'pr', current: 'pr' })).toEqual({
       kind: 'dock',
       next: null
     })
@@ -45,20 +46,34 @@ describe('resolvePanelAction', () => {
 
   it('docks with the new panel on wide layouts (swap)', () => {
     expect(
-      resolvePanelAction({ isWideLayout: true, tapped: 'sourceControl', current: 'files' })
+      resolvePanelAction({ canDock: true, tapped: 'sourceControl', current: 'files' })
     ).toEqual({ kind: 'dock', next: 'sourceControl' })
   })
 
-  it('pushes the tapped panel on narrow layouts regardless of current', () => {
+  it('pushes the tapped panel when docking is unavailable regardless of current', () => {
     const currents: ActivePanel[] = [null, 'sourceControl', 'files', 'pr']
     for (const panel of PANELS) {
       for (const current of currents) {
-        expect(resolvePanelAction({ isWideLayout: false, tapped: panel, current })).toEqual({
+        expect(resolvePanelAction({ canDock: false, tapped: panel, current })).toEqual({
           kind: 'push',
           panel
         })
       }
     }
+  })
+})
+
+describe('canDockSessionPanel', () => {
+  it('requires a wide layout and enough measured content-row width', () => {
+    expect(canDockSessionPanel({ isWideLayout: true, availableWidth: 700, dockWidth: 340 })).toBe(
+      true
+    )
+    expect(canDockSessionPanel({ isWideLayout: true, availableWidth: 699, dockWidth: 340 })).toBe(
+      false
+    )
+    expect(canDockSessionPanel({ isWideLayout: false, availableWidth: 900, dockWidth: 340 })).toBe(
+      false
+    )
   })
 })
 

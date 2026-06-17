@@ -17,15 +17,29 @@ export type PanelAction =
   | { kind: 'dock'; next: ActivePanel }
   | { kind: 'push'; panel: Exclude<ActivePanel, null> }
 
+export const SESSION_DOCK_MIN_MAIN_WIDTH = 360
+
+export function canDockSessionPanel(args: {
+  isWideLayout: boolean
+  availableWidth: number
+  dockWidth: number
+  minMainWidth?: number
+}): boolean {
+  return (
+    args.isWideLayout &&
+    args.availableWidth >= args.dockWidth + (args.minMainWidth ?? SESSION_DOCK_MIN_MAIN_WIDTH)
+  )
+}
+
 // Wide layouts dock (toggle/swap the sidebar beside the terminal); narrow layouts
 // push the panel's full-screen route (R3/R7). The caller maps a push to the concrete
 // expo-router path + params via panelRouteDescriptor.
 export function resolvePanelAction(args: {
-  isWideLayout: boolean
+  canDock: boolean
   tapped: Exclude<ActivePanel, null>
   current: ActivePanel
 }): PanelAction {
-  if (args.isWideLayout) {
+  if (args.canDock) {
     return { kind: 'dock', next: nextActivePanel(args.current, args.tapped) }
   }
   return { kind: 'push', panel: args.tapped }

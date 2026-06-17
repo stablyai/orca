@@ -15,6 +15,7 @@ describe('readFreshGitStatus', () => {
     const send = vi.fn(async () => fresh)
     const out = await readFreshGitStatus('w', fallback, send as never)
     expect(out?.branch).toBe('feat')
+    expect(out?.upstreamStatus).toEqual({ hasUpstream: true, ahead: 1, behind: 0 })
     expect(send).toHaveBeenCalledWith('git.status', { worktree: 'id:w' })
   })
 

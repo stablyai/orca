@@ -14,10 +14,7 @@ import {
   type MobilePrTitleAction
 } from '../session/use-mobile-pr-title-action'
 import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
-import {
-  buildFixChecksPrompt,
-  buildResolveConflictsPrompt
-} from '../session/pr-ai-triage-prompt'
+import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
 import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
 import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
@@ -105,6 +102,7 @@ export function MobilePRSidebar({
     <ScrollView
       style={{ flex: 1 }}
       contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomInset }]}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
       <PrSidebarContent

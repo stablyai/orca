@@ -89,6 +89,9 @@ export function MobilePrComposeForm({
       } else if (result.error) {
         setError(result.error)
       }
+    } catch (err) {
+      triggerError()
+      setError(err instanceof Error ? err.message : 'Failed to generate PR fields')
     } finally {
       setGenerating(false)
     }

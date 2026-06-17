@@ -414,12 +414,13 @@ async function updateViewportForClient(
   client: TerminalViewportClient,
   viewport: { cols: number; rows: number },
   defaultType: 'mobile' | 'desktop'
-): Promise<boolean> {
+): Promise<{ updated: boolean; applied: boolean }> {
   const type = client.type ?? defaultType
   if (type === 'mobile') {
     return runtime.updateMobileViewport(ptyId, client.id, viewport)
   }
-  return runtime.updateDesktopViewport(ptyId, viewport)
+  const updated = await runtime.updateDesktopViewport(ptyId, viewport)
+  return { updated, applied: updated }
 }
 
 const TerminalHandle = z.object({
@@ -908,14 +909,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
-      const updated = await updateViewportForClient(
+      const viewportUpdate = await updateViewportForClient(
         runtime,
         leaf.ptyId,
         params.client,
         params.viewport,
         'mobile'
       )
-      return { updated, seq: runtime.getLayout(leaf.ptyId)?.seq }
+      return { ...viewportUpdate, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
   }),
   // Why: desktop remote sessions can have dozens of panes. One streaming RPC

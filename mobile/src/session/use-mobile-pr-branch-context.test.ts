@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { MobileGitBranchCompareResult } from '../source-control/mobile-branch-compare'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
-import { deriveMobilePrBranchContext } from './use-mobile-pr-branch-context'
+import {
+  deriveMobilePrBranchContext,
+  loadMobilePrBranchContext
+} from './use-mobile-pr-branch-context'
 
 function status(overrides: Partial<MobileGitStatusResult>): MobileGitStatusResult {
   return {
@@ -75,5 +78,38 @@ describe('deriveMobilePrBranchContext', () => {
     expect(() => deriveMobilePrBranchContext(null, null)).not.toThrow()
     const result = deriveMobilePrBranchContext(null, null)
     expect(result).toEqual({ branch: null, headSha: null })
+  })
+})
+
+describe('loadMobilePrBranchContext', () => {
+  it('keeps status and repo eligibility when branchCompare fails', async () => {
+    const sendRequest = vi.fn(async (method: string) => {
+      if (method === 'git.status') {
+        return {
+          ok: true,
+          result: { entries: [], conflictOperation: 'unknown', branch: 'feat', head: 'sha-status' }
+        }
+      }
+      if (method === 'repo.list') {
+        return {
+          ok: true,
+          result: { repos: [{ id: 'repo', worktreeBaseRef: 'main' }] }
+        }
+      }
+      if (method === 'git.branchCompare') {
+        return { ok: false, error: { message: 'compare failed' } }
+      }
+      if (method === 'github.repoSlug') {
+        return { ok: true, result: { owner: 'stablyai', repo: 'orca' } }
+      }
+      return { ok: false, error: { message: `unexpected ${method}` } }
+    })
+    const out = await loadMobilePrBranchContext({ sendRequest } as never, 'repo::/wt')
+    expect(out).toEqual({
+      branch: 'feat',
+      headSha: 'sha-status',
+      isGithubRepo: true,
+      loaded: true
+    })
   })
 })

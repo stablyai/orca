@@ -18,8 +18,13 @@ type Props = {
   connState: ConnectionState
   branch: string | null
   headSha: string | null
+  isGithubRepo: boolean
+  branchContextLoaded: boolean
+  availableWidth: number
   onRequestClose: () => void
 }
+
+type DockPanelContentProps = Omit<Props, 'availableWidth'>
 
 // The wide-layout right-hand dock beside the session content (KTD2/KTD6). Owns its own
 // drag-resize state so dragging only re-renders this subtree (not the whole session
@@ -35,9 +40,12 @@ export function SessionDockColumn({
   connState,
   branch,
   headSha,
+  isGithubRepo,
+  branchContextLoaded,
+  availableWidth,
   onRequestClose
 }: Props) {
-  const { dockWidth, panHandlers } = useMobileDockResize()
+  const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
   return (
     <View style={[mobilePrSidebarStyles.dockColumn, { width: dockWidth }]}>
       {/* Dedicated drag handle over the dock's left border — a leaf overlay so the
@@ -52,6 +60,8 @@ export function SessionDockColumn({
         connState={connState}
         branch={branch}
         headSha={headSha}
+        isGithubRepo={isGithubRepo}
+        branchContextLoaded={branchContextLoaded}
         onRequestClose={onRequestClose}
       />
     </View>
@@ -69,8 +79,10 @@ const DockPanelContent = memo(function DockPanelContent({
   connState,
   branch,
   headSha,
+  isGithubRepo,
+  branchContextLoaded,
   onRequestClose
-}: Props) {
+}: DockPanelContentProps) {
   if (activePanel === 'sourceControl') {
     return (
       <MobileSourceControlPanel
@@ -101,6 +113,8 @@ const DockPanelContent = memo(function DockPanelContent({
       worktreeId={worktreeId}
       branch={branch}
       headSha={headSha}
+      isGithubRepo={isGithubRepo}
+      branchContextLoaded={branchContextLoaded}
       embedded
       onRequestClose={onRequestClose}
     />

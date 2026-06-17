@@ -31,6 +31,8 @@ export type OptimisticField<T> = {
   resolve: (authoritative: T) => T
   // Current optimistic value (undefined when none) — for read-only inspection.
   peek: () => T | undefined
+  // Clears any currently-shown optimism. Returns true if a value was cleared.
+  reset: () => boolean
 }
 
 // Factory holds the per-field sequence ref + optimistic value. Pure logic; the
@@ -76,6 +78,13 @@ export function createOptimisticField<T>(onChange?: () => void): OptimisticField
     },
     peek(): T | undefined {
       return optimisticSeq !== 0 ? optimisticValue : undefined
+    },
+    reset(): boolean {
+      if (optimisticSeq === 0) {
+        return false
+      }
+      clear()
+      return true
     }
   }
 }

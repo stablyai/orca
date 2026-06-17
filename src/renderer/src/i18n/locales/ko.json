@@ -8540,7 +8540,20 @@
             "b715ef615b": "{{value1}}보다 {{value0}} 커밋 앞서 있음",
             "c1a8f3e204": "{{value0}}보다 1 커밋 뒤처짐",
             "d2b9g4f315": "{{value1}}보다 {{value0}} 커밋 뒤처짐",
-            "e9c2a5d416": "{{value0}}와 동일한 상태"
+            "e9c2a5d416": "{{value0}}와 동일한 상태",
+            "branchContextEvenLabel": "even",
+            "pullPolicyNoticeTitle": "Pull needs a policy",
+            "pullPolicyNoticeBadge": "Diverged",
+            "pullPolicyNoticeDescription": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+            "pullPolicyCopyCommandLabel": "Copy {{value0}} pull policy command",
+            "pullPolicyCopiedTooltip": "Copied",
+            "pullPolicyCopyCommandTooltip": "Copy command",
+            "pullPolicyMergeLabel": "Merge",
+            "pullPolicyRebaseLabel": "Rebase",
+            "pullPolicyFastForwardLabel": "Fast-forward only",
+            "pullPolicyMergeDescription": "Create a merge commit when local and remote both changed.",
+            "pullPolicyRebaseDescription": "Replay local commits on top of the remote branch.",
+            "pullPolicyFastForwardDescription": "Only pull when no merge or rebase is needed."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",

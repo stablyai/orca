@@ -117,6 +117,17 @@ describe('loadPrSidebarData', () => {
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 7 })
   })
 
+  it('does not pass non-GitHub hosted-review hints into the GitHub PR lookup', async () => {
+    const d = deps({
+      fetchForBranch: vi.fn(async () =>
+        ok<HostedReviewInfo | null>(ghInfo({ provider: 'gitlab', number: 99 }))
+      ),
+      fetchWorktreeLinkedPR: vi.fn(async () => null)
+    })
+    await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })
+    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: null })
+  })
+
   it('is non-fatal when forBranch errors — prForBranch still resolves', async () => {
     const d = deps({ fetchForBranch: vi.fn(async () => fail<HostedReviewInfo | null>('timeout')) })
     const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })

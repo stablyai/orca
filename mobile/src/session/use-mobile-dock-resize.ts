@@ -2,16 +2,27 @@ import { useEffect, useRef, useState } from 'react'
 import { PanResponder } from 'react-native'
 import {
   HOST_DOCK_DEFAULT_WIDTH,
+  HOST_DOCK_MAX_WIDTH,
+  HOST_DOCK_MIN_WIDTH,
   clampHostDockWidth,
   loadHostDockWidth,
   saveHostDockWidth
 } from '../storage/preferences'
+import { SESSION_DOCK_MIN_MAIN_WIDTH } from './session-panel-host'
 
 type MobileDockResize = {
   dockWidth: number
   // Spread onto the dock's dedicated left-edge handle (a leaf overlay), NOT the
   // dock container — see the note below.
   panHandlers: ReturnType<typeof PanResponder.create>['panHandlers']
+}
+
+function clampDockWidthForRow(width: number, availableWidth: number): number {
+  const maxForRow =
+    Number.isFinite(availableWidth) && availableWidth > 0
+      ? Math.max(HOST_DOCK_MIN_WIDTH, availableWidth - SESSION_DOCK_MIN_MAIN_WIDTH)
+      : HOST_DOCK_MAX_WIDTH
+  return Math.min(Math.min(HOST_DOCK_MAX_WIDTH, maxForRow), clampHostDockWidth(width))
 }
 
 // Owns the wide-layout right-dock width + its drag-to-resize gesture.
@@ -21,9 +32,11 @@ type MobileDockResize = {
 // the dock container never sees the move events and the drag silently no-ops.
 // A leaf handle overlaid on the dock's left border owns the gesture on both
 // platforms. The dock grows leftward, so dragging left (negative dx) widens it.
-export function useMobileDockResize(): MobileDockResize {
+export function useMobileDockResize(availableWidth = 0): MobileDockResize {
   const [dockWidth, setDockWidth] = useState(HOST_DOCK_DEFAULT_WIDTH)
 
+  const availableWidthRef = useRef(availableWidth)
+  availableWidthRef.current = availableWidth
   const widthRef = useRef(dockWidth)
   widthRef.current = dockWidth
   const dragStartRef = useRef(dockWidth)
@@ -32,13 +45,17 @@ export function useMobileDockResize(): MobileDockResize {
     let stale = false
     void loadHostDockWidth().then((saved) => {
       if (!stale) {
-        setDockWidth(saved)
+        setDockWidth(clampDockWidthForRow(saved, availableWidthRef.current))
       }
     })
     return () => {
       stale = true
     }
   }, [])
+
+  useEffect(() => {
+    setDockWidth((prev) => clampDockWidthForRow(prev, availableWidth))
+  }, [availableWidth])
 
   const resizer = useRef(
     PanResponder.create({
@@ -51,7 +68,7 @@ export function useMobileDockResize(): MobileDockResize {
         dragStartRef.current = widthRef.current
       },
       onPanResponderMove: (_evt, g) => {
-        setDockWidth(clampHostDockWidth(dragStartRef.current - g.dx))
+        setDockWidth(clampDockWidthForRow(dragStartRef.current - g.dx, availableWidthRef.current))
       },
       onPanResponderRelease: () => {
         void saveHostDockWidth(widthRef.current)

@@ -106,6 +106,23 @@ describe('createMobilePr', () => {
     })
     expect(result).toEqual({ ok: false, error: 'disconnected' })
   })
+
+  it('normalizes a thrown sendRequest into { ok:false }', async () => {
+    const client = {
+      sendRequest: vi.fn(async () => {
+        throw new Error('socket hung up')
+      })
+    } as unknown as Pick<RpcClient, 'sendRequest'>
+    await expect(
+      createMobilePr(client, 'repo-1::/tmp/wt', {
+        provider: 'github',
+        base: 'main',
+        title: 'T',
+        body: '',
+        draft: false
+      })
+    ).resolves.toEqual({ ok: false, error: 'socket hung up' })
+  })
 })
 
 describe('resolveMobilePrPrefill', () => {
