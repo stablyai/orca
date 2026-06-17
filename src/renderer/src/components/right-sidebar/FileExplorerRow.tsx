@@ -441,6 +441,9 @@ export function FileExplorerRow({
           style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
           ref={setRowDragNode}
           data-native-file-drop-dir={rowDropDir}
+          // Why: marks this draggable row so the wheel-capture handler can rescue
+          // scroll Chromium swallows over draggable nodes (file-explorer-drag-scroll-marker).
+          data-explorer-draggable="true"
           draggable
           onDragStart={(event) => {
             const paths =
