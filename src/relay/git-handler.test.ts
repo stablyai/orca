@@ -82,6 +82,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fetch')
     expect(methods).toContain('git.forkSync')
     expect(methods).toContain('git.fetchRemoteTrackingRef')
+    expect(methods).toContain('git.fetchGitLabMergeRequestHead')
     expect(methods).toContain('git.push')
     expect(methods).toContain('git.pull')
     expect(methods).toContain('git.fastForward')
@@ -1165,6 +1166,56 @@ describe('GitHandler', () => {
           ref: 'refs/remotes/origin/other'
         })
       ).rejects.toThrow('Remote-tracking ref does not match the requested remote and branch.')
+    })
+
+    it('fetches GitLab merge request heads through the narrow fetch RPC', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-gitlab-mr-bare-'))
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'mr.txt'), 'head')
+        gitCommit(tmpDir, 'mr head')
+        const expected = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
+        execFileSync('git', ['push', 'origin', 'HEAD:refs/merge-requests/42/head'], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+
+        await dispatcher.callRequest('git.fetchGitLabMergeRequestHead', {
+          worktreePath: tmpDir,
+          remote: 'origin',
+          mrIid: 42
+        })
+
+        const actual = execFileSync('git', ['rev-parse', 'FETCH_HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        expect(actual).toBe(expected)
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects invalid GitLab merge request head fetch requests', async () => {
+      await expect(
+        dispatcher.callRequest('git.fetchGitLabMergeRequestHead', {
+          worktreePath: tmpDir,
+          remote: '-origin',
+          mrIid: 42
+        })
+      ).rejects.toThrow('GitLab merge request fetch remote must not start with "-".')
+      await expect(
+        dispatcher.callRequest('git.fetchGitLabMergeRequestHead', {
+          worktreePath: tmpDir,
+          remote: 'origin',
+          mrIid: 0
+        })
+      ).rejects.toThrow('Invalid GitLab merge request fetch request.')
     })
 
     it('rethrows upstreamStatus failures that are not "no upstream configured"', async () => {

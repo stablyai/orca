@@ -515,7 +515,9 @@ export async function getWorkItemByProjectRef(
     const { stdout } = await glabExecFileAsync(
       [
         'api',
-        ...glabHostnameArgs(projectRef, connectionId),
+        // Why: pasted GitLab URLs carry an explicit host; preserve it even for
+        // local/runtime-local repos so cwd remotes cannot redirect the lookup.
+        ...(projectRef.host ? ['--hostname', projectRef.host] : []),
         `projects/${encodedProject(projectRef.path)}/${resource}/${iid}`
       ],
       glabRepoExecOptions(repoPath, connectionId)

@@ -1,6 +1,8 @@
+import { join, sep } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createCreatePrIntentRunToken,
+  createPrIntentCurrentTargetConflictsWithToken,
   createPrIntentGitStatusMatchesToken,
   createPrIntentRunTokenMatches,
   getCreatePrIntentStagePaths,
@@ -42,6 +44,36 @@ describe('source-control Create PR intent flow helpers', () => {
     expect(createPrIntentGitStatusMatchesToken(token, { branch: 'feature/pr' })).toBe(true)
     expect(createPrIntentGitStatusMatchesToken(token, { branch: 'refs/heads/other' })).toBe(false)
     expect(createPrIntentGitStatusMatchesToken(token, { branch: null })).toBe(false)
+  })
+
+  it('does not treat navigating to another worktree as an intent conflict', () => {
+    const wt1Path = join(sep, 'repo', 'wt-1')
+    const wt2Path = join(sep, 'repo', 'wt-2')
+
+    const token = createCreatePrIntentRunToken({
+      repoId: 'repo-1',
+      worktreeId: 'wt-1',
+      worktreePath: wt1Path,
+      branch: 'feature/pr'
+    })
+
+    expect(
+      createPrIntentCurrentTargetConflictsWithToken(token, {
+        repoId: 'repo-1',
+        worktreeId: 'wt-2',
+        worktreePath: wt2Path,
+        branch: 'other'
+      })
+    ).toBe(false)
+
+    expect(
+      createPrIntentCurrentTargetConflictsWithToken(token, {
+        repoId: 'repo-1',
+        worktreeId: 'wt-1',
+        worktreePath: wt1Path,
+        branch: 'other'
+      })
+    ).toBe(true)
   })
 
   it('stages only safe unstaged and untracked paths', () => {

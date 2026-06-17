@@ -111,6 +111,7 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
       set({ rateLimits: result.state })
     } catch (error) {
       console.error('Failed to consume Codex rate-limit reset:', error)
+      throw error
     }
   },
 

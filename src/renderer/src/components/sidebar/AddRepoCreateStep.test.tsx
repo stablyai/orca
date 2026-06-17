@@ -3,17 +3,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { Dialog } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CreateStep } from './AddRepoCreateStep'
-import type { GitAvailability, RepoKind } from './create-project-defaults'
+import type { GitAvailability } from './create-project-defaults'
 
 function renderCreateStep({
   createName = '',
-  createKind = 'git',
   gitAvailability = 'available',
   createParent = '/Users/alice/orca/projects',
   parentDefaultPending = false
 }: {
   createName?: string
-  createKind?: RepoKind
   gitAvailability?: GitAvailability
   createParent?: string
   parentDefaultPending?: boolean
@@ -24,7 +22,6 @@ function renderCreateStep({
         <CreateStep
           createName={createName}
           createParent={createParent}
-          createKind={createKind}
           createError={null}
           isCreating={false}
           defaultParent="/Users/alice/orca/projects"
@@ -33,7 +30,6 @@ function renderCreateStep({
           parentDefaultPending={parentDefaultPending}
           onNameChange={vi.fn()}
           onParentChange={vi.fn()}
-          onKindChange={vi.fn()}
           onPickParent={vi.fn()}
           onCreate={vi.fn()}
         />
@@ -56,11 +52,15 @@ describe('CreateStep', () => {
     expect(html).not.toContain('aria-label="Browse host filesystem"')
   })
 
-  it('shows the Git fallback explanation in the collapsed summary', () => {
-    const html = renderCreateStep({ createKind: 'folder', gitAvailability: 'unavailable' })
+  it('shows the Git-required explanation in the collapsed summary', () => {
+    const html = renderCreateStep({
+      createName: 'demo-project',
+      gitAvailability: 'unavailable'
+    })
 
-    expect(html).toContain('Folder in ~/orca/projects')
-    expect(html).toContain('Git isn&#x27;t installed, so a plain folder is the default.')
+    expect(html).toContain('Git repository in ~/orca/projects')
+    expect(html).toContain('Git is required to create a project.')
+    expect(html).toContain('disabled=""')
   })
 
   it('disables create while an auto-filled parent belongs to a previous target', () => {

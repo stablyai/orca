@@ -28,26 +28,174 @@ describe('git remote operations', () => {
   })
 
   it('pushes to the configured upstream remote and branch', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'review/pr-1738\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'pr-prateek-orca\n', stderr: '' })
-      .mockResolvedValueOnce({
-        stdout: 'refs/heads/prateek/fix-sidebar-agents-toggle\n',
-        stderr: ''
-      })
-      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'review/pr-1738\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.review/pr-1738.remote')) {
+        return { stdout: 'pr-prateek-orca\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.review/pr-1738.pushRemote')) {
+        return { stdout: 'pr-prateek-orca\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.review/pr-1738.merge')) {
+        return { stdout: 'refs/heads/prateek/fix-sidebar-agents-toggle\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.review/pr-1738.base')) {
+        throw new Error('missing branch base')
+      }
+      return { stdout: '', stderr: '' }
+    })
 
     await gitPush('/repo', false)
 
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
-      [['config', '--get', 'branch.review/pr-1738.remote'], { cwd: '/repo' }],
-      [['config', '--get', 'branch.review/pr-1738.merge'], { cwd: '/repo' }],
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['config', '--get', 'branch.review/pr-1738.remote'],
+      { cwd: '/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['push', '--set-upstream', 'pr-prateek-orca', 'HEAD:prateek/fix-sidebar-agents-toggle'],
+      { cwd: '/repo' }
+    )
+  })
+
+  it('does not combine remote.pushDefault with a base-branch merge target', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'feature/fix\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.feature/fix.remote')) {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.feature/fix.pushRemote')) {
+        throw new Error('missing pushRemote')
+      }
+      if (args[0] === 'config' && args.includes('remote.pushDefault')) {
+        return { stdout: 'fork\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.feature/fix.merge')) {
+        return { stdout: 'refs/heads/main\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.feature/fix.base')) {
+        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await gitPush('/repo', false)
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      ['push', '--set-upstream', 'fork', 'HEAD:main'],
+      { cwd: '/repo' }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['push', '--set-upstream', 'origin', 'HEAD'],
+      { cwd: '/repo' }
+    )
+  })
+
+  it('keeps a fork head target when the contributor branch matches the base branch name', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'review/pr-1\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.review/pr-1.remote')) {
+        return { stdout: 'fork\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.review/pr-1.pushRemote')) {
+        return { stdout: 'fork\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.review/pr-1.merge')) {
+        return { stdout: 'refs/heads/main\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.review/pr-1.base')) {
+        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await gitPush('/repo', false)
+
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['push', '--set-upstream', 'fork', 'HEAD:main'],
+      { cwd: '/repo' }
+    )
+  })
+
+  it('pushes to a URL-valued branch pushRemote when no named remote exists', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'imp/chinese-translation\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.pushRemote')) {
+        return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('remote.pushDefault')) {
+        throw new Error('missing pushDefault')
+      }
+      if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.remote')) {
+        return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.merge')) {
+        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
+      }
+      if (args[0] === 'remote' && args[1] === 'get-url') {
+        return { stdout: 'https://github.com/stablyai/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await gitPush('/repo', false)
+
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
       [
-        ['push', '--set-upstream', 'pr-prateek-orca', 'HEAD:prateek/fix-sidebar-agents-toggle'],
-        { cwd: '/repo' }
-      ]
-    ])
+        'push',
+        '--set-upstream',
+        'https://github.com/pynickle/orca.git',
+        'HEAD:imp/chinese-translation'
+      ],
+      { cwd: '/repo' }
+    )
+  })
+
+  it('normalizes a URL-valued branch remote to a matching named remote before pushing', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'imp/chinese-translation\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.pushRemote')) {
+        throw new Error('missing pushRemote')
+      }
+      if (args[0] === 'config' && args.includes('remote.pushDefault')) {
+        throw new Error('missing pushDefault')
+      }
+      if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.remote')) {
+        return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.merge')) {
+        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
+      }
+      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
+        return { stdout: 'https://github.com/stablyai/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'pr-pynickle-orca') {
+        return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
+      }
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\npr-pynickle-orca\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await gitPush('/repo', false)
+
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['push', '--set-upstream', 'pr-pynickle-orca', 'HEAD:imp/chinese-translation'],
+      { cwd: '/repo' }
+    )
   })
 
   it('uses an explicit push target even when it differs from the local branch name', async () => {

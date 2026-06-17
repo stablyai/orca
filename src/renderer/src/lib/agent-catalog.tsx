@@ -75,6 +75,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://opencode.ai/docs/cli/'
   },
   {
+    id: 'ante',
+    label: translate('auto.lib.agent.catalog.da41abbdd4', 'Ante'),
+    cmd: 'ante',
+    faviconDomain: 'antigma.ai',
+    homepageUrl: 'https://github.com/AntigmaLabs/ante-preview'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',

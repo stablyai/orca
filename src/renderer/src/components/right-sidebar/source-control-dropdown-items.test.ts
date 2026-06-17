@@ -494,6 +494,50 @@ describe('resolveDropdownItems', () => {
     expect(byKind.publish.disabled).toBe(true)
   })
 
+  it('offers Push instead of Publish Branch when an open linked review has no upstream', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 1,
+        prState: 'open',
+        canPushLinkedReviewWithoutUpstream: true
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit_push.disabled).toBe(false)
+    expect(byKind.push.title).toBe('Push updates to the linked review branch')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.publish.label).toBe('Linked Review')
+    expect(byKind.publish.title).toBe('Linked review branch already exists')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('blocks Push when an open linked review has no upstream and no branch target', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 1,
+        prState: 'open'
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit_push.disabled).toBe(true)
+    expect(byKind.commit_push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.publish.label).toBe('Linked Review')
+    expect(byKind.publish.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
   it('waits for linked PR state before showing a publish prompt', () => {
     const items = resolveDropdownItems(
       inputs({

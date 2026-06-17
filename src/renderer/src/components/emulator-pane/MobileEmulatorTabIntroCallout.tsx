@@ -20,12 +20,12 @@ export function MobileEmulatorTabIntroCallout({
 
   return (
     <div
-      className="mobile-emulator-tab-intro-callout--menu mx-1 mt-1 flex items-center gap-2 rounded-lg border border-border/70 bg-card/80 px-2 py-1.5 text-foreground"
+      className="mobile-emulator-tab-intro-callout--menu mt-1 flex items-center gap-2 rounded-lg border-x border-b border-border/70 bg-muted px-2 py-1.5 dark:bg-accent/80"
       // Why: Radix dropdown treats pointer-down inside custom panels as an
       // outside-select; keep the menu open while the user reads or clicks Keep/Hide.
       onPointerDown={(event) => event.preventDefault()}
     >
-      <p className="min-w-0 flex-1 text-[11px] leading-4 text-muted-foreground">
+      <p className="min-w-0 flex-1 text-[11px] leading-4 text-foreground/85">
         {translate(
           'auto.components.emulator.pane.MobileEmulatorTabIntroCallout.5789936d9a',
           'Preview iOS simulators while agents drive the screen.'

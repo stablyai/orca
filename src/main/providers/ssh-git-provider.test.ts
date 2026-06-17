@@ -790,6 +790,16 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('fetchGitLabMergeRequestHead sends git.fetchGitLabMergeRequestHead request', async () => {
+    await provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetchGitLabMergeRequestHead', {
+      worktreePath: '/home/user/repo',
+      remote: 'origin',
+      mrIid: 42
+    })
+  })
+
   it('getBranchDiff sends git.branchDiff request', async () => {
     const diffs = [{ kind: 'text', originalContent: '', modifiedContent: 'new' }]
     mux.request.mockResolvedValue(diffs)

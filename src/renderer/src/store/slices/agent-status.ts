@@ -274,6 +274,23 @@ export function collectSleepingAgentSessionRecordsForWorktree(
   return records
 }
 
+function recoveryRecordMatches(
+  existing: SleepingAgentSessionRecord | undefined,
+  next: SleepingAgentSessionRecord
+): boolean {
+  if (!existing) {
+    return false
+  }
+  return (
+    existing.origin === next.origin &&
+    existing.agent === next.agent &&
+    existing.worktreeId === next.worktreeId &&
+    existing.tabId === next.tabId &&
+    existing.providerSession.key === next.providerSession.key &&
+    existing.providerSession.id === next.providerSession.id
+  )
+}
+
 function pruneMigrationUnsupportedEntries(
   entries: Record<string, MigrationUnsupportedPtyEntry>,
   predicate: (entry: MigrationUnsupportedPtyEntry) => boolean
@@ -611,11 +628,30 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
         )
-        const hasSleepingRecord = paneKey in s.sleepingAgentSessionsByPaneKey
-        const nextSleepingAgentSessions = hasSleepingRecord
-          ? { ...s.sleepingAgentSessionsByPaneKey }
-          : s.sleepingAgentSessionsByPaneKey
-        if (hasSleepingRecord) {
+        const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
+        const liveRecoveryWorktreeId =
+          entry.state === 'done'
+            ? null
+            : (entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey))
+        const liveRecoveryRecord = liveRecoveryWorktreeId
+          ? sleepingRecordFromEntry({
+              state: s,
+              entry,
+              worktreeId: liveRecoveryWorktreeId,
+              capturedAt: updatedAt,
+              origin: 'live'
+            })
+          : null
+        let nextSleepingAgentSessions = s.sleepingAgentSessionsByPaneKey
+        if (liveRecoveryRecord) {
+          if (!recoveryRecordMatches(existingSleepingRecord, liveRecoveryRecord)) {
+            nextSleepingAgentSessions = {
+              ...s.sleepingAgentSessionsByPaneKey,
+              [paneKey]: liveRecoveryRecord
+            }
+          }
+        } else if (existingSleepingRecord) {
+          nextSleepingAgentSessions = { ...s.sleepingAgentSessionsByPaneKey }
           delete nextSleepingAgentSessions[paneKey]
         }
         return {

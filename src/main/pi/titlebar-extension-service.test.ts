@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -185,6 +186,25 @@ describe('PiTitlebarExtensionService', () => {
       )
     ).toBe('user extension')
     expectPiHomeIntact()
+  })
+
+  it('source-backs OMP agent.db before OMP lazily creates it', () => {
+    const svc = new PiTitlebarExtensionService()
+    const env = svc.buildPtyEnv('pty-omp-sqlite', piHome, 'omp')
+
+    const sourcePath = join(piHome, 'agent.db')
+    const overlayPath = join(env.PI_CODING_AGENT_DIR!, 'agent.db')
+    const content = 'agent.db credentials'
+
+    expect(existsSync(sourcePath)).toBe(true)
+    expect(existsSync(overlayPath)).toBe(true)
+    expect(existsSync(join(piHome, 'history.db'))).toBe(false)
+    writeFileSync(overlayPath, content)
+
+    expect(readFileSync(sourcePath, 'utf-8')).toBe(content)
+    if (process.platform !== 'win32') {
+      expect(lstatSync(overlayPath).isSymbolicLink()).toBe(true)
+    }
   })
 
   it('rebuilding an overlay for the same ptyId does not corrupt the user Pi dir', () => {

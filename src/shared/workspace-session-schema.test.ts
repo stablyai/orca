@@ -126,13 +126,15 @@ describe('parseWorkspaceSession', () => {
           capturedAt: 10,
           updatedAt: 9,
           terminalTitle: 'Codex',
-          lastAssistantMessage: 'done'
+          lastAssistantMessage: 'done',
+          origin: 'live'
         }
       }
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('codex')
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('live')
     }
   })
 

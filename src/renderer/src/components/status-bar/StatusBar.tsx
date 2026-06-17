@@ -1316,7 +1316,11 @@ function CodexSwitcherMenu({
       return
     }
     if (skipFutureResetConfirm) {
-      await updateSettings({ skipCodexRateLimitResetConfirm: true })
+      try {
+        await updateSettings({ skipCodexRateLimitResetConfirm: true })
+      } catch (error) {
+        console.error('Failed to save Codex reset confirmation preference:', error)
+      }
     }
     await handleRedeemReset()
     if (mountedRef.current) {

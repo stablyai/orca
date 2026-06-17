@@ -41,7 +41,8 @@ export async function getPublishTargetStatus(
       hasUpstream: false,
       upstreamName,
       ahead: 0,
-      behind: 0
+      behind: 0,
+      hasConfiguredPushTarget: true
     }
   }
 

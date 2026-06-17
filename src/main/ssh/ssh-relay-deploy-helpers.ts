@@ -280,7 +280,8 @@ export async function execCommand(
     }
     const onClose = (code: number): void => {
       if (code !== 0) {
-        settle(reject, new Error(`Command "${command}" failed (exit ${code}): ${stderr.trim()}`))
+        const output = stderr.trim() || stdout.trim()
+        settle(reject, new Error(`Command "${command}" failed (exit ${code}): ${output}`))
       } else {
         settle(resolve, stdout)
       }

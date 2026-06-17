@@ -281,6 +281,37 @@ describe('StarNagService', () => {
     })
     expect(ui.starNagNextThreshold).toBe(STAR_NAG_INITIAL_THRESHOLD * 2)
     expect(ui.starNagBaselineAgents).toBe(45)
+    expect(ui.starNagDeferredUntil).toBeGreaterThan(Date.now())
+  })
+
+  it('does not show threshold prompts while the persisted cooldown is active', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const { service, emitAgentStarted } = createHarness({
+      starNagDeferredUntil: Date.now() + 3 * 24 * 60 * 60 * 1000
+    })
+
+    service.start()
+    emitAgentStarted(45)
+    await flushAsyncWork()
+
+    expect(window.webContents.send).not.toHaveBeenCalled()
+    expect(trackMock).not.toHaveBeenCalled()
+  })
+
+  it('allows force_show to bypass the persisted cooldown', () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const { service } = createHarness({
+      starNagDeferredUntil: Date.now() + 3 * 24 * 60 * 60 * 1000
+    })
+
+    service.registerIpcHandlers()
+    getIpcHandler('star-nag:forceShow')()
+
+    expect(window.webContents.send).toHaveBeenCalledWith('star-nag:show', {
+      mode: 'gh'
+    })
   })
 
   it('keeps the force_show source through exposure and dismissal', () => {
@@ -541,7 +572,7 @@ describe('StarNagService', () => {
     })
   })
 
-  it('emits dismissed, disabled, and opened_web as distinct main-owned outcomes', () => {
+  it('emits dismissed, disabled, and opened_repo as distinct main-owned outcomes', () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
     const dismissed = createHarness()
@@ -558,7 +589,8 @@ describe('StarNagService', () => {
       agents_since_baseline: 35,
       agents_since_baseline_bucket: '35-69',
       nth_repo_added: 3,
-      next_threshold: STAR_NAG_INITIAL_THRESHOLD * 2
+      next_threshold: STAR_NAG_INITIAL_THRESHOLD * 2,
+      cooldown_days: 3
     })
 
     trackMock.mockClear()
@@ -582,8 +614,47 @@ describe('StarNagService', () => {
 
     expect(trackMock).toHaveBeenCalledWith(
       'star_nag_outcome',
-      expect.objectContaining({ outcome: 'opened_web', mode: 'web' })
+      expect.objectContaining({ outcome: 'opened_repo', mode: 'web' })
     )
+    expect(opened.ui.starNagCompleted).toBe(true)
+    expect(opened.ui.starNagDeferredUntil).toBeNull()
+  })
+
+  it('emits opened_repo at most once for one prompt session', () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const { service } = createHarness()
+
+    service.registerIpcHandlers()
+    getIpcHandler('star-nag:forceShow')()
+    getIpcHandler('star-nag:openWeb')()
+    getIpcHandler('star-nag:openWeb')()
+
+    const openedRepoOutcomes = trackMock.mock.calls.filter(
+      ([name, payload]) =>
+        name === 'star_nag_outcome' && (payload as { outcome?: string }).outcome === 'opened_repo'
+    )
+    expect(openedRepoOutcomes).toHaveLength(1)
+  })
+
+  it('emits later cooldown outcome without completing', () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const later = createHarness()
+
+    later.service.registerIpcHandlers()
+    getIpcHandler('star-nag:forceShow')()
+    getIpcHandler('star-nag:later')()
+
+    expect(trackMock).toHaveBeenCalledWith(
+      'star_nag_outcome',
+      expect.objectContaining({ outcome: 'later', cooldown_days: 3 })
+    )
+    expect(consoleInfoMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ event: 'star_nag_later' })
+    )
+    expect(later.ui.starNagCompleted).toBeUndefined()
+    expect(later.ui.starNagDeferredUntil).toBeGreaterThan(Date.now())
   })
 
   it('emits direct-star attempted and succeeded outcomes plus app_starred_orca', async () => {
@@ -599,11 +670,11 @@ describe('StarNagService', () => {
     expect(ui.starNagCompleted).toBe(true)
     expect(trackMock).toHaveBeenCalledWith(
       'star_nag_outcome',
-      expect.objectContaining({ outcome: 'star_attempted', mode: 'gh' })
+      expect.objectContaining({ outcome: 'star_clicked', mode: 'gh' })
     )
     expect(trackMock).toHaveBeenCalledWith(
       'star_nag_outcome',
-      expect.objectContaining({ outcome: 'star_succeeded', mode: 'gh' })
+      expect.objectContaining({ outcome: 'direct_star_succeeded', mode: 'gh' })
     )
     expect(trackMock).toHaveBeenCalledWith('app_starred_orca', {
       source: 'star_nag',
@@ -629,7 +700,7 @@ describe('StarNagService', () => {
     )
     expect(trackMock).toHaveBeenCalledWith(
       'star_nag_outcome',
-      expect.objectContaining({ outcome: 'star_succeeded', nth_repo_added: 2 })
+      expect.objectContaining({ outcome: 'direct_star_succeeded', nth_repo_added: 2 })
     )
     expect(trackMock).toHaveBeenCalledWith('app_starred_orca', {
       source: 'star_nag',
@@ -654,13 +725,37 @@ describe('StarNagService', () => {
 
     expect(trackMock).toHaveBeenCalledWith(
       'star_nag_outcome',
-      expect.objectContaining({ outcome: 'star_succeeded', mode: 'gh' })
+      expect.objectContaining({ outcome: 'direct_star_succeeded', mode: 'gh' })
     )
     expect(trackMock).toHaveBeenCalledWith('app_starred_orca', {
       source: 'star_nag',
       nth_repo_added: 3
     })
     expect(ui.starNagCompleted).toBe(true)
+  })
+
+  it('records failed direct star after dismissal without clearing the cooldown or re-showing', async () => {
+    const window = createWindow()
+    browserWindowMock.getAllWindows.mockReturnValue([window])
+    const deferredStar = createDeferred<boolean>()
+    starOrcaMock.mockReturnValue(deferredStar.promise)
+    const { service, ui } = createHarness()
+
+    service.registerIpcHandlers()
+    getIpcHandler('star-nag:forceShow')()
+    const starPromise = getIpcHandler('star-nag:starOrca')()
+    getIpcHandler('star-nag:dismiss')()
+
+    deferredStar.resolve(false)
+    await expect(starPromise).resolves.toBe(false)
+
+    expect(trackMock).toHaveBeenCalledWith(
+      'star_nag_outcome',
+      expect.objectContaining({ outcome: 'direct_star_failed', mode: 'gh' })
+    )
+    expect(ui.starNagCompleted).toBeUndefined()
+    expect(ui.starNagDeferredUntil).toBeGreaterThan(Date.now())
+    expect(window.webContents.send).toHaveBeenCalledTimes(1)
   })
 
   it('clears the in-flight direct-star guard after thrown attempts so the user can retry', async () => {
@@ -699,21 +794,21 @@ describe('StarNagService', () => {
 
     const starAttempts = trackMock.mock.calls.filter(
       ([name, payload]) =>
-        name === 'star_nag_outcome' &&
-        (payload as { outcome?: string }).outcome === 'star_attempted'
+        name === 'star_nag_outcome' && (payload as { outcome?: string }).outcome === 'star_clicked'
     )
     expect(starAttempts).toHaveLength(1)
     expect(trackMock).toHaveBeenCalledWith(
       'star_nag_outcome',
-      expect.objectContaining({ outcome: 'star_failed', mode: 'gh' })
+      expect.objectContaining({ outcome: 'direct_star_failed', mode: 'gh' })
     )
 
     getIpcHandler('star-nag:openWeb')()
 
     expect(trackMock).toHaveBeenCalledWith(
       'star_nag_outcome',
-      expect.objectContaining({ outcome: 'opened_web', mode: 'web' })
+      expect.objectContaining({ outcome: 'opened_repo', mode: 'web' })
     )
     expect(ui.starNagCompleted).toBe(true)
+    expect(ui.starNagDeferredUntil).toBeNull()
   })
 })

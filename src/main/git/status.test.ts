@@ -630,17 +630,33 @@ describe('getStatus', () => {
   it('reports no upstream from porcelain v2 status when no same-name origin branch exists', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
-      })
-      .mockResolvedValueOnce({ stdout: 'feature/prompts\n' })
-      .mockRejectedValueOnce(new Error('fatal: no upstream configured'))
-      .mockRejectedValueOnce(new Error('missing remote branch'))
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === '-c' && args.includes('status')) {
+        return Promise.resolve({
+          stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
+        })
+      }
+      if (args[0] === 'symbolic-ref') {
+        return Promise.resolve({ stdout: 'feature/prompts\n' })
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        return Promise.reject(new Error('fatal: no upstream configured'))
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature/prompts')) {
+        return Promise.reject(new Error('missing remote branch'))
+      }
+      if (args[0] === 'config') {
+        return Promise.reject(new Error(`missing ${args[2] ?? 'config'}`))
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
 
     const result = await getStatus('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/feature/prompts'],
+      { cwd: '/repo' }
+    )
     expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
   })
 

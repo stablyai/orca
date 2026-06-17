@@ -204,6 +204,39 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
+  it('returns Push when no upstream exists but an open linked review already owns the branch', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 1,
+        prState: 'open',
+        canPushLinkedReviewWithoutUpstream: true
+      })
+    )
+    expect(result).toEqual({
+      kind: 'push',
+      label: 'Push',
+      title: 'Push updates to the linked review branch',
+      disabled: false
+    })
+  })
+
+  it('does not push an open linked review when its branch target is unavailable', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 1,
+        prState: 'open'
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Linked review branch target is unavailable.',
+      disabled: true
+    })
+  })
+
   it('does not offer Publish Branch when HEAD is detached', () => {
     const result = resolvePrimaryAction(
       inputs({

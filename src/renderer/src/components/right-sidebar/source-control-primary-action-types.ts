@@ -66,7 +66,14 @@ export type PrimaryActionInputs = {
   // Why: detached HEAD can look like an unpublished branch from upstream
   // status alone, but it has no branch ref that Publish Branch can push.
   hasCurrentBranch?: boolean
+  // Why: linked review branches without upstream counts are pushable only when
+  // Orca has a persisted or Git-configured target. Otherwise Push could fall
+  // through to the default publish-to-origin behavior.
+  canPushLinkedReviewWithoutUpstream?: boolean
   isPrIntentInFlight?: boolean
+  // Why: eligibility is fetched asynchronously; keep the header anchor visible
+  // while the request is in flight instead of flashing it in after ~1s.
+  isHostedReviewCreationLoading?: boolean
 }
 
 export const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {

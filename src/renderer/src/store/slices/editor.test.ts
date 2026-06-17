@@ -454,6 +454,62 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(2)
   })
 
+  it('bumps fileContentReloadNonce when re-opening an existing clean file with reload requested', () => {
+    const store = createEditorStore()
+
+    const openFileWithReloadRequest = (): void =>
+      store.getState().openFile(
+        {
+          filePath: '/repo/file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'edit'
+        },
+        { forceContentReload: true }
+      )
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(1)
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(2)
+  })
+
+  it('does not bump fileContentReloadNonce when a dirty file is re-opened', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().markFileDirty('/repo/file.ts', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/file.ts',
+        relativePath: 'file.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { forceContentReload: true }
+    )
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        isDirty: true,
+        fileContentReloadNonce: undefined
+      })
+    )
+  })
+
   it('opens the visible diff tab in the requested split group', () => {
     const store = createEditorTabsStore()
     const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })

@@ -696,6 +696,7 @@ type RuntimeStore = {
     defaultRepoSelection?: GlobalSettings['defaultRepoSelection']
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     githubProjects?: GlobalSettings['githubProjects']
+    experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
@@ -2016,6 +2017,7 @@ export class OrcaRuntimeService {
     | 'defaultRepoSelection'
     | 'defaultLinearTeamSelection'
     | 'githubProjects'
+    | 'experimentalNewWorktreeCardStyle'
   > {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
@@ -2033,7 +2035,8 @@ export class OrcaRuntimeService {
       visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
       defaultRepoSelection: settings.defaultRepoSelection ?? null,
       defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,
-      githubProjects: settings.githubProjects
+      githubProjects: settings.githubProjects,
+      experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true
     }
   }
 
@@ -2051,6 +2054,7 @@ export class OrcaRuntimeService {
       | 'defaultRepoSelection'
       | 'defaultLinearTeamSelection'
       | 'githubProjects'
+      | 'experimentalNewWorktreeCardStyle'
     >
   ): Pick<
     GlobalSettings,
@@ -2066,6 +2070,7 @@ export class OrcaRuntimeService {
     | 'defaultRepoSelection'
     | 'defaultLinearTeamSelection'
     | 'githubProjects'
+    | 'experimentalNewWorktreeCardStyle'
   > {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
@@ -11603,14 +11608,17 @@ export class OrcaRuntimeService {
       return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
     }
     const compareBaseRef = targetBranch ? `refs/remotes/${remote}/${targetBranch}` : undefined
+    const fetchRemoteTrackingRef = async (branch: string, ref: string): Promise<void> => {
+      await (sshGitProvider
+        ? sshGitProvider.fetchRemoteTrackingRef(repo.path, remote, branch, ref)
+        : gitExec(['fetch', remote, `+refs/heads/${branch}:${ref}`]))
+    }
     const fetchTargetBranch = async (): Promise<{ error: string } | null> => {
       if (!targetBranch || !compareBaseRef) {
         return null
       }
       try {
-        await (sshGitProvider
-          ? sshGitProvider.fetchRemoteTrackingRef(repo.path, remote, targetBranch, compareBaseRef)
-          : gitExec(['fetch', remote, `+refs/heads/${targetBranch}:${compareBaseRef}`]))
+        await fetchRemoteTrackingRef(targetBranch, compareBaseRef)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         return { error: `Failed to fetch ${remote}/${targetBranch}: ${message.split('\n')[0]}` }
@@ -11623,7 +11631,9 @@ export class OrcaRuntimeService {
       // Why: GitLab exposes fork MR heads on the target project, so mobile/SSH
       // can match desktop without adding the contributor fork as a remote.
       try {
-        await gitExec(['fetch', remote, mrRef])
+        await (sshGitProvider
+          ? sshGitProvider.fetchGitLabMergeRequestHead(repo.path, remote, args.mrIid)
+          : gitExec(['fetch', remote, mrRef]))
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         return { error: `Failed to fetch ${mrRef}: ${message.split('\n')[0]}` }
@@ -11646,11 +11656,7 @@ export class OrcaRuntimeService {
     }
 
     try {
-      await gitExec([
-        'fetch',
-        remote,
-        `+refs/heads/${sourceBranch}:refs/remotes/${remote}/${sourceBranch}`
-      ])
+      await fetchRemoteTrackingRef(sourceBranch, `refs/remotes/${remote}/${sourceBranch}`)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return { error: `Failed to fetch ${remote}/${sourceBranch}: ${message.split('\n')[0]}` }

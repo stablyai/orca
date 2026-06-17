@@ -457,6 +457,18 @@ export class SshGitProvider implements IGitProvider {
     })
   }
 
+  async fetchGitLabMergeRequestHead(
+    worktreePath: string,
+    remote: string,
+    mrIid: number
+  ): Promise<void> {
+    await this.mux.request('git.fetchGitLabMergeRequestHead', {
+      worktreePath,
+      remote,
+      mrIid
+    })
+  }
+
   async getBranchDiff(
     worktreePath: string,
     baseRef: string,

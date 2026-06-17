@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
@@ -278,7 +279,7 @@ describe('fetchCodexRateLimits', () => {
     const result = await resultPromise
 
     expect(result.rateLimitResetCredits).toEqual({ availableCount: 2 })
-    expect(readFileMock).toHaveBeenCalledWith('/managed/codex-home/auth.json', 'utf8')
+    expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'), 'utf8')
     expect(fetch).toHaveBeenCalledWith(
       'https://chatgpt.com/backend-api/wham/usage',
       expect.objectContaining({

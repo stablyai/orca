@@ -287,7 +287,9 @@ function rememberEffectiveUpstreamStatus(
   now: number,
   probedSameNameOriginRef: boolean
 ): void {
-  if (status.hasUpstream) {
+  // Why: hasConfiguredPushTarget gates a write action. Re-probe it each poll
+  // rather than keeping a stale positive target after branch config changes.
+  if (status.hasUpstream || status.hasConfiguredPushTarget) {
     effectiveUpstreamStatusCache.delete(cacheKey)
     return
   }

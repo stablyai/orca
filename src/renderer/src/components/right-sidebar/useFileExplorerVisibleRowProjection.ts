@@ -129,7 +129,8 @@ export function getEffectiveFileExplorerIgnoredPaths({
   worktreePath: string | null
 }): readonly string[] {
   const ignoredPathResultMatchesCurrentWorktree =
-    ignoredPathResult?.activeWorktreeId === activeWorktreeId &&
+    ignoredPathResult !== null &&
+    ignoredPathResult.activeWorktreeId === activeWorktreeId &&
     ignoredPathResult.worktreePath === worktreePath
 
   if (!canLoadIgnoredPaths || !ignoredPathResultMatchesCurrentWorktree) {

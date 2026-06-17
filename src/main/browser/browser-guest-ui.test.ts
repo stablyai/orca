@@ -497,6 +497,31 @@ describe('setupGuestShortcutForwarding', () => {
     expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:zoomBrowserPage', 'in')
   })
 
+  it('forwards browser history shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const backInput =
+      process.platform === 'darwin'
+        ? { code: 'BracketLeft', key: '[', meta: true, control: false, alt: false }
+        : { code: 'ArrowLeft', key: 'ArrowLeft', meta: false, control: false, alt: true }
+    const forwardInput =
+      process.platform === 'darwin'
+        ? { code: 'BracketRight', key: ']', meta: true, control: false, alt: false }
+        : { code: 'ArrowRight', key: 'ArrowRight', meta: false, control: false, alt: true }
+
+    const backPreventDefault = triggerBeforeInput(backInput)
+    const forwardPreventDefault = triggerBeforeInput(forwardInput)
+
+    expect(backPreventDefault).toHaveBeenCalledTimes(1)
+    expect(forwardPreventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:browserHistoryNavigate', 'back')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:browserHistoryNavigate', 'forward')
+  })
+
   it('consumes guest zoom shortcuts even when the renderer is unavailable', () => {
     setupGuestShortcutForwarding({
       browserTabId,

@@ -31,29 +31,28 @@ function basenameWithoutExt(filePath: string): string {
   return dot > 0 ? base.slice(0, dot) : base
 }
 
-/**
- * Locate the active markdown document DOM subtree. v1 uses a scoped query
- * over the whole document: there is only one active markdown surface at a
- * time, and both preview and rich modes paint a uniquely-classed container.
- * If multi-pane split view ever makes multiple surfaces visible at once,
- * this contract must be revisited (see design doc §4).
- */
-function findActiveDocumentSubtree(): Element | null {
-  return document.querySelector(DOCUMENT_SUBTREE_SELECTOR)
+function findDocumentSubtree(root: ParentNode): Element | null {
+  return root.querySelector(DOCUMENT_SUBTREE_SELECTOR)
 }
 
 /**
- * Extract a clean, self-contained HTML export payload from the active
- * markdown surface. Returns null when no markdown document is active or the
+ * Extract a clean, self-contained HTML export payload from a panel-scoped
+ * markdown surface. Returns null when the requested file is stale or the
  * surface is in a mode (Monaco source) that does not render a document DOM.
  */
-export function getActiveMarkdownExportPayload(): MarkdownExportPayload | null {
-  const state = useAppStore.getState()
-  if (state.activeTabType !== 'editor') {
+export function getActiveMarkdownExportPayload({
+  fileId,
+  root
+}: {
+  fileId: string
+  root: ParentNode | null
+}): MarkdownExportPayload | null {
+  if (!root) {
     return null
   }
-  const activeFile = state.openFiles.find((f) => f.id === state.activeFileId)
-  if (!activeFile || activeFile.mode !== 'edit') {
+  const state = useAppStore.getState()
+  const activeFile = state.openFiles.find((f) => f.id === fileId)
+  if (!activeFile || (activeFile.mode !== 'edit' && activeFile.mode !== 'markdown-preview')) {
     return null
   }
   const language = detectLanguage(activeFile.filePath)
@@ -61,7 +60,7 @@ export function getActiveMarkdownExportPayload(): MarkdownExportPayload | null {
     return null
   }
 
-  const subtree = findActiveDocumentSubtree()
+  const subtree = findDocumentSubtree(root)
   if (!subtree) {
     return null
   }

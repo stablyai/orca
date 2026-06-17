@@ -203,6 +203,23 @@ describe('repo slice runtime routing', () => {
     expect(reposList).not.toHaveBeenCalled()
   })
 
+  it('stamps runtime-fetched SSH repos with the runtime owner', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-ssh-repo',
+      ok: true,
+      result: { repos: [{ ...remoteRepo, connectionId: 'ssh-1' }] },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+
+    await store.getState().fetchRepos()
+
+    expect(store.getState().repos).toEqual([
+      { ...remoteRepo, connectionId: 'ssh-1', executionHostId: 'runtime:env-1' }
+    ])
+  })
+
   it('updates repos through the active remote runtime environment', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-2',

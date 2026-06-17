@@ -156,6 +156,16 @@ function areFloatingTerminalPanelCommittedBoundsEqual(
   return left !== null && JSON.stringify(left) === JSON.stringify(right)
 }
 
+function setFloatingTerminalInputFocusedInMain(focused: boolean): void {
+  const setInputFocused = window.api.ui.setFloatingTerminalInputFocused
+  // Why: dev reloads can pair a new renderer with an older preload; losing this
+  // shortcut mirror should not take down the whole React tree.
+  if (typeof setInputFocused !== 'function') {
+    return
+  }
+  setInputFocused(focused)
+}
+
 export function FloatingTerminalPanel({
   open,
   onOpenChange,
@@ -913,7 +923,7 @@ export function FloatingTerminalPanel({
   }, [cancelShortcutFocusFrame, focusPanelForShortcuts])
 
   const setFloatingTerminalInputFocused = useCallback((target: EventTarget | null): void => {
-    window.api.ui.setFloatingTerminalInputFocused(isFloatingWorkspaceTerminalInputTarget(target))
+    setFloatingTerminalInputFocusedInMain(isFloatingWorkspaceTerminalInputTarget(target))
   }, [])
 
   const handleShortcutSurfaceKeyDown = useCallback(
@@ -1119,9 +1129,9 @@ export function FloatingTerminalPanel({
 
   useEffect(() => {
     if (!open) {
-      window.api.ui.setFloatingTerminalInputFocused(false)
+      setFloatingTerminalInputFocusedInMain(false)
     }
-    return () => window.api.ui.setFloatingTerminalInputFocused(false)
+    return () => setFloatingTerminalInputFocusedInMain(false)
   }, [open])
 
   useEffect(() => {
@@ -1134,7 +1144,7 @@ export function FloatingTerminalPanel({
       if (!panel || !(event.target instanceof Node) || panel.contains(event.target)) {
         return
       }
-      window.api.ui.setFloatingTerminalInputFocused(false)
+      setFloatingTerminalInputFocusedInMain(false)
       const active = document.activeElement
       if (active instanceof HTMLElement && panel.contains(active)) {
         // Why: regular tab strip items are non-focusable, so clicking them can
@@ -1150,7 +1160,7 @@ export function FloatingTerminalPanel({
       }
       // Why: browser webviews focus out-of-process and do not emit renderer
       // pointerdown events, so release floating ownership on renderer blur too.
-      window.api.ui.setFloatingTerminalInputFocused(false)
+      setFloatingTerminalInputFocusedInMain(false)
       active.blur()
     }
 

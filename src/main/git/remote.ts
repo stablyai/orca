@@ -1,5 +1,6 @@
 import { normalizeGitErrorMessage } from '../../shared/git-remote-error'
 import { resolveEffectiveGitUpstream } from '../../shared/git-effective-upstream'
+import { gitRefTargetsBranchOnRemote } from '../../shared/git-remote-branch-name'
 import { resolveGitRemoteRebaseSource } from '../../shared/git-rebase-source'
 import type { GitPushTarget } from '../../shared/types'
 import { validateGitPushTarget } from './push-target-validation'
@@ -18,23 +19,127 @@ async function getConfiguredPushTarget(
       return null
     }
 
-    const [{ stdout: remoteStdout }, { stdout: mergeStdout }] = await Promise.all([
-      gitExecFileAsync(['config', '--get', `branch.${branch}.remote`], { cwd: worktreePath }),
+    const [pushRemote, { stdout: mergeStdout }] = await Promise.all([
+      getConfiguredPushRemote(worktreePath, branch),
       gitExecFileAsync(['config', '--get', `branch.${branch}.merge`], { cwd: worktreePath })
     ])
-    const remote = remoteStdout.trim()
+    const remote = pushRemote?.remote
     const mergeRef = mergeStdout.trim()
     const branchRef = mergeRef.replace(/^refs\/heads\//, '')
     if (!remote || !branchRef || remote === '.' || branchRef === mergeRef) {
       return null
     }
-    if (remote === 'origin' && branchRef !== branch) {
+    if (await branchMergeTargetsConfiguredBase(worktreePath, branch, remote, branchRef)) {
+      return null
+    }
+    if (!canPushConfiguredMergeBranch(pushRemote, branch, branchRef)) {
       return null
     }
     return { remote, refspec: `HEAD:${branchRef}` }
   } catch {
     return null
   }
+}
+
+async function getConfigValue(worktreePath: string, key: string): Promise<string | null> {
+  try {
+    const { stdout } = await gitExecFileAsync(['config', '--get', key], { cwd: worktreePath })
+    const value = stdout.trim()
+    return value || null
+  } catch {
+    return null
+  }
+}
+
+function isUrlValuedRemote(remote: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(remote) || /^[^@/:]+@[^:]+:.+/.test(remote)
+}
+
+type ConfiguredPushRemote = {
+  remote: string
+  branchRemote: string | null
+}
+
+async function findRemoteNameForUrl(
+  worktreePath: string,
+  remoteUrl: string
+): Promise<string | null> {
+  try {
+    const { stdout } = await gitExecFileAsync(['remote'], { cwd: worktreePath })
+    const remotes = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    for (const remoteName of remotes) {
+      try {
+        const { stdout: urlStdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
+          cwd: worktreePath
+        })
+        if (urlStdout.trim() === remoteUrl) {
+          return remoteName
+        }
+      } catch {
+        // Ignore a remote that disappeared or has no fetch URL.
+      }
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+async function normalizePushRemote(worktreePath: string, remote: string): Promise<string> {
+  if (!isUrlValuedRemote(remote)) {
+    return remote
+  }
+  return (await findRemoteNameForUrl(worktreePath, remote)) ?? remote
+}
+
+async function getConfiguredPushRemote(
+  worktreePath: string,
+  branch: string
+): Promise<ConfiguredPushRemote | null> {
+  const branchRemote = await getConfigValue(worktreePath, `branch.${branch}.remote`)
+  const remote =
+    (await getConfigValue(worktreePath, `branch.${branch}.pushRemote`)) ??
+    (await getConfigValue(worktreePath, 'remote.pushDefault')) ??
+    branchRemote
+  if (!remote) {
+    return null
+  }
+  return {
+    remote: await normalizePushRemote(worktreePath, remote),
+    branchRemote: branchRemote ? await normalizePushRemote(worktreePath, branchRemote) : null
+  }
+}
+
+async function branchMergeTargetsConfiguredBase(
+  worktreePath: string,
+  branch: string,
+  remote: string,
+  branchRef: string
+): Promise<boolean> {
+  return gitRefTargetsBranchOnRemote(
+    await getConfigValue(worktreePath, `branch.${branch}.base`),
+    remote,
+    branchRef
+  )
+}
+
+function canPushConfiguredMergeBranch(
+  pushRemote: ConfiguredPushRemote | null,
+  branch: string,
+  branchRef: string
+): boolean {
+  if (!pushRemote) {
+    return false
+  }
+  if (branchRef === branch) {
+    return true
+  }
+  // Why: branch.merge belongs to branch.remote. A pushDefault fork must not
+  // inherit origin/main as its destination branch.
+  return pushRemote.remote !== 'origin' && pushRemote.branchRemote === pushRemote.remote
 }
 
 function explicitPushTarget(target: GitPushTarget): { remote: string; refspec: string } {
@@ -108,9 +213,8 @@ async function gitPullWithArgs(
 }
 
 export async function gitPull(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
-  // Why: plain `git pull` uses the user's configured pull strategy (merge by
-  // default) so diverged branches reconcile instead of erroring out. Conflicts
-  // surface through the existing conflict-resolution flow.
+  // Why: plain `git pull` honors the user's configured merge/rebase/ff policy.
+  // If no policy exists, Git's policy error is normalized with setup guidance.
   await gitPullWithArgs(worktreePath, [], pushTarget)
 }
 

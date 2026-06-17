@@ -11,6 +11,7 @@ export const JA_PHRASE_FIXES = [
   { pattern: /端末/g, replacement: 'ターミナル', whenEnIncludes: 'erminal' },
   { pattern: /シャチ:\/\//g, replacement: 'orca://', whenEnIncludes: 'orca://' },
   { pattern: /線形/g, replacement: 'Linear', whenEnIncludes: 'Linear' },
+  { pattern: /グラフQL/g, replacement: 'GraphQL', whenEnIncludes: 'GraphQL' },
   { pattern: /不和/g, replacement: 'Discord', whenEnIncludes: 'Discord' },
   { pattern: /爽やか/g, replacement: '更新中', whenEnIncludes: 'Refreshing' },
   { pattern: /殺害/g, replacement: '終了中', whenEnIncludes: 'Killing' },
@@ -238,5 +239,7 @@ export const JA_PHRASE_FIXES = [
   { pattern: /を選択してください/g, replacement: 'を選択', whenEnIncludes: 'Choose' },
   { pattern: /入力してください/g, replacement: '入力', whenEnIncludes: 'Enter' },
   { pattern: /追加してください/g, replacement: '追加', whenEnIncludes: 'Add' },
-  { pattern: /試してください/g, replacement: '試す', whenEnIncludes: 'Try' }
+  { pattern: /試してください/g, replacement: '試す', whenEnIncludes: 'Try' },
+  // Why: JP engineers use "Issue" in Latin, not katakana. Runs last so all *→イシュー fixes above normalize to Issue.
+  { pattern: /イシュー/g, replacement: 'Issue', whenEnIncludes: 'issue' }
 ]

@@ -75,6 +75,9 @@ export type GitUpstreamStatus = {
   upstreamName?: string
   ahead: number
   behind: number
+  /** True when push can target configured branch push metadata even though
+   * upstream/ahead-behind cannot be resolved. */
+  hasConfiguredPushTarget?: boolean
   // Why: when a branch was rebased, the upstream-only commits can be older
   // patch-equivalent copies. Pulling them reintroduces stale history; a
   // lease-protected force push is the correct reconciliation.

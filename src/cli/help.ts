@@ -254,6 +254,11 @@ Behavior:
   Remote runtime access can also be supplied with ORCA_PAIRING_CODE or ORCA_ENVIRONMENT.
   Use selectors for discovery and handles for repeated live terminal operations.
 
+Agent Sessions And Worktrees:
+  \`worktree create --agent\` creates a new checkout/workspace with an agent.
+  To start a fresh agent in the current worktree, use:
+    orca terminal create --worktree active --command "codex"
+
 Browser Workflow:
   1. Create or navigate:  orca tab create --url https://example.com
                           orca goto --url https://example.com
@@ -303,6 +308,7 @@ Examples:
   $ orca worktree ps --limit 10
   $ orca file open-changed --mode diff
   $ orca file open src/App.tsx
+  $ orca terminal create --worktree active --command "codex"
   $ orca terminal list --worktree path:/Users/me/orca/workspaces/orca/cli-test-1 --json
   $ orca terminal send --terminal term_123 --text "hi" --enter
   $ orca terminal wait --terminal term_123 --for exit --timeout-ms 60000 --json

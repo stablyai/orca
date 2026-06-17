@@ -2,6 +2,7 @@
 // Why: split from source-control-primary-action because the primary and dropdown are independent derivations with different priority ladders; together they exceed the max-lines budget and tangle unrelated concerns.
 
 import type { PrimaryActionInputs } from './source-control-primary-action'
+import { canSubmitCommit, resolveCommitDisabledReason } from './source-control-commit-eligibility'
 import type { GitConflictOperation } from '../../../../shared/types'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import { supportsHostedReviewCreation } from '../../../../shared/hosted-review-creation-providers'
@@ -133,6 +134,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     conflictOperation = 'unknown',
     branchCommitsAhead,
     hasCurrentBranch = true,
+    canPushLinkedReviewWithoutUpstream = false,
     rebaseBaseRef,
     isPullRequestOperationActive = false
   } = inputs
@@ -148,8 +150,18 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   // button's stable-frame guarantee extends to the dropdown.
   const upstreamLoading = upstreamStatus === undefined
   const hasUpstream = upstreamStatus?.hasUpstream ?? false
+  const hasOpenHostedReview = prState === 'open' || prState === 'draft'
+  const canPushUntrackedHostedReview =
+    !hasUpstream &&
+    hasOpenHostedReview &&
+    hasCurrentBranch &&
+    branchCommitsAhead !== 0 &&
+    canPushLinkedReviewWithoutUpstream
+  const pushBlockedByOpenHostedReviewTarget =
+    !hasUpstream && hasOpenHostedReview && !canPushUntrackedHostedReview
   const publishBlockedByMergedPR = !hasUpstream && prState === 'merged'
   const publishBlockedByPRLoading = !hasUpstream && !!isPRStateLoading
+  const publishBlockedByOpenHostedReview = !hasUpstream && hasOpenHostedReview
   const publishBlockedByDetachedHead = !hasUpstream && !hasCurrentBranch
   const publishBlockedByNoBranchCommits = !hasUpstream && branchCommitsAhead === 0
   const publishBlockedByUncommittedChanges = publishBlockedByNoBranchCommits && hasDirtyLocalChanges
@@ -166,22 +178,23 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   // on a stale status snapshot.
   const globalBusy = isCommitting || isRemoteOperationActive || isPullRequestOperationActive
 
-  const commitDisabledReason = (() => {
-    if (hasUnresolvedConflicts) {
-      return 'Resolve conflicts before committing'
-    }
-    if (!hasStaged) {
-      return 'Stage at least one file to commit'
-    }
-    if (hasPartiallyStagedChanges) {
-      return 'Stage all changes before committing partially staged files'
-    }
-    if (!hasMessage) {
-      return 'Enter a commit message to commit'
-    }
-    return null
-  })()
-  const canCommit = !globalBusy && commitDisabledReason === null
+  const commitDisabledReason = resolveCommitDisabledReason({
+    stagedCount,
+    hasPartiallyStagedChanges,
+    hasMessage,
+    hasUnresolvedConflicts
+  })
+  const canCommit =
+    !globalBusy &&
+    canSubmitCommit({
+      stagedCount,
+      hasPartiallyStagedChanges,
+      hasMessage,
+      hasUnresolvedConflicts,
+      isCommitting,
+      isRemoteOperationActive,
+      isPullRequestOperationActive
+    })
   const commitItem: DropdownItem = {
     kind: 'commit',
     label: translate(
@@ -207,14 +220,16 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
         ? 'PR is already merged'
         : publishBlockedByDetachedHead
           ? 'Check out a branch before pushing commits'
-          : !hasUpstream
-            ? 'Publish the branch first to push commits'
-            : (commitDisabledReason ??
-              (shouldForcePushWithLease
-                ? 'Commit staged changes and force push with lease'
-                : behind > 0
-                  ? 'Use Commit & Sync to pull remote changes before pushing'
-                  : 'Commit staged changes and push'))
+          : pushBlockedByOpenHostedReviewTarget
+            ? 'Linked review branch target is unavailable'
+            : !hasUpstream && !canPushUntrackedHostedReview
+              ? 'Publish the branch first to push commits'
+              : (commitDisabledReason ??
+                (shouldForcePushWithLease
+                  ? 'Commit staged changes and force push with lease'
+                  : behind > 0
+                    ? 'Use Commit & Sync to pull remote changes before pushing'
+                    : 'Commit staged changes and push'))
   const commitPushItem: DropdownItem = {
     kind: 'commit_push',
     label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
@@ -222,7 +237,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     disabled:
       globalBusy ||
       upstreamLoading ||
-      !hasUpstream ||
+      (!hasUpstream && !canPushUntrackedHostedReview) ||
       publishBlockedByDetachedHead ||
       (behind > 0 && !shouldForcePushWithLease) ||
       publishBlockedByPRLoading ||
@@ -288,21 +303,25 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
           ? 'PR is already merged'
           : publishBlockedByDetachedHead
             ? 'Check out a branch before pushing commits'
-            : !hasUpstream
-              ? 'Publish the branch first to push commits'
-              : shouldForcePushWithLease
-                ? 'Use Force Push — remote only has older copies of local commits'
-                : behind > 0 && ahead > 0
-                  ? 'Sync first to pull remote changes before pushing'
-                  : ahead === 0
-                    ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
-                    : describePushCount(ahead),
+            : canPushUntrackedHostedReview
+              ? 'Push updates to the linked review branch'
+              : pushBlockedByOpenHostedReviewTarget
+                ? 'Linked review branch target is unavailable'
+                : !hasUpstream
+                  ? 'Publish the branch first to push commits'
+                  : shouldForcePushWithLease
+                    ? 'Use Force Push — remote only has older copies of local commits'
+                    : behind > 0 && ahead > 0
+                      ? 'Sync first to pull remote changes before pushing'
+                      : ahead === 0
+                        ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
+                        : describePushCount(ahead),
     disabled:
       globalBusy ||
       upstreamLoading ||
-      !hasUpstream ||
+      (!hasUpstream && !canPushUntrackedHostedReview) ||
       publishBlockedByDetachedHead ||
-      ahead === 0 ||
+      (hasUpstream && ahead === 0) ||
       shouldForcePushWithLease ||
       (behind > 0 && !shouldForcePushWithLease)
   }
@@ -453,34 +472,41 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     label:
       publishBlockedByMergedPR || publishBlockedByPRLoading
         ? 'PR Status'
-        : publishBlockedByDetachedHead
-          ? 'No Branch'
-          : publishBlockedByUncommittedChanges
-            ? 'Commit Changes First'
-            : publishBlockedByNoBranchCommits
-              ? 'No Branch Changes'
-              : 'Publish Branch',
+        : publishBlockedByOpenHostedReview
+          ? 'Linked Review'
+          : publishBlockedByDetachedHead
+            ? 'No Branch'
+            : publishBlockedByUncommittedChanges
+              ? 'Commit Changes First'
+              : publishBlockedByNoBranchCommits
+                ? 'No Branch Changes'
+                : 'Publish Branch',
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
         ? 'Checking PR status…'
         : publishBlockedByMergedPR
           ? 'PR is already merged'
-          : publishBlockedByDetachedHead
-            ? 'Check out a branch before publishing commits'
-            : publishBlockedByUncommittedChanges
-              ? 'Commit changes before publishing the branch'
-              : publishBlockedByNoBranchCommits
-                ? 'Nothing to publish'
-                : hasUpstream
-                  ? 'Branch is already published'
-                  : 'Publish this branch to origin',
+          : publishBlockedByOpenHostedReview
+            ? canPushLinkedReviewWithoutUpstream
+              ? 'Linked review branch already exists'
+              : 'Linked review branch target is unavailable'
+            : publishBlockedByDetachedHead
+              ? 'Check out a branch before publishing commits'
+              : publishBlockedByUncommittedChanges
+                ? 'Commit changes before publishing the branch'
+                : publishBlockedByNoBranchCommits
+                  ? 'Nothing to publish'
+                  : hasUpstream
+                    ? 'Branch is already published'
+                    : 'Publish this branch to origin',
     disabled:
       globalBusy ||
       upstreamLoading ||
       hasUpstream ||
       publishBlockedByPRLoading ||
       publishBlockedByMergedPR ||
+      publishBlockedByOpenHostedReview ||
       publishBlockedByDetachedHead ||
       publishBlockedByNoBranchCommits
   }

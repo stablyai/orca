@@ -16,6 +16,8 @@ const SUBMODULE_REMOTE_CHANGED_PATTERN =
   /non-fast-forward|fetch first|updates were rejected|remote contains work that you do not have/i
 const NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN =
   /(?:^|:\s)((?:Submodule '[^'\n]+'|A submodule) (?:has remote changes\. Pull inside the submodule, then try again\.|could not be pushed\. Resolve the submodule push error, then try again\.))(?:$|\s)/i
+const DIVERGENT_PULL_RECONCILIATION_PATTERN =
+  /Need to specify how to reconcile divergent branches|divergent branches and need to specify how to reconcile them/i
 
 export function stripCredentialsFromMessage(message: string): string {
   return message.replace(USERPASS_URL_PATTERN, '$1').replace(HTTPS_TOKEN_URL_PATTERN, '$1')
@@ -95,6 +97,14 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
 
   if (raw.includes('no tracking information') || raw.includes('no upstream')) {
     return 'Branch has no upstream. Publish the branch first.'
+  }
+
+  if (operation === 'pull' && DIVERGENT_PULL_RECONCILIATION_PATTERN.test(raw)) {
+    return (
+      'Pull needs a Git pull policy for divergent branches. Configure one for this repository ' +
+      'or host, then try again: git config pull.rebase false (merge), ' +
+      'git config pull.rebase true (rebase), or git config pull.ff only (fast-forward only).'
+    )
   }
 
   if (

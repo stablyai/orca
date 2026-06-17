@@ -44,6 +44,7 @@ export type ClaudeRuntimeAuthPreparation = {
   wslLinuxConfigDir?: string | null
   envPatch: ClaudeEnvPatch
   stripAuthEnv: boolean
+  managedRefreshDeferredByLivePty?: boolean
   provenance: string
 }
 
@@ -101,6 +102,7 @@ export class ClaudeRuntimeAuthService {
   private hasLastWrittenOauthAccount = false
   private lastWrittenOauthAccount: unknown = null
   private skipNextReadBackForAccountId: string | null = null
+  private managedRefreshDeferredByLivePtyAccountId: string | null = null
 
   constructor(private readonly store: Store) {
     this.initializeLastSyncedState()
@@ -177,6 +179,7 @@ export class ClaudeRuntimeAuthService {
       settings.claudeManagedAccounts,
       this.lastSyncedAccountId
     )
+    this.managedRefreshDeferredByLivePtyAccountId = null
     const previousManagedCredentialsJson = previousAccount
       ? await this.readManagedCredentials(previousAccount)
       : null
@@ -412,7 +415,11 @@ export class ClaudeRuntimeAuthService {
     // entirely while a Claude PTY is live: that process owns the credentials
     // and refreshing here would race its own rotation (double-rotation
     // invalidates one copy) — the read-back above preserves its refresh instead.
-    if (!hasLiveClaudePtys()) {
+    const liveClaudePtys = hasLiveClaudePtys()
+    if (liveClaudePtys && isOauthTokenExpiring(credentialsJson)) {
+      this.managedRefreshDeferredByLivePtyAccountId = activeAccount.id
+    }
+    if (!liveClaudePtys) {
       const refreshed = await this.refreshManagedAccountTokenIfNeeded(
         activeAccount,
         credentialsJson
@@ -677,6 +684,11 @@ export class ClaudeRuntimeAuthService {
       wslLinuxConfigDir: null,
       envPatch: paths.envPatch,
       stripAuthEnv: Boolean(activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'),
+      managedRefreshDeferredByLivePty: Boolean(
+        activeAccountId &&
+        activeAccount?.managedAuthRuntime !== 'wsl' &&
+        this.managedRefreshDeferredByLivePtyAccountId === activeAccountId
+      ),
       provenance:
         activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'
           ? `managed:${activeAccountId}`

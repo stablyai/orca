@@ -141,19 +141,32 @@ export function useTerminalPaneGlobalEffects({
   }, [isActive, isVisible])
 
   useEffect(() => {
-    if (!isActive || !isVisible) {
+    if (!isVisible) {
       return
     }
-    const onFocus = (): void => {
+    const recoverWebglAtlases = (): void => {
       // Why: WebGL atlas corruption does not always raise context loss; window
-      // focus regain is a low-cost recovery point for agent TUI glyph damage.
-      // Reset globally — a per-manager reset clears the shared glyph atlas
-      // under every other visible same-config terminal and garbles it.
+      // foregrounding is a low-cost recovery point. Visible terminals can be
+      // inactive in split groups, and same-config terminals share the atlas.
       resetAllTerminalWebglAtlases()
     }
+    const onFocus = (): void => recoverWebglAtlases()
+    const onVisibilityChange = (): void => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        recoverWebglAtlases()
+      }
+    }
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [isActive, isVisible])
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', onVisibilityChange)
+    }
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+        document.removeEventListener('visibilitychange', onVisibilityChange)
+      }
+    }
+  }, [isVisible])
 
   useEffect(() => {
     const manager = managerRef.current

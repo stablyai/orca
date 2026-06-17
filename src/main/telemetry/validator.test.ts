@@ -43,7 +43,7 @@ describe('validate', () => {
 
   it('accepts a well-formed star_nag_outcome payload with cohort context', () => {
     const result = validate('star_nag_outcome', {
-      outcome: 'opened_web',
+      outcome: 'opened_repo',
       source: 'force_show',
       mode: 'web',
       threshold: 35,
@@ -57,7 +57,7 @@ describe('validate', () => {
   it('rejects malformed star_nag_outcome payloads', () => {
     expect(
       validate('star_nag_outcome', {
-        outcome: 'opened_web',
+        outcome: 'opened_repo',
         source: 'force_show',
         mode: 'web',
         threshold: 35,
@@ -68,7 +68,7 @@ describe('validate', () => {
     ).toBe(false)
     expect(
       validate('star_nag_outcome', {
-        outcome: 'opened_web',
+        outcome: 'opened_repo',
         source: 'force_show',
         mode: 'web',
         threshold: 0,

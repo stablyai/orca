@@ -6,6 +6,7 @@ import {
   parseLsofListeningOutput,
   parseNetstatListeningOutput,
   parseProcNetTcp,
+  resetWorkspacePortScanTimeoutBackoffForTests,
   scanWorkspacePorts
 } from './local-workspace-port-scanner'
 
@@ -145,6 +146,7 @@ describe('container process classification', () => {
 
 describe('scanWorkspacePorts attribution work', () => {
   afterEach(() => {
+    resetWorkspacePortScanTimeoutBackoffForTests()
     vi.restoreAllMocks()
     execFileMock.mockReset()
   })
@@ -202,6 +204,7 @@ describe('scanWorkspacePorts attribution work', () => {
 describe('scanWorkspacePorts command timeout', () => {
   afterEach(() => {
     vi.useRealTimers()
+    resetWorkspacePortScanTimeoutBackoffForTests()
     vi.restoreAllMocks()
     execFileMock.mockReset()
   })
@@ -230,5 +233,64 @@ describe('scanWorkspacePorts command timeout', () => {
       unavailableReason: 'Port scanning is unavailable on darwin.'
     })
     expect(killMock).toHaveBeenCalled()
+  })
+
+  it('backs off after a command timeout instead of launching lsof on every scan tick', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const killMock = vi.fn()
+    execFileMock.mockImplementation(() => ({ kill: killMock }))
+
+    const firstScanPromise = scanWorkspacePorts([], {
+      lookup: () => undefined,
+      reconcileScan: vi.fn()
+    })
+
+    await vi.advanceTimersByTimeAsync(4_000)
+    await expect(firstScanPromise).resolves.toMatchObject({
+      platform: 'darwin',
+      ports: [],
+      unavailableReason: 'Port scanning is unavailable on darwin.'
+    })
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+
+    const cooldownScans = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        scanWorkspacePorts([], {
+          lookup: () => undefined,
+          reconcileScan: vi.fn()
+        })
+      )
+    )
+
+    expect(cooldownScans).toHaveLength(10)
+    expect(cooldownScans[0]).toMatchObject({
+      platform: 'darwin',
+      ports: []
+    })
+    expect(
+      cooldownScans.every((scan) => scan.unavailableReason?.includes('temporarily paused'))
+    ).toBe(true)
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(65_001)
+    await vi.advanceTimersByTimeAsync(0)
+    execFileMock.mockImplementation(
+      (_command: string, args: string[], _options: unknown, callback: unknown) => {
+        const execCallback = callback as (error: Error | null, stdout: string) => void
+        const output = args.includes('-iTCP') ? 'p123\ncnode\nn127.0.0.1:3000' : ''
+        execCallback(null, output)
+        return { kill: vi.fn() }
+      }
+    )
+
+    const recoveredScan = await scanWorkspacePorts([], {
+      lookup: () => undefined,
+      reconcileScan: vi.fn()
+    })
+
+    expect(recoveredScan.unavailableReason).toBeUndefined()
+    expect(execFileMock).toHaveBeenCalledTimes(4)
   })
 })

@@ -88,7 +88,7 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
       )
       expect(item).toMatchObject({ type: 'mr', number: 5, branchName: 'feat' })
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-        ['api', 'projects/g%2Fp/merge_requests/5'],
+        ['api', '--hostname', 'gitlab.com', 'projects/g%2Fp/merge_requests/5'],
         { cwd: '/repo' }
       )
     })
@@ -110,9 +110,29 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
         'issue'
       )
       expect(item).toMatchObject({ type: 'issue', number: 9 })
-      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['api', 'projects/g%2Fp/issues/9'], {
-        cwd: '/repo'
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', '--hostname', 'gitlab.com', 'projects/g%2Fp/issues/9'],
+        { cwd: '/repo' }
+      )
+    })
+
+    it('passes self-hosted hostname for local pasted URL lookups', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          id: 201,
+          iid: 9,
+          title: 'bug',
+          state: 'opened',
+          web_url: 'https://gitlab.internal/g/p/-/issues/9'
+        })
       })
+
+      await getWorkItemByProjectRef('/repo', { host: 'gitlab.internal', path: 'g/p' }, 9, 'issue')
+
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', '--hostname', 'gitlab.internal', 'projects/g%2Fp/issues/9'],
+        { cwd: '/repo' }
+      )
     })
 
     it('returns null when the API errors', async () => {

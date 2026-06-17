@@ -28,7 +28,7 @@ function makeProjectGroup(): ProjectGroup {
   }
 }
 
-function makeFolderWorkspace(): FolderWorkspace {
+function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
   return {
     id: 'folder-workspace-1',
     projectGroupId: 'group-1',
@@ -42,7 +42,8 @@ function makeFolderWorkspace(): FolderWorkspace {
     sortOrder: 0,
     lastActivityAt: 1,
     createdAt: 1,
-    updatedAt: 1
+    updatedAt: 1,
+    ...overrides
   }
 }
 
@@ -76,13 +77,13 @@ describe('submitFolderWorkspaceCreate', () => {
     expect(createFolderWorkspace).toHaveBeenCalledWith({
       projectGroupId: 'group-1',
       name: 'hi',
+      connectionId: null,
       linkedTask: null
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)
-    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
-      'folder-workspace-1',
-      undefined
-    )
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      runtimeEnvironmentId: null
+    })
     expect(consoleError).toHaveBeenCalledWith(
       'Failed to activate folder workspace after create:',
       expect.any(Error)
@@ -102,6 +103,10 @@ describe('submitFolderWorkspaceCreate', () => {
       quickAgent: 'codex',
       autoRenameBranchFromWork: true,
       agentCmdOverrides: {},
+      agentArgs: '--model gpt-5.4',
+      agentEnv: { ORCA_AGENT_PROFILE: 'review' },
+      launchSource: 'new_workspace_composer',
+      runtimeEnvironmentId: 'env-1',
       createFolderWorkspace,
       onOpenChange
     })
@@ -109,6 +114,7 @@ describe('submitFolderWorkspaceCreate', () => {
     expect(createFolderWorkspace).toHaveBeenCalledWith({
       projectGroupId: 'group-1',
       name: 'Platform workspace',
+      connectionId: null,
       linkedTask: null,
       createdWithAgent: 'codex',
       pendingFirstAgentMessageRename: true
@@ -116,11 +122,19 @@ describe('submitFolderWorkspaceCreate', () => {
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
       'folder-workspace-1',
       expect.objectContaining({
+        runtimeEnvironmentId: 'env-1',
         startup: expect.objectContaining({
-          command: expect.stringContaining('codex')
+          command: expect.stringContaining('codex'),
+          env: { ORCA_AGENT_PROFILE: 'review' },
+          telemetry: expect.objectContaining({
+            launch_source: 'new_workspace_composer'
+          })
         })
       })
     )
+    const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
+    expect(startup?.command).toContain('--model')
+    expect(startup?.command).toContain('gpt-5.4')
   })
 
   it('does not mark first-input rename when the folder workspace has an explicit name', async () => {
@@ -142,6 +156,7 @@ describe('submitFolderWorkspaceCreate', () => {
     expect(createFolderWorkspace).toHaveBeenCalledWith({
       projectGroupId: 'group-1',
       name: 'Checkout polish',
+      connectionId: null,
       linkedTask: null,
       createdWithAgent: 'codex'
     })
@@ -174,6 +189,7 @@ describe('submitFolderWorkspaceCreate', () => {
     expect(createFolderWorkspace).toHaveBeenCalledWith({
       projectGroupId: 'group-1',
       name: 'Restore checkout polish',
+      connectionId: null,
       linkedTask: linkedWorkItem,
       createdWithAgent: 'codex'
     })
@@ -198,8 +214,68 @@ describe('submitFolderWorkspaceCreate', () => {
     expect(createFolderWorkspace).toHaveBeenCalledWith({
       projectGroupId: 'group-1',
       name: 'Platform workspace',
+      connectionId: null,
       linkedTask: null,
       createdWithAgent: 'codex'
     })
+  })
+
+  it('preserves SSH group ownership when creating and activating a folder workspace', async () => {
+    const projectGroup = {
+      ...makeProjectGroup(),
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1'
+    }
+    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace({ connectionId: 'ssh-1' }))
+    const onOpenChange = vi.fn()
+
+    await submitFolderWorkspaceCreate({
+      projectGroup,
+      name: 'SSH workspace',
+      lastAutoName: '',
+      linkedWorkItem: null,
+      note: '',
+      quickAgent: null,
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      isRemote: true,
+      runtimeEnvironmentId: null,
+      createFolderWorkspace,
+      onOpenChange
+    })
+
+    expect(createFolderWorkspace).toHaveBeenCalledWith({
+      projectGroupId: 'group-1',
+      name: 'SSH workspace',
+      connectionId: 'ssh-1',
+      linkedTask: null
+    })
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it('returns false when folder workspace creation fails without returning a workspace', async () => {
+    const createFolderWorkspace = vi.fn(async () => null)
+    const onOpenChange = vi.fn()
+
+    await expect(
+      submitFolderWorkspaceCreate({
+        projectGroup: makeProjectGroup(),
+        name: 'hi',
+        lastAutoName: '',
+        linkedWorkItem: null,
+        note: '',
+        quickAgent: null,
+        autoRenameBranchFromWork: false,
+        agentCmdOverrides: {},
+        createFolderWorkspace,
+        onOpenChange
+      })
+    ).resolves.toBe(false)
+
+    expect(onOpenChange).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealFolderWorkspace).not.toHaveBeenCalled()
   })
 })

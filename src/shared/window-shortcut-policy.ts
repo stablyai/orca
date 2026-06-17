@@ -26,7 +26,6 @@ export type WindowShortcutInput = {
 export type WindowShortcutAction =
   | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
   | { type: 'openSettings' }
-  | { type: 'exportPdf' }
   | { type: 'forceReload' }
   | { type: 'toggleWorktreePalette' }
   | { type: 'toggleFloatingTerminal' }
@@ -190,10 +189,6 @@ export function resolveWindowShortcutAction(
     return { type: 'openSettings' }
   }
 
-  if (actionMatches('file.exportPdf', input, platform, keybindings, options)) {
-    return { type: 'exportPdf' }
-  }
-
   if (actionMatches('app.forceReload', input, platform, keybindings, options)) {
     return { type: 'forceReload' }
   }
@@ -280,8 +275,6 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
           : 'zoom.reset'
     case 'openSettings':
       return 'app.settings'
-    case 'exportPdf':
-      return 'file.exportPdf'
     case 'forceReload':
       return 'app.forceReload'
     case 'toggleWorktreePalette':

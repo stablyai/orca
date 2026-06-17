@@ -28,6 +28,10 @@ function hasUsageData(provider: ProviderRateLimits): boolean {
   )
 }
 
+function isProviderSnapshotPending(provider: ProviderRateLimits | null): boolean {
+  return provider === null || (provider.status === 'fetching' && !hasUsageData(provider))
+}
+
 // Why: a provider that returns `unavailable` is explicitly not configured
 // (Gemini OAuth off, OpenCode Go cookie unset, Claude on API-key billing). Its
 // fetch object is non-null, so a bare `!== null` check still renders a "--"
@@ -113,6 +117,18 @@ export function isUsageEmptyState(
   // Why: settings are the durable source for managed accounts. Until they
   // hydrate, avoid showing a setup CTA that can contradict connected accounts.
   if (!settings) {
+    return false
+  }
+  // Why: system-default Claude/Codex accounts have no persisted account row;
+  // their first durable signal is the usage snapshot, so wait for snapshots to
+  // settle before teaching the user to connect an account.
+  if (
+    isProviderSnapshotPending(providers.claude) ||
+    isProviderSnapshotPending(providers.codex) ||
+    isProviderSnapshotPending(providers.gemini) ||
+    isProviderSnapshotPending(providers.opencodeGo) ||
+    isProviderSnapshotPending(providers.kimi)
+  ) {
     return false
   }
   return (

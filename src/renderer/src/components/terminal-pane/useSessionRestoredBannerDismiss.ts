@@ -1,9 +1,10 @@
 import { useEffect, type RefObject } from 'react'
+import type { SessionRestoredBannerDismissEvent } from './session-restored-banner-pane-state'
 
 export function useSessionRestoredBannerDismiss(
   visible: boolean,
   containerRef: RefObject<HTMLElement | null>,
-  dismiss: () => void
+  dismiss: (event: SessionRestoredBannerDismissEvent) => void
 ): void {
   useEffect(() => {
     if (!visible) {
