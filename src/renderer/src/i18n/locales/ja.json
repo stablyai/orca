@@ -4217,7 +4217,9 @@
           "75ca9b718e": "Codex は、アクティブなアカウントには新たにサインインする必要があると報告しました。新規 Codex セッションを開始する前に、再認証してください。",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Use your current",
-          "e05d0ff737": "現在の {{value0}} Claude ログインを使用します。"
+          "e05d0ff737": "現在の {{value0}} Claude ログインを使用します。",
+          "2eb471df34": "Use default Codex config directory",
+          "e321640e44": "Run Codex with your system ~/.codex config instead of Orca's managed home. Disables Orca's Codex account hot-swap and auth sync."
         },
         "AdvancedPane": {
           "40b29e0bf3": "再起動",
@@ -6280,7 +6282,9 @@
             "bdbd1e668e": "窓",
             "593720c17f": "場所",
             "b84a5b0c8a": "プロバイダー アカウントをこのデバイスまたは WSL で検査および追加するかどうかを選択します。",
-            "d09fb5ca92": "アカウントの場所"
+            "d09fb5ca92": "アカウントの場所",
+            "d6347a2658": "Default Codex config directory",
+            "edd9a67f8d": "Run Codex with your system ~/.codex config instead of Orca's managed home."
           }
         },
         "advanced": {
@@ -8711,7 +8715,19 @@
                   "c39d0c75c3": "リンクされたレビュー ブランチのターゲットを利用できません。",
                   "8c6d15a07d": "PR を作成",
                   "d37e68f61d": "レビュー用にブランチを準備中…",
-                  "c72e5e65d1": "このブランチを準備して {{value0}} を作成"
+                  "c72e5e65d1": "このブランチを準備して {{value0}} を作成",
+                  "b8e4f2a901": "Wait for the remote operation to finish.",
+                  "c9f3a1b802": "Resolve conflicts before creating a {{value0}}.",
+                  "d2a8c4e703": "No changes on this branch to include in a {{value0}}.",
+                  "e3b9d5f814": "Cannot create a {{value0}} from the default branch.",
+                  "f4c0e6a925": "Commit changes before creating a {{value0}}.",
+                  "a5d1f7b036": "Publish commits before creating a {{value0}}.",
+                  "b6e2a8c147": "Push commits before creating a {{value0}}.",
+                  "c7f3b9d258": "Sync this branch before creating a {{value0}}.",
+                  "d8a4c0e369": "Authenticate before creating a {{value0}}.",
+                  "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
+                  "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
+                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
                 }
               }
             }

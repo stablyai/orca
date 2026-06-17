@@ -497,6 +497,7 @@ describe('registerPtyHandlers', () => {
     getSettings?: () => {
       enableGitHubAttribution?: boolean
       agentStatusHooksEnabled?: boolean
+      codexUseDefaultConfigDir?: boolean
       httpProxyUrl?: string
       httpProxyBypassRules?: string
     },
@@ -643,6 +644,34 @@ describe('registerPtyHandlers', () => {
 
     it('injects the selected Codex home into Orca terminal PTYs', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME)
+      expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+      expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
+    })
+
+    it('skips the managed Codex home when codexUseDefaultConfigDir is enabled', async () => {
+      // Why: the opt-in setting must force Codex back to its default ~/.codex
+      // home by injecting NO CODEX_HOME, even though a managed home is selected
+      // (getSelectedCodexHomePath returns TEST_CODEX_HOME here). Any ambient
+      // CODEX_HOME/ORCA_CODEX_HOME must also be stripped, not left to leak in.
+      const env = await spawnAndGetEnv(
+        { CODEX_HOME: '/tmp/ambient-codex-home', ORCA_CODEX_HOME: '/tmp/ambient-orca-codex-home' },
+        undefined,
+        () => TEST_CODEX_HOME,
+        () => ({ codexUseDefaultConfigDir: true })
+      )
+      expect(env.CODEX_HOME).toBeUndefined()
+      expect(env.ORCA_CODEX_HOME).toBeUndefined()
+    })
+
+    it('still injects the managed Codex home when codexUseDefaultConfigDir is off', async () => {
+      // Why: guards the OR condition wired into skipCodexHomeEnv — a false (or
+      // absent) setting must preserve the existing managed-home injection.
+      const env = await spawnAndGetEnv(
+        undefined,
+        undefined,
+        () => TEST_CODEX_HOME,
+        () => ({ codexUseDefaultConfigDir: false })
+      )
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
     })

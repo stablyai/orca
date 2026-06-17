@@ -28,7 +28,7 @@ import {
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsRow, SettingsSegmentedControl, SettingsSwitchRow } from './SettingsFormControls'
 import { matchesSettingsSearch } from './settings-search'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import {
@@ -1108,6 +1108,40 @@ export function AccountsPane({
               })
             )}
           </div>
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.AccountsPane.2eb471df34',
+            'Use default Codex config directory'
+          )}
+          description={translate(
+            'auto.components.settings.AccountsPane.e321640e44',
+            "Run Codex with your system ~/.codex config instead of Orca's managed home. Disables Orca's Codex account hot-swap and auth sync."
+          )}
+          keywords={['codex', 'config', 'directory', 'home', 'managed', 'default', 'account']}
+          className="space-y-3 py-2"
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.AccountsPane.2eb471df34',
+              'Use default Codex config directory'
+            )}
+            description={translate(
+              'auto.components.settings.AccountsPane.e321640e44',
+              "Run Codex with your system ~/.codex config instead of Orca's managed home. Disables Orca's Codex account hot-swap and auth sync."
+            )}
+            checked={settings.codexUseDefaultConfigDir === true}
+            onChange={() =>
+              updateSettings({
+                codexUseDefaultConfigDir: settings.codexUseDefaultConfigDir !== true
+              })
+            }
+            ariaLabel={translate(
+              'auto.components.settings.AccountsPane.2eb471df34',
+              'Use default Codex config directory'
+            )}
+          />
         </SearchableSetting>
       </section>
     ) : null,

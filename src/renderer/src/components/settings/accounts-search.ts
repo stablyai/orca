@@ -93,6 +93,24 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.accounts.search.f2d666a886', 'optional'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.35b461d817', 'sign in')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.accounts.search.d6347a2658',
+      'Default Codex config directory'
+    ),
+    description: translate(
+      'auto.components.settings.accounts.search.edd9a67f8d',
+      "Run Codex with your system ~/.codex config instead of Orca's managed home."
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.70d1b8def5', 'codex'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e85a7f3385', 'default'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.397ba215c5', 'config'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.67a07ebd35', 'directory'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5d23eca2a7', 'home'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c919fa7390', 'managed')
+    ]
   }
 ])
 
