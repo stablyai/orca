@@ -11,16 +11,19 @@ import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
 import { PRActionsSection } from './pr-sidebar/PRActionsSection'
 import { PRReviewersSection } from './pr-sidebar/PRReviewersSection'
 import { PRChecksSection } from './pr-sidebar/PRChecksSection'
+import { PrSidebarCreateEmptyState } from './pr-sidebar/PrSidebarCreateEmptyState'
 
 type Props = {
   state: PrSidebarState
   onRetry: () => void
-  // Re-fetches authoritative PR data after a successful mutation (U3/U6).
+  // Re-fetches authoritative PR data after a successful mutation (U3/U6) or create.
   refetch: () => void
   // Threaded to sections for github.* fetches + mutations.
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
+  // Current git branch — feeds the create-PR prefill in the no-PR empty state.
+  gitBranch: string | null
   headSha: string | null
   // Applied by the docked column so content clears the home indicator (the screen's
   // SafeAreaView is edges={['top']} only).
@@ -37,6 +40,7 @@ export function MobilePRSidebar({
   client,
   connState,
   worktreeId,
+  gitBranch,
   headSha,
   bottomInset = 0
 }: Props) {
@@ -69,8 +73,10 @@ export function MobilePRSidebar({
         branch={branch}
         state={state}
         onRetry={onRetry}
+        refetch={refetch}
         client={client}
         worktreeId={worktreeId}
+        gitBranch={gitBranch}
         actions={actions}
       />
     </ScrollView>
@@ -81,21 +87,25 @@ function PrSidebarContent({
   branch,
   state,
   onRetry,
+  refetch,
   client,
   worktreeId,
+  gitBranch,
   actions
 }: {
   branch: ReturnType<typeof prSidebarRenderBranch>
   state: PrSidebarState
   onRetry: () => void
+  refetch: () => void
   client: RpcClient | null
   worktreeId: string
+  gitBranch: string | null
   actions: MobilePrActions
 }) {
   if (branch === 'loading') {
     return (
       <View style={styles.stateArea}>
-        <ActivityIndicator color={colors.accentBlue} />
+        <ActivityIndicator color={colors.textSecondary} />
         <Text style={styles.stateText}>Loading pull request…</Text>
       </View>
     )
@@ -132,12 +142,15 @@ function PrSidebarContent({
     )
   }
   if (branch === 'none') {
-    // GitHub repo, but the current branch has no open PR — explain rather than
-    // showing a blank panel (the dedicated icon is always available).
+    // GitHub repo, but the current branch has no open PR — offer to create one
+    // (desktop parity) rather than showing a dead-end message.
     return (
-      <View style={styles.stateArea}>
-        <Text style={styles.stateText}>No open pull request for this branch.</Text>
-      </View>
+      <PrSidebarCreateEmptyState
+        client={client}
+        worktreeId={worktreeId}
+        gitBranch={gitBranch}
+        onCreated={refetch}
+      />
     )
   }
   if (branch === 'ready' && state.kind === 'ready') {

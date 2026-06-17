@@ -255,6 +255,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     client,
     connState,
     worktreeId,
+    prSidebarBranch,
     prSidebarHeadSha,
     actionError,
     activeHunkIndex,

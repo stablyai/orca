@@ -11,8 +11,6 @@ export function statusColor(token: MobileStatusToken): string {
       return colors.statusAmber
     case 'statusRed':
       return colors.statusRed
-    case 'statusPurple':
-      return colors.statusPurple
     default:
       return colors.textSecondary
   }

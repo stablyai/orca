@@ -22,7 +22,7 @@ export const prActionsStyles = StyleSheet.create({
     backgroundColor: colors.bgPanel
   },
   methodButtonSelected: {
-    borderColor: colors.accentBlue,
+    borderColor: colors.textSecondary,
     backgroundColor: colors.bgRaised
   },
   methodButtonText: {
@@ -47,9 +47,11 @@ export const prActionsStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
+  // Neutral primary: a light fill with dark text, mirroring the desktop PR page's
+  // default button (no bright accent) so the sidebar stays mostly monochrome.
   actionButtonPrimary: {
-    backgroundColor: colors.accentBlue,
-    borderColor: colors.accentBlue
+    backgroundColor: colors.textPrimary,
+    borderColor: colors.textPrimary
   },
   actionButtonDisabled: {
     opacity: 0.5
@@ -60,7 +62,7 @@ export const prActionsStyles = StyleSheet.create({
     fontWeight: '700'
   },
   actionButtonTextPrimary: {
-    color: '#fff'
+    color: colors.bgBase
   },
   actionButtonDestructiveText: {
     color: colors.statusRed
@@ -90,7 +92,7 @@ export const prActionsStyles = StyleSheet.create({
     backgroundColor: colors.bgPanel
   },
   togglePillOn: {
-    borderColor: colors.statusGreen,
+    borderColor: colors.textSecondary,
     backgroundColor: colors.bgRaised
   },
   togglePillText: {
@@ -99,7 +101,7 @@ export const prActionsStyles = StyleSheet.create({
     color: colors.textSecondary
   },
   togglePillTextOn: {
-    color: colors.statusGreen
+    color: colors.textPrimary
   },
   // Non-blocking error line shown under an action after a transient failure.
   actionError: {

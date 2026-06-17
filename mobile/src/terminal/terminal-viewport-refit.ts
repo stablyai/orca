@@ -22,12 +22,12 @@ type TerminalViewportRefitOptions = {
   // Why: terminal text size (font scale) — changing it changes the cell size, so
   // the PTY must be re-fitted to a new column count and reflowed.
   textScale: number
-  // Why: on wide layouts a docked side panel takes a fixed slice of the row, so
-  // opening/closing OR resizing it changes the terminal column width without any
-  // window-dim or tab-strip change. Carries the dock's effective width (0 when no
-  // dock) so a drag-resize re-fits too — the refit's 150ms debounce coalesces the
-  // stream of drag widths into a single settle-time refit.
-  dockWidth: number
+  // Why: the terminal's measured frame width changes when a side panel docks/undocks
+  // or EITHER sidebar is drag-resized (the left worktree sidebar shrinks the detail
+  // pane; the right dock takes a slice of the row) — all without any window-dim or
+  // tab-strip change. Carries that measured width so those resizes re-fit the PTY;
+  // the 150ms debounce coalesces the stream of drag widths into one settle-time refit.
+  terminalFrameWidth: number
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }
@@ -50,7 +50,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     initializedHandlesRef,
     tabStripVisible,
     textScale,
-    dockWidth,
+    terminalFrameWidth,
     unsubscribeTerminal,
     subscribeToTerminal
   } = options
@@ -189,19 +189,19 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     scheduleViewportRefit()
   }, [textScale, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Why: docking/undocking OR resizing a side panel on a wide layout changes the
-  // terminal's column width (the dock takes a slice of the row) without any
-  // window-dim or tab-strip change, so the cached viewport goes stale and the PTY
-  // keeps the pre-change width. Mark un-measured and refit when the width changes.
-  const prevDockWidthRef = useRef(dockWidth)
+  // Why: the terminal's measured frame width changes when a panel docks/undocks or
+  // either sidebar is drag-resized — none of which touch the window dims or tab
+  // strip — so the cached viewport goes stale and the PTY keeps the pre-resize
+  // width. Mark un-measured and refit when the measured width changes.
+  const prevFrameWidthRef = useRef(terminalFrameWidth)
   useEffect(() => {
-    if (prevDockWidthRef.current === dockWidth) {
+    if (prevFrameWidthRef.current === terminalFrameWidth) {
       return
     }
-    prevDockWidthRef.current = dockWidth
+    prevFrameWidthRef.current = terminalFrameWidth
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
-  }, [dockWidth, viewportMeasuredRef, scheduleViewportRefit])
+  }, [terminalFrameWidth, viewportMeasuredRef, scheduleViewportRefit])
 
   useEffect(() => {
     disposedRef.current = false

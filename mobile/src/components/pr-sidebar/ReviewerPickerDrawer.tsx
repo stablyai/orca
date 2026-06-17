@@ -96,7 +96,7 @@ export function ReviewerPickerDrawer({
       />
       {load.status === 'loading' ? (
         <View style={styles.pickerStateArea}>
-          <ActivityIndicator color={colors.accentBlue} />
+          <ActivityIndicator color={colors.textSecondary} />
         </View>
       ) : load.status === 'error' ? (
         <View style={styles.pickerStateArea}>
@@ -124,7 +124,7 @@ export function ReviewerPickerDrawer({
               >
                 <View style={styles.rowTrailing}>
                   {requested ? (
-                    <Check size={16} color={colors.statusGreen} strokeWidth={2.4} />
+                    <Check size={16} color={colors.textPrimary} strokeWidth={2.4} />
                   ) : null}
                 </View>
                 <View style={styles.pickerRowMain}>

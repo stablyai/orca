@@ -8,12 +8,7 @@ import type { PRCheckDetail, PRState } from '../../../../src/shared/types'
 // The mobile-theme color tokens this logic maps to. Section components resolve
 // the token name to an actual color from `mobile-theme`, keeping this module
 // free of style imports.
-export type MobileStatusToken =
-  | 'statusGreen'
-  | 'statusAmber'
-  | 'statusRed'
-  | 'statusPurple'
-  | 'textSecondary'
+export type MobileStatusToken = 'statusGreen' | 'statusAmber' | 'statusRed' | 'textSecondary'
 
 export type CheckOutcome = 'success' | 'pending' | 'failure' | 'neutral'
 
@@ -159,15 +154,17 @@ export type PRStateBadge = {
 // State-badge mapping mirrors desktop merge-state presentation tones: merged is
 // neutral, open is green (active), draft is muted, closed is red.
 export function prStateBadge(state: PRState): PRStateBadge {
+  // Why: the state badge is a neutral monochrome chip (the label carries the
+  // state) so the sidebar stays muted/black-and-white per the design direction.
   switch (state) {
     case 'open':
-      return { label: 'Open', token: 'statusGreen' }
+      return { label: 'Open', token: 'textSecondary' }
     case 'merged':
-      return { label: 'Merged', token: 'statusPurple' }
+      return { label: 'Merged', token: 'textSecondary' }
     case 'draft':
       return { label: 'Draft', token: 'textSecondary' }
     case 'closed':
-      return { label: 'Closed', token: 'statusRed' }
+      return { label: 'Closed', token: 'textSecondary' }
     default:
       return { label: state, token: 'textSecondary' }
   }

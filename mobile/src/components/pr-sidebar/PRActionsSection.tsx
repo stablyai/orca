@@ -126,9 +126,9 @@ export function PRActionsSection({ pr, actions }: Props) {
         accessibilityLabel={`${methodLabel(effectiveMethod)} pull request`}
       >
         {mergeBusy ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.bgBase} />
         ) : (
-          <GitMerge size={16} color="#fff" strokeWidth={2.2} />
+          <GitMerge size={16} color={colors.bgBase} strokeWidth={2.2} />
         )}
         <Text style={[styles.actionButtonText, styles.actionButtonTextPrimary]}>
           {methodLabel(effectiveMethod)}

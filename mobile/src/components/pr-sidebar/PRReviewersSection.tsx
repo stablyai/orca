@@ -6,7 +6,6 @@ import type { GitHubWorkItemDetails } from '../../../../src/shared/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import { getPRReviewerRows } from './pr-checks-presentation'
-import { statusColor } from './pr-sidebar-status-color'
 import { ReviewerPickerDrawer } from './ReviewerPickerDrawer'
 import { PRSection } from './PRSection'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
@@ -57,7 +56,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
           accessibilityRole="button"
           accessibilityLabel="Add or remove reviewers"
         >
-          <UserPlus size={16} color={colors.accentBlue} strokeWidth={2.2} />
+          <UserPlus size={16} color={colors.textSecondary} strokeWidth={2.2} />
         </Pressable>
       }
     >
@@ -73,7 +72,9 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
                   {row.name ? `${row.name} (${row.login})` : row.login}
                 </Text>
               </View>
-              <Text style={[styles.rowStatus, { color: statusColor(row.token) }]}>
+              {/* Neutral gray like the desktop PR page (the label text carries the
+                  state); keeps the sidebar mostly monochrome. */}
+              <Text style={[styles.rowStatus, { color: colors.textSecondary }]}>
                 {row.stateLabel}
               </Text>
               <Pressable

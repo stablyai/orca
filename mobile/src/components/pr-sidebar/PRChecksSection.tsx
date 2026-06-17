@@ -114,7 +114,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions }:
               {rerunBusy ? (
                 <ActivityIndicator color={colors.textSecondary} />
               ) : (
-                <RotateCw size={14} color={colors.accentBlue} strokeWidth={2.2} />
+                <RotateCw size={14} color={colors.textSecondary} strokeWidth={2.2} />
               )}
             </Pressable>
           ) : null}
@@ -154,7 +154,7 @@ function CheckDetail({ entry }: { entry: DetailEntry | undefined }) {
   if (!entry || entry.status === 'loading') {
     return (
       <View style={styles.checkDetailArea}>
-        <ActivityIndicator color={colors.accentBlue} />
+        <ActivityIndicator color={colors.textSecondary} />
       </View>
     )
   }

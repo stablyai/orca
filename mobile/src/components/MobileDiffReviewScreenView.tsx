@@ -107,6 +107,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
               client={controller.client}
               connState={controller.connState}
               worktreeId={controller.worktreeId}
+              gitBranch={controller.prSidebarBranch}
               headSha={controller.prSidebarHeadSha}
               bottomInset={insets.bottom}
             />
@@ -126,6 +127,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             client={controller.client}
             connState={controller.connState}
             worktreeId={controller.worktreeId}
+            gitBranch={controller.prSidebarBranch}
             headSha={controller.prSidebarHeadSha}
           />
         </RightDrawer>

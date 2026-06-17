@@ -115,9 +115,9 @@ describe('prCheckKey', () => {
 
 describe('prStateBadge', () => {
   it('maps each PR state to a label + token', () => {
-    expect(prStateBadge('open')).toEqual({ label: 'Open', token: 'statusGreen' })
-    expect(prStateBadge('closed')).toEqual({ label: 'Closed', token: 'statusRed' })
-    expect(prStateBadge('merged')).toEqual({ label: 'Merged', token: 'statusPurple' })
+    expect(prStateBadge('open')).toEqual({ label: 'Open', token: 'textSecondary' })
+    expect(prStateBadge('closed')).toEqual({ label: 'Closed', token: 'textSecondary' })
+    expect(prStateBadge('merged')).toEqual({ label: 'Merged', token: 'textSecondary' })
     expect(prStateBadge('draft')).toEqual({ label: 'Draft', token: 'textSecondary' })
   })
 })

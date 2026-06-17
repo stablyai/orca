@@ -61,6 +61,7 @@ export function MobilePrViewPanel({
       client={client}
       connState={connState}
       worktreeId={worktreeId}
+      gitBranch={branch}
       headSha={headSha}
       bottomInset={insets.bottom}
     />
