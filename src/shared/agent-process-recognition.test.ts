@@ -93,6 +93,36 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('ante-obsidian', 'ante')).toBe(false)
   })
 
+  it('does not recognize Ante headless one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('ante -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('ante -psummarize')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('ante --prompt "review this for security issues"')
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('ante --prompt=review --output-format minimal')
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('ante --resume ses_123')).toEqual({
+      agent: 'ante',
+      processName: 'ante'
+    })
+  })
+
+  it('does not recognize wrapped Ante headless one-shot commands as interactive agents', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine('node /Users/dev/.ante/bin/ante --prompt "review"')
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node C:\Users\dev\.ante\bin\ante.cmd -p review`
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('node /Users/dev/.ante/bin/ante')).toEqual({
+      agent: 'ante',
+      processName: 'ante'
+    })
+  })
+
   it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/vibe')).toEqual({
       agent: 'mistral-vibe',
