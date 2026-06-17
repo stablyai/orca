@@ -206,12 +206,16 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
         </Pressable>
       ) : null}
 
-      {/* Unlink the PR from this worktree (always available for a linked PR). */}
+      {/* Unlink the PR from this worktree. Disabled while another PR mutation is in
+          flight so clearing the link can't race a merge/close refetch. */}
       {avail.canUnlink ? (
         <Pressable
-          style={[styles.actionButton, unlinking && styles.actionButtonDisabled]}
+          style={[
+            styles.actionButton,
+            (unlinking || mergeBusy || autoMergeBusy || stateBusy) && styles.actionButtonDisabled
+          ]}
           onPress={() => void unlink()}
-          disabled={unlinking}
+          disabled={unlinking || mergeBusy || autoMergeBusy || stateBusy}
           accessibilityRole="button"
           accessibilityLabel="Unlink pull request"
         >

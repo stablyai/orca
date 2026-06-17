@@ -110,11 +110,9 @@ export function MobilePrComposeSheet({
     }
   }, [base, body, client, draft, generating, title, worktreeId])
 
-  // base≠head guard only when the head branch is known; otherwise fall back to
-  // requiring a non-empty title + base (the source-control caller omits head).
-  const canSubmit = head
-    ? canSubmitPrCompose(title, base, head)
-    : title.trim().length > 0 && base.trim().length > 0
+  // With no head, base≠head reduces to "base non-empty" (every non-empty base
+  // differs from ''), so a single rule covers both callers.
+  const canSubmit = canSubmitPrCompose(title, base, head ?? '')
 
   const submit = useCallback(async () => {
     if (!client || submitting || !canSubmit) {
@@ -126,6 +124,9 @@ export function MobilePrComposeSheet({
       const outcome = await createMobilePr(client, worktreeId, {
         provider: prefill.provider,
         base,
+        // Send the same head the submit guard validated against, so the PR opens
+        // from the validated branch instead of a host-inferred one.
+        ...(head ? { head } : {}),
         title,
         body,
         draft
@@ -146,6 +147,7 @@ export function MobilePrComposeSheet({
     canSubmit,
     client,
     draft,
+    head,
     onCreated,
     prefill.provider,
     submitting,

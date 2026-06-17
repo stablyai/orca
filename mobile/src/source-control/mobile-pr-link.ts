@@ -2,8 +2,10 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 
 // Link / unlink an existing PR to the current worktree via worktree.set (the same
-// path desktop's "Link another PR" uses). linkedPR is tri-state on the host:
-// a number sets the link, null clears it. worktree.set is allowlisted for mobile.
+// path desktop's "Link another PR" uses). GitHub-scoped: it writes the worktree's
+// `linkedPR` key, matching desktop where linking is GitHub-only (GitLab/Bitbucket
+// use separate linked* keys). linkedPR is tri-state on the host: a number sets the
+// link, null clears it. worktree.set is allowlisted for mobile.
 
 export type MobilePrLinkOutcome = { ok: true } | { ok: false; error: string }
 

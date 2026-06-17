@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { RpcClient } from '../transport/rpc-client'
@@ -26,6 +26,19 @@ export function MobilePrBasePicker({
   const [results, setResults] = useState<string[]>([])
   const [focused, setFocused] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Guards: drop results after unmount, and ignore an earlier search whose response
+  // arrives after a later one (out-of-order network) so stale matches can't clobber.
+  const mounted = useRef(true)
+  const seq = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      mounted.current = false
+      if (timer.current) {
+        clearTimeout(timer.current)
+      }
+    }
+  }, [])
 
   const queryRefs = useCallback(
     (query: string) => {
@@ -37,9 +50,13 @@ export function MobilePrBasePicker({
         return
       }
       timer.current = setTimeout(() => {
-        void searchBaseRefs(client, worktreeId, query.trim()).then((refs) =>
+        const requestSeq = ++seq.current
+        void searchBaseRefs(client, worktreeId, query.trim()).then((refs) => {
+          if (!mounted.current || requestSeq !== seq.current) {
+            return
+          }
           setResults(refs.filter((r) => r !== query).slice(0, 6))
-        )
+        })
       }, 200)
     },
     [client, worktreeId]

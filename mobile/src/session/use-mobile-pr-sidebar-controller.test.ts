@@ -95,6 +95,25 @@ describe('loadPrSidebarData', () => {
     expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: null })
   })
 
+  it('falls back to the worktree linkedPR when forBranch has no open PR (closed/merged)', async () => {
+    const merged = { ...PR, number: 42, state: 'merged' } as unknown as PRInfo
+    const d = deps({
+      fetchForBranch: vi.fn(async () => ok<HostedReviewInfo | null>(null)),
+      fetchPRForBranch: vi.fn(async () => ok<PRInfo | null>(merged))
+    })
+    const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat', linkedPR: 42 })
+    // The persisted linkedPR is threaded as the authoritative resolver...
+    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 42 })
+    // ...and the non-open PR loads to ready (not the 'none' empty state).
+    expect(out).toEqual({ kind: 'ready', data: { pr: merged, details: DETAILS, checks: CHECKS } })
+  })
+
+  it('prefers the forBranch open hint over the worktree linkedPR', async () => {
+    const d = deps()
+    await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat', linkedPR: 42 })
+    expect(d.fetchPRForBranch).toHaveBeenCalledWith('w', { branch: 'feat', linkedPRNumber: 7 })
+  })
+
   it('is non-fatal when forBranch errors — prForBranch still resolves', async () => {
     const d = deps({ fetchForBranch: vi.fn(async () => fail<HostedReviewInfo | null>('timeout')) })
     const out = await loadPrSidebarData(d, { worktreeId: 'w', branch: 'feat' })

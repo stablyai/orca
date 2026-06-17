@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { GitPullRequest, Link2 } from 'lucide-react-native'
+import { GitPullRequest, Link2, Link2Off } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
 import { resolveMobilePrPrefill, type MobilePrPrefill } from '../../source-control/mobile-pr-create'
+import { fetchWorktreeLinkedPR, unlinkMobilePr } from '../../source-control/mobile-pr-link'
 import { MobilePrComposeSheet, openMobilePrUrl } from '../MobilePrComposeSheet'
 import { MobileLinkPrSheet } from './MobileLinkPrSheet'
 import { prActionsStyles as actionStyles } from './pr-actions-styles'
@@ -26,6 +27,43 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
   const [composeVisible, setComposeVisible] = useState(false)
   const [linkVisible, setLinkVisible] = useState(false)
   const [loading, setLoading] = useState(false)
+  // A persisted linkedPR while the branch shows no PR means the linked PR couldn't be
+  // resolved (deleted/transferred/cross-repo). Surface Unlink so the user can recover
+  // instead of being trapped re-linking a dead PR.
+  const [orphanLinkedPR, setOrphanLinkedPR] = useState<number | null>(null)
+  const [unlinking, setUnlinking] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    if (!client) {
+      setOrphanLinkedPR(null)
+      return
+    }
+    void fetchWorktreeLinkedPR(client, worktreeId).then((n) => {
+      if (!cancelled) {
+        setOrphanLinkedPR(n)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [client, worktreeId])
+
+  const unlink = async (): Promise<void> => {
+    if (!client || unlinking) {
+      return
+    }
+    setUnlinking(true)
+    try {
+      const outcome = await unlinkMobilePr(client, worktreeId)
+      if (outcome.ok) {
+        setOrphanLinkedPR(null)
+        onCreated()
+      }
+    } finally {
+      setUnlinking(false)
+    }
+  }
 
   const openComposer = async (): Promise<void> => {
     if (!client || loading) {
@@ -55,7 +93,11 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
 
   return (
     <View style={styles.stateArea}>
-      <Text style={styles.stateText}>No open pull request for this branch.</Text>
+      <Text style={styles.stateText}>
+        {orphanLinkedPR
+          ? `Linked pull request #${orphanLinkedPR} is unavailable. Create a new one, link another, or unlink.`
+          : 'No open pull request for this branch.'}
+      </Text>
       <Pressable
         style={[
           actionStyles.actionButton,
@@ -86,6 +128,25 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
         <Link2 size={16} color={colors.textPrimary} strokeWidth={2.2} />
         <Text style={actionStyles.actionButtonText}>Link existing pull request</Text>
       </Pressable>
+      {orphanLinkedPR ? (
+        <Pressable
+          style={[
+            actionStyles.actionButton,
+            (!client || unlinking) && actionStyles.actionButtonDisabled
+          ]}
+          onPress={() => void unlink()}
+          disabled={!client || unlinking}
+          accessibilityRole="button"
+          accessibilityLabel="Unlink pull request"
+        >
+          {unlinking ? (
+            <ActivityIndicator color={colors.textSecondary} />
+          ) : (
+            <Link2Off size={16} color={colors.textSecondary} strokeWidth={2.2} />
+          )}
+          <Text style={actionStyles.actionButtonText}>Unlink</Text>
+        </Pressable>
+      ) : null}
 
       {prefill ? (
         <MobilePrComposeSheet
