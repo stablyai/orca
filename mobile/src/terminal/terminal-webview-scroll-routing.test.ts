@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 const source =
   readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-url-tap.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-tap-dispatch-injected.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
 const sessionSource = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
@@ -161,7 +162,7 @@ describe('TerminalWebView scroll routing', () => {
 
     const dragMoveBlock = sliceBetween(
       'function handleDragMove(handle, clientX, clientY)',
-      '  // ============================================================\n  // LATCHING TOUCH DISPATCHER'
+      '  // Latching document-level touch dispatcher: see'
     )
     expect(dragMoveBlock).toContain('edgeScrollClientX = clientX;')
     expect(dragMoveBlock).toContain('edgeScrollClientY = clientY;')
@@ -189,9 +190,7 @@ describe('TerminalWebView scroll routing', () => {
       "document.addEventListener('touchend'",
       '}, { capture: true, passive: true });'
     )
-    expect(touchEndBlock).toContain(
-      'notifyTerminalSurfaceTap(longPressOrigin.x, longPressOrigin.y)'
-    )
+    expect(touchEndBlock).toContain('notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y)')
 
     const tapHandlerBlock = sliceBetween(
       'function notifyTerminalSurfaceTap(originX, originY)',

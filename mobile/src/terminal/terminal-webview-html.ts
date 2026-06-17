@@ -5,6 +5,7 @@ import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
+import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
@@ -893,6 +894,13 @@ export const XTERM_HTML = `<!DOCTYPE html>
   var WORD_RE = /[\\p{L}\\p{N}_./:@~+=?&#%-]/u;
   var LONG_PRESS_MS = 500;
   var LONG_PRESS_SLOP = 10;
+  // Why: a tap that opens a link/path must survive small finger jitter. The
+  // long-press slop (10px) only cancels the press-to-select timer; reusing it
+  // to gate the tap dropped any URL/file tap that wandered >10px — at fit scale
+  // a few screen px of jitter is a normal tap. Use a wider, time-bounded tap
+  // window so deliberate scrolls/pans still don't fire a tap.
+  var TAP_SLOP = 24;
+  var TAP_MAX_MS = 700;
   var EDGE_SCROLL_PX = 40;
   var EDGE_SCROLL_INTERVAL = 60;
 
@@ -908,6 +916,11 @@ export const XTERM_HTML = `<!DOCTYPE html>
   var sel = null; // { anchor:{col,row}, focus:{col,row}, activeHandle:null|'start'|'end' }
   var longPressTimer = null;
   var longPressOrigin = null; // {x,y, identifier}
+  // Why: tap detection is tracked separately from the long-press timer so a
+  // small jitter that cancels the press-to-select timer does not also cancel
+  // the tap (which opens links/paths). {x,y,t,identifier} or null once the
+  // gesture is disqualified as a tap (moved too far or held too long).
+  var tapCandidate = null;
   var edgeScrollTimer = null;
   var edgeScrollDir = 0;
   var edgeScrollClientX = 0;
@@ -1512,158 +1525,9 @@ export const XTERM_HTML = `<!DOCTYPE html>
     else stopEdgeScroll();
   }
 
-  // ============================================================
-  // LATCHING TOUCH DISPATCHER (document-level)
-  // ============================================================
-  var dispatch = { mode: 'idle', touchId: null, touchIds: null, longPressFingerInsideOverlay: false };
-
-  function touchById(touches, id) {
-    for (var i = 0; i < touches.length; i++) {
-      if (touches[i].identifier === id) return touches[i];
-    }
-    return null;
-  }
-
-  function targetInside(target, el) {
-    if (!target || !el) return false;
-    return el.contains(target);
-  }
-
-  function clearLongPress() {
-    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-    longPressOrigin = null;
-  }
-
-  function armLongPress(touch) {
-    longPressOrigin = { x: touch.clientX, y: touch.clientY, identifier: touch.identifier };
-    longPressTimer = setTimeout(function() {
-      longPressTimer = null;
-      if (!longPressOrigin) return;
-      var c = viewportToCell(longPressOrigin.x, longPressOrigin.y);
-      if (!c) return;
-      enterSelect(c.col, c.row);
-    }, LONG_PRESS_MS);
-  }
-
-  function touchSlopExceeded(t) {
-    if (!longPressOrigin) return false;
-    var dx = Math.abs(t.clientX - longPressOrigin.x);
-    var dy = Math.abs(t.clientY - longPressOrigin.y);
-    return (dx + dy) > LONG_PRESS_SLOP;
-  }
-
-  // Why: existing surface handlers stay attached to surface but we wrap
-  // their entry to no-op when the dispatcher latches into select-drag.
-  function dispatcherShouldBlockSurface() {
-    return dispatch.mode === 'select-drag';
-  }
-
-  document.addEventListener('touchstart', function(e) {
-    var t = e.touches[0];
-    var target = e.target;
-    var onHandle = target === handleStart || target === handleEnd;
-    var inOverlay = targetInside(target, selectionOverlay);
-    var inSurface = targetInside(target, surface);
-
-    if (e.touches.length === 2) {
-      // pinch latch
-      if (selMode === 'select') {
-        notify({ type: 'mobile-clip-cancel-by-pinch' });
-        cancelSelect();
-      }
-      dispatch.mode = 'pinch';
-      dispatch.touchIds = [e.touches[0].identifier, e.touches[1].identifier];
-      clearLongPress();
-      return;
-    }
-
-    if (onHandle && selMode === 'select') {
-      // start handle drag
-      var handleName = (target === handleStart) ? 'start' : 'end';
-      sel.activeHandle = handleName;
-      dispatch.mode = 'select-drag';
-      dispatch.touchId = t.identifier;
-      e.preventDefault();
-      return;
-    }
-
-    if (inOverlay) {
-      // tap on menu pill — let the buttons' own handlers fire
-      return;
-    }
-
-    if (inSurface && selMode === 'select') {
-      // Why: tap-to-dismiss matches native iOS/Android — touching outside the
-      // selection clears it. We cancel immediately and latch to 'surface' so
-      // the same gesture still drives scroll/pan without a second touch.
-      cancelSelect();
-      dispatch.mode = 'surface';
-      dispatch.touchId = t.identifier;
-      return;
-    }
-
-    if (inSurface) {
-      dispatch.mode = 'surface';
-      dispatch.touchId = t.identifier;
-      armLongPress(t);
-    }
-  }, { capture: true, passive: false });
-
-  document.addEventListener('touchmove', function(e) {
-    if (dispatch.mode === 'select-drag') {
-      var t = touchById(e.touches, dispatch.touchId);
-      if (!t || !sel || !sel.activeHandle) return;
-      e.preventDefault();
-      handleDragMove(sel.activeHandle, t.clientX, t.clientY);
-      return;
-    }
-    if (dispatch.mode === 'surface' || dispatch.mode === 'pinch') {
-      // long-press slop check
-      if (longPressTimer && e.touches.length === 1) {
-        if (touchSlopExceeded(e.touches[0])) clearLongPress();
-      }
-      // existing surface handler will run from its own listener
-    }
-  }, { capture: true, passive: false });
-
-  document.addEventListener('touchend', function(e) {
-    if (dispatch.mode === 'select-drag') {
-      if (sel) sel.activeHandle = null;
-      stopEdgeScroll();
-      dispatch.mode = 'idle';
-      dispatch.touchId = null;
-      return;
-    }
-    if (dispatch.mode === 'pinch') {
-      if (e.touches.length < 2) {
-        dispatch.mode = (e.touches.length === 1) ? 'surface' : 'idle';
-        dispatch.touchIds = null;
-        if (e.touches.length === 1) dispatch.touchId = e.touches[0].identifier;
-      }
-      return;
-    }
-    if (dispatch.mode === 'surface') {
-      if (e.touches.length === 0 && longPressOrigin && selMode !== 'select') {
-        notifyTerminalSurfaceTap(longPressOrigin.x, longPressOrigin.y);
-      }
-      clearLongPress();
-      if (e.touches.length === 0) {
-        dispatch.mode = 'idle';
-        dispatch.touchId = null;
-      }
-    }
-  }, { capture: true, passive: true });
-
-  document.addEventListener('touchcancel', function() {
-    clearLongPress();
-    stopEdgeScroll();
-    if (dispatch.mode === 'select-drag') {
-      if (sel) sel.activeHandle = null;
-    }
-    dispatch.mode = 'idle';
-    dispatch.touchId = null;
-    dispatch.touchIds = null;
-  }, { capture: true, passive: true });
+  // Latching document-level touch dispatcher: see
+  // terminal-webview-tap-dispatch-injected.ts (extracted for max-lines).
+  ${TERMINAL_TAP_DISPATCH_JS}
 
   btnCopy.addEventListener('click', function(e) {
     e.preventDefault();
