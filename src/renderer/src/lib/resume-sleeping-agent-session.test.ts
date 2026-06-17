@@ -58,6 +58,20 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
+  it('skips live-checkpoint records — their restored pane owns recovery', () => {
+    const record = makeRecord({ origin: 'live' })
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
   it('resumes legacy sleep records without an origin even when their tab still exists', () => {
     const record = makeRecord()
     useAppStore.setState({

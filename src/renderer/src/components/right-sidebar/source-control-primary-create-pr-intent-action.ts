@@ -183,7 +183,10 @@ export function resolveDisabledCreatePrHeaderAction(
           { value0: copy.reviewLabel }
         )
         break
-      default:
+      case 'existing_review':
+      case 'fork_head_unsupported':
+      case 'unsupported_provider':
+      case null:
         title = translate(
           'auto.components.right.sidebar.source.control.primary.action.f0c6e2a581',
           'This branch is not ready for a {{value0}} yet.',
