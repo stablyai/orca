@@ -43,4 +43,16 @@ Source-control and review changes must consider GitLab and other supported git p
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
 Never commit PR evidence images; attach them to the PR conversation instead (but never use gh-attach).
 
+## PR, Commit, and Issue Naming
+
+Use Conventional Commit-style names for PR titles and commit subjects:
+
+`<type>(<scope>): <specific user-facing change>`
+
+- Types: `fix`, `feat`, `perf`, `refactor`, `test`, `docs`, `build`, `chore`, `release`.
+- Scopes should name the product/domain area, not the implementation file: `omp`, `pi`, `terminal`, `github`, `gitlab`, `source-control`, `release`, `worktree`, `settings`, `mobile`, `cli`, `agent`, `ai-vault`, `codex`, `opencode`, `computer-use`, `devin`.
+- Prefer the user-facing owner when multiple layers are touched: `fix(omp): prevent typed OMP from inheriting Pi overlay`, not `fix(pty): ...`.
+- For single-commit PRs, the commit subject should match the PR title exactly. For multi-commit PRs, every commit should use the same format and describe one coherent step.
+- PR bodies should include `Summary`, linked issue (`Fixes #1234` when applicable), `Screenshots` or "No visual change", `Testing`, and any notable `Risk`/`Notes`. Agent-assisted PRs must also include `AI Review Report` and `Security Audit`.
+
 ## Type Declarations: Prefer `.ts` Over `.d.ts`
