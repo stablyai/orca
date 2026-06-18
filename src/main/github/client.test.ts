@@ -101,6 +101,7 @@ import {
   getPRComments,
   getPRForBranch,
   getRepoUpstream,
+  starOrca,
   getWorkItem,
   getPullRequestPushTarget,
   mergePR,
@@ -149,6 +150,28 @@ describe('checkOrcaStarred', () => {
     execFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await expect(checkOrcaStarred()).resolves.toBe(null)
+  })
+})
+
+describe('starOrca', () => {
+  beforeEach(() => {
+    execFileAsyncMock.mockReset()
+    acquireMock.mockReset()
+    releaseMock.mockReset()
+    acquireMock.mockResolvedValue(undefined)
+  })
+
+  it('bounds direct star attempts so the UI can fall back promptly', async () => {
+    execFileAsyncMock.mockRejectedValueOnce(new Error('Command failed: timeout'))
+
+    await expect(starOrca()).resolves.toBe(false)
+
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      'gh',
+      ['api', '-X', 'PUT', 'user/starred/stablyai/orca'],
+      { encoding: 'utf-8', timeout: 5_000 }
+    )
+    expect(releaseMock).toHaveBeenCalledTimes(1)
   })
 })
 

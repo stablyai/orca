@@ -96,6 +96,7 @@ type GhExecOptions = ReturnType<typeof ghRepoExecOptions>
 type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
 
 const ORCA_REPO = 'stablyai/orca'
+const ORCA_DIRECT_STAR_TIMEOUT_MS = 5_000
 const PR_CHECK_LOG_TAIL_LINES = 200
 const PR_CHECK_LOG_TAIL_BYTES = 16 * 1024
 const PR_CHECK_LOG_TAIL_JOB_LIMIT = 5
@@ -397,7 +398,10 @@ export async function starOrca(): Promise<boolean> {
   await acquire()
   try {
     await execFileAsync('gh', ['api', '-X', 'PUT', `user/starred/${ORCA_REPO}`], {
-      encoding: 'utf-8'
+      encoding: 'utf-8',
+      // Why: the star nag falls back to GitHub in-browser; don't leave users
+      // stuck in a loading state if the gh process hangs on auth or network I/O.
+      timeout: ORCA_DIRECT_STAR_TIMEOUT_MS
     })
     return true
   } catch {
