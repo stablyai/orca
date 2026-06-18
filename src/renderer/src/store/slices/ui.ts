@@ -673,6 +673,14 @@ export type UISlice = {
   closeActivityPage: () => void
   selectedAutomationId: string | null
   setSelectedAutomationId: (id: string | null) => void
+  pendingAutomationRunNavigation: {
+    automationId: string
+    runId: string | null
+    hostId?: ExecutionHostId
+  } | null
+  setPendingAutomationRunNavigation: (
+    navigation: { automationId: string; runId: string | null; hostId?: ExecutionHostId } | null
+  ) => void
   openAutomationsPage: () => void
   closeAutomationsPage: () => void
   openSpacePage: () => void
@@ -792,6 +800,8 @@ export type UISlice = {
   setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
+  hideAutomationGeneratedWorkspaces: boolean
+  setHideAutomationGeneratedWorkspaces: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
@@ -1316,6 +1326,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     })),
   selectedAutomationId: null,
   setSelectedAutomationId: (id) => set({ selectedAutomationId: id }),
+  pendingAutomationRunNavigation: null,
+  setPendingAutomationRunNavigation: (navigation) =>
+    set({ pendingAutomationRunNavigation: navigation }),
   openAutomationsPage: () => {
     get().recordViewVisit('automations')
     set((state) => ({
@@ -1893,6 +1906,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   hideDefaultBranchWorkspace: false,
   setHideDefaultBranchWorkspace: (v) => set({ hideDefaultBranchWorkspace: v }),
+  hideAutomationGeneratedWorkspaces: false,
+  setHideAutomationGeneratedWorkspaces: (v) => set({ hideAutomationGeneratedWorkspaces: v }),
 
   showDotfilesByWorktree: {},
   setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
@@ -2219,6 +2234,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
         workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
         hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
+        hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
         filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),
         collapsedGroups: new Set(ui.collapsedGroups ?? []),

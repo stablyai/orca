@@ -342,6 +342,12 @@ export function activateAndRevealWorktree(
   if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(wt.repoId)) {
     state.setFilterRepoIds([])
   }
+  if (
+    state.hideAutomationGeneratedWorkspaces &&
+    wt.automationProvenance?.kind === 'created-by-automation'
+  ) {
+    state.setHideAutomationGeneratedWorkspaces(false)
+  }
 
   // 6. Reveal in sidebar
   if (opts?.revealInSidebar !== false) {

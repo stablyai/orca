@@ -3518,7 +3518,8 @@
           "f506a1262a": "워크스페이스 필터링",
           "75405270ed": "필터 편집({{value0}} 활성)",
           "489d1c8c9f": "프로젝트 검색...",
-          "ee240a39eb": "필터 편집"
+          "ee240a39eb": "필터 편집",
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
         },
         "SidebarHeader": {
           "92154beb7e": "새로운 워크스페이스",
@@ -3580,7 +3581,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "기본 브랜치 숨기기",
           "ed1611b65b": "슬립 중인 항목 숨기기",
-          "82594419ba": "필터"
+          "82594419ba": "필터",
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 활동 레이아웃",
@@ -3731,7 +3733,15 @@
           "3ea2702e62": "연결됨 {{value0}} #{{value1}}",
           "b105fd3057": "연결된 Linear {{value0}}",
           "3f2649eeb8": "연결된 이슈 #{{value0}}",
-          "fe075cb851": "워크스페이스 메모"
+          "fe075cb851": "워크스페이스 메모",
+          "automationHeader": "자동화",
+          "openAutomation": "자동화 열기",
+          "openAutomationRun": "실행 열기",
+          "automationCreated": "자동화가 생성함",
+          "checkingAutomationAvailability": "자동화 사용 가능 여부 확인 중...",
+          "automationMissing": "자동화를 더 이상 사용할 수 없습니다.",
+          "automationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다.",
+          "automationAvailabilityUnavailable": "자동화 사용 가능 여부를 확인할 수 없습니다."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",
@@ -11171,7 +11181,9 @@
           "d441032f7e": "정지시키다",
           "5918020edc": "달리다",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "자동화를 더 이상 사용할 수 없습니다.",
+          "pendingAutomationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다."
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo 브랜치 검색...",

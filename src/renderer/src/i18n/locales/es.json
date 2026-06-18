@@ -3537,7 +3537,8 @@
           "f506a1262a": "Filtrar espacios de trabajo",
           "75405270ed": "Editar filtros ({{value0}} activo)",
           "489d1c8c9f": "Buscar proyectos...",
-          "ee240a39eb": "Editar filtros"
+          "ee240a39eb": "Editar filtros",
+          "automationCreated": "Ocultar creados por automatizaciones"
         },
         "SidebarHeader": {
           "92154beb7e": "Nuevo espacio de trabajo",
@@ -3599,7 +3600,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "Ocultar rama predeterminada",
           "ed1611b65b": "Ocultar durmiendo",
-          "82594419ba": "Filtros"
+          "82594419ba": "Filtros",
+          "automationCreated": "Ocultar creados por automatizaciones"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Diseño de actividad del Agent",
@@ -3750,7 +3752,15 @@
           "3ea2702e62": "Vinculado {{value0}} #{{value1}}",
           "b105fd3057": "Linear vinculado {{value0}}",
           "3f2649eeb8": "Problema vinculado #{{value0}}",
-          "fe075cb851": "Notas del espacio de trabajo"
+          "fe075cb851": "Notas del espacio de trabajo",
+          "automationHeader": "Automatización",
+          "openAutomation": "Abrir automatización",
+          "openAutomationRun": "Abrir ejecución",
+          "automationCreated": "Creado por automatización",
+          "checkingAutomationAvailability": "Comprobando disponibilidad de la automatización...",
+          "automationMissing": "La automatización ya no está disponible.",
+          "automationRunMissing": "El historial de ejecuciones ya no está disponible.",
+          "automationAvailabilityUnavailable": "No se pudo comprobar la disponibilidad de la automatización."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "Estado: Abierto",
@@ -11171,7 +11181,9 @@
           "d441032f7e": "pausa",
           "5918020edc": "correr",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "La automatización ya no está disponible.",
+          "pendingAutomationRunMissing": "El historial de ejecuciones ya no está disponible."
         },
         "CreateFromPicker": {
           "f061f49e3f": "Buscar sucursales de repo...",

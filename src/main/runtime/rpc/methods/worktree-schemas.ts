@@ -20,6 +20,13 @@ const OptionalTuiAgent = z
   .transform((value): TuiAgent | undefined => (isTuiAgent(value) ? value : undefined))
   .optional()
 
+const AutomationWorkspaceProvenanceRequest = z.object({
+  automationId: z.string(),
+  automationRunId: z.string(),
+  dispatchToken: z.string(),
+  createRequestId: z.string()
+})
+
 export const WorktreeListParams = z.object({
   repo: OptionalString,
   limit: OptionalFiniteNumber
@@ -128,7 +135,8 @@ export const WorktreeCreate = z
     createdWithAgent: z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
-      .optional()
+      .optional(),
+    automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {
     if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {

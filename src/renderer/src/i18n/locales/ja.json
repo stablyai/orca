@@ -3518,7 +3518,8 @@
           "f506a1262a": "ワークスペースのフィルタリング",
           "75405270ed": "フィルターの編集 ({{value0}} がアクティブ)",
           "489d1c8c9f": "プロジェクトを検索...",
-          "ee240a39eb": "フィルターの編集"
+          "ee240a39eb": "フィルターの編集",
+          "automationCreated": "自動化で作成されたワークスペースを非表示"
         },
         "SidebarHeader": {
           "92154beb7e": "新規ワークスペース",
@@ -3580,7 +3581,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "デフォルトのブランチを非表示にする",
           "ed1611b65b": "スリープ中を非表示",
-          "82594419ba": "フィルター"
+          "82594419ba": "フィルター",
+          "automationCreated": "自動化で作成されたワークスペースを非表示"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent アクティビティのレイアウト",
@@ -3731,7 +3733,15 @@
           "3ea2702e62": "リンク済み {{value0}} #{{value1}}",
           "b105fd3057": "リンク Linear {{value0}}",
           "3f2649eeb8": "リンクされた Issue #{{value0}}",
-          "fe075cb851": "ワークスペースのメモ"
+          "fe075cb851": "ワークスペースのメモ",
+          "automationHeader": "自動化",
+          "openAutomation": "自動化を開く",
+          "openAutomationRun": "実行を開く",
+          "automationCreated": "自動化によって作成",
+          "checkingAutomationAvailability": "自動化の利用可否を確認中...",
+          "automationMissing": "自動化は利用できなくなりました。",
+          "automationRunMissing": "実行履歴は利用できなくなりました。",
+          "automationAvailabilityUnavailable": "自動化の利用可否を確認できませんでした。"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状態: オープン",
@@ -11171,7 +11181,9 @@
           "d441032f7e": "一時停止",
           "5918020edc": "走る",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "自動化は利用できなくなりました。",
+          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。"
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo ブランチを検索...",

@@ -203,6 +203,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
+  const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
+  const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
@@ -244,6 +246,53 @@ const WorktreeCard = React.memo(function WorktreeCard({
       })
     },
     [worktree, openModal]
+  )
+
+  const handleOpenAutomation = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      const automationId = worktree.automationProvenance?.automationId
+      if (!automationId) {
+        return
+      }
+      const hostId = worktree.automationProvenance?.hostId ?? worktree.hostId
+      setPendingAutomationRunNavigation({
+        automationId,
+        runId: null,
+        ...(hostId ? { hostId } : {})
+      })
+      openAutomationsPage()
+    },
+    [
+      openAutomationsPage,
+      setPendingAutomationRunNavigation,
+      worktree.automationProvenance?.automationId,
+      worktree.automationProvenance?.hostId,
+      worktree.hostId
+    ]
+  )
+
+  const handleOpenAutomationRun = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      const provenance = worktree.automationProvenance
+      if (!provenance) {
+        return
+      }
+      const hostId = provenance.hostId ?? worktree.hostId
+      setPendingAutomationRunNavigation({
+        automationId: provenance.automationId,
+        runId: provenance.automationRunId,
+        ...(hostId ? { hostId } : {})
+      })
+      openAutomationsPage()
+    },
+    [
+      openAutomationsPage,
+      setPendingAutomationRunNavigation,
+      worktree.automationProvenance,
+      worktree.hostId
+    ]
   )
 
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
@@ -956,7 +1005,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
     issue: metaIssue,
     linearIssue: metaLinearIssue,
     review: newCardStyle ? null : metaReview,
-    comment: metaComment
+    comment: metaComment,
+    automationProvenance: worktree.automationProvenance
   })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id)
@@ -1012,7 +1062,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
       issue: hoverIssue,
       linearIssue: hoverLinearIssue,
       review: hoverReview,
-      comment: hoverComment
+      comment: hoverComment,
+      automationProvenance: worktree.automationProvenance
     }) ||
       workspacePorts.length > 0 ||
       showBranchIdentityHover)
@@ -1029,6 +1080,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
             linearIssue={metaLinearIssue}
             review={metaReview}
             comment={metaComment}
+            automationProvenance={worktree.automationProvenance}
+            automationHostId={worktree.hostId}
             branchName={showBranchIdentityHover ? branch : undefined}
             workspaceTitle={worktree.displayName}
             identityOrder="branch-first"
@@ -1048,6 +1101,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 ? handleOpenReviewInOrca
                 : undefined
             }
+            onOpenAutomation={affiliateListMode ? undefined : handleOpenAutomation}
+            onOpenAutomationRun={affiliateListMode ? undefined : handleOpenAutomationRun}
             // Why: compact mode hides the metadata badge row, so title hover
             // carries the same explicit-link affordance without adding chrome.
             onUnlinkReview={
@@ -1085,6 +1140,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             linearIssue={metaLinearIssue}
             review={newCardStyle ? null : metaReview}
             comment={metaComment}
+            automationProvenance={worktree.automationProvenance}
             className="ml-0 pr-0"
           />
         )}
@@ -1097,6 +1153,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
         linearIssue={metaLinearIssue}
         review={metaReview}
         comment={metaComment}
+        automationProvenance={worktree.automationProvenance}
+        automationHostId={worktree.hostId}
         detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
         hoverControl={detailsHoverControl}
         onEditIssue={affiliateListMode ? undefined : handleEditIssue}
@@ -1108,6 +1166,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
         onOpenReviewInOrca={
           metaReview?.url && metaReview.provider === 'github' ? handleOpenReviewInOrca : undefined
         }
+        onOpenAutomation={affiliateListMode ? undefined : handleOpenAutomation}
+        onOpenAutomationRun={affiliateListMode ? undefined : handleOpenAutomationRun}
         // Why: branch lookup can show a review without persisted metadata. Only
         // expose unlink when this workspace has an explicit linked PR/MR.
         onUnlinkReview={
@@ -1549,6 +1609,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
         linearIssue={hoverLinearIssue}
         review={hoverReview}
         comment={hoverComment}
+        automationProvenance={worktree.automationProvenance}
+        automationHostId={worktree.hostId}
         branchName={showBranchIdentityHover ? branch : undefined}
         workspaceTitle={showBranchIdentityHover ? visibleCardTitle : undefined}
         detailsAfter={
@@ -1567,6 +1629,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
         onOpenReviewInOrca={
           hoverReview?.url && hoverReview.provider === 'github' ? handleOpenReviewInOrca : undefined
         }
+        onOpenAutomation={affiliateListMode ? undefined : handleOpenAutomation}
+        onOpenAutomationRun={affiliateListMode ? undefined : handleOpenAutomationRun}
         // Why: branch lookup can show a review without persisted metadata. Only
         // expose unlink when this workspace has an explicit linked PR/MR.
         onUnlinkReview={

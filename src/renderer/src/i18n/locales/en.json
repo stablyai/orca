@@ -3543,7 +3543,8 @@
           "f506a1262a": "Filter workspaces",
           "75405270ed": "Edit filters ({{value0}} active)",
           "489d1c8c9f": "Search projects...",
-          "ee240a39eb": "Edit filters"
+          "ee240a39eb": "Edit filters",
+          "automationCreated": "Hide automation-created"
         },
         "SidebarHeader": {
           "25a95899c9": "Add Project",
@@ -3605,7 +3606,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "Hide default branch",
           "ed1611b65b": "Hide sleeping",
-          "82594419ba": "Filters"
+          "82594419ba": "Filters",
+          "automationCreated": "Hide automation-created"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",
@@ -3764,7 +3766,15 @@
           "3ea2702e62": "Linked {{value0}} #{{value1}}",
           "b105fd3057": "Linked Linear {{value0}}",
           "3f2649eeb8": "Linked issue #{{value0}}",
-          "fe075cb851": "Workspace notes"
+          "fe075cb851": "Workspace notes",
+          "automationHeader": "Automation",
+          "openAutomation": "Open automation",
+          "openAutomationRun": "Open run",
+          "automationCreated": "Created by automation",
+          "checkingAutomationAvailability": "Checking automation availability...",
+          "automationMissing": "Automation no longer available.",
+          "automationRunMissing": "Run history no longer available.",
+          "automationAvailabilityUnavailable": "Automation availability could not be checked."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",
@@ -11171,7 +11181,9 @@
           "d441032f7e": "pause",
           "5918020edc": "run",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "Automation no longer available.",
+          "pendingAutomationRunMissing": "Run history no longer available."
         },
         "CreateFromPicker": {
           "f061f49e3f": "Search repo branches...",

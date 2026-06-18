@@ -169,6 +169,7 @@ const UiUpdate = z
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     workspaceHostOrder: z.array(z.string()).optional(),
     hideDefaultBranchWorkspace: z.boolean().optional(),
+    hideAutomationGeneratedWorkspaces: z.boolean().optional(),
     filterRepoIds: StringArray.optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),

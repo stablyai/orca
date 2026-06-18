@@ -1584,8 +1584,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedBitbucketPR,
     linkedAzureDevOpsPR,
     linkedGiteaPR,
-    compareBaseRef
+    compareBaseRef,
+    options
   ) => {
+    const automationProvenanceRequest = options?.automationProvenanceRequest
     const retryableConflictPatterns = [
       /already exists locally/i,
       /already exists on a remote/i,
@@ -1646,7 +1648,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedAzureDevOpsPR !== undefined ? { linkedAzureDevOpsPR } : {}),
             ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
             ...(startup ? { startup } : {}),
-            ...(creationId ? { creationId } : {})
+            ...(creationId ? { creationId } : {}),
+            ...(automationProvenanceRequest ? { automationProvenanceRequest } : {})
           }
           const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
           const result =
@@ -1687,6 +1690,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(linkedBitbucketPR !== undefined ? { linkedBitbucketPR } : {}),
                     ...(linkedAzureDevOpsPR !== undefined ? { linkedAzureDevOpsPR } : {}),
                     ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
+                    ...(automationProvenanceRequest ? { automationProvenanceRequest } : {}),
                     ...(startup
                       ? {
                           startupCommand: startup.command,

@@ -3518,7 +3518,8 @@
           "f506a1262a": "搜索工作区",
           "75405270ed": "编辑搜索器（{{value0}} 活动）",
           "489d1c8c9f": "搜索项目...",
-          "ee240a39eb": "编辑搜索器"
+          "ee240a39eb": "编辑搜索器",
+          "automationCreated": "隐藏自动化创建的工作区"
         },
         "SidebarHeader": {
           "92154beb7e": "新工作区",
@@ -3580,7 +3581,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "隐藏默认分支",
           "ed1611b65b": "隐藏休眠项",
-          "82594419ba": "搜索器"
+          "82594419ba": "搜索器",
+          "automationCreated": "隐藏自动化创建的工作区"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 活动布局",
@@ -3731,7 +3733,15 @@
           "3ea2702e62": "已链接 {{value0}} #{{value1}}",
           "b105fd3057": "链接 Linear {{value0}}",
           "3f2649eeb8": "链接议题#{{value0}}",
-          "fe075cb851": "工作区笔记"
+          "fe075cb851": "工作区笔记",
+          "automationHeader": "自动化",
+          "openAutomation": "打开自动化",
+          "openAutomationRun": "打开运行",
+          "automationCreated": "由自动化创建",
+          "checkingAutomationAvailability": "正在检查自动化可用性...",
+          "automationMissing": "自动化已不可用。",
+          "automationRunMissing": "运行历史已不可用。",
+          "automationAvailabilityUnavailable": "无法检查自动化可用性。"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状态：开放",
@@ -11171,7 +11181,9 @@
           "d441032f7e": "暂停",
           "5918020edc": "跑步",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "自动化已不可用。",
+          "pendingAutomationRunMissing": "运行历史已不可用。"
         },
         "CreateFromPicker": {
           "f061f49e3f": "搜索 repo 分支...",
