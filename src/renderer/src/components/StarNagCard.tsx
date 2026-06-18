@@ -92,17 +92,24 @@ export function StarNagCard(): React.JSX.Element | null {
     if (busy) {
       return
     }
-    if (mode === 'web') {
-      setBusy(true)
+    const openGithubFallback = async (): Promise<boolean> => {
       try {
         await window.api.shell.openUrl(ORCA_REPO_URL)
         await window.api.starNag.openWeb()
         if (mountedRef.current) {
           setVisible(false)
         }
+        return true
       } catch {
         // Why: failing to open the external browser is recoverable; keep the
         // prompt available so the user can retry or choose another action.
+        return false
+      }
+    }
+    if (mode === 'web') {
+      setBusy(true)
+      try {
+        await openGithubFallback()
       } finally {
         if (mountedRef.current) {
           setBusy(false)
@@ -116,19 +123,24 @@ export function StarNagCard(): React.JSX.Element | null {
       ok = await window.api.starNag.starOrca()
     } catch {
       ok = false
+    }
+    try {
+      if (!ok) {
+        // Why: direct star failure should not make the user click a second time;
+        // immediately hand off to GitHub, matching the onboarding toast flow.
+        const opened = await openGithubFallback()
+        if (!opened && mountedRef.current) {
+          setMode('web')
+        }
+        return
+      }
+      if (mountedRef.current) {
+        setVisible(false)
+      }
     } finally {
       if (mountedRef.current) {
         setBusy(false)
       }
-    }
-    if (!ok) {
-      if (mountedRef.current) {
-        setMode('web')
-      }
-      return
-    }
-    if (mountedRef.current) {
-      setVisible(false)
     }
   }
 
