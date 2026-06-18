@@ -2,6 +2,7 @@
 one focused file because the registration helper is stateful and each spawn-path
 assertion reuses the same mocked IPC and node-pty harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
 import { delimiter, join, posix } from 'node:path'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
@@ -905,10 +906,12 @@ describe('registerPtyHandlers', () => {
     })
 
     it('does not restore managed Pi source metadata when hooks are disabled without a legacy overlay', async () => {
+      const userSelectedPiAgentDir = join(tmpdir(), 'user-selected-pi-agent')
+      const managedPiSourceDir = join(tmpdir(), 'managed-pi-source')
       const env = await spawnAndGetEnv(
         {
-          PI_CODING_AGENT_DIR: '/tmp/user-selected-pi-agent',
-          ORCA_PI_SOURCE_AGENT_DIR: '/tmp/managed-pi-source'
+          PI_CODING_AGENT_DIR: userSelectedPiAgentDir,
+          ORCA_PI_SOURCE_AGENT_DIR: managedPiSourceDir
         },
         undefined,
         undefined,
@@ -916,15 +919,16 @@ describe('registerPtyHandlers', () => {
       )
 
       expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
-      expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/user-selected-pi-agent')
+      expect(env.PI_CODING_AGENT_DIR).toBe(userSelectedPiAgentDir)
       expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
     })
 
     it('does not create PI_CODING_AGENT_DIR from managed OMP source metadata when hooks are disabled', async () => {
+      const managedOmpSourceDir = join(tmpdir(), 'managed-omp-source')
       const env = await spawnAndGetEnv(
         {
-          ORCA_OMP_SOURCE_AGENT_DIR: '/tmp/managed-omp-source'
+          ORCA_OMP_SOURCE_AGENT_DIR: managedOmpSourceDir
         },
         undefined,
         undefined,

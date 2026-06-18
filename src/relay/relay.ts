@@ -555,6 +555,8 @@ async function main(): Promise<void> {
             : ctx.env.ORCA_OMP_SOURCE_AGENT_DIR
         const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'omp')
         if (dir) {
+          // Why: only inject OMP status-extension path when the extension file
+          // is Orca-managed; do not auto-wire user-owned extension files.
           if (pluginOverlay.hasManagedPiExtension(dir)) {
             env.ORCA_OMP_STATUS_EXTENSION = getRelayPiStatusExtensionPath(dir)
           }
