@@ -1833,7 +1833,10 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'hermes':
       return eventName === 'pre_llm_call' || eventName === 'on_session_start'
     case 'devin':
-      return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
+      // Why: SessionStart is handled by an early return in normalizeDevinEvent
+      // (clears turn cache, returns null) so it never reaches this branch.
+      // UserPromptSubmit is the real new-turn boundary for Devin.
+      return eventName === 'UserPromptSubmit'
   }
 }
 
@@ -1981,8 +1984,16 @@ function normalizeDevinEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  if (eventName === 'SessionStart') {
+    // Why: Devin emits SessionStart when the TUI opens/resumes while still idle.
+    // Only UserPromptSubmit or tool activity should create a visible working row —
+    // mapping SessionStart to 'working' made the sidebar show "Devin - Running"
+    // with a spinner before the user typed anything.
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
   const stateName =
-    eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
