@@ -247,6 +247,7 @@ export function buildWorktreeAgentRows(args: {
         entry: rowEntry,
         tab,
         agentType: resolveRowAgentType(rowEntry, tab),
+        rowSource: 'live',
         state: shouldDecay ? 'idle' : rowEntry.state,
         startedAt: rowEntry.stateHistory[0]?.startedAt ?? rowEntry.stateStartedAt
       })
@@ -286,6 +287,7 @@ export function buildWorktreeAgentRows(args: {
       entry: rowEntry,
       tab,
       agentType: resolveRowAgentType(rowEntry, tab),
+      rowSource: 'live',
       state: shouldDecay ? 'idle' : rowEntry.state,
       startedAt: rowEntry.stateHistory[0]?.startedAt ?? rowEntry.stateStartedAt
     })
@@ -314,6 +316,7 @@ export function buildWorktreeAgentRows(args: {
       entry: rowEntry,
       tab: ra.tab,
       agentType: resolveRowAgentType(rowEntry, ra.tab),
+      rowSource: 'retained',
       state: 'done',
       startedAt: ra.startedAt
     })

@@ -3,18 +3,14 @@ import type { GlobalSettings } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { Separator } from '../ui/separator'
 import { CliSection } from './CliSection'
-import { GeneralCacheTimerSection } from './GeneralCacheTimerSection'
 import { GeneralEditorSettingsSection } from './GeneralEditorSettingsSection'
-import { GeneralNetworkSettingsSection } from './GeneralNetworkSettingsSection'
 import { GeneralSupportSection } from './GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
 import {
-  getGeneralCacheTimerSearchEntries,
   getGeneralCliSearchEntries,
   getGeneralEditorSearchEntries,
   getGeneralNavigationSearchEntries,
-  getGeneralNetworkSearchEntries,
   getGeneralPaneSearchEntries,
   getGeneralSupportSearchEntries,
   getGeneralUpdateSearchEntries,
@@ -22,7 +18,7 @@ import {
 } from './general-search'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { RecentTabOrderControl } from './RecentTabOrderControl'
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
@@ -33,15 +29,6 @@ export {
   updateAutoSaveDelayDraftState,
   type AutoSaveDelayDraftState
 } from './GeneralEditorSettingsSection'
-export {
-  createHttpProxyBypassRulesDraftState,
-  createHttpProxyUrlDraftState,
-  setHttpProxyUrlDraftErrorState,
-  updateHttpProxyBypassRulesDraftState,
-  updateHttpProxyUrlDraftState,
-  type HttpProxyBypassRulesDraftState,
-  type HttpProxyUrlDraftState
-} from './GeneralNetworkSettingsSection'
 export { shouldCommitOpenInApplicationsDraft } from './OpenInMenuSetting'
 
 type GeneralSearchEntry = ReturnType<typeof getGeneralNavigationSearchEntries>[number]
@@ -57,6 +44,22 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
 }
 
 export { getGeneralPaneSearchEntries }
+
+/**
+ * The Project Runtime section is Windows-only. Gate on the platform directly:
+ * an empty search query makes matchesSettingsSearch return true even for an
+ * empty entries array, which would otherwise render an orphaned header (the
+ * inner control self-hides) on non-Windows hosts.
+ */
+export function shouldShowProjectRuntimeSection(
+  wslSupportedPlatform: boolean | undefined,
+  searchQuery: string,
+  projectRuntimeSearchEntries: SettingsSearchEntry[]
+): boolean {
+  return (
+    Boolean(wslSupportedPlatform) && matchesSettingsSearch(searchQuery, projectRuntimeSearchEntries)
+  )
+}
 
 export function getTabOrderControlSearchKeywords(
   navigationEntries: GeneralSearchEntry[] = getGeneralNavigationSearchEntries()
@@ -143,7 +146,11 @@ export function GeneralPane({
         updateSettings={updateSettings}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, projectRuntimeSearchEntries) ? (
+    shouldShowProjectRuntimeSection(
+      wslSupportedPlatform,
+      searchQuery,
+      projectRuntimeSearchEntries
+    ) ? (
       <section key="project-runtime" className="space-y-4">
         <SettingsSubsectionHeader
           title={translate(
@@ -165,13 +172,6 @@ export function GeneralPane({
         />
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralNetworkSearchEntries()) ? (
-      <GeneralNetworkSettingsSection
-        key="network"
-        settings={settings}
-        updateSettings={updateSettings}
-      />
-    ) : null,
     matchesSettingsSearch(searchQuery, getGeneralEditorSearchEntries()) ? (
       <GeneralEditorSettingsSection
         key="editor"
@@ -187,13 +187,6 @@ export function GeneralPane({
         wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}
         wslCapabilitiesLoading={wslCapabilitiesLoading}
-      />
-    ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralCacheTimerSearchEntries()) ? (
-      <GeneralCacheTimerSection
-        key="cache-timer"
-        settings={settings}
-        updateSettings={updateSettings}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralUpdateSearchEntries()) ? (

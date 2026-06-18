@@ -31,6 +31,7 @@ function buildStartupOpt(
   return {
     command: plan.launchCommand,
     ...(plan.env ? { env: plan.env } : {}),
+    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
     // Why: command-code shows its prompt in the tab status before the first
     // hook fires, so the prompt is threaded through here.
     ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0

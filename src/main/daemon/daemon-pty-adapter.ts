@@ -22,6 +22,7 @@ import {
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isShellProcess } from '../../shared/agent-detection'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 
 export type DaemonPtyAdapterOptions = {
   socketPath: string
@@ -136,8 +137,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
     await this.ensureConnected()
 
     const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+    const isCodexStartupCommand =
+      recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
+    const shouldWaitForShellReady =
+      isCodexStartupCommand &&
+      shouldUseShellReadyStartupDelivery({
+        command: opts.command,
+        startupCommandDelivery: opts.startupCommandDelivery
+      })
     const shellReadyTimeoutMs =
-      shellReadySupported && recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
+      shellReadySupported && isCodexStartupCommand && !shouldWaitForShellReady
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
 
@@ -149,6 +158,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       env: opts.env,
       envToDelete: opts.envToDelete,
       command: opts.command,
+      startupCommandDelivery: opts.startupCommandDelivery,
       // Why: without this, the daemon always spawns cmd.exe (COMSPEC) or
       // PowerShell as a fallback — regardless of which shell the renderer
       // asked for in the "+" menu or persisted as the default. Forwarding

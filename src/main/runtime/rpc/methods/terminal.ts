@@ -507,6 +507,7 @@ const TerminalWait = TerminalHandle.extend({
 const TerminalCreateParams = z.object({
   worktree: OptionalString,
   command: OptionalString,
+  startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   env: z.record(z.string(), z.string()).optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
@@ -774,6 +775,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       terminal: await runtime.createTerminal(params.worktree, {
         command: params.command,
+        startupCommandDelivery: params.startupCommandDelivery,
         env: params.env,
         title: params.title,
         focus: params.focus === true,

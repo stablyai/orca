@@ -73,6 +73,9 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
   })
   state.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
     showSessionRestoredBanner: true,
     telemetry: {
       agent_kind: tuiAgentToAgentKind(record.agent),

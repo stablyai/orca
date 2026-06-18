@@ -173,6 +173,7 @@ async function hibernateWorktreeIfStillEligible(
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
     await state.shutdownWorktreeTerminals(worktreeId, {
       keepIdentifiers: true,
+      shutdownReason: 'auto-hibernate-completed-agent',
       sleepingPaneKeys: confirmedCandidate.paneKeys,
       ...(runtimeEnvironmentId
         ? { expectedRuntimePtyIds: confirmedCandidate.expectedRuntimePtyIds }

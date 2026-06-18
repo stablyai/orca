@@ -2,24 +2,30 @@ import { test, expect } from './helpers/orca-app'
 import type { Page } from '@stablyai/playwright-test'
 import type { TerminalPaneLayoutNode } from '../../src/shared/types'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { worktreeRow } from './worktree-row-locators'
 
 type SmartSortScenario = {
   blockedId: string
   doneId: string
+  blockedTabId: string
+  doneTabId: string
+  blockedPaneKey: string
+  donePaneKey: string
 }
 
-const WORKTREE_OPTION_PREFIX = 'worktree-list-option-'
-
 async function getVisibleWorktreeIdsByTop(page: Page): Promise<string[]> {
-  return page.locator(`[role="option"][id^="${WORKTREE_OPTION_PREFIX}"]`).evaluateAll((elements) =>
-    elements
-      .map((element) => ({
-        id: decodeURIComponent(element.id.slice('worktree-list-option-'.length)),
-        top: element.getBoundingClientRect().top
-      }))
-      .sort((a, b) => a.top - b.top)
-      .map((row) => row.id)
-  )
+  return page
+    .locator('[data-worktree-sidebar] [role="option"][data-worktree-id]')
+    .evaluateAll((elements) =>
+      elements
+        .map((element) => ({
+          id: element.dataset.worktreeId ?? '',
+          top: element.getBoundingClientRect().top
+        }))
+        .filter((row) => row.id.length > 0)
+        .sort((a, b) => a.top - b.top)
+        .map((row) => row.id)
+    )
 }
 
 async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
@@ -157,8 +163,51 @@ async function seedSmartSortScenario(page: Page): Promise<SmartSortScenario> {
       { updatedAt: now, stateStartedAt: now - 60_000 }
     )
 
-    return { blockedId: blocked.id, doneId: done.id }
+    return {
+      blockedId: blocked.id,
+      doneId: done.id,
+      blockedTabId: blockedTab.id,
+      doneTabId: doneTab.id,
+      blockedPaneKey: `${blockedTab.id}:${blockedLeafId}`,
+      donePaneKey: `${doneTab.id}:${doneLeafId}`
+    }
   })
+}
+
+async function getSmartSortScenarioReadiness(
+  page: Page,
+  scenario: SmartSortScenario
+): Promise<{
+  blockedHasLivePty: boolean
+  doneHasLivePty: boolean
+  blockedState: string | null
+  doneState: string | null
+  fallbackOrder: string[]
+}> {
+  return page.evaluate((scenario) => {
+    const state = window.__store?.getState()
+    if (!state) {
+      return {
+        blockedHasLivePty: false,
+        doneHasLivePty: false,
+        blockedState: null,
+        doneState: null,
+        fallbackOrder: []
+      }
+    }
+    const scenarioWorktrees = Object.values(state.worktreesByRepo)
+      .flat()
+      .filter((worktree) => worktree.id === scenario.blockedId || worktree.id === scenario.doneId)
+    return {
+      blockedHasLivePty: (state.ptyIdsByTabId[scenario.blockedTabId]?.length ?? 0) > 0,
+      doneHasLivePty: (state.ptyIdsByTabId[scenario.doneTabId]?.length ?? 0) > 0,
+      blockedState: state.agentStatusByPaneKey[scenario.blockedPaneKey]?.state ?? null,
+      doneState: state.agentStatusByPaneKey[scenario.donePaneKey]?.state ?? null,
+      fallbackOrder: scenarioWorktrees
+        .sort((a, b) => b.sortOrder - a.sortOrder || a.displayName.localeCompare(b.displayName))
+        .map((worktree) => worktree.id)
+    }
+  }, scenario)
 }
 
 test.describe('Worktree Smart Sort', () => {
@@ -171,20 +220,30 @@ test.describe('Worktree Smart Sort', () => {
   test('renders attention-needed worktrees above finished agents in Smart mode', async ({
     orcaPage
   }) => {
-    const { blockedId, doneId } = await seedSmartSortScenario(orcaPage)
+    const scenario = await seedSmartSortScenario(orcaPage)
+    const { blockedId, doneId } = scenario
+
+    await expect
+      .poll(() => getSmartSortScenarioReadiness(orcaPage, scenario), {
+        timeout: 8_000,
+        message: 'Smart sort scenario did not seed live PTYs and fresh agent statuses'
+      })
+      .toEqual({
+        blockedHasLivePty: true,
+        doneHasLivePty: true,
+        blockedState: 'blocked',
+        doneState: 'done',
+        fallbackOrder: [doneId, blockedId]
+      })
 
     await expect
       .poll(async () => (await getVisibleWorktreeIdsByTop(orcaPage)).slice(0, 2), {
-        timeout: 8_000,
+        timeout: 12_000,
         message: 'Smart sort did not promote the blocked worktree in the visible sidebar'
       })
       .toEqual([blockedId, doneId])
 
-    await expect(
-      orcaPage.locator(`[id="${WORKTREE_OPTION_PREFIX}${encodeURIComponent(blockedId)}"]`)
-    ).toBeVisible()
-    await expect(
-      orcaPage.locator(`[id="${WORKTREE_OPTION_PREFIX}${encodeURIComponent(doneId)}"]`)
-    ).toBeVisible()
+    await expect(worktreeRow(orcaPage, blockedId)).toBeVisible()
+    await expect(worktreeRow(orcaPage, doneId)).toBeVisible()
   })
 })

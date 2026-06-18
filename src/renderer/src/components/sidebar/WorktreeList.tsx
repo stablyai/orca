@@ -214,6 +214,9 @@ import {
 import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
 import {
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
+  LINEAGE_CHILDREN_INLINE_OFFSET,
+  getLineageChildrenInlineStyle,
+  getLineageNestedRowGeometry,
   getProjectGroupHeaderPaddingLeft,
   getWorktreeCardContentIndent,
   getWorktreeCardSurfaceInset
@@ -3957,20 +3960,23 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               forceActiveSurface = false
             ) => {
               const lineageToggleGroupKey = itemRow.lineageGroupKey
-              // Why: child card rows own lineage depth, while WorktreeCard
-              // still owns the project/group inset inside each card surface.
+              const experimentalNewWorktreeCardStyle =
+                settings?.experimentalNewWorktreeCardStyle === true
+              // Why: experimental in-card lineage inherits the parent surface;
+              // legacy cards keep the old depth-based nested row geometry.
               const paddingDepth = nested ? Math.max(0, itemRow.depth - 1) : itemRow.depth
-              const nestedCardPaddingLeft = nested
-                ? getWorktreeCardSurfaceInset({
-                    isGrouped: true,
-                    groupDepth: itemRow.depth
-                  })
-                : 0
               const inheritedCardContentIndent = getWorktreeCardContentIndent({
                 isGrouped: groupBy !== 'none',
                 groupDepth: itemRow.groupDepth,
                 lineageDepth: 0
               })
+              const nestedLineageGeometry = nested
+                ? getLineageNestedRowGeometry({
+                    experimentalNewWorktreeCardStyle,
+                    inheritedCardContentIndent,
+                    lineageDepth: itemRow.depth
+                  })
+                : null
               // Why: grouped rows inherit their project/group header depth,
               // while the card surface still spans the full hit/background row.
               const paddingLeft = getWorktreeCardContentIndent({
@@ -3979,15 +3985,20 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 lineageDepth: paddingDepth
               })
               const surfaceInset = nested
-                ? nestedCardPaddingLeft
+                ? nestedLineageGeometry!.surfaceInset
                 : getWorktreeCardSurfaceInset({
                     isGrouped: groupBy !== 'none',
                     groupDepth: itemRow.groupDepth
                   })
-              const cardContentIndent = Math.max(
-                0,
-                (nested ? inheritedCardContentIndent : paddingLeft) - surfaceInset
-              )
+              const cardContentIndent = nested
+                ? nestedLineageGeometry!.cardContentIndent
+                : Math.max(0, paddingLeft - surfaceInset)
+              const lineageChildrenStyle = lineageChildren
+                ? getLineageChildrenInlineStyle(
+                    nestedLineageGeometry?.lineageChildrenInlineOffset ??
+                      LINEAGE_CHILDREN_INLINE_OFFSET
+                  )
+                : undefined
               const worktreeDragGroupKey = groupKeyByRowKey.get(itemRow.rowKey)
               const worktreeDragGroupIndex = groupIndexByRowKey.get(itemRow.rowKey)
               const revealHighlightTone =
@@ -4068,6 +4079,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     lineageChildCount={itemRow.lineageChildCount}
                     lineageCollapsed={itemRow.lineageCollapsed}
                     lineageChildren={lineageChildren}
+                    lineageChildrenStyle={lineageChildrenStyle}
                     onLineageToggle={
                       lineageToggleGroupKey
                         ? (event) => {

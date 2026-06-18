@@ -26,6 +26,7 @@ const CreateTerminalTab = WorktreeTabSelector.extend({
   afterTabId: z.string().optional(),
   targetGroupId: z.string().optional(),
   command: z.string().optional(),
+  startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   agent: z
     .custom<TuiAgent>(isTuiAgent, {
       message: 'Unknown agent preset'
@@ -111,6 +112,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,
         command: params.command,
+        startupCommandDelivery: params.startupCommandDelivery,
         agent: params.agent,
         activate: params.activate
       })

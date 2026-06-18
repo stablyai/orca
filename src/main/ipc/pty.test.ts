@@ -4826,6 +4826,72 @@ describe('registerPtyHandlers', () => {
     }
   )
 
+  posixOnlyIt('waits for shell-ready before writing delivery-hinted Codex startup', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        command: "codex 'linked issue context'",
+        startupCommandDelivery: 'shell-ready'
+      })
+
+      const [, , options] = spawnMock.mock.calls[0]!
+      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+      mockProc.emitData('last login: today\r\n')
+      vi.advanceTimersByTime(1499)
+      await Promise.resolve()
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+      mockProc.emitData('\x1b]777;orca-shell-ready\x07')
+      await Promise.resolve()
+      vi.advanceTimersByTime(49)
+      await Promise.resolve()
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+      await Promise.resolve()
+      expect(mockProc.proc.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  posixOnlyIt('waits for shell-ready when Codex uses the native prefill flag', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp',
+        command: "codex --prefill 'linked issue context'"
+      })
+
+      const [, , options] = spawnMock.mock.calls[0]!
+      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+      mockProc.emitData('\x1b]777;orca-shell-ready\x07')
+      await Promise.resolve()
+      vi.runAllTimers()
+      await Promise.resolve()
+      expect(mockProc.proc.write).toHaveBeenCalledWith("codex --prefill 'linked issue context'\n")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   posixOnlyIt('keeps the conservative max wait for non-agent startup commands', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()

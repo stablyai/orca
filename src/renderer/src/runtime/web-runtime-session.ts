@@ -10,6 +10,7 @@ import type {
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/types'
 import type { AppState } from '../store/types'
 import { useAppStore } from '../store'
@@ -44,6 +45,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   agent?: TuiAgent
   activate?: boolean
   selectWorktree?: boolean
@@ -68,6 +70,7 @@ export async function createWebRuntimeSessionTerminal(args: {
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         targetGroupId: args.targetGroupId,
         command: args.command,
+        startupCommandDelivery: args.startupCommandDelivery,
         agent: args.agent,
         activate: args.activate !== false
       },
