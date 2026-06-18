@@ -47,6 +47,8 @@ import type {
   BrowserCaptureStopResult,
   BrowserCookie
 } from '../../shared/runtime-types'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
+import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
 
 // Why: must exceed agent-browser's internal per-command timeouts (goto defaults to 30s,
 // wait can be up to 60s). Using 90s ensures the bridge never kills a command before
@@ -55,6 +57,8 @@ const EXEC_TIMEOUT_MS = 90_000
 const CONSECUTIVE_TIMEOUT_LIMIT = 3
 const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
 const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
+export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
+export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
 
 type SessionState = {
   proxy: CdpWsProxy
@@ -79,6 +83,27 @@ type QueuedCommand = {
 type ResolvedBrowserCommandTarget = {
   browserPageId: string
   webContentsId: number
+}
+
+function focusedValueSetExpression(
+  valueExpression: string,
+  options?: { append?: boolean; dispatchEvents?: boolean }
+): string {
+  const nextValue = options?.append
+    ? ["String(el.value ?? '') + ", valueExpression].join('')
+    : valueExpression
+  const dispatchEvents = options?.dispatchEvents
+    ? " el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));"
+    : ''
+  return [
+    '(() => { const el = document.activeElement; if (el) {' +
+      " const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;",
+    ' const nextValue = ',
+    nextValue,
+    '; if (nativeSetter) { nativeSetter.call(el, nextValue); } else { el.value = nextValue; }',
+    dispatchEvents,
+    ' } })()'
+  ].join('')
 }
 
 type AgentBrowserExecOptions = {
@@ -702,17 +727,30 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserFillResult> {
+    await assertClipboardTextWriteWithinLimitWithYield(value)
     // Why: Input.insertText via Electron's debugger API does not deliver text to
     // focused inputs in webviews — this is a fundamental Electron limitation.
     // Agent-browser's fill and click also fail for the same reason.
     // Workaround: use agent-browser's focus to resolve the ref, then set the value
-    // directly via JS and dispatch input/change events for React/framework compat.
+    // directly via chunked JS and dispatch input/change events for React/framework compat.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       await this.execAgentBrowser(sessionName, ['focus', element])
-      const serializedValue = JSON.stringify(value)
       await this.execAgentBrowser(sessionName, [
         'eval',
-        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, ${serializedValue}); } else { el.value = ${serializedValue}; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
+        focusedValueSetExpression(JSON.stringify(''))
+      ])
+      for (const chunk of iterateBrowserTextInsertionChunks(
+        value,
+        AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+      )) {
+        await this.execAgentBrowser(sessionName, [
+          'eval',
+          focusedValueSetExpression(JSON.stringify(chunk), { append: true })
+        ])
+      }
+      await this.execAgentBrowser(sessionName, [
+        'eval',
+        focusedValueSetExpression(JSON.stringify(''), { append: true, dispatchEvents: true })
       ])
       return { filled: element } as BrowserFillResult
     })
@@ -723,12 +761,15 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserTypeResult> {
+    await assertClipboardTextWriteWithinLimitWithYield(input)
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, [
-        'keyboard',
-        'type',
-        input
-      ])) as BrowserTypeResult
+      for (const chunk of iterateBrowserTextInsertionChunks(
+        input,
+        AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+      )) {
+        await this.execAgentBrowser(sessionName, ['keyboard', 'type', chunk])
+      }
+      return { typed: true } as BrowserTypeResult
     })
   }
 
@@ -805,8 +846,16 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
+    await assertClipboardTextWriteWithinLimitWithYield(text)
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['keyboard', 'inserttext', text])
+      let result: unknown = { inserted: true }
+      for (const chunk of iterateBrowserTextInsertionChunks(
+        text,
+        AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
+      )) {
+        result = await this.execAgentBrowser(sessionName, ['keyboard', 'inserttext', chunk])
+      }
+      return result
     })
   }
 
@@ -1015,6 +1064,9 @@ export class AgentBrowserBridge {
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
+    await assertClipboardTextWriteWithinLimitWithYield(text, {
+      maxBytes: AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES
+    })
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return await this.execAgentBrowser(sessionName, ['clipboard', 'write', text])
     })

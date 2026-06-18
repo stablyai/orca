@@ -1,5 +1,6 @@
 // src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts
 import { describe, it, expect } from 'vitest'
+import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
 import { matchFileSearchShortcut, matchSearchNavigate } from './keyboard-handlers'
 
 function makeKeyEvent(
@@ -46,6 +47,17 @@ describe('matchSearchNavigate', () => {
     const e = makeKeyEvent({ metaKey: true })
     expect(
       matchSearchNavigate(e, isMac, true, { query: '', caseSensitive: false, regex: false })
+    ).toBeNull()
+  })
+
+  it('returns null when query is too large for bounded terminal search', () => {
+    const e = makeKeyEvent({ metaKey: true })
+    expect(
+      matchSearchNavigate(e, isMac, true, {
+        query: 'x'.repeat(FIND_QUERY_MAX_BYTES + 1),
+        caseSensitive: false,
+        regex: false
+      })
     ).toBeNull()
   })
 

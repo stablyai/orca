@@ -1,8 +1,10 @@
 import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../../shared/ai-vault-types'
+import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 
 export const AI_VAULT_SESSION_DRAG_TYPE = 'application/x-orca-ai-vault-session'
 export const AI_VAULT_SESSION_DRAG_START_EVENT = 'orca-ai-vault-session-drag-start'
 export const AI_VAULT_SESSION_DRAG_END_EVENT = 'orca-ai-vault-session-drag-end'
+export const AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES = 16 * 1024
 
 export type AiVaultSessionDragPayload = {
   agent: AiVaultAgent
@@ -45,14 +47,18 @@ export function writeAiVaultSessionDragData(
   dataTransfer: DataTransfer,
   payload: AiVaultSessionDragPayload
 ): void {
+  const serialized = JSON.stringify({ kind: 'ai-vault-session', version: 1, ...payload })
+  if (isAiVaultSessionDragPayloadTooLarge(serialized)) {
+    activeAiVaultSessionDragPayload = null
+    dataTransfer.effectAllowed = 'copy'
+    dataTransfer.setData(AI_VAULT_SESSION_DRAG_TYPE, '')
+    return
+  }
   activeAiVaultSessionDragPayload = { ...payload }
   dataTransfer.effectAllowed = 'copy'
   // Why: avoid text/plain so terminal/native drop targets cannot paste the
   // resume command instead of letting Orca's pane drop layer handle it.
-  dataTransfer.setData(
-    AI_VAULT_SESSION_DRAG_TYPE,
-    JSON.stringify({ kind: 'ai-vault-session', version: 1, ...payload })
-  )
+  dataTransfer.setData(AI_VAULT_SESSION_DRAG_TYPE, serialized)
 }
 
 export function hasAiVaultSessionDragData(dataTransfer: DataTransfer): boolean {
@@ -70,6 +76,9 @@ export function readAiVaultSessionDragData(
   if (!raw) {
     return hasAiVaultSessionDragData(dataTransfer) ? activeAiVaultSessionDragPayload : null
   }
+  if (isAiVaultSessionDragPayloadTooLarge(raw)) {
+    return null
+  }
 
   try {
     const parsed: unknown = JSON.parse(raw)
@@ -81,4 +90,13 @@ export function readAiVaultSessionDragData(
   } catch {
     return null
   }
+}
+
+function isAiVaultSessionDragPayloadTooLarge(raw: string): boolean {
+  return (
+    raw.length > AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES ||
+    measureClipboardTextByteLength(raw, {
+      stopAfterBytes: AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES
+    }).exceededLimit
+  )
 }

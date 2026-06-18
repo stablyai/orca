@@ -137,6 +137,7 @@ import {
   updateCommentCodeContextExpansionState,
   type CommentCodeContextLineUpdate
 } from '@/components/comment-code-context-state'
+import { getPrCommentCodeContext } from '@/components/github/pr-comment-code-context'
 import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
@@ -144,11 +145,20 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
 import {
   getGitHubPRReviewerRows,
-  normalizeGitHubReviewerLogins
+  normalizeGitHubReviewerLogins,
+  parseGitHubReviewerInputLogins
 } from '@/components/github-pr-reviewer-display'
+import {
+  filterGitHubPRReviewerCandidates,
+  getGitHubPRReviewerQueryState
+} from '@/components/github/github-pr-reviewer-candidate-filter'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
@@ -584,32 +594,22 @@ function PRReviewersPanel({
       ),
     [localReviewRequests]
   )
-  const reviewerQuery = reviewerInput.trim().replace(/^@/, '').toLowerCase()
-  const filteredReviewerCandidates = useMemo(() => {
-    const query = reviewerQuery
-    return reviewerCandidates
-      .filter((user) => {
-        const login = user.login.toLowerCase()
-        return (
-          query.length === 0 ||
-          login.includes(query) ||
-          (user.name ?? '').toLowerCase().includes(query)
-        )
-      })
-      .sort((a, b) => {
-        const aLogin = a.login.toLowerCase()
-        const bLogin = b.login.toLowerCase()
-        const aStarts = aLogin.startsWith(query)
-        const bStarts = bLogin.startsWith(query)
-        if (aStarts !== bStarts) {
-          return aStarts ? -1 : 1
-        }
-        return a.login.localeCompare(b.login)
-      })
-  }, [reviewerCandidates, reviewerQuery])
+  const reviewerQueryState = useMemo(
+    () => getGitHubPRReviewerQueryState(reviewerInput),
+    [reviewerInput]
+  )
+  const reviewerQuery = reviewerQueryState.query
+  const filteredReviewerCandidates = useMemo(
+    () =>
+      filterGitHubPRReviewerCandidates({
+        candidates: reviewerCandidates,
+        queryState: reviewerQueryState
+      }),
+    [reviewerCandidates, reviewerQueryState]
+  )
   const suggestedReviewerRows = useMemo(
     () =>
-      reviewerQuery.length === 0
+      reviewerQuery.length === 0 && !reviewerQueryState.isTooLarge
         ? reviewerSeedUsers
             .filter((user) => !selectedReviewerLogins.has(user.login.toLowerCase()))
             .filter((user) => user.login.toLowerCase() !== authorLogin)
@@ -620,6 +620,7 @@ function PRReviewersPanel({
       authorLogin,
       reviewerCandidatesByLogin,
       reviewerQuery.length,
+      reviewerQueryState.isTooLarge,
       reviewerSeedUsers,
       selectedReviewerLogins
     ]
@@ -687,7 +688,7 @@ function PRReviewersPanel({
       return
     }
     const logins = normalizeGitHubReviewerLogins(
-      requestedLogins ?? reviewerInput.split(/[\s,]+/),
+      requestedLogins ?? parseGitHubReviewerInputLogins(reviewerInput),
       selectedReviewerLogins
     )
     if (logins.length === 0) {
@@ -1158,44 +1159,6 @@ function PRReviewersPanel({
 
 function isPRFileViewed(file: GitHubPRFile): boolean {
   return file.viewerViewedState === 'VIEWED'
-}
-
-function findNearestBraceBlock(
-  lines: string[],
-  targetLine: number
-): { startLine: number; endLine: number } | null {
-  const stack: number[] = []
-  const ranges: { startLine: number; endLine: number }[] = []
-  const targetIndex = targetLine - 1
-
-  lines.forEach((line, lineIndex) => {
-    for (const character of line) {
-      if (character === '{') {
-        stack.push(lineIndex)
-      } else if (character === '}') {
-        const startLine = stack.pop()
-        if (startLine !== undefined && startLine <= lineIndex) {
-          ranges.push({ startLine: startLine + 1, endLine: lineIndex + 1 })
-        }
-      }
-    }
-  })
-
-  const containingRange = ranges
-    .filter((range) => range.startLine - 1 <= targetIndex && targetIndex <= range.endLine - 1)
-    .sort((a, b) => a.endLine - a.startLine - (b.endLine - b.startLine))[0]
-
-  if (containingRange) {
-    return containingRange
-  }
-
-  return (
-    ranges
-      .filter(
-        (range) => range.startLine - 1 >= targetIndex && range.startLine - 1 - targetIndex <= 8
-      )
-      .sort((a, b) => a.startLine - b.startLine)[0] ?? null
-  )
 }
 
 // Why: SWR cache for the work-item details fetch. Reopening the same drawer
@@ -2461,41 +2424,35 @@ function CommentCodeContext({
   }
 
   const source = contents.modified || contents.original
-  const lines = source.split(/\r?\n/)
+  const codeContext = getPrCommentCodeContext({
+    source,
+    line,
+    startLine,
+    contextBefore,
+    contextAfter,
+    fallbackLines: CODE_CONTEXT_FALLBACK_LINES,
+    maxBlockLines: CODE_CONTEXT_MAX_BLOCK_LINES
+  })
+  if (!codeContext) {
+    return null
+  }
+  const {
+    selectedLines,
+    totalLines,
+    commentFrom,
+    commentTo,
+    from,
+    to,
+    blockRange,
+    shouldUseBlockRange,
+    canExpandAbove,
+    canExpandBelow,
+    canExpandBlock
+  } = codeContext
   const language = detectLanguage(comment.path)
-  const commentFrom = Math.max(1, Math.min(startLine ?? line, line))
-  const commentTo = Math.min(lines.length, Math.max(startLine ?? line, line))
-  const from = Math.max(1, commentFrom - contextBefore)
-  const to = Math.min(lines.length, commentTo + contextAfter)
-  const selectedLines = lines.slice(from - 1, to)
-  const candidateBlockRange = findNearestBraceBlock(lines, commentFrom)
-  const candidateBlockLineCount = candidateBlockRange
-    ? candidateBlockRange.endLine - candidateBlockRange.startLine + 1
-    : 0
-  const isWholeFileBlock =
-    candidateBlockRange !== null &&
-    candidateBlockRange.startLine <= 2 &&
-    candidateBlockRange.endLine >= lines.length - 1
-  const shouldUseBlockRange =
-    candidateBlockRange !== null &&
-    !isWholeFileBlock &&
-    candidateBlockLineCount <= CODE_CONTEXT_MAX_BLOCK_LINES
-  const blockRange = shouldUseBlockRange
-    ? candidateBlockRange
-    : {
-        startLine: Math.max(1, commentFrom - CODE_CONTEXT_FALLBACK_LINES),
-        endLine: Math.min(lines.length, commentTo + CODE_CONTEXT_FALLBACK_LINES)
-      }
-  const canExpandAbove = from > 1
-  const canExpandBelow = to < lines.length
-  const canExpandBlock = blockRange.startLine < from || blockRange.endLine > to
   const blockTooltip = shouldUseBlockRange
     ? 'Show surrounding code block'
     : 'Show nearby code context'
-
-  if (selectedLines.length === 0) {
-    return null
-  }
 
   return (
     <div className="mb-3 overflow-hidden rounded-md border border-border/50 bg-muted/20">
@@ -2590,7 +2547,7 @@ function CommentCodeContext({
                 disabled={!canExpandBelow}
                 onClick={() =>
                   setContextAfter((current) =>
-                    Math.min(current + CODE_CONTEXT_EXPAND_STEP, lines.length - commentTo)
+                    Math.min(current + CODE_CONTEXT_EXPAND_STEP, totalLines - commentTo)
                   )
                 }
                 aria-label={translate(
@@ -3575,13 +3532,22 @@ function CommentReplyForm({
   const mountedRef = useMountedRef()
 
   const submit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed || submitting) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty' || submitting) {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
     try {
-      const ok = await onSubmit(trimmed)
+      const ok = await onSubmit(bodyState.body)
       if (!mountedRef.current) {
         return
       }
@@ -3594,6 +3560,7 @@ function CommentReplyForm({
       }
     }
   }, [body, mountedRef, onSubmit, submitting])
+  const canSubmitReply = hasBoundedCommentBodyText(body)
 
   return (
     <div className={cn('rounded-md border border-border/50 bg-background/60 p-2', className)}>
@@ -3610,7 +3577,7 @@ function CommentReplyForm({
         <Button variant="ghost" size="sm" onClick={onCancel}>
           {translate('auto.components.GitHubItemDialog.675bc0d638', 'Cancel')}
         </Button>
-        <Button size="sm" disabled={!body.trim() || submitting} onClick={() => void submit()}>
+        <Button size="sm" disabled={!canSubmitReply || submitting} onClick={() => void submit()}>
           {submitting
             ? translate('auto.components.GitHubItemDialog.5752c25aff', 'Posting…')
             : translate('auto.components.GitHubItemDialog.f64dd90102', 'Reply')}
@@ -5550,8 +5517,17 @@ function GHCommentComposer({
   const mountedRef = useMountedRef()
 
   const handleSubmit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty') {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
@@ -5561,7 +5537,7 @@ function GHCommentComposer({
         repoId: repoId ?? undefined,
         sourceContext,
         number: issueNumber,
-        body: trimmed,
+        body: bodyState.body,
         type: itemType
       })
       if (!mountedRef.current) {
@@ -5592,6 +5568,7 @@ function GHCommentComposer({
       }
     }
   }, [body, mountedRef, repoPath, repoId, sourceContext, issueNumber, itemType, onCommentAdded])
+  const canSubmitComment = hasBoundedCommentBodyText(body)
 
   return (
     <div className={cn('flex flex-col items-start gap-2', className)}>
@@ -5606,7 +5583,7 @@ function GHCommentComposer({
       />
       <Button
         onClick={handleSubmit}
-        disabled={!body.trim() || submitting}
+        disabled={!canSubmitComment || submitting}
         className="gap-2"
         aria-label={translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
       >

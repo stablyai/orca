@@ -19,6 +19,7 @@ export function useLocalImagePick(
     // before the async dialog so we can insert the image exactly where the user
     // intended, not at whatever position focus() falls back to afterward.
     const insertPos = editor.state.selection.from
+    const targetDom = editor.view.dom
     try {
       const srcPath = await window.api.shell.pickImage()
       if (!srcPath) {
@@ -30,7 +31,9 @@ export function useLocalImagePick(
         sourcePath: srcPath,
         worktreeId,
         runtimeEnvironmentId,
-        insertPos
+        insertPos,
+        canInsert: (candidate) =>
+          !candidate.isDestroyed && candidate.view.dom === targetDom && targetDom.isConnected
       })
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))

@@ -92,42 +92,132 @@ export function getMarkdownRichModeUnsupportedMessage(content: string): string |
 }
 
 function stripMarkdownCode(content: string): string {
-  const lines = content.split(/\r?\n/)
-  const sanitizedLines: string[] = []
+  let sanitized = ''
   let activeFence: '`' | '~' | null = null
+  let lineStart = 0
 
-  for (const line of lines) {
+  for (let index = 0; index <= content.length; index += 1) {
+    if (index < content.length && content.charCodeAt(index) !== 10) {
+      continue
+    }
+    const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
+    const line = content.slice(lineStart, lineEnd)
     const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/)
     if (fenceMatch) {
       const fenceMarker = fenceMatch[1][0] as '`' | '~'
       activeFence = activeFence === fenceMarker ? null : fenceMarker
-      sanitizedLines.push('')
-      continue
+    } else if (!activeFence) {
+      sanitized += line.replace(/`+[^`\n]*`+/g, '')
     }
 
-    if (activeFence) {
-      sanitizedLines.push('')
-      continue
+    if (index < content.length) {
+      sanitized += '\n'
     }
-
-    sanitizedLines.push(line.replace(/`+[^`\n]*`+/g, ''))
+    lineStart = index + 1
   }
 
-  return sanitizedLines.join('\n')
+  return sanitized
 }
 
 function preservesEmbeddedHtml(contentWithoutCode: string, roundTripOutput: string): boolean {
-  const htmlFragments =
-    contentWithoutCode.match(/<!--[\s\S]*?-->|<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/g) ?? []
-
   let searchIndex = 0
-  for (const fragment of htmlFragments) {
+  return forEachEmbeddedHtmlFragment(contentWithoutCode, (fragment) => {
     const foundIndex = roundTripOutput.indexOf(fragment, searchIndex)
     if (foundIndex === -1) {
       return false
     }
     searchIndex = foundIndex + fragment.length
+    return true
+  })
+}
+
+function forEachEmbeddedHtmlFragment(
+  content: string,
+  visit: (fragment: string) => boolean
+): boolean {
+  for (let index = 0; index < content.length; index++) {
+    if (content.charCodeAt(index) !== 60) {
+      continue
+    }
+
+    let fragmentEnd: number | null = null
+    if (content.startsWith('<!--', index)) {
+      const commentEnd = content.indexOf('-->', index + 4)
+      fragmentEnd = commentEnd === -1 ? null : commentEnd + 3
+    } else {
+      fragmentEnd = getHtmlTagEnd(content, index)
+    }
+
+    if (fragmentEnd === null) {
+      continue
+    }
+
+    if (!visit(content.slice(index, fragmentEnd))) {
+      return false
+    }
+    index = fragmentEnd - 1
   }
 
   return true
+}
+
+function getHtmlTagEnd(content: string, startIndex: number): number | null {
+  let index = startIndex + 1
+
+  if (content.charCodeAt(index) === 47) {
+    index++
+  }
+
+  if (!isHtmlTagNameStart(content.charCodeAt(index))) {
+    return null
+  }
+  index++
+
+  while (isHtmlTagNamePart(content.charCodeAt(index))) {
+    index++
+  }
+
+  const nextCode = content.charCodeAt(index)
+  if (nextCode === 62) {
+    return index + 1
+  }
+  if (nextCode === 47 && content.charCodeAt(index + 1) === 62) {
+    return index + 2
+  }
+  if (!isHtmlWhitespace(nextCode)) {
+    return null
+  }
+
+  index++
+  while (index < content.length) {
+    const code = content.charCodeAt(index)
+    if (code === 60) {
+      return null
+    }
+    if (code === 62) {
+      return index + 1
+    }
+    index++
+  }
+
+  return null
+}
+
+function isHtmlTagNameStart(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+}
+
+function isHtmlTagNamePart(code: number): boolean {
+  return (
+    isHtmlTagNameStart(code) ||
+    (code >= 48 && code <= 57) ||
+    code === 95 ||
+    code === 46 ||
+    code === 58 ||
+    code === 45
+  )
+}
+
+function isHtmlWhitespace(code: number): boolean {
+  return code === 9 || code === 10 || code === 11 || code === 12 || code === 13 || code === 32
 }

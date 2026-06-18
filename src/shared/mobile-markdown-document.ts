@@ -1,3 +1,5 @@
+import { getClipboardTextByteLength, isClipboardTextByteLengthOverLimit } from './clipboard-text'
+
 export const MOBILE_MARKDOWN_EDIT_MAX_BYTES = 256 * 1024
 
 export type RuntimeMarkdownReadOnlyReason =
@@ -62,6 +64,10 @@ export function hashMarkdownContent(content: string): string {
   return `content:${utf8ByteLength(content)}:${hash.toString(16).padStart(16, '0')}`
 }
 
+export function isMarkdownContentByteLengthOverLimit(content: string, maxBytes: number): boolean {
+  return isClipboardTextByteLengthOverLimit(content, maxBytes)
+}
+
 export function utf8ByteLength(content: string): number {
-  return new TextEncoder().encode(content).byteLength
+  return getClipboardTextByteLength(content)
 }

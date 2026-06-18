@@ -1,4 +1,5 @@
 import type { SshConnection } from './ssh-connection'
+import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
 import { parseUnameToRelayPlatform, type RelayPlatform } from './relay-protocol'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { getRemoteHostPlatform, type RemoteHostPlatform } from './ssh-remote-platform'
@@ -18,7 +19,7 @@ export async function detectRemoteHostPlatform(
 async function detectUnamePlatform(conn: SshConnection): Promise<RelayPlatform | null> {
   try {
     const output = await execCommand(conn, 'uname -sm')
-    const parts = output.trim().split(/\s+/)
+    const parts = getProcessOutputFields(output, 2)
     if (parts.length < 2) {
       return null
     }
@@ -37,7 +38,7 @@ async function detectWindowsPlatform(conn: SshConnection): Promise<RelayPlatform
       'Write-Output ("Windows " + $arch)'
     ].join('; ')
     const output = await execCommand(conn, powerShellCommand(script), { wrapCommand: false })
-    const parts = output.trim().split(/\s+/)
+    const parts = getProcessOutputFields(output, 2)
     if (parts.length < 2 || parts[0].toLowerCase() !== 'windows') {
       return null
     }

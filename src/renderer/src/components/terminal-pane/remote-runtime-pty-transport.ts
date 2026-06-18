@@ -5,6 +5,10 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
+import {
+  isTerminalInputTooLargeWithDeferredMeasurement,
+  iterateTerminalInputChunks
+} from '../../../../shared/terminal-input'
 import type { PtyConnectResult, PtyTransport, IpcPtyTransportOptions } from './pty-dispatcher'
 import { createPtyOutputProcessor } from './pty-transport'
 import { unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-client'
@@ -216,14 +220,38 @@ export function createRemoteRuntimePtyTransport(
     if (!data) {
       return true
     }
+    await inputBatcher.drain()
+    if (!connected || handle !== targetHandle) {
+      return false
+    }
+    // Why: normal remote sendInput may be waiting on yielded size validation;
+    // drain it before acknowledged writes so terminal bytes stay ordered.
     const text = `${inputBatcher.takePending()}${data}`
     try {
-      const result = await callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
-        terminal: targetHandle,
-        text,
-        client: { id: clientId, type: 'desktop' }
-      })
-      return result.send.accepted === true
+      const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(text)
+      if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
+        return false
+      }
+    } catch {
+      return false
+    }
+    try {
+      for (const chunk of iterateTerminalInputChunks(text)) {
+        if (!connected || handle !== targetHandle) {
+          return false
+        }
+        // Why: acknowledged sends are ordered behind any pending debounce text,
+        // but they must not collapse large paste input back into one remote RPC.
+        const result = await callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
+          terminal: targetHandle,
+          text: chunk,
+          client: { id: clientId, type: 'desktop' }
+        })
+        if (result.send.accepted !== true) {
+          return false
+        }
+      }
+      return true
     } catch (error) {
       storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
       return false
@@ -438,6 +466,7 @@ export function createRemoteRuntimePtyTransport(
 
     disconnect() {
       inputBatcher.flush()
+      inputBatcher.clear()
       viewportBatcher.flush()
       outputProcessor.clearAccumulatedState()
       if (!connected && !handle) {
@@ -457,6 +486,7 @@ export function createRemoteRuntimePtyTransport(
 
     detach() {
       inputBatcher.flush()
+      inputBatcher.clear()
       viewportBatcher.flush()
       outputProcessor.clearAccumulatedState()
       connected = false
@@ -474,8 +504,7 @@ export function createRemoteRuntimePtyTransport(
       }
       // Why: callers use \r or terminal.send's enter flag for semantic Enter;
       // literal LF bytes from paste/programmatic input must survive the stream.
-      inputBatcher.push(data)
-      return true
+      return inputBatcher.push(data)
     },
 
     sendInputAccepted: sendInputAcceptedToRuntime,
@@ -497,6 +526,10 @@ export function createRemoteRuntimePtyTransport(
 
     getPtyId() {
       return remotePtyId
+    },
+
+    getConnectionId() {
+      return null
     },
 
     async serializeBuffer(opts) {

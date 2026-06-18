@@ -56,7 +56,8 @@
     "zoomOut": "Alejar",
     "openWorktreePalette": "Abrir paleta de árbol de trabajo",
     "window": "Ventana",
-    "help": "Ayuda"
+    "help": "Ayuda",
+    "paste": "Paste"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -523,7 +524,11 @@
       "useGlobalFileDrop": {
         "38c9f034ff": "No se pudieron cargar los archivos eliminados.",
         "d720e2f855": "Algunos archivos caídos no se pudieron cargar.",
-        "245faa95b9": "No hay ninguna ruta de espacio de trabajo remoto disponible para los archivos descartados."
+        "245faa95b9": "No hay ninguna ruta de espacio de trabajo remoto disponible para los archivos descartados.",
+        "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
+        "nativeDropTooManyPaths": "Drop contains too many files.",
+        "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
+        "nativeDropPathsTooLarge": "Drop path list is too large."
       },
       "useIpcEvents": {
         "0e3cf53060": "Pestaña del navegador {{value0}} no encontrada",
@@ -602,6 +607,12 @@
         "f70ac54d38": "Cuentas de proveedores de IA",
         "4121f7a0a2": "Administre agents de IA, establezca un valor predeterminado y personalice comandos.",
         "b49abbd2f7": "Agents"
+      },
+      "useAppMenuPaste": {
+        "pasteTooLarge": "Paste is too large."
+      },
+      "useLargeTextControlPaste": {
+        "pasteTooLarge": "Paste is too large."
       }
     },
     "components": {
@@ -794,7 +805,8 @@
         "16c1abe76c": "Marcar visto",
         "ba8e329d92": "Desmarcar visto",
         "3f79ffc8b7": "Abra los detalles de relaciones públicas para ver los revisores actuales.",
-        "5c1c973855": "Eliminar revisor"
+        "5c1c973855": "Eliminar revisor",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reabrir",
@@ -858,7 +870,8 @@
         "40c56b95e2": "{{value0}} aprobación{{value1}} restante",
         "3a051b8ade": "Elemento de trabajo",
         "32f8bef818": "Sin salida de registro.",
-        "4168eb2c51": "Resolver"
+        "4168eb2c51": "Resolver",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "Comentario",
@@ -892,7 +905,8 @@
         "54649eaeab": "+ Cesionario",
         "2a829a2f00": "prioridad",
         "693be070d0": "transición",
-        "ef21405c6d": "Problema con Jira"
+        "ef21405c6d": "Problema con Jira",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "Landing": {
         "76a95f7f47": "Crear",
@@ -1014,7 +1028,8 @@
         "858d0630da": "Cerrar vista previa",
         "39883467f4": "Cuestión Linear",
         "fda549766e": "{{value0}} para comentar",
-        "d71cd3003e": "+ Cesionario"
+        "d71cd3003e": "+ Cesionario",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "Solo disponible para proyectos Git locales.",
@@ -1069,7 +1084,8 @@
         "setupKindFolder": "Folder",
         "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
         "importingHostSetup": "Importing...",
-        "importHostSetup": "Import"
+        "importHostSetup": "Import",
+        "notePasteTooLarge": "Paste is too large for the note field."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "Elija el proyecto, el nombre del espacio de trabajo y el agente antes de crear el espacio de trabajo."
@@ -1238,7 +1254,8 @@
         "50b8fb290f": "Marcar visto",
         "2b4fdb880c": "Desmarcar visto",
         "56ec6eafb7": "Abra los detalles de relaciones públicas para ver los revisores actuales.",
-        "7f964a365a": "Eliminar revisor"
+        "7f964a365a": "Eliminar revisor",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "QuickOpen": {
         "1dbd3f59ff": "Mover",
@@ -1826,7 +1843,8 @@
                 "c3e829b4d9": "Ahorrar",
                 "463d030ae4": "Borrar",
                 "8564f58542": "Editar",
-                "5f104bf855": "Aún no hay comentarios."
+                "5f104bf855": "Aún no hay comentarios.",
+                "commentTooLarge": "Comment is too large to submit safely."
               },
               "LabelsEditor": {
                 "34dd57d6c8": "Cargando…",
@@ -1854,7 +1872,8 @@
           "b7e4a1c902": "Paste, drop, or click to add files",
           "8f1c2d4e6a": "Nothing to preview",
           "c91f0a2b14": "Write",
-          "d82b1e3f05": "Preview"
+          "d82b1e3f05": "Preview",
+          "imageUrlTooLarge": "Image URL is too large."
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "Mostrando problemas de",
@@ -1944,7 +1963,8 @@
           "f6a7b8c9d0": "Close issue",
           "b1c2d3e4f5": "Reopen issue",
           "0a73f59e85": "Send comment",
-          "bf43425540": "Comment"
+          "bf43425540": "Comment",
+          "commentTooLarge": "Comment is too large to submit safely."
         },
         "GitHubWorkItemAssigneePopoverContent": {
           "cddd9b04a7": "Loading assignees",
@@ -2348,7 +2368,11 @@
                 "53f015fd85": "Se omitió el enlace simbólico {{value0}}{{value1}}.",
                 "29c031b49a": "Subiendo el archivo {{value0}}{{value1}} al tiempo de ejecución...",
                 "0c77693641": "Worktree no está listo; inténtalo de nuevo en un momento.",
-                "ce8248b835": "Ruta del árbol de trabajo no disponible."
+                "ce8248b835": "Ruta del árbol de trabajo no disponible.",
+                "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
+                "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
+                "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
             }
           },
@@ -2523,7 +2547,8 @@
                   "097a982ee0": "Cargando archivos...",
                   "5a9c83c04b": "Abra cualquier archivo, URL, agente, ...",
                   "90eb94dc48": "Introduzca una URL http:// o https://.",
-                  "5553b283ce": "Ingrese una URL o ruta de archivo."
+                  "5553b283ce": "Ingrese una URL o ruta de archivo.",
+                  "queryTooLarge": "Search text is too large."
                 }
               },
               "menu": {
@@ -3460,7 +3485,8 @@
           "f8b1deb1a4": "Cancelar",
           "51001182e3": "directorio vacio",
           "971d85cc84": "Se abre como proyecto remoto · {{value0}}",
-          "00c4235c10": "No hay coincidencias para '{{value0}}'"
+          "00c4235c10": "No hay coincidencias para '{{value0}}'",
+          "largeInputNoMatches": "No matches for this long input"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "Eliminar",
@@ -4360,7 +4386,8 @@
           "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual"
+          "agentPermissionsManual": "Manual",
+          "3f1bdf3cb4": "Environment text is too large to parse safely."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -8753,7 +8780,8 @@
                   "f49e0a21e0": "Código",
                   "542bf6a7e2": "Itálico",
                   "256300f8ea": "Atrevido",
-                  "87aff03d63": "Envío..."
+                  "87aff03d63": "Envío...",
+                  "commentTooLarge": "Comment is too large to submit safely."
                 }
               }
             }
@@ -10154,6 +10182,11 @@
                 }
               }
             }
+          },
+          "useEmulatorScreenKeyboard": {
+            "pasteTooLarge": "Paste is too large for emulator keyboard input.",
+            "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
+            "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
           }
         }
       },
@@ -10405,7 +10438,8 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "Agregar nota sobre el texto seleccionado",
-          "fd68ae03b3": "Buscar en archivos"
+          "fd68ae03b3": "Buscar en archivos",
+          "largePasteTooLarge": "Paste is too large."
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "Copiar URL remota",
@@ -10686,6 +10720,9 @@
               }
             }
           }
+        },
+        "richMarkdownLargeTextPaste": {
+          "tooLarge": "Paste is too large."
         }
       },
       "diff": {
@@ -10702,7 +10739,8 @@
           "DiffCommentPopover": {
             "2b3ce6d394": "Cancelar",
             "e05063cfc1": "Línea {{value0}}",
-            "c845170b3b": "Líneas {{value0}}-{{value1}}"
+            "c845170b3b": "Líneas {{value0}}-{{value1}}",
+            "commentTooLarge": "Comment is too large to submit safely."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "esta nota"

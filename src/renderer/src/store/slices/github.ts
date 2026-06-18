@@ -45,6 +45,7 @@ import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
+import { isGitHubWorkItemsQueryTooLarge } from './github-work-items-query-bounds'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { translate } from '@/i18n/i18n'
 import {
@@ -2166,6 +2167,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   getCachedWorkItems: (repoId, limit, query, repoPath, sourceContext) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return null
+    }
     const state = get()
     const key =
       sourceContext?.provider === 'github'
@@ -2175,6 +2179,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   getWorkItemsSourcesAndError: (repoId, limit, query, repoPath) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return { sources: null, error: null }
+    }
     const key = getWorkItemsCacheKeyForOwner(get(), repoId, limit, query, repoPath)
     const entry = get().workItemsCache[key]
     return {
@@ -2200,6 +2207,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchWorkItems: async (repoId, repoPath, limit, query, options): Promise<GitHubWorkItem[]> => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return []
+    }
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
     const requestSettings = getGitHubWorkItemSourceSettings(
@@ -2316,6 +2326,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchWorkItemsAcrossRepos: async (repos, perRepoLimit, displayLimit, query, options) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return { items: [], failedCount: 0 }
+    }
     const state = get()
     let failedCount = 0
     const perProjectResults = await Promise.all(
@@ -2360,6 +2373,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, before) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return { items: [], failedCount: 0 }
+    }
     let failedCount = 0
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
@@ -2415,6 +2431,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   countWorkItemsAcrossRepos: async (repos, query) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return 0
+    }
     const counts = await Promise.all(
       repos.map(async (r) => {
         try {
@@ -2442,6 +2461,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   prefetchWorkItems: (repoId, repoPath, limit = PER_REPO_FETCH_LIMIT, query = '', options) => {
+    if (isGitHubWorkItemsQueryTooLarge(query)) {
+      return
+    }
     const requestState = get()
     const repo = findRepoForGitHubOwner(requestState, repoId, repoPath)
     const key =

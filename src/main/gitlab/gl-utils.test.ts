@@ -361,6 +361,19 @@ describe('parseGlabApiResponse', () => {
     expect(parsed.body).toBe('[]')
   })
 
+  it('splits large bodies without full-output separator matching', () => {
+    const matchSpy = vi.spyOn(String.prototype, 'match')
+    const body = '[{"iid":1}]'.repeat(10_000)
+    const parsed = parseGlabApiResponse(`HTTP/2.0 200 OK\r\nX-Total: 7\r\n\r\n${body}`)
+
+    expect(parsed.headers['x-total']).toBe('7')
+    expect(parsed.body).toBe(body)
+    const usedSeparatorMatch = matchSpy.mock.calls.some(
+      ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r?\\n\\r?\\n'
+    )
+    expect(usedSeparatorMatch).toBe(false)
+  })
+
   it('lowercases header names for stable lookup', () => {
     const stdout = 'HTTP/2.0 200 OK\nX-Total: 1\nContent-Type: application/json\n\n{}'
     const parsed = parseGlabApiResponse(stdout)

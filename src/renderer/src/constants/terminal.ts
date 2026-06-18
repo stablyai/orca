@@ -39,6 +39,7 @@ export type FocusTerminalPaneDetail = {
 
 export type PasteTerminalTextDetail = {
   tabId: string
+  paneId?: number
   text: string
 }
 

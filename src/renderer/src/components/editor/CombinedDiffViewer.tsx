@@ -56,6 +56,7 @@ import {
   type EditorPathMutationTarget
 } from './editor-autosave'
 import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
+import { getCombinedDiffCommitMessageBody } from './combined-diff-commit-message'
 import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import { getLargeDiffRenderLimit } from './large-diff-render-limit'
 import { getStoredTextDiffContent, getStoredTextDiffResult } from './large-diff-section-content'
@@ -176,18 +177,6 @@ function getInitialCombinedDiffFileTreeCollapsed(
   // Why: the tree is opt-in for new sessions; only an explicit saved setting
   // should make it the opening surface while settings are still loading.
   return combinedDiffFileTreeCollapsedPreference ?? combinedDiffFileTreeVisibleByDefault !== true
-}
-
-function commitMessageBody(message: string | undefined, subject: string | undefined): string {
-  const normalized = (message ?? '').replace(/\r\n/g, '\n').trim()
-  if (!normalized) {
-    return ''
-  }
-  const [firstLine = '', ...bodyLines] = normalized.split('\n')
-  if (subject && firstLine.trim() === subject.trim()) {
-    return bodyLines.join('\n').trim()
-  }
-  return normalized
 }
 
 export default function CombinedDiffViewer({
@@ -1273,7 +1262,10 @@ export default function CombinedDiffViewer({
     }
   }, [clearDiffComments, diffCommentCount, file.worktreeId, isClearingNotes])
 
-  const commitBody = commitMessageBody(commitCompare?.message, commitCompare?.subject)
+  const commitBody = getCombinedDiffCommitMessageBody(
+    commitCompare?.message,
+    commitCompare?.subject
+  )
   const commitHeader =
     isCommitMode && commitCompare ? (
       <div className="border-b border-border bg-background px-4 py-3">

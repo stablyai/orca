@@ -13,8 +13,8 @@ import { readRuntimeFileContent } from './runtime-file-client'
 import { settingsForRuntimeOwner } from './runtime-rpc-client'
 import {
   hashMarkdownContent,
+  isMarkdownContentByteLengthOverLimit,
   MOBILE_MARKDOWN_EDIT_MAX_BYTES,
-  utf8ByteLength,
   type RuntimeMarkdownReadTabResult,
   type RuntimeMarkdownSaveTabResult,
   type RuntimeMobileMarkdownRequest,
@@ -86,7 +86,7 @@ async function saveMobileMarkdownTab(
   baseVersion: string,
   content: string
 ): Promise<RuntimeMarkdownSaveTabResult> {
-  if (utf8ByteLength(content) > MOBILE_MARKDOWN_EDIT_MAX_BYTES) {
+  if (isMarkdownContentByteLengthOverLimit(content, MOBILE_MARKDOWN_EDIT_MAX_BYTES)) {
     throw new Error('file_too_large')
   }
   const target = resolveMarkdownTarget(worktreeId, tabId)
@@ -222,7 +222,7 @@ function getReadOnlyReason(
   if (sourceFile.isUntitled) {
     return 'unsupported_untitled'
   }
-  if (utf8ByteLength(content) > MOBILE_MARKDOWN_EDIT_MAX_BYTES) {
+  if (isMarkdownContentByteLengthOverLimit(content, MOBILE_MARKDOWN_EDIT_MAX_BYTES)) {
     return 'file_too_large'
   }
   return undefined
@@ -251,7 +251,7 @@ async function readFileContent(file: OpenFile): Promise<string> {
   if (result.isBinary) {
     throw new Error('binary_file')
   }
-  if (utf8ByteLength(result.content) > MOBILE_MARKDOWN_READ_MAX_BYTES) {
+  if (isMarkdownContentByteLengthOverLimit(result.content, MOBILE_MARKDOWN_READ_MAX_BYTES)) {
     throw new Error('file_too_large')
   }
   return result.content

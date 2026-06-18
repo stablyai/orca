@@ -106,8 +106,17 @@ import {
   getGitHubPRPrimaryReviewer,
   getGitHubPRReviewLabel,
   normalizeGitHubReviewerLogins,
+  parseGitHubReviewerInputLogins,
   type GitHubPRPrimaryReviewer
 } from '@/components/github-pr-reviewer-display'
+import {
+  filterGitHubPRReviewerCandidates,
+  getGitHubPRReviewerQueryState
+} from '@/components/github/github-pr-reviewer-candidate-filter'
+import {
+  filterJiraProjectPickerProjects,
+  getJiraProjectPickerDisplayLabel as getJiraProjectDisplayLabel
+} from '@/components/jira-project-picker-filter'
 import {
   getLinearStateMarkerStyle,
   getLinearStatePillStyle
@@ -155,6 +164,10 @@ import {
 } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import {
+  readLinearBoardIssueDragData,
+  writeLinearBoardIssueDragData
+} from '@/lib/linear-board-drag-payload'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
@@ -198,6 +211,7 @@ import {
 } from '@/components/task-page-github-status-state'
 import { deriveTaskPagePRCheckSummary } from '@/components/task-page-pr-check-summary'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import { buildJiraCreateTextAdf } from '@/components/jira-create-adf'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
@@ -531,8 +545,6 @@ type LinearIssueListRow =
   | { type: 'section'; key: string; label: string; count: number }
   | { type: 'issue'; issue: LinearIssue }
 
-const LINEAR_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-linear-issue-id'
-
 const LINEAR_CUSTOM_VIEW_MODELS = ['issue', 'project'] satisfies readonly LinearCustomViewModel[]
 
 function mergeLinearCollectionResults<T>(
@@ -847,14 +859,6 @@ const jiraProjectLabelCollator = new Intl.Collator(undefined, {
   sensitivity: 'base'
 })
 
-function getJiraProjectDisplayLabel(project: JiraProject, includeSiteName: boolean): string {
-  const projectLabel = `${project.name} (${project.key})`
-  if (includeSiteName && project.siteName) {
-    return `${project.siteName} · ${projectLabel}`
-  }
-  return projectLabel
-}
-
 function compareJiraProjectsByDisplayLabel(
   a: JiraProject,
   b: JiraProject,
@@ -873,17 +877,6 @@ function compareJiraProjectsByDisplayLabel(
   return jiraProjectLabelCollator.compare(a.key, b.key)
 }
 
-function getJiraProjectSearchText(project: JiraProject, includeSiteName: boolean): string {
-  return [
-    getJiraProjectDisplayLabel(project, includeSiteName),
-    project.key,
-    project.name,
-    project.siteName ?? ''
-  ]
-    .join(' ')
-    .toLocaleLowerCase()
-}
-
 const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
 
 function isVisibleJiraCreateField(field: JiraCreateField): boolean {
@@ -900,17 +893,6 @@ function findJiraCreateAllowedValue(field: JiraCreateField, draftValue: string) 
   return field.allowedValues?.find((value) => {
     return value.id === draftValue || value.value === draftValue || value.name === draftValue
   })
-}
-
-function jiraCreateTextToAdf(text: string): Record<string, unknown> {
-  return {
-    type: 'doc',
-    version: 1,
-    content: text.split(/\r?\n/).map((line) => ({
-      type: 'paragraph',
-      content: line ? [{ type: 'text', text: line }] : []
-    }))
-  }
 }
 
 function getJiraCreateOptionPayload(
@@ -954,7 +936,7 @@ function buildJiraCreateFieldValue(field: JiraCreateField, draftValue: string): 
     return Number.isFinite(numberValue) ? numberValue : trimmed
   }
   if (field.schema?.custom?.includes(':textarea') || field.schema?.type === 'textarea') {
-    return jiraCreateTextToAdf(trimmed)
+    return buildJiraCreateTextAdf(trimmed)
   }
   return trimmed
 }
@@ -1884,32 +1866,22 @@ function PRReviewCell({
       ),
     [localReviewRequests]
   )
-  const reviewerQuery = reviewerInput.trim().replace(/^@/, '').toLowerCase()
-  const filteredReviewerCandidates = useMemo(() => {
-    const query = reviewerQuery
-    return reviewerCandidates
-      .filter((user) => {
-        const login = user.login.toLowerCase()
-        return (
-          query.length === 0 ||
-          login.includes(query) ||
-          (user.name ?? '').toLowerCase().includes(query)
-        )
-      })
-      .sort((a, b) => {
-        const aLogin = a.login.toLowerCase()
-        const bLogin = b.login.toLowerCase()
-        const aStarts = aLogin.startsWith(query)
-        const bStarts = bLogin.startsWith(query)
-        if (aStarts !== bStarts) {
-          return aStarts ? -1 : 1
-        }
-        return a.login.localeCompare(b.login)
-      })
-  }, [reviewerCandidates, reviewerQuery])
+  const reviewerQueryState = useMemo(
+    () => getGitHubPRReviewerQueryState(reviewerInput),
+    [reviewerInput]
+  )
+  const reviewerQuery = reviewerQueryState.query
+  const filteredReviewerCandidates = useMemo(
+    () =>
+      filterGitHubPRReviewerCandidates({
+        candidates: reviewerCandidates,
+        queryState: reviewerQueryState
+      }),
+    [reviewerCandidates, reviewerQueryState]
+  )
   const suggestedReviewerRows = useMemo(
     () =>
-      reviewerQuery.length === 0
+      reviewerQuery.length === 0 && !reviewerQueryState.isTooLarge
         ? reviewerSeedUsers
             .filter((user) => !selectedReviewerLogins.has(user.login.toLowerCase()))
             .filter((user) => user.login.toLowerCase() !== authorLogin)
@@ -1920,6 +1892,7 @@ function PRReviewCell({
       authorLogin,
       reviewerCandidatesByLogin,
       reviewerQuery.length,
+      reviewerQueryState.isTooLarge,
       reviewerSeedUsers,
       selectedReviewerLogins
     ]
@@ -1975,7 +1948,7 @@ function PRReviewCell({
       return
     }
     const logins = normalizeGitHubReviewerLogins(
-      requestedLogins ?? reviewerInput.split(/[\s,]+/),
+      requestedLogins ?? parseGitHubReviewerInputLogins(reviewerInput),
       selectedReviewerLogins
     )
     if (logins.length === 0) {
@@ -4948,9 +4921,10 @@ export default function TaskPage(): React.JSX.Element {
         event.preventDefault()
         return
       }
-      event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData(LINEAR_BOARD_DRAG_ISSUE_MIME, issue.id)
-      event.dataTransfer.setData('text/plain', issue.id)
+      if (!writeLinearBoardIssueDragData(event.dataTransfer, issue.id)) {
+        event.preventDefault()
+        return
+      }
       setLinearBoardDraggingIssueId(issue.id)
     },
     [linearBoardUpdatingIssueIds, linearStatusBoardEnabled]
@@ -4979,8 +4953,13 @@ export default function TaskPage(): React.JSX.Element {
         return
       }
 
+      const draggedIssue = readLinearBoardIssueDragData(event.dataTransfer)
       const issueId =
-        event.dataTransfer.getData(LINEAR_BOARD_DRAG_ISSUE_MIME) || linearBoardDraggingIssueId
+        draggedIssue.status === 'issue'
+          ? draggedIssue.issueId
+          : draggedIssue.status === 'hidden'
+            ? linearBoardDraggingIssueId
+            : null
       const issue = filteredLinearIssues.find((item) => item.id === issueId)
       if (
         !issue ||
@@ -5347,13 +5326,11 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const filteredNewJiraIssueProjects = useMemo(() => {
-    const query = newJiraIssueProjectQuery.trim().toLocaleLowerCase()
-    if (!query) {
-      return sortedAvailableJiraProjects
-    }
-    return sortedAvailableJiraProjects.filter((project) =>
-      getJiraProjectSearchText(project, includeJiraSiteNameInProjectLabel).includes(query)
-    )
+    return filterJiraProjectPickerProjects({
+      projects: sortedAvailableJiraProjects,
+      query: newJiraIssueProjectQuery,
+      includeSiteName: includeJiraSiteNameInProjectLabel
+    })
   }, [includeJiraSiteNameInProjectLabel, newJiraIssueProjectQuery, sortedAvailableJiraProjects])
 
   const newJiraIssueTargetProject = useMemo(

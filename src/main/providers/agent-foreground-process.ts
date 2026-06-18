@@ -1,6 +1,8 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import {
+  recognizeAgentProcessFromCommandLine
+} from '../../shared/agent-process-recognition'
 import {
   resolveWindowsAgentForegroundProcess,
   shouldInspectWindowsAgentForeground,

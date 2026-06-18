@@ -43,9 +43,8 @@ type EmulatorDeviceFrameProps = {
   onGesture: (points: EmulatorGesturePoint[]) => void
 }
 
-const MAX_GESTURE_SAMPLES = 32
-const WHEEL_GESTURE_IDLE_MS = 80
-
+const MAX_GESTURE_SAMPLES = 32,
+  WHEEL_GESTURE_IDLE_MS = 80
 type PendingWheelGesture = {
   end: EmulatorScreenPoint
   live: boolean
@@ -79,9 +78,13 @@ export function EmulatorDeviceFrame({
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
   const canInteract = isLive && !loading && !streamError
-  const { sendKeyboardFrames, sendTouch } = useEmulatorControlStream(wsUrl, canInteract)
+  const { cancelKeyboardFrames, sendKeyboardFrames, sendTouch } = useEmulatorControlStream(
+    wsUrl,
+    canInteract
+  )
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
     useEmulatorScreenKeyboard({
+      cancelKeyboardFrames,
       canInteract,
       sendKeyboardFrames
     })

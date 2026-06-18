@@ -78,9 +78,12 @@ import { createAgentCompletionCoordinator } from './agent-completion-coordinator
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import {
   markTerminalBracketedPasteInterrupted,
-  observeTerminalBracketedPasteModeOutput,
-  pasteTerminalText
+  observeTerminalBracketedPasteModeOutput
 } from './terminal-bracketed-paste'
+import { executeTerminalStartupCommandPaste } from './terminal-startup-command-paste'
+import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
+import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
+import { isCodexTerminalStartupCommand } from './terminal-startup-command-classifier'
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
@@ -121,7 +124,6 @@ const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS = 50
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX = 3
-const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
@@ -289,31 +291,13 @@ function readE2eHiddenSnapshotOverride(ptyId: string): Promise<PtyBufferSnapshot
   })
 }
 
-function firstStartupCommandToken(command: string): string {
-  const trimmed = command.trim()
-  const quote = trimmed[0]
-  if ((quote === '"' || quote === "'") && trimmed.length > 1) {
-    const end = trimmed.indexOf(quote, 1)
-    if (end > 1) {
-      return trimmed.slice(1, end)
-    }
-  }
-  return trimmed.split(/\s+/)[0] ?? ''
-}
-
-function isCodexStartupCommand(command: string): boolean {
-  const executable = firstStartupCommandToken(command)
-    .split(/[\\/]/)
-    .pop()
-    ?.toLowerCase()
-    .replace(STARTUP_COMMAND_EXTENSION_RE, '')
-  return executable === 'codex' || executable?.startsWith('codex-') === true
-}
-
 function shouldKeepHiddenStartupRendererQueriesLive(
   startup: PtyConnectionDeps['startup']
 ): boolean {
-  return startup?.telemetry?.agent_kind === 'codex' || isCodexStartupCommand(startup?.command ?? '')
+  return (
+    startup?.telemetry?.agent_kind === 'codex' ||
+    isCodexTerminalStartupCommand(startup?.command ?? '')
+  )
 }
 
 function containsHiddenStartupRendererQuery(data: string): boolean {
@@ -2082,6 +2066,32 @@ export function connectPanePty(
       }
       return true
     }
+    const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
+      !disposed &&
+      deps.paneTransportsRef.current.get(pane.id) === transport &&
+      transport.getPtyId() === ptyId
+    const runTerminalPasteStartupCommand = async (command: string): Promise<boolean> => {
+      const ptyId = transport.getPtyId()
+      const result = await executeTerminalStartupCommandPaste({
+        command,
+        pane,
+        ptyId,
+        runtime: resolveTerminalPasteRuntime({
+          platform: CLIENT_PLATFORM,
+          ptyId,
+          connectionId,
+          remotePlatform: getTerminalPasteSshRemotePlatform(connectionId),
+          transport,
+          isWindowsConpty: isNativeWindowsConpty
+        }),
+        transport,
+        isTargetCurrent: isStartupPasteTargetCurrent
+      })
+      if (result.status !== 'pasted' || !isStartupPasteTargetCurrent(ptyId)) {
+        return false
+      }
+      return transport.sendInput('\r')
+    }
     const schedulePendingStartupCommandDelivery = (): void => {
       if (!pendingStartupCommand) {
         return
@@ -2115,10 +2125,7 @@ export function connectPanePty(
             return
           }
           if (shouldDeliverStartupViaTerminalPaste) {
-            // Why: this mode must pass through xterm so bracketed-paste
-            // wrapping is applied before the submit Enter.
-            pasteTerminalText(pane.terminal, command)
-            transport.sendInput('\r')
+            await runTerminalPasteStartupCommand(command)
           } else {
             transport.sendInput(`${command}\r`)
           }
