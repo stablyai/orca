@@ -41,6 +41,13 @@ function buildStartupOpt(
   }
 }
 
+function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boolean {
+  if (request.worktreeCreateProgressMode) {
+    return request.worktreeCreateProgressMode === 'indeterminate'
+  }
+  return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
+}
+
 async function preflightAgentTrust(request: WorktreeCreationRequest, path: string): Promise<void> {
   // Why: trust-gated agents (cursor-agent, copilot) consume the bracketed paste
   // as menu input on first launch. Pre-write the trust artifact before any
@@ -198,9 +205,9 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
   const creationId = createBrowserUuid()
   const store = useAppStore.getState()
   // Why: the remote/runtime create path emits no progress events, so the stepped
-  // checklist would freeze on step 1. Mark it indeterminate up front so the panel
-  // shows a single spinner instead of implying phase progress that never arrives.
-  const indeterminate = getActiveRuntimeTarget(store.settings).kind !== 'local'
+  // checklist would freeze on step 1. Use the request's captured repo owner so
+  // Retry does not change shape when focus moves to another runtime.
+  const indeterminate = getWorktreeCreationIndeterminate(request)
   store.beginPendingWorktreeCreation({
     creationId,
     phase: 'fetching',

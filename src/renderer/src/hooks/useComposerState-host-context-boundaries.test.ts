@@ -25,8 +25,9 @@ describe('useComposerState host-context boundaries', () => {
     )
 
     expect(section).toContain('const runRepo = selectedRepo ??')
+    expect(section).toContain('resolveGitHubPrStartPointForRepo')
     expect(section).toContain('repoId: runRepo.id')
-    expect(section).toContain('repo: runRepo.id')
+    expect(section).toContain('settings: itemRepoSettings')
     expect(section).not.toContain('repoId: repoForItem.id')
     expect(section).not.toContain('repo: repoForItem.id')
   })
@@ -135,10 +136,55 @@ describe('useComposerState host-context boundaries', () => {
     const submitLookup = sourceBetween(
       HOOK_SOURCE,
       'const resolvePendingSmartGitHubSubmit',
-      'const resolution = getSmartGitHubSubmitResolution(item)'
+      'const prStartPoint'
     )
     expect(submitLookup).toContain('sourceContext:')
     expect(submitLookup).toContain('selectedRepoGitHubSourceContext')
+  })
+
+  it('uses submit-time GitHub PR start points for the create payload', () => {
+    const submitLookup = sourceBetween(
+      HOOK_SOURCE,
+      'const resolvePendingSmartGitHubSubmit',
+      'const applyLinkedGitLabWorkItem'
+    )
+    expect(submitLookup).toContain('resolveGitHubPrStartPointForRepo')
+    expect(submitLookup).toContain("kind: 'pr-start-point'")
+    expect(submitLookup).toContain("kind: 'metadata-only'")
+    expect(submitLookup).toContain('baseBranch: prStartPoint.baseBranch')
+    expect(submitLookup).toContain('branchNameOverride: prStartPoint.branchNameOverride')
+
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+    expect(fullSubmit).toContain("smartGitHubResolution.kind === 'pr-start-point'")
+    expect(fullSubmit).toContain("smartGitHubResolution.kind === 'metadata-only'")
+    expect(fullSubmit).toContain('effectiveLinkedPR !== null || linkedGitLabMR !== null')
+    expect(fullSubmit).toContain('selectedRepoIsGit ? submitBaseBranch : undefined')
+    expect(fullSubmit).toContain('submitPushTarget')
+    expect(fullSubmit).toContain('submitCompareBaseRef')
+    expect(fullSubmit).not.toContain('smartGitHubResolution?.baseBranch ?? baseBranch')
+    expect(fullSubmit).not.toContain('smartGitHubResolution?.compareBaseRef ?? compareBaseRef')
+    expect(fullSubmit).not.toContain('smartGitHubResolution?.pushTarget ?? pushTarget')
+    expect(fullSubmit).not.toContain(
+      'smartGitHubResolution?.branchNameOverride ?? branchNameOverride'
+    )
+
+    const quickSubmit = sourceBetween(HOOK_SOURCE, 'const submitQuick = useCallback', 'return {')
+    expect(quickSubmit).toContain("smartGitHubResolution.kind === 'pr-start-point'")
+    expect(quickSubmit).toContain("smartGitHubResolution.kind === 'metadata-only'")
+    expect(quickSubmit).toContain('effectiveLinkedPR !== null || linkedGitLabMR !== null')
+    expect(quickSubmit).toContain('explicitBaseBranch: smartSubmitBaseBranch')
+    expect(quickSubmit).toContain('pushTarget: submitPushTarget')
+    expect(quickSubmit).toContain('compareBaseRef: submitCompareBaseRef')
+    expect(quickSubmit).not.toContain('smartGitHubResolution?.baseBranch ?? baseBranch')
+    expect(quickSubmit).not.toContain('smartGitHubResolution?.compareBaseRef ?? compareBaseRef')
+    expect(quickSubmit).not.toContain('smartGitHubResolution?.pushTarget ?? pushTarget')
+    expect(quickSubmit).not.toContain(
+      'smartGitHubResolution?.branchNameOverride ?? branchNameOverride'
+    )
   })
 
   it('resolves submit-time GitHub smart input when folder child repos exist', () => {
@@ -156,7 +202,7 @@ describe('useComposerState host-context boundaries', () => {
     const lookupSection = sourceBetween(
       HOOK_SOURCE,
       'const resolvePendingSmartGitHubSubmit',
-      'const resolution = getSmartGitHubSubmitResolution(item)'
+      'const prStartPoint'
     )
     expect(lookupSection).toContain('isProjectGroupTarget')
     expect(lookupSection).toContain('folderSourceRepos.filter(isGitRepoKind)')
@@ -304,10 +350,14 @@ describe('useComposerState host-context boundaries', () => {
   })
 
   it('resolves quick-create base refs through the worktree-create precedence helper', () => {
-    const section = sourceBetween(HOOK_SOURCE, 'const submitBaseBranch', 'const createDisplayName')
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const smartSubmitBaseBranch',
+      'const createDisplayName'
+    )
 
     expect(section).toContain('resolveWorktreeCreateBaseBranch')
-    expect(section).toContain('explicitBaseBranch: baseBranch')
+    expect(section).toContain('explicitBaseBranch: smartSubmitBaseBranch')
     expect(section).toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
     expect(section).toContain('getRuntimeRepoBaseRefDefault')
   })
