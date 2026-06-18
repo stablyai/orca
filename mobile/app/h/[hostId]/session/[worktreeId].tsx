@@ -2489,7 +2489,9 @@ export default function SessionScreen() {
     }
     void (async () => {
       if (client && created !== '1') {
-        await client
+        // Why: desktop reveal can be slow on cold/busy hosts, but mobile
+        // session tabs are addressed by worktree id and can load immediately.
+        void client
           .sendRequest('worktree.activate', {
             worktree: `id:${worktreeId}`
           })

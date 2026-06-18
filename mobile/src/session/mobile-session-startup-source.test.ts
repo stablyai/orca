@@ -29,6 +29,19 @@ describe('mobile session startup', () => {
     expect(autoCreateEffect).toContain('void handleCreateTerminal()')
   })
 
+  it('loads session tabs without waiting for desktop activation', () => {
+    const startupEffect = sliceBetween(
+      'void (async () => {',
+      'return () => {\n      disposed = true'
+    )
+
+    expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
+    expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")
+    expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
+      startupEffect.indexOf('await fetchSessionTabs()')
+    )
+  })
+
   it('keeps dynamic agent rows above fixed New Tab actions', () => {
     const newTabActions = sliceBetween('title="New Tab"', 'onClose={() => setShowCreateTabDrawer')
 
