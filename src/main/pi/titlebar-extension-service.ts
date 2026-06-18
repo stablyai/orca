@@ -27,6 +27,7 @@ export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
+const ORCA_MANAGED_EXTENSION_MARKER_LINE = `// ${ORCA_MANAGED_EXTENSION_MARKER}`
 
 type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
 
@@ -63,9 +64,9 @@ function toSafeOverlayDirName(ptyId: string): string {
 }
 
 function withOrcaManagedExtensionMarker(source: string): string {
-  return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
+  return source.startsWith(`${ORCA_MANAGED_EXTENSION_MARKER_LINE}\n`)
     ? source
-    : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
+    : `${ORCA_MANAGED_EXTENSION_MARKER_LINE}\n${source}`
 }
 
 export class PiTitlebarExtensionService {
@@ -92,9 +93,10 @@ export class PiTitlebarExtensionService {
 
   private canOverwriteManagedExtension(path: string): boolean {
     try {
-      return readFileSync(path, 'utf8').includes(ORCA_MANAGED_EXTENSION_MARKER)
-    } catch {
-      return true
+      const [firstLine] = readFileSync(path, 'utf8').split(/\r?\n/, 1)
+      return firstLine === ORCA_MANAGED_EXTENSION_MARKER_LINE
+    } catch (err) {
+      return (err as NodeJS.ErrnoException).code === 'ENOENT'
     }
   }
 

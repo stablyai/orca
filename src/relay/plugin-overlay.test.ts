@@ -90,6 +90,19 @@ describe('PluginOverlayManager', () => {
     expect(readFileSync(extensionFile, 'utf8')).toBe('user-owned remote status extension')
   })
 
+  it('does not treat incidental marker text as remote Orca ownership', () => {
+    const piAgentDir = join(homeDir, '.pi', 'agent')
+    const extensionFile = join(piAgentDir, 'extensions', 'orca-agent-status.ts')
+    const userStatusExtension =
+      '/* @orca-managed-pi-extension */\nuser-owned remote status extension'
+    mkdirSync(join(piAgentDir, 'extensions'), { recursive: true })
+    writeFileSync(extensionFile, userStatusExtension)
+
+    manager.setSources({ piExtensionSource: '// pi extension' })
+    expect(manager.materializePi('tab-incidental-marker:0')).toBeNull()
+    expect(readFileSync(extensionFile, 'utf8')).toBe(userStatusExtension)
+  })
+
   it('uses the kind-specific Pi-compatible extension source when available', () => {
     manager.setSources({
       piExtensionSource: '// pi extension',

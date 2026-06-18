@@ -39,6 +39,8 @@ function windowsShellArgs(shellName: string): string[] | null {
 }
 
 function hasOverlayRestoreEnv(env: Record<string, string>): boolean {
+  // Why: Pi/OMP source markers still require wrapper files for typed `omp`;
+  // the managed-extension path can omit ORCA_OMP_STATUS_EXTENSION.
   return Boolean(
     env.ORCA_OPENCODE_CONFIG_DIR ||
     env.ORCA_REMOTE_CLI_BIN_DIR ||

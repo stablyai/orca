@@ -254,6 +254,43 @@ exit 0
     }
   )
 
+  itWithBash('does not inject the status extension into launch help', async () => {
+    const tempDir = makeTempDir()
+    const binDir = join(tempDir, 'bin')
+    const sourceDir = join(tempDir, 'source-omp-agent')
+    const extensionDir = join(sourceDir, 'extensions')
+    mkdirSync(binDir)
+    mkdirSync(extensionDir, { recursive: true })
+    const statusExtension = join(extensionDir, 'orca-agent-status.ts')
+    writeFileSync(statusExtension, 'export default {}')
+    writeFakeOmp(binDir)
+
+    const captureFile = join(tempDir, 'launch-help-capture')
+    await runInteractiveBashPty({
+      cwd: tempDir,
+      rcfileContent: getPosixOmpShellWrapper(),
+      env: {
+        ...process.env,
+        HOME: tempDir,
+        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        PI_CODING_AGENT_DIR: '',
+        ORCA_OMP_SOURCE_AGENT_DIR: sourceDir,
+        ORCA_OMP_STATUS_EXTENSION: statusExtension,
+        ORCA_FAKE_OMP_DEFAULT_DIR: sourceDir,
+        ORCA_CAPTURE_FILE: captureFile,
+        TERM: process.env.TERM || 'xterm-256color'
+      },
+      input: `omp launch --help
+exit 0
+`
+    })
+
+    const capture = readFileSync(captureFile, 'utf8')
+    expect(capture).toContain(`PI=${sourceDir}`)
+    expect(capture).toContain('ARG1=launch')
+    expect(capture).toContain('ARG2=--help')
+    expect(capture).not.toContain('ARG2=--extension')
+  })
   itWithBash(
     'does not let a Pi-only Orca shell route typed OMP through the Pi overlay',
     async () => {

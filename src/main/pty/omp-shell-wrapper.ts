@@ -36,10 +36,17 @@ __orca_omp_is_subcommand() {
   esac
   return 1
 }
+__orca_omp_has_help_flag() {
+  local __orca_arg
+  for __orca_arg in "$@"; do
+    case "$__orca_arg" in
+      help|--help|-h|--version|-v) return 0 ;;
+    esac
+  done
+  return 1
+}
 __orca_omp_should_skip_extension() {
-  case "\${1:-}" in
-    help|--help|-h|--version|-v) return 0 ;;
-  esac
+  __orca_omp_has_help_flag "$@" && return 0
   __orca_omp_is_subcommand "\${1:-}"
 }
 __orca_omp_has_pi_only_home() {
@@ -59,7 +66,7 @@ __orca_omp() {
   local __orca_had_pi=0
   [[ -n "\${PI_CODING_AGENT_DIR+x}" ]] && __orca_had_pi=1
   local __orca_use_extension=1
-  __orca_omp_should_skip_extension "\${1:-}" && __orca_use_extension=0
+  __orca_omp_should_skip_extension "$@" && __orca_use_extension=0
   if [[ $__orca_use_extension -eq 1 ]]; then
     if [[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
       export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
@@ -124,9 +131,18 @@ function Global:__OrcaOmpIsSubcommand {
     $subcommands = @(${subcommands})
     return $subcommands -contains $Name
 }
+function Global:__OrcaOmpHasHelpFlag {
+    param([object[]]$Values)
+    foreach ($Value in $Values) {
+        if (@("help", "--help", "-h", "--version", "-v") -contains ([string]$Value)) {
+            return $true
+        }
+    }
+    return $false
+}
 function Global:__OrcaOmpShouldSkipExtension {
-    param([string]$Name)
-    if (@("help", "--help", "-h", "--version", "-v") -contains $Name) { return $true }
+    param([string]$Name, [object[]]$Values)
+    if (__OrcaOmpHasHelpFlag -Values $Values) { return $true }
     return __OrcaOmpIsSubcommand -Name $Name
 }
 function Global:__OrcaOmpHasPiOnlyHome {
@@ -144,7 +160,7 @@ if ($env:ORCA_OMP_CODING_AGENT_DIR -or $env:ORCA_OMP_SOURCE_AGENT_DIR -or
     function Global:omp {
         $orcaPrevPi = $env:PI_CODING_AGENT_DIR
         $orcaHadPi = Test-Path Env:PI_CODING_AGENT_DIR
-        $orcaUseExtension = -not (__OrcaOmpShouldSkipExtension -Name ([string]($args[0])))
+        $orcaUseExtension = -not (__OrcaOmpShouldSkipExtension -Name ([string]($args[0])) -Values $args)
         if ($orcaUseExtension) {
             if ($env:ORCA_OMP_CODING_AGENT_DIR) {
                 $env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_CODING_AGENT_DIR

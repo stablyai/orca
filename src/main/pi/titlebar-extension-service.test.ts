@@ -231,6 +231,19 @@ describe('PiTitlebarExtensionService', () => {
     expectPiHomeIntact()
   })
 
+  it('does not treat incidental marker text as Orca ownership', () => {
+    const userStatusExtension = '/* @orca-managed-pi-extension */\nuser-owned status extension'
+    writeFileSync(join(piHome, 'extensions', 'orca-agent-status.ts'), userStatusExtension, 'utf-8')
+
+    const svc = new PiTitlebarExtensionService()
+    const env = svc.buildPtyEnv('pty-incidental-marker', piHome, 'pi')
+
+    expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe(piHome)
+    expect(readFileSync(join(piHome, 'extensions', 'orca-agent-status.ts'), 'utf-8')).toBe(
+      userStatusExtension
+    )
+  })
+
   it.skipIf(process.platform === 'win32')(
     'writes bundled extensions through a symlinked user extensions dir',
     () => {

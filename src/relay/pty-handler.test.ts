@@ -807,11 +807,12 @@ describe('PtyHandler', () => {
       expect(shellArgs).toEqual(['--rcfile', rcfile])
       expect(spawnOptions.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/remote/overlay/opencode')
       expect(spawnOptions.env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
-      expect(readFileSync(rcfile, 'utf8')).toContain(
-        'export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
+      const rcfileContent = readFileSync(rcfile, 'utf8')
+      expect(rcfileContent).toContain('export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"')
+      expect(rcfileContent).not.toContain(
+        'export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
       )
-      expect(readFileSync(rcfile, 'utf8')).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-      expect(readFileSync(rcfile, 'utf8')).toContain('command omp --extension')
+      expect(rcfileContent).toContain('command omp --extension')
 
       rmSync(homeDir, { recursive: true, force: true })
     }

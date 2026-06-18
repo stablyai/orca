@@ -42,11 +42,12 @@ const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
+const ORCA_MANAGED_EXTENSION_MARKER_LINE = `// ${ORCA_MANAGED_EXTENSION_MARKER}`
 
 function withOrcaManagedPiExtensionMarker(source: string): string {
-  return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
+  return source.startsWith(`${ORCA_MANAGED_EXTENSION_MARKER_LINE}\n`)
     ? source
-    : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
+    : `${ORCA_MANAGED_EXTENSION_MARKER_LINE}\n${source}`
 }
 // Why: source-dir resolution is keyed off the launching agent (Pi or OMP).
 // Both consume `PI_CODING_AGENT_DIR` but default to different `~/.<kind>/agent`
@@ -224,9 +225,10 @@ export class PluginOverlayManager {
 
   private canOverwritePiExtension(path: string): boolean {
     try {
-      return readFileSync(path, 'utf8').includes(ORCA_MANAGED_EXTENSION_MARKER)
-    } catch {
-      return true
+      const [firstLine] = readFileSync(path, 'utf8').split(/\r?\n/, 1)
+      return firstLine === ORCA_MANAGED_EXTENSION_MARKER_LINE
+    } catch (err) {
+      return (err as NodeJS.ErrnoException).code === 'ENOENT'
     }
   }
 
