@@ -14,7 +14,7 @@ export type RichMarkdownReviewRailState = {
 const REVIEW_NOTE_GAP_PX = 8
 const REVIEW_NOTE_BASE_HEIGHT_PX = 58 // new Notion-style card base height (padding, border, gap, header)
 const REVIEW_NOTE_BODY_LINE_HEIGHT_PX = 20 // new body line-height
-const REVIEW_NOTE_QUOTE_HEIGHT_PX = 32 // new quote height (border, margins, text)
+const REVIEW_NOTE_QUOTE_HEIGHT_PX = 24 // single-line quote height (line-height plus margins)
 
 function getReviewNoteStartLine(comment: Pick<DiffComment, 'lineNumber' | 'startLine'>): number {
   return comment.startLine ?? comment.lineNumber
@@ -46,10 +46,11 @@ export function stackRichMarkdownReviewNotePositions(
   return [...positions].sort(compareRichMarkdownReviewNotePositions).map((position) => {
     const top = Math.max(position.top, nextOpenTop)
     const measured = measuredHeights?.get(position.comment.id)
+    // Why: cards render a fallback source-line quote even when no exact text was selected.
     const estimatedHeight =
       REVIEW_NOTE_BASE_HEIGHT_PX +
       position.comment.body.split('\n').length * REVIEW_NOTE_BODY_LINE_HEIGHT_PX +
-      (position.comment.selectedText ? REVIEW_NOTE_QUOTE_HEIGHT_PX : 0)
+      REVIEW_NOTE_QUOTE_HEIGHT_PX
     const height = measured ?? estimatedHeight
     nextOpenTop = top + height + REVIEW_NOTE_GAP_PX
     return { ...position, top }

@@ -422,6 +422,55 @@ describe('runtime git client', () => {
     })
   })
 
+  it('passes one-shot commit-message params to local and runtime generation', async () => {
+    const sourceControlAiResolvedParams = {
+      agentId: 'codex' as const,
+      model: 'gpt-5.5',
+      thinkingLevel: 'high',
+      customPrompt: 'Use Conventional Commits.'
+    }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { success: true, message: 'feat: test' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await generateRuntimeCommitMessage(
+      {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'repo-1::/repo',
+        worktreePath: '/repo'
+      },
+      { sourceControlAiResolvedParams }
+    )
+    await generateRuntimeCommitMessage(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo'
+      },
+      { sourceControlAiResolvedParams }
+    )
+
+    expect(gitGenerateCommitMessage).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      repoId: 'repo-1',
+      connectionId: undefined,
+      sourceControlAiResolvedParams
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'git.generateCommitMessage',
+      params: {
+        worktree: 'id:wt-1',
+        commitMessageDiscoveryHostKey: 'runtime:env-1',
+        sourceControlAiResolvedParams
+      },
+      timeoutMs: 75_000
+    })
+  })
+
   it('discovers commit-message models through the active runtime', async () => {
     const agentCmdOverrides = { cursor: 'cursor-agent' }
     runtimeEnvironmentCall.mockResolvedValue({

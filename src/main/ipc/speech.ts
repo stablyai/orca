@@ -4,6 +4,11 @@ import { writeFile, unlink } from 'fs/promises'
 import { createHash } from 'crypto'
 import { SPEECH_MODEL_CATALOG, getCatalogModel } from '../speech/model-catalog'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import {
+  clearOpenAiSpeechApiKey,
+  hasOpenAiSpeechApiKey,
+  saveOpenAiSpeechApiKey
+} from '../speech/openai-api-key-store'
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -13,6 +18,20 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle('speech:getModelStates', async () => {
     return getSpeechModelManager(store).getModelStates()
+  })
+
+  ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
+    return { configured: hasOpenAiSpeechApiKey() }
+  })
+
+  ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
+    saveOpenAiSpeechApiKey(apiKey)
+    return { configured: true }
+  })
+
+  ipcMain.handle('speech:clearOpenAiApiKey', async () => {
+    clearOpenAiSpeechApiKey()
+    return { configured: false }
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {

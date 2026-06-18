@@ -181,25 +181,31 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
 }
 
 /**
- * Prepend newly-discovered PATH segments to process.env.PATH, preserving
- * existing ordering and avoiding duplicates. Returns the segments that were
- * actually added so callers can log/telemetry on nontrivial hydrations.
+ * Promote shell-discovered PATH segments to the front of process.env.PATH,
+ * preserving shell ordering and avoiding duplicates. Returns the segments that
+ * were newly added so callers can log/telemetry on nontrivial hydrations.
  */
 export function mergePathSegments(segments: string[]): string[] {
   if (segments.length === 0) {
     return []
   }
   const current = process.env.PATH ?? ''
-  const existing = new Set(current.split(delimiter).filter(Boolean))
-  // Why: Node 22+ Set.prototype.difference preserves insertion order of the
-  // receiver, so [...incoming.difference(existing)] gives us the new entries
-  // in the order the shell provided them (first-match-wins on PATH).
-  const added = [...new Set(segments).difference(existing)]
-  if (added.length === 0) {
+  const currentSegments = current.split(delimiter).filter(Boolean)
+  const shellSegments = [...new Set(segments)]
+  const shellSegmentSet = new Set(shellSegments)
+  const existing = new Set(currentSegments)
+  const added = shellSegments.filter((segment) => !existing.has(segment))
+  const merged = [
+    ...shellSegments,
+    ...currentSegments.filter((segment) => !shellSegmentSet.has(segment))
+  ]
+  const next = merged.join(delimiter)
+  if (next === current) {
     return []
   }
-  // Why: prepend so shell-provided entries win over the hardcoded fallbacks.
-  // The user's rc files are the source of truth for `which`-style resolution.
-  process.env.PATH = [...added, ...current.split(delimiter).filter(Boolean)].join(delimiter)
+  // Why: shell-provided entries must win over hardcoded packaged-app fallbacks.
+  // A seeded fallback can point at a stale CLI while the user's shell resolves
+  // a healthy one from the same directory list in a different order.
+  process.env.PATH = next
   return added
 }

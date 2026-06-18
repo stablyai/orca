@@ -12,6 +12,11 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp/orca-speech-test') },
   BrowserWindow: { fromWebContents: fromWebContentsMock },
   ipcMain: { handle: handleMock },
+  safeStorage: {
+    decryptString: vi.fn(),
+    encryptString: vi.fn(() => Buffer.from('encrypted')),
+    isEncryptionAvailable: vi.fn(() => true)
+  },
   systemPreferences: {
     getMediaAccessStatus: vi.fn(() => 'granted'),
     askForMediaAccess: vi.fn(() => Promise.resolve(true))

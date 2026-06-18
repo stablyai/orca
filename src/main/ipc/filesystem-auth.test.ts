@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type * as RepoWorktrees from '../repo-worktrees'
 import { listRepoWorktrees } from '../repo-worktrees'
-import type { GitWorktreeInfo, Repo } from '../../shared/types'
+import type { FolderWorkspace, GitWorktreeInfo, ProjectGroup, Repo } from '../../shared/types'
 import {
   invalidateAuthorizedRootsCache,
   isDescendantOrEqual,
@@ -35,9 +35,52 @@ const repo: Repo = {
   kind: 'git'
 }
 
-function makeStore(repos: Repo[] = [repo]): Store {
+function makeProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
+  return {
+    id: 'group-1',
+    name: 'Workspace',
+    parentPath: '/folders/workspace',
+    parentGroupId: null,
+    createdFrom: 'folder-scan',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
+function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
+  return {
+    id: 'folder-workspace-1',
+    projectGroupId: 'group-1',
+    name: 'Feature',
+    folderPath: '/folders/workspace',
+    comment: '',
+    linkedTask: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 1,
+    lastActivityAt: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
+function makeStore(
+  repos: Repo[] = [repo],
+  options: {
+    projectGroups?: ProjectGroup[]
+    folderWorkspaces?: FolderWorkspace[]
+  } = {}
+): Store {
   return {
     getRepos: () => repos,
+    getProjectGroups: () => options.projectGroups ?? [],
+    getFolderWorkspaces: () => options.folderWorkspaces ?? [],
     getSettings: () => ({})
   } as unknown as Store
 }
@@ -111,6 +154,113 @@ describe('filesystem-auth path containment', () => {
     }
   })
 
+  it('authorizes local folder workspace roots outside child repo roots', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-folder-workspace-'))
+    try {
+      const folderPath = join(tempRoot, 'platform')
+      const repoPath = join(folderPath, 'web')
+      await mkdir(repoPath, { recursive: true })
+      const projectGroup = makeProjectGroup({ parentPath: folderPath })
+      const folderWorkspace = makeFolderWorkspace({ folderPath, projectGroupId: projectGroup.id })
+      const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }], {
+        projectGroups: [projectGroup],
+        folderWorkspaces: [folderWorkspace]
+      })
+
+      await expect(resolveAuthorizedPath(folderPath, store)).resolves.toBe(
+        await realpath(folderPath)
+      )
+      await expect(resolveAuthorizedPath(join(folderPath, 'notes.md'), store)).resolves.toBe(
+        join(await realpath(folderPath), 'notes.md')
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('authorizes local folder-backed project group roots outside child repo roots', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-project-group-'))
+    try {
+      const folderPath = join(tempRoot, 'platform')
+      const repoPath = join(folderPath, 'web')
+      await mkdir(repoPath, { recursive: true })
+      const projectGroup = makeProjectGroup({ parentPath: folderPath })
+      const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }], {
+        projectGroups: [projectGroup]
+      })
+
+      await expect(resolveAuthorizedPath(folderPath, store)).resolves.toBe(
+        await realpath(folderPath)
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('does not authorize SSH-only folder workspace roots as local paths', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-remote-folder-workspace-'))
+    try {
+      const folderPath = join(tempRoot, 'remote-platform')
+      const repoPath = join(folderPath, 'web')
+      await mkdir(repoPath, { recursive: true })
+      const projectGroup = makeProjectGroup({ parentPath: folderPath })
+      const folderWorkspace = makeFolderWorkspace({ folderPath, projectGroupId: projectGroup.id })
+      const store = makeStore(
+        [{ ...repo, id: 'repo-temp', path: repoPath, connectionId: 'ssh-1' }],
+        {
+          projectGroups: [projectGroup],
+          folderWorkspaces: [folderWorkspace]
+        }
+      )
+
+      await expect(resolveAuthorizedPath(folderPath, store)).rejects.toThrow('Access denied')
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('does not authorize repo-less SSH-provenance folder roots as local paths', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-remote-folder-provenance-'))
+    try {
+      const folderPath = join(tempRoot, 'remote-platform')
+      await mkdir(folderPath, { recursive: true })
+      const projectGroup = makeProjectGroup({ parentPath: folderPath, connectionId: 'ssh-1' })
+      const folderWorkspace = makeFolderWorkspace({
+        folderPath,
+        projectGroupId: projectGroup.id,
+        connectionId: 'ssh-1'
+      })
+      const store = makeStore([], {
+        projectGroups: [projectGroup],
+        folderWorkspaces: [folderWorkspace]
+      })
+
+      await expect(resolveAuthorizedPath(folderPath, store)).rejects.toThrow('Access denied')
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('does not authorize SSH-only folder-backed project group roots as local paths', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-remote-project-group-'))
+    try {
+      const folderPath = join(tempRoot, 'remote-platform')
+      const repoPath = join(folderPath, 'web')
+      await mkdir(repoPath, { recursive: true })
+      const projectGroup = makeProjectGroup({ parentPath: folderPath })
+      const store = makeStore(
+        [{ ...repo, id: 'repo-temp', path: repoPath, connectionId: 'ssh-1' }],
+        {
+          projectGroups: [projectGroup]
+        }
+      )
+
+      await expect(resolveAuthorizedPath(folderPath, store)).rejects.toThrow('Access denied')
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it.skipIf(process.platform === 'win32')(
     'rejects missing descendants under a symlinked ancestor outside the repo',
     async () => {
@@ -141,7 +291,7 @@ describe('filesystem-auth path containment', () => {
 
   it('allows git-relative files under dotdot-prefixed child directories', () => {
     expect(validateGitRelativeFilePath(resolve('/workspace/repo'), '..fixtures/file.ts')).toBe(
-      '..fixtures/file.ts'
+      join('..fixtures', 'file.ts')
     )
   })
 

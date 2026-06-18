@@ -1,6 +1,14 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
-type LinkedReviewMetadataProvider = 'github' | 'gitlab'
+type LinkedReviewMetadataProvider = Exclude<HostedReviewInfo['provider'], 'unsupported'>
+
+type LinkedReviewNumbers = {
+  linkedPR: number | null
+  linkedGitLabMR: number | null
+  linkedBitbucketPR: number | null
+  linkedAzureDevOpsPR: number | null
+  linkedGiteaPR: number | null
+}
 
 export type WorktreeCardPrDisplay =
   | HostedReviewInfo
@@ -15,13 +23,20 @@ export type WorktreeCardPrDisplay =
 
 function getLinkedReviewNumber(
   provider: LinkedReviewMetadataProvider,
-  linkedPR: number | null,
-  linkedGitLabMR: number | null
+  links: LinkedReviewNumbers
 ): number | null {
-  if (provider === 'github') {
-    return linkedPR
+  switch (provider) {
+    case 'github':
+      return links.linkedPR
+    case 'gitlab':
+      return links.linkedGitLabMR
+    case 'bitbucket':
+      return links.linkedBitbucketPR
+    case 'azure-devops':
+      return links.linkedAzureDevOpsPR
+    case 'gitea':
+      return links.linkedGiteaPR
   }
-  return linkedGitLabMR
 }
 
 function makeLinkedReviewFallback(
@@ -39,24 +54,28 @@ function makeLinkedReviewFallback(
   }
 }
 
-function hasLinkedReviewMetadataProvider(
-  provider: HostedReviewInfo['provider']
-): provider is LinkedReviewMetadataProvider {
-  return provider === 'github' || provider === 'gitlab'
-}
-
 export function getWorktreeCardPrDisplay(
   review: HostedReviewInfo | null | undefined,
   linkedPR: number | null,
-  linkedGitLabMR: number | null = null
+  linkedGitLabMR: number | null = null,
+  linkedBitbucketPR: number | null = null,
+  linkedAzureDevOpsPR: number | null = null,
+  linkedGiteaPR: number | null = null
 ): WorktreeCardPrDisplay | null {
+  const links = {
+    linkedPR,
+    linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR
+  }
   if (review) {
-    if (!hasLinkedReviewMetadataProvider(review.provider)) {
+    if (review.provider === 'unsupported') {
       return review
     }
-    const linkedReviewNumber = getLinkedReviewNumber(review.provider, linkedPR, linkedGitLabMR)
+    const linkedReviewNumber = getLinkedReviewNumber(review.provider, links)
     if (linkedReviewNumber === null) {
-      return null
+      return review.provider === 'github' || review.provider === 'gitlab' ? null : review
     }
     if (review.number === linkedReviewNumber) {
       return review
@@ -70,6 +89,18 @@ export function getWorktreeCardPrDisplay(
 
   if (linkedGitLabMR !== null) {
     return makeLinkedReviewFallback('gitlab', linkedGitLabMR, review)
+  }
+
+  if (linkedBitbucketPR !== null) {
+    return makeLinkedReviewFallback('bitbucket', linkedBitbucketPR, review)
+  }
+
+  if (linkedAzureDevOpsPR !== null) {
+    return makeLinkedReviewFallback('azure-devops', linkedAzureDevOpsPR, review)
+  }
+
+  if (linkedGiteaPR !== null) {
+    return makeLinkedReviewFallback('gitea', linkedGiteaPR, review)
   }
 
   return null

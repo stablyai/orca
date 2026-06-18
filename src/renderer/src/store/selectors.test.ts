@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Repo, Worktree } from '../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import type { AppState } from './types'
 import {
   getAllWorktreesFromState,
+  getProjectHostSetupProjectionFromState,
   getWorktreeMapFromState,
   resetFloatingVisibleTabCountSelectorCacheForTest,
   selectFloatingVisibleTabCount
@@ -28,6 +30,15 @@ function makeWorktree(args: { id: string; repoId: string; displayName: string })
     branch: 'main',
     isBare: false,
     isMainWorktree: false
+  }
+}
+
+function makeRepo(args: Pick<Repo, 'id' | 'path' | 'displayName'> & Partial<Repo>): Repo {
+  return {
+    badgeColor: '#737373',
+    addedAt: 100,
+    kind: 'git',
+    ...args
   }
 }
 
@@ -155,5 +166,148 @@ describe('store selectors', () => {
 
     expect(selectFloatingVisibleTabCount({ ...state })).toBe(3)
     expect(openFileScans).toBe(1)
+  })
+
+  it('caches the project host setup projection by repo slice identity', () => {
+    const repos = [
+      makeRepo({
+        id: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca'
+      })
+    ]
+    const state = { repos }
+
+    const projection = getProjectHostSetupProjectionFromState(state)
+
+    expect(projection.projects).toHaveLength(1)
+    expect(projection.setups[0]).toMatchObject({
+      id: 'repo-1',
+      projectId: 'repo:repo-1',
+      hostId: 'local'
+    })
+    expect(getProjectHostSetupProjectionFromState({ repos })).toBe(projection)
+    expect(getProjectHostSetupProjectionFromState({ repos: [...repos] })).not.toBe(projection)
+  })
+
+  it('prefers hydrated project host setup state when present', () => {
+    const repos = [
+      makeRepo({
+        id: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca'
+      })
+    ]
+    const projects = [
+      {
+        id: 'project-1',
+        displayName: 'Project',
+        badgeColor: '#737373',
+        sourceRepoIds: ['repo-1'],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    const projectHostSetups = [
+      {
+        id: 'setup-1',
+        projectId: 'project-1',
+        hostId: 'local' as const,
+        repoId: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca',
+        setupState: 'ready' as const,
+        setupMethod: 'legacy-repo' as const,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+
+    expect(getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups })).toEqual({
+      projects,
+      setups: projectHostSetups
+    })
+  })
+
+  it('falls back to repo compatibility projection when hydrated setup state is empty', () => {
+    const repos = [
+      makeRepo({
+        id: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca',
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      })
+    ]
+
+    const projection = getProjectHostSetupProjectionFromState({
+      repos,
+      projects: [],
+      projectHostSetups: []
+    })
+
+    expect(projection.projects).toEqual([
+      expect.objectContaining({
+        id: 'github:stablyai/orca',
+        sourceRepoIds: ['repo-1']
+      })
+    ])
+    expect(projection.setups).toEqual([
+      expect.objectContaining({
+        id: 'repo-1',
+        projectId: 'github:stablyai/orca',
+        repoId: 'repo-1',
+        hostId: 'local',
+        path: '/Users/alice/orca'
+      })
+    ])
+  })
+
+  it('merges missing repo compatibility rows with independent hydrated setups', () => {
+    const repos = [
+      makeRepo({
+        id: 'repo-1',
+        path: '/Users/alice/orca',
+        displayName: 'orca'
+      })
+    ]
+    const projects = [
+      {
+        id: 'cloud-project',
+        displayName: 'Cloud Project',
+        badgeColor: '#737373',
+        sourceRepoIds: [],
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    const projectHostSetups = [
+      {
+        id: 'cloud-project::gpu-vm',
+        projectId: 'cloud-project',
+        hostId: toRuntimeExecutionHostId('gpu-vm'),
+        repoId: '',
+        path: '/srv/cloud-project',
+        displayName: 'GPU VM',
+        setupState: 'ready' as const,
+        setupMethod: 'provisioned' as const,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+
+    const projection = getProjectHostSetupProjectionFromState({
+      repos,
+      projects,
+      projectHostSetups
+    })
+
+    expect(projection.projects.map((project) => project.id)).toEqual([
+      'repo:repo-1',
+      'cloud-project'
+    ])
+    expect(projection.setups.map((setup) => setup.id)).toEqual(['repo-1', 'cloud-project::gpu-vm'])
+    expect(getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups })).toBe(
+      projection
+    )
   })
 })

@@ -18,6 +18,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
+  Devin: 'devin',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   Aider: 'aider',
@@ -30,13 +31,6 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
 function agentFromTitle(title: string): TuiAgent | null {
   const label = getAgentLabel(title)
   return label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
-}
-
-function isGenericClaudeTitle(title: string, titleAgent: TuiAgent | null): boolean {
-  if (titleAgent !== 'claude') {
-    return false
-  }
-  return !/(?<![\w./\\-])claude(?![\w./\\-])/i.test(title)
 }
 
 function getTitleForegroundKey(title: string): string {
@@ -71,31 +65,27 @@ export function resolveTabAgentFromSignals(args: {
 }): TuiAgent | null {
   const titleAgent = agentFromTitle(args.title)
   const titleLooksShell = isShellProcess(args.title)
+  // Why: remote panes cannot cheaply prove shell foreground after hook exit,
+  // so keep the last completed hook identity instead of flashing unknown.
+  const completedHookAgent =
+    !args.isRemote && titleLooksShell && args.hasCompletedHook ? null : args.completedHookAgent
+  const hookAgent = args.hookAgent ?? completedHookAgent ?? null
   const launchAgent =
     args.hasCompletedHook || (titleLooksShell && args.hasObservedAgentSignal)
       ? null
       : (args.launchAgent ?? null)
-  const explicitAgent = args.hookAgent ?? args.completedHookAgent ?? launchAgent
-  // Why: OpenClaude can emit Claude-style `✳ <task>` titles. Prefer explicit
-  // hook/launch identity only for those generic task-title matches.
-  const titleResolutionAgent =
-    isGenericClaudeTitle(args.title, titleAgent) && explicitAgent && explicitAgent !== 'claude'
-      ? explicitAgent
-      : titleAgent
-  const fallbackAgent = titleResolutionAgent ?? explicitAgent
   if (args.isRemote || args.foreground === undefined) {
-    return fallbackAgent
+    return hookAgent ?? titleAgent ?? launchAgent
   }
   if (args.foreground) {
     return args.foreground
   }
-  if (titleResolutionAgent) {
-    return titleResolutionAgent
+  // Why: once a local pane has returned to a shell, a stale hook should not keep
+  // painting it as an agent tab.
+  if (args.shellForegroundAfterAgentSignal) {
+    return null
   }
-  // Why: a freshly spawned agent tab can briefly report the shell before the
-  // queued launch command owns the PTY. Only let shell clear the icon after
-  // this pane has actually been observed running an agent.
-  return args.shellForegroundAfterAgentSignal ? null : fallbackAgent
+  return hookAgent ?? titleAgent ?? launchAgent
 }
 
 /**
@@ -109,9 +99,10 @@ export function resolveTabAgentFromSignals(args: {
  *    starts/exits/takes a turn), never on an interval, and only for local panes
  *    (SSH foreground inspection is a 15s-timeout RPC). A recognized agent wins;
  *    a recognized shell authoritatively means "no agent".
- * 2. Title — catches agents whose process name isn't self-identifying (Claude
+ * 2. Hook status — accurate provider identity from native integrations, and
+ *    available for SSH/remote panes where foreground polling is too costly.
+ * 3. Title — catches agents whose process name isn't self-identifying (Claude
  *    runs as `node`; its "✳ Claude Code" title still identifies it).
- * 3. Hook status — accurate but only updates on the agent's hook events.
  * 4. launchAgent — what Orca launched here; instant bootstrap before any check.
  */
 export function useTabAgent(tab: TerminalTab): TuiAgent | null {

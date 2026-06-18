@@ -5,11 +5,18 @@ import type {
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchArgs,
-  HostedReviewInfo
+  HostedReviewInfo,
+  HostedReviewProvider
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { AppIdentity } from '../shared/app-identity'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
+import type { TaskSourceContext } from '../shared/task-source-context'
+import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
+import type {
+  FolderWorkspacePathStatus,
+  FolderWorkspacePathStatusRequest
+} from '../shared/folder-workspace-path-status'
 import type {
   BaseRefDefaultResult,
   BaseRefSearchResult,
@@ -35,6 +42,8 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitStatusResult,
   GitUpstreamStatus,
@@ -120,8 +129,20 @@ import type {
   PRComment,
   PRInfo,
   PRRefreshOutcome,
+  Project,
+  ProjectUpdateArgs,
   Repo,
   ProjectGroup,
+  ProjectHostSetup,
+  ProjectHostSetupCreateArgs,
+  ProjectHostSetupCreateResult,
+  ProjectHostSetupDeleteArgs,
+  ProjectHostSetupDeleteResult,
+  ProjectHostSetupExistingFolderArgs,
+  ProjectHostSetupResult,
+  ProjectHostSetupUpdateArgs,
+  ProjectHostSetupUpdateResult,
+  FolderWorkspace,
   ProjectGroupImportResult,
   ProjectGroupImportMode,
   ShellHydrationFailureReason,
@@ -131,10 +152,12 @@ import type {
   SearchResult,
   StatsSummary,
   MemorySnapshot,
+  TuiAgent,
   UpdateStatus,
   Worktree,
   WorktreeBaseStatusEvent,
   WorktreeLineage,
+  WorkspaceLineage,
   WorktreeMeta,
   WorktreeRemoteBranchConflictEvent,
   RemoveWorktreeResult,
@@ -144,11 +167,28 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+
+type GitLabRepoSelectorArgs = {
+  repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+}
+
+type GitHubRepoSelectorArgs = {
+  repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+}
+import type {
+  WarpThemeImportPreview,
+  WarpThemeImportSource
+} from '../shared/terminal-custom-themes'
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type { RuntimeAccessGrant } from '../shared/runtime-access-grants'
 import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
+import type { ExecutionHostId } from '../shared/execution-host'
 import type { FeatureInteractionId } from '../shared/feature-interactions'
 import type {
   AddIssueCommentBySlugArgs,
@@ -220,6 +260,8 @@ import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../shared/commit-message-agent-spec'
+import type { ResolvedSourceControlAiGenerationParams } from '../shared/source-control-ai'
+import type { SourceControlAiSettings } from '../shared/source-control-ai-types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
@@ -263,7 +305,11 @@ import type {
   ClaudeUsageSnapshot,
   ClaudeUsageSummary
 } from '../shared/claude-usage-types'
-import type { RateLimitRuntimeTarget, RateLimitState } from '../shared/rate-limit-types'
+import type {
+  CodexRateLimitResetResult,
+  RateLimitRuntimeTarget,
+  RateLimitState
+} from '../shared/rate-limit-types'
 import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
@@ -311,6 +357,7 @@ import type {
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../shared/opencode-usage-types'
+import type { AiVaultListArgs, AiVaultListResult } from '../shared/ai-vault-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
@@ -418,6 +465,26 @@ export type BrowserApi = {
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
 }
 
+export type EmulatorApi = {
+  onPaneFocus: (callback: (data: { worktreeId: string }) => void) => () => void
+  onAutoAttach: (
+    callback: (data: {
+      worktreeId: string
+      info: { deviceUdid: string; streamUrl: string; wsUrl: string; axUrl?: string }
+    }) => void
+  ) => () => void
+  startFrameStream: (args: { streamUrl: string; streamKey?: string }) => Promise<{
+    streamId: string
+  }>
+  stopFrameStream: (args: { streamId: string }) => Promise<void>
+  onFrameStreamFrame: (
+    callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
+  ) => () => void
+  onFrameStreamError: (
+    callback: (data: { streamId: string; message: string }) => void
+  ) => () => void
+}
+
 export type DetectedBrowserProfileInfo = {
   name: string
   directory: string
@@ -468,17 +535,16 @@ export type RefreshAgentsResult = {
   pathFailureReason: ShellHydrationFailureReason
 }
 
+export type PreflightRuntimeContext = {
+  wslDistro?: string | null
+  wslDefault?: boolean
+  projectRuntime?: ProjectExecutionRuntimeResolution
+}
+
 export type PreflightApi = {
-  check: (args?: {
-    force?: boolean
-    wslDistro?: string | null
-    wslDefault?: boolean
-  }) => Promise<PreflightStatus>
-  detectAgents: (args?: { wslDistro?: string | null; wslDefault?: boolean }) => Promise<string[]>
-  refreshAgents: (args?: {
-    wslDistro?: string | null
-    wslDefault?: boolean
-  }) => Promise<RefreshAgentsResult>
+  check: (args?: PreflightRuntimeContext & { force?: boolean }) => Promise<PreflightStatus>
+  detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
+  refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
 }
 
@@ -528,9 +594,7 @@ export type StatsApi = {
 // renderer's view of the IPC surface.
 export type DiagnosticsStatusPayload = {
   readonly localFileEnabled: boolean
-  readonly otlpEnabled: boolean
   readonly bundleEnabled: boolean
-  readonly otlpStatus: string
   readonly traceFilePath: string
   readonly traceFamilySize: number
   readonly disabledReason?:
@@ -544,9 +608,13 @@ export type DiagnosticsBundlePayload = {
   readonly bytes: number
   readonly spanCount: number
 }
-export type DiagnosticsUploadPayload = {
-  readonly ticketId: string
-}
+export type DiagnosticsUploadPayload =
+  | {
+      readonly ticketId: string
+    }
+  | {
+      readonly canceled: true
+    }
 
 export type MemoryApi = {
   getSnapshot: () => Promise<MemorySnapshot>
@@ -639,6 +707,10 @@ export type OpenCodeUsageApi = {
   }) => Promise<OpenCodeUsageSessionRow[]>
 }
 
+export type AiVaultApi = {
+  listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
+}
+
 export type AppApi = {
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
   getIdentity: () => Promise<AppIdentity>
@@ -655,6 +727,9 @@ export type AppApi = {
   /** Reloads the current app renderer through main so expected renderer
    *  teardown can be classified before Electron emits process-gone events. */
   reload: () => Promise<void>
+  /** Resolves when the daemon PTY provider and hook receiver have either
+   *  started or failed open for the first BrowserWindow. */
+  awaitFirstWindowStartupServices: () => Promise<void>
   /** Returns the macOS `AppleCurrentKeyboardLayoutInputSourceID` when
    *  available (e.g. `com.apple.keylayout.PolishPro`). Used by the
    *  keyboard-layout probe to distinguish layouts whose base layer matches
@@ -714,13 +789,21 @@ export type PreloadApi = {
           | 'externalWorktreeVisibilityPromptDismissedAt'
           | 'projectGroupId'
           | 'projectGroupOrder'
-          | 'sourceControlAi'
+          | 'forkSyncMode'
         >
-      >
+      > & { sourceControlAi?: Repo['sourceControlAi'] | null }
     }) => Promise<Repo>
     pickFolder: () => Promise<string | null>
+    pickFolders: () => Promise<string[]>
     pickDirectory: () => Promise<string | null>
     clone: (args: { url: string; destination: string }) => Promise<Repo>
+    cloneRemote: (args: { connectionId: string; url: string; destination: string }) => Promise<Repo>
+    createRemote: (args: {
+      connectionId: string
+      parentPath: string
+      name: string
+      kind: 'git' | 'folder'
+    }) => Promise<{ repo: Repo } | { error: string }>
     cloneAbort: () => Promise<void>
     // Why: error union matches the IPC handler's return shape; renderer callers branch on `'error' in result`.
     addRemote: (args: {
@@ -735,6 +818,8 @@ export type PreloadApi = {
       name: string
       kind: 'git' | 'folder'
     }) => Promise<{ repo: Repo } | { error: string }>
+    isGitAvailable: () => Promise<boolean>
+    getDefaultCreateProjectParent: () => Promise<string>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
     getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
@@ -746,11 +831,23 @@ export type PreloadApi = {
     }) => Promise<BaseRefSearchResult[]>
     onChanged: (callback: () => void) => () => void
   }
+  projects: {
+    list: () => Promise<Project[]>
+    update: (args: ProjectUpdateArgs) => Promise<Project | null>
+    listHostSetups: () => Promise<ProjectHostSetup[]>
+    createHostSetup: (args: ProjectHostSetupCreateArgs) => Promise<ProjectHostSetupCreateResult>
+    setupExistingFolder: (
+      args: ProjectHostSetupExistingFolderArgs
+    ) => Promise<ProjectHostSetupResult>
+    updateHostSetup: (args: ProjectHostSetupUpdateArgs) => Promise<ProjectHostSetupUpdateResult>
+    deleteHostSetup: (args: ProjectHostSetupDeleteArgs) => Promise<ProjectHostSetupDeleteResult>
+  }
   projectGroups: {
     list: () => Promise<ProjectGroup[]>
     create: (args: {
       name: string
       parentPath?: string | null
+      connectionId?: string | null
       parentGroupId?: string | null
       createdFrom?: ProjectGroup['createdFrom']
     }) => Promise<ProjectGroup>
@@ -783,6 +880,42 @@ export type PreloadApi = {
       mode: ProjectGroupImportMode
     }) => Promise<ProjectGroupImportResult>
   }
+  folderWorkspaces: {
+    list: () => Promise<FolderWorkspace[]>
+    getPathStatus: (args: FolderWorkspacePathStatusRequest) => Promise<FolderWorkspacePathStatus>
+    create: (args: {
+      projectGroupId: string
+      name?: string
+      folderPath?: string | null
+      connectionId?: string | null
+      linkedTask?: FolderWorkspace['linkedTask']
+      createdWithAgent?: FolderWorkspace['createdWithAgent']
+      pendingFirstAgentMessageRename?: boolean
+    }) => Promise<FolderWorkspace>
+    update: (args: {
+      folderWorkspaceId: string
+      updates: Partial<
+        Pick<
+          FolderWorkspace,
+          | 'name'
+          | 'folderPath'
+          | 'linkedTask'
+          | 'comment'
+          | 'isArchived'
+          | 'isUnread'
+          | 'isPinned'
+          | 'sortOrder'
+          | 'manualOrder'
+          | 'workspaceStatus'
+          | 'createdWithAgent'
+          | 'pendingFirstAgentMessageRename'
+          | 'firstAgentMessageRenameError'
+          | 'lastActivityAt'
+        >
+      >
+    }) => Promise<FolderWorkspace | null>
+    delete: (args: { folderWorkspaceId: string }) => Promise<boolean>
+  }
   sparsePresets: {
     list: (args: { repoId: string }) => Promise<SparsePreset[]>
     save: (args: {
@@ -799,11 +932,19 @@ export type PreloadApi = {
     listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
+    /** Two-phase progress for a background `create`, correlated by
+     *  `creationId`. Renderer routes each event to its pending creation's
+     *  status surface; the remote/runtime create path emits nothing, so the
+     *  surface falls back to an indeterminate spinner. */
+    onCreateProgress: (
+      callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
+    ) => () => void
     prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
     resolvePrBase: (args: {
       repoId: string
       prNumber: number
       headRefName?: string
+      baseRefName?: string
       isCrossRepository?: boolean
     }) => Promise<GitHubPrStartPoint | { error: string }>
     /** GitLab parallel of resolvePrBase. For same-project MRs returns
@@ -813,8 +954,12 @@ export type PreloadApi = {
       repoId: string
       mrIid: number
       sourceBranch?: string
+      targetBranch?: string
       isCrossRepository?: boolean
-    }) => Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>
+    }) => Promise<
+      | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
+      | { error: string }
+    >
     remove: (args: {
       worktreeId: string
       force?: boolean
@@ -826,7 +971,10 @@ export type PreloadApi = {
       expectedHead: string
     }) => Promise<ForceDeleteWorktreeBranchResult>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
-    listLineage: () => Promise<Record<string, WorktreeLineage>>
+    listLineage: () => Promise<{
+      lineage: Record<string, WorktreeLineage>
+      workspaceLineage?: Record<string, WorkspaceLineage>
+    }>
     updateLineage: (args: {
       worktreeId: string
       parentWorktreeId?: string
@@ -873,6 +1021,7 @@ export type PreloadApi = {
       // Preserved from the deleted index.d.ts PtyApi duplicate during the
       // single-source-of-truth collapse (see docs/preload-typecheck-hole.md §1).
       shellOverride?: string
+      projectRuntime?: ProjectExecutionRuntimeResolution
       // Why: closes the SIGKILL race documented in INVESTIGATION.md — main
       // sync-flushes the (worktreeId, tabId, leafId → ptyId) binding before
       // pty:spawn returns. Only the renderer's daemon-host path threads these.
@@ -901,6 +1050,8 @@ export type PreloadApi = {
     signal: (id: string, signal: string) => void
     kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
     ackColdRestore: (id: string) => void
+    ackData: (id: string, charCount: number) => void
+    setActiveRendererPty: (id: string, active: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
@@ -912,9 +1063,26 @@ export type PreloadApi = {
       data: string
       cols: number
       rows: number
+      cwd?: string | null
       seq?: number
       source?: 'headless' | 'renderer'
     } | null>
+    getRendererDeliveryDebugSnapshot: () => Promise<{
+      pendingPtyCount: number
+      pendingChars: number
+      maxPendingCharsByPty: number
+      rendererInFlightPtyCount: number
+      rendererInFlightChars: number
+      maxRendererInFlightCharsByPty: number
+      activeRendererPtyCount: number
+      flushScheduled: boolean
+      peakPendingChars: number
+      peakMaxPendingCharsByPty: number
+      peakRendererInFlightChars: number
+      peakMaxRendererInFlightCharsByPty: number
+      ackGatedFlushSkipCount: number
+    }>
+    resetRendererDeliveryDebug: () => Promise<void>
     onData: (
       callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
     ) => () => void
@@ -991,11 +1159,13 @@ export type PreloadApi = {
     issue: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       number: number
     }) => Promise<IssueInfo | null>
     workItem: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       number: number
       type?: 'issue' | 'pr'
     }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
@@ -1007,22 +1177,22 @@ export type PreloadApi = {
       number: number
       type: 'issue' | 'pr'
     }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
-    workItemDetails: (args: {
-      repoPath: string
-      repoId?: string
-      number: number
-      type?: 'issue' | 'pr'
-    }) => Promise<GitHubWorkItemDetails | null>
-    prFileContents: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      path: string
-      oldPath?: string
-      status: GitHubPRFile['status']
-      headSha: string
-      baseSha: string
-    }) => Promise<GitHubPRFileContents>
+    workItemDetails: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+        type?: 'issue' | 'pr'
+      }
+    ) => Promise<GitHubWorkItemDetails | null>
+    prFileContents: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        path: string
+        oldPath?: string
+        status: GitHubPRFile['status']
+        headSha: string
+        baseSha: string
+      }
+    ) => Promise<GitHubPRFileContents>
     listIssues: (args: {
       repoPath: string
       repoId?: string
@@ -1031,6 +1201,7 @@ export type PreloadApi = {
     createIssue: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       title: string
       body: string
       labels?: string[]
@@ -1045,33 +1216,35 @@ export type PreloadApi = {
       before?: string
       noCache?: boolean
     }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
-    prChecks: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      headSha?: string
-      prRepo?: GitHubOwnerRepo | null
-      noCache?: boolean
-    }) => Promise<PRCheckDetail[]>
+    prChecks: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        headSha?: string
+        prRepo?: GitHubOwnerRepo | null
+        noCache?: boolean
+      }
+    ) => Promise<PRCheckDetail[]>
     prCheckDetails: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       checkRunId?: number
       workflowRunId?: number
       checkName?: string
       url?: string | null
       prRepo?: GitHubOwnerRepo | null
     }) => Promise<PRCheckRunDetails | null>
-    rerunPRChecks: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      headSha?: string
-      failedOnly?: boolean
-    }) => Promise<{ ok: true; count: number } | { ok: false; error: string }>
+    rerunPRChecks: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        headSha?: string
+        failedOnly?: boolean
+      }
+    ) => Promise<{ ok: true; count: number } | { ok: false; error: string }>
     prComments: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       prNumber: number
       prRepo?: GitHubOwnerRepo | null
       noCache?: boolean
@@ -1079,17 +1252,18 @@ export type PreloadApi = {
     resolveReviewThread: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
       threadId: string
       resolve: boolean
     }) => Promise<boolean>
-    setPRFileViewed: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      pullRequestId: string
-      path: string
-      viewed: boolean
-    }) => Promise<boolean>
+    setPRFileViewed: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        pullRequestId: string
+        path: string
+        viewed: boolean
+      }
+    ) => Promise<boolean>
     updatePRTitle: (args: {
       repoPath: string
       repoId?: string
@@ -1097,75 +1271,84 @@ export type PreloadApi = {
       title: string
       prRepo?: GitHubOwnerRepo | null
     }) => Promise<boolean>
-    mergePR: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      method?: 'merge' | 'squash' | 'rebase'
-      prRepo?: GitHubOwnerRepo | null
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    setPRAutoMerge: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      enabled: boolean
-      prRepo?: GitHubOwnerRepo | null
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    updatePRState: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      updates: { state: 'open' | 'closed' }
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    requestPRReviewers: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      reviewers: string[]
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    removePRReviewers: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      reviewers: string[]
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    updateIssue: (args: {
-      repoPath: string
-      repoId?: string
-      number: number
-      updates: GitHubIssueUpdate
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    addIssueComment: (args: {
-      repoPath: string
-      repoId?: string
-      number: number
-      body: string
-      /** Why: GitHub stores PR conversation comments under `/issues/N/comments`
-       *  too, so the IPC and `gh` call paths are identical. The renderer cache
-       *  key is keyed by the drawer's `type`, so callers pass it through to
-       *  scope the cross-window invalidation broadcast correctly and avoid
-       *  evicting an unrelated PR/issue that happens to share the number. */
-      type?: 'issue' | 'pr'
-      prRepo?: GitHubOwnerRepo | null
-    }) => Promise<GitHubCommentResult>
-    addPRReviewCommentReply: (args: {
-      repoPath: string
-      repoId?: string
-      prNumber: number
-      commentId: number
-      body: string
-      threadId?: string
-      path?: string
-      line?: number
-      prRepo?: GitHubOwnerRepo | null
-    }) => Promise<GitHubCommentResult>
-    addPRReviewComment: (
-      args: GitHubPRReviewCommentInput & { repoId?: string }
+    mergePR: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        method?: 'merge' | 'squash' | 'rebase'
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    setPRAutoMerge: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        enabled: boolean
+        method?: 'merge' | 'squash' | 'rebase'
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    updatePRState: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        updates: { state: 'open' | 'closed' }
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    requestPRReviewers: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        reviewers: string[]
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    removePRReviewers: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        reviewers: string[]
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateIssue: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+        updates: GitHubIssueUpdate
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (
+      args: GitHubRepoSelectorArgs & {
+        number: number
+        body: string
+        /** Why: GitHub stores PR conversation comments under `/issues/N/comments`
+         *  too, so the IPC and `gh` call paths are identical. The renderer cache
+         *  key is keyed by the drawer's `type`, so callers pass it through to
+         *  scope the cross-window invalidation broadcast correctly and avoid
+         *  evicting an unrelated PR/issue that happens to share the number. */
+        type?: 'issue' | 'pr'
+        prRepo?: GitHubOwnerRepo | null
+      }
     ) => Promise<GitHubCommentResult>
-    listLabels: (args: { repoPath: string; repoId?: string }) => Promise<string[]>
+    addPRReviewCommentReply: (
+      args: GitHubRepoSelectorArgs & {
+        prNumber: number
+        commentId: number
+        body: string
+        threadId?: string
+        path?: string
+        line?: number
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => Promise<GitHubCommentResult>
+    addPRReviewComment: (
+      args: GitHubPRReviewCommentInput & {
+        repoId?: string
+        sourceContext?: TaskSourceContext | null
+      }
+    ) => Promise<GitHubCommentResult>
+    listLabels: (args: {
+      repoPath: string
+      repoId?: string
+      sourceContext?: TaskSourceContext | null
+    }) => Promise<string[]>
     listAssignableUsers: (args: {
       repoPath: string
       repoId?: string
+      sourceContext?: TaskSourceContext | null
     }) => Promise<GitHubAssignableUser[]>
     /**
      * Subscribe to local-mutation broadcasts. Used by the work-item-drawer
@@ -1246,117 +1429,136 @@ export type PreloadApi = {
       force?: boolean
       host?: string | null
     }) => Promise<GetGitLabRateLimitResult>
-    projectSlug: (args: { repoPath: string }) => Promise<GitLabProjectRef | null>
-    mrForBranch: (args: {
-      repoPath: string
-      branch: string
-      linkedMRIid?: number | null
-    }) => Promise<MRInfo | null>
-    mr: (args: { repoPath: string; iid: number }) => Promise<MRInfo | null>
-    listMRs: (args: {
-      repoPath: string
-      state?: MRListState
-      page?: number
-      perPage?: number
-    }) => Promise<ListMergeRequestsResult>
+    projectSlug: (args: GitLabRepoSelectorArgs) => Promise<GitLabProjectRef | null>
+    mrForBranch: (
+      args: GitLabRepoSelectorArgs & {
+        branch: string
+        linkedMRIid?: number | null
+      }
+    ) => Promise<MRInfo | null>
+    mr: (args: GitLabRepoSelectorArgs & { iid: number }) => Promise<MRInfo | null>
+    listMRs: (
+      args: GitLabRepoSelectorArgs & {
+        state?: MRListState
+        page?: number
+        perPage?: number
+      }
+    ) => Promise<ListMergeRequestsResult>
     /** Combined MR + issue list filtered by state. Issues are skipped
      *  when state is 'merged' (issues don't merge). */
-    listWorkItems: (args: {
-      repoPath: string
-      state?: MRListState
-      page?: number
-      perPage?: number
-    }) => Promise<ListMergeRequestsResult>
-    issue: (args: { repoPath: string; number: number }) => Promise<GitLabIssueInfo | null>
-    listIssues: (args: {
-      repoPath: string
-      state?: 'opened' | 'closed' | 'all'
-      assignee?: string
-      limit?: number
-    }) => Promise<{ items: GitLabWorkItem[]; error?: ClassifiedError }>
-    createIssue: (args: {
-      repoPath: string
-      title: string
-      body: string
-    }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
-    updateIssue: (args: {
-      repoPath: string
-      number: number
-      updates: GitLabIssueUpdate
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    addIssueComment: (args: {
-      repoPath: string
-      number: number
-      body: string
-    }) => Promise<GitLabCommentResult>
-    listLabels: (args: { repoPath: string }) => Promise<string[]>
-    listAssignableUsers: (args: { repoPath: string }) => Promise<GitLabAssignableUser[]>
+    listWorkItems: (
+      args: GitLabRepoSelectorArgs & {
+        state?: MRListState
+        page?: number
+        perPage?: number
+      }
+    ) => Promise<ListMergeRequestsResult>
+    issue: (args: GitLabRepoSelectorArgs & { number: number }) => Promise<GitLabIssueInfo | null>
+    listIssues: (
+      args: GitLabRepoSelectorArgs & {
+        state?: 'opened' | 'closed' | 'all'
+        assignee?: string
+        limit?: number
+      }
+    ) => Promise<{ items: GitLabWorkItem[]; error?: ClassifiedError }>
+    createIssue: (
+      args: GitLabRepoSelectorArgs & {
+        title: string
+        body: string
+      }
+    ) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
+    updateIssue: (
+      args: GitLabRepoSelectorArgs & {
+        number: number
+        updates: GitLabIssueUpdate
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (
+      args: GitLabRepoSelectorArgs & {
+        number: number
+        body: string
+      }
+    ) => Promise<GitLabCommentResult>
+    listLabels: (args: GitLabRepoSelectorArgs) => Promise<string[]>
+    listAssignableUsers: (args: GitLabRepoSelectorArgs) => Promise<GitLabAssignableUser[]>
     /** Cross-project user-scoped todos (gitlab.com/dashboard/todos). */
-    todos: (args: { repoPath: string }) => Promise<GitLabTodo[]>
+    todos: (args: GitLabRepoSelectorArgs) => Promise<GitLabTodo[]>
     /** Aggregated dialog payload — body + discussions + pipeline jobs. */
-    workItemDetails: (args: {
-      repoPath: string
-      iid: number
-      type: 'issue' | 'mr'
-    }) => Promise<GitLabWorkItemDetails | null>
-    closeMR: (args: {
-      repoPath: string
-      iid: number
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    reopenMR: (args: {
-      repoPath: string
-      iid: number
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    mergeMR: (args: {
-      repoPath: string
-      iid: number
-      method?: 'merge' | 'squash' | 'rebase'
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    updateMR: (args: {
-      repoPath: string
-      iid: number
-      updates: GitLabMRUpdate
-    }) => Promise<{ ok: true } | { ok: false; error: string }>
-    updateMRReviewers: (args: {
-      repoPath: string
-      iid: number
-      reviewerIds: number[]
-      projectRef?: GitLabProjectRef | null
-    }) => Promise<GitLabMRReviewersUpdateResult>
-    addMRComment: (args: {
-      repoPath: string
-      iid: number
-      body: string
-    }) => Promise<GitLabCommentResult>
-    addMRInlineComment: (args: {
-      repoPath: string
-      iid: number
-      input: GitLabMRInlineCommentInput
-      projectRef?: GitLabProjectRef | null
-    }) => Promise<GitLabCommentResult>
-    resolveMRDiscussion: (args: {
-      repoPath: string
-      iid: number
-      discussionId: string
-      resolved: boolean
-    }) => Promise<GitLabDiscussionResolveResult>
-    jobTrace: (args: {
-      repoPath: string
-      jobId: number
-      projectRef?: GitLabProjectRef | null
-    }) => Promise<GitLabJobTraceResult>
-    retryJob: (args: {
-      repoPath: string
-      jobId: number
-      projectRef?: GitLabProjectRef | null
-    }) => Promise<GitLabRetryJobResult>
-    workItemByPath: (args: {
-      repoPath: string
-      host: string
-      path: string
-      iid: number
-      type: 'issue' | 'mr'
-    }) => Promise<Omit<GitLabWorkItem, 'repoId'> | null>
+    workItemDetails: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        type: 'issue' | 'mr'
+      }
+    ) => Promise<GitLabWorkItemDetails | null>
+    closeMR: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    reopenMR: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    mergeMR: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        method?: 'merge' | 'squash' | 'rebase'
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateMR: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        updates: GitLabMRUpdate
+      }
+    ) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateMRReviewers: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        reviewerIds: number[]
+        projectRef?: GitLabProjectRef | null
+      }
+    ) => Promise<GitLabMRReviewersUpdateResult>
+    addMRComment: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        body: string
+      }
+    ) => Promise<GitLabCommentResult>
+    addMRInlineComment: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        input: GitLabMRInlineCommentInput
+        projectRef?: GitLabProjectRef | null
+      }
+    ) => Promise<GitLabCommentResult>
+    resolveMRDiscussion: (
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        discussionId: string
+        resolved: boolean
+      }
+    ) => Promise<GitLabDiscussionResolveResult>
+    jobTrace: (
+      args: GitLabRepoSelectorArgs & {
+        jobId: number
+        projectRef?: GitLabProjectRef | null
+      }
+    ) => Promise<GitLabJobTraceResult>
+    retryJob: (
+      args: GitLabRepoSelectorArgs & {
+        jobId: number
+        projectRef?: GitLabProjectRef | null
+      }
+    ) => Promise<GitLabRetryJobResult>
+    workItemByPath: (
+      args: GitLabRepoSelectorArgs & {
+        host: string
+        path: string
+        iid: number
+        type: 'issue' | 'mr'
+      }
+    ) => Promise<Omit<GitLabWorkItem, 'repoId'> | null>
   }
   linear: {
     connect: (args: {
@@ -1414,6 +1616,19 @@ export type PreloadApi = {
       workspaceId?: LinearWorkspaceSelection
       force?: boolean
     }) => Promise<LinearCollectionResult<LinearProjectSummary>>
+    createProject: (args: {
+      name: string
+      description?: string
+      content?: string
+      teamIds: string[]
+      workspaceId?: string
+      leadId?: string | null
+      memberIds?: string[]
+      labelIds?: string[]
+      priority?: number
+      startDate?: string
+      targetDate?: string
+    }) => Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }>
     getProject: (args: {
       id: string
       workspaceId: string
@@ -1506,10 +1721,20 @@ export type PreloadApi = {
     listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
   }
   starNag: {
-    onShow: (callback: () => void) => () => void
+    onShow: (
+      callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void
+    ) => () => void
+    onHide: (callback: () => void) => () => void
     dismiss: () => Promise<void>
+    later: () => Promise<void>
     complete: () => Promise<void>
+    disable: () => Promise<void>
+    openWeb: () => Promise<void>
+    starOrca: () => Promise<boolean>
     forceShow: () => Promise<void>
+    agentValueMoment: () => Promise<{ status: 'ready'; mode: 'gh' | 'web' } | { status: 'skipped' }>
+    showAgentValueMoment: () => Promise<void>
+    onboardingCompleted: () => Promise<void>
   }
   /** Fire-and-forget track. Loose typing at the IPC boundary on purpose —
    *  the main-side validator is the single enforcement point. Renderer call
@@ -1519,15 +1744,13 @@ export type PreloadApi = {
   /** Flip the persisted opt-in preference. Subject to a per-session
    *  consent-mutation rate limit on the main side (≤5/session). */
   telemetrySetOptIn: (optedIn: boolean) => Promise<void>
-  /** Diagnostic-bundle / trace-folder controls. Surface for
-   *  telemetry-error-tracking.md §User controls. The renderer triggers
-   *  flows; main does the filesystem / network work and returns
-   *  serializable metadata. Main retains collected upload payloads so the
-   *  renderer can confirm without reading or substituting arbitrary bytes. */
+  /** Diagnostic file controls. Surface for telemetry-error-tracking.md
+   *  §User controls. The renderer triggers flows; main does the filesystem /
+   *  network work and returns serializable metadata. Main retains collected
+   *  upload payloads so the renderer can confirm without reading or
+   *  substituting arbitrary bytes. */
   diagnostics: {
     getStatus: () => Promise<DiagnosticsStatusPayload>
-    openTraceFolder: () => Promise<void>
-    clearTraces: () => Promise<void>
     collectBundle: (lookbackMinutes?: number) => Promise<DiagnosticsBundlePayload>
     openBundlePreview: (bundleSubmissionId: string) => Promise<void>
     discardBundlePreview: (bundleSubmissionId: string) => Promise<void>
@@ -1552,6 +1775,7 @@ export type PreloadApi = {
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
     listFonts: () => Promise<string[]>
     previewGhosttyImport: () => Promise<GhosttyImportPreview>
+    previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>
     /** Subscribe to out-of-band settings updates (e.g. the View > Appearance
      *  menu toggles) so the renderer can stay in sync with main's persisted
      *  state without round-tripping through settings:get. */
@@ -1601,9 +1825,9 @@ export type PreloadApi = {
     getInstallStatus: () => Promise<CliInstallStatus>
     install: () => Promise<CliInstallStatus>
     remove: () => Promise<CliInstallStatus>
-    getWslInstallStatus: () => Promise<CliInstallStatus>
-    installWsl: () => Promise<CliInstallStatus>
-    removeWsl: () => Promise<CliInstallStatus>
+    getWslInstallStatus: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
+    installWsl: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
+    removeWsl: (args?: { distro?: string | null }) => Promise<CliInstallStatus>
   }
   agentHooks: {
     claudeStatus: () => Promise<AgentHookInstallStatus>
@@ -1618,6 +1842,7 @@ export type PreloadApi = {
     grokStatus: () => Promise<AgentHookInstallStatus>
     copilotStatus: () => Promise<AgentHookInstallStatus>
     hermesStatus: () => Promise<AgentHookInstallStatus>
+    devinStatus: () => Promise<AgentHookInstallStatus>
   }
   agentTrust: {
     markTrusted: (args: {
@@ -1683,6 +1908,7 @@ export type PreloadApi = {
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<void>
   }
   browser: BrowserApi
+  emulator: EmulatorApi
   hooks: {
     check: (args: { repoId: string }) => Promise<{
       status?: 'ok' | 'error'
@@ -1719,11 +1945,13 @@ export type PreloadApi = {
     }) => Promise<void>
   }
   session: {
-    get: () => Promise<WorkspaceSessionState>
-    set: (args: WorkspaceSessionState) => Promise<void>
-    patch: (args: WorkspaceSessionPatch) => Promise<void>
+    // hostId is optional and defaults to the 'local' partition on the main
+    // side, so existing callers that omit it behave exactly as before.
+    get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
+    set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
+    patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null
-    setSync: (args: WorkspaceSessionState) => void
+    setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
   }
   remoteWorkspace: {
     get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>
@@ -1761,12 +1989,17 @@ export type PreloadApi = {
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
+  aiVault: AiVaultApi
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string
       connectionId?: string
     }) => Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }>
+    downloadFile: (args: {
+      filePath: string
+      connectionId: string
+    }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string
@@ -1874,6 +2107,8 @@ export type PreloadApi = {
       paths: string[]
       connectionId?: string
     }) => Promise<string[]>
+    findHugeFoldersToIgnore: (args: { worktreePath: string }) => Promise<string[]>
+    appendGitignore: (args: { worktreePath: string; folderName: string }) => Promise<boolean>
     history: (
       args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
     ) => Promise<GitHistoryResult>
@@ -1910,6 +2145,11 @@ export type PreloadApi = {
       connectionId?: string
       pushTarget?: GitPushTarget
     }) => Promise<void>
+    syncFork: (args: {
+      worktreePath: string
+      connectionId?: string
+      expectedUpstream: GitForkSyncExpectedUpstream
+    }) => Promise<GitForkSyncResult>
     push: (args: {
       worktreePath: string
       publish?: boolean
@@ -1961,6 +2201,9 @@ export type PreloadApi = {
       worktreePath: string
       repoId?: string
       connectionId?: string
+      sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+      sourceControlAi?: SourceControlAiSettings
+      agentCmdOverrides?: Partial<Record<TuiAgent, string>>
     }) => Promise<
       | { success: true; message: string; agentLabel?: string }
       | { success: false; error: string; canceled?: boolean }
@@ -1989,14 +2232,20 @@ export type PreloadApi = {
       title: string
       body: string
       draft: boolean
+      provider?: HostedReviewProvider
+      useTemplate?: boolean
       connectionId?: string
+      sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+      sourceControlAi?: SourceControlAiSettings
+      agentCmdOverrides?: Partial<Record<TuiAgent, string>>
     }) => Promise<
       | {
           success: true
           fields: { base: string; title: string; body: string; draft: boolean }
           agentLabel?: string
+          branchChangedByPreparation?: boolean
         }
-      | { success: false; error: string; canceled?: boolean }
+      | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
     >
     cancelGeneratePullRequestFields: (args: {
       worktreePath: string
@@ -2038,11 +2287,17 @@ export type PreloadApi = {
       line: number
       connectionId?: string
     }) => Promise<string | null>
+    remoteCommitUrl: (args: {
+      worktreePath: string
+      sha: string
+      connectionId?: string
+    }) => Promise<string | null>
   }
   ui: {
     get: () => Promise<PersistedUIState>
     set: (args: Partial<PersistedUIState>) => Promise<void>
     recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
+    onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
     onOpenSettings: (callback: () => void) => () => void
     onOpenSetupGuide: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
@@ -2057,18 +2312,21 @@ export type PreloadApi = {
     onOpenQuickOpen: (callback: () => void) => () => void
     onOpenNewWorkspace: (callback: () => void) => () => void
     onDeleteCurrentWorkspace: (callback: () => void) => () => void
+    onOpenWorkspaceBoard: (callback: () => void) => () => void
     onOpenTasks: (callback: () => void) => () => void
     onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
     onJumpToTabIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
     onNewMarkdownTab: (callback: () => void) => () => void
+    onNewSimulatorTab: (callback: () => void) => () => void
     onRequestTabCreate: (
       callback: (data: {
         requestId: string
         url: string
         worktreeId?: string
         sessionProfileId?: string
+        activate?: boolean
       }) => void
     ) => () => void
     replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }) => void
@@ -2084,6 +2342,7 @@ export type PreloadApi = {
     onFocusBrowserAddressBar: (callback: () => void) => () => void
     onFindInBrowserPage: (callback: () => void) => () => void
     onReloadBrowserPage: (callback: () => void) => () => void
+    onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     onHardReloadBrowserPage: (callback: () => void) => () => void
     onCloseActiveTab: (callback: () => void) => () => void
@@ -2095,7 +2354,6 @@ export type PreloadApi = {
     onCtrlTabKeyUp: (callback: () => void) => () => void
     onToggleStatusBar: (callback: () => void) => () => void
     onDictationKeyDown: (callback: () => void) => () => void
-    onExportPdfRequested: (callback: () => void) => () => void
     onActivateWorktree: (
       callback: (data: {
         repoId: string
@@ -2267,6 +2525,9 @@ export type PreloadApi = {
     }) => Promise<{ environment: PublicKnownRuntimeEnvironment }>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
     remove: (args: { selector: string }) => Promise<{ removed: PublicKnownRuntimeEnvironment }>
+    disconnect: (args: {
+      selector: string
+    }) => Promise<{ disconnected: PublicKnownRuntimeEnvironment }>
     getStatus: (args: {
       selector: string
       timeoutMs?: number
@@ -2296,6 +2557,7 @@ export type PreloadApi = {
     get: () => Promise<RateLimitState>
     refresh: () => Promise<RateLimitState>
     refreshCodexForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
+    consumeCodexResetCredit: () => Promise<CodexRateLimitResetResult>
     refreshClaudeForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
     setPollingInterval: (ms: number) => Promise<void>
     fetchInactiveClaudeAccounts: () => Promise<void>
@@ -2445,6 +2707,9 @@ export type PreloadApi = {
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>
     getModelStates: () => Promise<SpeechModelState[]>
+    getOpenAiApiKeyStatus: () => Promise<{ configured: boolean }>
+    saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
+    clearOpenAiApiKey: () => Promise<{ configured: boolean }>
     downloadModel: (modelId: string) => Promise<void>
     cancelDownload: (modelId: string) => Promise<void>
     deleteModel: (modelId: string) => Promise<void>

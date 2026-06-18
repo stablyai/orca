@@ -32,6 +32,7 @@ export function getSmartWorkspaceEmptyHint(mode: SmartNameMode): string {
 }
 
 export function getBranchSearchRequest({
+  branchesEnabled,
   disabled,
   textOnly,
   mode,
@@ -39,6 +40,7 @@ export function getBranchSearchRequest({
   query,
   limit
 }: {
+  branchesEnabled?: boolean
   disabled: boolean
   textOnly: boolean
   mode: SmartNameMode
@@ -48,7 +50,13 @@ export function getBranchSearchRequest({
 }): { repoId: string; query: string; limit: number } | null {
   const trimmedQuery = query.trim()
   const shouldSearchBranches = mode === 'branches' || (mode === 'smart' && trimmedQuery.length > 0)
-  if (disabled || textOnly || !selectedRepoId || !shouldSearchBranches) {
+  if (
+    branchesEnabled === false ||
+    disabled ||
+    textOnly ||
+    !selectedRepoId ||
+    !shouldSearchBranches
+  ) {
     return null
   }
   return { repoId: selectedRepoId, query: trimmedQuery, limit }
@@ -112,7 +120,7 @@ export function buildSmartWorkspaceSourceRows({
     nextRows.push(
       ...githubItems.map((item) => ({
         kind: 'github' as const,
-        value: `github-${item.type}-${item.number}`,
+        value: `github-${item.repoId}-${item.type}-${item.number}`,
         item
       }))
     )
@@ -121,7 +129,7 @@ export function buildSmartWorkspaceSourceRows({
     nextRows.push(
       ...gitlabItems.map((item) => ({
         kind: 'gitlab' as const,
-        value: `gitlab-${item.type}-${item.number}`,
+        value: `gitlab-${item.repoId}-${item.type}-${item.number}`,
         item
       }))
     )

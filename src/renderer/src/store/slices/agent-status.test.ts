@@ -736,7 +736,7 @@ describe('agent status PR refresh handoff', () => {
     })
   })
 
-  it('does not spend a PR refresh when no PR surface is visible', async () => {
+  it('does not spend a PR refresh when no status lane or PR surface is visible', async () => {
     vi.useFakeTimers()
     const enqueuePRRefresh = stubGitHubPRRefreshApi()
     const store = createTestStore()

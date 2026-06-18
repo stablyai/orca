@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: this relay handler centralizes the git RPC
 protocol surface so local and SSH git behavior stay in one dispatch table. */
-import { execFile } from 'child_process'
+import { execFile, spawn } from 'child_process'
 import { promisify } from 'util'
 import * as path from 'path'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
 import { expandTilde } from './context'
 import {
@@ -25,9 +25,10 @@ import {
   removeWorktreeOp,
   worktreeIsCleanOp
 } from './git-handler-worktree-ops'
+import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
-import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
+import { isNoUpstreamError, normalizeGitErrorMessage } from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
@@ -43,6 +44,8 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../shared/git-discard-path-safety'
+import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
+import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../shared/git-fork-sync'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -70,6 +73,8 @@ export class GitHandler {
     this.dispatcher.onRequest('git.bulkUnstage', (p) => this.bulkUnstage(p))
     this.dispatcher.onRequest('git.abortMerge', (p) => this.abortMerge(p))
     this.dispatcher.onRequest('git.abortRebase', (p) => this.abortRebase(p))
+    this.dispatcher.onRequest('git.checkout', (p) => this.checkout(p))
+    this.dispatcher.onRequest('git.localBranches', (p) => this.localBranches(p))
     this.dispatcher.onRequest('git.discard', (p) => this.discard(p))
     this.dispatcher.onRequest('git.bulkDiscard', (p) => this.bulkDiscard(p))
     this.dispatcher.onRequest('git.conflictOperation', (p) => this.conflictOperation(p))
@@ -77,7 +82,11 @@ export class GitHandler {
     this.dispatcher.onRequest('git.commitCompare', (p) => this.commitCompare(p))
     this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
+    this.dispatcher.onRequest('git.forkSync', (p, context) => this.forkSync(p, context))
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
+    this.dispatcher.onRequest('git.fetchGitLabMergeRequestHead', (p) =>
+      this.fetchGitLabMergeRequestHead(p)
+    )
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
     this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
     this.dispatcher.onRequest('git.fastForward', (p) => this.fastForward(p))
@@ -88,25 +97,41 @@ export class GitHandler {
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
+    this.dispatcher.onRequest('git.refreshLocalBaseRefForWorktreeCreate', (p) =>
+      this.refreshLocalBaseRefForWorktreeCreate(p)
+    )
     this.dispatcher.onRequest('git.renameCurrentBranch', (p) => this.renameCurrentBranch(p))
-    this.dispatcher.onRequest('git.exec', (p) => this.exec(p))
+    this.dispatcher.onRequest('git.exec', (p, context) => this.exec(p, context))
+    this.dispatcher.onRequest('git.clone', (p, context) => this.clone(p, context))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
   }
 
   private async git(
     args: string[],
     cwd: string,
-    opts?: { maxBuffer?: number; disableOptionalLocks?: boolean }
+    opts?: {
+      maxBuffer?: number
+      disableOptionalLocks?: boolean
+      signal?: AbortSignal
+      nonInteractive?: boolean
+    }
   ): Promise<{ stdout: string; stderr: string }> {
     const env = buildRelayCommandEnv()
     if (opts?.disableOptionalLocks) {
       env.GIT_OPTIONAL_LOCKS = '0'
     }
+    if (opts?.nonInteractive) {
+      env.GIT_TERMINAL_PROMPT = '0'
+      env.GIT_ASKPASS = ''
+      env.SSH_ASKPASS = ''
+      env.GIT_SSH_COMMAND ??= 'ssh -o BatchMode=yes'
+    }
     return execFileAsync('git', args, {
       cwd: expandTilde(cwd),
       env,
       encoding: 'utf-8',
-      maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER
+      maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER,
+      signal: opts?.signal
     })
   }
 
@@ -201,6 +226,45 @@ export class GitHandler {
   private async abortRebase(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     await this.git(['rebase', '--abort'], worktreePath)
+  }
+
+  private async checkout(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const branch = params.branch as string
+    // Defense-in-depth: reject option-like branch tokens (the RPC schema also
+    // validates, but this relay entrypoint is reachable independently). The
+    // `startsWith('-')` guard is what prevents flag injection; the trailing `--`
+    // marks that no pathspecs follow so the token is treated as a branch ref.
+    if (typeof branch !== 'string' || branch.length === 0 || branch.startsWith('-')) {
+      throw new Error('invalid_branch_name')
+    }
+    await this.git(['checkout', branch, '--'], worktreePath)
+    return { ok: true as const, branch }
+  }
+
+  private async localBranches(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const { stdout } = await this.git(
+      ['for-each-ref', '--format=%(HEAD)%09%(refname:short)', 'refs/heads/'],
+      worktreePath
+    )
+    let current: string | null = null
+    const branches: string[] = []
+    for (const line of stdout.split('\n')) {
+      if (line.length === 0) {
+        continue
+      }
+      const [marker, name] = line.split('\t')
+      if (!name) {
+        continue
+      }
+      if (marker === '*') {
+        current = name
+      }
+      branches.push(name)
+    }
+    branches.sort((a, b) => (a === current ? -1 : b === current ? 1 : 0))
+    return { current, branches }
   }
 
   private normalizeGitPathForCompare(filePath: string): string {
@@ -437,6 +501,36 @@ export class GitHandler {
     }
   }
 
+  private async forkSync(params: Record<string, unknown>, context?: RequestContext) {
+    const worktreePath = params.worktreePath as string
+    const expectedUpstream = validateGitForkSyncExpectedUpstream(params.expectedUpstream, {
+      required: true
+    })
+    const controller = new AbortController()
+    const abortFromContext = () => controller.abort()
+    if (context?.signal?.aborted) {
+      controller.abort()
+    } else {
+      context?.signal?.addEventListener('abort', abortFromContext, { once: true })
+    }
+    const timeout = setTimeout(() => controller.abort(), 60_000)
+    try {
+      return await syncForkDefaultBranch(
+        (args) =>
+          this.git(args, worktreePath, {
+            nonInteractive: true,
+            signal: controller.signal
+          }),
+        { expectedUpstream }
+      )
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error, 'push'))
+    } finally {
+      clearTimeout(timeout)
+      context?.signal?.removeEventListener('abort', abortFromContext)
+    }
+  }
+
   private async fetchRemoteTrackingRef(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const remote = params.remote
@@ -468,6 +562,41 @@ export class GitHandler {
       // Why: create-worktree needs a write-capable fetch, but generic git.exec
       // intentionally rejects fetch. This narrow RPC keeps the relay allowlist
       // tight while preserving the same safe error normalization as git.fetch.
+      throw new Error(normalizeGitErrorMessage(error, 'fetch'))
+    }
+  }
+
+  private async fetchGitLabMergeRequestHead(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const remote = params.remote
+    const mrIid = params.mrIid
+    if (typeof remote !== 'string') {
+      throw new Error('Invalid GitLab merge request fetch request.')
+    }
+    if (typeof mrIid !== 'number' || !Number.isSafeInteger(mrIid) || mrIid <= 0) {
+      throw new Error('Invalid GitLab merge request fetch request.')
+    }
+    const mergeRequestIid = mrIid
+    if (remote.startsWith('-')) {
+      throw new Error('GitLab merge request fetch remote must not start with "-".')
+    }
+
+    try {
+      const { stdout } = await this.git(['remote'], worktreePath)
+      const remotes = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+      if (!remotes.includes(remote)) {
+        throw new Error(`Remote "${remote}" is not configured.`)
+      }
+      // Why: GitLab MR heads are not refs/heads/*, so the remote-tracking
+      // fetch RPC cannot represent fork MRs. Keep this write path MR-only.
+      await this.git(
+        ['fetch', '--no-tags', remote, `refs/merge-requests/${mergeRequestIid}/head`],
+        worktreePath
+      )
+    } catch (error) {
       throw new Error(normalizeGitErrorMessage(error, 'fetch'))
     }
   }
@@ -529,8 +658,8 @@ export class GitHandler {
   }
 
   private async pull(params: Record<string, unknown>) {
-    // Why: plain `git pull` uses the user's configured pull strategy (merge by
-    // default) so diverged branches reconcile instead of erroring out.
+    // Why: plain `git pull` honors the user's configured merge/rebase/ff policy.
+    // If no policy exists, Git's policy error is normalized with setup guidance.
     await this.pullWithArgs(params, [])
   }
 
@@ -581,13 +710,93 @@ export class GitHandler {
     })
   }
 
-  private async exec(params: Record<string, unknown>) {
+  private async exec(params: Record<string, unknown>, context?: RequestContext) {
     const args = params.args as string[]
     const cwd = params.cwd as string
 
     validateGitExecArgs(args)
-    const { stdout, stderr } = await this.git(args, cwd)
+    const { stdout, stderr } = await this.git(args, cwd, { signal: context?.signal })
     return { stdout, stderr }
+  }
+
+  private async clone(params: Record<string, unknown>, context?: RequestContext) {
+    const args = params.args as string[]
+    const cwd = params.cwd as string
+    const progressId = params.progressId
+    validateGitExecArgs(args)
+    if (typeof progressId !== 'string' || progressId.length === 0) {
+      throw new Error('Missing clone progress id.')
+    }
+    if (args[0] !== 'clone') {
+      throw new Error('git.clone only supports clone commands.')
+    }
+    return await this.spawnClone(args, cwd, progressId, context)
+  }
+
+  private async spawnClone(
+    args: string[],
+    cwd: string,
+    progressId: string,
+    context?: RequestContext
+  ): Promise<{ stdout: string; stderr: string }> {
+    return await new Promise((resolve, reject) => {
+      const child = spawn('git', args, {
+        cwd: expandTilde(cwd),
+        env: buildRelayCommandEnv(),
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+      let stdout = ''
+      let stderr = ''
+      let settled = false
+      const cleanup = (): void => {
+        context?.signal?.removeEventListener('abort', onAbort)
+      }
+      const onAbort = (): void => {
+        child.kill()
+      }
+      context?.signal?.addEventListener('abort', onAbort, { once: true })
+      child.stdout?.on('data', (chunk: Buffer) => {
+        stdout = (stdout + chunk.toString('utf-8')).slice(-4096)
+      })
+      child.stderr?.on('data', (chunk: Buffer) => {
+        const text = chunk.toString('utf-8')
+        stderr = (stderr + text).slice(-4096)
+        for (const line of text.split(/[\r\n]+/)) {
+          const match = line.match(/^([\w\s]+):\s+(\d+)%/)
+          if (match) {
+            this.dispatcher.notify('git.cloneProgress', {
+              progressId,
+              phase: match[1].trim(),
+              percent: parseInt(match[2], 10)
+            })
+          }
+        }
+      })
+      child.on('error', (error) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
+      })
+      child.on('close', (code, signal) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        if (context?.signal?.aborted) {
+          reject(new Error('Clone aborted'))
+          return
+        }
+        if (code === 0 && !signal) {
+          resolve({ stdout, stderr })
+          return
+        }
+        reject(new Error(`Clone failed: ${getGitCloneFailureMessage(stderr)}`))
+      })
+    })
   }
 
   private async renameCurrentBranch(params: Record<string, unknown>) {
@@ -650,5 +859,9 @@ export class GitHandler {
 
   private async worktreeIsClean(params: Record<string, unknown>) {
     return worktreeIsCleanOp(this.git.bind(this), params)
+  }
+
+  private async refreshLocalBaseRefForWorktreeCreate(params: Record<string, unknown>) {
+    return refreshLocalBaseRefForWorktreeCreateOp(this.git.bind(this), params)
   }
 }

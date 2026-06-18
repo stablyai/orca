@@ -1,9 +1,15 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { buildAgentStartupPlan, type AgentStartupPlan } from '@/lib/tui-agent-startup'
+import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -13,17 +19,20 @@ import {
   subscribeToPtyData,
   subscribeToPtyExit
 } from '@/components/terminal-pane/pty-dispatcher'
-import { createAgentStatusOscProcessor } from '@/components/terminal-pane/agent-status-osc'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   getRemoteRuntimeTerminalHandle,
   subscribeToRuntimeTerminalData,
   toRemoteRuntimePtyId
 } from '@/runtime/runtime-terminal-stream'
+import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
+import { translate } from '@/i18n/i18n'
 
 export type LaunchAgentBackgroundSessionArgs = {
   agent: TuiAgent
@@ -64,6 +73,14 @@ export async function launchAgentBackgroundSession(
     }
   }
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
+  const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  const launchPlatform = repo
+    ? getAgentLaunchPlatformForRepo(
+        repo,
+        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
+      )
+    : CLIENT_PLATFORM
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -75,7 +92,9 @@ export async function launchAgentBackgroundSession(
       agent,
       prompt: '',
       cmdOverrides,
-      platform: CLIENT_PLATFORM,
+      agentArgs,
+      agentEnv,
+      platform: launchPlatform,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
@@ -84,7 +103,9 @@ export async function launchAgentBackgroundSession(
       agent,
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
-      platform: CLIENT_PLATFORM,
+      agentArgs,
+      agentEnv,
+      platform: launchPlatform,
       allowEmptyPromptLaunch: !hasPrompt
     })
   }
@@ -102,8 +123,10 @@ export async function launchAgentBackgroundSession(
     store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
   }
   // Why: agent hook callbacks are keyed by pane, and background automation
-  // tabs never mount a TerminalPane to inject this env for us.
-  const leafId = globalThis.crypto.randomUUID()
+  // tabs never mount a TerminalPane to inject this env for us. createBrowserUuid
+  // (not crypto.randomUUID) because the latter is undefined in non-secure
+  // browser contexts — the LAN web client served over plain HTTP.
+  const leafId = createBrowserUuid()
   const paneKey = makePaneKey(tab.id, leafId)
   // Why: `title` labels the tab/worktree entry. Pane titles render as an
   // in-terminal title row, so background sessions must not persist it there.
@@ -142,7 +165,11 @@ export async function launchAgentBackgroundSession(
       window.api.pty.write(ptyId, submittedCommand)
     }, 50)
   }
-  const runtimeTarget = getActiveRuntimeTarget(store.settings)
+  // Route by the worktree's owner host: the agent terminal must spawn on the host
+  // that owns this worktree, not on the focused runtime.
+  const runtimeTarget = getActiveRuntimeTarget(
+    getSettingsForWorktreeRuntimeOwner(store, worktreeId)
+  )
   let ptyId: string
   try {
     if (runtimeTarget.kind === 'environment') {
@@ -256,7 +283,12 @@ export async function launchAgentBackgroundSession(
       agent,
       submit: true,
       onTimeout: () => {
-        toast.message("Your automation prompt wasn't sent — open the workspace and paste it.")
+        toast.message(
+          translate(
+            'auto.lib.launch.agent.background.session.4ca0651d56',
+            "Your automation prompt wasn't sent — open the workspace and paste it."
+          )
+        )
         track('agent_error', {
           error_class: 'paste_readiness_timeout',
           agent_kind: tuiAgentToAgentKind(agent)

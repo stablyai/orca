@@ -148,6 +148,20 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     })
   })
 
+  it('resolves full remote-tracking refs with longest configured remote matching', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'foo\nfoo/bar\norigin\n', stderr: '' })
+    const runtime = new OrcaRuntimeService(null)
+
+    await expect(
+      runtime.resolveRemoteTrackingBase('/repo/e', 'refs/remotes/foo/bar/main')
+    ).resolves.toEqual({
+      remote: 'foo/bar',
+      branch: 'main',
+      ref: 'refs/remotes/foo/bar/main',
+      base: 'foo/bar/main'
+    })
+  })
+
   it('refreshes a remote-tracking base with an exact no-tags refspec', async () => {
     mockFetchResults([{ stdout: '', stderr: '' }])
     const runtime = new OrcaRuntimeService(null)

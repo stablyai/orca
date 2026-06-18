@@ -38,7 +38,37 @@ const DictationHandle = z.object({
   dictationId: requiredString('Missing dictation ID')
 })
 
+const SpeechModelDownload = z.object({
+  modelId: requiredString('Missing model ID')
+})
+
+const DictationSetup = z.object({
+  enabled: z.boolean().optional(),
+  modelId: OptionalString,
+  dictationMode: z.enum(['toggle', 'hold']).optional()
+})
+
 export const SPEECH_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'speech.models.list',
+    params: null,
+    handler: async (_params, { runtime }) => runtime.listMobileSpeechModels()
+  }),
+  defineMethod({
+    name: 'speech.models.download',
+    params: SpeechModelDownload,
+    handler: async (params, { runtime }) => runtime.downloadMobileSpeechModel(params.modelId)
+  }),
+  defineMethod({
+    name: 'speech.dictation.setup',
+    params: DictationSetup,
+    handler: async (params, { runtime }) =>
+      runtime.configureMobileDictation({
+        ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
+        ...(params.modelId !== undefined ? { modelId: params.modelId } : {}),
+        ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {})
+      })
+  }),
   defineMethod({
     name: 'speech.dictation.start',
     params: DictationStart,

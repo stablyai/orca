@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
 
 type UntitledFileRenameDialogProps = {
   open: boolean
@@ -132,14 +133,21 @@ export function UntitledFileRenameDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">Save as</DialogTitle>
+          <DialogTitle className="text-sm">
+            {translate('auto.components.editor.UntitledFileRenameDialog.674b046582', 'Save as')}
+          </DialogTitle>
           <DialogDescription className="text-xs">
-            Name your markdown file and pick a folder.
+            {translate(
+              'auto.components.editor.UntitledFileRenameDialog.e365f3c638',
+              'Name your markdown file and pick a folder.'
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">Name</label>
+            <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+              {translate('auto.components.editor.UntitledFileRenameDialog.b6ed807cc6', 'Name')}
+            </label>
             <div className="flex items-center gap-1.5">
               <Input
                 ref={setNameInputNode}
@@ -154,16 +162,21 @@ export function UntitledFileRenameDialog({
                     handleSubmit()
                   }
                 }}
-                placeholder="file name"
+                placeholder={translate(
+                  'auto.components.editor.UntitledFileRenameDialog.c8ac7868e6',
+                  'file name'
+                )}
                 className="h-8 text-sm"
                 aria-invalid={!!displayError}
               />
-              <span className="text-xs text-muted-foreground shrink-0">.md</span>
+              <span className="text-xs text-muted-foreground shrink-0">
+                {translate('auto.components.editor.UntitledFileRenameDialog.2d7d39dc63', '.md')}
+              </span>
             </div>
           </div>
           <div>
             <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
-              Folder
+              {translate('auto.components.editor.UntitledFileRenameDialog.30099dca46', 'Folder')}
             </label>
             <div className="flex items-center gap-1.5">
               <Input
@@ -188,7 +201,15 @@ export function UntitledFileRenameDialog({
                 disabled={disableBrowse}
                 onClick={() => void handleBrowse()}
                 title={
-                  disableBrowse ? 'Folder picker unavailable for remote files' : 'Browse folders'
+                  disableBrowse
+                    ? translate(
+                        'auto.components.editor.UntitledFileRenameDialog.5e7f0d8a80',
+                        'Folder picker unavailable for remote files'
+                      )
+                    : translate(
+                        'auto.components.editor.UntitledFileRenameDialog.725868c75d',
+                        'Browse folders'
+                      )
                 }
               >
                 <FolderOpen className="size-3.5" />
@@ -199,10 +220,10 @@ export function UntitledFileRenameDialog({
         {displayError && <p className="text-xs text-destructive mt-1">{displayError}</p>}
         <DialogFooter className="mt-1">
           <Button variant="outline" size="sm" onClick={onClose}>
-            Cancel
+            {translate('auto.components.editor.UntitledFileRenameDialog.949711deb4', 'Cancel')}
           </Button>
           <Button size="sm" onClick={handleSubmit}>
-            Save
+            {translate('auto.components.editor.UntitledFileRenameDialog.a7dd27b0bc', 'Save')}
           </Button>
         </DialogFooter>
       </DialogContent>

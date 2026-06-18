@@ -4,12 +4,20 @@ const {
   glabExecFileAsyncMock,
   getGlabKnownHostsMock,
   resolveIssueSourceMock,
+  glabRepoExecOptionsMock,
   acquireMock,
   releaseMock
 } = vi.hoisted(() => ({
   glabExecFileAsyncMock: vi.fn(),
   getGlabKnownHostsMock: vi.fn(),
   resolveIssueSourceMock: vi.fn(),
+  glabRepoExecOptionsMock: vi.fn(
+    (
+      repoPath: string,
+      connectionId?: string | null,
+      localGitOptions: { wslDistro?: string } = {}
+    ) => (connectionId ? {} : { cwd: repoPath, ...localGitOptions })
+  ),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
 }))
@@ -21,9 +29,7 @@ vi.mock('./gl-utils', () => ({
   resolveIssueSource: resolveIssueSourceMock,
   glabExecFileAsync: glabExecFileAsyncMock,
   glabHostnameArgs: vi.fn(() => []),
-  glabRepoExecOptions: vi.fn((repoPath: string, connectionId?: string | null) =>
-    connectionId ? {} : { cwd: repoPath }
-  )
+  glabRepoExecOptions: glabRepoExecOptionsMock
 }))
 
 import { getWorkItemDetails } from './work-item-details'
@@ -33,6 +39,7 @@ describe('getWorkItemDetails', () => {
     glabExecFileAsyncMock.mockReset()
     getGlabKnownHostsMock.mockReset()
     resolveIssueSourceMock.mockReset()
+    glabRepoExecOptionsMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
@@ -133,5 +140,66 @@ describe('getWorkItemDetails', () => {
       'projects/g%2Fp/merge_requests/12/diffs?per_page=100'
     ])
     expect(glabExecFileAsyncMock.mock.calls.flatMap(([args]) => args)).not.toContain('--paginate')
+  })
+
+  it('routes local WSL MR detail fetches through project resolution and glab options', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const endpoint = args.at(-1)
+      if (endpoint === 'projects/g%2Fp/merge_requests/12') {
+        return {
+          stdout: JSON.stringify({
+            id: 120,
+            iid: 12,
+            title: 'WSL detail',
+            state: 'opened',
+            web_url: 'https://gitlab.com/g/p/-/merge_requests/12',
+            updated_at: '2026-06-16T00:00:00Z',
+            description: 'MR body',
+            sha: 'head-sha',
+            head_pipeline: null,
+            reviewers: []
+          })
+        }
+      }
+      if (endpoint === 'projects/g%2Fp/merge_requests/12/discussions?per_page=100') {
+        return { stdout: '[]' }
+      }
+      if (endpoint === 'projects/g%2Fp/merge_requests/12/reviewers') {
+        return { stdout: '[]' }
+      }
+      if (endpoint === 'projects/g%2Fp/merge_requests/12/approvals') {
+        return { stdout: JSON.stringify({ approvals_required: 0, approvals_left: 0 }) }
+      }
+      if (endpoint === 'projects/g%2Fp/merge_requests/12/approval_state') {
+        return { stdout: JSON.stringify({ rules: [] }) }
+      }
+      if (endpoint === 'projects/g%2Fp/merge_requests/12/diffs?per_page=100') {
+        return { stdout: '[]' }
+      }
+      throw new Error(`unexpected glab call: ${args.join(' ')}`)
+    })
+
+    const details = await getWorkItemDetails(
+      '/repo',
+      12,
+      'mr',
+      undefined,
+      null,
+      undefined,
+      localGitOptions
+    )
+
+    expect(details?.item.number).toBe(12)
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/repo',
+      undefined,
+      ['gitlab.com'],
+      null,
+      localGitOptions
+    )
+    expect(glabExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
+    )
   })
 })

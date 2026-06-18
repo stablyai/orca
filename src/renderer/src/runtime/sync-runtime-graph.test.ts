@@ -157,6 +157,37 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
   })
 
+  it('changes when quick command terminal label metadata changes', () => {
+    const shared = makeSharedOverrides()
+    const base = makeState({
+      ...shared,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'pnpm test', customTitle: null, ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+    const before = getRuntimeMobileSessionSyncKey(base)
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...base,
+        tabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'term-1',
+              title: 'pnpm test',
+              quickCommandLabel: 'Run tests',
+              customTitle: null,
+              ptyId: 'pty-1'
+            }
+          ]
+        } as unknown as AppState['tabsByWorktree']
+      }),
+      base,
+      before
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
   it('changes when generated terminal titles are toggled', () => {
     const shared = makeSharedOverrides()
     const tabsByWorktree = {
@@ -673,6 +704,46 @@ describe('buildMobileSessionTabSnapshots', () => {
     ])
   })
 
+  it('does not publish terminal pane agent status for the Claude agents screen behind a custom title', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `term-1:${leafId}`
+    const state = makeState({
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'claude agents', customTitle: 'Pinned', ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId'],
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'stale task',
+          updatedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000,
+          agentType: 'claude',
+          paneKey,
+          terminalTitle: 'claude working',
+          stateHistory: []
+        }
+      }
+    })
+
+    const [tab] = buildMobileSessionTabSnapshots(state)[0]?.tabs ?? []
+
+    expect(tab).toMatchObject({
+      type: 'terminal',
+      id: `term-1::${leafId}`,
+      title: 'Pinned'
+    })
+    expect(tab).not.toHaveProperty('agentStatus')
+  })
+
   it('publishes generated terminal titles to mobile snapshots only when enabled', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const base = makeState({
@@ -711,6 +782,40 @@ describe('buildMobileSessionTabSnapshots', () => {
     ).toMatchObject({
       type: 'terminal',
       title: 'Fix remote tabs'
+    })
+  })
+
+  it('publishes quick command labels to mobile snapshots before generated titles', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'term-1',
+            title: 'pnpm test',
+            quickCommandLabel: 'Run tests',
+            generatedTitle: 'Generated title',
+            customTitle: null,
+            ptyId: 'pty-1'
+          }
+        ]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs[0]).toMatchObject({
+      type: 'terminal',
+      title: 'Run tests',
+      quickCommandLabel: 'Run tests'
     })
   })
 

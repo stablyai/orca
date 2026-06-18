@@ -12,4 +12,15 @@ describe('TerminalWebView text zoom', () => {
     const webViewProps = source.slice(start, end)
     expect(webViewProps).toContain('textZoom={100}')
   })
+
+  it('keeps the HTML source object stable so parent renders do not reload xterm', () => {
+    const start = source.indexOf('<WebView')
+    expect(start).toBeGreaterThanOrEqual(0)
+    const end = source.indexOf('/>', start)
+    expect(end).toBeGreaterThan(start)
+    const webViewProps = source.slice(start, end)
+    expect(source).toContain('const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }')
+    expect(webViewProps).toContain('source={XTERM_WEBVIEW_SOURCE}')
+    expect(webViewProps).not.toContain('source={{ html: XTERM_HTML }}')
+  })
 })

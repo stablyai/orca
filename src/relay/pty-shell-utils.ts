@@ -1,14 +1,67 @@
 import { execFile as execFileCb } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
+import { homedir } from 'os'
+import { win32 as pathWin32 } from 'path'
 import { promisify } from 'util'
+import {
+  isAgentForegroundWrapperProcess,
+  isExpectedAgentProcess,
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine
+} from '../shared/agent-process-recognition'
+import { isShellProcess } from '../shared/shell-process-detection'
+import {
+  resolveWindowsAgentForegroundProcess,
+  shouldInspectWindowsAgentForeground
+} from '../main/providers/windows-agent-foreground-process'
 
 const execFile = promisify(execFileCb)
+
+type ProcessRow = {
+  pid: number
+  ppid: number
+  stat: string
+  command: string
+}
+
+export function resolveWindowsDefaultShell(
+  env: NodeJS.ProcessEnv = process.env,
+  existsPath: (path: string) => boolean = existsSync
+): string {
+  const envShell = env.SHELL
+  if (envShell && existsPath(envShell)) {
+    return envShell
+  }
+
+  const systemRoot = env.SystemRoot || env.WINDIR || env.windir || 'C:\\Windows'
+  const windowsPowerShell = pathWin32.join(
+    systemRoot,
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe'
+  )
+  if (existsPath(windowsPowerShell)) {
+    return windowsPowerShell
+  }
+
+  const comspec = env.ComSpec || env.COMSPEC
+  if (comspec && existsPath(comspec)) {
+    return comspec
+  }
+
+  return comspec || 'powershell.exe'
+}
 
 /**
  * Resolve the default shell for PTY spawning.
  * Prefers $SHELL, then common fallbacks.
  */
 export function resolveDefaultShell(): string {
+  if (process.platform === 'win32') {
+    return resolveWindowsDefaultShell()
+  }
+
   const envShell = process.env.SHELL
   if (envShell && existsSync(envShell)) {
     return envShell
@@ -20,6 +73,19 @@ export function resolveDefaultShell(): string {
     }
   }
   return '/bin/sh'
+}
+
+export function resolveDefaultCwd(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  homeDir = homedir()
+): string {
+  if (platform === 'win32') {
+    const driveHome = env.HOMEDRIVE && env.HOMEPATH ? `${env.HOMEDRIVE}${env.HOMEPATH}` : undefined
+    return env.USERPROFILE || env.HOME || driveHome || homeDir || `${env.SystemDrive || 'C:'}\\`
+  }
+
+  return env.HOME || homeDir || '/'
 }
 
 /**
@@ -86,10 +152,136 @@ export async function processHasChildren(pid: number): Promise<boolean> {
   }
 }
 
+function parsePsRows(stdout: string): ProcessRow[] {
+  const rows: ProcessRow[] = []
+  for (const line of stdout.split(/\r?\n/)) {
+    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/)
+    if (!match) {
+      continue
+    }
+    rows.push({
+      pid: Number(match[1]),
+      ppid: Number(match[2]),
+      stat: match[3],
+      command: match[4]
+    })
+  }
+  return rows
+}
+
+function collectDescendants(
+  rows: ProcessRow[],
+  rootPid: number
+): (ProcessRow & { depth: number })[] {
+  const childrenByParent = new Map<number, ProcessRow[]>()
+  for (const row of rows) {
+    const children = childrenByParent.get(row.ppid) ?? []
+    children.push(row)
+    childrenByParent.set(row.ppid, children)
+  }
+
+  const descendants: (ProcessRow & { depth: number })[] = []
+  const stack = (childrenByParent.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
+  while (stack.length > 0) {
+    const { row, depth } = stack.pop()!
+    descendants.push({ ...row, depth })
+    for (const child of childrenByParent.get(row.pid) ?? []) {
+      stack.push({ row: child, depth: depth + 1 })
+    }
+  }
+  return descendants
+}
+
+function candidateScore(row: ProcessRow & { depth: number }): number {
+  return (row.stat.includes('+') ? 10_000 : 0) + row.depth
+}
+
+function processCommandToken(command: string): string {
+  return command.trim().split(/\s+/, 1)[0] ?? ''
+}
+
+function candidateMatchesFallbackWrapper(candidate: ProcessRow, fallbackProcess: string): boolean {
+  return isExpectedAgentProcess(processCommandToken(candidate.command), fallbackProcess)
+}
+
+async function getRecognizedForegroundDescendant(
+  pid: number,
+  fallbackProcess?: string | null
+): Promise<string | null> {
+  try {
+    const { stdout } = await execFile('ps', ['-axo', 'pid=,ppid=,stat=,command='], {
+      encoding: 'utf-8',
+      timeout: 3000
+    })
+    const rows = parsePsRows(stdout)
+    const root = rows.find((row) => row.pid === pid)
+    const candidates = collectDescendants(rows, pid).sort(
+      (a, b) => candidateScore(b) - candidateScore(a)
+    )
+    // Why: SSH relays do not have the daemon's async wrapper cache. Inspect the
+    // remote process tree so node/python agent entrypoints become real agents.
+    const foregroundIsKnown =
+      root?.stat.includes('+') === true ||
+      candidates.some((candidate) => candidate.stat.includes('+'))
+    const foregroundCandidates = foregroundIsKnown
+      ? candidates.filter((candidate) => candidate.stat.includes('+'))
+      : candidates
+    const inspectionCandidates =
+      fallbackProcess && isAgentForegroundWrapperProcess(fallbackProcess)
+        ? foregroundCandidates.filter((candidate) =>
+            candidateMatchesFallbackWrapper(candidate, fallbackProcess)
+          )
+        : foregroundCandidates
+    if (
+      fallbackProcess &&
+      isAgentForegroundWrapperProcess(fallbackProcess) &&
+      inspectionCandidates.length !== 1
+    ) {
+      return null
+    }
+    for (const candidate of inspectionCandidates) {
+      const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
+      if (recognized) {
+        return recognized.processName
+      }
+    }
+  } catch {
+    // Fall through to node-pty's process name or the root command name.
+  }
+  return null
+}
+
 /**
  * Get the foreground process name of a given pid (via ps).
  */
-export async function getForegroundProcessName(pid: number): Promise<string | null> {
+export async function getForegroundProcessName(
+  pid: number,
+  fallbackProcess?: string | null
+): Promise<string | null> {
+  if (fallbackProcess) {
+    const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
+    if (fallbackRecognition) {
+      return fallbackRecognition.processName
+    }
+    if (process.platform === 'win32') {
+      if (!shouldInspectWindowsAgentForeground(fallbackProcess)) {
+        return fallbackProcess
+      }
+      return (
+        (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ?? fallbackProcess
+      )
+    }
+    if (!isShellProcess(fallbackProcess) && !isAgentForegroundWrapperProcess(fallbackProcess)) {
+      return fallbackProcess
+    }
+  }
+  const recognized = await getRecognizedForegroundDescendant(pid, fallbackProcess)
+  if (recognized) {
+    return recognized
+  }
+  if (fallbackProcess) {
+    return fallbackProcess
+  }
   try {
     const { stdout } = await execFile('ps', ['-o', 'comm=', '-p', String(pid)], {
       encoding: 'utf-8',

@@ -51,7 +51,9 @@ export function attachMainWindowServices(
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
+    awaitLocalPtyStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
+    onBeforeUpdateQuit?: () => void | Promise<void>
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
@@ -64,7 +66,10 @@ export function attachMainWindowServices(
     getSelectedCodexHomePath,
     () => store.getSettings(),
     prepareClaudeAuth,
-    store
+    store,
+    {
+      awaitLocalPtyStartup: options?.awaitLocalPtyStartup
+    }
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
   // uses a narrow `pty:management:*` IPC surface that reads the live
@@ -89,12 +94,29 @@ export function attachMainWindowServices(
   // function re-runs as the main window is recreated — does not redo the
   // git I/O or daemon RPC.
   void hydrateLocalPtyRegistryAtBoot(store)
+  const localPtyStartupReady = options?.awaitLocalPtyStartup?.()
+  if (localPtyStartupReady) {
+    void localPtyStartupReady
+      .then(() => hydrateLocalPtyRegistryAtBoot(store))
+      .catch((error) => {
+        console.warn(
+          '[memory] Deferred pty-registry hydration skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      })
+  }
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
   setupAutoUpdater(mainWindow, {
     getLastUpdateCheckAt: () => store.getUI().lastUpdateCheckAt,
-    onBeforeQuit: () => store.flush(),
+    onBeforeQuit: async () => {
+      try {
+        await options?.onBeforeUpdateQuit?.()
+      } finally {
+        store.flush()
+      }
+    },
     setLastUpdateCheckAt: (timestamp) => {
       store.updateUI({ lastUpdateCheckAt: timestamp })
     },
@@ -194,7 +216,8 @@ function registerRuntimeWindowLifecycle(
     }
   }
   runtime.setNotifier({
-    worktreesChanged: (repoId) => send('worktrees:changed', { repoId }),
+    worktreesChanged: (repoId, renamed) =>
+      send('worktrees:changed', renamed ? { repoId, renamed } : { repoId }),
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),

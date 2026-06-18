@@ -3,6 +3,7 @@ import { GitBranch } from 'lucide-react'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
+import { translate } from '@/i18n/i18n'
 
 function NestedRepoSelectAllRow({
   total,
@@ -35,13 +36,20 @@ function NestedRepoSelectAllRow({
         checked={allSelected}
         disabled={disabled}
         onChange={onToggle}
-        aria-label={allSelected ? 'Deselect all' : 'Select all'}
+        aria-label={
+          allSelected
+            ? translate('auto.components.repo.NestedRepoChecklist.929734aea5', 'Deselect all')
+            : translate('auto.components.repo.NestedRepoChecklist.91b5bcadb6', 'Select all')
+        }
       />
       <span className="min-w-0 truncate text-[12.5px] font-semibold text-foreground">
-        {allSelected ? 'Deselect all' : 'Select all'}
+        {allSelected
+          ? translate('auto.components.repo.NestedRepoChecklist.929734aea5', 'Deselect all')
+          : translate('auto.components.repo.NestedRepoChecklist.91b5bcadb6', 'Select all')}
       </span>
       <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
-        {selectedCount} of {total} selected
+        {selectedCount} {translate('auto.components.repo.NestedRepoChecklist.ea54c7bf8f', 'of')}{' '}
+        {total} {translate('auto.components.repo.NestedRepoChecklist.f7e1170567', 'selected')}
       </span>
     </label>
   )

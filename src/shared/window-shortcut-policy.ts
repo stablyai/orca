@@ -6,7 +6,8 @@ import {
   normalizeTerminalShortcutPolicy,
   type KeybindingActionId,
   type KeybindingMatchOptions,
-  type KeybindingOverrides
+  type KeybindingOverrides,
+  type PhysicalModifierToken
 } from './keybindings'
 
 export type WindowShortcutInput = {
@@ -21,12 +22,14 @@ export type WindowShortcutInput = {
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
+  // Set only by the double-tap detector; threads the synthetic input through
+  // the main-process resolver so allowlisted actions can fire on double-tap.
+  doubleTapModifier?: PhysicalModifierToken
 }
 
 export type WindowShortcutAction =
   | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
   | { type: 'openSettings' }
-  | { type: 'exportPdf' }
   | { type: 'forceReload' }
   | { type: 'toggleWorktreePalette' }
   | { type: 'toggleFloatingTerminal' }
@@ -35,6 +38,7 @@ export type WindowShortcutAction =
   | { type: 'openQuickOpen' }
   | { type: 'openNewWorkspace' }
   | { type: 'deleteCurrentWorkspace' }
+  | { type: 'openWorkspaceBoard' }
   | { type: 'openTasks' }
   | { type: 'switchRecentTab' }
   | { type: 'jumpToWorktreeIndex'; index: number }
@@ -90,6 +94,32 @@ export function matchesRecentTabSwitcherChord(
     keybindings,
     options
   )
+}
+
+function isControlKey(input: WindowShortcutInput): boolean {
+  return (
+    input.code === 'ControlLeft' ||
+    input.code === 'ControlRight' ||
+    input.code === 'Control' ||
+    input.key === 'Control'
+  )
+}
+
+function isTabKey(input: WindowShortcutInput): boolean {
+  return input.code === 'Tab' || input.key === 'Tab'
+}
+
+export function isRecentTabSwitcherCommitRelease(input: WindowShortcutInput): boolean {
+  if (input.type !== 'keyUp' && input.type !== 'keyup') {
+    return false
+  }
+  if (isControlKey(input)) {
+    return true
+  }
+  const control = input.control ?? input.ctrlKey
+  // Why: some Electron surfaces report the final Ctrl+Tab release as Tab
+  // keyup after Control is already up, so commit instead of stranding the UI.
+  return isTabKey(input) && control === false
 }
 
 function actionMatches(
@@ -164,10 +194,6 @@ export function resolveWindowShortcutAction(
     return { type: 'openSettings' }
   }
 
-  if (actionMatches('file.exportPdf', input, platform, keybindings, options)) {
-    return { type: 'exportPdf' }
-  }
-
   if (actionMatches('app.forceReload', input, platform, keybindings, options)) {
     return { type: 'forceReload' }
   }
@@ -200,6 +226,10 @@ export function resolveWindowShortcutAction(
 
   if (actionMatches('workspace.delete', input, platform, keybindings, options)) {
     return { type: 'deleteCurrentWorkspace' }
+  }
+
+  if (actionMatches('workspace.openBoard', input, platform, keybindings, options)) {
+    return { type: 'openWorkspaceBoard' }
   }
 
   if (actionMatches('voice.dictation', input, platform, keybindings, options)) {
@@ -254,8 +284,6 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
           : 'zoom.reset'
     case 'openSettings':
       return 'app.settings'
-    case 'exportPdf':
-      return 'file.exportPdf'
     case 'forceReload':
       return 'app.forceReload'
     case 'toggleWorktreePalette':
@@ -272,6 +300,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'workspace.create'
     case 'deleteCurrentWorkspace':
       return 'workspace.delete'
+    case 'openWorkspaceBoard':
+      return 'workspace.openBoard'
     case 'openTasks':
       return 'view.tasks'
     case 'switchRecentTab':

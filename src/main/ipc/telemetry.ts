@@ -53,7 +53,11 @@ import type { OptInVia } from '../../shared/telemetry-events'
 // mirrors how other core-handlers accept the store explicitly.
 let storeRef: Store | null = null
 
-const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>(['app_starred_orca'])
+const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
+  'app_starred_orca',
+  'star_nag_outcome',
+  'feature_interaction_usage_bucket_reached'
+])
 
 /**
  * Derive the `via` discriminator for a `telemetry:setOptIn` call from

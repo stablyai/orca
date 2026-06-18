@@ -12,6 +12,7 @@ import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatc
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 import {
   REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
   type RequestActiveTerminalPaneSplitDetail
@@ -24,6 +25,8 @@ import {
 } from './terminal-agent-session-fork'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -51,6 +54,7 @@ type UseTerminalPaneContextMenuDeps = {
   onSetTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
+  forceBracketedMultilineTextPaste: boolean
   rightClickToPaste: boolean
 }
 
@@ -90,6 +94,7 @@ export function useTerminalPaneContextMenu({
   onSetTitle,
   onPasteError,
   onAgentSessionForkReady,
+  forceBracketedMultilineTextPaste,
   rightClickToPaste
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
@@ -147,7 +152,12 @@ export function useTerminalPaneContextMenu({
     // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
     // remounts; the numeric PaneManager id is only a local runtime handle.
     await window.api.ui.writeClipboardText(makePaneKey(tabId, pane.leafId))
-    toast.success('Pane ID copied')
+    toast.success(
+      translate(
+        'auto.components.terminal.pane.use.terminal.pane.context.menu.a29b9faa01',
+        'Pane ID copied'
+      )
+    )
     pane.terminal.focus()
   }
 
@@ -161,7 +171,16 @@ export function useTerminalPaneContextMenu({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
-      pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
+      forceBracketedMultilineTextPaste,
+      pasteText: (text, options) => {
+        pasteTerminalText(pane.terminal, text, options)
+        if (text) {
+          recordTerminalUserInputForLeaf(tabId, pane.leafId)
+        }
+        if (options?.recoverImagePasteWebglAtlas) {
+          scheduleImagePasteWebglAtlasRecovery()
+        }
+      },
       onImagePasteError: (error) => {
         const detail = error instanceof Error ? error.message : String(error)
         onPasteError(`Image paste failed: ${detail}`)
@@ -278,6 +297,7 @@ export function useTerminalPaneContextMenu({
     sendTerminalQuickCommandToPane({
       command,
       pane,
+      tabId,
       transport: paneTransportsRef.current.get(pane.id)
     })
   }

@@ -19,11 +19,13 @@ type FileExplorerVirtualRowsProps = {
   statusByRelativePath: Map<string, GitFileStatus>
   ignoredByRelativePath: Set<string>
   expanded: Set<string>
+  canCollapseFolderSubtree?: boolean
   dirCache: Record<string, DirCache>
   selectedPaths: Set<string>
   activeFileId: string | null
   flashingPath: string | null
   deleteShortcutLabel: string
+  connectionId?: string | null
   onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
   onContextMenuSelect: (node: TreeNode) => void
@@ -59,11 +61,13 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     statusByRelativePath,
     ignoredByRelativePath,
     expanded,
+    canCollapseFolderSubtree = true,
     dirCache,
     selectedPaths,
     activeFileId,
     flashingPath,
     deleteShortcutLabel,
+    connectionId,
     onClick,
     onDoubleClick,
     onContextMenuSelect,
@@ -163,6 +167,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
               isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}
+              connectionId={connectionId}
+              canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
               selectionSize={selectedPaths.has(n.path) ? visibleSelectionCount : 1}

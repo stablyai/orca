@@ -14,7 +14,8 @@ describe('buildOnboardingFolderAgentStartup', () => {
     })
 
     expect(startup).toEqual({
-      command: 'codex',
+      command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+      env: {},
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'onboarding',
@@ -90,7 +91,8 @@ describe('buildOnboardingFolderAgentStartup', () => {
         false
       )
     ).toEqual({
-      command: 'echo onboarding-folder-agent',
+      command: "echo onboarding-folder-agent '--dangerously-bypass-approvals-and-sandbox'",
+      env: {},
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'onboarding',

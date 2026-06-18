@@ -5,7 +5,14 @@
    across files would duplicate the vi.hoisted boundary mocks with no cleaner
    ownership seam. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'path'
 import { PROTOCOL_VERSION } from './types'
+
+const FAKE_USER_DATA_PATH = '/fake/userData'
+const FAKE_RUNTIME_DIR = join(FAKE_USER_DATA_PATH, 'daemon')
+const FAKE_APP_PATH = '/fake/app'
+const FAKE_APP_OUT_MAIN_PATH = join(FAKE_APP_PATH, 'out', 'main')
+const FAKE_DAEMON_ENTRY_PATH = join(FAKE_APP_OUT_MAIN_PATH, 'daemon-entry.js')
 
 // Why: the restart flow touches many boundary modules (electron app paths, fs
 // for dir creation, net for socket probe, DaemonClient over that socket, the
@@ -20,6 +27,7 @@ const {
   writeFileSyncMock,
   netConnectMock,
   forkMock,
+  checkDaemonHealthMock,
   healthCheckDaemonMock,
   getMacDaemonSystemResolverHealthMock,
   getDaemonLaunchIdentityMock,
@@ -28,6 +36,7 @@ const {
   getProcessStartedAtMsMock,
   daemonClientMock,
   spawnerInstances,
+  ensureRunningOverrides,
   adapterInstances,
   setLocalPtyProviderMock,
   unbindLocalProviderListenersMock,
@@ -65,6 +74,7 @@ const {
     }
   })
 
+  const checkDaemonHealthMock = vi.fn(async () => 'healthy')
   const healthCheckDaemonMock = vi.fn(async () => true)
   const getMacDaemonSystemResolverHealthMock = vi.fn(() => 'healthy')
   const getDaemonLaunchIdentityMock = vi.fn(() => 'match')
@@ -83,6 +93,7 @@ const {
   // Why: every DaemonSpawner constructed under test pushes into this array so
   // assertions can check "was the *same* spawner reused across restart?".
   const spawnerInstances: MockSpawner[] = []
+  const ensureRunningOverrides: (() => Promise<{ socketPath: string; tokenPath: string }>)[] = []
   // Same for DaemonPtyAdapter. The test asserts the replacement adapter is a
   // fresh instance whose respawn closure targets the *original* spawner.
   const adapterInstances: MockAdapter[] = []
@@ -99,6 +110,7 @@ const {
     writeFileSyncMock,
     netConnectMock,
     forkMock,
+    checkDaemonHealthMock,
     healthCheckDaemonMock,
     getMacDaemonSystemResolverHealthMock,
     getDaemonLaunchIdentityMock,
@@ -107,6 +119,7 @@ const {
     getProcessStartedAtMsMock,
     daemonClientMock,
     spawnerInstances,
+    ensureRunningOverrides,
     adapterInstances,
     setLocalPtyProviderMock,
     unbindLocalProviderListenersMock,
@@ -169,6 +182,7 @@ vi.mock('child_process', () => ({ fork: forkMock }))
 vi.mock('net', () => ({ connect: netConnectMock }))
 
 vi.mock('./daemon-health', () => ({
+  checkDaemonHealth: checkDaemonHealthMock,
   getDaemonLaunchIdentity: getDaemonLaunchIdentityMock,
   getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock,
   healthCheckDaemon: healthCheckDaemonMock,
@@ -193,6 +207,10 @@ vi.mock('./daemon-spawner', () => ({
       // so the test can verify the *replacement* adapter is constructed with
       // info from the second ensureRunning call, not stale info from the first.
       this.ensureRunning = vi.fn(async () => {
+        const override = ensureRunningOverrides.shift()
+        if (override) {
+          return override()
+        }
         this.socketCounter += 1
         return {
           socketPath: `/fake/socket-${this.socketCounter}`,
@@ -256,11 +274,15 @@ vi.mock('../ipc/pty', () => ({
 async function importFresh() {
   vi.resetModules()
   spawnerInstances.length = 0
+  ensureRunningOverrides.length = 0
   adapterInstances.length = 0
   setLocalPtyProviderMock.mockClear()
   unbindLocalProviderListenersMock.mockClear()
   rebindLocalProviderListenersMock.mockClear()
+  checkDaemonHealthMock.mockClear()
+  checkDaemonHealthMock.mockResolvedValue('healthy')
   healthCheckDaemonMock.mockClear()
+  healthCheckDaemonMock.mockResolvedValue(true)
   getMacDaemonSystemResolverHealthMock.mockReset()
   getMacDaemonSystemResolverHealthMock.mockReturnValue('healthy')
   getDaemonLaunchIdentityMock.mockClear()
@@ -285,10 +307,66 @@ async function importFresh() {
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   beforeEach(() => {
     probeSocketExistsMock.mockReturnValue(false)
+    netConnectMock.mockReset()
+    netConnectMock.mockImplementation(() => {
+      const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+      return {
+        on(event: string, cb: () => void) {
+          handlers[event]?.push(cb)
+          if (event === 'error') {
+            queueMicrotask(() => cb())
+          }
+          return this
+        },
+        removeListener(event: string, cb: () => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
+        destroy() {}
+      }
+    })
   })
 
   afterEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('re-binds listeners after the first daemon provider is installed', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(1)
+    expect(rebindLocalProviderListenersMock).toHaveBeenCalledTimes(1)
+    expect(rebindLocalProviderListenersMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      setLocalPtyProviderMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('does not install a late daemon provider after startup fallback aborts the init attempt', async () => {
+    const mod = await importFresh()
+    let resolveEnsureRunning!: (value: { socketPath: string; tokenPath: string }) => void
+    ensureRunningOverrides.push(
+      () =>
+        new Promise((resolve) => {
+          resolveEnsureRunning = resolve
+        })
+    )
+    const abortController = new AbortController()
+
+    const started = mod.initDaemonPtyProvider(abortController.signal)
+    await Promise.resolve()
+
+    expect(spawnerInstances).toHaveLength(1)
+    expect(spawnerInstances[0].ensureRunning).toHaveBeenCalledTimes(1)
+
+    abortController.abort()
+    resolveEnsureRunning({ socketPath: '/fake/socket-late', tokenPath: '/fake/token-late' })
+    await started
+
+    expect(adapterInstances).toHaveLength(0)
+    expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
+    expect(rebindLocalProviderListenersMock).not.toHaveBeenCalled()
+    expect(mod.getDaemonProvider()).toBeNull()
   })
 
   it('fans pty:exit for every active session *before* unbinding listeners, and killedCount is captured pre-fanout', async () => {
@@ -668,20 +746,22 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     // would leave the coalescer untested. The deferred gate holds the first
     // restart inside `ensureRunning` until we release it, guaranteeing the
     // second call enters while the first is genuinely mid-flight.
+    let markEnsureRunningEntered: (() => void) | undefined
+    const ensureRunningEntered = new Promise<void>((resolve) => {
+      markEnsureRunningEntered = resolve
+    })
     let releaseEnsureRunning: (() => void) | undefined
     const ensureRunningBarrier = new Promise<void>((resolve) => {
       releaseEnsureRunning = resolve
     })
     originalSpawner.ensureRunning.mockImplementationOnce(async () => {
+      markEnsureRunningEntered?.()
       await ensureRunningBarrier
       return { socketPath: '/fake/socket-2', tokenPath: '/fake/token-2' }
     })
 
     const call1 = mod.restartDaemon()
-    // Yield microtasks so call1 progresses into runRestartDaemon and is
-    // definitely blocked on the barrier.
-    await Promise.resolve()
-    await Promise.resolve()
+    await ensureRunningEntered
     const call2 = mod.restartDaemon()
 
     // Why: `async function restartDaemon` wraps each return in a fresh
@@ -759,18 +839,18 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(getDaemonLaunchIdentityMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
-      '/fake/app/out/main/daemon-entry.js'
+      FAKE_DAEMON_ENTRY_PATH
     )
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token'
     )
     expect(forkMock).toHaveBeenCalledWith(
-      '/fake/app/out/main/daemon-entry.js',
+      FAKE_DAEMON_ENTRY_PATH,
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
@@ -809,10 +889,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(getDaemonLaunchIdentityMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
-      '/fake/app/out/main/daemon-entry.js'
+      FAKE_DAEMON_ENTRY_PATH
     )
     expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
     expect(disconnectMock).toHaveBeenCalledOnce()
@@ -891,12 +971,12 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(getMacDaemonSystemResolverHealthMock).toHaveBeenCalledWith('/fake/socket', '/fake/token')
     expect(getDaemonLaunchIdentityMock).not.toHaveBeenCalled()
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token'
     )
     expect(forkMock).toHaveBeenCalledWith(
-      '/fake/app/out/main/daemon-entry.js',
+      FAKE_DAEMON_ENTRY_PATH,
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
@@ -976,12 +1056,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('uses the direct daemon entry when Electron app path is already out/main', async () => {
-    probeSocketExistsMock.mockImplementation(
-      (p?: string) => p === '/fake/app/out/main/daemon-entry.js'
-    )
-    healthCheckDaemonMock.mockResolvedValueOnce(false)
+    probeSocketExistsMock.mockImplementation((p?: string) => p === FAKE_DAEMON_ENTRY_PATH)
     const mod = await importFresh()
-    getAppPathMock.mockReturnValue('/fake/app/out/main')
+    getAppPathMock.mockReturnValue(FAKE_APP_OUT_MAIN_PATH)
+    healthCheckDaemonMock.mockResolvedValue(false)
     await mod.initDaemonPtyProvider()
 
     const launcher = spawnerInstances[0].launcher as (
@@ -1015,15 +1093,15 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(forkMock).toHaveBeenCalledWith(
-      '/fake/app/out/main/daemon-entry.js',
+      FAKE_DAEMON_ENTRY_PATH,
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ detached: true })
     )
   })
 
   it('removes detached daemon startup listeners after readiness', async () => {
-    healthCheckDaemonMock.mockResolvedValueOnce(false)
     const mod = await importFresh()
+    healthCheckDaemonMock.mockResolvedValue(false)
     await mod.initDaemonPtyProvider()
 
     const launcher = spawnerInstances[0].launcher as (
@@ -1069,7 +1147,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       JSON.stringify({
         pid: 12345,
         startedAtMs: 1_000_000,
-        entryPath: '/fake/app/out/main/daemon-entry.js',
+        entryPath: FAKE_DAEMON_ENTRY_PATH,
         appVersion: '1.2.3'
       }),
       { mode: 0o600 }
@@ -1077,8 +1155,8 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   })
 
   it('removes detached daemon startup listeners after startup error', async () => {
-    healthCheckDaemonMock.mockResolvedValueOnce(false)
     const mod = await importFresh()
+    healthCheckDaemonMock.mockResolvedValue(false)
     await mod.initDaemonPtyProvider()
 
     const launcher = spawnerInstances[0].launcher as (
@@ -1121,6 +1199,132 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(child.unref).not.toHaveBeenCalled()
   })
 
+  it('preserves a health-check-failing daemon when it owns live sessions', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const requestMock = vi.fn(async (method: string) => {
+      if (method === 'listSessions') {
+        return {
+          sessions: [{ sessionId: 'wt-1@@live', isAlive: true }]
+        }
+      }
+      return {}
+    })
+    const disconnectMock = vi.fn()
+    daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {}),
+        request: requestMock,
+        disconnect: disconnectMock
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(requestMock).toHaveBeenCalledWith('listSessions', undefined)
+    expect(disconnectMock).toHaveBeenCalledOnce()
+    expect(killStaleDaemonMock).not.toHaveBeenCalled()
+    expect(forkMock).not.toHaveBeenCalled()
+  })
+
+  it('replaces a health-check-failing daemon when live sessions cannot be verified', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
+      return {
+        ensureConnected: vi.fn(async () => {
+          throw new Error('daemon is wedged')
+        }),
+        request: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
+    forkMock.mockImplementationOnce(() => ({
+      pid: 12345,
+      on(event: string, cb: (arg?: unknown) => void) {
+        if (event === 'message') {
+          queueMicrotask(() => cb({ type: 'ready' }))
+        }
+        return this
+      },
+      off() {
+        return this
+      },
+      disconnect: vi.fn(),
+      unref: vi.fn()
+    }))
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(killStaleDaemonMock).toHaveBeenCalledWith(
+      FAKE_RUNTIME_DIR,
+      '/fake/socket',
+      '/fake/token'
+    )
+    expect(forkMock).toHaveBeenCalled()
+  })
+
+  it('replaces a health-check-failing daemon when no live sessions would be lost', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    const launcher = spawnerInstances[0].launcher as (
+      socketPath: string,
+      tokenPath: string
+    ) => Promise<{ shutdown(): Promise<void> }>
+    healthCheckDaemonMock.mockResolvedValueOnce(false)
+    forkMock.mockImplementationOnce(() => {
+      const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+        message: [],
+        error: [],
+        exit: []
+      }
+      return {
+        pid: 12345,
+        on(event: string, cb: (arg?: unknown) => void) {
+          handlers[event]?.push(cb)
+          if (event === 'message') {
+            queueMicrotask(() => cb({ type: 'ready' }))
+          }
+          return this
+        },
+        off(event: string, cb: (arg?: unknown) => void) {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return this
+        },
+        disconnect: vi.fn(),
+        unref: vi.fn()
+      }
+    })
+
+    await launcher('/fake/socket', '/fake/token')
+
+    expect(killStaleDaemonMock).toHaveBeenCalledWith(
+      FAKE_RUNTIME_DIR,
+      '/fake/socket',
+      '/fake/token'
+    )
+    expect(forkMock).toHaveBeenCalledWith(
+      FAKE_DAEMON_ENTRY_PATH,
+      ['--socket', '/fake/socket', '--token', '/fake/token'],
+      expect.objectContaining({ detached: true })
+    )
+  })
+
   it('preserves a packaged healthy daemon when its app bundle is current', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
@@ -1137,13 +1341,13 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(getDaemonLaunchIdentityMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
-      '/fake/app/out/main/daemon-entry.js'
+      FAKE_DAEMON_ENTRY_PATH
     )
     expect(isDaemonStaleForCurrentBundleMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
       '1.2.3'
@@ -1189,18 +1393,18 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(isDaemonStaleForCurrentBundleMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
       '1.2.3'
     )
     expect(killStaleDaemonMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token'
     )
     expect(forkMock).toHaveBeenCalledWith(
-      '/fake/app/out/main/daemon-entry.js',
+      FAKE_DAEMON_ENTRY_PATH,
       ['--socket', '/fake/socket', '--token', '/fake/token'],
       expect.objectContaining({ detached: true })
     )
@@ -1237,7 +1441,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     await launcher('/fake/socket', '/fake/token')
 
     expect(isDaemonStaleForCurrentBundleMock).toHaveBeenCalledWith(
-      '/fake/userData/daemon',
+      FAKE_RUNTIME_DIR,
       '/fake/socket',
       '/fake/token',
       '1.2.3'

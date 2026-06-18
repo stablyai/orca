@@ -1,6 +1,6 @@
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/components/sidebar/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,

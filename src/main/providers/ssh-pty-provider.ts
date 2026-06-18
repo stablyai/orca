@@ -10,6 +10,7 @@ type RemoteCliBridgeEnv = {
   relayDir: string
   nodePath: string
   sockPath: string
+  pathDelimiter?: ':' | ';'
 }
 
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -152,13 +153,14 @@ export class SshPtyProvider implements IPtyProvider {
       return env
     }
     const merged = { ...env }
+    const pathDelimiter = this.remoteCliBridgeEnv.pathDelimiter ?? ':'
     const pathKey = merged.PATH !== undefined ? 'PATH' : merged.Path !== undefined ? 'Path' : null
     if (pathKey) {
       const pathValue = merged[pathKey] ?? ''
-      merged[pathKey] = pathValue.split(':').includes(this.remoteCliBridgeEnv.binDir)
+      merged[pathKey] = pathValue.split(pathDelimiter).includes(this.remoteCliBridgeEnv.binDir)
         ? pathValue
         : pathValue
-          ? `${this.remoteCliBridgeEnv.binDir}:${pathValue}`
+          ? `${this.remoteCliBridgeEnv.binDir}${pathDelimiter}${pathValue}`
           : this.remoteCliBridgeEnv.binDir
     }
     merged.ORCA_REMOTE_CLI_BIN_DIR = this.remoteCliBridgeEnv.binDir

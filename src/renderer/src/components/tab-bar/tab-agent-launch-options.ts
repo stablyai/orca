@@ -1,4 +1,4 @@
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../../shared/types'
 
 export type TabAgentLaunchOption = {
@@ -16,16 +16,16 @@ function compactAgentAlias(value: string): string {
 }
 
 function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string; cmd: string } | null {
-  return AGENT_CATALOG.find((entry) => entry.id === agent) ?? null
+  return getAgentCatalog().find((entry) => entry.id === agent) ?? null
 }
 
 export function orderTabLaunchAgents(
   defaultAgent: TuiAgent | 'blank' | null | undefined,
   detected: readonly TuiAgent[]
 ): TuiAgent[] {
-  const inCatalogOrder = AGENT_CATALOG.filter((entry) => detected.includes(entry.id)).map(
-    (entry) => entry.id
-  )
+  const inCatalogOrder = getAgentCatalog()
+    .filter((entry) => detected.includes(entry.id))
+    .map((entry) => entry.id)
   if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
     return inCatalogOrder
   }

@@ -1,9 +1,16 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import path from 'path'
+import path, { win32 } from 'path'
 import type { RelayDispatcher } from './dispatcher'
+import { buildRelayCommandEnv } from './relay-command-env'
 
 const execFileAsync = promisify(execFile)
+
+type CommandLookupSpec = {
+  file: string
+  args: string[]
+  windowsHide?: true
+}
 
 export class PreflightHandler {
   private dispatcher: RelayDispatcher
@@ -40,18 +47,37 @@ export class PreflightHandler {
   // .zprofile/.bash_profile sourced. Running `which` directly would miss
   // agents installed via Homebrew, nvm, cargo, pipx, etc. Spawning a login
   // shell (`-lc`) ensures PATH matches what the user's PTY sessions see.
+  // Windows has no /bin/sh on native OpenSSH hosts, so use where.exe there.
   private async isCommandOnPath(command: string): Promise<boolean> {
     try {
-      const { stdout } = await execFileAsync('/bin/sh', ['-lc', `which ${command}`], {
+      const spec = buildCommandLookupSpec(command, process.platform)
+      const { stdout } = await execFileAsync(spec.file, spec.args, {
         encoding: 'utf-8',
-        timeout: 5000
+        env: buildRelayCommandEnv(),
+        timeout: 5000,
+        ...(spec.windowsHide ? { windowsHide: true } : {})
       })
-      return stdout
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .some((line) => path.isAbsolute(line))
+      return hasAbsoluteCommandPath(stdout, process.platform)
     } catch {
       return false
     }
   }
+}
+
+export function buildCommandLookupSpec(
+  command: string,
+  platform: NodeJS.Platform
+): CommandLookupSpec {
+  if (platform === 'win32') {
+    return { file: 'where.exe', args: [command], windowsHide: true }
+  }
+  return { file: '/bin/sh', args: ['-lc', 'command -v "$1"', 'sh', command] }
+}
+
+export function hasAbsoluteCommandPath(output: string, platform: NodeJS.Platform): boolean {
+  const pathOps = platform === 'win32' ? win32 : path
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .some((line) => pathOps.isAbsolute(line))
 }

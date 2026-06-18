@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraClientForSite } from './client'
+import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 
-const { clearTokenMock, getClientsMock, jiraRequestMock } = vi.hoisted(() => ({
+const { clearTokenMock, getClientsMock, isAuthErrorMock, jiraRequestMock } = vi.hoisted(() => ({
   clearTokenMock: vi.fn(),
   getClientsMock: vi.fn(),
+  isAuthErrorMock: vi.fn(),
   jiraRequestMock: vi.fn()
 }))
 
@@ -12,7 +14,7 @@ vi.mock('./client', () => ({
   release: vi.fn(),
   clearToken: (...args: unknown[]) => clearTokenMock(...args),
   getClients: (...args: unknown[]) => getClientsMock(...args),
-  isAuthError: vi.fn().mockReturnValue(false),
+  isAuthError: (...args: unknown[]) => isAuthErrorMock(...args),
   jiraRequest: (...args: unknown[]) => jiraRequestMock(...args)
 }))
 
@@ -32,7 +34,30 @@ function makeEntry(): JiraClientForSite {
 describe('Jira issue operations', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    isAuthErrorMock.mockReturnValue(false)
     getClientsMock.mockReturnValue([makeEntry()])
+  })
+
+  it('surfaces Jira credential decrypt errors on active issue, metadata, and mutation paths', async () => {
+    const error = new Error(credentialDecryptionMessage('Jira'))
+    getClientsMock.mockImplementation(() => {
+      throw error
+    })
+    const { createIssue, getIssue, listIssueTypes, listProjects, searchIssues } =
+      await import('./issues')
+
+    await expect(searchIssues('project = ALP', 20, 'site-1')).rejects.toThrow(error.message)
+    await expect(getIssue('ALP-1', 'site-1')).rejects.toThrow(error.message)
+    await expect(listProjects('site-1')).rejects.toThrow(error.message)
+    await expect(listIssueTypes('10000', 'site-1')).rejects.toThrow(error.message)
+    await expect(
+      createIssue({
+        siteId: 'site-1',
+        projectId: '10000',
+        issueTypeId: '10001',
+        title: 'Fix auth'
+      })
+    ).rejects.toThrow(error.message)
   })
 
   it('paginates Jira project search results before sorting them', async () => {

@@ -2,6 +2,7 @@ import { Copy, Image, MessageSquarePlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { BrowserGrabPayload } from '../../../../shared/browser-grab-types'
+import { translate } from '@/i18n/i18n'
 
 // ---------------------------------------------------------------------------
 // Grab payload → human-readable prompt context
@@ -127,10 +128,13 @@ export default function GrabConfirmationSheet({
       <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="rounded-md bg-indigo-500/10 px-2 py-0.5 text-xs font-medium text-indigo-400">
-            Grab
+            {translate('auto.components.browser.pane.GrabConfirmationSheet.f3575229df', 'Grab')}
           </div>
           <span className="text-sm text-muted-foreground">
-            Review before attaching. Captured page context may include visible site content.
+            {translate(
+              'auto.components.browser.pane.GrabConfirmationSheet.50f7114f99',
+              'Review before attaching. Captured page context may include visible site content.'
+            )}
           </span>
         </div>
         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={onCancel}>
@@ -148,7 +152,10 @@ export default function GrabConfirmationSheet({
             <div className="overflow-hidden rounded-lg border border-border/60">
               <img
                 src={payload.screenshot.dataUrl}
-                alt="Selected element screenshot"
+                alt={translate(
+                  'auto.components.browser.pane.GrabConfirmationSheet.9c6ce0632a',
+                  'Selected element screenshot'
+                )}
                 className="max-h-48 w-full object-contain bg-black/5"
               />
             </div>
@@ -157,7 +164,10 @@ export default function GrabConfirmationSheet({
           {/* Element summary */}
           <div className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Selected Element
+              {translate(
+                'auto.components.browser.pane.GrabConfirmationSheet.a759d8f866',
+                'Selected Element'
+              )}
             </h3>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm">
               <div className="flex items-baseline gap-2">
@@ -166,16 +176,19 @@ export default function GrabConfirmationSheet({
                 </span>
                 {target.accessibility.role ? (
                   <span className="text-xs text-muted-foreground">
-                    role=
+                    {translate(
+                      'auto.components.browser.pane.GrabConfirmationSheet.d053db279d',
+                      'role='
+                    )}
                     <EscapedText text={target.accessibility.role} />
                   </span>
                 ) : null}
               </div>
               {target.accessibility.accessibleName ? (
                 <div className="mt-1 text-muted-foreground">
-                  &quot;
+                  {translate('auto.components.browser.pane.GrabConfirmationSheet.eb98a0971a', '"')}
                   <EscapedText text={target.accessibility.accessibleName} />
-                  &quot;
+                  {translate('auto.components.browser.pane.GrabConfirmationSheet.eb98a0971a', '"')}
                 </div>
               ) : null}
               <div className="mt-1 font-mono text-xs text-muted-foreground/70">
@@ -190,11 +203,19 @@ export default function GrabConfirmationSheet({
           {/* Page info */}
           <div className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Page
+              {translate('auto.components.browser.pane.GrabConfirmationSheet.9098b118ab', 'Page')}
             </h3>
             <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-sm">
               <div className="font-medium text-foreground">
-                <EscapedText text={page.title || 'Untitled'} />
+                <EscapedText
+                  text={
+                    page.title ||
+                    translate(
+                      'auto.components.browser.pane.GrabConfirmationSheet.405bb315da',
+                      'Untitled'
+                    )
+                  }
+                />
               </div>
               <div className="mt-0.5 text-xs text-muted-foreground/70">
                 <EscapedText text={page.sanitizedUrl} />
@@ -206,7 +227,7 @@ export default function GrabConfirmationSheet({
           {target.htmlSnippet ? (
             <div className="space-y-2">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                HTML
+                {translate('auto.components.browser.pane.GrabConfirmationSheet.7d1480fbf1', 'HTML')}
               </h3>
               <pre className="max-h-32 overflow-auto rounded-lg border border-border/60 bg-muted/20 p-3 font-mono text-xs text-foreground/80 scrollbar-sleek">
                 <EscapedText text={target.htmlSnippet} />
@@ -218,7 +239,10 @@ export default function GrabConfirmationSheet({
           {nearbyText.length > 0 ? (
             <div className="space-y-2">
               <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Nearby Context
+                {translate(
+                  'auto.components.browser.pane.GrabConfirmationSheet.effd75e330',
+                  'Nearby Context'
+                )}
               </h3>
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
                 <ul className="list-inside list-disc space-y-0.5 text-sm text-muted-foreground">
@@ -237,21 +261,27 @@ export default function GrabConfirmationSheet({
       {/* Actions */}
       <div className="flex items-center justify-end gap-2 border-t border-border/70 px-4 py-3">
         <Button variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
+          {translate('auto.components.browser.pane.GrabConfirmationSheet.87d97bdd6d', 'Cancel')}
         </Button>
         <Button variant="outline" size="sm" className="gap-1.5" onClick={onCopy}>
           <Copy className="size-3.5" />
-          Copy
+          {translate('auto.components.browser.pane.GrabConfirmationSheet.26fd87f4df', 'Copy')}
         </Button>
         {onCopyScreenshot ? (
           <Button variant="outline" size="sm" className="gap-1.5" onClick={onCopyScreenshot}>
             <Image className="size-3.5" />
-            Copy Screenshot
+            {translate(
+              'auto.components.browser.pane.GrabConfirmationSheet.7095e98362',
+              'Copy Screenshot'
+            )}
           </Button>
         ) : null}
         <Button size="sm" className="gap-1.5" onClick={onAttach}>
           <MessageSquarePlus className="size-3.5" />
-          Attach to AI
+          {translate(
+            'auto.components.browser.pane.GrabConfirmationSheet.314a0aaa5b',
+            'Attach to AI'
+          )}
         </Button>
       </div>
     </div>

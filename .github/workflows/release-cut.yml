@@ -57,6 +57,11 @@ concurrency:
 
 jobs:
   cut:
+    # Why: this job bumps package.json and fast-forwards main. On a fork with
+    # Actions enabled, the scheduled cut would run against the fork's main and
+    # diverge it (version line) every slot, conflicting every PR back upstream.
+    # Gate to the canonical repo so the workflow no-ops on forks.
+    if: github.repository == 'stablyai/orca'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -488,6 +493,19 @@ jobs:
             git push origin "$TAG"
           fi
 
+      - name: Release E2E signal summary
+        if: always()
+        run: |
+          {
+            echo "## Release E2E Signal"
+            echo ""
+            echo "- Terminal rendering golden is release-blocking."
+            echo "- Full E2E is diagnostic/non-blocking release evidence."
+            echo "- Terminal rendering release evidence is diagnostic/non-blocking."
+            echo ""
+            echo "Publishing behavior is controlled by the existing job dependencies; this summary does not change release gating."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   create-release:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
@@ -520,6 +538,165 @@ jobs:
     uses: ./.github/workflows/e2e.yml
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+  terminal-rendering-golden:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    name: terminal rendering golden ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-15
+            platform: mac
+          - os: windows-latest
+            platform: windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      - name: Install native build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: Linux terminal golden E2E uses the same native install path as
+      # release CI, which needs pnpm to bypass its non-executable gyp_main.py.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app for terminal rendering golden
+        run: npx electron-vite build --mode e2e
+
+      - name: Run terminal rendering golden on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+
+      - name: Run terminal rendering golden on macOS
+        if: runner.os == 'macOS'
+        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+
+      - name: Run terminal rendering golden on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:SKIP_BUILD = '1'
+          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
+          pnpm run test:e2e:terminal-rendering-golden
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-rendering-golden-${{ matrix.platform }}-playwright-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Why: these broader terminal rendering repros are useful release evidence,
+  # but they include heavier app-like flows and must not block publishing.
+  terminal-rendering-release-evidence:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    continue-on-error: true
+    name: terminal rendering release evidence ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-15
+            platform: mac
+          - os: windows-latest
+            platform: windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      - name: Install native build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: keep the non-blocking evidence lane on the same Linux native
+      # install path as the blocking golden and release build jobs.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app for terminal rendering evidence
+        run: npx electron-vite build --mode e2e
+
+      - name: Run terminal rendering evidence on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence
+
+      - name: Run terminal rendering evidence on macOS
+        if: runner.os == 'macOS'
+        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence
+
+      - name: Run terminal rendering evidence on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:SKIP_BUILD = '1'
+          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
+          pnpm run test:e2e:terminal-rendering-release-evidence
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-rendering-release-evidence-${{ matrix.platform }}-playwright-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
 
   build:
     needs:
@@ -671,6 +848,9 @@ jobs:
       # Why ORCA_BUILD_IDENTITY here (not in env at the job level): the
       # value comes from the per-tag classification above and electron-vite
       # reads it from `process.env` during `pnpm build:release` only.
+      # Why ORCA_DIAGNOSTICS_TOKEN_URL here: official builds pin crash
+      # diagnostic uploads to Orca's endpoint at compile time, matching the
+      # telemetry gate's "official binary only" behavior.
       - name: Build app
         run: pnpm build:release
         env:
@@ -678,6 +858,7 @@ jobs:
           # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
           NODE_OPTIONS: --max-old-space-size=4096
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
       # Why: macOS signing secrets (CSC_LINK, CSC_KEY_PASSWORD) must NOT be
@@ -766,6 +947,7 @@ jobs:
     needs:
       - cut
       - build
+      - terminal-rendering-golden
     runs-on: ubuntu-latest
     permissions:
       contents: write

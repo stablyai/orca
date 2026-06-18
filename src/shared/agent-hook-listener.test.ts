@@ -383,6 +383,40 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.lastAssistantMessage).toBeUndefined()
   })
 
+  it('normalizes Devin documented lifecycle events', () => {
+    const started = normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', source: 'resume' }
+      },
+      'production'
+    )
+    const compacted = normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PostCompaction', summary: 'trimmed' }
+      },
+      'production'
+    )
+    const ended = normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionEnd', reason: 'complete' }
+      },
+      'production'
+    )
+
+    expect(started?.payload).toMatchObject({ agentType: 'devin', state: 'working' })
+    expect(compacted?.payload).toMatchObject({ agentType: 'devin', state: 'working' })
+    expect(ended?.payload).toMatchObject({ agentType: 'devin', state: 'done' })
+  })
+
   it('rejects oversized paneKey', () => {
     const event = normalizeHookPayload(
       state,

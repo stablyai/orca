@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   linearCreateIssue,
+  linearCreateProject,
   linearCreateSubIssue,
   linearGetCustomView,
   linearGetProject,
@@ -30,6 +31,7 @@ const linearStatusLocal = vi.fn()
 const linearSearchIssuesLocal = vi.fn()
 const linearListIssuesLocal = vi.fn()
 const linearCreateIssueLocal = vi.fn()
+const linearCreateProjectLocal = vi.fn()
 const linearUpdateIssueLocal = vi.fn()
 const linearListTeamsLocal = vi.fn()
 const linearListProjectsLocal = vi.fn()
@@ -49,6 +51,7 @@ beforeEach(() => {
   linearSearchIssuesLocal.mockReset()
   linearListIssuesLocal.mockReset()
   linearCreateIssueLocal.mockReset()
+  linearCreateProjectLocal.mockReset()
   linearUpdateIssueLocal.mockReset()
   linearListTeamsLocal.mockReset()
   linearListProjectsLocal.mockReset()
@@ -70,6 +73,7 @@ beforeEach(() => {
         searchIssues: linearSearchIssuesLocal,
         listIssues: linearListIssuesLocal,
         createIssue: linearCreateIssueLocal,
+        createProject: linearCreateProjectLocal,
         updateIssue: linearUpdateIssueLocal,
         listTeams: linearListTeamsLocal,
         listProjects: linearListProjectsLocal,
@@ -97,6 +101,7 @@ describe('runtime linear client', () => {
       title: 'Child task',
       url: 'https://linear.app/ENG-2'
     })
+    linearCreateProjectLocal.mockResolvedValue({ ok: true, project: { id: 'project-1' } })
 
     await expect(linearStatus({ activeRuntimeEnvironmentId: null })).resolves.toEqual({
       connected: false,
@@ -111,6 +116,10 @@ describe('runtime linear client', () => {
     await linearCreateSubIssue(
       { activeRuntimeEnvironmentId: null },
       { parentIssueId: 'issue-1', teamId: 'team-1', title: 'Child task' }
+    )
+    await linearCreateProject(
+      { activeRuntimeEnvironmentId: null },
+      { name: 'Roadmap', teamIds: ['team-1'], workspaceId: 'workspace-1' }
     )
 
     expect(linearStatusLocal).toHaveBeenCalled()
@@ -128,6 +137,11 @@ describe('runtime linear client', () => {
       parentIssueId: 'issue-1',
       teamId: 'team-1',
       title: 'Child task'
+    })
+    expect(linearCreateProjectLocal).toHaveBeenCalledWith({
+      name: 'Roadmap',
+      teamIds: ['team-1'],
+      workspaceId: 'workspace-1'
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
@@ -371,6 +385,12 @@ describe('runtime linear client', () => {
         _meta: { runtimeId: 'runtime-1' }
       })
       .mockResolvedValueOnce({
+        id: 'rpc-create-project',
+        ok: true,
+        result: { ok: true, project: { id: 'project-2' } },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      .mockResolvedValueOnce({
         id: 'rpc-select',
         ok: true,
         result: { connected: true, viewer: null },
@@ -399,6 +419,16 @@ describe('runtime linear client', () => {
     )
     await linearListTeams({ activeRuntimeEnvironmentId: 'env-1' }, 'all')
     await linearListProjects({ activeRuntimeEnvironmentId: 'env-1' }, 'roadmap', 10, 'workspace-1')
+    await linearCreateProject(
+      { activeRuntimeEnvironmentId: 'env-1' },
+      {
+        name: 'Roadmap',
+        description: 'Summary',
+        teamIds: ['team-1'],
+        workspaceId: 'workspace-1',
+        priority: 2
+      }
+    )
     await linearSelectWorkspace({ activeRuntimeEnvironmentId: 'env-1' }, 'workspace-1')
 
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
@@ -442,6 +472,18 @@ describe('runtime linear client', () => {
       timeoutMs: 30_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(6, {
+      selector: 'env-1',
+      method: 'linear.createProject',
+      params: {
+        name: 'Roadmap',
+        description: 'Summary',
+        teamIds: ['team-1'],
+        workspaceId: 'workspace-1',
+        priority: 2
+      },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(7, {
       selector: 'env-1',
       method: 'linear.selectWorkspace',
       params: { workspaceId: 'workspace-1' },

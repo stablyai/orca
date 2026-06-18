@@ -4,12 +4,14 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { track } from '@/lib/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { GhosttyDiscoveryRow } from './GhosttyDiscoveryRow'
 import type {
   DiscoveryStatusEmitted,
   GhosttyImportPreview,
   GlobalSettings
 } from '../../../../shared/types'
-import ghosttyIcon from '../../../../../resources/ghostty.svg'
+import { translate } from '@/i18n/i18n'
+import { ChromePreview } from './theme-chrome-preview'
 
 type ThemeStepProps = {
   theme: GlobalSettings['theme']
@@ -33,7 +35,7 @@ export function applyOnboardingThemeSelection(
 // remaining states are exactly `DiscoveryStatusEmitted`, which is the
 // schema-side enum the compile-time guard in
 // `src/shared/telemetry-events.ts` locks against.
-type DiscoveryState =
+export type DiscoveryState =
   | { status: 'idle' }
   | { status: 'detecting' }
   | { status: 'found'; preview: GhosttyImportPreview; fields: string[] }
@@ -133,7 +135,12 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       const resolved = preview.found ? preview : await window.api.settings.previewGhosttyImport()
       if (!resolved.found || Object.keys(resolved.diff).length === 0) {
         if (mountedRef.current) {
-          toast.info('No Ghostty settings found to import')
+          toast.info(
+            translate(
+              'auto.components.onboarding.ThemeStep.16a9f0446a',
+              'No Ghostty settings found to import'
+            )
+          )
         }
         track('onboarding_ghostty_import_failed', { reason: 'empty_diff' })
         return
@@ -164,9 +171,15 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       })
     } catch (err) {
       if (mountedRef.current) {
-        toast.error('Failed to import Ghostty settings', {
-          description: err instanceof Error ? err.message : String(err)
-        })
+        toast.error(
+          translate(
+            'auto.components.onboarding.ThemeStep.699ddf83c2',
+            'Failed to import Ghostty settings'
+          ),
+          {
+            description: err instanceof Error ? err.message : String(err)
+          }
+        )
       }
       track('onboarding_ghostty_import_failed', { reason: 'unknown' })
     } finally {
@@ -182,9 +195,24 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     hint: string
     icon: typeof Monitor
   }[] = [
-    { id: 'system', label: 'System', hint: 'Match OS', icon: Monitor },
-    { id: 'dark', label: 'Dark', hint: 'Easy on the eyes', icon: Moon },
-    { id: 'light', label: 'Light', hint: 'Bright & crisp', icon: Sun }
+    {
+      id: 'system',
+      label: translate('auto.components.onboarding.ThemeStep.827ea7b4a2', 'System'),
+      hint: 'Match OS',
+      icon: Monitor
+    },
+    {
+      id: 'dark',
+      label: translate('auto.components.onboarding.ThemeStep.fa7b673ea9', 'Dark'),
+      hint: 'Easy on the eyes',
+      icon: Moon
+    },
+    {
+      id: 'light',
+      label: translate('auto.components.onboarding.ThemeStep.ad192706e6', 'Light'),
+      hint: 'Bright & crisp',
+      icon: Sun
+    }
   ]
 
   return (
@@ -233,153 +261,14 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       <div className="flex items-center gap-2 px-1 text-[12px] text-muted-foreground">
         <Settings2 className="size-3.5" />
         <span>
-          More terminal options, including font, cursor, and palette, in{' '}
-          <span className="font-medium text-foreground">Settings → Terminal</span>
-        </span>
-      </div>
-    </div>
-  )
-}
-
-function GhosttyDiscoveryRow({
-  discovery,
-  importing,
-  disabled,
-  onImport
-}: {
-  discovery: DiscoveryState
-  importing: boolean
-  disabled: boolean
-  onImport: (preview: GhosttyImportPreview) => void
-}) {
-  // Why: 'idle' is the pre-effect state that persists on non-Mac (the
-  // discovery effect short-circuits there), so render nothing instead of
-  // showing the dashed-border "Looking for a Ghostty config…" placeholder.
-  if (discovery.status === 'absent' || discovery.status === 'idle') {
-    return null
-  }
-
-  if (discovery.status === 'detecting') {
-    return (
-      <div className="flex items-center gap-2.5 rounded-lg border border-dashed border-border bg-transparent px-3.5 py-2.5 text-[12px] text-muted-foreground">
-        <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground/60" />
-        Looking for a Ghostty config…
-      </div>
-    )
-  }
-
-  if (discovery.status === 'imported') {
-    return (
-      <div className="flex items-center gap-2.5 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.07] px-3.5 py-2.5 text-[12px] text-foreground">
-        <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
-        <span className="flex-1">
-          <span className="font-medium">Imported from Ghostty.</span>
-          {discovery.fields.length > 0 && (
-            <span className="text-muted-foreground"> {discovery.fields.join(' · ')}</span>
-          )}
-        </span>
-      </div>
-    )
-  }
-
-  const { preview, fields } = discovery
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-violet-500/30 bg-violet-500/[0.06] px-3.5 py-2.5">
-      <img src={ghosttyIcon} alt="" className="size-4 shrink-0" />
-      <div className="min-w-0 flex-1">
-        <div className="text-[12px] text-foreground">
-          <span className="font-medium">Ghostty config detected.</span>{' '}
-          <span className="text-muted-foreground">
-            Import {fields.length > 0 ? fields.map((f) => f.toLowerCase()).join(', ') : 'settings'}?
+          {translate(
+            'auto.components.onboarding.ThemeStep.dd5c16ad1b',
+            'More terminal options, including font, cursor, and palette, in'
+          )}{' '}
+          <span className="font-medium text-foreground">
+            {translate('auto.components.onboarding.ThemeStep.94b9dc561d', 'Settings → Terminal')}
           </span>
-        </div>
-        {preview.configPath && (
-          <div
-            className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground"
-            title={preview.configPath}
-          >
-            {preview.configPath}
-          </div>
-        )}
-      </div>
-      <button
-        className="shrink-0 rounded-md bg-foreground px-3 py-1.5 text-[11.5px] font-semibold text-background hover:bg-foreground/90 disabled:opacity-50"
-        disabled={importing || disabled}
-        onClick={() => onImport(preview)}
-      >
-        {importing ? 'Importing…' : 'Import'}
-      </button>
-    </div>
-  )
-}
-
-function ChromePreview({ variant }: { variant: GlobalSettings['theme'] }) {
-  if (variant === 'system') {
-    return (
-      <div className="relative size-full">
-        <div
-          className="absolute inset-0"
-          style={{ clipPath: 'polygon(0 0, 50% 0, 50% 100%, 0 100%)' }}
-        >
-          <ChromeMock dark />
-        </div>
-        <div
-          className="absolute inset-0"
-          style={{ clipPath: 'polygon(50% 0, 100% 0, 100% 100%, 50% 100%)' }}
-        >
-          <ChromeMock dark={false} />
-        </div>
-        <div
-          aria-hidden
-          className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/70"
-        />
-      </div>
-    )
-  }
-  return <ChromeMock dark={variant === 'dark'} />
-}
-
-function ChromeMock({ dark }: { dark: boolean }) {
-  // Tiny Orca chrome: sidebar with two rows + a content area with a tab and
-  // a composer line. Pure Tailwind so it stays lightweight inside the tile.
-  const bg = dark ? 'bg-[#0f1115]' : 'bg-[#f7f8fa]'
-  const sidebar = dark ? 'bg-[#16181d]' : 'bg-[#eceef2]'
-  const sidebarBorder = dark ? 'border-white/5' : 'border-black/5'
-  const row = dark ? 'bg-white/10' : 'bg-black/10'
-  const rowDim = dark ? 'bg-white/5' : 'bg-black/5'
-  const tab = dark ? 'bg-[#1d2026] border-white/5' : 'bg-white border-black/5'
-  const accent = 'bg-violet-500/80'
-  return (
-    <div className={cn('flex size-full', bg)}>
-      <div className={cn('flex w-[34%] flex-col gap-1 border-r p-1.5', sidebar, sidebarBorder)}>
-        <div className={cn('h-1 w-7 rounded-sm', rowDim)} />
-        <div className="mt-0.5 flex items-center gap-1">
-          <span className={cn('size-1 rounded-full', accent)} />
-          <span className={cn('h-1 flex-1 rounded-sm', row)} />
-        </div>
-        <div className="flex items-center gap-1">
-          <span className={cn('size-1 rounded-full', rowDim)} />
-          <span className={cn('h-1 flex-1 rounded-sm', rowDim)} />
-        </div>
-        <div className="flex items-center gap-1">
-          <span className={cn('size-1 rounded-full', rowDim)} />
-          <span className={cn('h-1 w-3/4 rounded-sm', rowDim)} />
-        </div>
-      </div>
-      <div className="flex flex-1 flex-col p-1.5">
-        <div className="flex gap-1">
-          <div className={cn('h-2 w-8 rounded-sm border', tab)} />
-          <div className={cn('h-2 w-5 rounded-sm', rowDim)} />
-        </div>
-        <div className="mt-1.5 flex-1 space-y-1">
-          <div className={cn('h-1 w-full rounded-sm', rowDim)} />
-          <div className={cn('h-1 w-5/6 rounded-sm', rowDim)} />
-          <div className={cn('h-1 w-2/3 rounded-sm', rowDim)} />
-        </div>
-        <div className={cn('mt-1 flex h-2.5 items-center gap-1 rounded-sm border px-1', tab)}>
-          <span className={cn('size-1 rounded-full', accent)} />
-          <span className={cn('h-0.5 flex-1 rounded-sm', rowDim)} />
-        </div>
+        </span>
       </div>
     </div>
   )
@@ -391,24 +280,42 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
   // stays tidy. Anything in the diff that doesn't match a label still gets
   // imported; it just isn't surfaced as a chip.
   const groups: { label: string; keys: (keyof GlobalSettings)[] }[] = [
-    { label: 'Font', keys: ['terminalFontFamily', 'terminalFontSize', 'terminalFontWeight'] },
     {
-      label: 'Cursor',
+      label: translate('auto.components.onboarding.ThemeStep.cc1858e19e', 'Font'),
+      keys: ['terminalFontFamily', 'terminalFontSize', 'terminalFontWeight']
+    },
+    {
+      label: translate('auto.components.onboarding.ThemeStep.ab2a583a97', 'Cursor'),
       keys: ['terminalCursorStyle', 'terminalCursorBlink', 'terminalCursorOpacity']
     },
-    { label: 'Theme palette', keys: ['terminalThemeDark', 'terminalThemeLight'] },
-    { label: 'Colors', keys: ['terminalColorOverrides'] },
-    { label: 'Padding', keys: ['terminalPaddingX', 'terminalPaddingY'] },
     {
-      label: 'Window',
+      label: translate('auto.components.onboarding.ThemeStep.c021e9dddd', 'Theme palette'),
+      keys: ['terminalThemeDark', 'terminalThemeLight']
+    },
+    {
+      label: translate('auto.components.onboarding.ThemeStep.06a24f4f2d', 'Colors'),
+      keys: ['terminalColorOverrides']
+    },
+    {
+      label: translate('auto.components.onboarding.ThemeStep.86c0f1caa2', 'Padding'),
+      keys: ['terminalPaddingX', 'terminalPaddingY']
+    },
+    {
+      label: translate('auto.components.onboarding.ThemeStep.b3a99a2d29', 'Window'),
       keys: ['terminalBackgroundOpacity', 'windowBackgroundBlur', 'terminalInactivePaneOpacity']
     },
     {
-      label: 'Dividers',
+      label: translate('auto.components.onboarding.ThemeStep.8ca01945f2', 'Dividers'),
       keys: ['terminalDividerColorDark', 'terminalDividerColorLight']
     },
-    { label: 'Mouse', keys: ['terminalMouseHideWhileTyping', 'terminalFocusFollowsMouse'] },
-    { label: 'macOS Option key', keys: ['terminalMacOptionAsAlt'] }
+    {
+      label: translate('auto.components.onboarding.ThemeStep.6c51398942', 'Mouse'),
+      keys: ['terminalMouseHideWhileTyping', 'terminalFocusFollowsMouse']
+    },
+    {
+      label: translate('auto.components.onboarding.ThemeStep.a4b254779d', 'macOS Option key'),
+      keys: ['terminalMacOptionAsAlt']
+    }
   ]
   return groups.filter(({ keys }) => keys.some((k) => k in diff)).map(({ label }) => label)
 }

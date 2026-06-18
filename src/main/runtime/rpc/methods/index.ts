@@ -21,6 +21,7 @@ import { GITHUB_METHODS } from './github'
 import { GITLAB_METHODS } from './gitlab'
 import { HOSTED_REVIEW_METHODS } from './hosted-review'
 import { LINEAR_METHODS } from './linear'
+import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
 import { JIRA_METHODS } from './jira'
 import { SSH_METHODS } from './ssh'
 import { SPEECH_METHODS } from './speech'
@@ -30,6 +31,7 @@ import { WORKSPACE_PORT_METHODS } from './workspace-ports'
 import { SKILL_METHODS } from './skills'
 import { CLIPBOARD_METHODS } from './clipboard'
 import { HOST_CAPABILITY_METHODS } from './host-capabilities'
+import { EMULATOR_METHODS } from './emulator'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -57,6 +59,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...GITLAB_METHODS,
   ...HOSTED_REVIEW_METHODS,
   ...LINEAR_METHODS,
+  ...LINEAR_AGENT_ACCESS_METHODS,
   ...JIRA_METHODS,
   ...SSH_METHODS,
   ...SPEECH_METHODS,
@@ -65,5 +68,6 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...CLIPBOARD_METHODS,
   ...HOST_CAPABILITY_METHODS,
   ...CLIENT_EVENT_METHODS,
-  ...CLIENT_UI_METHODS
+  ...CLIENT_UI_METHODS,
+  ...EMULATOR_METHODS
 ]

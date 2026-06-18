@@ -11,6 +11,7 @@ import type {
   AutomationDispatchResult,
   AutomationPrecheckResult
 } from '../../../shared/automations-types'
+import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
 import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
@@ -20,6 +21,7 @@ import {
   createAutomationRunOutputSnapshotBuffer,
   selectAutomationRunOutputSnapshot
 } from '@/components/automations/automation-run-output-snapshot'
+import { translate } from '@/i18n/i18n'
 
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 const activeReuseDispatchTabIds = new Set<string>()
@@ -56,7 +58,8 @@ export function useAutomationDispatchEvents(): void {
         activeTabId: state.activeTabId,
         activeTabType: state.activeTabType
       }
-      const repo = state.repos.find((entry) => entry.id === automation.projectId)
+      const runRepoId = getAutomationRunRepoId(automation)
+      const repo = state.repos.find((entry) => entry.id === runRepoId)
       const automationWorktree = automation.workspaceId
         ? state.allWorktrees().find((entry) => entry.id === automation.workspaceId)
         : null
@@ -71,7 +74,10 @@ export function useAutomationDispatchEvents(): void {
           status: 'skipped_unavailable',
           workspaceId: run.workspaceId,
           workspaceDisplayName: run.workspaceDisplayName ?? null,
-          error: 'The target project is no longer available.'
+          error: translate(
+            'auto.hooks.useAutomationDispatchEvents.386db94f3e',
+            'The target project is no longer available.'
+          )
         })
         return
       }
@@ -86,7 +92,10 @@ export function useAutomationDispatchEvents(): void {
             status: 'skipped_needs_interactive_auth',
             workspaceId: dispatchWorkspaceId,
             workspaceDisplayName: dispatchWorkspaceDisplayName,
-            error: 'SSH reconnect requires interactive credentials.'
+            error: translate(
+              'auto.hooks.useAutomationDispatchEvents.16a21d6413',
+              'SSH reconnect requires interactive credentials.'
+            )
           })
           return
         }
@@ -110,13 +119,35 @@ export function useAutomationDispatchEvents(): void {
         }
       }
 
+      if (
+        automation.workspaceMode === 'existing' &&
+        automationWorktree &&
+        automation.runContext?.repoId &&
+        automationWorktree.repoId !== automation.runContext.repoId
+      ) {
+        await markDispatchResult({
+          runId: run.id,
+          status: 'skipped_unavailable',
+          workspaceId: automation.workspaceId,
+          workspaceDisplayName: dispatchWorkspaceDisplayName,
+          error: translate(
+            'auto.hooks.useAutomationDispatchEvents.3ad7d77f57',
+            'The target workspace is on a different host than this automation run target.'
+          )
+        })
+        return
+      }
+
       if (automation.workspaceMode === 'existing' && !automationWorktree) {
         await markDispatchResult({
           runId: run.id,
           status: 'skipped_unavailable',
           workspaceId: automation.workspaceId,
           workspaceDisplayName: dispatchWorkspaceDisplayName,
-          error: 'The target workspace is no longer available.'
+          error: translate(
+            'auto.hooks.useAutomationDispatchEvents.59718b120b',
+            'The target workspace is no longer available.'
+          )
         })
         return
       }
@@ -146,7 +177,7 @@ export function useAutomationDispatchEvents(): void {
                 await useAppStore
                   .getState()
                   .createWorktree(
-                    automation.projectId,
+                    runRepoId,
                     buildAutomationWorkspaceName(run.title, run.scheduledFor),
                     automation.baseBranch ?? undefined,
                     'inherit',
@@ -169,7 +200,10 @@ export function useAutomationDispatchEvents(): void {
             status: 'skipped_unavailable',
             workspaceId: automation.workspaceId,
             workspaceDisplayName: dispatchWorkspaceDisplayName,
-            error: 'The target workspace is no longer available.'
+            error: translate(
+              'auto.hooks.useAutomationDispatchEvents.59718b120b',
+              'The target workspace is no longer available.'
+            )
           })
           return
         }
@@ -378,14 +412,20 @@ export function useAutomationDispatchEvents(): void {
         if (!result) {
           throw new Error('Unable to build an agent launch plan.')
         }
-        observeAgentStatus(result.tabId, dispatchStartedAt)
+        const launchedTabId = result.tabId
+        // Why: host-backed automation terminals may lack a local tab id; skip
+        // pane-key status observation while background session output still
+        // tracks completion.
+        if (launchedTabId) {
+          observeAgentStatus(launchedTabId, dispatchStartedAt)
+        }
         try {
           await markDispatchResult({
             runId: run.id,
             status: 'dispatched',
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
-            terminalSessionId: result.tabId,
+            terminalSessionId: launchedTabId,
             precheckResult,
             error: null
           })

@@ -14,4 +14,10 @@ describe('synthetic agent titles', () => {
     expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'working')).toBe(false)
     expect(shouldDriveSyntheticAgentTitleFromHook('codex', 'done')).toBe(true)
   })
+
+  it('provides Devin titles for hook-driven status updates', () => {
+    expect(getSyntheticAgentTerminalTitle('devin', 'done')).toBe('Devin ready')
+    expect(getSyntheticAgentTerminalTitle('devin', 'waiting')).toBe('Devin - action required')
+    expect(shouldDriveSyntheticAgentTitleFromHook('devin', 'working')).toBe(true)
+  })
 })

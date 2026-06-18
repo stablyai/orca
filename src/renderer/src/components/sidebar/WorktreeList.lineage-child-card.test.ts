@@ -2,7 +2,14 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { ProjectGroup, Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type {
+  FolderWorkspace,
+  ProjectGroup,
+  Repo,
+  Worktree,
+  WorktreeLineage
+} from '../../../../shared/types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 const mockStore = vi.hoisted(() => ({
   state: {} as Record<string, unknown>
@@ -14,6 +21,16 @@ type WorktreeListComponent = React.ComponentType<{
 }>
 
 let WorktreeList: WorktreeListComponent
+
+function makeFolderWorkspacePathStatusMockState(): Record<string, unknown> {
+  return {
+    fetchFolderWorkspacePathStatus: vi.fn(),
+    folderWorkspaces: [],
+    folderWorkspacePathStatuses: {},
+    getFolderWorkspacePathStatusCacheKey: (request: unknown) => JSON.stringify(request),
+    getFreshFolderWorkspacePathStatus: () => null
+  }
+}
 
 vi.mock('@/store', () => {
   const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
@@ -59,25 +76,95 @@ vi.mock('./project-header-drag', () => ({
 vi.mock('./WorktreeCard', () => ({
   default: ({
     worktree,
+    repo,
+    isActive,
     contentIndent,
     flushSurface,
+    renameRowKey,
+    lineageChildCount,
+    lineageCollapsed,
     lineageChildren
   }: {
     worktree: Worktree
+    repo?: Repo
+    isActive?: boolean
     contentIndent?: number
     flushSurface?: boolean
+    renameRowKey?: string
+    lineageChildCount?: number
+    lineageCollapsed?: boolean
     lineageChildren?: React.ReactNode
-  }) =>
-    React.createElement(
+  }) => {
+    const deleteStateByWorktreeId =
+      (mockStore.state.deleteStateByWorktreeId as Record<
+        string,
+        { isDeleting?: boolean } | undefined
+      >) ?? {}
+    const cardProps = (mockStore.state.worktreeCardProperties as string[] | undefined) ?? []
+    const sshState =
+      repo?.connectionId && mockStore.state.sshConnectionStates instanceof Map
+        ? mockStore.state.sshConnectionStates.get(repo.connectionId)
+        : null
+    const isDeleting = deleteStateByWorktreeId[worktree.id]?.isDeleting === true
+    const showSshDialog = isActive && repo?.connectionId && sshState?.status !== 'connected'
+    // Why: the real WorktreeCard owns the inline-rename surface and decides
+    // begin-editing from renameRowKey + renamingWorktreeId, so mirror that here
+    // to verify WorktreeList hands each row its row-scoped rename key.
+    const renamingRequest = mockStore.state.renamingWorktreeId as {
+      worktreeId: string
+      rowKey?: string
+    } | null
+    const beginEditing =
+      renamingRequest?.worktreeId === worktree.id &&
+      (renamingRequest.rowKey === undefined || renamingRequest.rowKey === renameRowKey)
+
+    return React.createElement(
       'section',
       {
         'data-worktree-card-id': worktree.id,
+        'data-worktree-card-active': isActive ? 'true' : undefined,
         'data-content-indent': contentIndent,
-        'data-flush-surface': flushSurface ? 'true' : undefined
+        'data-flush-surface': flushSurface ? 'true' : undefined,
+        'data-begin-editing': beginEditing ? 'true' : undefined,
+        'data-lineage-child-count': lineageChildCount,
+        'data-lineage-collapsed':
+          lineageCollapsed === undefined ? undefined : String(lineageCollapsed),
+        'data-linked-pr': worktree.linkedPR ?? undefined,
+        'data-linked-gitlab-mr': worktree.linkedGitLabMR ?? undefined,
+        'aria-busy': isDeleting ? 'true' : undefined
       },
       React.createElement('h2', null, worktree.displayName),
+      isDeleting ? React.createElement('span', null, 'Deleting') : null,
+      cardProps.includes('status') && worktree.isUnread
+        ? React.createElement('button', { 'aria-label': 'Mark as read' }, 'Unread')
+        : null,
+      lineageChildCount
+        ? React.createElement(
+            'button',
+            {
+              'data-lineage-toggle-for': worktree.id,
+              'aria-expanded': lineageCollapsed ? 'false' : 'true'
+            },
+            `${lineageChildCount} ${lineageChildCount === 1 ? 'child' : 'children'}`
+          )
+        : null,
+      showSshDialog
+        ? React.createElement('aside', {
+            'data-worktree-card-ssh-dialog': 'open',
+            'data-ssh-status': sshState?.status ?? 'disconnected',
+            'data-ssh-target-id': repo?.connectionId
+          })
+        : null,
       lineageChildren
     )
+  },
+  shouldBeginWorktreeRename: (
+    request: { worktreeId: string; rowKey?: string } | null,
+    worktreeId: string,
+    rowKey?: string
+  ) =>
+    request?.worktreeId === worktreeId &&
+    (request.rowKey === undefined || request.rowKey === rowKey)
 }))
 
 vi.mock('./WorktreeCardAgents', () => ({
@@ -90,8 +177,21 @@ vi.mock('./WorktreeCardAgents', () => ({
 }))
 
 vi.mock('./WorktreeTitleInlineRename', () => ({
-  WorktreeTitleInlineRename: ({ displayName }: { displayName: string }) =>
-    React.createElement('span', { 'data-worktree-title-inline-rename': '' }, displayName)
+  WorktreeTitleInlineRename: ({
+    beginEditing,
+    displayName
+  }: {
+    beginEditing?: boolean
+    displayName: string
+  }) =>
+    React.createElement(
+      'span',
+      {
+        'data-worktree-title-inline-rename': '',
+        'data-begin-editing': beginEditing ? 'true' : undefined
+      },
+      displayName
+    )
 }))
 
 vi.mock('./WorktreeActivityStatusIndicator', () => ({
@@ -140,6 +240,8 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuContent: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
   DropdownMenuItem: ({ children }: { children: React.ReactNode }) =>
+    React.createElement('div', null, children),
+  DropdownMenuLabel: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', null, children),
   DropdownMenuSeparator: () => React.createElement('hr'),
   DropdownMenuSub: ({ children }: { children: React.ReactNode }) =>
@@ -191,6 +293,28 @@ function makeWorktree(args: {
   }
 }
 
+function makeFolderWorkspace(
+  groupId: string,
+  overrides: Partial<FolderWorkspace> = {}
+): FolderWorkspace {
+  return {
+    id: 'folder-workspace-1',
+    projectGroupId: groupId,
+    name: 'Folder workspace fixture',
+    folderPath: '/tmp/lineage-order/folder',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 1,
+    lastActivityAt: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
 function makeLineage(worktree: Worktree, parent: Worktree): WorktreeLineage {
   return {
     worktreeId: worktree.id,
@@ -203,9 +327,164 @@ function makeLineage(worktree: Worktree, parent: Worktree): WorktreeLineage {
   }
 }
 
+function makeFolderWorkspacePathStatusState(): Record<string, unknown> {
+  return {
+    fetchFolderWorkspacePathStatus: vi.fn(),
+    folderWorkspacePathStatuses: {},
+    folderWorkspaces: [],
+    getFolderWorkspacePathStatusCacheKey: (request: unknown) => JSON.stringify(request),
+    getFreshFolderWorkspacePathStatus: vi.fn(() => null)
+  }
+}
+
+function setFolderWorkspaceFixtureState(): void {
+  const group: ProjectGroup = {
+    id: 'folder-group-1',
+    name: 'Folder Group',
+    parentPath: '/tmp/lineage-order/folder',
+    parentGroupId: null,
+    createdFrom: 'manual',
+    tabOrder: 0,
+    isCollapsed: false,
+    color: null,
+    createdAt: 1,
+    updatedAt: 1
+  }
+  const folderWorkspace = makeFolderWorkspace(group.id)
+
+  mockStore.state = {
+    ...makeFolderWorkspacePathStatusMockState(),
+    activeModal: '',
+    activeView: 'terminal',
+    activeWorktreeId: folderWorkspaceKey(folderWorkspace.id),
+    agentStatusEpoch: 0,
+    agentStatusByPaneKey: {},
+    browserTabsByWorktree: {},
+    clearPendingRevealWorktreeId: vi.fn(),
+    collapsedGroups: new Set<string>(),
+    deleteStateByWorktreeId: {},
+    filterRepoIds: [],
+    ...makeFolderWorkspacePathStatusState(),
+    folderWorkspaces: [folderWorkspace],
+    groupBy: 'repo',
+    hideDefaultBranchWorkspace: false,
+    issueCache: {},
+    migrationUnsupportedByPtyId: {},
+    openModal: vi.fn(),
+    pendingRevealWorktree: null,
+    prCache: {},
+    prVisibleRefreshGeneration: 0,
+    projectGroups: [group],
+    ptyIdsByTabId: {},
+    reorderRepos: vi.fn(),
+    reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    retainedAgentsByPaneKey: {},
+    repos: [],
+    runtimePaneTitlesByTabId: {},
+    setFilterRepoIds: vi.fn(),
+    setHideDefaultBranchWorkspace: vi.fn(),
+    setRenamingWorktreeId: vi.fn(),
+    setShowSleepingWorkspaces: vi.fn(),
+    setSortBy: vi.fn(),
+    settings: null,
+    renamingWorktreeId: null,
+    showSleepingWorkspaces: true,
+    sortBy: 'manual',
+    sortEpoch: 0,
+    sshConnectedGeneration: 0,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    toggleCollapsedGroup: vi.fn(),
+    updateWorktreeMeta: vi.fn(),
+    updateWorktreesMeta: vi.fn(),
+    workspaceHostScope: 'all',
+    workspaceStatuses: [],
+    worktreeCardProperties: ['status', 'inline-agents'],
+    worktreeLineageById: {},
+    worktreesByRepo: {}
+  }
+}
+
+function setPinnedDuplicateFixtureState(): void {
+  const repo = makeRepo()
+  const pinned = makeWorktree({
+    id: 'pinned',
+    instanceId: 'pinned-instance',
+    displayName: 'pinned duplicate',
+    branch: 'pinned-branch',
+    sortOrder: 20
+  })
+  pinned.isPinned = true
+  const normal = makeWorktree({
+    id: 'normal',
+    instanceId: 'normal-instance',
+    displayName: 'normal sibling',
+    branch: 'normal-branch',
+    sortOrder: 10
+  })
+
+  mockStore.state = {
+    ...makeFolderWorkspacePathStatusMockState(),
+    activeModal: '',
+    activeView: 'terminal',
+    activeWorktreeId: pinned.id,
+    agentStatusEpoch: 0,
+    agentStatusByPaneKey: {},
+    browserTabsByWorktree: {},
+    clearPendingRevealWorktreeId: vi.fn(),
+    collapsedGroups: new Set<string>(),
+    deleteStateByWorktreeId: {},
+    filterRepoIds: [],
+    ...makeFolderWorkspacePathStatusState(),
+    groupBy: 'none',
+    hideDefaultBranchWorkspace: false,
+    issueCache: {},
+    migrationUnsupportedByPtyId: {},
+    openModal: vi.fn(),
+    pendingRevealWorktree: null,
+    prCache: {},
+    prVisibleRefreshGeneration: 0,
+    projectGroups: [],
+    ptyIdsByTabId: {},
+    reorderRepos: vi.fn(),
+    reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    retainedAgentsByPaneKey: {},
+    repos: [repo],
+    runtimePaneTitlesByTabId: {},
+    setFilterRepoIds: vi.fn(),
+    setHideDefaultBranchWorkspace: vi.fn(),
+    setRenamingWorktreeId: vi.fn(),
+    setShowSleepingWorkspaces: vi.fn(),
+    setSortBy: vi.fn(),
+    settings: null,
+    renamingWorktreeId: null,
+    showSleepingWorkspaces: true,
+    sortBy: 'manual',
+    sortEpoch: 0,
+    sshConnectedGeneration: 0,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    toggleCollapsedGroup: vi.fn(),
+    updateWorktreeMeta: vi.fn(),
+    updateWorktreesMeta: vi.fn(),
+    workspaceHostScope: 'all',
+    workspaceStatuses: [],
+    worktreeCardProperties: ['status', 'inline-agents'],
+    worktreeLineageById: {},
+    worktreesByRepo: {
+      [repo.id]: [pinned, normal]
+    }
+  }
+}
+
 function setLineageFixtureState(
   groupBy: 'none' | 'repo' = 'none',
   options: {
+    childWorktreeOverrides?: Partial<Worktree>
     deletingWorktreeIds?: string[]
     projectGrouped?: boolean
     unreadWorktreeIds?: string[]
@@ -241,6 +520,7 @@ function setLineageFixtureState(
     branch: 'child-branch',
     sortOrder: 20
   })
+  Object.assign(child, options.childWorktreeOverrides)
   const grandchild = makeWorktree({
     id: 'grandchild',
     instanceId: 'grandchild-instance',
@@ -254,6 +534,7 @@ function setLineageFixtureState(
   grandchild.isUnread = unreadWorktreeIds.has(grandchild.id)
 
   mockStore.state = {
+    ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
@@ -269,6 +550,7 @@ function setLineageFixtureState(
       ])
     ),
     filterRepoIds: [],
+    ...makeFolderWorkspacePathStatusState(),
     groupBy,
     hideDefaultBranchWorkspace: false,
     issueCache: {},
@@ -302,6 +584,9 @@ function setLineageFixtureState(
     toggleCollapsedGroup: vi.fn(),
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta: vi.fn(),
+    // Why: multi-host added a host scope filter; 'all' (the store default)
+    // bypasses it so the fixture's worktrees aren't dropped before rendering.
+    workspaceHostScope: 'all',
     workspaceStatuses: [],
     worktreeCardProperties: ['status', 'inline-agents'],
     worktreeLineageById: {
@@ -333,6 +618,7 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
   }
 
   mockStore.state = {
+    ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
@@ -343,6 +629,7 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
     collapsedGroups: new Set<string>(),
     deleteStateByWorktreeId: {},
     filterRepoIds,
+    ...makeFolderWorkspacePathStatusState(),
     groupBy: 'repo',
     hideDefaultBranchWorkspace: false,
     issueCache: {},
@@ -376,6 +663,7 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
     toggleCollapsedGroup: vi.fn(),
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta: vi.fn(),
+    workspaceHostScope: 'all',
     workspaceStatuses: [],
     worktreeCardProperties: ['status', 'inline-agents'],
     worktreeLineageById: {},
@@ -392,6 +680,7 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
   }
 
   mockStore.state = {
+    ...makeFolderWorkspacePathStatusMockState(),
     activeModal: '',
     activeView: 'terminal',
     activeWorktreeId: null,
@@ -402,6 +691,7 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
     collapsedGroups: new Set<string>(),
     deleteStateByWorktreeId: {},
     filterRepoIds,
+    ...makeFolderWorkspacePathStatusState(),
     groupBy: 'repo',
     hideDefaultBranchWorkspace: false,
     issueCache: {},
@@ -435,6 +725,7 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
     toggleCollapsedGroup: vi.fn(),
     updateWorktreeMeta: vi.fn(),
     updateWorktreesMeta: vi.fn(),
+    workspaceHostScope: 'all',
     workspaceStatuses: [],
     worktreeCardProperties: ['status', 'inline-agents'],
     worktreeLineageById: {},
@@ -450,6 +741,22 @@ async function renderWorktreeListMarkup(): Promise<string> {
       scrollOffsetRef: { current: 0 },
       scrollAnchorRef: { current: null }
     })
+  )
+}
+
+function getCardOpeningTag(markup: string, worktreeId: string): string {
+  return (
+    markup.match(new RegExp(`<section[^>]*data-worktree-card-id="${worktreeId}"[^>]*>`))?.[0] ?? ''
+  )
+}
+
+function getOptionOpeningTag(markup: string, worktreeId: string): string {
+  // Why: option ids are keyed by the row's rowKey (e.g. all%3Achild), so the
+  // worktree id is the suffix after the encoded ':' group separator.
+  return (
+    markup.match(
+      new RegExp(`<div[^>]*id="worktree-list-option-[^"]*%3A${worktreeId}"[^>]*>`)
+    )?.[0] ?? ''
   )
 }
 
@@ -492,63 +799,76 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).not.toContain('empty-project')
   })
 
-  it('renders nested inline agent rows before the nested child-count toggle', async () => {
+  it('renders recursive lineage descendants through WorktreeCard once', async () => {
     setLineageFixtureState()
     const markup = await renderWorktreeListMarkup()
 
-    const childStart = markup.indexOf('lineage child with agent')
-    const agentRowIndex = markup.indexOf('Review fixture prompt', childStart)
-    const childToggleIndex = markup.indexOf('1 child', childStart)
+    expect(markup.match(/data-worktree-card-id="parent"/g)).toHaveLength(1)
+    expect(markup.match(/data-worktree-card-id="child"/g)).toHaveLength(1)
+    expect(markup.match(/data-worktree-card-id="grandchild"/g)).toHaveLength(1)
 
-    expect(childStart).toBeGreaterThan(-1)
-    expect(agentRowIndex).toBeGreaterThan(childStart)
-    expect(childToggleIndex).toBeGreaterThan(childStart)
-    expect(agentRowIndex).toBeLessThan(childToggleIndex)
+    const parentIndex = markup.indexOf('data-worktree-card-id="parent"')
+    const childIndex = markup.indexOf('data-worktree-card-id="child"')
+    const grandchildIndex = markup.indexOf('data-worktree-card-id="grandchild"')
+
+    expect(parentIndex).toBeGreaterThan(-1)
+    expect(childIndex).toBeGreaterThan(parentIndex)
+    expect(grandchildIndex).toBeGreaterThan(childIndex)
+    expect(getCardOpeningTag(markup, 'child')).toContain('data-lineage-child-count="1"')
   })
 
-  it('renders nested child titles through the inline rename surface', async () => {
-    setLineageFixtureState()
+  it('passes child review details through the shared WorktreeCard path', async () => {
+    setLineageFixtureState('none', {
+      childWorktreeOverrides: { linkedPR: 456, linkedGitLabMR: 42 }
+    })
     const markup = await renderWorktreeListMarkup()
+    const childCard = getCardOpeningTag(markup, 'child')
 
-    expect(markup).toContain('data-worktree-title-inline-rename=""')
-    expect(markup).toContain('lineage child with agent')
+    expect(childCard).toContain('data-linked-pr="456"')
+    expect(childCard).toContain('data-linked-gitlab-mr="42"')
   })
 
-  it('nests the first-level child workspace card surface under its parent', async () => {
+  it('uses shared nested-row indentation for child and grandchild cards', async () => {
     setLineageFixtureState()
     const markup = await renderWorktreeListMarkup()
 
-    expect(markup).toContain('<div style="padding-left:18px"><div id="worktree-list-option-child"')
+    expect(getOptionOpeningTag(markup, 'child')).toContain('padding-left:14px')
+    expect(getCardOpeningTag(markup, 'child')).toContain('data-content-indent="0"')
+    expect(getCardOpeningTag(markup, 'child')).toContain('data-flush-surface="true"')
+    expect(getOptionOpeningTag(markup, 'grandchild')).toContain('padding-left:28px')
+    expect(getCardOpeningTag(markup, 'grandchild')).toContain('data-content-indent="0"')
+    expect(getCardOpeningTag(markup, 'grandchild')).toContain('data-flush-surface="true"')
   })
 
   it('shows deleting feedback on nested lineage child cards', async () => {
     setLineageFixtureState('none', { deletingWorktreeIds: ['child'] })
     const markup = await renderWorktreeListMarkup()
-
-    const childCard =
-      markup.match(/<div id="worktree-list-option-child"[\s\S]*?lineage child with agent/)?.[0] ??
-      ''
+    const childCard = getCardOpeningTag(markup, 'child')
+    const childIndex = markup.indexOf('data-worktree-card-id="child"')
+    const childMarkup = markup.slice(
+      childIndex,
+      markup.indexOf('data-worktree-card-id="grandchild"')
+    )
 
     expect(childCard).toContain('aria-busy="true"')
-    expect(childCard).toContain('cursor-not-allowed opacity-50 grayscale')
-    expect(childCard).toContain('animate-spin')
-    expect(childCard).toContain('Deleting')
+    expect(childMarkup).toContain('Deleting')
   })
 
   it('shows the unread bell action on unread nested lineage child cards', async () => {
     setLineageFixtureState('none', { unreadWorktreeIds: ['child'] })
-    mockStore.state.worktreeCardProperties = ['status', 'unread', 'inline-agents']
+    mockStore.state.worktreeCardProperties = ['status', 'inline-agents']
     const markup = await renderWorktreeListMarkup()
+    const childIndex = markup.indexOf('data-worktree-card-id="child"')
+    const childMarkup = markup.slice(
+      childIndex,
+      markup.indexOf('data-worktree-card-id="grandchild"')
+    )
 
-    const childCard =
-      markup.match(/<div id="worktree-list-option-child"[\s\S]*?lineage child with agent/)?.[0] ??
-      ''
-
-    expect(childCard).toContain('aria-label="Mark as read"')
-    expect(childCard).not.toContain('aria-label="Mark as unread"')
+    expect(childMarkup).toContain('aria-label="Mark as read"')
+    expect(childMarkup).not.toContain('aria-label="Mark as unread"')
   })
 
-  it('opens the reconnect dialog for an active disconnected lineage child during render', async () => {
+  it('lets WorktreeCard own the reconnect dialog for an active disconnected lineage child', async () => {
     setLineageFixtureState()
     const repo = (mockStore.state.repos as Repo[])[0]!
     repo.connectionId = 'ssh-target-1'
@@ -558,19 +878,61 @@ describe('WorktreeList lineage child card renderer', () => {
 
     const markup = await renderWorktreeListMarkup()
 
-    expect(markup).toContain('data-lineage-ssh-dialog="open"')
+    expect(getCardOpeningTag(markup, 'child')).toContain('data-worktree-card-active="true"')
+    expect(markup).toContain('data-worktree-card-ssh-dialog="open"')
+    expect(markup).not.toContain('data-lineage-ssh-dialog="open"')
     expect(markup).toContain('data-ssh-status="disconnected"')
     expect(markup).toContain('data-ssh-target-id="ssh-target-1"')
-    expect(markup).toContain('data-ssh-target-label="Remote target"')
+  })
+
+  it('points aria-activedescendant at the active lineage child row', async () => {
+    setLineageFixtureState()
+    mockStore.state.activeWorktreeId = 'child'
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('aria-activedescendant="worktree-list-option-all%3Achild"')
+  })
+
+  it('points aria-activedescendant at the active folder workspace row', async () => {
+    setFolderWorkspaceFixtureState()
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain(
+      'aria-activedescendant="worktree-list-option-folder%3Afolder-workspace-1"'
+    )
+  })
+
+  it('points aria-activedescendant at the natural row for active pinned duplicates', async () => {
+    setPinnedDuplicateFixtureState()
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('aria-activedescendant="worktree-list-option-all%3Apinned"')
+    expect(markup).toContain('id="worktree-list-option-pinned%3Apinned"')
+  })
+
+  it('opens inline rename only for the row-scoped lineage child request', async () => {
+    setLineageFixtureState()
+    mockStore.state.renamingWorktreeId = { worktreeId: 'child', rowKey: 'all:child' }
+    const markup = await renderWorktreeListMarkup()
+
+    const childCard =
+      markup.match(
+        /<div id="worktree-list-option-all%3Achild"[\s\S]*?lineage child with agent/
+      )?.[0] ?? ''
+    const parentCard =
+      markup.match(/<div id="worktree-list-option-all%3Aparent"[\s\S]*?lineage parent/)?.[0] ?? ''
+
+    expect(childCard).toContain('data-begin-editing="true"')
+    expect(parentCard).not.toContain('data-begin-editing="true"')
   })
 
   it('does not add group indentation when grouping is disabled', async () => {
     setLineageFixtureState('none')
     const markup = await renderWorktreeListMarkup()
 
-    const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
+    const parentRow = getOptionOpeningTag(markup, 'parent')
 
-    expect(parentRow).toContain('id="worktree-list-option-parent"')
+    expect(parentRow).toContain('id="worktree-list-option-all%3Aparent"')
     expect(parentRow).not.toContain('padding-left')
   })
 
@@ -578,23 +940,39 @@ describe('WorktreeList lineage child card renderer', () => {
     setLineageFixtureState('repo')
     const markup = await renderWorktreeListMarkup()
 
-    const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
+    const parentRow = getOptionOpeningTag(markup, 'parent')
 
     expect(parentRow).not.toContain('padding-left')
-    expect(markup).toContain(
-      '<section data-worktree-card-id="parent" data-content-indent="20" data-flush-surface="true">'
-    )
+    expect(getCardOpeningTag(markup, 'parent')).toContain('data-content-indent="20"')
+    expect(getCardOpeningTag(markup, 'parent')).toContain('data-flush-surface="true"')
+  })
+
+  it('keeps nested card inner padding aligned with grouped parent cards', async () => {
+    setLineageFixtureState('repo')
+    const markup = await renderWorktreeListMarkup()
+
+    expect(getOptionOpeningTag(markup, 'child')).toContain('padding-left:14px')
+    expect(getCardOpeningTag(markup, 'child')).toContain('data-content-indent="6"')
+    expect(getCardOpeningTag(markup, 'child')).toContain('data-flush-surface="true"')
+  })
+
+  it('keeps nested card inner padding aligned inside project groups', async () => {
+    setLineageFixtureState('repo', { projectGrouped: true })
+    const markup = await renderWorktreeListMarkup()
+
+    expect(getOptionOpeningTag(markup, 'child')).toContain('padding-left:14px')
+    expect(getCardOpeningTag(markup, 'child')).toContain('data-content-indent="24"')
+    expect(getCardOpeningTag(markup, 'child')).toContain('data-flush-surface="true"')
   })
 
   it('adds project group depth to workspace card content indentation', async () => {
     setLineageFixtureState('repo', { projectGrouped: true })
     const markup = await renderWorktreeListMarkup()
 
-    const parentRow = markup.match(/<div[^>]*id="worktree-list-option-parent"[^>]*>/)?.[0] ?? ''
+    const parentRow = getOptionOpeningTag(markup, 'parent')
 
-    expect(parentRow).not.toContain('padding-left')
-    expect(markup).toContain(
-      '<section data-worktree-card-id="parent" data-content-indent="38" data-flush-surface="true">'
-    )
+    expect(parentRow).toContain('padding-left:14px')
+    expect(getCardOpeningTag(markup, 'parent')).toContain('data-content-indent="24"')
+    expect(getCardOpeningTag(markup, 'parent')).toContain('data-flush-surface="true"')
   })
 })

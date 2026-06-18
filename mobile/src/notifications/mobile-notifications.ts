@@ -23,7 +23,13 @@ type SubscribeResult = {
   subscriptionId: string
 }
 
-const scheduledNotificationIdsByHostAndNotificationId = new Map<string, string>()
+type ScheduledNotificationState = {
+  identifier?: string
+  pending?: Promise<string | null>
+  dismissAfterSchedule?: boolean
+}
+
+const scheduledNotificationsByHostAndNotificationId = new Map<string, ScheduledNotificationState>()
 
 function getStoredNotificationKey(hostId: string, notificationId: string): string {
   return `${encodeURIComponent(hostId)}:${encodeURIComponent(notificationId)}`
@@ -69,38 +75,91 @@ function configureNotificationChannel(): void {
 }
 
 async function showLocalNotification(event: NotificationEvent, hostId: string): Promise<void> {
-  const enabled = await loadPushNotificationsEnabled()
-  if (!enabled) {
-    return
-  }
-
-  const granted = await ensureNotificationPermissions()
-  if (!granted) {
-    return
-  }
-
   const storedKey = event.notificationId
     ? getStoredNotificationKey(hostId, event.notificationId)
     : null
-  const previousIdentifier = storedKey
-    ? scheduledNotificationIdsByHostAndNotificationId.get(storedKey)
-    : undefined
-  if (storedKey && previousIdentifier) {
-    await Notifications.dismissNotificationAsync(previousIdentifier).catch(() => {})
-    scheduledNotificationIdsByHostAndNotificationId.delete(storedKey)
+
+  if (!storedKey) {
+    const enabled = await loadPushNotificationsEnabled()
+    if (!enabled) {
+      return
+    }
+
+    const granted = await ensureNotificationPermissions()
+    if (!granted) {
+      return
+    }
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: event.title,
+        body: event.body,
+        data: buildLocalNotificationData(event, hostId),
+        ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
+      },
+      trigger: null
+    })
+    return
   }
 
-  const scheduledIdentifier = await Notifications.scheduleNotificationAsync({
-    content: {
-      title: event.title,
-      body: event.body,
-      data: buildLocalNotificationData(event, hostId),
-      ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
-    },
-    trigger: null
-  })
-  if (storedKey) {
-    scheduledNotificationIdsByHostAndNotificationId.set(storedKey, scheduledIdentifier)
+  let state = scheduledNotificationsByHostAndNotificationId.get(storedKey)
+  if (state?.pending) {
+    return
+  }
+  if (!state) {
+    state = {}
+    scheduledNotificationsByHostAndNotificationId.set(storedKey, state)
+  }
+  const notificationState = state
+
+  const pending = (async () => {
+    const enabled = await loadPushNotificationsEnabled()
+    if (!enabled) {
+      return null
+    }
+
+    const granted = await ensureNotificationPermissions()
+    if (!granted) {
+      return null
+    }
+
+    if (notificationState.identifier) {
+      await Notifications.dismissNotificationAsync(notificationState.identifier).catch(() => {})
+      notificationState.identifier = undefined
+    }
+
+    return Notifications.scheduleNotificationAsync({
+      content: {
+        title: event.title,
+        body: event.body,
+        data: buildLocalNotificationData(event, hostId),
+        ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
+      },
+      trigger: null
+    })
+  })()
+  notificationState.pending = pending
+
+  try {
+    const scheduledIdentifier = await pending
+    if (!scheduledIdentifier) {
+      if (!notificationState.identifier) {
+        scheduledNotificationsByHostAndNotificationId.delete(storedKey)
+      }
+      return
+    }
+    if (notificationState.dismissAfterSchedule) {
+      notificationState.dismissAfterSchedule = false
+      scheduledNotificationsByHostAndNotificationId.delete(storedKey)
+      await Notifications.dismissNotificationAsync(scheduledIdentifier).catch(() => {})
+      return
+    }
+    notificationState.identifier = scheduledIdentifier
+  } finally {
+    if (notificationState.pending === pending) {
+      notificationState.pending = undefined
+      notificationState.dismissAfterSchedule = false
+    }
   }
 }
 
@@ -112,12 +171,21 @@ async function dismissLocalNotification(
     return
   }
   const storedKey = getStoredNotificationKey(hostId, event.notificationId)
-  const identifier = scheduledNotificationIdsByHostAndNotificationId.get(storedKey)
-  if (!identifier) {
+  const state = scheduledNotificationsByHostAndNotificationId.get(storedKey)
+  if (!state) {
     return
   }
-  scheduledNotificationIdsByHostAndNotificationId.delete(storedKey)
-  await Notifications.dismissNotificationAsync(identifier).catch(() => {})
+  if (state.pending) {
+    // Why: desktop can send dismiss while iOS/Android is still scheduling the
+    // matching local notification. Remember it so no stale banner survives.
+    state.dismissAfterSchedule = true
+    return
+  }
+  if (!state.identifier) {
+    return
+  }
+  scheduledNotificationsByHostAndNotificationId.delete(storedKey)
+  await Notifications.dismissNotificationAsync(state.identifier).catch(() => {})
 }
 
 // Why: each host connection gets its own notification subscription. When the

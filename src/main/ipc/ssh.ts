@@ -850,7 +850,7 @@ export function registerSshHandlers(
     if (shutdownFailures.length > 0) {
       // Why: a failed relay shutdown can leave the remote process alive in the
       // grace window. Keep the lease/session intact so the user can retry.
-      throw new Error(`Failed to terminate remote SSH sessions: ${shutdownFailures.join('; ')}`)
+      throw new Error(`Failed to terminate SSH host sessions: ${shutdownFailures.join('; ')}`)
     }
     if (session) {
       await portForwardManager!.removeAllForwards(args.targetId)

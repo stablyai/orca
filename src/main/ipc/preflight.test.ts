@@ -11,7 +11,9 @@ const {
   getActiveMultiplexerMock,
   getBitbucketAuthStatusMock,
   getAzureDevOpsAuthStatusMock,
-  getGiteaAuthStatusMock
+  getGiteaAuthStatusMock,
+  resolveCliCommandsMock,
+  mergePersistedWindowsPathMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   execFileMock: vi.fn(),
@@ -21,7 +23,9 @@ const {
   getActiveMultiplexerMock: vi.fn(),
   getBitbucketAuthStatusMock: vi.fn(),
   getAzureDevOpsAuthStatusMock: vi.fn(),
-  getGiteaAuthStatusMock: vi.fn()
+  getGiteaAuthStatusMock: vi.fn(),
+  resolveCliCommandsMock: vi.fn(),
+  mergePersistedWindowsPathMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -43,6 +47,14 @@ vi.mock('child_process', () => {
 vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: hydrateShellPathMock,
   mergePathSegments: mergePathSegmentsMock
+}))
+
+vi.mock('../codex-cli/command', () => ({
+  resolveCliCommands: resolveCliCommandsMock
+}))
+
+vi.mock('../pty/windows-environment-path', () => ({
+  mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
 
 vi.mock('./ssh', () => ({
@@ -98,6 +110,13 @@ describe('preflight', () => {
     getBitbucketAuthStatusMock.mockReset()
     getAzureDevOpsAuthStatusMock.mockReset()
     getGiteaAuthStatusMock.mockReset()
+    mergePersistedWindowsPathMock.mockReset()
+    // Why: existing tests should keep treating `which` as the only source
+    // unless a case explicitly exercises the install-dir fallback.
+    resolveCliCommandsMock.mockReset()
+    resolveCliCommandsMock.mockImplementation(
+      (commands: string[]) => new Map(commands.map((command) => [command, command]))
+    )
     getBitbucketAuthStatusMock.mockResolvedValue(defaultBitbucketStatus)
     getAzureDevOpsAuthStatusMock.mockResolvedValue(defaultAzureDevOpsStatus)
     getGiteaAuthStatusMock.mockResolvedValue(defaultGiteaStatus)
@@ -266,10 +285,10 @@ describe('preflight', () => {
       }
       if (command === 'wsl.exe') {
         const script = String(args[5])
-        if (script === "'gh' --version") {
+        if (script.includes('gh') && script.includes('--version')) {
           return { stdout: 'gh version 2.0.0\n' }
         }
-        if (script === "'gh' auth status") {
+        if (script.includes('gh') && script.includes('auth status')) {
           return { stdout: 'github.com\n  - Active account: true\n' }
         }
         throw new Error(`unexpected WSL script ${script}`)
@@ -282,14 +301,42 @@ describe('preflight', () => {
     expect(status.gh).toEqual({ installed: true, authenticated: true })
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-lc', "'gh' --version"],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringMatching(/gh[\s\S]*--version/)],
       { encoding: 'utf-8', timeout: 5000 }
     )
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'bash', '-lc', "'gh' auth status"],
+      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringMatching(/gh[\s\S]*auth status/)],
       { encoding: 'utf-8', timeout: 5000 }
     )
+  })
+
+  it('uses the persisted Windows Path when probing host CLIs', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    mergePersistedWindowsPathMock.mockImplementation((env: Record<string, string>) => {
+      env.Path = 'C:\\Windows\\System32;C:\\Program Files\\GitHub CLI'
+    })
+    execFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git version 2.0.0\n' })
+      .mockResolvedValueOnce({ stdout: 'gh version 2.0.0\n' })
+      .mockResolvedValueOnce({ stdout: 'glab version 1.92.1\n' })
+      .mockResolvedValueOnce({ stdout: 'github.com\n  - Active account: true\n' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to gitlab.com\n' })
+
+    const status = await runPreflightCheck()
+
+    expect(status.gh).toEqual({ installed: true, authenticated: true })
+    expect(mergePersistedWindowsPathMock).toHaveBeenCalled()
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, 'gh', ['--version'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      env: expect.objectContaining({
+        Path: 'C:\\Windows\\System32;C:\\Program Files\\GitHub CLI'
+      })
+    })
   })
 
   it('times out hung WSL preflight probes', async () => {
@@ -306,10 +353,18 @@ describe('preflight', () => {
         if (command === 'gh' || command === 'glab') {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
-        if (command === 'wsl.exe' && Array.isArray(args) && args.at(-1) === "'gh' --version") {
+        if (
+          command === 'wsl.exe' &&
+          Array.isArray(args) &&
+          String(args.at(-1)).includes("'gh' --version")
+        ) {
           return new Promise(() => {})
         }
-        if (command === 'wsl.exe' && Array.isArray(args) && args.at(-1) === "'glab' --version") {
+        if (
+          command === 'wsl.exe' &&
+          Array.isArray(args) &&
+          String(args.at(-1)).includes("'glab' --version")
+        ) {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
         throw new Error(`unexpected command ${String(command)}`)
@@ -435,6 +490,72 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
   })
 
+  it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
+    // Why: cold GUI launches can run detection before shell-PATH hydration
+    // adds user install dirs, so `which` can miss runnable CLIs.
+    execFileAsyncMock.mockImplementation(async (command) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      throw new Error('not found')
+    })
+    resolveCliCommandsMock.mockImplementation(
+      (commands: string[]) =>
+        new Map(
+          commands.map((cmd) => {
+            if (cmd === 'claude') {
+              return [cmd, '/Users/test/.local/bin/claude']
+            }
+            if (cmd === 'codex') {
+              return [cmd, '/Users/test/.asdf/shims/codex']
+            }
+            if (cmd === 'opencode') {
+              return [cmd, '/Users/test/Library/pnpm/opencode']
+            }
+            return [cmd, cmd]
+          })
+        )
+    )
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'codex', 'opencode'])
+    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not double-count an agent already found on PATH via the install-dir resolver', async () => {
+    // Why: the fallback should not duplicate ids when PATH already finds a CLI.
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'claude') {
+        return { stdout: '/Users/test/.local/bin/claude\n' }
+      }
+      throw new Error('not found')
+    })
+    resolveCliCommandsMock.mockImplementation(
+      (commands: string[]) => new Map(commands.map((cmd) => [cmd, cmd]))
+    )
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
+    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
+    expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.not.arrayContaining(['claude']))
+  })
+
+  it('treats an agent as not installed when the install-dir resolver throws', async () => {
+    // Why: transient fs errors in the fallback must not crash detection.
+    execFileAsyncMock.mockImplementation(async (command) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      throw new Error('not found')
+    })
+    resolveCliCommandsMock.mockImplementation(() => {
+      throw new Error('EACCES: permission denied')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+  })
+
   it('registers agent detection through the shared launch config commands', async () => {
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {
@@ -503,6 +624,31 @@ describe('preflight', () => {
     })
   })
 
+  it('returns no remote agents when the SSH connection is unavailable', async () => {
+    getActiveMultiplexerMock.mockReturnValue(null)
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
+    ).resolves.toEqual([])
+  })
+
+  it('returns no remote agents when the SSH connection is disposed', async () => {
+    const request = vi.fn()
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => true,
+      request
+    })
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
+    ).resolves.toEqual([])
+    expect(request).not.toHaveBeenCalled()
+  })
+
   it('detects agents from the selected WSL distro for a WSL workspace', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -521,14 +667,16 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
     expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+    // Why: the local fallback must not report host binaries as WSL binaries.
+    expect(resolveCliCommandsMock).not.toHaveBeenCalled()
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
       expect.arrayContaining([
         '-d',
         'Ubuntu',
-        '--exec',
-        'bash',
-        '-ic',
+        '--',
+        'sh',
+        '-c',
         expect.stringContaining("'claude'")
       ]),
       { encoding: 'utf-8', timeout: 10000 }
@@ -553,11 +701,93 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents({ wslDefault: true })).resolves.toEqual(['codex'])
     expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+    // Why: the local fallback must not leak into WSL detection.
+    expect(resolveCliCommandsMock).not.toHaveBeenCalled()
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      expect.arrayContaining(['--exec', 'bash', '-ic', expect.stringContaining("'codex'")]),
+      expect.arrayContaining(['--', 'sh', '-c', expect.stringContaining("'codex'")]),
       { encoding: 'utf-8', timeout: 10000 }
     )
+  })
+
+  it('lets a resolved host project runtime override stale WSL context flags', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      expect(command).not.toBe('wsl.exe')
+      if (command === 'git' || command === 'gh' || command === 'glab') {
+        return { stdout: `${String(command)} ok\n` }
+      }
+      throw new Error(`unexpected command ${String(command)} ${JSON.stringify(args)}`)
+    })
+
+    const status = await runPreflightCheck(false, {
+      wslDistro: 'Ubuntu',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'windows-host',
+          hostPlatform: 'win32',
+          projectId: 'project-1',
+          reason: 'project-override',
+          cacheKey: 'project-1:windows-host'
+        }
+      }
+    })
+
+    expect(status.git.installed).toBe(true)
+    expect(mergePersistedWindowsPathMock).toHaveBeenCalled()
+  })
+
+  it('does not hydrate the host PATH when refreshing agents for a resolved WSL runtime', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'wsl.exe') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      const script = String(args[5])
+      if (script.includes("'claude'")) {
+        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+      }
+      throw new Error('not found')
+    })
+
+    registerPreflightHandlers()
+
+    const result = (await handlers['preflight:refreshAgents'](undefined, {
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'project-1',
+          distro: 'Ubuntu',
+          reason: 'project-override',
+          cacheKey: 'project-1:wsl:Ubuntu'
+        }
+      }
+    })) as {
+      agents: string[]
+      addedPathSegments: string[]
+      shellHydrationOk: boolean
+      pathSource: string
+      pathFailureReason: string
+    }
+
+    expect(result).toEqual({
+      agents: ['claude'],
+      addedPathSegments: [],
+      shellHydrationOk: true,
+      pathSource: 'sync_seed_only',
+      pathFailureReason: 'none'
+    })
+    expect(hydrateShellPathMock).not.toHaveBeenCalled()
+    expect(mergePathSegmentsMock).not.toHaveBeenCalled()
   })
 
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {

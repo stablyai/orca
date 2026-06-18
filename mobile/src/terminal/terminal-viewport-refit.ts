@@ -4,6 +4,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalWebViewHandle } from './TerminalWebView'
 import {
   isTerminalUpdateViewportApplied,
+  isTerminalUpdateViewportUpdated,
   isTerminalViewportRefitTargetCurrent
 } from './terminal-viewport-refit-state'
 
@@ -19,6 +20,15 @@ type TerminalViewportRefitOptions = {
   deviceTokenRef: RefObject<string | null>
   initializedHandlesRef: RefObject<Set<string>>
   tabStripVisible: boolean
+  // Why: terminal text size (font scale) — changing it changes the cell size, so
+  // the PTY must be re-fitted to a new column count and reflowed.
+  textScale: number
+  // Why: the terminal's measured frame width changes when a side panel docks/undocks
+  // or EITHER sidebar is drag-resized (the left worktree sidebar shrinks the detail
+  // pane; the right dock takes a slice of the row) — all without any window-dim or
+  // tab-strip change. Carries that measured width so those resizes re-fit the PTY;
+  // the 150ms debounce coalesces the stream of drag widths into one settle-time refit.
+  terminalFrameWidth: number
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }
@@ -40,6 +50,8 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     deviceTokenRef,
     initializedHandlesRef,
     tabStripVisible,
+    textScale,
+    terminalFrameWidth,
     unsubscribeTerminal,
     subscribeToTerminal
   } = options
@@ -101,7 +113,19 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
               client: { id: deviceToken, type: 'mobile' as const },
               viewport: dims
             })
-            if (isTerminalUpdateViewportApplied(response)) {
+            if (!isCurrentTarget()) {
+              return
+            }
+            if (isTerminalUpdateViewportUpdated(response)) {
+              rpc.updateTerminalSubscriptionViewport(handle, dims)
+              if (isTerminalUpdateViewportApplied(response)) {
+                // Why: updateViewport reflows the server PTY and re-streams only
+                // the visible screen, so the WebView's local xterm scrollback
+                // stays wrapped at the old width. Reflow it locally only when
+                // the server actually applied phone-fit; desktop mode records
+                // the viewport but leaves the PTY at desktop dims.
+                ref.reflow(dims.cols, dims.rows)
+              }
               return
             }
           } catch {
@@ -162,6 +186,34 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
   }, [windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit])
+
+  // Why: the text size changed, so the WebView is re-rendering at a new font/cell
+  // size. Re-measure and resize the PTY so the server reflows to the new column
+  // count. The refit's own 150ms debounce gives the WebView a frame to apply the
+  // new fontSize before we measure the resulting cell metrics.
+  const prevTextScaleRef = useRef(textScale)
+  useEffect(() => {
+    if (prevTextScaleRef.current === textScale) {
+      return
+    }
+    prevTextScaleRef.current = textScale
+    viewportMeasuredRef.current = false
+    scheduleViewportRefit()
+  }, [textScale, viewportMeasuredRef, scheduleViewportRefit])
+
+  // Why: the terminal's measured frame width changes when a panel docks/undocks or
+  // either sidebar is drag-resized — none of which touch the window dims or tab
+  // strip — so the cached viewport goes stale and the PTY keeps the pre-resize
+  // width. Mark un-measured and refit when the measured width changes.
+  const prevFrameWidthRef = useRef(terminalFrameWidth)
+  useEffect(() => {
+    if (prevFrameWidthRef.current === terminalFrameWidth) {
+      return
+    }
+    prevFrameWidthRef.current = terminalFrameWidth
+    viewportMeasuredRef.current = false
+    scheduleViewportRefit()
+  }, [terminalFrameWidth, viewportMeasuredRef, scheduleViewportRefit])
 
   useEffect(() => {
     disposedRef.current = false

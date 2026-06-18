@@ -88,7 +88,7 @@ Dashboard caveats:
 
 ### 2026-05-09 - Onboarding Cohort Injection
 
-Scope: `cohort` on onboarding events. Current schemas declare it on `onboarding_started`, `onboarding_step_viewed`, `onboarding_step_completed`, `onboarding_step_skipped`, `onboarding_tour_outcome`, `onboarding_step4_path_clicked`, `onboarding_step4_path_failed`, `onboarding_task_sources_snapshot`, `onboarding_completed`, `onboarding_dismissed`, `onboarding_agent_picked`, onboarding import/setup events, `onboarding_feature_setup_toggled`, `onboarding_feature_setup_run`, `onboarding_feature_setup_terminal_opened`, and `onboarding_feature_setup_terminal_interacted`. See `src/shared/telemetry-events.ts` for the exact current roster.
+Scope: `cohort` on onboarding events. Current schemas declare it on `onboarding_started`, `onboarding_step_viewed`, `onboarding_step_completed`, `onboarding_step_skipped`, `onboarding_tour_outcome`, `onboarding_step4_path_clicked`, `onboarding_step4_path_failed`, `onboarding_task_sources_snapshot`, `onboarding_windows_terminal_snapshot`, `onboarding_completed`, `onboarding_dismissed`, `onboarding_agent_picked`, onboarding import/setup events, `onboarding_feature_setup_toggled`, `onboarding_feature_setup_run`, `onboarding_feature_setup_terminal_opened`, and `onboarding_feature_setup_terminal_interacted`. See `src/shared/telemetry-events.ts` for the exact current roster.
 
 The original `#1608` rollout covered `onboarding_started`, `onboarding_step_viewed`, `onboarding_step_completed`, `onboarding_step_skipped`, `onboarding_step4_path_clicked`, `onboarding_step4_path_failed`, `onboarding_completed`, `onboarding_dismissed`, `onboarding_agent_picked`, and onboarding import events. Later onboarding events joined the roster by declaring `cohort` in their schemas.
 
@@ -300,7 +300,7 @@ This is a product-flow and telemetry-interpretation boundary, not a new event ro
 Dashboard caveats:
 
 - Treat `onboarding_step_*` rows for the removed final code/project picker step as historical first-run onboarding signals after this rollout.
-- Segment numeric onboarding step analysis across this boundary. The active final step changed from the five-step active flow to `ONBOARDING_FINAL_STEP = 4`.
+- Segment numeric onboarding step analysis across this boundary. At this boundary, the active final step changed from the five-step active flow to `ONBOARDING_FINAL_STEP = 4`; later onboarding step rollouts may supersede that final-step value.
 - Do not use absence of new final code/project picker rows as a drop-off signal; that step no longer exists in active onboarding.
 
 ### 2026-06-03 - Add Project Default Checkout Handoff
@@ -326,6 +326,59 @@ Dashboard caveats:
 - Do not build current-flow conversion funnels that require `repo_added -> add_repo_setup_step_action`; the normal next step is an automatic workspace reveal/open, not a tracked user choice.
 - Use `add_repo_existing_workspaces_detected` to estimate how often added projects had non-main existing workspaces, but do not infer the user selected "use existing worktrees" because that choice no longer exists in the normal flow.
 - Use `add_repo_default_checkout_handoff` for the current handoff outcome. `result = 'opened_default_checkout'` is the expected path; `result = 'revealed_project'` is the graceful fallback. Break down fallback rows by `source` and `reason`.
+
+### 2026-06-10 - Repo Added Git-vs-Folder Signal
+
+Scope: `repo_added.is_git_repo` replaces the retired `onboarding_completed.is_git_repo` split for git-vs-folder analysis. Project selection moved out of onboarding in the 1.4.46 flow, so `onboarding_completed` now fires before any repo is chosen. After that boundary, the old `onboarding_completed.is_git_repo` value is not a valid git-vs-folder signal.
+
+`repo_added.is_git_repo` is sourced from git detection at the add point. It is optional so SSH/remote paths that genuinely cannot determine git-ness can omit the property instead of defaulting to `false`.
+
+| Field                    | Value                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| PR                       | `#5121`                                                                                     |
+| Merge commit             | `TBD`                                                                                       |
+| `code_merged_at_utc`     | `TBD`                                                                                       |
+| First release            | `TBD`                                                                                       |
+| First release commit     | `TBD`                                                                                       |
+| `first_released_at_utc`  | `TBD`                                                                                       |
+| `first_seen_at_utc`      | `TBD` on `repo_added.is_git_repo`                                                           |
+| `dashboard_ready_at_utc` | `TBD`; use only after first-seen rows exist and field coverage has been checked in PostHog. |
+
+PostHog evidence checked at `2026-06-10T19:00:00Z`:
+
+- Dashboard tile "Fresh-install onboarding completion over time" (`JlIt5J1N`, insight id `9076383`, project `406068`) showed the git-repo share collapse to about 4% while plain-folder completions spiked to about 88% on 2026-06-05.
+- Raw `onboarding_completed.is_git_repo` counts by `app_version` showed a version cliff: versions through `1.4.45` were about 80% true, while `1.4.46`, `1.4.47`, and `1.4.48` had zero true rows in the sampled data.
+
+Dashboard caveats:
+
+- Treat `onboarding_completed.is_git_repo` as historical only after app version `1.4.45`.
+- Do not stitch historical `onboarding_completed.is_git_repo` and new `repo_added.is_git_repo` series without an explicit version boundary and label change; they are emitted at different funnel moments.
+- Repoint dashboard tile `JlIt5J1N` to use `repo_added.is_git_repo` once the new field is observed in release telemetry.
+- Omitted `repo_added.is_git_repo` means unknown/degraded detection, not plain folder. Only explicit `false` means plain folder.
+
+### 2026-06-16 - Windows Terminal Preferences Onboarding Step
+
+Scope: Windows first-run onboarding adds a terminal preferences step before notifications. The step lets users choose the default Windows terminal shell and right-click paste/menu behavior before their first project handoff.
+
+`onboarding_step_*` rows can now emit `value_kind = 'windows_terminal'` at step `4`. Notifications move to step `5`, so `ONBOARDING_FINAL_STEP = 5` for current active onboarding. Non-Windows clients skip the Windows terminal step but still persist through the skipped step so resumed onboarding lands on notifications. `onboarding_windows_terminal_snapshot` records the low-cardinality selected shell bucket, right-click behavior, exit action, duration, and advance method when the visible Windows terminal step exits.
+
+| Field                    | Value                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| PR                       | `#5488`                                                                                |
+| Merge commit             | `68abadba8198c627fb642c41e54937c04ccddfe8`                                             |
+| `code_merged_at_utc`     | `2026-06-16T21:07:26Z`                                                                 |
+| First release            | `TBD`                                                                                  |
+| First release commit     | `TBD`                                                                                  |
+| `first_released_at_utc`  | `TBD`                                                                                  |
+| `first_seen_at_utc`      | `TBD` on `onboarding_step_viewed { value_kind: 'windows_terminal' }` and `onboarding_windows_terminal_snapshot` |
+| `dashboard_ready_at_utc` | `TBD`; use only after first-seen rows exist and Windows/non-Windows split plus snapshot coverage are verified. |
+
+Dashboard caveats:
+
+- Segment numeric onboarding step analysis across this boundary. Step `4` is Windows terminal preferences in the current flow, but was notifications in the previous active flow.
+- Use `value_kind` rather than numeric `step` when comparing notifications or Windows terminal setup across releases.
+- Non-Windows users can have persisted `lastCompletedStep` values that include the skipped Windows step; do not treat that as evidence they viewed the Windows terminal page.
+- `onboarding_windows_terminal_snapshot.default_shell = 'other'` means Orca could not bucket the persisted setting. It is not a raw shell path and should be monitored as telemetry quality, not a product choice.
 
 ## Updating This File
 

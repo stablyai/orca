@@ -15,7 +15,9 @@ import {
 import type { WorkspacePortGroup } from '@/lib/workspace-port-groups'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import { translate } from '@/i18n/i18n'
 
 function PortAction({
   label,
@@ -71,12 +73,22 @@ export function PortRow({
   external?: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(
+      s,
+      port.kind === 'workspace' ? port.owner.worktreeId : activeWorktreeId
+    )
+  )
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const runtimeTarget = useMemo(
+    () => getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }),
+    [runtimeEnvironmentId, settings]
+  )
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const openInOrcaBrowser = shouldOpenWorkspacePortInOrcaBrowser(settings)
   const canOpen = !openInOrcaBrowser || port.kind === 'workspace' || Boolean(activeWorktreeId)
@@ -95,7 +107,13 @@ export function PortRow({
         openInOrcaBrowser
       }).then((result) => {
         if (!result.ok) {
-          toast.error('Failed to open browser', { description: result.reason })
+          toast.error(
+            translate(
+              'auto.components.status.bar.ports.status.popover.rows.b854ec9ff5',
+              'Failed to open browser'
+            ),
+            { description: result.reason }
+          )
         }
       })
     },
@@ -116,7 +134,13 @@ export function PortRow({
       recordFeatureInteraction('ports')
       const address = addressForPort(port)
       void window.api.ui.writeClipboardText(address)
-      toast.success(`Copied ${address}`)
+      toast.success(
+        translate(
+          'auto.components.status.bar.ports.status.popover.rows.480d8f2347',
+          'Copied {{value0}}',
+          { value0: address }
+        )
+      )
     },
     [port, recordFeatureInteraction]
   )
@@ -138,16 +162,30 @@ export function PortRow({
           toast.error(result.reason)
           return
         }
-        toast.success(`Stopped process on ${port.port}`)
+        toast.success(
+          translate(
+            'auto.components.status.bar.ports.status.popover.rows.acdb6df590',
+            'Stopped process on {{value0}}',
+            { value0: port.port }
+          )
+        )
         const refreshResult = await refreshWorkspacePortScanAfterStop({
           runtimeTarget,
           setWorkspacePortScan,
+          setWorkspacePortScanForKey,
+          getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
           setWorkspacePortScanRefreshing
         })
         if (!refreshResult.ok) {
-          toast.error('Failed to refresh ports', {
-            description: refreshResult.reason
-          })
+          toast.error(
+            translate(
+              'auto.components.status.bar.ports.status.popover.rows.e4a709548c',
+              'Failed to refresh ports'
+            ),
+            {
+              description: refreshResult.reason
+            }
+          )
         }
       }
       void run()
@@ -157,6 +195,7 @@ export function PortRow({
       recordFeatureInteraction,
       runtimeTarget,
       setWorkspacePortScan,
+      setWorkspacePortScanForKey,
       setWorkspacePortScanRefreshing
     ]
   )
@@ -178,14 +217,35 @@ export function PortRow({
               {processLabel}
             </TooltipContent>
           </Tooltip>
-          <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
-            <PortAction label="Open in Browser" onClick={handleOpen} disabled={!canOpen}>
+          <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 can-hover:opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
+            <PortAction
+              label={translate(
+                'auto.components.status.bar.ports.status.popover.rows.085f4f0334',
+                'Open in Browser'
+              )}
+              onClick={handleOpen}
+              disabled={!canOpen}
+            >
               <ExternalLink className="size-3" />
             </PortAction>
-            <PortAction label={`Copy ${addressForPort(port)}`} onClick={handleCopy}>
+            <PortAction
+              label={translate(
+                'auto.components.status.bar.ports.status.popover.rows.536d48a5dc',
+                'Copy {{value0}}',
+                { value0: addressForPort(port) }
+              )}
+              onClick={handleCopy}
+            >
               <Copy className="size-3" />
             </PortAction>
-            <PortAction label="Stop Process" disabled={!canStop} onClick={handleStop}>
+            <PortAction
+              label={translate(
+                'auto.components.status.bar.ports.status.popover.rows.0e72c8d9fb',
+                'Stop Process'
+              )}
+              disabled={!canStop}
+              onClick={handleStop}
+            >
               <Trash2 className="size-3" />
             </PortAction>
           </div>
@@ -210,7 +270,12 @@ export function WorkspaceGroupRows({
       event.stopPropagation()
       const ownerPort = group.ports[0]
       if (!ownerPort || !goToWorkspacePortOwner(ownerPort)) {
-        toast.error('Workspace unavailable')
+        toast.error(
+          translate(
+            'auto.components.status.bar.ports.status.popover.rows.f2b813345f',
+            'Workspace unavailable'
+          )
+        )
       }
     },
     [group.ports]
@@ -224,7 +289,10 @@ export function WorkspaceGroupRows({
         </span>
         <div className="flex shrink-0 items-center gap-1">
           <PortAction
-            label="Go to Worktree"
+            label={translate(
+              'auto.components.status.bar.ports.status.popover.rows.a49ea79246',
+              'Go to Worktree'
+            )}
             onClick={handleGoToWorkspace}
             disabled={group.ports.length === 0}
           >

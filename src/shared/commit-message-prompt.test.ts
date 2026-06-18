@@ -36,16 +36,42 @@ describe('truncateDiffForPrompt', () => {
   })
 
   it('truncates and appends a marker when over budget', () => {
-    const oversized = 'A'.repeat(STAGED_DIFF_BYTE_BUDGET + 100)
+    const oversized = `${'line\n'.repeat(STAGED_DIFF_BYTE_BUDGET / 5 + 100)}`
     const result = truncateDiffForPrompt(oversized)
     expect(result.length).toBeLessThan(oversized.length)
-    expect(result).toMatch(/diff truncated, 100 bytes omitted/)
+    expect(result).toMatch(/diff truncated, \d+ bytes omitted/)
   })
 
-  it('honors a custom budget', () => {
-    const result = truncateDiffForPrompt('abcdefghij', 5)
-    expect(result.startsWith('abcde')).toBe(true)
-    expect(result).toMatch(/diff truncated, 5 bytes omitted/)
+  it('clips on a line boundary so the diff is never cut mid-line', () => {
+    const diff = `${'keep this line\n'.repeat(40)}`
+    const result = truncateDiffForPrompt(diff, 95)
+    const body = result.split('\n...(diff truncated')[0]
+    // Every retained line is whole.
+    for (const line of body.split('\n').filter(Boolean)) {
+      expect(line).toBe('keep this line')
+    }
+  })
+
+  it('keeps clipped output within a tight custom budget', () => {
+    const files = Array.from(
+      { length: 20 },
+      (_, i) => `diff --git a/file-${i}.txt b/file-${i}.txt\n${'+x\n'.repeat(200)}`
+    ).join('')
+    const result = truncateDiffForPrompt(files, 120)
+
+    expect(result.length).toBeLessThanOrEqual(120)
+  })
+
+  it('shares the budget fairly so a huge file does not starve a small one', () => {
+    const hugeFile = `diff --git a/data.jsonl b/data.jsonl\n${'+x\n'.repeat(5000)}`
+    const smallFile = 'diff --git a/src/app.ts b/src/app.ts\n+const meaningful = true\n'
+    const result = truncateDiffForPrompt(`${hugeFile}${smallFile}`, 1_000)
+
+    // The small, human-authored change survives instead of being cut off.
+    expect(result).toContain('a/src/app.ts')
+    expect(result).toContain('const meaningful = true')
+    // The huge file is clipped, not the small one.
+    expect(result).toMatch(/diff truncated, \d+ bytes omitted/)
   })
 })
 

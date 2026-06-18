@@ -6,8 +6,11 @@ on:
       - '.github/workflows/golden-e2e-experiment.yml'
       - 'package.json'
       - 'tests/e2e/golden-core-flows.spec.ts'
+      - 'tests/e2e/fixtures/terminal-emoji-table.md'
       - 'tests/e2e/helpers/**'
+      - 'tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts'
       - 'src/renderer/src/components/sidebar/SidebarHeader.tsx'
+      - 'src/renderer/src/lib/pane-manager/**'
   workflow_dispatch:
     inputs:
       ref:
@@ -69,11 +72,15 @@ jobs:
 
       - name: Run golden E2E tests on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
+        run: |
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
+          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
 
       - name: Run golden E2E tests on macOS
         if: runner.os == 'macOS'
-        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
+        run: |
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
 
       - name: Run golden E2E tests on Windows
         if: runner.os == 'Windows'
@@ -82,6 +89,7 @@ jobs:
           $env:SKIP_BUILD = '1'
           $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
           pnpm run test:e2e -- tests/e2e/golden-core-flows.spec.ts
+          pnpm run test:e2e:terminal-rendering-golden
 
       - name: Upload Playwright traces
         if: failure()

@@ -4,6 +4,7 @@ import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import { waitForTerminalPtyDataInjector } from './helpers/terminal-pty-injection'
 
 // Repro commands:
 //   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-foreground-redraw-freeze.spec.ts --config tests/playwright.config.ts --project electron-headless -g "active OpenTUI-style"
@@ -184,6 +185,7 @@ test.describe('Terminal foreground redraw freeze repro', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
+    await waitForTerminalPtyDataInjector(orcaPage, paneKey)
     await resetSchedulerDebug(orcaPage)
     const measurement = await measureRendererDuringBurst(orcaPage, paneKey)
     const scheduler = await readSchedulerDebug(orcaPage)
@@ -211,6 +213,7 @@ test.describe('Terminal foreground redraw freeze repro', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
+    await waitForTerminalPtyDataInjector(orcaPage, paneKey)
     await resetSchedulerDebug(orcaPage)
     const measurement = await measureRendererDuringFrames(orcaPage, paneKey, frames)
     const scheduler = await readSchedulerDebug(orcaPage)

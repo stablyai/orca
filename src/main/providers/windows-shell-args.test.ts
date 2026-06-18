@@ -3,7 +3,17 @@ import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
 } from '../powershell-osc133-bootstrap'
+import {
+  buildWslInteractiveLoginShellCommand,
+  escapeWslShCommandForWindows
+} from '../../shared/wsl-login-shell-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+
+function expectedWslArgs(linuxCwd: string, distro?: string): string[] {
+  const command = `cd '${linuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && ${buildWslInteractiveLoginShellCommand()}`
+  const shellArgs = ['--', 'sh', '-c', escapeWslShCommandForWindows(command)]
+  return distro ? ['-d', distro, ...shellArgs] : shellArgs
+}
 
 describe('resolveWindowsShellLaunchArgs', () => {
   it('returns cmd.exe args with chcp 65001 for UTF-8 output', () => {
@@ -31,22 +41,21 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const opencodeRestoreIndex = command.indexOf(
       '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
     )
-    const piRestoreIndex = command.indexOf(
-      '$env:PI_CODING_AGENT_DIR = $env:ORCA_PI_CODING_AGENT_DIR'
-    )
-    const ompRestoreIndex = command.indexOf(
-      '$env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_CODING_AGENT_DIR'
-    )
+    const ompWrapperIndex = command.indexOf('function Global:omp')
+    const ompExtensionIndex = command.indexOf('--extension $env:ORCA_OMP_STATUS_EXTENSION')
     const codexRestoreIndex = command.indexOf('$env:CODEX_HOME = $env:ORCA_CODEX_HOME')
     const promptIndex = command.indexOf('function Global:prompt')
 
     expect(command).not.toContain('$PROFILE')
+    expect(command).not.toContain('ORCA_PI_CODING_AGENT_DIR')
+    expect(command).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(command).not.toContain('$env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_SOURCE_AGENT_DIR')
     expect(outputEncodingIndex).toBeGreaterThanOrEqual(0)
     expect(opencodeRestoreIndex).toBeGreaterThan(outputEncodingIndex)
-    expect(piRestoreIndex).toBeGreaterThan(outputEncodingIndex)
-    expect(ompRestoreIndex).toBeGreaterThan(piRestoreIndex)
+    expect(ompWrapperIndex).toBeGreaterThan(opencodeRestoreIndex)
+    expect(ompExtensionIndex).toBeGreaterThan(ompWrapperIndex)
     expect(codexRestoreIndex).toBeGreaterThan(outputEncodingIndex)
-    expect(codexRestoreIndex).toBeGreaterThan(ompRestoreIndex)
+    expect(codexRestoreIndex).toBeGreaterThan(ompWrapperIndex)
     expect(promptIndex).toBeGreaterThan(codexRestoreIndex)
     expect(command).toContain('Esc = [char]27')
     expect(command).toContain('Bel = [char]7')
@@ -95,12 +104,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       'C:\\Users\\alice\\code',
       'C:\\Users\\alice'
     )
-    expect(result.shellArgs).toEqual([
-      '--',
-      'bash',
-      '-c',
-      'cd \'/mnt/c/Users/alice/code\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-    ])
+    expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/code'))
     // Why: WSL cannot cd into a Windows path, so node-pty must start from the
     // user's Windows home and we inject the Linux cd into the shellArgs above.
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
@@ -109,17 +113,16 @@ describe('resolveWindowsShellLaunchArgs', () => {
 
   it('escapes single quotes when translating a WSL cwd', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', "C:\\weird'path", 'C:\\Users\\alice')
-    // The injected bash cmd must not break out of the surrounding single
-    // quotes when the path contains a ' character.
-    expect(result.shellArgs[3]).toBe(
-      "cd '/mnt/c/weird'\\''path' && export PATH=\"$HOME/.local/bin:$PATH\" && exec bash -l"
-    )
+    // The injected sh cmd must not break out of the surrounding single quotes
+    // when the path contains a ' character.
+    expect(result.shellArgs[3]).toContain("cd '/mnt/c/weird'\\''path'")
+    expect(result.shellArgs[3]).toContain('exec "\\$_orca_wsl_shell" -l')
   })
 
   it('falls back to /mnt/c when cwd is not a drive-letter path', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', '\\\\server\\share', 'C:\\Users\\alice')
-    expect(result.shellArgs[3]).toBe(
-      'cd \'/mnt/c\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
+    expect(result.shellArgs[3]).toContain(
+      'cd \'/mnt/c\' && export PATH="\\$HOME/.local/bin:\\$PATH"'
     )
   })
 
@@ -136,14 +139,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
         '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
         'C:\\Users\\alice'
       )
-      expect(result.shellArgs).toEqual([
-        '-d',
-        'Ubuntu',
-        '--',
-        'bash',
-        '-c',
-        'cd \'/home/alice/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-      ])
+      expect(result.shellArgs).toEqual(expectedWslArgs('/home/alice/repo', 'Ubuntu'))
       expect(result.effectiveCwd).toBe('C:\\Users\\alice')
       expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo')
     } finally {
@@ -162,14 +158,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       { distro: 'Ubuntu', treatPosixCwdAsWsl: true }
     )
 
-    expect(result.shellArgs).toEqual([
-      '-d',
-      'Ubuntu',
-      '--',
-      'bash',
-      '-c',
-      'cd \'/home/alice/repo/subdir\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
-    ])
+    expect(result.shellArgs).toEqual(expectedWslArgs('/home/alice/repo/subdir', 'Ubuntu'))
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo\\subdir')
   })

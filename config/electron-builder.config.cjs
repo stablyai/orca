@@ -126,6 +126,7 @@ module.exports = {
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName)
     verifyPackagedMainRuntimeDeps(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
+    chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
@@ -207,6 +208,12 @@ module.exports = {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
         to: 'agent-browser-darwin-${arch}'
       },
+      // Why: serve-sim resolves its helper binary and camera assets relative
+      // to dist/serve-sim.js, so the whole package must be a real resource dir.
+      {
+        from: 'node_modules/serve-sim',
+        to: 'serve-sim'
+      },
       {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
         to: 'Orca Computer Use.app'
@@ -231,12 +238,19 @@ module.exports = {
     artifactName: 'orca-macos-${arch}.${ext}'
   },
   linux: {
-    // Why: Ubuntu 26 ships GNOME Orca as the `orca` package and /usr/bin/orca.
+    // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
     // The Linux installer should not claim those system package/file names.
     executableName: 'orca-ide',
     // Why: the icns source lets electron-builder emit standard hicolor PNG
     // sizes; a single 1024px PNG is ignored by some Linux docks/launchers.
     icon: 'resources/build/icon.icns',
+    desktop: {
+      entry: {
+        // Why: Electron reports WM_CLASS=orca for the visible Linux window;
+        // GNOME docks need an exact match to group it with orca-ide.desktop.
+        StartupWMClass: 'orca'
+      }
+    },
     extraResources: [
       ...commonExtraResources,
       linuxSpeechNativeResource,
@@ -299,6 +313,23 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
     // Why: packaged Unix installs expose these extraResources as public shell
     // commands, and source/packager mode drift must not ship a non-executable CLI.
     chmodSync(launcherPath, 0o755)
+  }
+}
+
+function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
+  if (electronPlatformName !== 'darwin') {
+    return
+  }
+  const helperPaths = [
+    join(resourcesDir, 'serve-sim', 'bin', 'serve-sim-bin'),
+    join(resourcesDir, 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper'),
+    join(resourcesDir, 'node_modules', 'serve-sim', 'bin', 'serve-sim-bin'),
+    join(resourcesDir, 'node_modules', 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper')
+  ]
+  for (const helperPath of helperPaths) {
+    if (existsSync(helperPath)) {
+      chmodSync(helperPath, 0o755)
+    }
   }
 }
 

@@ -71,4 +71,51 @@ describe('speech RPC methods', () => {
     expect(response).toMatchObject({ ok: false })
     expect(runtime.feedMobileDictation).not.toHaveBeenCalled()
   })
+
+  it('lists speech models', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listMobileSpeechModels: vi
+        .fn()
+        .mockResolvedValue({ enabled: false, selectedModelId: '', models: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('speech.models.list', null))
+
+    expect(runtime.listMobileSpeechModels).toHaveBeenCalled()
+    expect(response).toMatchObject({ ok: true, result: { enabled: false, models: [] } })
+  })
+
+  it('starts a model download', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      downloadMobileSpeechModel: vi.fn().mockResolvedValue({ started: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('speech.models.download', { modelId: 'parakeet-tdt-0.6b-v3-int8' })
+    )
+
+    expect(runtime.downloadMobileSpeechModel).toHaveBeenCalledWith('parakeet-tdt-0.6b-v3-int8')
+    expect(response).toMatchObject({ ok: true, result: { started: true } })
+  })
+
+  it('configures dictation enable + model selection', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      configureMobileDictation: vi
+        .fn()
+        .mockResolvedValue({ enabled: true, selectedModelId: 'm1', models: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SPEECH_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('speech.dictation.setup', { enabled: true, modelId: 'm1' })
+    )
+
+    expect(runtime.configureMobileDictation).toHaveBeenCalledWith({ enabled: true, modelId: 'm1' })
+    expect(response).toMatchObject({ ok: true, result: { enabled: true, selectedModelId: 'm1' } })
+  })
 })

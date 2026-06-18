@@ -1,5 +1,6 @@
 import { extractLastOscTitle, detectAgentStatusFromTitle } from '../../shared/agent-detection'
 import type { AgentStatus } from '../../shared/agent-detection'
+import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import type { StatsCollector } from './collector'
 
 type PtyAgentState = 'unknown' | 'agent' | 'stopped'
@@ -20,6 +21,8 @@ type PtyRecord = {
 
 type MeaningfulContentDetector = (chunk: string) => boolean
 
+const MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT = 4096
+
 /**
  * Lightweight normalization to detect whether a PTY data chunk contains
  * meaningful (non-ANSI, non-OSC) output. Mirrors the regex passes in
@@ -30,7 +33,13 @@ function hasMeaningfulContent(chunk: string): boolean {
   // chain just to prove they contain visible output.
   for (let index = 0; index < chunk.length; index++) {
     const code = chunk.charCodeAt(index)
-    if (code === 0x1b || code < 0x09 || (code > 0x0d && code < 0x20) || code > 0x7e) {
+    if (
+      code === 0x1b ||
+      code === 0x7f ||
+      code < 0x09 ||
+      (code > 0x0d && code < 0x20) ||
+      (code >= 0x80 && code <= 0x9f)
+    ) {
       break
     }
     if (code > 0x20) {
@@ -44,13 +53,19 @@ function hasMeaningfulContent(chunk: string): boolean {
     // eslint-disable-next-line no-control-regex
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
     // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\][^\x07]*(?:\x1b)?$/g, '') // incomplete OSC tail
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b[PX^_][\s\S]*?\x1b\\/g, '') // ST-terminated string controls
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b[PX^_][\s\S]*(?:\x1b)?$/g, '') // incomplete string-control tail
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '') // CSI sequences
     // eslint-disable-next-line no-control-regex
     .replace(/\x1b[@-_]/g, '') // Fe sequences
     // eslint-disable-next-line no-control-regex
     .replace(/\u0008/g, '') // backspace
     // eslint-disable-next-line no-control-regex
-    .replace(/[^\x09\x0a\x20-\x7e]/g, '') // non-printable
+    .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '') // non-printable
     .trim()
   return stripped.length > 0
 }
@@ -73,6 +88,8 @@ function hasMeaningfulContent(chunk: string): boolean {
  */
 export class AgentDetector {
   private ptys = new Map<string, PtyRecord>()
+  private oscTitleScanTailByPtyId = new Map<string, string>()
+  private meaningfulContentScanTailByPtyId = new Map<string, string>()
   private stats: StatsCollector
   private meaningfulContentDetector: MeaningfulContentDetector
 
@@ -104,8 +121,13 @@ export class AgentDetector {
     }
 
     let hasMeaningfulOutput: boolean | null = null
+    const previousMeaningfulTail = this.meaningfulContentScanTailByPtyId.get(ptyId)
+    const meaningfulData = previousMeaningfulTail ? `${previousMeaningfulTail}${rawData}` : rawData
     const getHasMeaningfulOutput = (): boolean => {
-      hasMeaningfulOutput ??= this.meaningfulContentDetector(rawData)
+      if (hasMeaningfulOutput === null) {
+        hasMeaningfulOutput = this.meaningfulContentDetector(meaningfulData)
+        this.updateMeaningfulContentScanTail(ptyId, meaningfulData)
+      }
       return hasMeaningfulOutput
     }
 
@@ -113,7 +135,7 @@ export class AgentDetector {
       record.lastMeaningfulOutputAt = at
     }
 
-    const title = extractLastOscTitle(rawData)
+    const title = this.extractLastOscTitleForPty(ptyId, rawData)
     if (title === null) {
       return
     }
@@ -173,5 +195,89 @@ export class AgentDetector {
 
     record.state = 'stopped'
     this.ptys.delete(ptyId)
+    this.oscTitleScanTailByPtyId.delete(ptyId)
+    this.meaningfulContentScanTailByPtyId.delete(ptyId)
   }
+
+  private extractLastOscTitleForPty(ptyId: string, rawData: string): string | null {
+    const previousTail = this.oscTitleScanTailByPtyId.get(ptyId)
+    if (!previousTail && !rawData.includes('\x1b')) {
+      return null
+    }
+    const input = `${previousTail ?? ''}${rawData}`
+    const scanTail = extractOscTitleScanTail(input)
+    if (scanTail.length > 0) {
+      this.oscTitleScanTailByPtyId.set(ptyId, scanTail)
+    } else {
+      this.oscTitleScanTailByPtyId.delete(ptyId)
+    }
+    return extractLastOscTitle(input)
+  }
+
+  private updateMeaningfulContentScanTail(ptyId: string, rawData: string): void {
+    const tail = extractMeaningfulContentScanTail(rawData)
+    if (tail.length > 0) {
+      this.meaningfulContentScanTailByPtyId.set(ptyId, tail)
+    } else {
+      this.meaningfulContentScanTailByPtyId.delete(ptyId)
+    }
+  }
+}
+
+function extractMeaningfulContentScanTail(value: string): string {
+  const escapeIndex = value.lastIndexOf('\x1b')
+  if (escapeIndex === -1) {
+    return ''
+  }
+  const parsed = parseMeaningfulControlSequence(value, escapeIndex)
+  return parsed === null ? trimMeaningfulContentScanTail(value.slice(escapeIndex)) : ''
+}
+
+function parseMeaningfulControlSequence(value: string, escapeIndex: number): number | null {
+  const introducer = value[escapeIndex + 1]
+  if (!introducer) {
+    return null
+  }
+  if (introducer === '[') {
+    for (let index = escapeIndex + 2; index < value.length; index += 1) {
+      const code = value.charCodeAt(index)
+      if (code >= 0x40 && code <= 0x7e) {
+        return index
+      }
+    }
+    return null
+  }
+  if (introducer === ']') {
+    for (let index = escapeIndex + 2; index < value.length; index += 1) {
+      if (value[index] === '\u0007') {
+        return index
+      }
+      if (value[index] === '\u001b' && value[index + 1] === '\\') {
+        return index + 1
+      }
+    }
+    return null
+  }
+  if (isStTerminatedStringControlIntroducer(introducer)) {
+    for (let index = escapeIndex + 2; index < value.length; index += 1) {
+      if (value[index] === '\u001b' && value[index + 1] === '\\') {
+        return index + 1
+      }
+    }
+    return null
+  }
+  return escapeIndex + 1
+}
+
+function isStTerminatedStringControlIntroducer(introducer: string): boolean {
+  return introducer === 'P' || introducer === 'X' || introducer === '^' || introducer === '_'
+}
+
+function trimMeaningfulContentScanTail(value: string): string {
+  if (value.length <= MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT) {
+    return value
+  }
+  const introducer = value.slice(0, Math.min(2, value.length))
+  const suffixBudget = Math.max(0, MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT - introducer.length)
+  return `${introducer}${value.slice(-suffixBudget)}`
 }

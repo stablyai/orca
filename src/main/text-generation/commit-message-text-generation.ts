@@ -40,6 +40,7 @@ import {
   type ResolvedSourceControlAiGenerationParams
 } from '../../shared/source-control-ai'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
+import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
 import { resolveCliCommand } from '../codex-cli/command'
 import {
   getSpawnArgsForWindows,
@@ -47,6 +48,7 @@ import {
   WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR
 } from '../win32-utils'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
+import { wslAwareSpawn } from '../git/runner'
 
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -87,7 +89,7 @@ export type RemoteCommitMessageExecResult = {
 export type TextGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
 
 export type CommitMessageGenerationTarget =
-  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv }
+  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
   | {
       kind: 'remote'
       cwd: string
@@ -107,6 +109,11 @@ type ResolveCommitMessageSettingsResult =
 type InternalTextGenerationResult =
   | { success: true; rawOutput: string; agentLabel?: string }
   | { success: false; error: string; canceled?: boolean }
+
+export type CommitMessageModelDiscoveryLocalOptions = {
+  cwd?: string
+  wslDistro?: string
+}
 
 export function trimGeneratedCommitMessage(message: string): string {
   return message.replace(/\s+$/, '')
@@ -136,23 +143,43 @@ export function resolveTextGenerationParams(
   return resolveCommitMessageSettings(settings, discoveryHostKey, operation, repo)
 }
 
-function sanitizeAgentFailureDetail(detail: string | null): string | null {
-  const trimmed = detail?.replace(/\p{Cc}+/gu, ' ').trim()
-  if (!trimmed) {
-    return null
-  }
-  return trimmed.length > 240 ? `${trimmed.slice(0, 240).trimEnd()}...` : trimmed
-}
-
-function userFacingAgentFailure(
+function formatAgentCliFailureMessage(
   label: string,
-  detail?: string | null,
+  stdout: string,
+  stderr: string,
+  exitCode: number | null,
   options?: { includeLocalMacDnsHint?: boolean }
 ): string {
-  const message = `${label} failed. Check the agent CLI configuration and try again.`
+  const detail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
+  const message = detail
+    ? `${label} CLI command failed: ${detail}`
+    : `${label} CLI command failed with code ${exitCode}.`
   return options?.includeLocalMacDnsHint === false
     ? message
     : withMacTailscaleDnsHint(message, detail)
+}
+
+function sanitizeAgentFailureDetail(detail: string | null): string | null {
+  const trimmed = detail
+    ?.replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!trimmed) {
+    return null
+  }
+  // Why: agent stderr often includes local or SSH repo paths. Persisting those
+  // into worktree metadata leaks environment details into synced renderer state.
+  const redacted = trimmed
+    .replace(
+      /\\\\[^\s"'`<>\\]+\\(?:[^\s"'`<>\\]+(?:\s+[^\s"'`<>\\]+)*(?=\\)\\)*[^\s"'`<>\\]+/g,
+      '[path]'
+    )
+    .replace(
+      /[A-Za-z]:[\\/](?:[^\s"'`<>\\/|:*?]+(?:\s+[^\s"'`<>\\/|:*?]+)*(?=[\\/])[\\/])*[^\s"'`<>\\/|:*?]+/g,
+      '[path]'
+    )
+    .replace(/(^|[\s"'`(])\/(?:[^\s"'`<>/]+(?:\s+[^\s"'`<>/]+)*(?=\/)\/)*[^\s"'`<>/]+/g, '$1[path]')
+  return redacted.length > 240 ? `${redacted.slice(0, 240).trimEnd()}...` : redacted
 }
 
 function userFacingUnsafeWindowsBatchArgs(label: string): string {
@@ -185,20 +212,15 @@ function finalizeModelDiscoveryOutput(
   code: number | null
 ): DiscoverCommitMessageModelsResult {
   if (code !== 0) {
-    const safeDetail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
     console.error('[commit-message] Model discovery failed:', {
       label: spec.label,
       exitCode: code,
-      safeDetail,
       stdout,
       stderr
     })
     return {
       success: false,
-      error: withMacTailscaleDnsHint(
-        `${spec.label} model discovery failed. Check the agent CLI configuration and try again.`,
-        safeDetail
-      )
+      error: formatAgentCliFailureMessage(spec.label, stdout, stderr, code)
     }
   }
   let models = spec.modelDiscovery?.parse(stdout) ?? []
@@ -248,7 +270,8 @@ function planModelDiscovery(
 export async function discoverCommitMessageModelsLocal(
   agentId: TuiAgent,
   env: NodeJS.ProcessEnv | undefined,
-  agentCommandOverride?: string
+  agentCommandOverride?: string,
+  options: CommitMessageModelDiscoveryLocalOptions = {}
 ): Promise<DiscoverCommitMessageModelsResult> {
   const spec = getCommitMessageAgentSpec(agentId)
   if (!spec) {
@@ -268,18 +291,29 @@ export async function discoverCommitMessageModelsLocal(
         resolve({ success: false, error: planned.error })
         return
       }
-      const resolvedBinary =
-        process.platform === 'win32'
-          ? resolveCliCommand(planned.plan.binary, {
-              pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null
-            })
-          : planned.plan.binary
-      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, planned.plan.args)
-      child = spawn(spawnCmd, spawnArgs, {
-        env: spawnEnv,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true
-      })
+      if (process.platform === 'win32' && options.wslDistro) {
+        child = wslAwareSpawn(planned.plan.binary, planned.plan.args, {
+          cwd: options.cwd,
+          env: buildWslLauncherEnv(env),
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+          wslDistro: options.wslDistro,
+          useWslLoginShell: true
+        })
+      } else {
+        const resolvedBinary =
+          process.platform === 'win32'
+            ? resolveCliCommand(planned.plan.binary, {
+                pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null
+              })
+            : planned.plan.binary
+        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, planned.plan.args)
+        child = spawn(spawnCmd, spawnArgs, {
+          env: spawnEnv,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true
+        })
+      }
     } catch (error) {
       console.error('[commit-message] Failed to spawn model discovery:', error)
       resolve({
@@ -451,6 +485,17 @@ function killProcessTree(child: ChildProcess): void {
 // Keying by operation plus `local:${cwd}` keeps local cancellation independent
 // from SSH worktrees and from other generation features in the same worktree.
 const cancelTokensByLane = new Map<string, () => void>()
+const WSL_LAUNCHER_ENV_KEYS = [
+  'ComSpec',
+  'COMSPEC',
+  'Path',
+  'PATH',
+  'PATHEXT',
+  'SystemRoot',
+  'TEMP',
+  'TMP',
+  'WINDIR'
+] as const
 
 function localLaneKey(operation: TextGenerationOperation, cwd: string): string {
   return `${operation}:local:${cwd}`
@@ -460,29 +505,57 @@ export function cancelGenerateCommitMessageLocal(cwd: string): void {
   cancelTokensByLane.get(localLaneKey('commit-message', cwd))?.()
 }
 
+function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const key of WSL_LAUNCHER_ENV_KEYS) {
+    const value = process.env[key]
+    if (value !== undefined) {
+      env[key] = value
+    }
+  }
+  for (const [key, value] of Object.entries(explicitEnv ?? {})) {
+    if (value !== undefined && value !== process.env[key]) {
+      env[key] = value
+    }
+  }
+  return env
+}
+
 async function runLocalPlan(
   plan: CommitMessagePlan,
   cwd: string,
   env: NodeJS.ProcessEnv | undefined,
   emptyResultName = 'message',
-  operation: TextGenerationOperation = 'commit-message'
+  operation: TextGenerationOperation = 'commit-message',
+  wslDistro?: string
 ): Promise<InternalTextGenerationResult> {
   const { binary, args, stdinPayload, label } = plan
   return new Promise((resolve) => {
     let child: ChildProcess
     try {
       const spawnEnv = env ?? process.env
-      const resolvedBinary =
-        process.platform === 'win32'
-          ? resolveCliCommand(binary, { pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null })
-          : binary
-      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, args)
-      child = spawn(spawnCmd, spawnArgs, {
-        cwd,
-        env: spawnEnv,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true
-      })
+      if (process.platform === 'win32' && wslDistro) {
+        child = wslAwareSpawn(binary, args, {
+          cwd,
+          env: buildWslLauncherEnv(env),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true,
+          wslDistro,
+          useWslLoginShell: true
+        })
+      } else {
+        const resolvedBinary =
+          process.platform === 'win32'
+            ? resolveCliCommand(binary, { pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null })
+            : binary
+        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, args)
+        child = spawn(spawnCmd, spawnArgs, {
+          cwd,
+          env: spawnEnv,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true
+        })
+      }
     } catch (error) {
       if (error instanceof UnsafeWindowsBatchArgumentsError) {
         resolve({
@@ -582,7 +655,10 @@ async function runLocalPlan(
         return
       }
       if (outputLimitExceeded) {
-        finalize({ success: false, error: userFacingAgentFailure(label) })
+        finalize({
+          success: false,
+          error: `${label} CLI command produced too much output. Check the agent CLI configuration and try again.`
+        })
         return
       }
       finalizeFromAgentOutput({ code, stdout, stderr, label, emptyResultName, finalize })
@@ -613,34 +689,35 @@ function finalizeFromAgentOutput(args: {
 }): void {
   const { code, stdout, stderr, label, emptyResultName, finalize, includeLocalMacDnsHint } = args
   if (code !== 0) {
-    const safeDetail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
     console.error('[commit-message] Generator failed:', {
       label,
       exitCode: code,
-      safeDetail,
       stdout,
       stderr
     })
     finalize({
       success: false,
-      error: userFacingAgentFailure(label, safeDetail, { includeLocalMacDnsHint })
+      error: formatAgentCliFailureMessage(label, stdout, stderr, code, {
+        includeLocalMacDnsHint
+      })
     })
     return
   }
   const cleaned = cleanGeneratedCommitMessage(stdout)
   if (!cleaned) {
-    const safeDetail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
-    if (safeDetail) {
+    const detail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
+    if (detail) {
       console.error('[commit-message] Generator returned no stdout but reported an error:', {
         label,
         exitCode: code,
-        safeDetail,
         stdout,
         stderr
       })
       finalize({
         success: false,
-        error: userFacingAgentFailure(label, safeDetail, { includeLocalMacDnsHint })
+        error: formatAgentCliFailureMessage(label, stdout, stderr, code, {
+          includeLocalMacDnsHint
+        })
       })
       return
     }
@@ -738,7 +815,16 @@ export async function generateCommitMessageFromContext(
   params: GenerateCommitMessageParams,
   target: CommitMessageGenerationTarget
 ): Promise<GenerateCommitMessageResult> {
-  const prompt = buildCommitMessagePrompt(context, params.customPrompt ?? '')
+  const basePrompt = buildCommitMessagePrompt(context, '')
+  const prompt =
+    params.commandInputTemplate !== undefined
+      ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
+          basePrompt,
+          branch: context.branch ?? '(detached)',
+          stagedFiles: context.stagedSummary,
+          stagedPatch: context.stagedPatch
+        })
+      : buildCommitMessagePrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
     return { success: false, error: planned.error }
@@ -747,7 +833,14 @@ export async function generateCommitMessageFromContext(
   const internalResult =
     target.kind === 'remote'
       ? await runRemotePlan(planned.plan, target)
-      : await runLocalPlan(planned.plan, target.cwd, target.env)
+      : await runLocalPlan(
+          planned.plan,
+          target.cwd,
+          target.env,
+          'message',
+          'commit-message',
+          target.wslDistro
+        )
   return formatCommitMessageGenerationResult(internalResult)
 }
 
@@ -786,7 +879,20 @@ export async function generatePullRequestFieldsFromContext(
   params: GenerateCommitMessageParams,
   target: CommitMessageGenerationTarget
 ): Promise<GeneratePullRequestFieldsResult> {
-  const prompt = buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
+  const basePrompt = buildPullRequestFieldsPrompt(context, '')
+  const prompt =
+    params.commandInputTemplate !== undefined
+      ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
+          basePrompt,
+          branch: context.branch ?? '(detached)',
+          baseBranch: context.base,
+          currentTitle: context.currentTitle,
+          currentBody: context.currentBody,
+          commitSummary: context.commitSummary,
+          changedFiles: context.changeSummary,
+          patch: context.patch
+        })
+      : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
     return {
@@ -799,7 +905,14 @@ export async function generatePullRequestFieldsFromContext(
   const internalResult =
     target.kind === 'remote'
       ? await runRemotePlan(planned.plan, target, 'details', 'pull-request-fields')
-      : await runLocalPlan(planned.plan, target.cwd, target.env, 'details', 'pull-request-fields')
+      : await runLocalPlan(
+          planned.plan,
+          target.cwd,
+          target.env,
+          'details',
+          'pull-request-fields',
+          target.wslDistro
+        )
   return formatPullRequestFieldsGenerationResult(internalResult, context)
 }
 
@@ -817,7 +930,15 @@ export async function generateBranchNameFromContext(
   params: GenerateCommitMessageParams,
   target: CommitMessageGenerationTarget
 ): Promise<GenerateBranchNameResult> {
-  const prompt = buildBranchNamePrompt(context, params.customPrompt ?? '')
+  const basePrompt = buildBranchNamePrompt(context)
+  const prompt =
+    params.commandInputTemplate !== undefined
+      ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
+          basePrompt,
+          firstPrompt: context.firstPrompt,
+          assistantMessage: context.assistantMessage ?? ''
+        })
+      : buildBranchNamePrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
     return { success: false, error: planned.error }
@@ -826,7 +947,14 @@ export async function generateBranchNameFromContext(
   const internalResult =
     target.kind === 'remote'
       ? await runRemotePlan(planned.plan, target, 'branch name', 'branch-name')
-      : await runLocalPlan(planned.plan, target.cwd, target.env, 'branch name', 'branch-name')
+      : await runLocalPlan(
+          planned.plan,
+          target.cwd,
+          target.env,
+          'branch name',
+          'branch-name',
+          target.wslDistro
+        )
   if (!internalResult.success) {
     return internalResult
   }

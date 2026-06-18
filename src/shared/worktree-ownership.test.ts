@@ -75,6 +75,7 @@ function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
     nestWorkspaces: true,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
+    localBaseRefSuggestionDismissed: false,
     branchPrefix: 'none',
     branchPrefixCustom: '',
     enableGitHubAttribution: false,

@@ -24,6 +24,7 @@ vi.mock('@/lib/worktree-activation', () => ({
 import { getLocalWorkspacePortSections } from './PortsPanel'
 import {
   killWorkspacePortForTarget,
+  mergeWorkspacePortScans,
   openWorkspacePortInBrowser,
   refreshWorkspacePortScanAfterStop,
   scanWorkspacePortsForTarget
@@ -219,6 +220,35 @@ describe('PortsPanel runtime routing', () => {
     ])
   })
 
+  it('merges local and runtime scans with host-prefixed row ids', () => {
+    const runtimePort: WorkspacePort = {
+      ...workspacePort,
+      id: workspacePort.id,
+      port: 3000,
+      owner: {
+        ...workspacePort.owner,
+        repoId: 'runtime-repo',
+        worktreeId: 'runtime-repo::/srv/app',
+        displayName: 'runtime app',
+        path: '/srv/app'
+      }
+    }
+
+    const merged = mergeWorkspacePortScans({
+      'local:all': { ...emptyScan, scannedAt: 10, ports: [workspacePort] },
+      'environment:env-1:all': { ...emptyScan, scannedAt: 20, ports: [runtimePort] }
+    })
+
+    expect(merged).toMatchObject({ platform: 'unknown', scannedAt: 20 })
+    expect(merged?.ports.map((port) => port.id)).toEqual([
+      `environment:env-1:all:${workspacePort.id}`,
+      `local:all:${workspacePort.id}`
+    ])
+    expect(
+      merged?.ports.map((port) => (port.kind === 'workspace' ? port.owner.worktreeId : null))
+    ).toEqual(['runtime-repo::/srv/app', 'repo::/workspace/app'])
+  })
+
   it('opens remote workspace ports in the server-side browser and binds the local page handle', async () => {
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) =>
       Promise.resolve({
@@ -350,6 +380,78 @@ describe('PortsPanel runtime routing', () => {
     })
     expect(setWorkspacePortScanRefreshing).toHaveBeenNthCalledWith(1, true)
     expect(setWorkspacePortScanRefreshing).toHaveBeenNthCalledWith(2, false)
+  })
+
+  it('preserves an all-host projection after refreshing one host post-stop', async () => {
+    const setWorkspacePortScan = vi.fn()
+    const setWorkspacePortScanForKey = vi.fn()
+    const setWorkspacePortScanRefreshing = vi.fn()
+    const localPort: WorkspacePort = { ...workspacePort, id: 'local-port', port: 5173 }
+    const refreshedRemotePort: WorkspacePort = {
+      ...workspacePort,
+      id: 'remote-port',
+      port: 3000,
+      owner: {
+        ...workspacePort.owner,
+        repoId: 'runtime-repo',
+        worktreeId: 'runtime-repo::/srv/app',
+        displayName: 'runtime app',
+        path: '/srv/app'
+      }
+    }
+    const localHostScan: WorkspacePortScanResult = {
+      ...emptyScan,
+      scannedAt: 10,
+      ports: [localPort]
+    }
+    const remoteHostScan: WorkspacePortScanResult = {
+      ...emptyScan,
+      scannedAt: 20,
+      ports: [refreshedRemotePort]
+    }
+    let scanCalls = 0
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      if (method === 'status.get') {
+        return Promise.resolve({
+          id: method,
+          ok: true,
+          result: compatibleStatus,
+          _meta: { runtimeId: 'runtime-1' }
+        })
+      }
+      if (method === 'workspacePorts.scan') {
+        scanCalls += 1
+        return Promise.resolve({
+          id: method,
+          ok: true,
+          result: remoteHostScan,
+          _meta: { runtimeId: 'runtime-1' }
+        })
+      }
+      return Promise.reject(new Error(`Unexpected method ${method}`))
+    })
+
+    await expect(
+      refreshWorkspacePortScanAfterStop({
+        runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
+        setWorkspacePortScan: setWorkspacePortScan as never,
+        setWorkspacePortScanForKey: setWorkspacePortScanForKey as never,
+        getWorkspacePortScansByKey: () => ({ 'local:all': localHostScan }),
+        setWorkspacePortScanRefreshing: setWorkspacePortScanRefreshing as never
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(setWorkspacePortScanForKey).toHaveBeenCalledWith('environment:env-1:all', remoteHostScan)
+    expect(setWorkspacePortScan).toHaveBeenLastCalledWith({
+      key: 'all-hosts:all',
+      result: expect.objectContaining({
+        ports: expect.arrayContaining([
+          expect.objectContaining({ port: 5173 }),
+          expect.objectContaining({ port: 3000 })
+        ])
+      })
+    })
+    expect(scanCalls).toBe(2)
   })
 
   it('keeps remote workspace ports in the server-side browser when link routing is off', async () => {

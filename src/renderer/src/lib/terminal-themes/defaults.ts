@@ -1,13 +1,14 @@
 import type { TerminalThemeMap } from './types'
 
 export const DEFAULT_TERMINAL_THEMES: TerminalThemeMap = {
-  // Exact colors from Ghostty source: src/terminal/color.zig + src/config/Config.zig
+  // Most colors come from Ghostty. Orca raises dark selection contrast because Ghostty's
+  // original #3e4451 blends into Codex-style gray instruction blocks.
   'Ghostty Default Style Dark': {
     background: '#282c34',
     foreground: '#ffffff',
     cursor: '#ffffff',
     cursorAccent: '#282c34',
-    selectionBackground: '#3e4451',
+    selectionBackground: '#5a7898',
     selectionForeground: '#ffffff',
     black: '#1d1f21',
     red: '#cc6666',

@@ -21,7 +21,9 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   // The singleton dispatcher subscribes a SINGLE global `window.api.pty.onData`
   // callback on first `ensurePtyDispatcher()`. We simulate the main process
   // delivering IPC events by invoking that captured callback directly.
-  let dispatcherCallback: ((payload: { id: string; data: string }) => void) | null = null
+  let dispatcherCallback:
+    | ((payload: { id: string; data: string; rawLength?: number }) => void)
+    | null = null
 
   beforeEach(() => {
     vi.resetModules()
@@ -36,17 +38,20 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
           write: vi.fn(),
           resize: vi.fn(),
           kill: vi.fn(),
-          onData: vi.fn((cb: (payload: { id: string; data: string }) => void) => {
-            // Only the first subscriber wins in production — the dispatcher
-            // calls onData exactly once (ensurePtyDispatcher guards with the
-            // `ptyDispatcherAttached` flag). Subsequent transport calls go
-            // through the same cached subscription, so we capture the first
-            // one and ignore the rest.
-            if (!dispatcherCallback) {
-              dispatcherCallback = cb
+          ackData: vi.fn(),
+          onData: vi.fn(
+            (cb: (payload: { id: string; data: string; rawLength?: number }) => void) => {
+              // Only the first subscriber wins in production — the dispatcher
+              // calls onData exactly once (ensurePtyDispatcher guards with the
+              // `ptyDispatcherAttached` flag). Subsequent transport calls go
+              // through the same cached subscription, so we capture the first
+              // one and ignore the rest.
+              if (!dispatcherCallback) {
+                dispatcherCallback = cb
+              }
+              return () => {}
             }
-            return () => {}
-          }),
+          ),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
         }
@@ -60,6 +65,20 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     } else {
       delete (globalThis as { window?: typeof window }).window
     }
+  })
+
+  it('ACKs PTY data after dispatcher consumers accept the chunk', async () => {
+    const { ensurePtyDispatcher, ptyDataHandlers } = await import('./pty-dispatcher')
+    const handler = vi.fn()
+
+    ensurePtyDispatcher()
+    ptyDataHandlers.set('pty-pi', handler)
+
+    dispatcherCallback?.({ id: 'pty-pi', data: 'chunk', rawLength: 10 } as never)
+
+    expect(handler).toHaveBeenCalledWith('chunk', { rawLength: 10 })
+    expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-pi', 10)
+    ptyDataHandlers.delete('pty-pi')
   })
 
   it('routes Pi OSC title frames from pty:data → onTitleChange via the dispatcher', async () => {

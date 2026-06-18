@@ -3,6 +3,8 @@ import { useAppStore } from '@/store'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { cancelPendingSidebarWorktreeActivation } from '@/lib/sidebar-worktree-activation'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
+import { translate } from '@/i18n/i18n'
+import { PINNED_GROUP_KEY } from './worktree-list-groups'
 
 /**
  * Shared "sleep worktree" flow (close all panels to free memory / CPU)
@@ -21,13 +23,30 @@ export async function runSleepWorktree(worktreeId: string): Promise<void> {
   await runSleepWorktrees([worktreeId])
 }
 
-function findSidebarWorktreeRow(worktreeId: string): HTMLElement | null {
-  const rowKey = `wt:${worktreeId}`
-  return (
-    Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')).find(
-      (element) => element.getAttribute('data-worktree-virtual-row-key') === rowKey
-    ) ?? null
+function getSidebarWorktreeOptions(worktreeId: string): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-id]')).filter(
+    (element) => element.dataset.worktreeId === worktreeId
   )
+}
+
+function findPrimarySidebarWorktreeOption(worktreeId: string): HTMLElement | null {
+  const options = getSidebarWorktreeOptions(worktreeId)
+  return (
+    options.find((element) =>
+      element.querySelector<HTMLElement>('[data-worktree-card-active="primary"]')
+    ) ??
+    options.find((element) => element.dataset.worktreeSectionKey !== PINNED_GROUP_KEY) ??
+    options[0] ??
+    null
+  )
+}
+
+function findSidebarWorktreeRow(worktreeId: string, rowKey?: string): HTMLElement | null {
+  const options = getSidebarWorktreeOptions(worktreeId)
+  const option = rowKey
+    ? (options.find((element) => element.dataset.worktreeRowKey === rowKey) ?? null)
+    : (findPrimarySidebarWorktreeOption(worktreeId) ?? null)
+  return option?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
 }
 
 function preserveSidebarWorktreePosition(worktreeId: string): () => void {
@@ -37,7 +56,9 @@ function preserveSidebarWorktreePosition(worktreeId: string): () => void {
   const getScroller = (): HTMLElement | null =>
     document.querySelector<HTMLElement>('[data-worktree-sidebar]')
   const scroller = getScroller()
-  const row = findSidebarWorktreeRow(worktreeId)
+  const activeOption = findPrimarySidebarWorktreeOption(worktreeId)
+  const activeRowKey = activeOption?.dataset.worktreeRowKey
+  const row = activeOption?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
   if (!scroller || !row) {
     return () => {}
   }
@@ -57,7 +78,7 @@ function preserveSidebarWorktreePosition(worktreeId: string): () => void {
         }
         return
       }
-      const nextRow = findSidebarWorktreeRow(worktreeId)
+      const nextRow = findSidebarWorktreeRow(worktreeId, activeRowKey)
       if (!nextRow) {
         // Why: a remount can first render the wrong virtual window. Put the
         // scroller near the same content after height changes so the row
@@ -143,7 +164,15 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     // otherwise continue — the active-worktree reset already happened so we
     // don't leave the UI in a stale state.
     toast.error(
-      worktreeIds.length === 1 ? 'Failed to sleep workspace' : 'Failed to sleep some workspaces',
+      worktreeIds.length === 1
+        ? translate(
+            'auto.components.sidebar.sleep.worktree.flow.8bc3fc0671',
+            'Failed to sleep workspace'
+          )
+        : translate(
+            'auto.components.sidebar.sleep.worktree.flow.c460fecc4a',
+            'Failed to sleep some workspaces'
+          ),
       {
         description: errors.join('\n')
       }

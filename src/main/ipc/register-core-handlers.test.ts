@@ -27,6 +27,7 @@ const {
   registerFilesystemHandlersMock,
   registerRuntimeHandlersMock,
   registerRuntimeEnvironmentHandlersMock,
+  registerAiVaultHandlersMock,
   registerCodexAccountHandlersMock,
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
@@ -48,7 +49,8 @@ const {
   registerSpeechHandlersMock,
   registerSkillsHandlersMock,
   registerWorkspaceSpaceHandlersMock,
-  registerWorkspacePortHandlersMock
+  registerWorkspacePortHandlersMock,
+  registerEmulatorFrameStreamHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
@@ -74,6 +76,7 @@ const {
   registerFilesystemHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
+  registerAiVaultHandlersMock: vi.fn(),
   registerCodexAccountHandlersMock: vi.fn(),
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
@@ -95,7 +98,8 @@ const {
   registerSpeechHandlersMock: vi.fn(),
   registerSkillsHandlersMock: vi.fn(),
   registerWorkspaceSpaceHandlersMock: vi.fn(),
-  registerWorkspacePortHandlersMock: vi.fn()
+  registerWorkspacePortHandlersMock: vi.fn(),
+  registerEmulatorFrameStreamHandlersMock: vi.fn()
 }))
 
 vi.mock('./onboarding', () => ({
@@ -206,6 +210,10 @@ vi.mock('./ui', () => ({
   registerUIHandlers: registerUIHandlersMock
 }))
 
+vi.mock('./emulator-frame-stream', () => ({
+  registerEmulatorFrameStreamHandlers: registerEmulatorFrameStreamHandlersMock
+}))
+
 vi.mock('./filesystem', () => ({
   registerFilesystemHandlers: registerFilesystemHandlersMock
 }))
@@ -224,6 +232,10 @@ vi.mock('./runtime', () => ({
 
 vi.mock('./runtime-environments', () => ({
   registerRuntimeEnvironmentHandlers: registerRuntimeEnvironmentHandlersMock
+}))
+
+vi.mock('./ai-vault', () => ({
+  registerAiVaultHandlers: registerAiVaultHandlersMock
 }))
 
 vi.mock('./codex-accounts', () => ({
@@ -304,6 +316,7 @@ describe('registerCoreHandlers', () => {
     registerFilesystemHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
     registerRuntimeEnvironmentHandlersMock.mockReset()
+    registerAiVaultHandlersMock.mockReset()
     registerCodexAccountHandlersMock.mockReset()
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
@@ -325,6 +338,7 @@ describe('registerCoreHandlers', () => {
     registerSkillsHandlersMock.mockReset()
     registerWorkspaceSpaceHandlersMock.mockReset()
     registerWorkspacePortHandlersMock.mockReset()
+    registerEmulatorFrameStreamHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', () => {
@@ -339,6 +353,7 @@ describe('registerCoreHandlers', () => {
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
     const onBeforeRelaunch = vi.fn()
+    const getAdditionalAiVaultCodexHomePaths = vi.fn(() => ['/runtime/codex/home'])
 
     registerCoreHandlers(
       store as never,
@@ -356,7 +371,7 @@ describe('registerCoreHandlers', () => {
       agentAwakeService as never,
       undefined,
       undefined,
-      { onBeforeRelaunch }
+      { getAdditionalAiVaultCodexHomePaths, onBeforeRelaunch }
     )
 
     expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
@@ -387,9 +402,13 @@ describe('registerCoreHandlers', () => {
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
     expect(registerUIHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerEmulatorFrameStreamHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalled()
+    expect(registerAiVaultHandlersMock).toHaveBeenCalledWith({
+      getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths
+    })
     expect(registerCliHandlersMock).toHaveBeenCalled()
     expect(registerPreflightHandlersMock).toHaveBeenCalled()
     expect(registerShellHandlersMock).toHaveBeenCalled()

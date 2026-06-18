@@ -20,9 +20,14 @@ import type {
   LinearWorkflowState
 } from '../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import {
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../shared/task-source-context'
 
 export type RuntimeLinearSettings =
   | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
+  | TaskSourceContext
   | null
   | undefined
 
@@ -31,12 +36,31 @@ export type LinearConnectResult = { ok: true; viewer: LinearViewer } | { ok: fal
 export type LinearCreateIssueResult =
   | { ok: true; id: string; identifier: string; title: string; url: string }
   | { ok: false; error: string }
+export type LinearCreateProjectResult =
+  | { ok: true; project: LinearProjectDetail }
+  | { ok: false; error: string }
 export type LinearMutationResult = { ok: true } | { ok: false; error: string }
 export type LinearCommentResult = { ok: true; id: string } | { ok: false; error: string }
 export type LinearReadOptions = { force?: boolean }
 
 function linearReadForce(options?: LinearReadOptions): { force: true } | {} {
   return options?.force ? { force: true } : {}
+}
+
+function isTaskSourceRuntimeSettings(
+  settings: RuntimeLinearSettings
+): settings is TaskSourceContext {
+  return settings !== null && settings !== undefined && 'kind' in settings
+}
+
+function getLinearRuntimeTarget(
+  settings: RuntimeLinearSettings
+): ReturnType<typeof getActiveRuntimeTarget> {
+  // Why: task source context makes provider ownership explicit; legacy callers
+  // still pass focused runtime settings until Tasks finishes migrating.
+  return getActiveRuntimeTarget(
+    isTaskSourceRuntimeSettings(settings) ? getTaskSourceRuntimeSettings(settings) : settings
+  )
 }
 
 function normalizeLinearIssueCollectionResult(
@@ -62,7 +86,7 @@ function normalizeLinearIssueCollectionResult(
 export async function linearStatus(
   settings: RuntimeLinearSettings
 ): Promise<LinearConnectionStatus> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectionStatus>(target, 'linear.status', undefined, {
         timeoutMs: 15_000
@@ -74,7 +98,7 @@ export async function linearTestConnection(
   settings: RuntimeLinearSettings,
   workspaceId?: string | null
 ): Promise<LinearConnectResult> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectResult>(
         target,
@@ -91,7 +115,7 @@ export async function linearConnect(
   settings: RuntimeLinearSettings,
   apiKey: string
 ): Promise<LinearConnectResult> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectResult>(
         target,
@@ -110,7 +134,7 @@ export async function linearDisconnectWorkspace(
   settings: RuntimeLinearSettings,
   workspaceId?: string | null
 ): Promise<void> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   if (target.kind === 'environment') {
     await callRuntimeRpc<{ ok: true }>(
       target,
@@ -129,7 +153,7 @@ export async function linearSelectWorkspace(
   settings: RuntimeLinearSettings,
   workspaceId: LinearWorkspaceSelection
 ): Promise<LinearConnectionStatus> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearConnectionStatus>(
         target,
@@ -146,7 +170,7 @@ export async function linearSearchIssues(
   limit?: number,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearIssue[]> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearIssue[]>(
         target,
@@ -163,7 +187,7 @@ export async function linearListIssues(
   limit?: number,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearCollectionResult<LinearIssue>> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   const result =
     target.kind === 'environment'
       ? await callRuntimeRpc<unknown>(
@@ -195,7 +219,7 @@ export async function linearCreateIssue(
     labelIds?: string[]
   }
 ): Promise<LinearCreateIssueResult> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCreateIssueResult>(target, 'linear.createIssue', args, {
         timeoutMs: 30_000
@@ -222,7 +246,7 @@ export async function linearGetIssue(
   id: string,
   workspaceId?: string | null
 ): Promise<LinearIssue | null> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearIssue | null>(
         target,
@@ -239,7 +263,7 @@ export async function linearUpdateIssue(
   updates: LinearIssueUpdate,
   workspaceId?: string | null
 ): Promise<LinearMutationResult> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearMutationResult>(
         target,
@@ -256,7 +280,7 @@ export async function linearAddIssueComment(
   body: string,
   workspaceId?: string | null
 ): Promise<LinearCommentResult> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCommentResult>(
         target,
@@ -272,7 +296,7 @@ export async function linearIssueComments(
   issueId: string,
   workspaceId?: string | null
 ): Promise<LinearComment[]> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearComment[]>(
         target,
@@ -287,7 +311,7 @@ export async function linearListTeams(
   settings: RuntimeLinearSettings,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearTeam[]> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearTeam[]>(
         target,
@@ -305,7 +329,7 @@ export async function linearListProjects(
   workspaceId?: LinearWorkspaceSelection | null,
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearProjectSummary>>(
         target,
@@ -323,13 +347,37 @@ export async function linearListProjects(
       : { items: [] }
 }
 
+export async function linearCreateProject(
+  settings: RuntimeLinearSettings,
+  args: {
+    name: string
+    description?: string
+    content?: string
+    teamIds: string[]
+    workspaceId?: string
+    leadId?: string | null
+    memberIds?: string[]
+    labelIds?: string[]
+    priority?: number
+    startDate?: string
+    targetDate?: string
+  }
+): Promise<LinearCreateProjectResult> {
+  const target = getLinearRuntimeTarget(settings)
+  return target.kind === 'environment'
+    ? callRuntimeRpc<LinearCreateProjectResult>(target, 'linear.createProject', args, {
+        timeoutMs: 30_000
+      })
+    : window.api.linear.createProject(args)
+}
+
 export async function linearGetProject(
   settings: RuntimeLinearSettings,
   id: string,
   workspaceId: string,
   options?: LinearReadOptions
 ): Promise<LinearProjectDetail | null> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearProjectDetail | null>(
         target,
@@ -347,7 +395,7 @@ export async function linearListProjectIssues(
   workspaceId: string,
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearIssue>> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearIssue>>(
         target,
@@ -370,7 +418,7 @@ export async function linearListCustomViews(
   workspaceId?: LinearWorkspaceSelection | null,
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearCustomViewSummary>> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearCustomViewSummary>>(
         target,
@@ -393,7 +441,7 @@ export async function linearGetCustomView(
   workspaceId: string,
   options?: LinearReadOptions
 ): Promise<LinearCustomViewSummary | null> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCustomViewSummary | null>(
         target,
@@ -411,7 +459,7 @@ export async function linearListCustomViewIssues(
   workspaceId: string,
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearIssue>> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearIssue>>(
         target,
@@ -434,7 +482,7 @@ export async function linearListCustomViewProjects(
   workspaceId: string,
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearProjectSummary>>(
         target,
@@ -455,7 +503,7 @@ export async function linearTeamStates(
   teamId: string,
   workspaceId?: string | null
 ): Promise<LinearWorkflowState[]> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearWorkflowState[]>(
         target,
@@ -471,7 +519,7 @@ export async function linearTeamLabels(
   teamId: string,
   workspaceId?: string | null
 ): Promise<LinearLabel[]> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearLabel[]>(
         target,
@@ -487,7 +535,7 @@ export async function linearTeamMembers(
   teamId: string,
   workspaceId?: string | null
 ): Promise<LinearMember[]> {
-  const target = getActiveRuntimeTarget(settings)
+  const target = getLinearRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearMember[]>(
         target,

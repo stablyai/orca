@@ -9,6 +9,12 @@ export type RuntimeClientEvent =
   | { type: 'reposChanged' }
   | { type: 'worktreesChanged'; repoId: string }
   | {
+      type: 'linearLinkedIssueUpdated'
+      worktreeId: string
+      identifier: string
+      workspaceId: string
+    }
+  | {
       type: 'activateWorktree'
       repoId: string
       worktreeId: string

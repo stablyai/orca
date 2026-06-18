@@ -159,7 +159,9 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onDataCb?.('\r\nuser@host $ ')
       await new Promise((r) => setTimeout(r, 40))
-      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\n')
+      expect(lastSubprocess.write).toHaveBeenCalledWith(
+        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
+      )
     })
   })
 
@@ -232,6 +234,22 @@ describe('TerminalHost', () => {
 
       host.kill('session-1')
       expect(lastSubprocess.kill).toHaveBeenCalled()
+      expect(host.isKilled('session-1')).toBe(true)
+    })
+
+    it('force-kills immediately when requested', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      host.kill('session-1', { immediate: true })
+
+      expect(lastSubprocess.kill).not.toHaveBeenCalled()
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+      expect(lastSubprocess.dispose).toHaveBeenCalled()
       expect(host.isKilled('session-1')).toBe(true)
     })
 

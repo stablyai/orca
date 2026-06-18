@@ -13,7 +13,7 @@ describe('buildResolvePullRequestConflictsPrompt', () => {
     expect(prompt).toContain(
       '- Conflict source: pull request mergeability check (the local worktree may not have MERGE_HEAD yet).'
     )
-    expect(prompt).toContain('- Pull request base branch: "main"')
+    expect(prompt).toContain('- PR base branch: "main"')
     expect(prompt).toContain('- Operation to create locally: merge')
     expect(prompt).toContain('do not treat the handoff as stale')
     expect(prompt).toContain('git fetch origin main')
@@ -29,10 +29,24 @@ describe('buildResolvePullRequestConflictsPrompt', () => {
       entries: [{ path: 'src/conflict.ts' }]
     })
 
-    expect(prompt).toContain('- Pull request base branch: "-upload-pack=sh"')
+    expect(prompt).toContain('- PR base branch: "-upload-pack=sh"')
     expect(prompt).toContain('quoting the ref exactly for the current shell')
     expect(prompt).toContain('after verifying the fetched ref exists')
     expect(prompt).not.toContain('git fetch origin -upload-pack=sh')
     expect(prompt).not.toContain('origin/-upload-pack=sh')
+  })
+
+  it('uses merge request wording for GitLab conflict prompts', () => {
+    const prompt = buildResolvePullRequestConflictsPrompt({
+      reviewKind: 'MR',
+      worktreePath: '/repo/worktree',
+      baseRef: 'main',
+      entries: [{ path: 'src/conflict.ts' }]
+    })
+
+    expect(prompt).toContain('reported for this merge request')
+    expect(prompt).toContain('- Conflict source: merge request mergeability check')
+    expect(prompt).toContain('- MR base branch: "main"')
+    expect(prompt).not.toContain('pull request')
   })
 })

@@ -3,8 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 
 type OverlayProps = {
+  actionLabel: string
   actionPending: boolean
+  allActionLabel?: string
+  allActionPending?: boolean
   onAction: () => void | Promise<void>
+  onAllAction?: () => void | Promise<void>
   rootRef: (node: HTMLDivElement | null) => void
 }
 
@@ -53,13 +57,17 @@ vi.mock('react', async () => {
   }
 })
 
-function renderOverlay(onAction: () => void | Promise<void>): OverlayElement {
+function renderOverlay(
+  onAction: () => void | Promise<void>,
+  onAllAction?: () => void | Promise<void>
+): OverlayElement {
   hookRuntime.stateIndex = 0
   hookRuntime.refIndex = 0
   return MobileDriverOverlay({
     driver: { kind: 'mobile', clientId: 'phone-1' } as never,
     hasFitOverride: false,
-    onAction
+    onAction,
+    onAllAction
   }) as OverlayElement
 }
 
@@ -92,5 +100,35 @@ describe('MobileDriverOverlay', () => {
     overlay = renderOverlay(onAction)
 
     expect(overlay.props.actionPending).toBe(false)
+  })
+
+  it('exposes held-fit restore labels for single and all terminals', () => {
+    hookRuntime.stateIndex = 0
+    hookRuntime.refIndex = 0
+
+    const overlay = MobileDriverOverlay({
+      driver: { kind: 'idle' } as never,
+      hasFitOverride: true,
+      onAction: vi.fn(),
+      onAllAction: vi.fn()
+    }) as OverlayElement
+
+    expect(overlay.props.actionLabel).toBe('Restore this terminal')
+    expect(overlay.props.allActionLabel).toBe('Restore all terminals')
+  })
+
+  it('exposes an all-terminals restore action when provided', async () => {
+    const onAction = vi.fn()
+    const onAllAction = vi.fn()
+
+    const overlay = renderOverlay(onAction, onAllAction)
+
+    expect(overlay.props.actionLabel).toBe('Take back this terminal')
+    expect(overlay.props.allActionLabel).toBe('Take back all terminals')
+    expect(overlay.props.allActionPending).toBe(false)
+    await overlay.props.onAllAction?.()
+
+    expect(onAction).not.toHaveBeenCalled()
+    expect(onAllAction).toHaveBeenCalledOnce()
   })
 })

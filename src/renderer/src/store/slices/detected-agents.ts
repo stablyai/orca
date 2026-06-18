@@ -5,6 +5,7 @@ import {
   getLocalAgentPreflightContext,
   localPreflightContextKey
 } from '@/lib/local-preflight-context'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 export type DetectedAgentsSlice = {
   detectedAgentIds: TuiAgent[] | null
@@ -23,6 +24,7 @@ export type DetectedAgentsSlice = {
    *  receive the same pending promise; store fields update once on resolve so
    *  every subscribed surface re-renders in the same tick. */
   refreshDetectedAgents: () => Promise<TuiAgent[]>
+  clearLocalDetectedAgents: () => void
 
   // Why: remote worktrees need per-connection agent detection. The local
   // detectedAgentIds field is connection-unaware, so remote state lives in a
@@ -31,6 +33,13 @@ export type DetectedAgentsSlice = {
   isDetectingRemoteAgents: Record<string, boolean>
   ensureRemoteDetectedAgents: (connectionId: string) => Promise<TuiAgent[]>
   clearRemoteDetectedAgents: (connectionId: string) => void
+
+  // Why: remote runtime hosts are not SSH connections, but their tab-bar
+  // launch menu still has to probe the host where the workspace actually runs.
+  runtimeDetectedAgentIds: Record<string, TuiAgent[] | null>
+  isDetectingRuntimeAgents: Record<string, boolean>
+  ensureRuntimeDetectedAgents: (environmentId: string) => Promise<TuiAgent[]>
+  clearRuntimeDetectedAgents: (environmentId: string) => void
 }
 
 // Why: these are module-scoped (not in the store) so we can deduplicate
@@ -38,10 +47,16 @@ export type DetectedAgentsSlice = {
 let detectPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let refreshPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let detectedContextKey: string | null = null
+let localDetectionGeneration = 0
 const remoteDetectPromises = new Map<string, Promise<TuiAgent[]>>()
+const runtimeDetectPromises = new Map<string, Promise<TuiAgent[]>>()
 
 export function _getRemoteDetectPromiseCountForTest(): number {
   return remoteDetectPromises.size
+}
+
+export function _getRuntimeDetectPromiseCountForTest(): number {
+  return runtimeDetectPromises.size
 }
 
 export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedAgentsSlice> = (
@@ -69,22 +84,27 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       detectedAgentIds: contextChanged ? null : get().detectedAgentIds,
       isDetectingAgents: true
     })
+    const requestGeneration = localDetectionGeneration
     const pending = window.api.preflight
       .detectAgents(context)
       .then((ids) => {
         const typed = ids as TuiAgent[]
-        set({ detectedAgentIds: typed, isDetectingAgents: false })
-        detectedContextKey = contextKey
+        if (requestGeneration === localDetectionGeneration) {
+          set({ detectedAgentIds: typed, isDetectingAgents: false })
+          detectedContextKey = contextKey
+        }
         return typed
       })
       .catch(() => {
         // Why: allow a retry on the next call if detection blew up (IPC timeout
         // during cold start). Do not cache the failure or show stale context.
-        detectPromise = null
-        set({
-          detectedAgentIds: contextChanged ? [] : get().detectedAgentIds,
-          isDetectingAgents: false
-        })
+        if (requestGeneration === localDetectionGeneration) {
+          detectPromise = null
+          set({
+            detectedAgentIds: contextChanged ? [] : get().detectedAgentIds,
+            isDetectingAgents: false
+          })
+        }
         return [] as TuiAgent[]
       })
     detectPromise = { key: contextKey, promise: pending }
@@ -102,28 +122,33 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       detectedAgentIds: contextChanged ? null : get().detectedAgentIds,
       isRefreshingAgents: true
     })
+    const requestGeneration = localDetectionGeneration
     const pending = window.api.preflight
       .refreshAgents(context)
       .then((result) => {
         const typed = result.agents as TuiAgent[]
-        set({
-          detectedAgentIds: typed,
-          isRefreshingAgents: false,
-          pathSource: result.pathSource,
-          pathFailureReason: result.pathFailureReason
-        })
-        // Why: once refresh has run, treat its result as the current detection
-        // snapshot so `ensureDetectedAgents` short-circuits.
-        detectedContextKey = contextKey
-        detectPromise = { key: contextKey, promise: Promise.resolve(typed) }
+        if (requestGeneration === localDetectionGeneration) {
+          set({
+            detectedAgentIds: typed,
+            isRefreshingAgents: false,
+            pathSource: result.pathSource,
+            pathFailureReason: result.pathFailureReason
+          })
+          // Why: once refresh has run, treat its result as the current detection
+          // snapshot so `ensureDetectedAgents` short-circuits.
+          detectedContextKey = contextKey
+          detectPromise = { key: contextKey, promise: Promise.resolve(typed) }
+        }
         return typed
       })
       .catch(() => {
         const fallback = contextChanged ? [] : (get().detectedAgentIds ?? [])
-        set({
-          detectedAgentIds: fallback,
-          isRefreshingAgents: false
-        })
+        if (requestGeneration === localDetectionGeneration) {
+          set({
+            detectedAgentIds: fallback,
+            isRefreshingAgents: false
+          })
+        }
         return fallback
       })
       .finally(() => {
@@ -135,8 +160,24 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     return pending
   },
 
+  clearLocalDetectedAgents: () => {
+    localDetectionGeneration += 1
+    detectPromise = null
+    refreshPromise = null
+    detectedContextKey = null
+    set({
+      detectedAgentIds: null,
+      isDetectingAgents: false,
+      isRefreshingAgents: false,
+      pathSource: null,
+      pathFailureReason: null
+    })
+  },
+
   remoteDetectedAgentIds: {},
   isDetectingRemoteAgents: {},
+  runtimeDetectedAgentIds: {},
+  isDetectingRuntimeAgents: {},
 
   ensureRemoteDetectedAgents: (connectionId: string) => {
     const existing = get().remoteDetectedAgentIds[connectionId]
@@ -192,6 +233,59 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       const { [connectionId]: _, ...restAgents } = s.remoteDetectedAgentIds
       const { [connectionId]: __, ...restLoading } = s.isDetectingRemoteAgents
       return { remoteDetectedAgentIds: restAgents, isDetectingRemoteAgents: restLoading }
+    })
+  },
+
+  ensureRuntimeDetectedAgents: (environmentId: string) => {
+    const existing = get().runtimeDetectedAgentIds[environmentId]
+    if (existing) {
+      return Promise.resolve(existing)
+    }
+    const inflight = runtimeDetectPromises.get(environmentId)
+    if (inflight) {
+      return inflight
+    }
+
+    set((s) => ({
+      isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: true }
+    }))
+
+    const pending = callRuntimeRpc<TuiAgent[]>(
+      { kind: 'environment', environmentId },
+      'preflight.detectAgents'
+    )
+      .then((ids) => {
+        const typed = ids as TuiAgent[]
+        set((s) => ({
+          runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [environmentId]: typed },
+          isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
+        }))
+        return typed
+      })
+      .catch(() => {
+        // Why: a remote runtime may be disconnected or version-incompatible.
+        // Keep the menu retryable instead of pinning a failed probe forever.
+        set((s) => ({
+          isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
+        }))
+        return [] as TuiAgent[]
+      })
+      .finally(() => {
+        if (runtimeDetectPromises.get(environmentId) === pending) {
+          runtimeDetectPromises.delete(environmentId)
+        }
+      })
+
+    runtimeDetectPromises.set(environmentId, pending)
+    return pending
+  },
+
+  clearRuntimeDetectedAgents: (environmentId: string) => {
+    runtimeDetectPromises.delete(environmentId)
+    set((s) => {
+      const { [environmentId]: _, ...restAgents } = s.runtimeDetectedAgentIds
+      const { [environmentId]: __, ...restLoading } = s.isDetectingRuntimeAgents
+      return { runtimeDetectedAgentIds: restAgents, isDetectingRuntimeAgents: restLoading }
     })
   }
 })

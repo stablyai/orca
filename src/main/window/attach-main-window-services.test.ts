@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: attachMainWindowServices centralizes main-window IPC wiring; keeping its integration-style mocks together avoids brittle cross-file setup. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Store } from '../persistence'
 
 const {
   onMock,
@@ -14,6 +15,7 @@ const {
   registerRepoHandlersMock,
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
+  hydrateLocalPtyRegistryAtBootMock,
   setupAutoUpdaterMock,
   browserManagerUnregisterAllMock
 } = vi.hoisted(() => ({
@@ -29,6 +31,7 @@ const {
   registerRepoHandlersMock: vi.fn(),
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
+  hydrateLocalPtyRegistryAtBootMock: vi.fn(),
   setupAutoUpdaterMock: vi.fn(),
   browserManagerUnregisterAllMock: vi.fn()
 }))
@@ -64,6 +67,10 @@ vi.mock('../ipc/worktrees', () => ({
 vi.mock('../ipc/pty', () => ({
   getLocalPtyProvider: vi.fn(),
   registerPtyHandlers: registerPtyHandlersMock
+}))
+
+vi.mock('../memory/hydrate-local-pty-registry', () => ({
+  hydrateLocalPtyRegistryAtBoot: hydrateLocalPtyRegistryAtBootMock
 }))
 
 vi.mock('../browser/browser-manager', () => ({
@@ -127,8 +134,8 @@ function createMainWindow(extraWebContents: { on?: MockFn; send?: MockFn } = {})
   }
 }
 
-function createStore(): never {
-  return { flush: vi.fn() } as never
+function createStore(): Store & { flush: MockFn } {
+  return { flush: vi.fn() } as Store & { flush: MockFn }
 }
 
 function createRuntime(): RuntimeStub {
@@ -138,6 +145,14 @@ function createRuntime(): RuntimeStub {
     markRendererReloading: vi.fn(),
     markGraphUnavailable: vi.fn()
   }
+}
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
 }
 
 function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
@@ -160,6 +175,7 @@ describe('attachMainWindowServices', () => {
     registerRepoHandlersMock.mockReset()
     registerWorktreeHandlersMock.mockReset()
     registerPtyHandlersMock.mockReset()
+    hydrateLocalPtyRegistryAtBootMock.mockReset()
     setupAutoUpdaterMock.mockReset()
     browserManagerUnregisterAllMock.mockReset()
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
@@ -190,6 +206,60 @@ describe('attachMainWindowServices', () => {
       ignoreCache: false
     })
     expect(mainWindow.webContents.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries local PTY registry hydration after local startup services are ready', async () => {
+    const localStartup = deferred()
+    const store = createStore()
+
+    attachMainWindowServices(
+      createMainWindow() as never,
+      store,
+      createRuntime() as never,
+      undefined,
+      undefined,
+      { awaitLocalPtyStartup: () => localStartup.promise }
+    )
+
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(1)
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledWith(store)
+
+    localStartup.resolve()
+    await localStartup.promise
+    await Promise.resolve()
+
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(2)
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenLastCalledWith(store)
+  })
+
+  it('passes injected update quit cleanup to the auto-updater', async () => {
+    const onBeforeUpdateQuit = vi.fn()
+    const store = createStore()
+
+    attachMainWindowServices(
+      createMainWindow() as never,
+      store,
+      createRuntime() as never,
+      undefined,
+      undefined,
+      { onBeforeUpdateQuit }
+    )
+
+    expect(setupAutoUpdaterMock).toHaveBeenCalledTimes(1)
+    await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
+
+    expect(onBeforeUpdateQuit).toHaveBeenCalledTimes(1)
+    expect(store.flush).toHaveBeenCalledTimes(1)
+  })
+
+  it('flushes the store before update quit when no cleanup is injected', async () => {
+    const store = createStore()
+
+    attachMainWindowServices(createMainWindow() as never, store, createRuntime() as never)
+
+    await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
+
+    expect(store.flush).toHaveBeenCalledTimes(1)
   })
 
   it('ignores app reload requests from non-main webContents', async () => {

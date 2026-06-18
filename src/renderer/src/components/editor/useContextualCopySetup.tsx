@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback } from 'react'
 import type { editor } from 'monaco-editor'
 import { setupContextualCopy } from './setup-contextual-copy'
+import { translate } from '@/i18n/i18n'
 
 export function useContextualCopySetup() {
   const [copyToast, setCopyToast] = useState<{ left: number; top: number } | null>(null)
@@ -34,7 +35,7 @@ export function useContextualCopySetup() {
       className="pointer-events-none fixed z-50 rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm"
       style={{ left: copyToast.left, top: copyToast.top }}
     >
-      Context copied
+      {translate('auto.components.editor.useContextualCopySetup.059bfb0d94', 'Context copied')}
     </div>
   ) : null
 

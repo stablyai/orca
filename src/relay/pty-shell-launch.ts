@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
-import { basename, dirname, join } from 'path'
+import { dirname, join } from 'path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
   getZshFinalZdotdirRestoreBlock,
@@ -19,12 +19,26 @@ function quotePosixSingle(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
+function shellBasename(shellPath: string): string {
+  return shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
+}
+
+function windowsShellArgs(shellName: string): string[] | null {
+  if (shellName === 'powershell.exe' || shellName === 'powershell') {
+    return ['-NoLogo']
+  }
+  if (shellName === 'pwsh.exe' || shellName === 'pwsh') {
+    return ['-NoLogo']
+  }
+  if (shellName === 'cmd.exe' || shellName === 'cmd') {
+    return []
+  }
+  return null
+}
+
 function hasOverlayRestoreEnv(env: Record<string, string>): boolean {
   return Boolean(
-    env.ORCA_OPENCODE_CONFIG_DIR ||
-    env.ORCA_PI_CODING_AGENT_DIR ||
-    env.ORCA_OMP_CODING_AGENT_DIR ||
-    env.ORCA_REMOTE_CLI_BIN_DIR
+    env.ORCA_OPENCODE_CONFIG_DIR || env.ORCA_REMOTE_CLI_BIN_DIR || env.ORCA_OMP_STATUS_EXTENSION
   )
 }
 
@@ -84,10 +98,6 @@ ${getZshStartupFileSourceBlock({
 if [[ ! -o login ]]; then
   # Why: remote startup files can re-export user defaults after relay spawn.
   [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-  [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-  if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
-    export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-  fi
   [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
   ${getPosixOmpShellWrapper()}
 fi
@@ -103,10 +113,6 @@ ${getZshStartupFileSourceBlock({
 })}
 # Why: .zlogin is the final zsh login startup file before the prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
-  export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-fi
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
 ${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')}
@@ -122,10 +128,6 @@ elif [[ -f "$HOME/.profile" ]]; then
 fi
 # Why: remote startup files can re-export user defaults after relay spawn.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-if [[ -z "\${ORCA_PI_CODING_AGENT_DIR:-}" && -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
-  export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-fi
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
 # Why: SSH bash sessions need the same command lifecycle markers as local
@@ -226,13 +228,16 @@ trap '__orca_osc133_preexec' DEBUG
 
 export function getRelayShellLaunchConfig(
   shellPath: string,
-  env: Record<string, string>
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform
 ): RelayShellLaunchConfig {
-  if (process.platform === 'win32') {
-    return { args: POSIX_LOGIN_ARGS, env: {} }
+  const shellName = shellBasename(shellPath)
+  if (platform === 'win32') {
+    // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
+    // only apply when the relay itself is running on native Windows.
+    return { args: windowsShellArgs(shellName) ?? [], env: {} }
   }
 
-  const shellName = basename(shellPath).toLowerCase()
   if (shellName !== 'zsh' && shellName !== 'bash') {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }

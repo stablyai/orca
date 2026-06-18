@@ -57,22 +57,33 @@ import type {
   LinearIssueChildSummary,
   LinearProjectSummary
 } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { translate } from '@/i18n/i18n'
 
 type LinearIssueWorkspaceProps = {
   issue: LinearIssue | null
-  onUse: (issue: LinearIssue, renderedText?: string) => void
+  onUse: (issue: LinearIssue) => void
   onOpenIssue: (issue: LinearIssue) => void
   onClose: () => void
   variant?: 'sheet' | 'page'
   backLabel?: string
+  sourceContext?: TaskSourceContext | null
 }
 
 async function copyTextToClipboard(text: string, label: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(text)
-    toast.success(`${label} copied`)
+    toast.success(
+      translate('auto.components.LinearIssueWorkspace.7835483c43', '{{value0}} copied', {
+        value0: label
+      })
+    )
   } catch {
-    toast.error(`Failed to copy ${label.toLowerCase()}`)
+    toast.error(
+      translate('auto.components.LinearIssueWorkspace.9bcbaa2737', 'Failed to copy {{value0}}', {
+        value0: label.toLowerCase()
+      })
+    )
   }
 }
 
@@ -102,12 +113,15 @@ function LinearIssueAvatar({
 
 function LinearIssueSubIssueButton({
   issue,
-  onOpenIssue
+  onOpenIssue,
+  sourceContext
 }: {
   issue: LinearIssue
   onOpenIssue: (issue: LinearIssue) => void
+  sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
@@ -136,18 +150,29 @@ function LinearIssueSubIssueButton({
     async (subIssue: LinearIssueChildSummary) => {
       setOpeningSubIssueId(subIssue.id)
       try {
-        const fullIssue = await fetchLinearIssue(subIssue.id, issue.workspaceId)
+        const fullIssue = await fetchLinearIssue(subIssue.id, issue.workspaceId, {
+          sourceContext
+        })
         if (!mountedRef.current) {
           return
         }
         if (fullIssue) {
           onOpenIssue(fullIssue)
         } else {
-          toast.error('Failed to load sub-issue')
+          toast.error(
+            translate('auto.components.LinearIssueWorkspace.9a1317cdd3', 'Failed to load sub-issue')
+          )
         }
       } catch (error) {
         if (mountedRef.current) {
-          toast.error(error instanceof Error ? error.message : 'Failed to load sub-issue')
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.LinearIssueWorkspace.9a1317cdd3',
+                  'Failed to load sub-issue'
+                )
+          )
         }
       } finally {
         if (mountedRef.current) {
@@ -155,7 +180,7 @@ function LinearIssueSubIssueButton({
         }
       }
     },
-    [fetchLinearIssue, issue.workspaceId, mountedRef, onOpenIssue]
+    [fetchLinearIssue, issue.workspaceId, mountedRef, onOpenIssue, sourceContext]
   )
 
   const handleCreate = useCallback(async () => {
@@ -165,7 +190,7 @@ function LinearIssueSubIssueButton({
     }
     setSubmitting(true)
     try {
-      const result = await linearCreateSubIssue(settings, {
+      const result = await linearCreateSubIssue(providerSettings, {
         parentIssueId: issue.id,
         teamId: issue.team.id,
         title: trimmed,
@@ -189,14 +214,25 @@ function LinearIssueSubIssueButton({
           }
           return { issueId: issue.id, subIssues: [...currentSubIssues, child] }
         })
-        toast.success(`Created ${result.identifier}`)
+        toast.success(
+          translate('auto.components.LinearIssueWorkspace.aeed19d003', 'Created {{value0}}', {
+            value0: result.identifier
+          })
+        )
         setTitle('')
         setOpen(false)
       } else {
         toast.error(result.error)
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create sub-issue')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.LinearIssueWorkspace.b25e453c9d',
+              'Failed to create sub-issue'
+            )
+      )
     } finally {
       setSubmitting(false)
     }
@@ -206,7 +242,7 @@ function LinearIssueSubIssueButton({
     issue.subIssues,
     issue.team.id,
     issue.workspaceId,
-    settings,
+    providerSettings,
     title
   ])
 
@@ -241,7 +277,9 @@ function LinearIssueSubIssueButton({
             className="flex h-9 items-center gap-2 rounded-md px-1 text-sm font-medium text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <Plus className="size-4" />
-            <span>Add sub-issues</span>
+            <span>
+              {translate('auto.components.LinearIssueWorkspace.8c55d6696a', 'Add sub-issues')}
+            </span>
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-80 p-3" align="start">
@@ -255,7 +293,10 @@ function LinearIssueSubIssueButton({
                   void handleCreate()
                 }
               }}
-              placeholder="Sub-issue title"
+              placeholder={translate(
+                'auto.components.LinearIssueWorkspace.c182e02de5',
+                'Sub-issue title'
+              )}
               className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <div className="flex justify-end">
@@ -265,7 +306,7 @@ function LinearIssueSubIssueButton({
                 disabled={!title.trim() || submitting}
               >
                 {submitting ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
-                Create
+                {translate('auto.components.LinearIssueWorkspace.42589845bc', 'Create')}
               </Button>
             </div>
           </div>
@@ -277,12 +318,15 @@ function LinearIssueSubIssueButton({
 
 function LinearIssueSidebarProjectCard({
   issue,
-  onProjectChanged
+  onProjectChanged,
+  sourceContext
 }: {
   issue: LinearIssue
   onProjectChanged: (project: LinearProjectSummary) => void
+  sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -297,7 +341,7 @@ function LinearIssueSidebarProjectCard({
     let cancelled = false
     const timeout = window.setTimeout(() => {
       setLoading(true)
-      void linearListProjects(settings, query, 20, issue.workspaceId)
+      void linearListProjects(providerSettings, query, 20, issue.workspaceId)
         .then((result) => {
           if (!cancelled) {
             setProjects(result.items)
@@ -305,7 +349,14 @@ function LinearIssueSidebarProjectCard({
         })
         .catch((error) => {
           if (!cancelled) {
-            toast.error(error instanceof Error ? error.message : 'Failed to load projects')
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : translate(
+                    'auto.components.LinearIssueWorkspace.38b80780c2',
+                    'Failed to load projects'
+                  )
+            )
           }
         })
         .finally(() => {
@@ -318,39 +369,55 @@ function LinearIssueSidebarProjectCard({
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [issue.workspaceId, open, query, settings])
+  }, [issue.workspaceId, open, providerSettings, query])
 
   const handleSelectProject = useCallback(
     async (project: LinearProjectSummary) => {
       setSavingProjectId(project.id)
       try {
         const result = await linearUpdateIssue(
-          settings,
+          providerSettings,
           issue.id,
           { projectId: project.id },
           issue.workspaceId
         )
         if (result.ok) {
           onProjectChanged(project)
-          patchLinearIssue(issue.id, { project })
-          toast.success('Project updated')
+          patchLinearIssue(issue.id, { project }, { sourceContext })
+          toast.success(
+            translate('auto.components.LinearIssueWorkspace.f9d4ef9807', 'Project updated')
+          )
           setOpen(false)
         } else {
           toast.error(result.error)
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to update project')
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.LinearIssueWorkspace.8b5b593053',
+                'Failed to update project'
+              )
+        )
       } finally {
         setSavingProjectId(null)
       }
     },
-    [issue.id, issue.workspaceId, onProjectChanged, patchLinearIssue, settings]
+    [
+      issue.id,
+      issue.workspaceId,
+      onProjectChanged,
+      patchLinearIssue,
+      providerSettings,
+      sourceContext
+    ]
   )
 
   return (
     <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
       <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-        <span>Project</span>
+        <span>{translate('auto.components.LinearIssueWorkspace.b51276c8d6', 'Project')}</span>
         <ChevronDown className="size-3.5" />
       </div>
       <Popover open={open} onOpenChange={setOpen}>
@@ -361,7 +428,8 @@ function LinearIssueSidebarProjectCard({
           >
             <FolderKanban className="size-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate">
-              {issue.project?.name ?? 'Add to project'}
+              {issue.project?.name ??
+                translate('auto.components.LinearIssueWorkspace.519c3587f3', 'Add to project')}
             </span>
             <ChevronDown className="size-3.5 shrink-0" />
           </button>
@@ -371,14 +439,17 @@ function LinearIssueSidebarProjectCard({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search projects"
+              placeholder={translate(
+                'auto.components.LinearIssueWorkspace.db3f269d98',
+                'Search projects'
+              )}
               className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <div className="max-h-64 overflow-y-auto scrollbar-sleek">
               {loading ? (
                 <div className="flex items-center gap-2 px-2 py-3 text-sm text-muted-foreground">
                   <LoaderCircle className="size-3.5 animate-spin" />
-                  Loading projects
+                  {translate('auto.components.LinearIssueWorkspace.937ba6ad9a', 'Loading projects')}
                 </div>
               ) : projects.length > 0 ? (
                 projects.map((project) => (
@@ -403,7 +474,15 @@ function LinearIssueSidebarProjectCard({
                 ))
               ) : (
                 <div className="px-2 py-3 text-sm text-muted-foreground">
-                  {query.trim() ? 'No projects found.' : 'Search for a project to add.'}
+                  {query.trim()
+                    ? translate(
+                        'auto.components.LinearIssueWorkspace.c11b4e3cc2',
+                        'No projects found.'
+                      )
+                    : translate(
+                        'auto.components.LinearIssueWorkspace.76ffd3c937',
+                        'Search for a project to add.'
+                      )}
                 </div>
               )}
             </div>
@@ -420,9 +499,11 @@ export default function LinearIssueWorkspace({
   onOpenIssue,
   onClose,
   variant = 'sheet',
-  backLabel = 'Back'
+  backLabel = 'Back',
+  sourceContext
 }: LinearIssueWorkspaceProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const [fullIssue, setFullIssue] = useState<LinearIssue | null>(null)
   const [issueLoading, setIssueLoading] = useState(false)
   const [comments, setComments] = useState<LinearComment[]>([])
@@ -457,7 +538,7 @@ export default function LinearIssueWorkspace({
       }
       try {
         let fetched = (await linearIssueComments(
-          settings,
+          providerSettings,
           targetIssue.id,
           targetIssue.workspaceId
         )) as LinearComment[]
@@ -480,7 +561,7 @@ export default function LinearIssueWorkspace({
         }
       }
     },
-    [mountedRef, settings]
+    [mountedRef, providerSettings]
   )
 
   useEffect(() => {
@@ -496,7 +577,7 @@ export default function LinearIssueWorkspace({
       return
     }
 
-    const issueKey = `${settings?.activeRuntimeEnvironmentId ?? 'local'}:${issue.workspaceId ?? 'selected'}:${issue.id}`
+    const issueKey = `${sourceContext?.hostId ?? settings?.activeRuntimeEnvironmentId ?? 'local'}:${issue.workspaceId ?? 'selected'}:${issue.id}`
     if (hydratedIssueKeyRef.current === issueKey) {
       return
     }
@@ -514,7 +595,7 @@ export default function LinearIssueWorkspace({
 
     // Why: issue hydration and comments are separate surfaces; a comments
     // failure should not blank the issue detail the user selected.
-    void linearGetIssue(settings, issue.id, issue.workspaceId)
+    void linearGetIssue(providerSettings, issue.id, issue.workspaceId)
       .then((issueResult) => {
         if (!mountedRef.current || requestId !== requestIdRef.current) {
           return
@@ -554,7 +635,7 @@ export default function LinearIssueWorkspace({
       })
 
     void loadComments(issue, requestId)
-  }, [issue, loadComments, mountedRef, settings])
+  }, [issue, loadComments, mountedRef, providerSettings, settings, sourceContext?.hostId])
 
   const displayed = fullIssue ?? issue
 
@@ -562,8 +643,8 @@ export default function LinearIssueWorkspace({
     if (!displayed) {
       return
     }
-    onUse(displayed, buildLinearIssueContextSnapshot(displayed, comments))
-  }, [comments, displayed, onUse])
+    onUse(displayed)
+  }, [displayed, onUse])
 
   const handleCommentAdded = useCallback((comment: LinearLocalComment) => {
     const newComment: LinearComment = {
@@ -586,23 +667,26 @@ export default function LinearIssueWorkspace({
     }
     return [
       {
-        label: 'Copy URL',
+        label: translate('auto.components.LinearIssueWorkspace.9a9a884236', 'Copy URL'),
         icon: Clipboard,
         action: () => void copyTextToClipboard(displayed.url, 'URL')
       },
       {
-        label: 'Copy identifier',
+        label: translate('auto.components.LinearIssueWorkspace.30c1242f3a', 'Copy identifier'),
         icon: Clipboard,
         action: () => void copyTextToClipboard(displayed.identifier, 'Identifier')
       },
       {
-        label: 'Copy suggested branch name',
+        label: translate(
+          'auto.components.LinearIssueWorkspace.5d670ec8dc',
+          'Copy suggested branch name'
+        ),
         icon: GitBranch,
         action: () =>
           void copyTextToClipboard(buildLinearIssueBranchName(displayed), 'Suggested branch name')
       },
       {
-        label: 'Copy prompt',
+        label: translate('auto.components.LinearIssueWorkspace.f6c6381593', 'Copy prompt'),
         icon: Clipboard,
         action: () => {
           const renderedText = buildLinearIssueContextSnapshot(displayed, comments)
@@ -637,10 +721,13 @@ export default function LinearIssueWorkspace({
           ) : null}
           <LinearIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="truncate font-medium text-foreground">
-            {displayed.workspaceName ?? 'Linear'}
+            {displayed.workspaceName ??
+              translate('auto.components.LinearIssueWorkspace.65239a714b', 'Linear')}
           </span>
           <ChevronRight className="size-3.5 shrink-0" />
-          <span className="shrink-0">Issues</span>
+          <span className="shrink-0">
+            {translate('auto.components.LinearIssueWorkspace.f63ef94ea8', 'Issues')}
+          </span>
           <ChevronRight className="size-3.5 shrink-0" />
           <span className="shrink-0 font-mono">{displayed.identifier}</span>
           <span className="min-w-0 truncate font-medium text-foreground">{displayed.title}</span>
@@ -654,13 +741,16 @@ export default function LinearIssueWorkspace({
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => void copyTextToClipboard(displayed.url, 'URL')}
-                aria-label="Copy Linear URL"
+                aria-label={translate(
+                  'auto.components.LinearIssueWorkspace.97c19a84f1',
+                  'Copy Linear URL'
+                )}
               >
                 <Link className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              Copy URL
+              {translate('auto.components.LinearIssueWorkspace.9a9a884236', 'Copy URL')}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -669,13 +759,16 @@ export default function LinearIssueWorkspace({
                 variant="ghost"
                 size="icon-sm"
                 onClick={() => void copyTextToClipboard(displayed.identifier, 'Identifier')}
-                aria-label="Copy issue identifier"
+                aria-label={translate(
+                  'auto.components.LinearIssueWorkspace.9e3c49beb8',
+                  'Copy issue identifier'
+                )}
               >
                 <Clipboard className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              Copy identifier
+              {translate('auto.components.LinearIssueWorkspace.30c1242f3a', 'Copy identifier')}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -684,13 +777,16 @@ export default function LinearIssueWorkspace({
                 variant="ghost"
                 size="icon-sm"
                 onClick={handleUseIssue}
-                aria-label="Start workspace from issue"
+                aria-label={translate(
+                  'auto.components.LinearIssueWorkspace.30a7f56c0a',
+                  'Start workspace from issue'
+                )}
               >
                 <ArrowRight className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              Start workspace
+              {translate('auto.components.LinearIssueWorkspace.e1e0a9bca9', 'Start workspace')}
             </TooltipContent>
           </Tooltip>
           {variant === 'sheet' ? (
@@ -700,13 +796,16 @@ export default function LinearIssueWorkspace({
                   variant="ghost"
                   size="icon-sm"
                   onClick={onClose}
-                  aria-label="Close Linear issue preview"
+                  aria-label={translate(
+                    'auto.components.LinearIssueWorkspace.7a4997d8bb',
+                    'Close Linear issue preview'
+                  )}
                 >
                   <X className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                Close
+                {translate('auto.components.LinearIssueWorkspace.df4c86ed12', 'Close')}
               </TooltipContent>
             </Tooltip>
           ) : null}
@@ -716,13 +815,23 @@ export default function LinearIssueWorkspace({
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         <div className="mx-auto grid w-full grid-cols-1 gap-10 px-7 py-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10 xl:px-12">
           <main className="min-w-0">
-            <LinearIssueTextEditor issue={displayed} onIssueChange={handleIssueTextChange} />
+            <LinearIssueTextEditor
+              issue={displayed}
+              onIssueChange={handleIssueTextChange}
+              sourceContext={sourceContext}
+            />
 
-            <LinearIssueSubIssueButton issue={displayed} onOpenIssue={onOpenIssue} />
+            <LinearIssueSubIssueButton
+              issue={displayed}
+              onOpenIssue={onOpenIssue}
+              sourceContext={sourceContext}
+            />
 
             <section className="mt-12 border-t border-border/60 pt-9">
               <div className="mb-8 flex items-center justify-between gap-3">
-                <h2 className="text-xl font-semibold text-foreground">Activity</h2>
+                <h2 className="text-xl font-semibold text-foreground">
+                  {translate('auto.components.LinearIssueWorkspace.543970c87a', 'Activity')}
+                </h2>
                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                   <LinearIssueAvatar
                     avatarUrl={displayed.assignee?.avatarUrl}
@@ -739,7 +848,12 @@ export default function LinearIssueWorkspace({
                   className="size-5"
                 />
                 <span>
-                  {displayed.assignee?.displayName ?? 'Someone'} updated the issue ·{' '}
+                  {displayed.assignee?.displayName ??
+                    translate('auto.components.LinearIssueWorkspace.8a33c85e9c', 'Someone')}{' '}
+                  {translate(
+                    'auto.components.LinearIssueWorkspace.fabbd3f974',
+                    'updated the issue ·'
+                  )}{' '}
                   {formatLinearIssueRelativeTime(displayed.updatedAt)}
                 </span>
               </div>
@@ -759,7 +873,7 @@ export default function LinearIssueWorkspace({
                     ) : (
                       <RefreshCw className="size-3" />
                     )}
-                    Retry
+                    {translate('auto.components.LinearIssueWorkspace.b0eac92d85', 'Retry')}
                   </Button>
                 </div>
               ) : null}
@@ -780,7 +894,11 @@ export default function LinearIssueWorkspace({
                       <div className="min-w-0 flex-1">
                         <div className="mb-1 flex min-w-0 items-center gap-2 text-sm">
                           <span className="truncate font-semibold text-foreground">
-                            {comment.user?.displayName ?? 'Unknown'}
+                            {comment.user?.displayName ??
+                              translate(
+                                'auto.components.LinearIssueWorkspace.ca8778c124',
+                                'Unknown'
+                              )}
                           </span>
                           <span className="shrink-0 text-muted-foreground">
                             {formatLinearIssueRelativeTime(comment.createdAt)}
@@ -803,6 +921,7 @@ export default function LinearIssueWorkspace({
                 workspaceId={displayed.workspaceId}
                 onCommentAdded={handleCommentAdded}
                 variant="linear-page"
+                sourceContext={sourceContext}
               />
             </section>
           </main>
@@ -814,15 +933,19 @@ export default function LinearIssueWorkspace({
                 editState={editState}
                 onEditStateChange={handleEditStateChange}
                 layout="properties"
+                sourceContext={sourceContext}
               />
             ) : null}
             <LinearIssueSidebarProjectCard
               issue={displayed}
               onProjectChanged={handleProjectChanged}
+              sourceContext={sourceContext}
             />
             <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
               <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-                <span>Actions</span>
+                <span>
+                  {translate('auto.components.LinearIssueWorkspace.c23e79e5c0', 'Actions')}
+                </span>
                 <ChevronDown className="size-3.5" />
               </div>
               <div className="space-y-1 p-3">
@@ -873,11 +996,17 @@ export default function LinearIssueWorkspace({
         }}
       >
         <VisuallyHidden.Root asChild>
-          <SheetTitle>{displayed?.title ?? 'Linear issue'}</SheetTitle>
+          <SheetTitle>
+            {displayed?.title ??
+              translate('auto.components.LinearIssueWorkspace.61f424f8ca', 'Linear issue')}
+          </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            Preview, edit, and start work from the selected issue.
+            {translate(
+              'auto.components.LinearIssueWorkspace.ad5dec37b7',
+              'Preview, edit, and start work from the selected issue.'
+            )}
           </SheetDescription>
         </VisuallyHidden.Root>
 

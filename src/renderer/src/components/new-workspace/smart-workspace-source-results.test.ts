@@ -20,6 +20,31 @@ describe('Branch source results', () => {
     ).toEqual({ repoId: 'repo-1', query: '', limit: 12 })
   })
 
+  it('does not request branch results when branches are disabled', () => {
+    expect(
+      getBranchSearchRequest({
+        branchesEnabled: false,
+        disabled: false,
+        textOnly: false,
+        mode: 'branches',
+        selectedRepoId: 'repo-1',
+        query: '',
+        limit: 12
+      })
+    ).toBeNull()
+    expect(
+      getBranchSearchRequest({
+        branchesEnabled: false,
+        disabled: false,
+        textOnly: false,
+        mode: 'smart',
+        selectedRepoId: 'repo-1',
+        query: 'refund',
+        limit: 12
+      })
+    ).toBeNull()
+  })
+
   it('keeps Smart mode in its start-typing state for an empty query', () => {
     expect(
       getBranchSearchRequest({
@@ -124,6 +149,50 @@ describe('Branch source results', () => {
         value: 'linear-linear-1',
         issue: { id: 'linear-1', identifier: 'ENG-1', title: 'Fix composer crash' }
       }
+    ])
+  })
+
+  it('keeps GitHub row values unique for the same item number across repos', () => {
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'github',
+      value: '',
+      branches: [],
+      githubItems: [
+        { repoId: 'repo-a', type: 'issue', number: 123, title: 'Repo A issue' } as never,
+        { repoId: 'repo-b', type: 'issue', number: 123, title: 'Repo B issue' } as never
+      ],
+      gitlabItems: [],
+      linearIssues: [],
+      gitlabAvailable: false,
+      linearAvailable: false,
+      resultLimit: 12
+    })
+
+    expect(rows.map((row) => row.value)).toEqual([
+      'github-repo-a-issue-123',
+      'github-repo-b-issue-123'
+    ])
+  })
+
+  it('keeps GitLab row values unique for the same item number across repos', () => {
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'gitlab',
+      value: '',
+      branches: [],
+      githubItems: [],
+      gitlabItems: [
+        { repoId: 'repo-a', type: 'issue', number: 123, title: 'Repo A issue' } as never,
+        { repoId: 'repo-b', type: 'issue', number: 123, title: 'Repo B issue' } as never
+      ],
+      linearIssues: [],
+      gitlabAvailable: true,
+      linearAvailable: false,
+      resultLimit: 12
+    })
+
+    expect(rows.map((row) => row.value)).toEqual([
+      'gitlab-repo-a-issue-123',
+      'gitlab-repo-b-issue-123'
     ])
   })
 

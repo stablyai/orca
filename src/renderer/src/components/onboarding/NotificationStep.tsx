@@ -15,12 +15,7 @@ import {
 import { sendNotificationSettingsTestNotification } from '@/components/settings/NotificationsPane'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
 import { useMountedRef } from '@/hooks/useMountedRef'
-
-export type NotificationDraft = {
-  agentTaskComplete: boolean
-  terminalBell: boolean
-  notifyWhenFocused: boolean
-}
+import { translate } from '@/i18n/i18n'
 
 type NotificationStepProps = {
   settings: GlobalSettings | null
@@ -117,7 +112,12 @@ export function NotificationStep({
     })
     if (!result.played) {
       if (mountedRef.current) {
-        toast.error('Notification sound could not be played')
+        toast.error(
+          translate(
+            'auto.components.onboarding.NotificationStep.b6a994e36e',
+            'Notification sound could not be played'
+          )
+        )
       }
     }
   }
@@ -148,7 +148,12 @@ export function NotificationStep({
 
   const handleSendTestNotification = async (): Promise<void> => {
     if (!notificationSettings) {
-      toast.error('Notification settings are still loading')
+      toast.error(
+        translate(
+          'auto.components.onboarding.NotificationStep.3cd5374e22',
+          'Notification settings are still loading'
+        )
+      )
       return
     }
     await sendNotificationSettingsTestNotification(notificationSettings, getCustomSoundVolume())
@@ -157,7 +162,10 @@ export function NotificationStep({
   if (!notificationSettings) {
     return (
       <div className="rounded-xl border border-border bg-muted/20 px-5 py-4 text-sm text-muted-foreground">
-        Loading notification settings…
+        {translate(
+          'auto.components.onboarding.NotificationStep.e52aacf380',
+          'Loading notification settings…'
+        )}
       </div>
     )
   }
@@ -175,10 +183,16 @@ export function NotificationStep({
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <Settings className="size-4" />
-                Allow Orca in macOS
+                {translate(
+                  'auto.components.onboarding.NotificationStep.d2dba86837',
+                  'Allow Orca in macOS'
+                )}
               </div>
               <p className="max-w-[58ch] text-[13px] leading-relaxed text-muted-foreground">
-                Open System Settings and make sure Orca is allowed to send notifications.
+                {translate(
+                  'auto.components.onboarding.NotificationStep.aa36281b00',
+                  'Open System Settings and make sure Orca is allowed to send notifications.'
+                )}
               </p>
             </div>
             <Button
@@ -188,7 +202,10 @@ export function NotificationStep({
               onClick={() => void handleMacPermission()}
             >
               <Settings className="size-3.5" />
-              Open Mac Settings
+              {translate(
+                'auto.components.onboarding.NotificationStep.8124d085a6',
+                'Open Mac Settings'
+              )}
             </Button>
           </div>
         </section>
@@ -196,16 +213,24 @@ export function NotificationStep({
 
       <section className="space-y-3">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-foreground">Choose a sound</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            {translate('auto.components.onboarding.NotificationStep.0af746e41f', 'Choose a sound')}
+          </h2>
           <p className="text-[13px] leading-relaxed text-muted-foreground">
-            Pick the alert Orca plays after a desktop notification is delivered.
+            {translate(
+              'auto.components.onboarding.NotificationStep.0fe570690c',
+              'Pick the alert Orca plays after a desktop notification is delivered.'
+            )}
           </p>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <FileAudio className="size-4" />
-            Notification Sound
+            {translate(
+              'auto.components.onboarding.NotificationStep.53aaffe49a',
+              'Notification Sound'
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select
@@ -216,7 +241,12 @@ export function NotificationStep({
               }
             >
               <SelectTrigger className="w-[360px] max-w-full" size="sm">
-                <SelectValue placeholder="Choose notification sound" />
+                <SelectValue
+                  placeholder={translate(
+                    'auto.components.onboarding.NotificationStep.dc897423e1',
+                    'Choose notification sound'
+                  )}
+                />
               </SelectTrigger>
               <SelectContent
                 portalContainer={selectPortalRoot}
@@ -235,7 +265,17 @@ export function NotificationStep({
                 <SelectSeparator />
                 <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
                   <Upload className="size-4" />
-                  <span>{customPath ? 'Change Custom File' : 'Choose Custom File'}</span>
+                  <span>
+                    {customPath
+                      ? translate(
+                          'auto.components.onboarding.NotificationStep.ac80d97e02',
+                          'Change Custom File'
+                        )
+                      : translate(
+                          'auto.components.onboarding.NotificationStep.c0692baa52',
+                          'Choose Custom File'
+                        )}
+                  </span>
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -247,7 +287,10 @@ export function NotificationStep({
               onClick={() => void handleSendTestNotification()}
             >
               <BellRing className="size-3.5" />
-              Send Test Notification
+              {translate(
+                'auto.components.onboarding.NotificationStep.3bede04483',
+                'Send Test Notification'
+              )}
             </Button>
           </div>
         </div>

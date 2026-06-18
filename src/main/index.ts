@@ -2,11 +2,10 @@
    it owns app lifecycle, service wiring, window creation, and hook/daemon
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
-import { grantDirAcl } from './win32-utils'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import os from 'node:os'
-import { app, BrowserWindow, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
 import { Store, initDataPath } from './persistence'
@@ -37,6 +36,7 @@ import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
+import { ensureMainI18n, setMainUiLanguage } from './i18n/main-i18n'
 import {
   getNextDefaultOnAppearanceSettingValue,
   registerAppMenu,
@@ -70,7 +70,9 @@ import {
   logSingleInstanceLockFailure,
   shouldBypassSingleInstanceLock
 } from './startup/single-instance-lock'
+import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { RateLimitService } from './rate-limits/service'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
@@ -90,6 +92,10 @@ import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service
 import { StarNagService } from './star-nag/service'
 import { agentHookServer } from './agent-hooks/server'
 import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branch-rename'
+import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
+import { moveWorktree } from './git/worktree'
+import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
+import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import {
   clearProviderPtyState,
@@ -99,10 +105,13 @@ import {
   registerHeadlessPtyRuntime
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
+import { EmulatorBridge } from './emulator/emulator-bridge'
+import { serveSimStateWatcher } from './emulator/serve-sim-state-watcher'
 import { browserManager } from './browser/browser-manager'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
+import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { AgentAwakeService } from './agent-awake-service'
 import {
   getCrashBreadcrumbSnapshot,
@@ -134,6 +143,7 @@ import {
 import type { AgentStatusState } from '../shared/agent-status-types'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
+import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -152,6 +162,16 @@ let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
+
+function buildHeadlessAutomationWorkspaceName(runTitle: string, scheduledFor: number): string {
+  const slug = runTitle
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40)
+  const stamp = new Date(scheduledFor).toISOString().replace(/[-:]/g, '').slice(0, 13)
+  return `auto-${slug || 'run'}-${stamp}`
+}
 let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
 let crashReports: CrashReportStore | null = null
@@ -161,6 +181,8 @@ let watcherShutdownDone = false
 let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
 let expectedRendererReload: { webContentsId: number; until: number } | null = null
+let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
+let localPtyStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
 const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
@@ -171,6 +193,12 @@ const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
 if (appImageCliRedirect.redirected) {
   app.exit(appImageCliRedirect.status)
 }
+
+// Kill switch for the first-work on-disk folder rename. The renderer reconciles a
+// worktree id change via migrateWorktreeIdentity + a rename-aware worktrees:changed
+// handler, so an old->new id change is no longer mistaken for a deletion. Flip off
+// to disable the on-disk move (branch + display rename still happen) if needed.
+const ENABLE_FIRST_WORK_FOLDER_RENAME = false
 
 // Why: the store/runtime singletons live here in index.ts; injecting them keeps
 // the rename orchestrator free of module-level state and unit-testable.
@@ -200,7 +228,29 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
       getSettings: () => currentStore.getSettings(),
       getRepo: (repoId) => currentStore.getRepo(repoId),
       getAgentEnvResolvers: () => currentRuntime.getCommitMessageAgentEnvironmentResolvers(),
-      getCurrentDisplayName: (worktreeId) => currentStore.getWorktreeMeta(worktreeId)?.displayName,
+      getCurrentDisplayName: (worktreeId) => {
+        const scope = parseWorkspaceKey(worktreeId)
+        if (scope?.type === 'folder') {
+          return currentStore.getFolderWorkspace(scope.folderWorkspaceId)?.name
+        }
+        return currentStore.getWorktreeMeta(worktreeId)?.displayName
+      },
+      getFolderWorkspacePath: (worktreeId) => {
+        const scope = parseWorkspaceKey(worktreeId)
+        return scope?.type === 'folder'
+          ? currentStore.getFolderWorkspace(scope.folderWorkspaceId)?.folderPath
+          : undefined
+      },
+      isPendingFirstAgentMessageRename: (worktreeId) => {
+        const scope = parseWorkspaceKey(worktreeId)
+        if (scope?.type === 'folder') {
+          return (
+            currentStore.getFolderWorkspace(scope.folderWorkspaceId)
+              ?.pendingFirstAgentMessageRename === true
+          )
+        }
+        return currentStore.getWorktreeMeta(worktreeId)?.pendingFirstAgentMessageRename === true
+      },
       canRenameOrcaCreatedBranch: (worktreeId) => {
         const meta = currentStore.getWorktreeMeta(worktreeId)
         // Why: a user/imported branch can coincidentally be named after a creature.
@@ -208,13 +258,71 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
       },
       setDisplayName: (worktreeId, displayName) => {
+        const scope = parseWorkspaceKey(worktreeId)
+        if (scope?.type === 'folder') {
+          currentStore.updateFolderWorkspace(scope.folderWorkspaceId, {
+            name: displayName,
+            pendingFirstAgentMessageRename: false,
+            firstAgentMessageRenameError: null
+          })
+          currentRuntime.notifyFolderWorkspaceChanged()
+          return
+        }
         currentStore.setWorktreeMeta(worktreeId, {
           displayName,
-          pendingFirstAgentMessageRename: false
+          pendingFirstAgentMessageRename: false,
+          // Success always clears the failure badge, even if the explicit
+          // setRenameError(null) clear is redundant.
+          firstAgentMessageRenameError: null
         })
       },
+      renameWorktreeFolder: ENABLE_FIRST_WORK_FOLDER_RENAME
+        ? (worktreeId, newLeaf) =>
+            renameWorktreeFolderOnFirstWork(worktreeId, newLeaf, {
+              getRepo: (repoId) => currentStore.getRepo(repoId),
+              getSettings: () => currentStore.getSettings(),
+              migrateWorktreeIdentity: (oldId, newId) =>
+                currentStore.migrateWorktreeIdentity(oldId, newId),
+              notifyWorktreeRenamed: (repoId, oldId, newId) =>
+                currentRuntime.notifyWorktreeFolderRenamed(repoId, oldId, newId),
+              pathExists: async (candidate) => existsSync(candidate),
+              moveWorktree
+            })
+        : undefined,
+      setRenameError: (worktreeId, error) => {
+        // Skip the write + renderer push when nothing changes — benign skips
+        // clear the error on every settled worktree, most of which never had one.
+        const scope = parseWorkspaceKey(worktreeId)
+        if (scope?.type === 'folder') {
+          const current = currentStore.getFolderWorkspace(
+            scope.folderWorkspaceId
+          )?.firstAgentMessageRenameError
+          if ((current ?? null) === (error ?? null)) {
+            return
+          }
+          currentStore.updateFolderWorkspace(scope.folderWorkspaceId, {
+            firstAgentMessageRenameError: error
+          })
+          currentRuntime.notifyFolderWorkspaceChanged()
+          return
+        }
+        const current = currentStore.getWorktreeMeta(worktreeId)?.firstAgentMessageRenameError
+        if ((current ?? null) === (error ?? null)) {
+          return
+        }
+        currentStore.setWorktreeMeta(worktreeId, { firstAgentMessageRenameError: error })
+        // Push to the renderer so the badge updates — the hook only knows the
+        // worktreeId, so derive the repoId the same way notifyBranchRenamed expects.
+        currentRuntime.notifyBranchRenamed(getRepoIdFromWorktreeId(worktreeId))
+      },
       resolveWorktreeIdForTab: (tabId) => currentStore.getWorktreeIdForTab(tabId),
-      onRenamed: (repoId) => currentRuntime.notifyBranchRenamed(repoId)
+      onRenamed: (repoIdOrWorktreeId) => {
+        if (parseWorkspaceKey(repoIdOrWorktreeId)?.type === 'folder') {
+          currentRuntime.notifyFolderWorkspaceChanged()
+          return
+        }
+        currentRuntime.notifyBranchRenamed(repoIdOrWorktreeId)
+      }
     }
   )
 }
@@ -258,6 +366,15 @@ if (startupDiagnosticsEnabled) {
     userData: app.getPath('userData'),
     e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
   })
+  startEventLoopStallProbe()
+}
+
+// Why: startup benchmarking needs in-process timestamps — harness-side stderr
+// arrival times include pipe buffering jitter. `t` is ms since process start.
+function logStartupMilestone(event: string, details: Record<string, unknown> = {}): void {
+  if (startupDiagnosticsEnabled) {
+    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
+  }
 }
 
 function focusExistingWindow(): void {
@@ -380,6 +497,41 @@ if (hasSingleInstanceLock) {
   enableMainProcessGpuFeatures()
 }
 
+ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
+  await firstWindowStartupServicesReady
+})
+
+function startDesktopFirstWindowStartupServices(): Promise<void> {
+  const startupServices = startFirstWindowStartupServices({
+    // Why: the persistent-terminal daemon is desktop-only. Headless `orca serve`
+    // registers its PTY runtime separately and must not spawn the desktop daemon
+    // or hook loopback listener.
+    startDaemonPtyProvider: (signal) => initDaemonPtyProvider(signal),
+    // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state, so
+    // the renderer awaits this barrier before restored terminals reconnect.
+    startAgentHookServer: () =>
+      agentHookServer.start({
+        env: app.isPackaged ? 'production' : 'development',
+        // Why: hooks source this endpoint file at invocation time, so old PTY
+        // env still reaches the current Orca process after an app restart.
+        // Dev uses a namespace because all worktrees share `orca-dev`.
+        userDataPath: app.getPath('userData'),
+        endpointNamespace: devAgentHookEndpointNamespace
+      }),
+    onDaemonError: (error) => {
+      console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
+    },
+    onAgentHookServerError: (error) => {
+      // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
+      // enrichment only. Orca must still boot if the loopback receiver fails.
+      console.error('[agent-hooks] Failed to start local hook server:', error)
+    }
+  })
+  firstWindowStartupServicesReady = startupServices.firstWindowReady
+  localPtyStartupReady = startupServices.localPtyReady
+  return firstWindowStartupServicesReady
+}
+
 function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
   const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
@@ -411,6 +563,7 @@ function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget):
 }
 
 function openMainWindow(): BrowserWindow {
+  logStartupMilestone('open-main-window-start')
   if (!store) {
     throw new Error('Store must be initialized before opening the main window')
   }
@@ -454,16 +607,21 @@ function openMainWindow(): BrowserWindow {
   }
 
   // Why: Chromium's BrowserWindow constructor resets the userData DACL to a
-  // Protected DACL. Grant explicit Full Control ACEs on all existing children
-  // before the constructor runs so they survive the upcoming DACL reset.
-  // Per-write EPERM retries in fs-utils/installer-utils serve as the backstop
-  // for any directories created after startup.
+  // Protected DACL, breaking writes in pre-existing subdirs. Explicit ACEs on
+  // userData + immediate children fix the tree permanently; the grant runs in
+  // the background on first launch only (marker-gated) because the previous
+  // synchronous recursive walk blocked startup ~60s on large profiles. See
+  // startup/windows-user-data-acl.ts; per-write EPERM retries are the backstop.
   if (process.platform === 'win32') {
-    try {
-      grantDirAcl(app.getPath('userData'), { recursive: true })
-    } catch {
-      // Non-fatal; per-call retries are the backstop.
-    }
+    logStartupMilestone('acl-grant-start')
+    ensureWindowsUserDataAclGrant(app.getPath('userData'), {
+      onDone: (result) => {
+        logStartupMilestone('acl-grant-done', { mode: result.mode })
+        if (result.mode === 'failed') {
+          console.warn('[win32-acl] userData ACL grant failed:', result.reason)
+        }
+      }
+    })
   }
 
   const window = createMainWindow(store, {
@@ -508,6 +666,10 @@ function openMainWindow(): BrowserWindow {
     }
   })
   recordCrashBreadcrumb('main_window_created')
+  logStartupMilestone('window-created')
+  window.once('ready-to-show', () => {
+    logStartupMilestone('ready-to-show')
+  })
 
   // Why: telemetry-plan.md§First-launch experience anchors default-on
   // `app_opened` to the first main-window load. Existing users in the
@@ -517,6 +679,7 @@ function openMainWindow(): BrowserWindow {
   const onFirstWindowLoad = (): void => {
     clearExpectedRendererReload(rendererWebContentsId)
     recordCrashBreadcrumb('main_window_loaded')
+    logStartupMilestone('did-finish-load')
     if (!store) {
       return
     }
@@ -542,15 +705,17 @@ function openMainWindow(): BrowserWindow {
     automations,
     {
       prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-      prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+      prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
     },
     agentAwakeService ?? undefined,
     crashReports ?? undefined,
     keybindings,
     {
-      onBeforeRelaunch: () => {
+      getAdditionalAiVaultCodexHomePaths: () =>
+        codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
+      onBeforeRelaunch: async () => {
         isQuitting = true
-        store?.flush()
+        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
       }
     }
   )
@@ -563,16 +728,22 @@ function openMainWindow(): BrowserWindow {
     prepareCodexRuntimeHomeForLaunch,
     (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
+      awaitLocalPtyStartup: () => localPtyStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
         if (window.webContents.id === webContentsId) {
           markExpectedRendererReload(webContentsId)
         }
         recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
-      }
+      },
+      onBeforeUpdateQuit: () =>
+        preserveAgentAuthBeforeRestart({ codexRuntimeHome, claudeRuntimeAuth, store })
     }
   )
   rateLimits.attach(window)
-  rateLimits.start()
+  // Why: quota probes can spawn CLIs and hit network. The attached show/focus
+  // listeners refresh as soon as the window can present quota UI, so do not
+  // compete with first paint.
+  rateLimits.start({ fetchImmediately: false })
   window.on('closed', () => {
     if (mainWindow === window) {
       mainWindow = null
@@ -607,6 +778,7 @@ function openMainWindow(): BrowserWindow {
       payload,
       receivedAt,
       stateStartedAt,
+      providerSession,
       isReplay
     }) => {
       if (mainWindow?.isDestroyed()) {
@@ -624,6 +796,7 @@ function openMainWindow(): BrowserWindow {
         connectionId,
         receivedAt,
         stateStartedAt,
+        ...(providerSession ? { providerSession } : {}),
         ...(orchestration ? { orchestration } : {})
       })
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
@@ -653,6 +826,7 @@ function openMainWindow(): BrowserWindow {
       })
     }
   })
+  logStartupMilestone('load-start')
   loadMainWindow(window)
   return window
 }
@@ -1050,10 +1224,12 @@ function driveSyntheticTitleFromHook(
 }
 
 app.whenReady().then(async () => {
+  logStartupMilestone('app-ready')
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
   app.setName(devInstanceIdentity.name)
 
   store = new Store()
+  logStartupMilestone('store-loaded')
   applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)
@@ -1159,10 +1335,104 @@ app.whenReady().then(async () => {
     // provider reference eagerly here would freeze the pre-daemon LocalPtyProvider
     // and defeat the teardown helper's prefix sweep (design §4.3 wire-up).
     getLocalProvider: () => getLocalPtyProvider(),
-    onPtyStopped: clearProviderPtyState
+    onPtyStopped: clearProviderPtyState,
+    onTerminalAgentStatus: (event) => {
+      agentHookServer.ingestTerminalStatus(event)
+    },
+    // Why: hook-reported agent status is the same source the desktop sidebar
+    // reads. worktree.ps pulls it at query time so mobile shows the same agents.
+    getAgentStatusSnapshot: () => agentHookServer.getStatusSnapshot()
   })
   runtime = runtimeService
-  automations = new AutomationService(store, { claudeUsage, codexUsage })
+  automations = new AutomationService(store, {
+    claudeUsage,
+    codexUsage,
+    // Why: desktop clients may mirror remote-host automations, but only a
+    // server process should execute schedules owned by `remote_host_service`.
+    allowRemoteHostScheduling: isServeMode,
+    headlessDispatcher: isServeMode
+      ? async ({ automation, run, target }) => {
+          const terminalSnapshotLimit = 2_000
+          let terminalHandle: string
+          let terminalSessionId: string | null = null
+          let workspaceId: string
+          let workspaceDisplayName: string | null = null
+
+          if (automation.workspaceMode === 'new_per_run') {
+            const created = await runtimeService.createManagedWorktree({
+              repoSelector: target.repo.id,
+              name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
+              baseBranch: automation.baseBranch ?? undefined,
+              setupDecision: 'inherit',
+              activate: false,
+              createdWithAgent: automation.agentId,
+              startupAgent: automation.agentId,
+              startupPrompt: automation.prompt,
+              telemetrySource: 'unknown'
+            })
+            terminalHandle = created.startupTerminal?.handle ?? ''
+            terminalSessionId = created.startupTerminal?.tabId ?? null
+            workspaceId = created.worktree.id
+            workspaceDisplayName = created.worktree.displayName ?? null
+            if (!terminalHandle) {
+              throw new Error(
+                created.warning ||
+                  'Automation workspace was created, but no agent terminal started.'
+              )
+            }
+          } else {
+            if (!automation.workspaceId) {
+              throw new Error('The target workspace is no longer available.')
+            }
+            const terminal = await runtimeService.launchAgentTerminal(
+              `id:${automation.workspaceId}`,
+              {
+                agent: automation.agentId,
+                prompt: automation.prompt,
+                title: run.title
+              }
+            )
+            terminalHandle = terminal.handle
+            terminalSessionId = terminal.tabId ?? null
+            workspaceId = terminal.worktreeId
+            const worktree = await runtimeService.showManagedWorktree(`id:${workspaceId}`)
+            workspaceDisplayName = worktree.displayName ?? null
+          }
+
+          const completion = (async () => {
+            const wait = await runtimeService.waitForTerminal(terminalHandle, {
+              condition: 'tui-idle'
+            })
+            const read = await runtimeService.readTerminal(terminalHandle, {
+              limit: terminalSnapshotLimit
+            })
+            const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
+            snapshotBuffer.append(read.tail.join('\n'))
+            if (wait.satisfied) {
+              return {
+                status: 'completed' as const,
+                outputSnapshot: snapshotBuffer.snapshot(),
+                error: null
+              }
+            }
+            return {
+              status: 'dispatch_failed' as const,
+              outputSnapshot: snapshotBuffer.snapshot(),
+              error: wait.blockedReason
+                ? `Automation agent is blocked: ${wait.blockedReason}.`
+                : 'Automation agent did not report completion.'
+            }
+          })()
+
+          return {
+            workspaceId,
+            workspaceDisplayName,
+            terminalSessionId,
+            completion
+          }
+        }
+      : undefined
+  })
   runtimeService.setAutomationService(automations)
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
@@ -1170,7 +1440,7 @@ app.whenReady().then(async () => {
     // even for the system-default path, so every Orca-launched Codex process
     // must resolve CODEX_HOME through the runtime-home service.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,
-    prepareForClaudeLaunch: () => claudeRuntimeAuth!.prepareForClaudeLaunch()
+    prepareForClaudeLaunch: (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target)
   })
   starNag = new StarNagService(store, stats)
   starNag.start()
@@ -1180,6 +1450,18 @@ app.whenReady().then(async () => {
       onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
     })
   )
+
+  // Emulator bridge (serve-sim). macOS-only feature (gated in CLI/runtime); always ship like agent-browser.
+  const emulatorBridge = new EmulatorBridge()
+  runtimeService.setEmulatorBridge(emulatorBridge)
+  serveSimStateWatcher.start()
+  serveSimStateWatcher.onDetected(({ worktreeId, info }) => {
+    runtimeService.getEmulatorBridge()?.registerActiveEmulator(worktreeId, info, {
+      managed: false
+    })
+    serveSimStateWatcher.markOrcaManaged(info)
+    runtimeService.notifyEmulatorAutoAttachFromWatcher(worktreeId, info)
+  })
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   if (shouldInstallManagedHooks(is.dev)) {
     // Why: the persisted off switch must run before any auto-install path so
@@ -1198,6 +1480,11 @@ app.whenReady().then(async () => {
       type: details.type
     })
   })
+
+  logStartupMilestone('services-initialized')
+  await ensureMainI18n()
+  await setMainUiLanguage(store.getSettings().uiLanguage)
+  logStartupMilestone('i18n-ready')
 
   registerAppMenu({
     onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),
@@ -1308,31 +1595,7 @@ app.whenReady().then(async () => {
   registerMobileHandlers(runtimeRpc)
 
   if (!isServeMode) {
-    await startFirstWindowStartupServices({
-      // Why: the persistent-terminal daemon is desktop-only. Headless
-      // `orca serve` registers its PTY runtime below and must not spawn the
-      // desktop daemon or hook loopback listener.
-      startDaemonPtyProvider: () => initDaemonPtyProvider(),
-      // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state,
-      // so the hook server must start before restored terminals can mount.
-      startAgentHookServer: () =>
-        agentHookServer.start({
-          env: app.isPackaged ? 'production' : 'development',
-          // Why: hooks source this endpoint file at invocation time, so old PTY
-          // env still reaches the current Orca process after an app restart.
-          // Dev uses a namespace because all worktrees share `orca-dev`.
-          userDataPath: app.getPath('userData'),
-          endpointNamespace: devAgentHookEndpointNamespace
-        }),
-      onDaemonError: (error) => {
-        console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
-      },
-      onAgentHookServerError: (error) => {
-        // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
-        // enrichment only. Orca must still boot if the loopback receiver fails.
-        console.error('[agent-hooks] Failed to start local hook server:', error)
-      }
-    })
+    startDesktopFirstWindowStartupServices()
   }
 
   if (serveOptions) {
@@ -1356,8 +1619,9 @@ app.whenReady().then(async () => {
     return
   }
 
-  // Why: once the hook server is ready (or has already failed open), window
-  // creation and runtime RPC startup are independent.
+  // Why: window creation and runtime RPC startup are independent. Local PTY
+  // spawns are gated inside registerPtyHandlers so RPC can bind immediately
+  // without racing the daemon provider swap.
   const [win] = await Promise.all([
     Promise.resolve(openMainWindow()),
     runtimeRpc.start().catch((error) => {
@@ -1424,6 +1688,8 @@ app.on('will-quit', (e) => {
   // Why: agent-browser daemon processes would otherwise linger after Orca quits,
   // holding ports and leaving stale session state on disk.
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
+  const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
+  serveSimStateWatcher.stop()
   killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
   store?.flush()
@@ -1472,7 +1738,7 @@ app.on('will-quit', (e) => {
     // Why: normal quits preserve the detached daemon for warm reattach, but a
     // dev parent dying means the temp/dev profile has no owner left to reattach.
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
-    Promise.allSettled([daemonTeardown, rpcStopAndClear, watcherShutdown])
+    Promise.allSettled([daemonTeardown, rpcStopAndClear, watcherShutdown, emulatorShutdown])
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())
       .catch(() => {

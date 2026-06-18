@@ -9,6 +9,40 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('repo RPC methods', () => {
+  it('updates project runtime preferences on the runtime server', async () => {
+    const project = {
+      id: 'project-1',
+      displayName: 'Project',
+      badgeColor: '#737373',
+      sourceRepoIds: [],
+      createdAt: 1,
+      updatedAt: 2,
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateProject: vi.fn().mockReturnValue(project)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('project.update', {
+        projectId: 'project-1',
+        updates: { localWindowsRuntimePreference: { kind: 'windows-host' } }
+      })
+    )
+
+    expect(runtime.updateProject).toHaveBeenCalledWith('project-1', {
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        project: { id: 'project-1', localWindowsRuntimePreference: { kind: 'windows-host' } }
+      }
+    })
+  })
+
   it('creates a repo on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -30,6 +64,22 @@ describe('repo RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { repo: { id: 'repo-1', path: '/srv/projects/new-app' } }
+    })
+  })
+
+  it('reports runtime Git availability without exposing command details', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      isGitAvailable: vi.fn().mockResolvedValue(true)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('repo.gitAvailable'))
+
+    expect(runtime.isGitAvailable).toHaveBeenCalled()
+    expect(response).toMatchObject({
+      ok: true,
+      result: { available: true }
     })
   })
 
@@ -226,6 +276,33 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('persists fork sync mode updates', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        forkSyncMode: 'safe-auto'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { forkSyncMode: 'safe-auto' }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      forkSyncMode: 'safe-auto'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', forkSyncMode: 'safe-auto' } }
+    })
+  })
+
   it('persists resolved GitHub upstream metadata updates', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -271,7 +348,29 @@ describe('repo RPC methods', () => {
       createProjectGroup: vi.fn().mockResolvedValue(group),
       updateProjectGroup: vi.fn().mockResolvedValue({ ...group, name: 'Core' }),
       deleteProjectGroup: vi.fn().mockResolvedValue({ deleted: true }),
-      moveProjectToGroup: vi.fn().mockResolvedValue({ id: 'repo-1', projectGroupId: group.id })
+      moveProjectToGroup: vi.fn().mockResolvedValue({ id: 'repo-1', projectGroupId: group.id }),
+      listFolderWorkspaces: vi.fn().mockReturnValue([
+        {
+          id: 'folder-workspace-1',
+          projectGroupId: group.id,
+          name: 'Refund fix',
+          folderPath: '/srv/platform',
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 1,
+          lastActivityAt: 0,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]),
+      createFolderWorkspace: vi.fn().mockResolvedValue({ id: 'folder-workspace-2' }),
+      updateFolderWorkspace: vi.fn().mockResolvedValue({ id: 'folder-workspace-1', comment: 'x' }),
+      deleteFolderWorkspace: vi.fn().mockResolvedValue({ deleted: true }),
+      getFolderWorkspacePathStatus: vi
+        .fn()
+        .mockResolvedValue({ path: '/srv/platform', exists: true })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
 
@@ -297,6 +396,28 @@ describe('repo RPC methods', () => {
         order: 2
       })
     )
+    const folderListResponse = await dispatcher.dispatch(makeRequest('folderWorkspace.list'))
+    await dispatcher.dispatch(
+      makeRequest('folderWorkspace.create', {
+        projectGroupId: group.id,
+        name: 'Refund fix'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('folderWorkspace.update', {
+        folderWorkspaceId: 'folder-workspace-1',
+        updates: { comment: 'x' }
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('folderWorkspace.delete', { folderWorkspaceId: 'folder-workspace-1' })
+    )
+    const statusResponse = await dispatcher.dispatch(
+      makeRequest('folderWorkspace.getPathStatus', {
+        scope: 'folder-workspace',
+        folderWorkspaceId: 'folder-workspace-1'
+      })
+    )
 
     expect(runtime.listProjectGroups).toHaveBeenCalled()
     expect(runtime.createProjectGroup).toHaveBeenCalledWith({
@@ -310,9 +431,32 @@ describe('repo RPC methods', () => {
     })
     expect(runtime.deleteProjectGroup).toHaveBeenCalledWith(group.id)
     expect(runtime.moveProjectToGroup).toHaveBeenCalledWith('repo-1', group.id, 2)
+    expect(runtime.listFolderWorkspaces).toHaveBeenCalled()
+    expect(runtime.createFolderWorkspace).toHaveBeenCalledWith({
+      projectGroupId: group.id,
+      name: 'Refund fix'
+    })
+    expect(runtime.updateFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
+      comment: 'x'
+    })
+    expect(runtime.deleteFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1')
+    expect(runtime.getFolderWorkspacePathStatus).toHaveBeenCalledWith({
+      scope: 'folder-workspace',
+      folderWorkspaceId: 'folder-workspace-1'
+    })
     expect(moveResponse).toMatchObject({
       ok: true,
       result: { repo: { id: 'repo-1', projectGroupId: group.id } }
+    })
+    expect(folderListResponse).toMatchObject({
+      ok: true,
+      result: {
+        folderWorkspaces: [expect.objectContaining({ id: 'folder-workspace-1' })]
+      }
+    })
+    expect(statusResponse).toMatchObject({
+      ok: true,
+      result: { status: { path: '/srv/platform', exists: true } }
     })
   })
 

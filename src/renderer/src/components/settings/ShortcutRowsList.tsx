@@ -3,6 +3,7 @@ import type { KeybindingActionId, KeybindingInput } from '../../../../shared/key
 import { cn } from '../../lib/utils'
 import { ShortcutBindingRow } from './ShortcutBindingRow'
 import type { ShortcutRowsByGroup } from './ShortcutFilterRail'
+import { translate } from '@/i18n/i18n'
 
 export function ShortcutRowsList({
   className,
@@ -37,7 +38,10 @@ export function ShortcutRowsList({
           className
         )}
       >
-        No shortcuts match those filters.
+        {translate(
+          'auto.components.settings.ShortcutRowsList.4ce3cd24d9',
+          'No shortcuts match those filters.'
+        )}
       </div>
     )
   }

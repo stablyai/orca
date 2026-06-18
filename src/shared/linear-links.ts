@@ -38,3 +38,45 @@ export function getLinearOrganizationUrlKeyFromIssueUrl(issueUrl?: string | null
     return null
   }
 }
+
+export type ParsedLinearIssueInput = {
+  identifier: string
+  organizationUrlKey?: string
+}
+
+const LINEAR_IDENTIFIER_PATTERN = /^[A-Za-z][A-Za-z0-9_]*-\d+$/
+
+export function parseLinearIssueInput(input: string): ParsedLinearIssueInput | null {
+  const trimmed = input.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  if (LINEAR_IDENTIFIER_PATTERN.test(trimmed)) {
+    return { identifier: trimmed.toUpperCase() }
+  }
+
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.hostname !== 'linear.app') {
+      return null
+    }
+    const parts = parsed.pathname.split('/').filter(Boolean)
+    const issueIndex = parts.indexOf('issue')
+    const organizationUrlKey = parts[0]
+    const rawIdentifier = issueIndex >= 0 ? parts[issueIndex + 1] : undefined
+    if (!organizationUrlKey || !rawIdentifier) {
+      return null
+    }
+    const identifier = decodeURIComponent(rawIdentifier).split(/[/?#]/)[0]
+    if (!LINEAR_IDENTIFIER_PATTERN.test(identifier)) {
+      return null
+    }
+    return {
+      identifier: identifier.toUpperCase(),
+      organizationUrlKey: decodeURIComponent(organizationUrlKey)
+    }
+  } catch {
+    return null
+  }
+}

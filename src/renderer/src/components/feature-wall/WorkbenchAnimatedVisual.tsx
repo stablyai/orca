@@ -7,6 +7,7 @@ import { ClaudeIcon } from '../status-bar/icons'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 import { CodexInlineIcon } from './feature-tour-preview-glyphs'
+import { translate } from '@/i18n/i18n'
 
 // Why: the right-click menu needs the same icons as the real Orca menu so the
 // visual reads as the actual product, not a generic terminal mockup.
@@ -510,8 +511,20 @@ export function WorkbenchAnimatedVisual(props: {
         /* Standalone keyboard hint stays inside the visual so the tour copy can
             remain a single subheader line. */
         <div className="border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
-          Same pane: <kbd className={KBD_CLASS}>{splitRightShortcutLabel}</kbd> splits right ·{' '}
-          <kbd className={KBD_CLASS}>{splitDownShortcutLabel}</kbd> splits down
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.0bc9ad0cd1',
+            'Same pane:'
+          )}
+          <kbd className={KBD_CLASS}>{splitRightShortcutLabel}</kbd>{' '}
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.a2b114dad0',
+            'splits right ·'
+          )}{' '}
+          <kbd className={KBD_CLASS}>{splitDownShortcutLabel}</kbd>{' '}
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.16877e038d',
+            'splits down'
+          )}
         </div>
       )}
     </div>
@@ -526,18 +539,54 @@ function PlaywrightPane(props: {
     <>
       <TermLine>
         <Prompt>$</Prompt>
-        <span className="text-foreground">pnpm playwright test</span>
+        <span className="text-foreground">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.4371cc9931',
+            'pnpm playwright test'
+          )}
+        </span>
       </TermLine>
-      <TermLine muted>Running 12 tests using 4 workers</TermLine>
+      <TermLine muted>
+        {translate(
+          'auto.components.feature.wall.WorkbenchAnimatedVisual.0b20782e0f',
+          'Running 12 tests using 4 workers'
+        )}
+      </TermLine>
       <TermLine>
         <PwCheck />
-        <PwIdx>1</PwIdx>login.spec.ts<PwName> › can sign in</PwName>
-        <PwDur>(1.2s)</PwDur>
+        <PwIdx>1</PwIdx>
+        {translate(
+          'auto.components.feature.wall.WorkbenchAnimatedVisual.defe550fe2',
+          'login.spec.ts'
+        )}
+        <PwName>
+          {' '}
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.3261c6853b',
+            '› can sign in'
+          )}
+        </PwName>
+        <PwDur>
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.5c5cbd783f', '(1.2s)')}
+        </PwDur>
       </TermLine>
       <TermLine>
         <PwCheck />
-        <PwIdx>2</PwIdx>checkout.spec.ts<PwName> › cart total updates</PwName>
-        <PwDur>(0.8s)</PwDur>
+        <PwIdx>2</PwIdx>
+        {translate(
+          'auto.components.feature.wall.WorkbenchAnimatedVisual.623881d72e',
+          'checkout.spec.ts'
+        )}
+        <PwName>
+          {' '}
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.944199e54a',
+            '› cart total updates'
+          )}
+        </PwName>
+        <PwDur>
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.7d9f1d5f7d', '(0.8s)')}
+        </PwDur>
       </TermLine>
       <TermLine>
         <RunSpinner reducedMotion={props.reducedMotion} />
@@ -554,32 +603,63 @@ function ClaudeChecklistPane(props: { reducedMotion: boolean }): JSX.Element {
     <>
       <TermLine>
         <Prompt>$</Prompt>
-        <span className="text-foreground">claude</span>
+        <span className="text-foreground">
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.000106adfe', 'claude')}
+        </span>
       </TermLine>
       <TermLine muted>
         <span className="mr-1.5 inline-flex align-[-2px]">
           <ClaudeIcon size={12} />
         </span>
-        Claude Code session started
+        {translate(
+          'auto.components.feature.wall.WorkbenchAnimatedVisual.431ca9842a',
+          'Claude Code session started'
+        )}
       </TermLine>
       <TermLine wrap>
-        <span className="mr-1.5 text-amber-600">&gt;</span>
-        review auth edge cases
+        <span className="mr-1.5 text-amber-600">
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.932c4b3a97', '>')}
+        </span>
+        {translate(
+          'auto.components.feature.wall.WorkbenchAnimatedVisual.c0eb94125e',
+          'review auth edge cases'
+        )}
       </TermLine>
       <TermLine>
         <span className="mr-1.5 font-bold text-emerald-600">✓</span>
-        <span className="text-foreground">Read</span>
-        <span className="ml-1.5 truncate text-muted-foreground">src/auth/session.ts</span>
+        <span className="text-foreground">
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.9923847785', 'Read')}
+        </span>
+        <span className="ml-1.5 truncate text-muted-foreground">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.b85eab49dd',
+            'src/auth/session.ts'
+          )}
+        </span>
       </TermLine>
       <TermLine>
         <span className="mr-1.5 font-bold text-emerald-600">✓</span>
-        <span className="text-foreground">Grep</span>
-        <span className="ml-1.5 truncate text-muted-foreground">throw src/auth</span>
+        <span className="text-foreground">
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.17cfdc3344', 'Grep')}
+        </span>
+        <span className="ml-1.5 truncate text-muted-foreground">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.0d93c298a7',
+            'throw src/auth'
+          )}
+        </span>
       </TermLine>
       <TermLine>
         <RunSpinner reducedMotion={props.reducedMotion} />
-        <span className="text-foreground">Edit</span>
-        <span className="ml-1.5 truncate text-muted-foreground">src/auth/session.ts</span>
+        <span className="text-foreground">
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.99f5224f1e', 'Edit')}
+        </span>
+        <span className="ml-1.5 truncate text-muted-foreground">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.b85eab49dd',
+            'src/auth/session.ts'
+          )}
+        </span>
       </TermLine>
     </>
   )
@@ -668,7 +748,12 @@ function ContextMenu(props: {
         <span className="inline-flex items-center justify-center text-muted-foreground">
           <SplitRightIcon />
         </span>
-        <span className="whitespace-nowrap leading-none">Split Terminal Right</span>
+        <span className="whitespace-nowrap leading-none">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.e370fa8c2b',
+            'Split Terminal Right'
+          )}
+        </span>
         <span className="font-mono text-[11px] text-muted-foreground">
           {props.splitRightShortcutLabel}
         </span>
@@ -677,7 +762,12 @@ function ContextMenu(props: {
         <span className="inline-flex items-center justify-center text-muted-foreground">
           <SplitDownIcon />
         </span>
-        <span className="whitespace-nowrap leading-none">Split Terminal Down</span>
+        <span className="whitespace-nowrap leading-none">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.ca2cfbf188',
+            'Split Terminal Down'
+          )}
+        </span>
         <span className="font-mono text-[11px] text-muted-foreground">
           {props.splitDownShortcutLabel}
         </span>
@@ -731,7 +821,15 @@ function RightPaneScrollback(props: {
               ) : (
                 <span className="mr-1.5 text-foreground">●</span>
               )}
-              {props.isCodex ? 'Codex session started' : 'Claude Code session started'}
+              {props.isCodex
+                ? translate(
+                    'auto.components.feature.wall.WorkbenchAnimatedVisual.fc84f17fe7',
+                    'Codex session started'
+                  )
+                : translate(
+                    'auto.components.feature.wall.WorkbenchAnimatedVisual.431ca9842a',
+                    'Claude Code session started'
+                  )}
             </TermLine>
           )
         }
@@ -739,7 +837,7 @@ function RightPaneScrollback(props: {
           return (
             <TermLine key={i} wrap>
               <span className={cn('mr-1.5', props.promptAccentClass ?? 'text-amber-600')}>
-                &gt;
+                {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.932c4b3a97', '>')}
               </span>
               {line.text}
             </TermLine>
@@ -749,7 +847,12 @@ function RightPaneScrollback(props: {
           return (
             <TermLine key={i}>
               <RunSpinner />
-              <span className="text-muted-foreground">Thinking…</span>
+              <span className="text-muted-foreground">
+                {translate(
+                  'auto.components.feature.wall.WorkbenchAnimatedVisual.633a91e358',
+                  'Thinking…'
+                )}
+              </span>
             </TermLine>
           )
         }

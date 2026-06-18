@@ -19,9 +19,12 @@ import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
+  getTabStripBorderClasses,
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
+import { translate } from '@/i18n/i18n'
+import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -108,7 +111,8 @@ export default function BrowserTab({
   onDuplicate,
   onTogglePin,
   dragData,
-  dropIndicator
+  dropIndicator,
+  includeTopTabBorder = true
 }: {
   tab: BrowserTabState
   isActive: boolean
@@ -122,6 +126,7 @@ export default function BrowserTab({
   onTogglePin: () => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
+  includeTopTabBorder?: boolean
 }): React.JSX.Element {
   // Why: no transform/transition/isDragging styling — the drag design is
   // that tabs stay visually anchored; only the blue insertion bar moves.
@@ -168,10 +173,11 @@ export default function BrowserTab({
   const tabRoot = (
     <div
       ref={setNodeRef}
+      data-tab-id={tab.id}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         if (e.button !== 0) {
           return
@@ -206,7 +212,7 @@ export default function BrowserTab({
           muted-foreground made the icon read as "disabled" in practice. */}
       <BrowserTabFavicon tabId={tab.id} faviconUrl={tab.faviconUrl} />
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
-      <span className="truncate max-w-[100px] mr-1">{tabLabel}</span>
+      <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
       {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
         <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
       )}
@@ -232,6 +238,7 @@ export default function BrowserTab({
   return (
     <>
       <div
+        className={TAB_CONTAINER_WIDTH_CLASSES}
         onContextMenuCapture={(event) => {
           event.preventDefault()
           window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
@@ -271,24 +278,24 @@ export default function BrowserTab({
         >
           <DropdownMenuItem onSelect={() => onSplitGroup('up', tab.id)}>
             <Rows2 className="mr-1.5 size-3.5" />
-            Split Up
+            {translate('auto.components.tab.bar.BrowserTab.96354ed249', 'Split Up')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onSplitGroup('down', tab.id)}>
             <Rows2 className="mr-1.5 size-3.5" />
-            Split Down
+            {translate('auto.components.tab.bar.BrowserTab.2186a8407c', 'Split Down')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onSplitGroup('left', tab.id)}>
             <Columns2 className="mr-1.5 size-3.5" />
-            Split Left
+            {translate('auto.components.tab.bar.BrowserTab.7e8106899f', 'Split Left')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onSplitGroup('right', tab.id)}>
             <Columns2 className="mr-1.5 size-3.5" />
-            Split Right
+            {translate('auto.components.tab.bar.BrowserTab.966feb9ad5', 'Split Right')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onDuplicate}>
             <Copy className="mr-1.5 size-3.5" />
-            Duplicate Tab
+            {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onTogglePin}>
@@ -297,21 +304,23 @@ export default function BrowserTab({
             ) : (
               <Pin className="mr-1.5 size-3.5" />
             )}
-            {isPinned ? 'Unpin Tab' : 'Pin Tab'}
+            {isPinned
+              ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
+              : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
-            Close
+            {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
-            Close Tabs To The Right
+            {translate('auto.components.tab.bar.BrowserTab.9dd880bd56', 'Close Tabs To The Right')}
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
             disabled={!isHttpUrl}
           >
             <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-            Open In Browser
+            {translate('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

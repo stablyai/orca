@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this hook is the single orchestrator for every onboarding-step transition (navigation, persistence, telemetry, ref-mirror, auto-select); splitting would force callers to coordinate ordering across multiple hooks and lose the controller-shape contract OnboardingFlow.tsx consumes. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { applyDocumentTheme } from '@/lib/document-theme'
@@ -32,6 +32,10 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { openProjectDefaultCheckout } from '../sidebar/project-added-default-checkout'
+import { translate } from '@/i18n/i18n'
+import { resolveAgentPermissionModeSummary } from '../../../../shared/tui-agent-permissions'
+import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { buildWindowsTerminalSnapshotPayload } from './windows-terminal-onboarding-telemetry'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -49,18 +53,31 @@ function shouldSkipIntegrationsStep(
   return status?.gh.installed === true
 }
 
-function isSkippedStepIndex(index: number, skipIntegrations: boolean): boolean {
-  return skipIntegrations && STEPS[index]?.id === 'integrations'
+function shouldSkipWindowsTerminalStep(isWindows: boolean): boolean {
+  return !isWindows
+}
+
+type OnboardingStepSkipOptions = {
+  skipIntegrations: boolean
+  skipWindowsTerminal: boolean
+}
+
+function isSkippedStepIndex(index: number, options: OnboardingStepSkipOptions): boolean {
+  const step = STEPS[index]
+  return (
+    (options.skipIntegrations && step?.id === 'integrations') ||
+    (options.skipWindowsTerminal && step?.id === 'windows_terminal')
+  )
 }
 
 function resolveStepIndex(
   index: number,
-  skipIntegrations: boolean,
+  skipOptions: OnboardingStepSkipOptions,
   direction: 'forward' | 'backward'
 ): number {
   const lastIndex = STEPS.length - 1
   let nextIndex = Math.min(Math.max(index, 0), lastIndex)
-  while (isSkippedStepIndex(nextIndex, skipIntegrations)) {
+  while (isSkippedStepIndex(nextIndex, skipOptions)) {
     const candidate = nextIndex + (direction === 'forward' ? 1 : -1)
     if (candidate < 0 || candidate > lastIndex) {
       return direction === 'forward' ? lastIndex : 0
@@ -112,8 +129,14 @@ export function remapOpenOnboardingLastCompletedStep({
   if (flowVersion === ONBOARDING_FLOW_VERSION) {
     return lastCompletedStep
   }
-  if (outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
+  if (outcome === 'completed' && lastCompletedStep >= 4) {
     return ONBOARDING_FINAL_STEP
+  }
+  // Why: v3 was the four-step flow before the Windows terminal preference
+  // page. Step 4 already meant notifications, so open progress should resume
+  // there rather than treating it as the newly inserted Windows step.
+  if (flowVersion === 3) {
+    return Math.min(4, lastCompletedStep)
   }
   // Why: v2 was the five-step flow; missing/older versions were seven-step
   // data where step 4 was removed agent setup, not completed integrations.
@@ -179,7 +202,13 @@ export async function prepareSkippedOnboardingPreferences({
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     setError(message)
-    toast.error('Could not save progress', { description: message })
+    toast.error(
+      translate(
+        'auto.components.onboarding.use.onboarding.flow.52acfbef51',
+        'Could not save progress'
+      ),
+      { description: message }
+    )
     return false
   }
 }
@@ -221,10 +250,15 @@ export function useOnboardingFlow(
   const effectivePreflightStatus = preflightStatus ?? useAppStore.getState().preflightStatus
 
   const skipIntegrations = shouldSkipIntegrationsStep(effectivePreflightStatus)
+  const skipWindowsTerminal = shouldSkipWindowsTerminalStep(isWindowsUserAgent())
+  const skipOptions = useMemo(
+    () => ({ skipIntegrations, skipWindowsTerminal }),
+    [skipIntegrations, skipWindowsTerminal]
+  )
   const remappedLastCompletedStep = remapOpenOnboardingLastCompletedStep(onboarding)
   const initialStep = resolveStepIndex(
     Math.min(Math.max(remappedLastCompletedStep, 0), STEPS.length - 1),
-    skipIntegrations,
+    skipOptions,
     'forward'
   )
   const [stepIndex, setStepIndex] = useState(initialStep)
@@ -232,6 +266,12 @@ export function useOnboardingFlow(
     settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
       ? settings.defaultTuiAgent
       : null
+  )
+  const [yoloPermissions, setYoloPermissions] = useState(
+    resolveAgentPermissionModeSummary({
+      agentDefaultArgs: settings?.agentDefaultArgs,
+      agentDefaultEnv: settings?.agentDefaultEnv
+    }) !== 'manual'
   )
   // Why: hydrate theme from saved settings instead of hardcoding 'dark' so users
   // who already configured a theme see their choice preselected.
@@ -256,6 +296,7 @@ export function useOnboardingFlow(
   // fallback defaults, unless the user already interacted with that field.
   const themeInteractedRef = useRef(false)
   const agentInteractedRef = useRef(false)
+  const yoloPermissionsInteractedRef = useRef(false)
   const [settingsHydrated, setSettingsHydrated] = useState(settings != null)
   const settingsHydration = resolveOnboardingSettingsHydration({
     settings,
@@ -272,6 +313,16 @@ export function useOnboardingFlow(
     }
     if (settingsHydration.selectedAgent !== undefined) {
       setSelectedAgent(settingsHydration.selectedAgent)
+    }
+  }
+  if (settings && !yoloPermissionsInteractedRef.current) {
+    const nextYoloPermissions =
+      resolveAgentPermissionModeSummary({
+        agentDefaultArgs: settings.agentDefaultArgs,
+        agentDefaultEnv: settings.agentDefaultEnv
+      }) !== 'manual'
+    if (nextYoloPermissions !== yoloPermissions) {
+      setYoloPermissions(nextYoloPermissions)
     }
   }
 
@@ -328,19 +379,36 @@ export function useOnboardingFlow(
     },
     []
   )
+  const setYoloPermissionsInteractive = useCallback((enabled: boolean) => {
+    yoloPermissionsInteractedRef.current = true
+    setYoloPermissions(enabled)
+  }, [])
 
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
   const visibleSteps = useMemo(
     () =>
       STEPS.map((step, index) => ({ step, index })).filter(
-        ({ index }) => !isSkippedStepIndex(index, skipIntegrations)
+        ({ index }) => !isSkippedStepIndex(index, skipOptions)
       ),
-    [skipIntegrations]
+    [skipOptions]
+  )
+  const progressSteps = useMemo(
+    () =>
+      STEPS.map((step, index) => ({
+        step,
+        index,
+        isSkipped: isSkippedStepIndex(index, skipOptions)
+      })).filter(({ step }) => step.id !== 'windows_terminal' || !skipWindowsTerminal),
+    [skipOptions, skipWindowsTerminal]
   )
   const visibleStepIndex = Math.max(
     0,
     visibleSteps.findIndex(({ index }) => index === stepIndex)
+  )
+  const progressStepIndex = Math.max(
+    0,
+    progressSteps.findIndex(({ index }) => index === stepIndex)
   )
   const hasExistingProject = repos.length > 0
 
@@ -377,13 +445,13 @@ export function useOnboardingFlow(
   }, [refreshPreflightStatus])
 
   const getNextStepIndex = useCallback(
-    (idx: number): number => resolveStepIndex(idx + 1, skipIntegrations, 'forward'),
-    [skipIntegrations]
+    (idx: number): number => resolveStepIndex(idx + 1, skipOptions, 'forward'),
+    [skipOptions]
   )
 
   const getPreviousStepIndex = useCallback(
-    (idx: number): number => resolveStepIndex(idx - 1, skipIntegrations, 'backward'),
-    [skipIntegrations]
+    (idx: number): number => resolveStepIndex(idx - 1, skipOptions, 'backward'),
+    [skipOptions]
   )
 
   useEffect(() => {
@@ -393,11 +461,22 @@ export function useOnboardingFlow(
     const nextIndex = getNextStepIndex(stepIndex)
     setStepIndex(nextIndex)
     // Why: users with gh already on PATH don't need this setup page, but
-    // persistence must still resume them at repo setup instead of bouncing back.
-    void persistStep(currentStep.stepNumber).then(onOnboardingChange, (err) => {
-      toast.error('Could not save progress', {
-        description: err instanceof Error ? err.message : String(err)
-      })
+    // persistence must still resume them at the next visible step instead of
+    // bouncing back through skipped optional pages.
+    const skippedThroughStepNumber = Math.max(
+      currentStep.stepNumber,
+      STEPS[nextIndex].stepNumber - 1
+    )
+    void persistStep(skippedThroughStepNumber).then(onOnboardingChange, (err) => {
+      toast.error(
+        translate(
+          'auto.components.onboarding.use.onboarding.flow.52acfbef51',
+          'Could not save progress'
+        ),
+        {
+          description: err instanceof Error ? err.message : String(err)
+        }
+      )
     })
   }, [
     currentStep.id,
@@ -490,7 +569,7 @@ export function useOnboardingFlow(
       if (selectedAgentRef.current !== null) {
         return
       }
-      const preferred = AGENT_CATALOG.find((agent) => ids.includes(agent.id))?.id ?? null
+      const preferred = getAgentCatalog().find((agent) => ids.includes(agent.id))?.id ?? null
       setSelectedAgent(preferred)
     })
   }, [refreshDetectedAgents])
@@ -560,6 +639,7 @@ export function useOnboardingFlow(
   const persistCurrentStep = usePersistCurrentStep({
     currentStepId: currentStep.id,
     selectedAgent,
+    yoloPermissions,
     theme,
     settings,
     updateSettings,
@@ -586,12 +666,24 @@ export function useOnboardingFlow(
       if (currentStep.id === 'integrations') {
         trackTaskSourcesSnapshot('continue', durationMs, advancedVia)
       }
+      if (currentStep.id === 'windows_terminal') {
+        track(
+          'onboarding_windows_terminal_snapshot',
+          buildWindowsTerminalSnapshotPayload({
+            settings,
+            exitAction: 'continue',
+            durationMs,
+            advancedVia
+          })
+        )
+      }
     },
     [
       consumeStepDurationMs,
       currentStep.id,
       currentStep.stepNumber,
       currentStep.valueKind,
+      settings,
       trackTaskSourcesSnapshot
     ]
   )
@@ -619,19 +711,22 @@ export function useOnboardingFlow(
             return
           }
           const nextIndex = getNextStepIndex(stepIndex)
-          if (
-            currentStep.id === 'theme' &&
-            skipIntegrations &&
-            STEPS[nextIndex]?.id === 'notifications'
-          ) {
-            // Why: resolveStepIndex skips integrations before it can render, but
-            // progress must still resume at notifications after a reload.
+          const skippedThroughStepNumber = STEPS[nextIndex].stepNumber - 1
+          if (skippedThroughStepNumber > currentStep.stepNumber) {
+            // Why: resolveStepIndex can skip optional pages before they render,
+            // but persisted progress must still resume at the visible page.
             try {
-              onOnboardingChange(await persistStep(STEPS[nextIndex].stepNumber - 1))
+              onOnboardingChange(await persistStep(skippedThroughStepNumber))
             } catch (err) {
-              toast.error('Could not save progress', {
-                description: err instanceof Error ? err.message : String(err)
-              })
+              toast.error(
+                translate(
+                  'auto.components.onboarding.use.onboarding.flow.52acfbef51',
+                  'Could not save progress'
+                ),
+                {
+                  description: err instanceof Error ? err.message : String(err)
+                }
+              )
             }
           }
           setStepIndex(nextIndex)
@@ -645,11 +740,11 @@ export function useOnboardingFlow(
       busyLabel,
       closeWith,
       currentStep.id,
+      currentStep.stepNumber,
       getNextStepIndex,
       onOnboardingChange,
       openModal,
       persistCurrentStep,
-      skipIntegrations,
       stepIndex,
       trackCurrentStepCompleted
     ]
@@ -686,7 +781,7 @@ export function useOnboardingFlow(
       if (settings?.activeRuntimeEnvironmentId?.trim()) {
         const path = serverPath.trim()
         if (!path) {
-          const message = 'Enter a server path.'
+          const message = 'Enter a path on the selected host.'
           setError(message)
           return
         }
@@ -977,7 +1072,7 @@ export function useOnboardingFlow(
     const destination =
       target.kind === 'environment' ? cloneDestination.trim() : settings.workspaceDir
     if (!destination) {
-      const message = 'Enter a server path for the clone destination.'
+      const message = 'Enter a host path for the clone destination.'
       setError(message)
       return
     }
@@ -1001,9 +1096,12 @@ export function useOnboardingFlow(
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
       track('onboarding_step4_path_failed', { path: 'clone_url', reason: 'clone_failed' })
-      toast.error('Clone failed', {
-        description: err instanceof Error ? err.message : String(err)
-      })
+      toast.error(
+        translate('auto.components.onboarding.use.onboarding.flow.fd74e7558e', 'Clone failed'),
+        {
+          description: err instanceof Error ? err.message : String(err)
+        }
+      )
     } finally {
       setBusyLabel(null)
     }
@@ -1079,6 +1177,17 @@ export function useOnboardingFlow(
       if (stepId === 'integrations') {
         trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
       }
+      if (stepId === 'windows_terminal') {
+        track(
+          'onboarding_windows_terminal_snapshot',
+          buildWindowsTerminalSnapshotPayload({
+            settings,
+            exitAction: 'skip_to_project_setup',
+            durationMs,
+            advancedVia: 'button'
+          })
+        )
+      }
       openModal('add-repo')
     } finally {
       setBusyLabel(null)
@@ -1134,7 +1243,13 @@ export function useOnboardingFlow(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setError(message)
-      toast.error('Could not open SSH settings', { description: message })
+      toast.error(
+        translate(
+          'auto.components.onboarding.use.onboarding.flow.dce4bdce5b',
+          'Could not open SSH settings'
+        ),
+        { description: message }
+      )
       return
     }
     // Why: Settings renders behind the fullscreen onboarding layer; SSH users
@@ -1167,11 +1282,9 @@ export function useOnboardingFlow(
       if (nestedScan && idx !== stepIndex) {
         trackNestedBackAndClear()
       }
-      setStepIndex(
-        resolveStepIndex(idx, skipIntegrations, idx < stepIndex ? 'backward' : 'forward')
-      )
+      setStepIndex(resolveStepIndex(idx, skipOptions, idx < stepIndex ? 'backward' : 'forward'))
     },
-    [nestedScan, skipIntegrations, stepIndex, trackNestedBackAndClear]
+    [nestedScan, skipOptions, stepIndex, trackNestedBackAndClear]
   )
 
   return {
@@ -1180,9 +1293,13 @@ export function useOnboardingFlow(
     stepIndex,
     visibleSteps,
     visibleStepIndex,
+    progressSteps,
+    progressStepIndex,
     currentStep,
     selectedAgent,
     setSelectedAgent: setSelectedAgentInteractive,
+    yoloPermissions,
+    setYoloPermissions: setYoloPermissionsInteractive,
     theme,
     setTheme: setThemeInteractive,
     cloneUrl,

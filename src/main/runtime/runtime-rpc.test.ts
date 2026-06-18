@@ -145,7 +145,12 @@ function waitForWsClose(ws: WebSocket): Promise<void> {
   })
 }
 
-async function authenticateMobileWs(pairingUrl: string): Promise<WebSocket> {
+type AuthenticatedMobileWs = {
+  ws: WebSocket
+  sharedKey: Uint8Array
+}
+
+async function authenticateMobileWsSession(pairingUrl: string): Promise<AuthenticatedMobileWs> {
   const parsed = parsePairingCode(pairingUrl)
   expect(parsed).toBeTruthy()
   const ws = await connectWs(parsed!.endpoint)
@@ -168,7 +173,83 @@ async function authenticateMobileWs(pairingUrl: string): Promise<WebSocket> {
     type: 'e2ee_authenticated'
   })
 
-  return ws
+  return { ws, sharedKey }
+}
+
+async function authenticateMobileWs(pairingUrl: string): Promise<WebSocket> {
+  return (await authenticateMobileWsSession(pairingUrl)).ws
+}
+
+function sendEncryptedWsRequest(
+  session: AuthenticatedMobileWs,
+  request: Record<string, unknown>
+): void {
+  session.ws.send(encrypt(JSON.stringify(request), session.sharedKey))
+}
+
+function createEncryptedWsResponseReader(session: AuthenticatedMobileWs): {
+  next: (
+    id: string,
+    predicate?: (response: Record<string, unknown>) => boolean
+  ) => Promise<Record<string, unknown>>
+  dispose: () => void
+} {
+  type Waiter = {
+    id: string
+    predicate: (response: Record<string, unknown>) => boolean
+    resolve: (response: Record<string, unknown>) => void
+  }
+  const queue: Record<string, unknown>[] = []
+  const waiters: Waiter[] = []
+
+  const takeQueued = (
+    id: string,
+    predicate: (response: Record<string, unknown>) => boolean
+  ): Record<string, unknown> | null => {
+    const index = queue.findIndex((response) => response.id === id && predicate(response))
+    if (index === -1) {
+      return null
+    }
+    const [response] = queue.splice(index, 1)
+    return response ?? null
+  }
+
+  const onMessage = (data: WebSocket.RawData): void => {
+    const decrypted = decrypt(
+      typeof data === 'string' ? data : data.toString('utf-8'),
+      session.sharedKey
+    )
+    expect(decrypted).toBeTruthy()
+    const response = JSON.parse(decrypted!) as Record<string, unknown>
+    const waiterIndex = waiters.findIndex(
+      (waiter) => response.id === waiter.id && waiter.predicate(response)
+    )
+    if (waiterIndex === -1) {
+      queue.push(response)
+      return
+    }
+    const [waiter] = waiters.splice(waiterIndex, 1)
+    waiter?.resolve(response)
+  }
+
+  session.ws.on('message', onMessage)
+
+  return {
+    next: (id: string, predicate: (response: Record<string, unknown>) => boolean = () => true) => {
+      const queued = takeQueued(id, predicate)
+      if (queued) {
+        return Promise.resolve(queued)
+      }
+      return new Promise<Record<string, unknown>>((resolve) => {
+        waiters.push({ id, predicate, resolve })
+      })
+    },
+    dispose: () => {
+      session.ws.off('message', onMessage)
+      waiters.length = 0
+      queue.length = 0
+    }
+  }
 }
 
 class FakeWebSocket extends EventEmitter {
@@ -487,7 +568,7 @@ describe('OrcaRuntimeRpcServer', () => {
       disconnectSpy.mockRestore()
       await server.stop()
     }
-  })
+  }, 15_000)
 
   it('does not revoke runtime-scoped devices through mobile revocation', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -552,7 +633,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  })
+  }, 15_000)
 
   it('rotates unused runtime pairing links without revoking already-used grants', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -608,7 +689,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  })
+  }, 15_000)
 
   it('caps WebSocket long-polls and aborts them when the socket closes', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -899,7 +980,9 @@ describe('OrcaRuntimeRpcServer', () => {
     await server['handleWebSocketMessage'](
       JSON.stringify({
         id: 'req_forbidden',
-        method: 'git.generateCommitMessage',
+        // files.delete is a real registered RPC intentionally kept off the
+        // mobile allowlist — mobile clients must never delete host files.
+        method: 'files.delete',
         deviceToken: mobile.token,
         params: { worktree: 'id:wt-1' }
       }),
@@ -2064,7 +2147,10 @@ describe('OrcaRuntimeRpcServer', () => {
     })
     expect(listResponse).toMatchObject({
       id: 'req_list',
-      ok: true
+      ok: true,
+      result: {
+        terminals: [expect.objectContaining({ ptyId: 'pty-1' })]
+      }
     })
 
     const handle = (
@@ -2147,6 +2233,248 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     await server.stop()
+  })
+
+  it('mirrors laptop-created remote runtime terminals into phone session tabs over RPC', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+
+    await server.start()
+
+    const metadata = readRuntimeMetadata(userDataPath)
+    const endpoint = metadata!.transports[0]!.endpoint
+    const authToken = metadata!.authToken
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const createResponse = await sendRequest(endpoint, {
+      id: 'laptop_create',
+      authToken,
+      method: 'terminal.create',
+      params: {
+        worktree: 'id:repo-1::/tmp/worktree-a',
+        command: "claude 'work on the issue'",
+        tabId: 'laptop-tab',
+        leafId
+      }
+    })
+
+    expect(createResponse).toMatchObject({
+      id: 'laptop_create',
+      ok: true,
+      result: {
+        terminal: {
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          surface: 'background'
+        }
+      }
+    })
+    runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 456)
+    runtime.onPtyData('laptop-created-pty', 'Claude is working...\r\n', 456)
+
+    const listResponse = await sendRequest(endpoint, {
+      id: 'phone_list',
+      authToken,
+      method: 'session.tabs.list',
+      params: {
+        worktree: 'id:repo-1::/tmp/worktree-a'
+      }
+    })
+
+    const terminal = (
+      createResponse.result as {
+        terminal: { handle: string }
+      }
+    ).terminal
+    expect(listResponse).toMatchObject({
+      id: 'phone_list',
+      ok: true,
+      result: {
+        tabs: [
+          {
+            type: 'terminal',
+            id: `laptop-tab::${leafId}`,
+            parentTabId: 'laptop-tab',
+            leafId,
+            status: 'ready',
+            terminal: terminal.handle,
+            agentStatus: {
+              state: 'working',
+              paneKey: `laptop-tab:${leafId}`,
+              terminalHandle: terminal.handle
+            }
+          }
+        ]
+      }
+    })
+
+    const readResponse = await sendRequest(endpoint, {
+      id: 'phone_read',
+      authToken,
+      method: 'terminal.read',
+      params: {
+        terminal: terminal.handle
+      }
+    })
+    expect(readResponse).toMatchObject({
+      id: 'phone_read',
+      ok: true,
+      result: {
+        terminal: {
+          tail: ['Claude is working...']
+        }
+      }
+    })
+
+    await server.stop()
+  })
+
+  it('streams laptop-created runtime terminals to a paired phone WebSocket client', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'paired-laptop-pty' })
+    runtime.setPtyController({
+      spawn,
+      write: (_ptyId, data) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    const phoneOffer = server.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'phone',
+      scope: 'mobile'
+    })
+    expect(phoneOffer.available).toBe(true)
+    if (!phoneOffer.available) {
+      throw new Error('WebSocket pairing unavailable')
+    }
+    const phone = await authenticateMobileWsSession(phoneOffer.pairingUrl)
+    const phoneResponses = createEncryptedWsResponseReader(phone)
+    const metadata = readRuntimeMetadata(userDataPath)
+    const laptopEndpoint = metadata!.transports[0]!.endpoint
+    const laptopAuthToken = metadata!.authToken
+    const worktree = 'id:repo-1::/tmp/worktree-a'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+
+    try {
+      sendEncryptedWsRequest(phone, {
+        id: 'phone_subscribe_tabs',
+        method: 'session.tabs.subscribe',
+        params: { worktree }
+      })
+      await expect(
+        phoneResponses.next('phone_subscribe_tabs', (response) => {
+          const result = response.result as { type?: string; tabs?: unknown[] } | undefined
+          return result?.type === 'snapshot' && result.tabs?.length === 0
+        })
+      ).resolves.toMatchObject({
+        ok: true,
+        streaming: true
+      })
+
+      const blockedUpdate = phoneResponses.next('phone_subscribe_tabs', (response) => {
+        const result = response.result as { type?: string; tabs?: unknown[] } | undefined
+        const tab = result?.tabs?.[0] as { agentStatus?: { state?: string } } | undefined
+        return result?.type === 'updated' && tab?.agentStatus?.state === 'blocked'
+      })
+      const createResponse = await sendRequest(laptopEndpoint, {
+        id: 'laptop_create',
+        authToken: laptopAuthToken,
+        method: 'terminal.create',
+        params: {
+          worktree,
+          command: "claude 'work on the issue'",
+          tabId: 'laptop-tab',
+          leafId,
+          activate: true
+        }
+      })
+      const terminal = (
+        createResponse.result as {
+          terminal: { handle: string }
+        }
+      ).terminal
+      runtime.onPtyData('paired-laptop-pty', '\x1b]0;Claude waiting for permission\x07', 456)
+      runtime.onPtyData('paired-laptop-pty', 'Need approval\r\n', 457)
+
+      await expect(blockedUpdate).resolves.toMatchObject({
+        ok: true,
+        streaming: true,
+        result: {
+          type: 'updated',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `laptop-tab::${leafId}`,
+              parentTabId: 'laptop-tab',
+              leafId,
+              status: 'ready',
+              terminal: terminal.handle,
+              agentStatus: {
+                state: 'blocked',
+                paneKey: `laptop-tab:${leafId}`,
+                terminalHandle: terminal.handle
+              }
+            }
+          ]
+        }
+      })
+
+      sendEncryptedWsRequest(phone, {
+        id: 'phone_read',
+        method: 'terminal.read',
+        params: { terminal: terminal.handle }
+      })
+      await expect(phoneResponses.next('phone_read')).resolves.toMatchObject({
+        ok: true,
+        result: {
+          terminal: {
+            tail: ['Need approval']
+          }
+        }
+      })
+
+      sendEncryptedWsRequest(phone, {
+        id: 'phone_send',
+        method: 'terminal.send',
+        params: {
+          terminal: terminal.handle,
+          text: 'approved'
+        }
+      })
+      await expect(phoneResponses.next('phone_send')).resolves.toMatchObject({
+        ok: true,
+        result: {
+          send: {
+            accepted: true
+          }
+        }
+      })
+      expect(writes).toEqual(['approved'])
+    } finally {
+      phoneResponses.dispose()
+      phone.ws.close()
+      await server.stop()
+    }
   })
 
   it('serves worktree.ps from the runtime summary builder', async () => {

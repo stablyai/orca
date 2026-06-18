@@ -18,26 +18,9 @@ import { useAppStore } from '@/store'
 import type { Repo } from '../../../shared/types'
 import type { GlobalSettings } from '../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { settingsForRepoOwner, slugByRepoId, slugCacheKey, type SlugIndex } from './repo-slug-cache'
 
-/** Lowercased `owner/repo` → Repo[]. Case folded because GitHub treats slugs
- *  case-insensitively but displays the canonical casing; the lookup side
- *  uses the row's `content.repository` which may or may not match the
- *  canonical casing depending on when the project item was indexed. */
-type SlugIndex = Map<string, Repo[]>
-
-/** Module-scope cache keyed by runtime scope + repo.id. A Repo that has already failed
- *  resolution is not retried on re-mount; the value in the map is `null`
- *  to record the negative result so we don't keep poking `git remote` for
- *  repos that will never match. */
-const slugByRepoId = new Map<string, string | null>()
-
-function slugCacheKey(
-  repoId: string,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): string {
-  const target = getActiveRuntimeTarget(settings)
-  return `${target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'}:${repoId}`
-}
+export { lookupReposBySlugFromCache } from './repo-slug-cache'
 
 /** Drop a repo's cached slug result. Call when a repo is removed or its
  *  remote URL is known to have changed (e.g. after `git remote set-url`),
@@ -97,7 +80,7 @@ async function buildIndex(
   // the cache cannot grow unbounded across long sessions where users add
   // and remove repos. Without this, every removed repo's id (and its
   // negative-cached null) lingers forever.
-  const liveKeys = new Set(repos.map((r) => slugCacheKey(r.id, settings)))
+  const liveKeys = new Set(repos.map((r) => slugCacheKey(r.id, settingsForRepoOwner(r, settings))))
   for (const key of slugByRepoId.keys()) {
     if (!liveKeys.has(key)) {
       slugByRepoId.delete(key)
@@ -105,7 +88,12 @@ async function buildIndex(
   }
   const next: SlugIndex = new Map()
   const results = await Promise.all(
-    repos.map(async (r) => ({ repo: r, slug: await resolveRepoSlug(r, settings) }))
+    repos.map(async (r) => ({
+      repo: r,
+      // Why: the project slug index spans repos from multiple hosts; each
+      // repo's remote metadata must be read from its owner.
+      slug: await resolveRepoSlug(r, settingsForRepoOwner(r, settings))
+    }))
   )
   for (const { repo, slug } of results) {
     if (slug) {
@@ -125,11 +113,7 @@ export type RepoSlugIndexState = {
  *  deep trees can treat it as referentially equal inside a single render cycle. */
 export function useRepoSlugIndex(): RepoSlugIndexState {
   const repos = useAppStore((s) => s.repos)
-  const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
-  const runtimeSettings = useMemo(
-    () => (activeRuntimeEnvironmentId ? { activeRuntimeEnvironmentId } : null),
-    [activeRuntimeEnvironmentId]
-  )
+  const settings = useAppStore((s) => s.settings)
   const [index, setIndex] = useState<SlugIndex>(() => new Map())
   const [ready, setReady] = useState(false)
   // Why: track the current repos snapshot so the effect can ignore stale
@@ -139,14 +123,14 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
   useEffect(() => {
     const gen = ++generationRef.current
     setReady(false)
-    void buildIndex(repos, runtimeSettings).then((next) => {
+    void buildIndex(repos, settings).then((next) => {
       if (gen !== generationRef.current) {
         return
       }
       setIndex(next)
       setReady(true)
     })
-  }, [repos, runtimeSettings])
+  }, [repos, settings])
 
   return useMemo(
     () => ({

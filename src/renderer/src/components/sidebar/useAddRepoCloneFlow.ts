@@ -6,16 +6,21 @@ import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetr
 import type { Repo } from '../../../../shared/types'
 import { getCloneDestinationAutoFill } from './clone-defaults'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
+import { translate } from '@/i18n/i18n'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 
 export function useAddRepoCloneFlow({
   step,
   activeRuntimeEnvironmentId,
+  sshTargetId,
   workspaceDir,
   fetchWorktrees,
   onGitRepoReady
 }: {
   step: AddRepoDialogStep
   activeRuntimeEnvironmentId: string | null | undefined
+  sshTargetId?: string | null
   workspaceDir: string | null | undefined
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
@@ -39,6 +44,9 @@ export function useAddRepoCloneFlow({
   const [cloneProgress, setCloneProgress] = useState<{ phase: string; percent: number } | null>(
     null
   )
+  const hostToken = `${activeRuntimeEnvironmentId?.trim() ?? ''}:${sshTargetId?.trim() ?? ''}`
+  const hostTokenRef = useRef(hostToken)
+  hostTokenRef.current = hostToken
   // Why: monotonic ID so stale clone callbacks can detect they were superseded.
   const cloneGenRef = useRef(0)
   // Why: track whether we've already auto-filled for this entry into the clone step,
@@ -56,6 +64,7 @@ export function useAddRepoCloneFlow({
     step,
     cloneDestination,
     activeRuntimeEnvironmentId,
+    sshTargetId,
     workspaceDir,
     cloneStepAutoFilled: cloneStepAutoFilledRef.current
   })
@@ -78,10 +87,15 @@ export function useAddRepoCloneFlow({
   }, [])
 
   const handlePickDestination = useCallback(async (): Promise<void> => {
-    if (activeRuntimeEnvironmentId?.trim()) {
+    if (activeRuntimeEnvironmentId?.trim() || sshTargetId?.trim()) {
       // Why: the native folder picker returns a client-local path. Runtime
-      // clone destinations must be typed as server paths.
-      toast.error('Enter a server path for the clone destination.')
+      // and SSH clone destinations must be typed as paths on that host.
+      toast.error(
+        translate(
+          'auto.components.sidebar.useAddRepoCloneFlow.0dc4d1b657',
+          'Enter a host path for the clone destination.'
+        )
+      )
       return
     }
     const gen = cloneGenRef.current
@@ -90,21 +104,32 @@ export function useAddRepoCloneFlow({
       setCloneDestination(dir)
       setCloneError(null)
     }
-  }, [activeRuntimeEnvironmentId])
+  }, [activeRuntimeEnvironmentId, sshTargetId])
 
   const handleClone = useCallback(async (): Promise<void> => {
     const trimmedUrl = cloneUrl.trim()
     if (!trimmedUrl || !cloneDestination.trim()) {
       return
     }
+    const requestHostToken = hostTokenRef.current
     const gen = ++cloneGenRef.current
     setIsCloning(true)
     setCloneError(null)
     setCloneProgress(null)
     try {
-      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
-      const repo =
-        target.kind === 'environment'
+      const target = activeRuntimeEnvironmentId?.trim()
+        ? { kind: 'environment' as const, environmentId: activeRuntimeEnvironmentId.trim() }
+        : getActiveRuntimeTarget({
+            ...useAppStore.getState().settings,
+            activeRuntimeEnvironmentId: null
+          })
+      const repo = sshTargetId?.trim()
+        ? await window.api.repos.cloneRemote({
+            connectionId: sshTargetId.trim(),
+            url: trimmedUrl,
+            destination: cloneDestination.trim()
+          })
+        : target.kind === 'environment'
           ? (
               await callRuntimeRpc<{ repo: Repo }>(
                 target,
@@ -120,39 +145,40 @@ export function useAddRepoCloneFlow({
               url: trimmedUrl,
               destination: cloneDestination.trim()
             })) as Repo)
-      if (gen !== cloneGenRef.current) {
+      if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
-      toast.success('Repository cloned', { description: repo.displayName })
-      // Why: eagerly upsert so step 2 finds the repo before the IPC event.
-      const state = useAppStore.getState()
-      const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
-      if (existingIdx === -1) {
-        useAppStore.setState({ repos: [...state.repos, repo] })
-      } else {
-        const updated = [...state.repos]
-        updated[existingIdx] = repo
-        useAppStore.setState({ repos: updated })
-      }
+      toast.success(
+        translate('auto.components.sidebar.useAddRepoCloneFlow.4d0013cc93', 'Repository cloned'),
+        { description: repo.displayName }
+      )
+      upsertAddedRepoWithProjectHostSetup(repo)
       // Why: once the repo exists, a transient non-authoritative refresh
       // should fall through to project reveal instead of leaving the add flow open.
       await fetchWorktrees(repo.id, { requireAuthoritative: true })
-      if (gen !== cloneGenRef.current) {
+      if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
       await onGitRepoReady(repo.id, 'clone_url')
     } catch (err) {
-      if (gen !== cloneGenRef.current) {
+      if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
       }
-      const message = err instanceof Error ? err.message : String(err)
+      const message = extractIpcErrorMessage(err, String(err))
       setCloneError(message)
     } finally {
-      if (gen === cloneGenRef.current) {
+      if (gen === cloneGenRef.current && requestHostToken === hostTokenRef.current) {
         setIsCloning(false)
       }
     }
-  }, [cloneUrl, cloneDestination, fetchWorktrees, onGitRepoReady])
+  }, [
+    activeRuntimeEnvironmentId,
+    cloneUrl,
+    cloneDestination,
+    fetchWorktrees,
+    onGitRepoReady,
+    sshTargetId
+  ])
 
   return {
     cloneUrl,

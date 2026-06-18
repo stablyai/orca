@@ -879,7 +879,7 @@ describe('SSH IPC handlers', () => {
 
     await expect(
       handlers.get('ssh:terminateSessions')!(null, { targetId: 'ssh-1' })
-    ).rejects.toThrow('Failed to terminate remote SSH sessions')
+    ).rejects.toThrow('Failed to terminate SSH host sessions')
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('ssh-1', 'pty-1', 'terminated')
     expect(mockConnectionManager.disconnect).not.toHaveBeenCalledWith('ssh-1')
   })

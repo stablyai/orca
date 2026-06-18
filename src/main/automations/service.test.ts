@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { Repo } from '../../shared/types'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import { AutomationService } from './service'
 
 const testState = { dir: '' }
@@ -120,6 +121,227 @@ describe('AutomationService', () => {
       'automations:dispatchRequested',
       expect.objectContaining({
         run: expect.objectContaining({ id: run.id, status: 'dispatching' })
+      })
+    )
+  })
+
+  it('skips dispatch when the selected project host setup is gone', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Manual check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'project-1',
+        hostId: 'local',
+        projectHostSetupId: 'missing-setup',
+        repoId: 'r1',
+        path: '/repo'
+      },
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({
+      isDestroyed: () => false,
+      send
+    } as never)
+    service.setRendererReady()
+
+    const run = await service.runNow(automation.id)
+
+    expect(run.status).toBe('skipped_unavailable')
+    expect(run.error).toBe('Project is not set up on the selected automation host anymore.')
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('skips dispatch when the saved project host setup path is stale', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    store.addRepo(makeRepo({ path: '/repo/current' }))
+    const setup = store.getProjectHostSetups()[0]!
+    const automation = store.createAutomation({
+      name: 'Manual check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: setup.projectId,
+        hostId: setup.hostId,
+        projectHostSetupId: setup.id,
+        repoId: setup.repoId,
+        path: '/repo/old'
+      },
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({
+      isDestroyed: () => false,
+      send
+    } as never)
+    service.setRendererReady()
+
+    const run = await service.runNow(automation.id)
+
+    expect(run.status).toBe('skipped_unavailable')
+    expect(run.error).toBe('Project path for the selected automation host has changed.')
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('skips runtime-owned automations before desktop renderer dispatch', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
+    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const setup = store.getProjectHostSetups()[0]!
+    const automation = store.createAutomation({
+      name: 'Remote check',
+      prompt: 'Check the remote repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: setup.projectId,
+        hostId: runtimeHostId,
+        projectHostSetupId: setup.id,
+        repoId: setup.repoId,
+        path: setup.path
+      },
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({
+      isDestroyed: () => false,
+      send
+    } as never)
+    service.setRendererReady()
+
+    const run = await service.runNow(automation.id)
+
+    expect(run.status).toBe('skipped_unavailable')
+    expect(run.error).toContain('Remote-server automation scheduling is not available')
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('dispatches remote-host scheduled automations when service runs in serve mode', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
+    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const setup = store.getProjectHostSetups()[0]!
+    const automation = store.createAutomation({
+      name: 'Remote check',
+      prompt: 'Check the remote repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: setup.projectId,
+        hostId: runtimeHostId,
+        projectHostSetupId: setup.id,
+        repoId: setup.repoId,
+        path: setup.path
+      },
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const send = vi.fn()
+    const service = new AutomationService(store, {
+      tickMs: 60_000,
+      allowRemoteHostScheduling: true
+    })
+    service.setWebContents({
+      isDestroyed: () => false,
+      send
+    } as never)
+    service.setRendererReady()
+
+    const run = await service.runNow(automation.id)
+
+    expect(run.status).toBe('dispatching')
+    expect(send).toHaveBeenCalledWith(
+      'automations:dispatchRequested',
+      expect.objectContaining({
+        automation: expect.objectContaining({ schedulerOwner: 'remote_host_service' }),
+        run: expect.objectContaining({ id: run.id, status: 'dispatching' })
+      })
+    )
+  })
+
+  it('dispatches remote-host automations headlessly when no renderer is available', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
+    const store = await createStore()
+    const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
+    store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
+    const setup = store.getProjectHostSetups()[0]!
+    const automation = store.createAutomation({
+      name: 'Remote check',
+      prompt: 'Check the remote repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: setup.projectId,
+        hostId: runtimeHostId,
+        projectHostSetupId: setup.id,
+        repoId: setup.repoId,
+        path: setup.path
+      },
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
+    })
+    const service = new AutomationService(store, {
+      tickMs: 60_000,
+      allowRemoteHostScheduling: true,
+      headlessDispatcher: vi.fn().mockResolvedValue({
+        workspaceId: 'remote-wt-1',
+        workspaceDisplayName: 'Remote automation',
+        terminalSessionId: 'remote-tab-1',
+        completion: Promise.resolve({
+          status: 'completed',
+          outputSnapshot: {
+            format: 'plain_text',
+            content: 'Done.',
+            capturedAt: Date.now(),
+            truncated: false
+          },
+          error: null
+        })
+      })
+    })
+
+    const run = await service.runNow(automation.id)
+
+    expect(run.status).toBe('dispatched')
+    expect(run.workspaceId).toBe('remote-wt-1')
+    expect(run.workspaceDisplayName).toBe('Remote automation')
+    expect(run.terminalSessionId).toBe('remote-tab-1')
+    await vi.waitFor(() =>
+      expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
+        status: 'completed',
+        workspaceId: 'remote-wt-1',
+        terminalSessionId: 'remote-tab-1',
+        outputSnapshot: expect.objectContaining({ content: 'Done.' })
       })
     )
   })

@@ -1,38 +1,25 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from 'lucide-react'
-import type {
-  GlobalSettings,
-  Repo,
-  TerminalQuickCommand,
-  TerminalQuickCommandScope
-} from '../../../../shared/types'
-import {
-  getTerminalQuickCommandBody,
-  getTerminalQuickCommandScope,
-  isTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
+import { Plus } from 'lucide-react'
+import type { GlobalSettings, TerminalQuickCommand } from '../../../../shared/types'
+import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
 import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { useAppStore } from '../../store'
-import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
-import { Command, CommandItem, CommandList } from '../ui/command'
 import { Label } from '../ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
-import RepoBadgeLabel, { RepoBadgeMark } from '../repo/RepoBadgeLabel'
-import { cn } from '@/lib/utils'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
+import { getSettingOwnershipSummary } from './setting-ownership'
+import { translate } from '@/i18n/i18n'
+import { QuickCommandsList } from './QuickCommandsList'
+import { GLOBAL_SCOPE_KEY, QuickCommandsScopeFilter } from './QuickCommandsScopeFilter'
 
 type QuickCommandsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   addCommandIntentSignal?: number
 }
-
-const GLOBAL_SCOPE_KEY = '__global__'
 
 type EditorState =
   | {
@@ -45,26 +32,11 @@ type EditorState =
     }
   | null
 
-function getRepoLabel(repo: Pick<Repo, 'displayName' | 'path'>): string {
-  return repo.displayName || repo.path
-}
-
 export function shouldOpenQuickCommandAddIntent(
   addCommandIntentSignal: number | undefined,
   consumedAddIntentSignal: number
 ): boolean {
   return Boolean(addCommandIntentSignal && consumedAddIntentSignal !== addCommandIntentSignal)
-}
-
-function getScopeLabel(
-  scope: TerminalQuickCommandScope,
-  repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
-): string {
-  if (scope.type === 'global') {
-    return 'Global'
-  }
-  const repo = repoById.get(scope.repoId)
-  return repo ? getRepoLabel(repo) : 'Missing project'
 }
 
 export function QuickCommandsPane({
@@ -75,6 +47,7 @@ export function QuickCommandsPane({
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const commands = settings.terminalQuickCommands ?? []
+  const ownership = getSettingOwnershipSummary('terminalQuickCommands')
   const confirm = useConfirmationDialog()
 
   const [editor, setEditor] = useState<EditorState>(null)
@@ -161,23 +134,6 @@ export function QuickCommandsPane({
     setScopeSelection(null)
   }
 
-  const renderTriggerLabel = (): React.JSX.Element => {
-    if (showAll) {
-      return <span>All commands</span>
-    }
-    const includesGlobal = effectiveSelection.has(GLOBAL_SCOPE_KEY)
-    const selectedRepos = repos.filter((r) => effectiveSelection.has(r.id))
-    const parts: string[] = []
-    if (includesGlobal) {
-      parts.push('Global')
-    }
-    if (selectedRepos.length > 0) {
-      const [first, ...rest] = selectedRepos
-      parts.push(rest.length > 0 ? `${first.displayName} +${rest.length}` : first.displayName)
-    }
-    return <span className="truncate">{parts.join(', ') || 'None'}</span>
-  }
-
   const saveCommand = (next: TerminalQuickCommand): void => {
     // Why: re-read from the store so save lands on the latest list when
     // multiple edit dialogs fire in quick succession.
@@ -192,9 +148,16 @@ export function QuickCommandsPane({
 
   const removeCommand = async (command: TerminalQuickCommand): Promise<void> => {
     const confirmed = await confirm({
-      title: `Delete "${command.label || 'Untitled'}"?`,
-      description: 'This quick command will be removed from your saved list.',
-      confirmLabel: 'Delete',
+      title: translate(
+        'auto.components.settings.QuickCommandsPane.3edf3deaf8',
+        'Delete "{{value0}}"?',
+        { value0: command.label || 'Untitled' }
+      ),
+      description: translate(
+        'auto.components.settings.QuickCommandsPane.3d9dc558e8',
+        'This quick command will be removed from your saved list.'
+      ),
+      confirmLabel: translate('auto.components.settings.QuickCommandsPane.ec1ed99e70', 'Delete'),
       confirmVariant: 'destructive'
     })
     if (!confirmed) {
@@ -213,11 +176,10 @@ export function QuickCommandsPane({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3 py-2">
         <div className="space-y-1">
-          <Label>Saved Commands</Label>
-          <p className="text-xs text-muted-foreground">
-            Run them from the Quick Commands button in the tab bar, or right-click inside any
-            terminal.
-          </p>
+          <Label>
+            {translate('auto.components.settings.QuickCommandsPane.f91b649324', 'Saved Commands')}
+          </Label>
+          <p className="text-xs text-muted-foreground">{ownership.description}</p>
         </div>
         <Button
           type="button"
@@ -226,173 +188,27 @@ export function QuickCommandsPane({
           onClick={() => setEditor({ mode: 'add', command: createDraftForCurrentFilter() })}
         >
           <Plus />
-          Add Command
+          {translate('auto.components.settings.QuickCommandsPane.5aacc8f7dc', 'Add Command')}
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Popover open={scopePopoverOpen} onOpenChange={setScopePopoverOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              role="combobox"
-              aria-expanded={scopePopoverOpen}
-              className="h-8 min-w-52 justify-between px-3 text-xs font-normal"
-            >
-              {renderTriggerLabel()}
-              <ChevronsUpDown className="size-3.5 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            className="w-[min(320px,calc(100vw-1rem))] min-w-[var(--radix-popover-trigger-width)] p-0"
-          >
-            <Command>
-              <div className="border-b border-border">
-                <button
-                  type="button"
-                  onClick={handleSelectAll}
-                  onMouseDown={(event) => event.preventDefault()}
-                  className={cn(
-                    'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
-                    showAll && 'opacity-80'
-                  )}
-                >
-                  <Check
-                    className={cn(
-                      'size-3 text-muted-foreground',
-                      showAll ? 'opacity-70' : 'opacity-0'
-                    )}
-                  />
-                  <span>All commands</span>
-                </button>
-              </div>
-              <CommandList>
-                <CommandItem
-                  value={GLOBAL_SCOPE_KEY}
-                  onSelect={() => toggleScope(GLOBAL_SCOPE_KEY)}
-                  className="items-center gap-2 px-3 py-1.5 text-xs"
-                >
-                  <Check
-                    className={cn(
-                      'size-3 text-muted-foreground',
-                      effectiveSelection.has(GLOBAL_SCOPE_KEY) ? 'opacity-70' : 'opacity-0'
-                    )}
-                  />
-                  <span>Global</span>
-                </CommandItem>
-                {repos.map((repo) => {
-                  const isSelected = effectiveSelection.has(repo.id)
-                  return (
-                    <CommandItem
-                      key={repo.id}
-                      value={repo.id}
-                      onSelect={() => toggleScope(repo.id)}
-                      className="items-center gap-2 px-3 py-1.5 text-xs"
-                    >
-                      <Check
-                        className={cn(
-                          'size-3 text-muted-foreground',
-                          isSelected ? 'opacity-70' : 'opacity-0'
-                        )}
-                      />
-                      <RepoBadgeLabel
-                        name={getRepoLabel(repo)}
-                        color={repo.badgeColor}
-                        className="max-w-full"
-                      />
-                    </CommandItem>
-                  )
-                })}
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </div>
+      <QuickCommandsScopeFilter
+        repos={repos}
+        effectiveSelection={effectiveSelection}
+        showAll={showAll}
+        scopePopoverOpen={scopePopoverOpen}
+        setScopePopoverOpen={setScopePopoverOpen}
+        handleSelectAll={handleSelectAll}
+        toggleScope={toggleScope}
+      />
 
-      <div className="overflow-hidden rounded-lg border border-border/50 bg-muted/20">
-        {visibleCommands.length === 0 ? (
-          <div className="px-3 py-6 text-sm text-muted-foreground">
-            {commands.length === 0
-              ? 'No quick commands saved.'
-              : 'No commands in the selected scopes.'}
-          </div>
-        ) : (
-          <div className="max-h-[60vh] space-y-2 overflow-y-auto p-2 scrollbar-sleek">
-            {visibleCommands.map((command) => {
-              const scope = getTerminalQuickCommandScope(command)
-              return (
-                <div
-                  key={command.id}
-                  className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2 shadow-xs"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <div className="truncate text-sm font-medium">
-                        {command.label || 'Untitled'}
-                      </div>
-                      <Badge variant="outline" className="max-w-44 gap-1.5">
-                        {scope.type === 'repo' ? (
-                          <>
-                            <RepoBadgeMark color={repoById.get(scope.repoId)?.badgeColor} />
-                            <span className="truncate">{getScopeLabel(scope, repoById)}</span>
-                          </>
-                        ) : (
-                          <span className="truncate">{getScopeLabel(scope, repoById)}</span>
-                        )}
-                      </Badge>
-                    </div>
-                    <div className="flex min-w-0 items-center gap-1.5 text-xs text-foreground/80">
-                      {isTerminalAgentQuickCommand(command) ? (
-                        <span className="shrink-0 text-muted-foreground">
-                          <AgentIcon agent={command.agent} size={12} />
-                        </span>
-                      ) : null}
-                      <span
-                        className={cn(
-                          'truncate',
-                          isTerminalAgentQuickCommand(command) ? '' : 'font-mono'
-                        )}
-                      >
-                        {isTerminalAgentQuickCommand(command)
-                          ? `${getAgentLabel(command.agent)}: ${getTerminalQuickCommandBody(command)}`
-                          : getTerminalQuickCommandBody(command) || 'No command text'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-[11px] font-medium text-foreground/75">
-                    {isTerminalAgentQuickCommand(command)
-                      ? 'Agent'
-                      : command.appendEnter
-                        ? 'Enter'
-                        : 'Insert'}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Edit ${command.label || 'quick command'}`}
-                    onClick={() => setEditor({ mode: 'edit', command })}
-                  >
-                    <Pencil />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Remove ${command.label || 'quick command'}`}
-                    onClick={() => void removeCommand(command)}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
+      <QuickCommandsList
+        commands={commands}
+        visibleCommands={visibleCommands}
+        repoById={repoById}
+        onEdit={(command) => setEditor({ mode: 'edit', command })}
+        onRemove={(command) => void removeCommand(command)}
+      />
 
       {editor !== null ? (
         <TerminalQuickCommandDialog

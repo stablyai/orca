@@ -1,41 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import type {
-  SourceControlAiModelChoice,
   SourceControlAiSettingsPatch,
   SourceControlAiSettings
 } from '../../../../shared/source-control-ai-types'
+import { buildBranchNamePrompt } from '../../../../shared/branch-name-from-work'
+import { normalizeSourceControlAiSettings } from '../../../../shared/source-control-ai'
 import {
-  clearSourceControlAiModelChoiceForHost,
-  normalizeSourceControlAiSettings,
-  readSourceControlAiModelChoiceForHost,
-  selectSourceControlAiModelChoiceForHost
-} from '../../../../shared/source-control-ai'
-import {
-  getCommitMessageAgentCapability,
-  isCustomAgentId,
-  resolveCommitMessageAgentChoice,
-  type CommitMessageAgentCapability,
-  type CommitMessageModelCapability
-} from '../../../../shared/commit-message-agent-spec'
-import {
-  getCommitMessageModelDiscoveryHostKeyForScope,
-  LOCAL_COMMIT_MESSAGE_HOST_KEY
-} from '../../../../shared/commit-message-host-key'
-import { getConnectionId } from '@/lib/connection-context'
+  resolveSourceControlActionCommandTemplate,
+  setSourceControlActionDefault
+} from '../../../../shared/source-control-ai-actions'
 import { cn } from '@/lib/utils'
-import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
 import { useAppStore } from '../../store'
-import { useActiveWorktree } from '../../store/selectors'
 import { Button } from '../ui/button'
+import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { AUTO_RENAME_BRANCH_ADVANCED_SEARCH_ENTRIES } from './auto-rename-branch-search'
-import { AutoRenameBranchPromptEditor } from './AutoRenameBranchPromptEditor'
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { getAutoRenameBranchAdvancedSearchEntries } from './auto-rename-branch-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { translate } from '@/i18n/i18n'
 
 type AutoRenameBranchFromWorkSettingProps = {
   settings: GlobalSettings
@@ -47,64 +33,19 @@ type AutoRenameBranchFromWorkSettingProps = {
   settingsSearchQuery?: string
 }
 
-const INHERIT_BRANCH_MODEL_VALUE = '__inherit_branch_model__'
+const BUILT_IN_BRANCH_NAME_PROMPT = buildBranchNamePrompt({
+  firstPrompt: '{first agent prompt}',
+  assistantMessage: '{agent initial response, when available}'
+})
 export function shouldOpenAutoRenameBranchAdvanced(searchQuery: string): boolean {
   return (
     normalizeSettingsSearchQuery(searchQuery) !== '' &&
-    matchesSettingsSearch(searchQuery, AUTO_RENAME_BRANCH_ADVANCED_SEARCH_ENTRIES)
+    matchesSettingsSearch(searchQuery, getAutoRenameBranchAdvancedSearchEntries())
   )
 }
 
 function readSourceControlSettings(settings: GlobalSettings): SourceControlAiSettings {
   return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
-}
-
-function mergeModelCapabilities(
-  fallbackModels: CommitMessageModelCapability[],
-  discoveredModels: CommitMessageModelCapability[] | undefined
-): CommitMessageModelCapability[] {
-  const models: CommitMessageModelCapability[] = []
-  const seen = new Set<string>()
-  for (const model of [...(discoveredModels ?? []), ...fallbackModels]) {
-    if (!model.id || seen.has(model.id)) {
-      continue
-    }
-    seen.add(model.id)
-    models.push(model)
-  }
-  return models
-}
-
-function getCapabilityWithDiscoveredModels(
-  config: SourceControlAiSettings,
-  capability: CommitMessageAgentCapability,
-  hostKey: string
-): CommitMessageAgentCapability {
-  const discoveredModels =
-    config.discoveredModelsByAgentByHost?.[hostKey]?.[capability.id] ??
-    (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
-      ? config.discoveredModelsByAgent?.[capability.id]
-      : undefined)
-  const models = mergeModelCapabilities(capability.models, discoveredModels)
-  const defaultModelId = models.some((model) => model.id === capability.defaultModelId)
-    ? capability.defaultModelId
-    : (models[0]?.id ?? capability.defaultModelId)
-  return { ...capability, models, defaultModelId }
-}
-
-function resolveSelectedThinking(
-  config: SourceControlAiSettings,
-  model: CommitMessageModelCapability,
-  operationChoice: SourceControlAiModelChoice | undefined
-): string | undefined {
-  if (!model.thinkingLevels) {
-    return undefined
-  }
-  const persisted =
-    operationChoice?.selectedThinkingByModel?.[model.id] ?? config.selectedThinkingByModel[model.id]
-  return model.thinkingLevels.some((level) => level.id === persisted)
-    ? persisted
-    : model.defaultThinkingLevel
 }
 
 export function AutoRenameBranchFromWorkSetting({
@@ -118,30 +59,30 @@ export function AutoRenameBranchFromWorkSetting({
 }: AutoRenameBranchFromWorkSettingProps): React.JSX.Element {
   const storeSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
-  const activeWorktree = useActiveWorktree()
-  const activeConnectionId = getConnectionId(activeWorktree?.id ?? null)
-  const discoveryHostKey = getCommitMessageModelDiscoveryHostKeyForScope(
-    activeWorktree?.id ? getRuntimeGitScope(settings, activeConnectionId) : activeConnectionId
-  )
   const config = readSourceControlSettings(settings)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const advancedSearchOpen = shouldOpenAutoRenameBranchAdvanced(searchQuery)
   const advancedOpen = optionsOpen || advancedSearchOpen
-  const persistedBranchNamePrompt = config.instructionsByOperation.branchName ?? ''
-  const persistedBranchNamePromptRef = useRef(persistedBranchNamePrompt)
-  persistedBranchNamePromptRef.current = persistedBranchNamePrompt
-  const [branchNamePromptDraft, setBranchNamePromptDraft] = useState(persistedBranchNamePrompt)
+  const persistedBranchNameTemplate = resolveSourceControlActionCommandTemplate(
+    config.actions,
+    'branchName'
+  )
+  const persistedBranchNameTemplateRef = useRef(persistedBranchNameTemplate)
+  persistedBranchNameTemplateRef.current = persistedBranchNameTemplate
+  const [branchNameTemplateDraft, setBranchNameTemplateDraft] = useState(
+    persistedBranchNameTemplate
+  )
   const [isSavingPrompt, setIsSavingPrompt] = useState(false)
-  const branchNamePromptDirty = branchNamePromptDraft !== persistedBranchNamePrompt
+  const branchNamePromptDirty = branchNameTemplateDraft !== persistedBranchNameTemplate
 
   useEffect(() => {
     if (!branchNamePromptDirty) {
-      setBranchNamePromptDraft(persistedBranchNamePrompt)
+      setBranchNameTemplateDraft(persistedBranchNameTemplate)
     }
-  }, [branchNamePromptDirty, persistedBranchNamePrompt])
+  }, [branchNamePromptDirty, persistedBranchNameTemplate])
 
   useEffect(() => {
-    setBranchNamePromptDraft(persistedBranchNamePromptRef.current)
+    setBranchNameTemplateDraft(persistedBranchNameTemplateRef.current)
     // Why: Settings owns the discard confirmation, but the draft lives here so
     // the row can keep its prompt-specific save/discard affordances.
   }, [branchPromptDiscardSignal])
@@ -161,103 +102,6 @@ export function AutoRenameBranchFromWorkSetting({
     onBranchPromptDirtyChangeRef.current?.(false)
   }, [])
 
-  const resolvedAgentId = resolveCommitMessageAgentChoice(
-    config.agentId,
-    settings.defaultTuiAgent,
-    settings.disabledTuiAgents
-  )
-  const activeAgentId =
-    resolvedAgentId && !isCustomAgentId(resolvedAgentId) ? resolvedAgentId : null
-  const activeCapability = useMemo(() => {
-    if (!activeAgentId) {
-      return undefined
-    }
-    const capability = getCommitMessageAgentCapability(activeAgentId)
-    return capability
-      ? getCapabilityWithDiscoveredModels(config, capability, discoveryHostKey)
-      : undefined
-  }, [activeAgentId, config, discoveryHostKey])
-  const branchModelChoice = config.modelOverridesByOperation?.branchName
-  const branchModelOverrideId = activeCapability
-    ? readSourceControlAiModelChoiceForHost(
-        branchModelChoice,
-        discoveryHostKey,
-        activeCapability.id
-      )
-    : undefined
-  const selectedBranchModel = branchModelOverrideId
-    ? activeCapability?.models.find((model) => model.id === branchModelOverrideId)
-    : undefined
-  const selectedBranchThinking = selectedBranchModel
-    ? resolveSelectedThinking(config, selectedBranchModel, branchModelChoice)
-    : undefined
-
-  const onBranchModelChange = (modelId: string): void => {
-    if (!activeCapability) {
-      return
-    }
-    if (modelId === INHERIT_BRANCH_MODEL_VALUE) {
-      void writeSourceControlAiSettings((current) => {
-        const nextOverrides = { ...current.modelOverridesByOperation }
-        const nextChoice = clearSourceControlAiModelChoiceForHost(
-          nextOverrides.branchName,
-          discoveryHostKey,
-          activeCapability.id
-        )
-        if (nextChoice) {
-          nextOverrides.branchName = nextChoice
-        } else {
-          delete nextOverrides.branchName
-        }
-        return { modelOverridesByOperation: nextOverrides }
-      })
-      return
-    }
-    const model = activeCapability.models.find((candidate) => candidate.id === modelId)
-    if (!model) {
-      return
-    }
-    void writeSourceControlAiSettings((current) => {
-      const nextChoice = selectSourceControlAiModelChoiceForHost(
-        current.modelOverridesByOperation?.branchName,
-        discoveryHostKey,
-        activeCapability.id,
-        model.id
-      )
-      if (
-        model.thinkingLevels &&
-        model.defaultThinkingLevel &&
-        !nextChoice.selectedThinkingByModel?.[model.id]
-      ) {
-        nextChoice.selectedThinkingByModel = {
-          ...nextChoice.selectedThinkingByModel,
-          [model.id]: model.defaultThinkingLevel
-        }
-      }
-      return {
-        modelOverridesByOperation: {
-          ...current.modelOverridesByOperation,
-          branchName: nextChoice
-        }
-      }
-    })
-  }
-
-  const onBranchThinkingChange = (modelId: string, thinkingId: string): void => {
-    void writeSourceControlAiSettings((current) => ({
-      modelOverridesByOperation: {
-        ...current.modelOverridesByOperation,
-        branchName: {
-          ...current.modelOverridesByOperation?.branchName,
-          selectedThinkingByModel: {
-            ...current.modelOverridesByOperation?.branchName?.selectedThinkingByModel,
-            [modelId]: thinkingId
-          }
-        }
-      }
-    }))
-  }
-
   const onSavePrompt = async (): Promise<void> => {
     if (!branchNamePromptDirty || isSavingPrompt) {
       return
@@ -265,10 +109,9 @@ export function AutoRenameBranchFromWorkSetting({
     setIsSavingPrompt(true)
     try {
       await writeSourceControlAiSettings((current) => ({
-        instructionsByOperation: {
-          ...current.instructionsByOperation,
-          branchName: branchNamePromptDraft
-        }
+        actions: setSourceControlActionDefault(current.actions, 'branchName', {
+          commandInputTemplate: branchNameTemplateDraft
+        })
       }))
     } finally {
       setIsSavingPrompt(false)
@@ -276,26 +119,29 @@ export function AutoRenameBranchFromWorkSetting({
   }
 
   const onDiscardPrompt = (): void => {
-    setBranchNamePromptDraft(persistedBranchNamePrompt)
+    setBranchNameTemplateDraft(persistedBranchNameTemplate)
   }
 
   return (
     <SearchableSetting
-      title="Auto-Name From First Message"
-      description="Use the first task to name blank new workspaces and their unpublished branches."
+      title={translate(
+        'auto.components.settings.AutoRenameBranchFromWorkSetting.ef787db0e3',
+        'Auto-rename branch & worktree'
+      )}
+      description={translate(
+        'auto.components.settings.AutoRenameBranchFromWorkSetting.6a051586d2',
+        'Rename the auto-generated branch based on the work once an agent starts.'
+      )}
       keywords={[
-        'workspace',
-        'title',
         'branch',
         'rename',
-        'name',
         'auto',
         'creature name',
         'agent',
         'prompt',
+        'command',
+        'template',
         'worktree',
-        'model',
-        'prompt',
         'slug'
       ]}
       forceVisible={forceVisible || branchNamePromptDirty || advancedSearchOpen}
@@ -303,11 +149,27 @@ export function AutoRenameBranchFromWorkSetting({
     >
       <div ref={setSettingRootRef} className="flex items-center justify-between gap-4">
         <div className="space-y-0.5">
-          <Label>Auto-name from first message</Label>
+          <Label>
+            {translate(
+              'auto.components.settings.AutoRenameBranchFromWorkSetting.ef787db0e3',
+              'Auto-rename branch & worktree'
+            )}
+          </Label>
           <p className="text-xs text-muted-foreground">
-            When a blank new workspace starts work, Orca uses the first task to rename the sidebar
-            title and unpublished generated branch (e.g. <code>Nautilus</code>). Workspaces created
-            from linked issues or pull requests are named up front from the same short identity.
+            {translate(
+              'auto.components.settings.AutoRenameBranchFromWorkSetting.12ea4a408d',
+              'When an agent starts working in a new workspace, Orca renames its auto-generated branch (e.g.'
+            )}
+            <code>
+              {translate(
+                'auto.components.settings.AutoRenameBranchFromWorkSetting.1626524572',
+                'Nautilus'
+              )}
+            </code>
+            {translate(
+              'auto.components.settings.AutoRenameBranchFromWorkSetting.d9b65054ef',
+              ') to a short name summarizing the task. Only branches Orca named itself are renamed, and never after they have been pushed.'
+            )}
           </p>
         </div>
         <button
@@ -338,7 +200,10 @@ export function AutoRenameBranchFromWorkSetting({
             size="sm"
             className="-ml-2 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
           >
-            Advanced
+            {translate(
+              'auto.components.settings.AutoRenameBranchFromWorkSetting.e784ea62dc',
+              'Advanced'
+            )}
             <ChevronDown
               className={cn('size-3.5 transition-transform', advancedOpen && 'rotate-180')}
             />
@@ -346,70 +211,156 @@ export function AutoRenameBranchFromWorkSetting({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-2 space-y-3 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
-            <AutoRenameBranchPromptEditor
-              draft={branchNamePromptDraft}
-              dirty={branchNamePromptDirty}
-              saving={isSavingPrompt}
-              onDraftChange={setBranchNamePromptDraft}
-              onDiscard={onDiscardPrompt}
-              onSave={onSavePrompt}
-            />
-
-            <div className="flex flex-col gap-3 border-t border-border/50 pt-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-2">
               <div className="space-y-0.5">
-                <Label>Branch name model</Label>
+                <Label htmlFor="git-auto-rename-branch-name-template">
+                  {translate(
+                    'auto.components.settings.AutoRenameBranchFromWorkSetting.a869d0edd8',
+                    'Branch name command template'
+                  )}
+                </Label>
                 <p className="text-xs text-muted-foreground">
-                  Use a different model for branch name generation.
+                  {translate(
+                    'auto.components.settings.AutoRenameBranchFromWorkSetting.9241b59bf5',
+                    'Use'
+                  )}
+                  <code className="font-mono">
+                    {translate(
+                      'auto.components.settings.AutoRenameBranchFromWorkSetting.c71770c455',
+                      '{basePrompt}'
+                    )}
+                  </code>{' '}
+                  {translate(
+                    'auto.components.settings.AutoRenameBranchFromWorkSetting.69bf4830c2',
+                    "to include Orca's"
+                  )}{' '}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline rounded-sm font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      >
+                        {translate(
+                          'auto.components.settings.AutoRenameBranchFromWorkSetting.9c9b54e4ea',
+                          'built-in branch-name prompt'
+                        )}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="start"
+                      side="bottom"
+                      className="w-[520px] max-w-[calc(100vw-2rem)] p-3"
+                    >
+                      <div>
+                        <pre className="scrollbar-sleek max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                          {BUILT_IN_BRANCH_NAME_PROMPT}
+                        </pre>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  {translate(
+                    'auto.components.settings.AutoRenameBranchFromWorkSetting.56580dcf60',
+                    '. You can also reference'
+                  )}
+                  <code className="font-mono">
+                    {translate(
+                      'auto.components.settings.AutoRenameBranchFromWorkSetting.2ee2779c05',
+                      '{firstPrompt}'
+                    )}
+                  </code>{' '}
+                  {translate(
+                    'auto.components.settings.AutoRenameBranchFromWorkSetting.570817d126',
+                    'and'
+                  )}{' '}
+                  <code className="font-mono">
+                    {translate(
+                      'auto.components.settings.AutoRenameBranchFromWorkSetting.a4fa380b67',
+                      '{assistantMessage}'
+                    )}
+                  </code>
+                  {translate(
+                    'auto.components.settings.AutoRenameBranchFromWorkSetting.5d569f5199',
+                    '. Orca generates only the final segment, like'
+                  )}
+                  <code className="font-mono">
+                    {translate(
+                      'auto.components.settings.AutoRenameBranchFromWorkSetting.800edb1e54',
+                      'fix-login-flow'
+                    )}
+                  </code>
+                  {translate(
+                    'auto.components.settings.AutoRenameBranchFromWorkSetting.f19a56498d',
+                    '; your branch prefix setting still applies.'
+                  )}
                 </p>
               </div>
-              {activeCapability ? (
-                <div className="flex w-full flex-col items-end gap-2 sm:w-auto">
-                  <Select
-                    value={branchModelOverrideId ?? INHERIT_BRANCH_MODEL_VALUE}
-                    onValueChange={onBranchModelChange}
-                  >
-                    <SelectTrigger size="sm" className="h-8 w-full shrink-0 text-xs sm:w-[220px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={INHERIT_BRANCH_MODEL_VALUE} className="cursor-pointer">
-                        Use default model
-                      </SelectItem>
-                      {activeCapability.models.map((model) => (
-                        <SelectItem key={model.id} value={model.id} className="cursor-pointer">
-                          {model.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {selectedBranchModel?.thinkingLevels && selectedBranchThinking ? (
-                    <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
-                      <span className="text-[11px] text-muted-foreground">Thinking</span>
-                      <Select
-                        value={selectedBranchThinking}
-                        onValueChange={(value) =>
-                          onBranchThinkingChange(selectedBranchModel.id, value)
-                        }
-                      >
-                        <SelectTrigger size="sm" className="h-7 w-[150px] text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {selectedBranchModel.thinkingLevels.map((level) => (
-                            <SelectItem key={level.id} value={level.id} className="cursor-pointer">
-                              {level.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="max-w-[260px] text-right text-xs text-muted-foreground">
-                  Choose a Git AI Author agent that supports model selection.
+              <textarea
+                id="git-auto-rename-branch-name-template"
+                rows={4}
+                value={branchNameTemplateDraft}
+                onChange={(event) => setBranchNameTemplateDraft(event.target.value)}
+                placeholder={translate(
+                  'auto.components.settings.AutoRenameBranchFromWorkSetting.c71770c455',
+                  '{basePrompt}'
+                )}
+                className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+              />
+              <SourceControlActionVariableChips
+                actionId="branchName"
+                onInsert={(variable) => {
+                  const separator =
+                    branchNameTemplateDraft.endsWith('\n') || branchNameTemplateDraft.length === 0
+                      ? ''
+                      : ' '
+                  setBranchNameTemplateDraft(`${branchNameTemplateDraft}${separator}{${variable}}`)
+                }}
+              />
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[11px] text-muted-foreground">
+                  {branchNamePromptDirty
+                    ? translate(
+                        'auto.components.settings.AutoRenameBranchFromWorkSetting.7c7e34a66d',
+                        'Unsaved changes'
+                      )
+                    : translate(
+                        'auto.components.settings.AutoRenameBranchFromWorkSetting.40e7be7850',
+                        'Saved'
+                      )}
                 </p>
-              )}
+                <div className="flex items-center gap-2">
+                  {branchNamePromptDirty ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={onDiscardPrompt}
+                      disabled={isSavingPrompt}
+                    >
+                      {translate(
+                        'auto.components.settings.AutoRenameBranchFromWorkSetting.0de9fda203',
+                        'Discard'
+                      )}
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    onClick={() => void onSavePrompt()}
+                    disabled={!branchNamePromptDirty || isSavingPrompt}
+                  >
+                    {isSavingPrompt
+                      ? translate(
+                          'auto.components.settings.AutoRenameBranchFromWorkSetting.cfd82406dd',
+                          'Saving...'
+                        )
+                      : translate(
+                          'auto.components.settings.AutoRenameBranchFromWorkSetting.ec3e0c388e',
+                          'Save'
+                        )}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </CollapsibleContent>

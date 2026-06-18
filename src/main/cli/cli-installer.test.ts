@@ -154,6 +154,9 @@ describe('CliInstaller', () => {
       expect(installed.commandPath).toBe(join(commandDir, 'orca-dev'))
       expect(installed.launcherPath).toBe(join(fixture.userDataPath, 'cli', 'bin', 'orca-dev'))
       await expect(readlink(installed.commandPath as string)).resolves.toBe(installed.launcherPath)
+      await expect(
+        readFile(join(fixture.userDataPath, 'cli', 'bin', 'orca'), 'utf8')
+      ).resolves.toBe(await readFile(installed.launcherPath as string, 'utf8'))
     }
   )
 

@@ -20,6 +20,7 @@ const makeHeaderRow = (key: string): Extract<Row, { type: 'header' }> => ({
   type: 'header',
   key,
   label: key,
+  count: 0,
   tone: 'text-foreground'
 })
 
@@ -47,6 +48,8 @@ const makeWorktree = (id: string): Worktree => ({
 
 const makeWorktreeRow = (id: string): Extract<Row, { type: 'item' }> => ({
   type: 'item',
+  rowKey: `all:${id}`,
+  sectionKey: 'all',
   worktree: makeWorktree(id),
   repo,
   depth: 0,

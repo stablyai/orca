@@ -3,6 +3,13 @@ import type { TreeNode } from './file-explorer-types'
 import { activateFileExplorerNode } from './useFileExplorerHandlers'
 
 describe('activateFileExplorerNode', () => {
+  const directoryNode: TreeNode = {
+    name: 'src',
+    path: '/repo/src',
+    relativePath: 'src',
+    isDirectory: true,
+    depth: 0
+  }
   const symlinkNode: TreeNode = {
     name: 'linked-docs',
     path: '/repo/linked-docs',
@@ -11,6 +18,26 @@ describe('activateFileExplorerNode', () => {
     isSymlink: true,
     depth: 0
   }
+
+  it('selects filtered folders without mutating persisted expansion', async () => {
+    const toggleDir = vi.fn()
+    const setSelectedPath = vi.fn()
+
+    await activateFileExplorerNode({
+      node: directoryNode,
+      activeWorktreeId: 'wt-1',
+      openFile: vi.fn(),
+      toggleDir,
+      canToggleDirectories: false,
+      loadDir: vi.fn(),
+      statPath: vi.fn(),
+      markPathAsDirectory: vi.fn(),
+      setSelectedPath
+    })
+
+    expect(setSelectedPath).toHaveBeenCalledWith('/repo/src')
+    expect(toggleDir).not.toHaveBeenCalled()
+  })
 
   it('expands a symlink only after explicit activation proves it is a directory', async () => {
     const loadDir = vi.fn().mockResolvedValue(true)

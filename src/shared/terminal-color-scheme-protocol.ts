@@ -22,12 +22,14 @@ export function resolveTerminalColorSchemeMode(
 export type Mode2031ScanResult = {
   subscribe: boolean
   unsubscribe: boolean
+  finalState: 'subscribed' | 'unsubscribed' | null
   tail: string
 }
 
 const NO_MODE_2031_SEQUENCE: Mode2031ScanResult = {
   subscribe: false,
   unsubscribe: false,
+  finalState: null,
   tail: ''
 }
 
@@ -39,6 +41,7 @@ export function scanMode2031Sequences(previousTail: string, data: string): Mode2
   const result: Mode2031ScanResult = {
     subscribe: false,
     unsubscribe: false,
+    finalState: null,
     tail: extractPrivateModeScanTail(input)
   }
   // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
@@ -51,8 +54,10 @@ export function scanMode2031Sequences(previousTail: string, data: string): Mode2
     }
     if ((match[2] ?? match[4]) === 'h') {
       result.subscribe = true
+      result.finalState = 'subscribed'
     } else {
       result.unsubscribe = true
+      result.finalState = 'unsubscribed'
     }
   }
   return result

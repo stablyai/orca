@@ -18,6 +18,7 @@ export {
   normalizeTerminalTitle,
   isGeminiTerminalTitle,
   isClaudeAgent,
+  isClaudeManagementTitle,
   getAgentLabel
 } from '../../../shared/agent-detection'
 import {
@@ -125,7 +126,9 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   droid: 'Droid',
   'command-code': 'Command Code',
   grok: 'Grok',
-  hermes: 'Hermes'
+  hermes: 'Hermes',
+  devin: 'Devin',
+  ante: 'Ante'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
@@ -151,6 +154,7 @@ export function formatAgentTypeLabel(agentType: AgentType | null | undefined): s
 // would silently accept a subset of the union.
 const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   claude: true,
+  'claude-agent-teams': true,
   openclaude: true,
   codex: true,
   autohand: true,
@@ -179,7 +183,9 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   hermes: true,
   openclaw: true,
   copilot: true,
-  grok: true
+  grok: true,
+  devin: true,
+  ante: true
 }
 
 export function agentTypeToIconAgent(agentType: AgentType | null | undefined): TuiAgent | null {

@@ -3,11 +3,12 @@ import { mkdirSync, rmSync, writeFileSync } from 'fs'
 import { mkdtemp } from 'fs/promises'
 import os from 'os'
 import path from 'path'
-import type { ElectronApplication } from '@stablyai/playwright-test'
+import type { ElectronApplication, Locator } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
 const tempRoots: string[] = []
+const IMPORT_AS_MONOREPO_BUTTON_NAME = 'Yes, import as monorepo'
 
 function initializeGitRepo(repoPath: string): void {
   mkdirSync(repoPath, { recursive: true })
@@ -132,6 +133,15 @@ async function installCancellableNestedScanMock(
   }, scan)
 }
 
+function getImportAsMonorepoButton(importDialog: Locator): Locator {
+  // Why: this test should fail on import-dialog copy drift instead of falling
+  // back to a retired accessible label.
+  return importDialog.getByRole('button', {
+    name: IMPORT_AS_MONOREPO_BUTTON_NAME,
+    exact: true
+  })
+}
+
 test.afterEach(() => {
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -154,8 +164,10 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
   await expect(dialog).toBeVisible()
   await dialog.getByRole('button', { name: /Browse folder/i }).click()
 
-  const importDialog = orcaPage.getByRole('dialog', { name: /Import as project group/i })
-  await expect(importDialog.getByText('Found 100 git repositories in this folder.')).toBeVisible()
+  const importDialog = orcaPage.getByRole('dialog', {
+    name: /Import repositories from folder/i
+  })
+  await expect(importDialog.getByText(/Found 100 repositories in/)).toBeVisible()
   await expect(importDialog.getByText('Showing partial scan results.')).toBeVisible()
   await expect(importDialog.getByText('z-web-client', { exact: true }).first()).toBeVisible()
 
@@ -165,7 +177,7 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
     .filter({ hasText: 'z-web-client' })
     .locator('input[type="checkbox"]')
     .check()
-  await importDialog.getByRole('button', { name: /Import as project group/i }).click()
+  await getImportAsMonorepoButton(importDialog).click()
 
   await expect
     .poll(
@@ -241,19 +253,17 @@ test('can stop a nested repo scan and import repositories found so far', async (
   const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
   await dialog.getByRole('button', { name: /Browse folder/i }).click()
 
-  const importDialog = orcaPage.getByRole('dialog', { name: /Import as project group/i })
-  await expect(
-    importDialog.getByText('Scanning... Found 1 git repository in this folder.')
-  ).toBeVisible()
-  await expect(
-    importDialog.getByRole('button', { name: /Import as project group/i })
-  ).toBeDisabled()
+  const importDialog = orcaPage.getByRole('dialog', {
+    name: /Import repositories from folder/i
+  })
+  await expect(importDialog.getByText(/Scanning\.\.\.\s*Found 1 repository in/)).toBeVisible()
+  await expect(getImportAsMonorepoButton(importDialog)).toBeDisabled()
   await importDialog.getByRole('button', { name: /Stop scan/i }).click()
   await expect(importDialog.getByText('Scan stopped early.')).toBeVisible()
-  await expect(importDialog.getByText('Found 1 git repository in this folder.')).toBeVisible()
-  await expect(importDialog.getByRole('button', { name: /Import as project group/i })).toBeEnabled()
+  await expect(importDialog.getByText(/Found 1 repository in/)).toBeVisible()
+  await expect(getImportAsMonorepoButton(importDialog)).toBeEnabled()
 
-  await importDialog.getByRole('button', { name: /Import as project group/i }).click()
+  await getImportAsMonorepoButton(importDialog).click()
 
   await expect
     .poll(

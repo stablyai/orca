@@ -5,7 +5,14 @@ import { createHash } from 'crypto'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
-import { safeStorage } from 'electron'
+import { net, safeStorage, session } from 'electron'
+import {
+  CredentialDecryptionError,
+  credentialFileHasContent,
+  readStoredCredentialToken
+} from '../integration-credential-file'
+import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
+import { withSpan } from '../observability/tracer'
 import type {
   JiraConnectArgs,
   JiraConnectionStatus,
@@ -63,6 +70,9 @@ export class JiraApiError extends Error {
 let cachedSiteFile: JiraSiteFile | null = null
 let siteFileLoaded = false
 const cachedTokens = new Map<string, string>()
+// Why: decrypt failures are recorded per site so getStatus can explain
+// failing reads without re-touching the keychain on every status poll.
+const credentialErrors = new Map<string, string>()
 
 function getOrcaDir(): string {
   return join(homedir(), '.orca')
@@ -104,7 +114,7 @@ function emptySiteFile(): JiraSiteFile {
 }
 
 function hasStoredToken(siteId: string): boolean {
-  return cachedTokens.has(siteId) || existsSync(getTokenPath(siteId))
+  return cachedTokens.has(siteId) || credentialFileHasContent(getTokenPath(siteId))
 }
 
 function normalizeSite(input: unknown): JiraSite | null {
@@ -206,7 +216,7 @@ function writeEncryptedToken(path: string, apiToken: string): void {
 
 function readToken(siteId: string): string | null {
   const cached = cachedTokens.get(siteId)
-  if (cached) {
+  if (cached !== undefined) {
     return cached
   }
   const path = getTokenPath(siteId)
@@ -215,12 +225,17 @@ function readToken(siteId: string): string | null {
   }
   try {
     const raw = readFileSync(path)
-    const token = safeStorage.isEncryptionAvailable()
-      ? safeStorage.decryptString(raw)
-      : raw.toString('utf-8')
-    cachedTokens.set(siteId, token)
+    const token = readStoredCredentialToken('Jira', raw)
+    if (token) {
+      cachedTokens.set(siteId, token)
+    }
+    credentialErrors.delete(siteId)
     return token
-  } catch {
+  } catch (error) {
+    if (error instanceof CredentialDecryptionError) {
+      credentialErrors.set(siteId, error.message)
+      throw error
+    }
     return null
   }
 }
@@ -230,10 +245,12 @@ function saveToken(siteId: string, apiToken: string): void {
   ensureTokenDir()
   writeEncryptedToken(getTokenPath(siteId), apiToken)
   cachedTokens.set(siteId, apiToken)
+  credentialErrors.delete(siteId)
 }
 
 function deleteToken(siteId: string): void {
   cachedTokens.delete(siteId)
+  credentialErrors.delete(siteId)
   try {
     unlinkSync(getTokenPath(siteId))
   } catch {
@@ -288,6 +305,55 @@ function authHeader(email: string, apiToken: string): string {
   return `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`
 }
 
+function describeErrorCause(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object' || !('cause' in error)) {
+    return undefined
+  }
+  const cause = (error as { cause?: unknown }).cause
+  if (cause instanceof Error) {
+    return `${cause.name}: ${cause.message}`
+  }
+  return cause === undefined ? undefined : String(cause)
+}
+
+async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
+  return withSpan(
+    'jira.request',
+    async (span) => {
+      span.setAttribute('jira.siteUrl', new URL(url).origin)
+      await ensureElectronProxyFromEnvironment({
+        proxySession: session.defaultSession,
+        probeUrl: url
+      }).catch((error) => {
+        span.addEvent('jira.proxySetupFailed', {
+          errorName: error instanceof Error ? error.name : typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error)
+        })
+      })
+      try {
+        // Why: Electron's network stack follows Chromium proxy/session state,
+        // avoiding undici's stale keep-alive sockets after VPN path changes.
+        return await net.fetch(url, init)
+      } catch (error) {
+        span.setAttribute(
+          'jira.transportErrorName',
+          error instanceof Error ? error.name : typeof error
+        )
+        span.setAttribute(
+          'jira.transportErrorMessage',
+          error instanceof Error ? error.message : String(error)
+        )
+        const cause = describeErrorCause(error)
+        if (cause) {
+          span.setAttribute('jira.transportErrorCause', cause)
+        }
+        throw error
+      }
+    },
+    { kind: 'client' }
+  )
+}
+
 async function requestWithCredentials(
   siteUrl: string,
   email: string,
@@ -299,7 +365,7 @@ async function requestWithCredentials(
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
   headers.set('Authorization', authHeader(email, apiToken))
-  const response = await fetch(`${siteUrl}${path}`, {
+  const response = await jiraFetch(`${siteUrl}${path}`, {
     ...init,
     headers
   })
@@ -342,7 +408,7 @@ export async function jiraRequest<T>(
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
   headers.set('Authorization', client.authorization)
-  const response = await fetch(`${client.site.siteUrl}${path}`, {
+  const response = await jiraFetch(`${client.site.siteUrl}${path}`, {
     ...init,
     headers
   })
@@ -358,13 +424,26 @@ export async function jiraRequest<T>(
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
   const file = getSiteFile()
   const selected = selection ?? file.selectedSiteId ?? file.activeSiteId
-  const sites =
-    selected === 'all'
-      ? file.sites
-      : file.sites.filter((site) => site.id === (selected ?? file.activeSiteId))
+  const isAllSelection = selected === 'all'
+  const sites = isAllSelection
+    ? file.sites
+    : file.sites.filter((site) => site.id === (selected ?? file.activeSiteId))
 
   return sites.flatMap((site) => {
-    const token = readToken(site.id)
+    let token: string | null
+    try {
+      token = readToken(site.id)
+    } catch (error) {
+      // Why: under an 'all' selection one un-decryptable site must not collapse
+      // reads for the healthy ones. readToken already recorded the per-site
+      // credentialError for getStatus to surface, so skip this site like a
+      // missing token. A specific-site selection still rethrows so the renderer
+      // can surface the decrypt banner promptly.
+      if (isAllSelection && error instanceof CredentialDecryptionError) {
+        return []
+      }
+      throw error
+    }
     return token ? [{ site, authorization: authHeader(site.email, token) }] : []
   })
 }
@@ -373,12 +452,16 @@ export function getStatus(): JiraConnectionStatus {
   const file = getSiteFile()
   const sites = file.sites.filter((site) => hasStoredToken(site.id))
   const activeSite = sites.find((site) => site.id === file.activeSiteId) ?? sites[0] ?? null
+  const credentialError = sites
+    .map((site) => credentialErrors.get(site.id))
+    .find((message) => message !== undefined)
   return {
     connected: sites.length > 0,
     viewer: siteToViewer(activeSite),
     sites,
     activeSiteId: activeSite?.id ?? null,
-    selectedSiteId: file.selectedSiteId ?? activeSite?.id ?? null
+    selectedSiteId: file.selectedSiteId ?? activeSite?.id ?? null,
+    ...(credentialError ? { credentialError } : {})
   }
 }
 
@@ -461,7 +544,12 @@ export function selectSite(siteId: JiraSiteSelection): JiraConnectionStatus {
 export async function testConnection(
   siteId?: string
 ): Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }> {
-  const client = getClients(siteId)[0]
+  let client: JiraClientForSite | undefined
+  try {
+    client = getClients(siteId)[0]
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Connection failed.' }
+  }
   if (!client) {
     return { ok: false, error: 'Not connected to Jira.' }
   }

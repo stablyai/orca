@@ -11,6 +11,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 export type PickerOption = { key: string; primary: string; secondary?: string }
 
@@ -77,7 +78,9 @@ export function SingleSelectList({
             onSelect={() => onSelect(trimmed)}
             className="items-center gap-2 px-3 py-1.5 text-xs"
           >
-            <span className="text-muted-foreground">Use</span>
+            <span className="text-muted-foreground">
+              {translate('auto.components.github.PRFilterPickers.2d1f58eda6', 'Use')}
+            </span>
             <span className="truncate font-medium">{trimmed}</span>
           </CommandItem>
         ) : null}
@@ -87,7 +90,7 @@ export function SingleSelectList({
             onSelect={() => onSelect(null)}
             className="gap-2 px-3 py-1.5 text-xs text-muted-foreground"
           >
-            Clear
+            {translate('auto.components.github.PRFilterPickers.472c12ae03', 'Clear')}
           </CommandItem>
         ) : null}
         {filtered.map((opt) => {
@@ -162,7 +165,8 @@ export function MultiSelectList({
             onSelect={() => onChange([])}
             className="gap-2 px-3 py-1.5 text-xs text-muted-foreground"
           >
-            Clear ({selected.length})
+            {translate('auto.components.github.PRFilterPickers.fdf387297c', 'Clear (')}
+            {selected.length})
           </CommandItem>
         ) : null}
         {filtered.map((opt) => {

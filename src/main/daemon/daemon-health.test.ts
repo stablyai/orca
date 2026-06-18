@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { createServer, connect, type Server } from 'net'
 import { DaemonServer } from './daemon-server'
-import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
+import { getDaemonPidPath, getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
   getProcessStartedAtMs,
   healthCheckDaemon,
@@ -65,7 +65,7 @@ describe('daemon health', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-health-test-'))
-    socketPath = join(dir, 'daemon.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'daemon.token')
   })
 
@@ -74,15 +74,36 @@ describe('daemon health', () => {
   })
 
   it('passes when a daemon answers ping', async () => {
+    const ptySpawnHealthCheck = vi.fn(async () => {})
     const server = new DaemonServer({
       socketPath,
       tokenPath,
+      ptySpawnHealthCheck,
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
 
     try {
       await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(true)
+      expect(ptySpawnHealthCheck).toHaveBeenCalledOnce()
+    } finally {
+      await server.shutdown()
+    }
+  })
+
+  it('fails when a protocol-healthy daemon cannot spawn PTYs', async () => {
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      ptySpawnHealthCheck: vi.fn(async () => {
+        throw new Error('stale node-pty helper')
+      }),
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+
+    try {
+      await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
     } finally {
       await server.shutdown()
     }

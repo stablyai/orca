@@ -4,6 +4,13 @@ import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  getRepoExecutionHostId,
+  getSettingsFocusedExecutionHostId,
+  type ExecutionHostId,
+  type ExecutionHostScope
+} from '../../../../shared/execution-host'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the
@@ -23,6 +30,7 @@ export type SidebarFilterState = {
   showSleepingWorkspaces: boolean
   filterRepoIds: readonly string[]
   hideDefaultBranchWorkspace: boolean
+  visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
 }
 
 /**
@@ -38,7 +46,8 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
   return (
     state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES ||
     state.filterRepoIds.length > 0 ||
-    state.hideDefaultBranchWorkspace
+    state.hideDefaultBranchWorkspace ||
+    state.visibleWorkspaceHostIds != null
   )
 }
 
@@ -48,6 +57,7 @@ export type ClearFilterActions = {
   resetShowSleepingWorkspaces: boolean
   resetFilterRepoIds: boolean
   resetHideDefaultBranchWorkspace: boolean
+  resetVisibleWorkspaceHostIds: boolean
 }
 
 /**
@@ -64,7 +74,8 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
   return {
     resetShowSleepingWorkspaces: state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES,
     resetFilterRepoIds: state.filterRepoIds.length > 0,
-    resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace
+    resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
+    resetVisibleWorkspaceHostIds: state.visibleWorkspaceHostIds != null
   }
 }
 
@@ -93,6 +104,9 @@ export function computeVisibleWorktreeIds(
     // forgetting to pass it.
     hideDefaultBranchWorkspace: boolean
     repoMap: Map<string, Repo>
+    workspaceHostScope: ExecutionHostScope
+    visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
+    defaultHostId: ExecutionHostId
     worktreeLineageById: Record<string, WorktreeLineage>
   }
 ): string[] {
@@ -107,6 +121,24 @@ export function computeVisibleWorktreeIds(
 
   if (opts.hideDefaultBranchWorkspace) {
     all = all.filter((w) => !isDefaultBranchWorkspace(w))
+  }
+
+  const visibleHostIds =
+    opts.visibleWorkspaceHostIds ??
+    (opts.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [opts.workspaceHostScope])
+  if (visibleHostIds) {
+    const visibleHostIdSet = new Set(visibleHostIds)
+    all = all.filter((w) => {
+      const repo = opts.repoMap.get(w.repoId)
+      if (!repo) {
+        return false
+      }
+      const hostId =
+        repo.connectionId || repo.executionHostId
+          ? getRepoExecutionHostId(repo)
+          : opts.defaultHostId
+      return visibleHostIdSet.has(hostId)
+    })
   }
 
   // Filter by repo
@@ -258,6 +290,9 @@ export function getVisibleWorktreeIds(): string[] {
     browserTabsByWorktree: state.browserTabsByWorktree,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     repoMap,
+    workspaceHostScope: state.workspaceHostScope,
+    visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
+    defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
     worktreeLineageById: state.worktreeLineageById
   })
 }

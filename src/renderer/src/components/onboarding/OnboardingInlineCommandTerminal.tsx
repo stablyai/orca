@@ -4,6 +4,7 @@ import TerminalPane from '@/components/terminal-pane/TerminalPane'
 import { PASTE_TERMINAL_TEXT_EVENT, type PasteTerminalTextDetail } from '@/constants/terminal'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 
 const ONBOARDING_INLINE_TERMINAL_WORKTREE_ID = 'onboarding-inline-terminal'
 const AUTO_INSERT_DELAY_MS = 250
@@ -291,7 +292,10 @@ export function OnboardingInlineCommandTerminal({
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              Starting terminal...
+              {translate(
+                'auto.components.onboarding.OnboardingInlineCommandTerminal.4123609efd',
+                'Starting terminal...'
+              )}
             </div>
           )}
         </div>

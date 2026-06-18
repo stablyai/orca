@@ -2,6 +2,11 @@ import { win32 as pathWin32 } from 'path'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
+  buildWslInteractiveLoginShellCommand,
+  escapeWslShCommandForWindows,
+  quotePosixShell
+} from '../../shared/wsl-login-shell-command'
+import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
 } from '../powershell-osc133-bootstrap'
@@ -32,15 +37,14 @@ export type WindowsShellWslContext = {
 }
 
 function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
-  const escapedLinuxCwd = linuxCwd.replace(/'/g, "'\\''")
-  // Why: Orca's WSL bridge is installed under ~/.local/bin, but distro login
-  // files do not consistently include that directory before agent commands run.
-  const shellArgs = [
-    '--',
-    'bash',
-    '-c',
-    `cd '${escapedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
-  ]
+  const setupCommand = [
+    `cd ${quotePosixShell(linuxCwd)}`,
+    'export PATH="$HOME/.local/bin:$PATH"',
+    buildWslInteractiveLoginShellCommand()
+  ].join(' && ')
+  // Why: WSL users often customize zsh rather than bash; launch the distro's
+  // login shell so terminal PATH matches the environment Orca detects.
+  const shellArgs = ['--', 'sh', '-c', escapeWslShCommandForWindows(setupCommand)]
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
 }
 
@@ -50,8 +54,8 @@ function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
  *  - powershell.exe / pwsh.exe: dot-source $PROFILE and force UTF-8 I/O so
  *    oh-my-posh / starship / PSReadLine keep working. `-NoExit` alone would
  *    skip the profile.
- *  - wsl.exe: translate the Windows cwd to /mnt/<drive>/... and enter a login
- *    bash inside the default distro.
+ *  - wsl.exe: translate the Windows cwd to /mnt/<drive>/... and enter the
+ *    distro user's login shell.
  *  - anything else: no args, same cwd. */
 export function resolveWindowsShellLaunchArgs(
   shellPath: string,

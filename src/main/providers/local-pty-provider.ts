@@ -2,7 +2,7 @@
 ~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
-import { basename } from 'path'
+import { basename, delimiter } from 'path'
 import { win32 as pathWin32 } from 'path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from './windows-powershell'
@@ -39,12 +39,16 @@ import {
   resolveWindowsGitBashShellPath
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { resolveAgentForegroundProcess } from './agent-foreground-process'
+import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyShellName = new Map<string, string>()
+const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: node-pty's onData/onExit register native NAPI ThreadSafeFunction
 // callbacks. If the PTY is killed without disposing these listeners, the
 // stale callbacks survive into node::FreeEnvironment() where NAPI attempts
@@ -88,6 +92,21 @@ function removeUnspecifiedPaneIdentityEnv(
   }
 }
 
+function promoteAgentTeamsShimPath(
+  env: Record<string, string>,
+  requestedPath: string | undefined
+): void {
+  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
+    return
+  }
+  const shimDir = requestedPath.split(delimiter)[0]
+  if (!shimDir) {
+    return
+  }
+  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
+  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
+}
+
 function disposePtyListeners(id: string): void {
   const disposables = ptyDisposables.get(id)
   if (disposables) {
@@ -117,6 +136,7 @@ function clearPtyState(id: string): void {
   disposePtyListeners(id)
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
+  ptyAgentForegroundContextPaths.delete(id)
   ptyLoadGeneration.delete(id)
 }
 
@@ -138,6 +158,26 @@ function normalizeLocalCallerSessionId(sessionId: string | undefined): string | 
     return null
   }
   return requested
+}
+
+function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
+  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
+  if (!trimmed || trimmed === 'xterm-256color') {
+    return null
+  }
+  return trimmed.split(/[\\/]/).pop() || null
+}
+
+function resolveForegroundFallbackProcess(
+  processName: string | null | undefined,
+  shellName: string | undefined
+): string | null {
+  if (process.platform !== 'win32' || normalizeForegroundProcessName(processName)) {
+    return processName || null
+  }
+  // Why: Windows node-pty can expose only the terminal name (`xterm-256color`).
+  // The spawned shell is the best fallback for agent foreground enrichment.
+  return shellName ?? processName ?? null
 }
 
 function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } = {}): void {
@@ -341,6 +381,9 @@ export class LocalPtyProvider implements IPtyProvider {
     for (const key of args.envToDelete ?? []) {
       delete spawnEnv[key]
     }
+    if (args.env?.TERM) {
+      spawnEnv.TERM = args.env.TERM
+    }
 
     spawnEnv.LANG ??= 'en_US.UTF-8'
 
@@ -369,6 +412,15 @@ export class LocalPtyProvider implements IPtyProvider {
           wslDistro: launchWslDistro
         })
       : spawnEnv
+    // Why: app-level env hooks can reintroduce vars that special launch modes
+    // explicitly scrubbed. Apply deletions last so shims like Claude Agent
+    // Teams keep their PATH and terminal-detection contract.
+    for (const key of args.envToDelete ?? []) {
+      delete finalEnv[key]
+    }
+    if (args.env?.TERM) {
+      finalEnv.TERM = args.env.TERM
+    }
     if (process.platform === 'win32') {
       const codexHomeWslInfo = finalEnv.CODEX_HOME ? parseWslPath(finalEnv.CODEX_HOME) : null
       if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
@@ -412,30 +464,38 @@ export class LocalPtyProvider implements IPtyProvider {
       }
     }
     if (!wslInfo && process.platform !== 'win32') {
-      // Why: any Orca-injected overlay env that user rc files can clobber
-      // needs the wrapper so the post-rc restore line runs.
+      // Why: OpenCode/Codex path restoration and OMP's typed-command status
+      // wrapper need shell-ready code after user startup files run.
       const needsNoMarkerWrapper =
         finalEnv.ORCA_ATTRIBUTION_SHIM_DIR ||
         finalEnv.ORCA_OPENCODE_CONFIG_DIR ||
-        finalEnv.ORCA_PI_CODING_AGENT_DIR ||
-        finalEnv.ORCA_OMP_CODING_AGENT_DIR ||
-        finalEnv.ORCA_CODEX_HOME
-      getFallbackShellReadyConfig = args.command
-        ? (shell) => getShellReadyLaunchConfig(shell)
-        : needsNoMarkerWrapper
-          ? (shell) => getAttributionShellLaunchConfig(shell)
-          : undefined
-      const shellLaunch = args.command
-        ? getShellReadyLaunchConfig(shellPath)
-        : needsNoMarkerWrapper
-          ? getAttributionShellLaunchConfig(shellPath)
-          : null
+        finalEnv.ORCA_OMP_STATUS_EXTENSION ||
+        finalEnv.ORCA_CODEX_HOME ||
+        finalEnv.ORCA_AGENT_TEAMS_SHIM_DIR
+      const isCodexStartupCommand =
+        recognizeAgentProcessFromCommandLine(args.command)?.agent === 'codex'
+      let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
+      if (args.command && isCodexStartupCommand) {
+        // Why: Codex needs the env-restoring wrapper, but waiting for a shell
+        // marker delays the first useful TUI frame.
+        getFallbackShellReadyConfig = (shell) => getAttributionShellLaunchConfig(shell)
+        shellLaunch = getAttributionShellLaunchConfig(shellPath)
+      } else if (args.command) {
+        getFallbackShellReadyConfig = (shell) => getShellReadyLaunchConfig(shell)
+        shellLaunch = getShellReadyLaunchConfig(shellPath)
+      } else if (needsNoMarkerWrapper) {
+        getFallbackShellReadyConfig = (shell) => getAttributionShellLaunchConfig(shell)
+        shellLaunch = getAttributionShellLaunchConfig(shellPath)
+      } else {
+        getFallbackShellReadyConfig = undefined
+      }
       if (shellLaunch) {
         Object.assign(finalEnv, shellLaunch.env)
         shellArgs = shellLaunch.args ?? shellArgs
         shellReadyLaunch = args.command ? shellLaunch : null
       }
     }
+    promoteAgentTeamsShimPath(finalEnv, args.env?.PATH)
 
     // ── Worktree-scoped shell history (§7–§10 of terminal-history-scope-design) ──
     // Why: without this, all worktree terminals share a single global HISTFILE
@@ -444,10 +504,15 @@ export class LocalPtyProvider implements IPtyProvider {
     const historyEnabled = worktreeId && (this.opts.isHistoryEnabled?.() ?? true)
     // Resolve the effective shell kind for history injection. For WSL, the
     // outer executable is wsl.exe but the inner login shell is bash.
-    const effectiveShellPath = wslInfo ? 'bash' : shellPath
+    const isWslTerminal =
+      Boolean(wslInfo || worktreeWslContext || preferredWslContext) ||
+      pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
+    const effectiveShellPath = isWslTerminal ? 'bash' : shellPath
     let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
     if (historyEnabled) {
-      historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd)
+      historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd, {
+        wslDistro: preferredWslContext?.distro ?? worktreeWslContext?.distro ?? null
+      })
       logHistoryInjection(worktreeId, historyResult)
     }
 
@@ -458,6 +523,7 @@ export class LocalPtyProvider implements IPtyProvider {
       rows: args.rows,
       cwd: effectiveCwd,
       env: finalEnv,
+      termName: finalEnv.TERM,
       ptySpawn: pty.spawn,
       getShellReadyConfig: getFallbackShellReadyConfig,
       // Why: if zsh failed and bash took over, HISTFILE still points to
@@ -476,6 +542,10 @@ export class LocalPtyProvider implements IPtyProvider {
     const proc = spawnResult.process
     ptyProcesses.set(id, proc)
     ptyShellName.set(id, basename(shellPath))
+    ptyAgentForegroundContextPaths.set(
+      id,
+      getAgentForegroundContextPaths({ cwd: args.cwd, worktreeId: args.worktreeId })
+    )
     ptyLoadGeneration.set(id, loadGeneration)
     this.opts.onSpawned?.(id)
 
@@ -613,6 +683,7 @@ export class LocalPtyProvider implements IPtyProvider {
     destroyPtyProcess(proc, { alreadyKilled: true })
     ptyProcesses.delete(id)
     ptyShellName.delete(id)
+    ptyAgentForegroundContextPaths.delete(id)
     ptyLoadGeneration.delete(id)
     this.opts.onExit?.(id, -1)
     for (const cb of exitListeners) {
@@ -680,7 +751,13 @@ export class LocalPtyProvider implements IPtyProvider {
       return null
     }
     try {
-      return proc.process || null
+      return await resolveAgentForegroundProcess(
+        proc.pid,
+        resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
+        {
+          contextPaths: ptyAgentForegroundContextPaths.get(id)
+        }
+      )
     } catch {
       return null
     }

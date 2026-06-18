@@ -14,14 +14,14 @@ const RG_AVAILABILITY_TIMEOUT_MS = 5000
 // while a positive cache could mask an rg that was uninstalled or broken
 // mid-session.
 
-export function checkRgAvailable(searchPath?: string): Promise<boolean> {
+export function checkRgAvailable(searchPath?: string, wslDistro?: string): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false
-    // Why: pass cwd so wslAwareSpawn routes through wsl.exe when the search
-    // path is inside a WSL filesystem. This checks whether rg is available
-    // inside the WSL distro rather than on the Windows PATH.
+    // Why: pass cwd plus project-runtime distro so WSL projects are checked
+    // inside their distro even when the search root is a Windows path.
     const child = wslAwareSpawn('rg', ['--version'], {
       ...(searchPath ? { cwd: searchPath } : {}),
+      ...(wslDistro ? { wslDistro } : {}),
       stdio: 'ignore'
     })
     let timeout: ReturnType<typeof setTimeout>

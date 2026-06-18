@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { FeatureWallSetupProgressInput } from './feature-wall-setup-progress'
 import { getFeatureWallSetupProgress } from './feature-wall-setup-progress'
@@ -64,13 +66,14 @@ describe('getFeatureWallSetupProgress', () => {
     const progress = getFeatureWallSetupProgress(makeInput({ gitRepoCount: 2 }))
 
     expect(progress.stepDone['add-two-repos']).toBe(true)
-    expect(progress.coreTotal).toBe(8)
+    expect(progress.coreTotal).toBe(9)
   })
 
-  it('orders visible parallel work before setup tasks', () => {
+  it('preserves the durable setup step definition order', () => {
     expect(getFeatureWallSetupSteps().map((step) => step.id)).toEqual([
       'split-terminal',
       'two-worktrees',
+      'browser',
       'notifications',
       'default-agent',
       'agent-capabilities',
@@ -83,7 +86,8 @@ describe('getFeatureWallSetupProgress', () => {
   it('groups setup guide steps into Parallel work and Setup sections', () => {
     expect(getFeatureWallSetupStepsForSection('parallel-work').map((step) => step.id)).toEqual([
       'split-terminal',
-      'two-worktrees'
+      'two-worktrees',
+      'browser'
     ])
     expect(getFeatureWallSetupStepsForSection('setup').map((step) => step.id)).toEqual([
       'notifications',
@@ -95,7 +99,20 @@ describe('getFeatureWallSetupProgress', () => {
     ])
   })
 
-  it('auto-selects incomplete parallel work before setup steps', () => {
+  it('renders Setup before Milestones and numbers Milestones after Setup', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/feature-wall/FeatureWallSetupChecklist.tsx'),
+      'utf8'
+    )
+    const setupSectionIndex = source.indexOf('steps={setupSteps}')
+    const milestonesSectionIndex = source.indexOf('steps={parallelWorkSteps}')
+
+    expect(setupSectionIndex).toBeGreaterThanOrEqual(0)
+    expect(milestonesSectionIndex).toBeGreaterThan(setupSectionIndex)
+    expect(source).toContain('startOrdinal={setupSteps.length + 1}')
+  })
+
+  it('auto-selects incomplete parallel work after setup steps are complete', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         settings: {
@@ -273,10 +290,32 @@ describe('getFeatureWallSetupProgress', () => {
     expect(progress.stepDone['two-worktrees']).toBe(true)
   })
 
+  it('marks the browser step complete once a non-blank page has been viewed', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          browser: { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+        }
+      })
+    )
+
+    expect(progress.stepDone.browser).toBe(true)
+  })
+
+  it('does not mark the browser step complete without a viewed page', () => {
+    expect(getFeatureWallSetupProgress(makeInput()).stepDone.browser).toBe(false)
+  })
+
   it('marks task sources complete for any supported connected provider', () => {
     const progress = getFeatureWallSetupProgress(makeInput({ hasConnectedTaskSource: true }))
 
     expect(progress.stepDone['task-sources']).toBe(true)
+  })
+
+  it('does not mark task sources complete while provider checks are pending', () => {
+    const progress = getFeatureWallSetupProgress(makeInput({ hasConnectedTaskSource: false }))
+
+    expect(progress.stepDone['task-sources']).toBe(false)
   })
 
   it('does not mark agent capabilities complete from setup-start interactions alone', () => {

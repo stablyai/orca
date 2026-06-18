@@ -163,6 +163,13 @@ export function RichMarkdownEditorSurface({
 }: RichMarkdownEditorSurfaceProps): React.JSX.Element {
   return (
     <div className="rich-markdown-editor-layout">
+      {showTableOfContents ? (
+        <MarkdownTableOfContentsPanel
+          items={tableOfContentsItems}
+          onClose={onCloseTableOfContents ?? (() => {})}
+          onNavigate={onNavigateTableOfContentsItem}
+        />
+      ) : null}
       <div
         ref={rootRef}
         className={`rich-markdown-editor-shell ${
@@ -280,13 +287,6 @@ export function RichMarkdownEditorSurface({
           />
         ) : null}
       </div>
-      {showTableOfContents ? (
-        <MarkdownTableOfContentsPanel
-          items={tableOfContentsItems}
-          onClose={onCloseTableOfContents ?? (() => {})}
-          onNavigate={onNavigateTableOfContentsItem}
-        />
-      ) : null}
     </div>
   )
 }

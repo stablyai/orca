@@ -1,7 +1,23 @@
-import React from 'react'
-import { ListTree, X } from 'lucide-react'
+import React, { useEffect, useState } from 'react'
+import { ChevronRight, ListTree, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { MarkdownTocItem } from './markdown-table-of-contents'
+import { cn } from '@/lib/utils'
+import type { MarkdownTocItem, MarkdownTocLevel } from './markdown-table-of-contents'
+import {
+  collapseMarkdownTocToLevel,
+  isMarkdownTocItemExpanded,
+  pruneMarkdownTocCollapsedIds,
+  toggleMarkdownTocCollapsedId
+} from './markdown-toc-collapse-state'
+import { translate } from '@/i18n/i18n'
+import { useSidebarResize } from '@/hooks/useSidebarResize'
+import { useAppStore } from '@/store'
+import {
+  MARKDOWN_TOC_PANEL_MIN_WIDTH,
+  MARKDOWN_TOC_RESIZE_HANDLE_CLASS_NAME,
+  clampMarkdownTocPanelWidth,
+  computeMaxMarkdownTocPanelWidth
+} from './markdown-toc-panel-width'
 
 type MarkdownTableOfContentsPanelProps = {
   items: MarkdownTocItem[]
@@ -9,30 +25,85 @@ type MarkdownTableOfContentsPanelProps = {
   onNavigate: (id: string) => void
 }
 
+const TOC_LEVELS: MarkdownTocLevel[] = [1, 2, 3]
+const TOC_INDENT_BASE_PX = 12
+const TOC_INDENT_STEP_PX = 12
+
 function MarkdownTocRow({
+  collapsedIds,
   depth,
   item,
-  onNavigate
+  onNavigate,
+  onToggleCollapsed
 }: {
+  collapsedIds: ReadonlySet<string>
   depth: number
   item: MarkdownTocItem
   onNavigate: (id: string) => void
+  onToggleCollapsed: (id: string) => void
 }): React.JSX.Element {
+  const hasChildren = item.children.length > 0
+  const expanded = isMarkdownTocItemExpanded(collapsedIds, item)
+  // Why: parents already shift title right via the disclosure chevron, so deeper
+  // parents skip the base inset; only the root row keeps it so top-level titles
+  // are not flush against the panel edge.
+  const rowPaddingLeft = hasChildren
+    ? depth === 0
+      ? TOC_INDENT_BASE_PX
+      : depth * TOC_INDENT_STEP_PX
+    : TOC_INDENT_BASE_PX + depth * TOC_INDENT_STEP_PX
+
   return (
     <>
-      <button
-        type="button"
-        className="markdown-toc-row"
-        style={{ paddingLeft: 12 + depth * 14 }}
-        title={item.title}
-        onClick={() => onNavigate(item.id)}
-      >
-        <span className="markdown-toc-level">H{item.level}</span>
-        <span className="markdown-toc-title">{item.title}</span>
-      </button>
-      {item.children.map((child) => (
-        <MarkdownTocRow key={child.id} depth={depth + 1} item={child} onNavigate={onNavigate} />
-      ))}
+      <div className="markdown-toc-row" style={{ paddingLeft: rowPaddingLeft }}>
+        {hasChildren ? (
+          <button
+            type="button"
+            className="markdown-toc-disclosure"
+            aria-label={
+              expanded
+                ? translate(
+                    'auto.components.editor.MarkdownTableOfContentsPanel.97ad46f11f',
+                    'Collapse {{value0}}',
+                    { value0: item.title }
+                  )
+                : translate(
+                    'auto.components.editor.MarkdownTableOfContentsPanel.65b036a6c8',
+                    'Expand {{value0}}',
+                    { value0: item.title }
+                  )
+            }
+            aria-expanded={expanded}
+            onClick={() => onToggleCollapsed(item.id)}
+          >
+            <ChevronRight
+              className={cn(
+                'size-3 shrink-0 text-muted-foreground transition-transform',
+                expanded && 'rotate-90'
+              )}
+            />
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="markdown-toc-title-button"
+          onClick={() => onNavigate(item.id)}
+        >
+          <span className="markdown-toc-title">{item.title}</span>
+        </button>
+      </div>
+      {hasChildren && expanded
+        ? item.children.map((child) => (
+            <MarkdownTocRow
+              key={child.id}
+              collapsedIds={collapsedIds}
+              depth={depth + 1}
+              item={child}
+              onNavigate={onNavigate}
+              onToggleCollapsed={onToggleCollapsed}
+            />
+          ))
+        : null}
     </>
   )
 }
@@ -42,32 +113,166 @@ export function MarkdownTableOfContentsPanel({
   onClose,
   onNavigate
 }: MarkdownTableOfContentsPanelProps): React.JSX.Element {
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
+  const markdownTocPanelWidth = useAppStore((s) => s.markdownTocPanelWidth)
+  const setMarkdownTocPanelWidth = useAppStore((s) => s.setMarkdownTocPanelWidth)
+  const [layoutWidth, setLayoutWidth] = useState<number | null>(null)
+  const maxPanelWidth = computeMaxMarkdownTocPanelWidth(layoutWidth ?? 0)
+  const renderedPanelWidth = clampMarkdownTocPanelWidth(
+    markdownTocPanelWidth,
+    layoutWidth ?? undefined
+  )
+  const { containerRef, onResizeStart } = useSidebarResize<HTMLElement>({
+    isOpen: true,
+    width: renderedPanelWidth,
+    minWidth: MARKDOWN_TOC_PANEL_MIN_WIDTH,
+    maxWidth: maxPanelWidth,
+    deltaSign: 1,
+    setWidth: setMarkdownTocPanelWidth
+  })
+
+  useEffect(() => {
+    setCollapsedIds((current) => pruneMarkdownTocCollapsedIds(current, items))
+  }, [items])
+
+  useEffect(() => {
+    const container = containerRef.current
+    const layout = container?.parentElement
+    if (!layout) {
+      return
+    }
+
+    const updateMaxWidth = (): void => {
+      setLayoutWidth(layout.clientWidth)
+    }
+
+    updateMaxWidth()
+    const observer = new ResizeObserver(updateMaxWidth)
+    observer.observe(layout)
+    return () => observer.disconnect()
+  }, [containerRef])
+
+  const collapseToLevel = (level: MarkdownTocLevel): void => {
+    setCollapsedIds(collapseMarkdownTocToLevel(items, level))
+  }
+
+  const toggleCollapsed = (id: string): void => {
+    setCollapsedIds((current) => toggleMarkdownTocCollapsedId(current, id))
+  }
+
   return (
-    <aside className="markdown-toc-panel" aria-label="Table of contents">
+    <aside
+      ref={containerRef}
+      className="markdown-toc-panel"
+      aria-label={translate(
+        'auto.components.editor.MarkdownTableOfContentsPanel.27d0a9c49a',
+        'Table of contents'
+      )}
+    >
       <div className="markdown-toc-header">
         <ListTree className="size-3.5 text-muted-foreground" />
-        <span>Table of Contents</span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="ml-auto"
-          aria-label="Close table of contents"
-          title="Close table of contents"
-          onClick={onClose}
-        >
-          <X className="size-3.5" />
-        </Button>
+        <span>
+          {translate(
+            'auto.components.editor.MarkdownTableOfContentsPanel.06357eea60',
+            'Table of Contents'
+          )}
+        </span>
+        <div className="markdown-toc-header-actions">
+          <div
+            className="markdown-toc-level-controls"
+            role="group"
+            aria-label={translate(
+              'auto.components.editor.MarkdownTableOfContentsPanel.0dc7b2f05a',
+              'Collapse by level'
+            )}
+          >
+            {TOC_LEVELS.map((level) => (
+              <Button
+                key={level}
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                className="markdown-toc-level-button"
+                aria-label={
+                  level === 3
+                    ? translate(
+                        'auto.components.editor.MarkdownTableOfContentsPanel.f3de856175',
+                        'Expand all heading levels'
+                      )
+                    : translate(
+                        'auto.components.editor.MarkdownTableOfContentsPanel.111e66b85d',
+                        'Collapse to heading level {{value0}}',
+                        { value0: level }
+                      )
+                }
+                title={
+                  level === 3
+                    ? translate(
+                        'auto.components.editor.MarkdownTableOfContentsPanel.a5daadd68b',
+                        'Expand all'
+                      )
+                    : translate(
+                        'auto.components.editor.MarkdownTableOfContentsPanel.4680a4b808',
+                        'Collapse to H{{value0}}',
+                        { value0: level }
+                      )
+                }
+                onClick={() => collapseToLevel(level)}
+              >
+                H{level}
+              </Button>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={translate(
+              'auto.components.editor.MarkdownTableOfContentsPanel.bbe8369097',
+              'Close table of contents'
+            )}
+            title={translate(
+              'auto.components.editor.MarkdownTableOfContentsPanel.bbe8369097',
+              'Close table of contents'
+            )}
+            onClick={onClose}
+          >
+            <X className="size-3.5" />
+          </Button>
+        </div>
       </div>
       <div className="markdown-toc-list">
         {items.length > 0 ? (
           items.map((item) => (
-            <MarkdownTocRow key={item.id} depth={0} item={item} onNavigate={onNavigate} />
+            <MarkdownTocRow
+              key={item.id}
+              collapsedIds={collapsedIds}
+              depth={0}
+              item={item}
+              onNavigate={onNavigate}
+              onToggleCollapsed={toggleCollapsed}
+            />
           ))
         ) : (
-          <div className="markdown-toc-empty">No headings</div>
+          <div className="markdown-toc-empty">
+            {translate(
+              'auto.components.editor.MarkdownTableOfContentsPanel.de3928b6e4',
+              'No headings'
+            )}
+          </div>
         )}
       </div>
+      <div
+        data-markdown-toc-resize-handle=""
+        className={MARKDOWN_TOC_RESIZE_HANDLE_CLASS_NAME}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={translate(
+          'auto.components.editor.MarkdownTableOfContentsPanel.8f4d2c1a9b',
+          'Resize table of contents'
+        )}
+        onMouseDown={onResizeStart}
+      />
     </aside>
   )
 }

@@ -7,9 +7,10 @@ import { ScrollArea } from '../ui/scroll-area'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
-import { BUILTIN_TERMINAL_THEME_NAMES, normalizeColor } from '@/lib/terminal-theme'
+import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type SettingsSwitchProps = {
   checked: boolean
@@ -235,9 +236,13 @@ type ThemePickerProps = {
   label: string
   description: string
   selectedTheme: string
+  themeOptions: TerminalThemeOption[]
   query: string
   onQueryChange: (value: string) => void
   onSelectTheme: (theme: string) => void
+  /** Bumps when themes are imported; scrolls the Imported group into view and
+   *  briefly highlights it so freshly-imported themes are easy to find. */
+  importedHighlightSignal?: number
 }
 
 type ColorFieldProps = {
@@ -276,14 +281,49 @@ export function ThemePicker({
   label,
   description,
   selectedTheme,
+  themeOptions,
   query,
   onQueryChange,
-  onSelectTheme
+  onSelectTheme,
+  importedHighlightSignal
 }: ThemePickerProps): React.JSX.Element {
+  const importedGroupRef = useRef<HTMLDivElement | null>(null)
+  const [highlightImported, setHighlightImported] = useState(false)
+
+  // Why: imported themes render below the built-in list inside a fixed-height
+  // scroll area, so after an import they sit off-screen. On each import signal,
+  // scroll the Imported group into view and flash a highlight so it's easy to spot.
+  useEffect(() => {
+    if (!importedHighlightSignal) {
+      return
+    }
+    importedGroupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    setHighlightImported(true)
+    const timer = setTimeout(() => setHighlightImported(false), 2000)
+    return () => clearTimeout(timer)
+  }, [importedHighlightSignal])
+
   const normalizedQuery = query.trim().toLowerCase()
-  const filteredThemes = BUILTIN_TERMINAL_THEME_NAMES.filter((theme) =>
-    theme.toLowerCase().includes(normalizedQuery)
-  ).slice(0, MAX_THEME_RESULTS)
+  const matchingThemes = themeOptions.filter((theme) =>
+    `${theme.label} ${theme.sourceLabel ?? ''}`.toLowerCase().includes(normalizedQuery)
+  )
+  const selectedThemeLabel =
+    themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
+  const groupedThemes = [
+    {
+      label: translate('auto.components.settings.SettingsFormControls.builtin_themes', 'Built-in'),
+      themes: matchingThemes
+        .filter((theme) => theme.group === 'built-in')
+        .slice(0, MAX_THEME_RESULTS)
+    },
+    {
+      label: translate('auto.components.settings.SettingsFormControls.imported_themes', 'Imported'),
+      themes: matchingThemes
+        .filter((theme) => theme.group === 'imported')
+        .slice(0, MAX_THEME_RESULTS)
+    }
+  ].filter((group) => group.themes.length > 0)
+  const visibleThemeCount = groupedThemes.reduce((sum, group) => sum + group.themes.length, 0)
 
   return (
     <div className="space-y-3">
@@ -294,40 +334,122 @@ export function ThemePicker({
       <Input
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
-        placeholder="Search builtin themes"
+        placeholder={translate(
+          'auto.components.settings.SettingsFormControls.search_terminal_themes',
+          'Search terminal themes'
+        )}
       />
       <div className="rounded-lg border border-border/50">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
-          <span>Selected: {selectedTheme}</span>
           <span>
-            Showing {filteredThemes.length}
+            {translate('auto.components.settings.SettingsFormControls.fbb428db98', 'Selected:')}{' '}
+            {selectedThemeLabel}
+          </span>
+          <span>
+            {translate('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
+            {visibleThemeCount}
             {normalizedQuery
-              ? ` matching "${query.trim()}"`
-              : ` of ${BUILTIN_TERMINAL_THEME_NAMES.length}`}
+              ? translate(
+                  'auto.components.settings.SettingsFormControls.c822571b2e',
+                  ' matching "{{value0}}"',
+                  { value0: query.trim() }
+                )
+              : translate(
+                  'auto.components.settings.SettingsFormControls.cb330ef7f8',
+                  ' of {{value0}}',
+                  { value0: themeOptions.length }
+                )}
           </span>
         </div>
         <ScrollArea className="h-64">
           <div className="space-y-1 p-2">
-            {filteredThemes.map((theme) => (
-              <button
-                key={theme}
-                onClick={() => onSelectTheme(theme)}
-                className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                  selectedTheme === theme
-                    ? 'bg-accent font-medium text-accent-foreground'
-                    : 'hover:bg-muted/60'
-                }`}
-              >
-                <span className="truncate">{theme}</span>
-                {selectedTheme === theme ? (
-                  <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
-                    Current
-                  </span>
-                ) : null}
-              </button>
-            ))}
-            {filteredThemes.length === 0 ? (
-              <div className="px-3 py-6 text-sm text-muted-foreground">No themes found.</div>
+            {groupedThemes.map((group) => {
+              const isImported =
+                group.label ===
+                translate(
+                  'auto.components.settings.SettingsFormControls.imported_themes',
+                  'Imported'
+                )
+              return (
+                <div
+                  key={group.label}
+                  ref={isImported ? importedGroupRef : undefined}
+                  className={cn(
+                    'space-y-1 rounded-md transition-colors duration-500',
+                    isImported && highlightImported && 'bg-accent/40 ring-1 ring-accent'
+                  )}
+                >
+                  <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                    {group.label}
+                  </p>
+                  {group.themes.map((theme) => (
+                    <button
+                      key={theme.value}
+                      onClick={() => onSelectTheme(theme.value)}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        selectedTheme === theme.value
+                          ? 'bg-accent font-medium text-accent-foreground'
+                          : 'hover:bg-accent'
+                      )}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{theme.label}</span>
+                        {theme.sourceLabel ? (
+                          <span className="block truncate text-[11px] font-normal text-muted-foreground">
+                            {translate(
+                              'auto.components.settings.SettingsFormControls.imported_from',
+                              'Imported from {{value0}}',
+                              { value0: theme.sourceLabel }
+                            )}
+                            {theme.mode && theme.mode !== 'unknown' ? ` · ${theme.mode}` : ''}
+                          </span>
+                        ) : null}
+                      </span>
+                      {/* Why: hide swatches on the current row so the color grid
+                        doesn't shift left to make room for the "Current" label. */}
+                      {theme.group === 'imported' &&
+                      theme.previewTheme &&
+                      selectedTheme !== theme.value ? (
+                        <span className="flex shrink-0 overflow-hidden rounded-sm border border-border/60">
+                          {[
+                            theme.previewTheme.black,
+                            theme.previewTheme.red,
+                            theme.previewTheme.green,
+                            theme.previewTheme.yellow,
+                            theme.previewTheme.blue,
+                            theme.previewTheme.magenta,
+                            theme.previewTheme.cyan,
+                            theme.previewTheme.white
+                          ].map((color, index) => (
+                            <span
+                              key={index}
+                              className="h-3 w-2"
+                              style={{ backgroundColor: color ?? 'transparent' }}
+                            />
+                          ))}
+                        </span>
+                      ) : null}
+                      {selectedTheme === theme.value ? (
+                        <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
+                          {translate(
+                            'auto.components.settings.SettingsFormControls.9119fb2268',
+                            'Current'
+                          )}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              )
+            })}
+            {visibleThemeCount === 0 ? (
+              <div className="px-3 py-6 text-sm text-muted-foreground">
+                {translate(
+                  'auto.components.settings.SettingsFormControls.ceefb9d7f1',
+                  'No themes found.'
+                )}
+              </div>
             ) : null}
           </div>
         </ScrollArea>
@@ -414,7 +536,10 @@ export function NumberField({
         <>
           {description}
           {defaultValue !== undefined ? (
-            <span className="ml-1 text-muted-foreground/70">· Default: {defaultValue}</span>
+            <span className="ml-1 text-muted-foreground/70">
+              {translate('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
+              {defaultValue}
+            </span>
           ) : null}
         </>
       }
@@ -453,6 +578,7 @@ export function FontAutocomplete({
   const [prevValue, setPrevValue] = useState(value)
   const [open, setOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const [isFilteringQuery, setIsFilteringQuery] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const previewFontFamilyRef = useRef(onPreviewFontFamily)
@@ -472,6 +598,9 @@ export function FontAutocomplete({
   if (value !== prevValue) {
     setPrevValue(value)
     setQuery(value)
+    if (value !== query) {
+      setIsFilteringQuery(false)
+    }
   }
 
   useEffect(() => {
@@ -482,6 +611,7 @@ export function FontAutocomplete({
     const handlePointerDown = (event: MouseEvent): void => {
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpen(false)
+        setIsFilteringQuery(false)
       }
     }
 
@@ -490,6 +620,7 @@ export function FontAutocomplete({
   }, [open])
 
   const normalizedQuery = query.trim().toLowerCase()
+  const normalizedValue = value.trim().toLowerCase()
   const filteredSuggestions = useMemo(() => {
     const startsWith = suggestions.filter((font) => font.toLowerCase().startsWith(normalizedQuery))
     const includes = suggestions.filter(
@@ -499,25 +630,31 @@ export function FontAutocomplete({
     )
     return normalizedQuery ? [...startsWith, ...includes] : suggestions
   }, [suggestions, normalizedQuery])
+  // Why: a committed font fills the input, but typed searches can also mirror
+  // into `value`; only expand exact matches outside an active search session.
+  const visibleSuggestions =
+    !isFilteringQuery && normalizedQuery === normalizedValue && filteredSuggestions.length <= 1
+      ? suggestions
+      : filteredSuggestions
 
   // Why: sync the highlighted index during render rather than via useEffect so
   // the correct item is highlighted on the very first paint after open/filter
   // changes — useEffect would leave one render with the stale index visible.
-  const [prevFilteredSuggestions, setPrevFilteredSuggestions] = useState(filteredSuggestions)
+  const [prevVisibleSuggestions, setPrevVisibleSuggestions] = useState(visibleSuggestions)
   const [prevOpen, setPrevOpen] = useState(open)
   const [prevHighlightedValue, setPrevHighlightedValue] = useState(value)
   if (
-    filteredSuggestions !== prevFilteredSuggestions ||
+    visibleSuggestions !== prevVisibleSuggestions ||
     open !== prevOpen ||
     value !== prevHighlightedValue
   ) {
-    setPrevFilteredSuggestions(filteredSuggestions)
+    setPrevVisibleSuggestions(visibleSuggestions)
     setPrevOpen(open)
     setPrevHighlightedValue(value)
-    if (!open || filteredSuggestions.length === 0) {
+    if (!open || visibleSuggestions.length === 0) {
       setHighlightedIndex(-1)
     } else {
-      const selectedIndex = filteredSuggestions.findIndex((font) => font === value)
+      const selectedIndex = visibleSuggestions.findIndex((font) => font === value)
       setHighlightedIndex(Math.max(selectedIndex, 0))
     }
   }
@@ -533,11 +670,12 @@ export function FontAutocomplete({
       onPreviewFontFamily(null)
       return
     }
-    onPreviewFontFamily(filteredSuggestions[highlightedIndex] ?? null)
-  }, [filteredSuggestions, highlightedIndex, onPreviewFontFamily, open])
+    onPreviewFontFamily(visibleSuggestions[highlightedIndex] ?? null)
+  }, [visibleSuggestions, highlightedIndex, onPreviewFontFamily, open])
 
   const commitValue = (nextValue: string): void => {
     setQuery(nextValue)
+    setIsFilteringQuery(false)
     onChange(nextValue)
     setOpen(false)
   }
@@ -555,15 +693,20 @@ export function FontAutocomplete({
           onChange={(e) => {
             const next = e.target.value
             setQuery(next)
+            setIsFilteringQuery(true)
             onChange(next)
             setOpen(true)
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            setIsFilteringQuery(false)
+            setOpen(true)
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               if (open) {
                 e.preventDefault()
                 setOpen(false)
+                setIsFilteringQuery(false)
               }
               return
             }
@@ -571,9 +714,9 @@ export function FontAutocomplete({
             if (e.key === 'ArrowDown') {
               e.preventDefault()
               setOpen(true)
-              if (filteredSuggestions.length > 0) {
+              if (visibleSuggestions.length > 0) {
                 setHighlightedIndex((current) =>
-                  current < 0 ? 0 : Math.min(current + 1, filteredSuggestions.length - 1)
+                  current < 0 ? 0 : Math.min(current + 1, visibleSuggestions.length - 1)
                 )
               }
               return
@@ -582,16 +725,16 @@ export function FontAutocomplete({
             if (e.key === 'ArrowUp') {
               e.preventDefault()
               setOpen(true)
-              if (filteredSuggestions.length > 0) {
+              if (visibleSuggestions.length > 0) {
                 setHighlightedIndex((current) =>
-                  current < 0 ? filteredSuggestions.length - 1 : Math.max(current - 1, 0)
+                  current < 0 ? visibleSuggestions.length - 1 : Math.max(current - 1, 0)
                 )
               }
               return
             }
 
             if (e.key === 'Enter' && open && highlightedIndex >= 0) {
-              const highlightedFont = filteredSuggestions[highlightedIndex]
+              const highlightedFont = visibleSuggestions[highlightedIndex]
               if (highlightedFont) {
                 e.preventDefault()
                 commitValue(highlightedFont)
@@ -615,13 +758,17 @@ export function FontAutocomplete({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 setQuery('')
+                setIsFilteringQuery(false)
                 onChange('')
                 setOpen(true)
                 focusInput()
               }}
               className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="Clear font selection"
-              title="Clear"
+              aria-label={translate(
+                'auto.components.settings.SettingsFormControls.a4ff6143f8',
+                'Clear font selection'
+              )}
+              title={translate('auto.components.settings.SettingsFormControls.74bcecd5ec', 'Clear')}
             >
               <CircleX className="size-3.5" />
             </button>
@@ -632,13 +779,19 @@ export function FontAutocomplete({
             onClick={() => {
               const nextOpen = !open
               setOpen(nextOpen)
+              if (!nextOpen) {
+                setIsFilteringQuery(false)
+              }
               if (nextOpen) {
                 focusInput()
               }
             }}
             className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Toggle font suggestions"
-            title="Fonts"
+            aria-label={translate(
+              'auto.components.settings.SettingsFormControls.c766f8ac75',
+              'Toggle font suggestions'
+            )}
+            title={translate('auto.components.settings.SettingsFormControls.b55371ea18', 'Fonts')}
           >
             <ChevronsUpDown className="size-3.5" />
           </button>
@@ -647,10 +800,10 @@ export function FontAutocomplete({
 
       {open ? (
         <div className="absolute top-full z-20 mt-2 w-full overflow-hidden rounded-md border border-border/50 bg-popover shadow-md">
-          <ScrollArea className={filteredSuggestions.length > 8 ? 'h-64' : undefined}>
+          <ScrollArea className={visibleSuggestions.length > 8 ? 'h-64' : undefined}>
             <div id={listboxId} role="listbox" className="p-1">
-              {filteredSuggestions.length > 0 ? (
-                filteredSuggestions.map((font, index) => (
+              {visibleSuggestions.length > 0 ? (
+                visibleSuggestions.map((font, index) => (
                   <button
                     key={font}
                     type="button"
@@ -676,7 +829,12 @@ export function FontAutocomplete({
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-3 text-sm text-muted-foreground">No matching fonts.</div>
+                <div className="px-3 py-3 text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SettingsFormControls.42a4d15a30',
+                    'No matching fonts.'
+                  )}
+                </div>
               )}
             </div>
           </ScrollArea>
