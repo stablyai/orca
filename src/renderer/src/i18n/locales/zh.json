@@ -4734,7 +4734,7 @@
           "37df688d6f": "启用浮动工作区并选择新选项卡的开始位置。",
           "1f67f39384": "浮动工作区"
         },
-        "GeneralCacheTimerSection": {
+        "AgentCacheTimerSection": {
           "05de84a104": "1小时",
           "54395ecd7c": "5分钟",
           "8b9e202e0a": "将此与您的提供商的缓存 TTL 相匹配。默认值为 5 分钟。",

@@ -3,14 +3,12 @@ import type { GlobalSettings } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { Separator } from '../ui/separator'
 import { CliSection } from './CliSection'
-import { GeneralCacheTimerSection } from './GeneralCacheTimerSection'
 import { GeneralEditorSettingsSection } from './GeneralEditorSettingsSection'
 import { GeneralNetworkSettingsSection } from './GeneralNetworkSettingsSection'
 import { GeneralSupportSection } from './GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
 import {
-  getGeneralCacheTimerSearchEntries,
   getGeneralCliSearchEntries,
   getGeneralEditorSearchEntries,
   getGeneralNavigationSearchEntries,
@@ -187,13 +185,6 @@ export function GeneralPane({
         wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}
         wslCapabilitiesLoading={wslCapabilitiesLoading}
-      />
-    ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralCacheTimerSearchEntries()) ? (
-      <GeneralCacheTimerSection
-        key="cache-timer"
-        settings={settings}
-        updateSettings={updateSettings}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralUpdateSearchEntries()) ? (

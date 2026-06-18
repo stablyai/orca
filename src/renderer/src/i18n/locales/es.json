@@ -4749,7 +4749,7 @@
           "37df688d6f": "Habilite el espacio de trabajo flotante y elija dónde comienzan las nuevas pestañas.",
           "1f67f39384": "Espacio de trabajo flotante"
         },
-        "GeneralCacheTimerSection": {
+        "AgentCacheTimerSection": {
           "05de84a104": "1 hora",
           "54395ecd7c": "5 minutos",
           "8b9e202e0a": "Haga coincidir esto con el TTL de caché de su proveedor. El valor predeterminado es 5 minutos.",
