@@ -3511,7 +3511,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     data-workspace-status={headerWorkspaceStatus ?? undefined}
                     data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
                     className={cn(
-                      'group relative flex h-7 w-full items-center gap-1.5 pr-1 text-left transition-all',
+                      'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
                       'cursor-pointer',
                       isDraggingThis &&
                         'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
