@@ -10,7 +10,7 @@ const source =
   readFileSync(new URL('./terminal-webview-tap-dispatch-injected.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
 const sessionSource = readFileSync(
-  new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
+  new URL('../../app/h/[hostId]/session/mobile-session-screen.tsx', import.meta.url),
   'utf8'
 )
 const sessionHelperSource = readFileSync(

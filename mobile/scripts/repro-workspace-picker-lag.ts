@@ -44,6 +44,12 @@ async function measureTapDelay(label: string, work: () => void): Promise<number>
   return elapsed
 }
 
+async function waitForDeferredWork(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 10)
+  })
+}
+
 function rebuildSections(worktrees: readonly Worktree[]): void {
   buildSections(worktrees as Worktree[], 'recent', filters, '', 'repo', pinnedIds)
 }
@@ -57,6 +63,8 @@ async function main(): Promise<void> {
   measure('single areWorktreeListsEqual', () => {
     areWorktreeListsEqual(baseWorktrees, freshSnapshot())
   })
+
+  await measureTapDelay('baseline: empty tap callback', () => {})
 
   await measureTapDelay('before: unconditional no-op poll rebuilds', () => {
     for (let i = 0; i < pollCount; i += 1) {
@@ -74,6 +82,20 @@ async function main(): Promise<void> {
       }
     }
   })
+
+  const completedSnapshots = Array.from({ length: pollCount }, () => freshSnapshot())
+  await measureTapDelay('after: deferred no-op poll apply outside tap turn', () => {
+    let current = baseWorktrees
+    for (const next of completedSnapshots) {
+      setTimeout(() => {
+        if (!areWorktreeListsEqual(current, next)) {
+          current = next
+          rebuildSections(next)
+        }
+      }, 5)
+    }
+  })
+  await waitForDeferredWork()
 }
 
 void main()

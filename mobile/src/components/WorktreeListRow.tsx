@@ -73,9 +73,10 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
       style={({ pressed }) => [
         styles.worktreeRow,
         item.isActive && styles.worktreeRowActive,
-        pressed && styles.worktreeRowPressed
+        pressed && !isReadOnly && styles.worktreeRowPressed
       ]}
       disabled={isReadOnly}
+      accessibilityState={{ disabled: isReadOnly }}
       onPress={() => onPress(item)}
       onLongPress={
         onLongPress
@@ -155,9 +156,9 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
         ) : null}
       </View>
 
-      {item.liveTerminalCount > 0 && (
+      {item.liveTerminalCount > 0 ? (
         <Text style={styles.terminalCount}>{item.liveTerminalCount}</Text>
-      )}
+      ) : null}
     </Pressable>
   )
 }

@@ -9,7 +9,7 @@ import {
 
 const hookSource = readFileSync(new URL('./terminal-viewport-refit.ts', import.meta.url), 'utf8')
 const sessionSource = readFileSync(
-  new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
+  new URL('../../app/h/[hostId]/session/mobile-session-screen.tsx', import.meta.url),
   'utf8'
 )
 

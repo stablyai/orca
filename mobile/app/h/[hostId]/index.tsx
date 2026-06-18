@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View,
   Text,
-  StyleSheet,
   SectionList,
   Pressable,
   ActivityIndicator,
-  TextInput
+  TextInput,
+  InteractionManager
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
@@ -58,11 +58,12 @@ import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
 import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { setCachedRepos } from '../../../src/cache/repo-cache'
-import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
+import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { leaveHostRoute } from '../../../src/host-route-exit'
 import { evaluateCompat, type CompatVerdict } from '../../../src/transport/protocol-compat'
 import { loadPinnedIds, savePinnedIds } from '../../../src/storage/preferences'
+import { triggerSelection } from '../../../src/platform/haptics'
 import {
   createInitialHostRouteActionState,
   resolveHostRouteActionState,
@@ -84,18 +85,25 @@ import {
   type Worktree
 } from '../../../src/worktree/workspace-list-sections'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
+import { openWorkspaceSession } from '../../../src/worktree/workspace-open-action'
 import { repoColor } from '../../../src/worktree/repo-color'
 import {
   WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
   WORKSPACE_SORT_OPTIONS as SORT_OPTIONS
 } from '../../../src/worktree/workspace-list-picker-options'
 import type { DesktopStatus, RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
+import { hostWorktreeActionDrawerStyles } from './host-worktree-action-drawer-styles'
+import { hostWorktreeScreenStyles } from './host-worktree-screen-styles'
+import { warmMobileSessionScreen } from './session/mobile-session-route-warmup'
+
+const styles = { ...hostWorktreeScreenStyles, ...hostWorktreeActionDrawerStyles }
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
 }
 
 const REPO_METADATA_REFRESH_MS = 60_000
+type WorktreeApplyTask = ReturnType<typeof InteractionManager.runAfterInteractions>
 
 type HostScreenProps = {
   // Why: when true, this worktree list is rendered as the persistent tablet
@@ -137,7 +145,11 @@ export function HostScreen({
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
+  const hostIdRef = useRef(hostId)
+  hostIdRef.current = hostId
   const fetchWorktreesInFlightRef = useRef(false)
+  const worktreeApplyGenerationRef = useRef(0)
+  const pendingWorktreeApplyRef = useRef<WorktreeApplyTask | null>(null)
   const fetchRepoMetadataInFlightRef = useRef(false)
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
@@ -191,6 +203,26 @@ export function HostScreen({
   // Persisted pin state
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+
+  const cancelScheduledWorktreeApply = useCallback(() => {
+    worktreeApplyGenerationRef.current += 1
+    pendingWorktreeApplyRef.current?.cancel()
+    pendingWorktreeApplyRef.current = null
+  }, [])
+
+  useEffect(() => cancelScheduledWorktreeApply, [cancelScheduledWorktreeApply, client, hostId])
+
+  useEffect(() => {
+    if (!worktreesLoaded) {
+      return
+    }
+    // Why: the session route is large. Warm the module after the list settles
+    // so the eventual tap does not pay the route import/evaluation cost.
+    const task = InteractionManager.runAfterInteractions(() => {
+      void warmMobileSessionScreen().catch(() => null)
+    })
+    return () => task.cancel()
+  }, [worktreesLoaded])
 
   // Why: snapshot of the synced view settings so the focus-effect ui.get merge
   // and the optimistic ui.set writes read the latest values without forcing the
@@ -413,6 +445,52 @@ export function HostScreen({
     [client, connState, hostId]
   )
 
+  const applyWorktreeSnapshot = useCallback((nextWorktrees: Worktree[], requestHostId: string) => {
+    // Why: large hosts can return identical worktree.ps snapshots every poll.
+    // Preserving the existing array keeps SectionList/sort rebuilds off the
+    // JS tap path unless something actually changed.
+    setWorktrees((current) =>
+      areWorktreeListsEqual(current, nextWorktrees) ? current : nextWorktrees
+    )
+    setLastKnownWorktrees((current) =>
+      areWorktreeListsEqual(current, nextWorktrees) ? current : nextWorktrees
+    )
+    setWorktreesLoaded(true)
+    // Drop the optimistic active override once the host confirms it (the
+    // activate RPC has landed and worktree.ps now reports it active), so we
+    // stop overriding and respect any later desktop-driven change.
+    setOptimisticActiveWorktreeId((pending) =>
+      pending && nextWorktrees.some((w) => w.worktreeId === pending && w.isActive) ? null : pending
+    )
+
+    // Clear optimistic sleep overrides once the server confirms the
+    // worktree is actually inactive (liveTerminalCount dropped to 0).
+    setSleptIds((prev) => {
+      if (prev.size === 0) {
+        return prev
+      }
+      const still = new Set<string>()
+      for (const id of prev) {
+        const wt = nextWorktrees.find((w) => w.worktreeId === id)
+        if (wt && wt.liveTerminalCount > 0) {
+          still.add(id)
+        }
+      }
+      return still.size === prev.size ? prev : still
+    })
+
+    // Sync local pin state from server so desktop-initiated pins/unpins
+    // are reflected without relying on stale AsyncStorage.
+    const serverPinned = new Set(nextWorktrees.filter((w) => w.isPinned).map((w) => w.worktreeId))
+    setPinnedIds((prev) => {
+      if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
+        return prev
+      }
+      void savePinnedIds(requestHostId, serverPinned)
+      return serverPinned
+    })
+  }, [])
+
   const fetchWorktrees = useCallback(
     async (options: { allowDuringModal?: boolean } = {}) => {
       if (!client || connState !== 'connected') {
@@ -442,54 +520,24 @@ export function HostScreen({
         }
         if (response.ok) {
           const result = (response as RpcSuccess).result as { worktrees: Worktree[] }
-          // Why: large hosts can return identical worktree.ps snapshots every
-          // poll. Preserving the existing array keeps SectionList/sort rebuilds
-          // off the JS tap path unless something actually changed.
-          setWorktrees((current) =>
-            areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
-          )
-          setLastKnownWorktrees((current) =>
-            areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
-          )
-          setWorktreesLoaded(true)
-          // Drop the optimistic active override once the host confirms it (the
-          // activate RPC has landed and worktree.ps now reports it active), so we
-          // stop overriding and respect any later desktop-driven change.
-          setOptimisticActiveWorktreeId((pending) =>
-            pending && result.worktrees.some((w) => w.worktreeId === pending && w.isActive)
-              ? null
-              : pending
-          )
-
-          // Clear optimistic sleep overrides once the server confirms the
-          // worktree is actually inactive (liveTerminalCount dropped to 0).
-          setSleptIds((prev) => {
-            if (prev.size === 0) {
-              return prev
+          const generation = worktreeApplyGenerationRef.current + 1
+          worktreeApplyGenerationRef.current = generation
+          pendingWorktreeApplyRef.current?.cancel()
+          // Why: worktree.ps snapshots can be large; applying them after active
+          // touches keeps background polling from delaying tap-down feedback.
+          pendingWorktreeApplyRef.current = InteractionManager.runAfterInteractions(() => {
+            if (
+              generation !== worktreeApplyGenerationRef.current ||
+              clientRef.current !== requestClient ||
+              hostIdRef.current !== requestHostId
+            ) {
+              return
             }
-            const still = new Set<string>()
-            for (const id of prev) {
-              const wt = result.worktrees.find((w) => w.worktreeId === id)
-              if (wt && wt.liveTerminalCount > 0) {
-                still.add(id)
-              }
+            pendingWorktreeApplyRef.current = null
+            if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
+              return
             }
-            return still.size === prev.size ? prev : still
-          })
-
-          // Sync local pin state from server so desktop-initiated pins/unpins
-          // are reflected without relying on stale AsyncStorage.
-          const serverPinned = new Set(
-            result.worktrees.filter((w) => w.isPinned).map((w) => w.worktreeId)
-          )
-          setPinnedIds((prev) => {
-            if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
-              return prev
-            }
-            if (hostId) {
-              void savePinnedIds(hostId, serverPinned)
-            }
-            return serverPinned
+            applyWorktreeSnapshot(result.worktrees, requestHostId)
           })
         }
       } catch {
@@ -498,7 +546,7 @@ export function HostScreen({
         fetchWorktreesInFlightRef.current = false
       }
     },
-    [client, connState, hostId]
+    [applyWorktreeSnapshot, client, connState, hostId]
   )
 
   // Why: read desktop's protocol version from status.get on every connect
@@ -677,39 +725,46 @@ export function HostScreen({
   }, [hostId, leaveHost, closeHostClient])
 
   const navigateFromHostList = useCallback(
-    (target: string) => {
+    (target: string): boolean => {
       if (!embedded) {
         router.push(target)
-        return
+        return true
       }
       const targetPath = target.split('?')[0] ?? target
       if (pathname === targetPath) {
-        return
+        return false
       }
       if (pathname === `/h/${hostId}`) {
         router.push(target)
-        return
+        return true
       }
       router.replace(target)
+      return true
     },
     [embedded, hostId, pathname, router]
   )
 
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
-      // Highlight the row immediately; the next worktree.ps poll confirms it.
-      setOptimisticActiveWorktreeId(item.worktreeId)
-      if (client && connState === 'connected') {
-        void client
-          .sendRequest('worktree.activate', {
-            worktree: `id:${item.worktreeId}`
-          })
-          .catch(() => null)
-      }
-      const target = `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
-      navigateFromHostList(target)
+      // Why: actual taps should win over stale background list maintenance, but
+      // scroll touches must not trigger haptics or row side effects.
+      cancelScheduledWorktreeApply()
+      openWorkspaceSession(hostId, item, {
+        navigate: navigateFromHostList,
+        markOptimisticActive: setOptimisticActiveWorktreeId,
+        activateWorktree: (worktreeId) => {
+          if (client && connState === 'connected') {
+            void client
+              .sendRequest('worktree.activate', {
+                worktree: `id:${worktreeId}`
+              })
+              .catch(() => null)
+          }
+        }
+      })
+      triggerSelection()
     },
-    [client, connState, hostId, navigateFromHostList]
+    [cancelScheduledWorktreeApply, client, connState, hostId, navigateFromHostList]
   )
 
   const handleSortChange = useCallback(
@@ -1463,325 +1518,3 @@ export default function HostWorktreeRoute() {
 function ListSeparator() {
   return <View style={styles.separator} />
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  topChrome: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  statusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 34,
-    paddingTop: spacing.xs,
-    paddingHorizontal: spacing.lg
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs
-  },
-  sidebarCollapseButton: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    marginLeft: spacing.xs
-  },
-  hostIdentity: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 0,
-    marginRight: spacing.md
-  },
-  hostNameText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  reconnectButton: {
-    paddingVertical: 4,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  reconnectButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  embeddedToolbar: {
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.sm,
-    gap: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  embeddedToolbarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  embeddedFilterChip: {
-    flex: 1,
-    minWidth: 0,
-    height: 30,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 0
-  },
-  embeddedModeButton: {
-    flex: 1,
-    minWidth: 0,
-    height: 30,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 0
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  filterChipActive: {
-    borderColor: colors.textSecondary,
-    backgroundColor: colors.bgRaised
-  },
-  filterChipText: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  filterChipTextActive: {
-    color: colors.textPrimary
-  },
-  sortButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  groupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  sortLabel: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  toolbarSpacer: {
-    flex: 1
-  },
-  toolbarIconButton: {
-    width: 32,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  embeddedToolbarIconButton: {
-    flex: 1,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  toolbarIconDisabled: {
-    opacity: 0.6
-  },
-  newButton: {
-    padding: spacing.xs
-  },
-  searchToggle: {
-    padding: spacing.xs
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 13,
-    paddingVertical: 2
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
-  list: {
-    paddingBottom: spacing.lg
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
-  },
-  sectionIcon: {
-    marginRight: spacing.xs
-  },
-  sectionRepoIcon: {
-    marginRight: spacing.xs
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  sectionCount: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginLeft: spacing.xs
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.borderSubtle,
-    marginLeft: spacing.lg + 24,
-    marginRight: spacing.lg
-  },
-  filterModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  filterModalTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  clearFiltersText: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  filterSectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  filterGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: spacing.md
-  },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2,
-    gap: spacing.sm
-  },
-  filterRowText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  filterSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  filterRepoDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  confirmContent: {
-    paddingBottom: spacing.lg
-  },
-  confirmTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  confirmMessage: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    lineHeight: 20
-  },
-  confirmButtons: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
-    alignItems: 'center'
-  },
-  confirmBtnCancel: {
-    backgroundColor: colors.bgPanel
-  },
-  confirmBtnDestructive: {
-    backgroundColor: colors.statusRed
-  },
-  confirmBtnPressed: {
-    opacity: 0.7
-  },
-  confirmBtnCancelText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textSecondary
-  },
-  confirmBtnDestructiveText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: '#fff'
-  }
-})
