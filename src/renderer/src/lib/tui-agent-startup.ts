@@ -28,7 +28,20 @@ function quoteStartupArg(value: string, platform: NodeJS.Platform): string {
     return `"${value.replace(/"/g, '""')}"`
   }
 
-  return `'${value.replace(/'/g, `'\\''`)}'`
+  // Why: POSIX shells allow literal newlines inside a single-quoted argument,
+  // but that makes the terminal show a `quote>` (or `>`) continuation prompt
+  // while the user is reading the line. Keep the typed command on one physical
+  // line by using printf command substitution for multiline values, while still
+  // passing the exact value (including real newlines) as a single argv
+  // argument when the shell executes the command.
+  if (!value.includes('\n')) {
+    return `'${value.replace(/'/g, `'\\''`)}'`
+  }
+
+  const lines = value.split('\n')
+  const quotedLines = lines.map((line) => `'${line.replace(/'/g, `'\\''`)}'`)
+
+  return `"$(printf '%s\\n' ${quotedLines.join(' ')})"`
 }
 
 export function buildAgentStartupPlan(args: {
@@ -39,7 +52,18 @@ export function buildAgentStartupPlan(args: {
   allowEmptyPromptLaunch?: boolean
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
-  const trimmedPrompt = prompt.trim()
+  // Why: the prompt is embedded in a shell command that is written to the PTY
+  // after the shell is ready. POSIX shells accept literal newlines inside a
+  // quoted argv argument, so the whole command can span multiple physical
+  // lines while still being submitted as one argv argument when the closing
+  // quote is followed by Enter. Windows command-line parsing is less reliable
+  // for embedded newlines, so there we collapse CR/LF to spaces to stay on one
+  // physical line. On POSIX we normalize CRLF/CR to LF so line endings are
+  // stable and do not surprise the shell.
+  const trimmedPrompt =
+    platform === 'win32'
+      ? prompt.trim().replace(/[\r\n]+/g, ' ')
+      : prompt.trim().replace(/\r\n?/g, '\n')
   const config = TUI_AGENT_CONFIG[agent]
   const baseCommand = cmdOverrides[agent] ?? config.launchCmd
 

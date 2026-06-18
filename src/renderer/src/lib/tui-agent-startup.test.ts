@@ -129,6 +129,60 @@ describe('buildAgentStartupPlan', () => {
     ).toBeNull()
   })
 
+  it('preserves structural newlines in Droid prompts as a single argv argument', () => {
+    // Why: the prompt is already formatted as a stable multi-line block
+    // (File, Line, User comment). The shell line editor accepts literal
+    // newlines inside a quoted argv argument, so keeping the newlines makes
+    // the terminal output readable while still submitting as one command.
+    expect(
+      buildAgentStartupPlan({
+        agent: 'droid',
+        prompt: 'File: docs/plan.md\nLine: 19\nUser comment: "what do you think about it?"',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toEqual({
+      agent: 'droid',
+      launchCommand:
+        'droid \'File: docs/plan.md\nLine: 19\nUser comment: "what do you think about it?"\'',
+      expectedProcess: 'droid',
+      followupPrompt: null
+    })
+  })
+
+  it('preserves structural newlines in Codex prompts as a single argv argument', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'codex',
+        prompt: 'Review this function:\n\n```ts\nconst x = 1\n```',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'codex',
+      launchCommand: "codex 'Review this function:\n\n```ts\nconst x = 1\n```'",
+      expectedProcess: 'codex',
+      followupPrompt: null
+    })
+  })
+
+  it('collapses embedded newlines on Windows to keep the command on one line', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'droid',
+        prompt: 'File: docs/plan.md\nLine: 19\nUser comment: "what do you think about it?"',
+        cmdOverrides: {},
+        platform: 'win32'
+      })
+    ).toEqual({
+      agent: 'droid',
+      launchCommand:
+        'droid "File: docs/plan.md Line: 19 User comment: ""what do you think about it?"""',
+      expectedProcess: 'droid',
+      followupPrompt: null
+    })
+  })
+
   it('uses -i flag for copilot to start an interactive session with initial prompt', () => {
     expect(
       buildAgentStartupPlan({
