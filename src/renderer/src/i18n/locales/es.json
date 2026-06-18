@@ -5739,7 +5739,8 @@
           "97dccee14e": "Modificado",
           "3b11ef3a43": "{{value0}} atajo",
           "f6579be67b": "Cambiar acceso directo",
-          "6a7848fdac": "Escuchando atajos"
+          "6a7848fdac": "Escuchando atajos",
+          "a98d551407": "Pulsa un atajo o toca dos veces una tecla modificadora (p. ej., {{value0}}). Esc cancela."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Estado",

@@ -7,7 +7,7 @@ import {
   type KeybindingActionId,
   type KeybindingMatchOptions,
   type KeybindingOverrides,
-  type ModifierToken
+  type PhysicalModifierToken
 } from './keybindings'
 
 export type WindowShortcutInput = {
@@ -24,7 +24,7 @@ export type WindowShortcutInput = {
   shiftKey?: boolean
   // Set only by the double-tap detector; threads the synthetic input through
   // the main-process resolver so allowlisted actions can fire on double-tap.
-  doubleTapModifier?: ModifierToken
+  doubleTapModifier?: PhysicalModifierToken
 }
 
 export type WindowShortcutAction =

@@ -928,6 +928,8 @@ describe('keybindings', () => {
     expect(formatKeybinding('DoubleTap+Alt', 'darwin')).toEqual(['⌥', '⌥'])
     // Ctrl's glyph ⌃ diverges from Mod's ⌘ on Mac, so cover it explicitly.
     expect(formatKeybinding('DoubleTap+Ctrl', 'darwin')).toEqual(['⌃', '⌃'])
+    expect(formatKeybindingList(['DoubleTap+Shift'], 'darwin')).toBe('⇧ ⇧')
+    expect(formatKeybindingList(['DoubleTap+Shift'], 'linux')).toBe('Shift Shift')
   })
 
   it('matches macOS Option-composed bracket shortcuts for all-type tab switching', () => {
@@ -969,5 +971,40 @@ describe('keybindings', () => {
       binding: 'DoubleTap+Shift',
       actionIds: expect.arrayContaining(['worktree.quickOpen', 'view.tasks'])
     })
+  })
+
+  it('reports conflicts across platform-primary double-tap aliases', () => {
+    expect(
+      findKeybindingConflicts('darwin', {
+        'worktree.quickOpen': ['DoubleTap+Mod'],
+        'view.tasks': ['DoubleTap+Cmd']
+      })
+    ).toContainEqual({
+      binding: 'DoubleTap+Mod',
+      actionIds: expect.arrayContaining(['worktree.quickOpen', 'view.tasks'])
+    })
+
+    expect(
+      findKeybindingConflicts('linux', {
+        'worktree.quickOpen': ['DoubleTap+Mod'],
+        'view.tasks': ['DoubleTap+Ctrl']
+      })
+    ).toContainEqual({
+      binding: 'DoubleTap+Mod',
+      actionIds: expect.arrayContaining(['worktree.quickOpen', 'view.tasks'])
+    })
+  })
+
+  it('does not report a conflict when one action lists double-tap aliases for itself', () => {
+    expect(
+      findKeybindingConflicts('darwin', {
+        'worktree.quickOpen': ['DoubleTap+Mod', 'DoubleTap+Cmd']
+      })
+    ).toEqual([])
+    expect(
+      findKeybindingConflicts('linux', {
+        'worktree.quickOpen': ['DoubleTap+Mod', 'DoubleTap+Ctrl']
+      })
+    ).toEqual([])
   })
 })

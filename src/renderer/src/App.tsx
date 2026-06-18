@@ -137,7 +137,7 @@ import {
   keybindingMatchesAction,
   type KeybindingActionId,
   type KeybindingContext,
-  type ModifierToken
+  type PhysicalModifierToken
 } from '../../shared/keybindings'
 import {
   ModifierDoubleTapDetector,
@@ -168,7 +168,7 @@ type ShortcutDispatchInput = {
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
-  doubleTapModifier?: ModifierToken
+  doubleTapModifier?: PhysicalModifierToken
   target: EventTarget | null
   defaultPrevented: boolean
   preventDefault: () => void
@@ -1553,7 +1553,7 @@ function App(): React.JSX.Element {
       }
 
       if (matchShortcut('workspace.openBoard') && activeView !== 'settings') {
-        e.preventDefault()
+        input.preventDefault()
         notifyTerminalCapture('workspace.openBoard')
         const store = useAppStore.getState()
         store.setSidebarOpen(true)
@@ -1643,9 +1643,6 @@ function App(): React.JSX.Element {
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.repeat) {
-        return
-      }
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: 'keyDown',
@@ -1659,13 +1656,16 @@ function App(): React.JSX.Element {
         }),
         Date.now()
       )
+      if (e.repeat) {
+        return
+      }
       if (detected) {
         // Synthetic input: no key/modifier flags, so only DoubleTap bindings match.
         dispatchShortcutInput({
           doubleTapModifier: detected.modifier,
-          target: document.activeElement,
-          defaultPrevented: false,
-          preventDefault: () => {}
+          target: e.target,
+          defaultPrevented: e.defaultPrevented,
+          preventDefault: () => e.preventDefault()
         })
         return
       }

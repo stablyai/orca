@@ -80,7 +80,11 @@ export function ShortcutBindingRow({
   const statusMessage = error ?? (warnings.length > 0 ? warnings.join(' ') : '')
   const doubleTapHint = platform === 'darwin' ? '⇧⇧' : 'Shift Shift'
   const recordingMessage = recording
-    ? `Press a shortcut, or double-tap a modifier (e.g. ${doubleTapHint}). Esc cancels.`
+    ? translate(
+        'auto.components.settings.ShortcutBindingRow.a98d551407',
+        'Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',
+        { value0: doubleTapHint }
+      )
     : ''
   const helperMessage = statusMessage || recordingMessage
   const hasBinding = effective.length > 0

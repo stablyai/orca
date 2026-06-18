@@ -10,7 +10,7 @@ import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
-import { useShortcutKeyCombos } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyComboDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import {
   FontAutocomplete,
@@ -64,7 +64,7 @@ type AppearancePaneProps = {
   warpThemes: UseWarpThemeImportReturn
 }
 
-function ShortcutHintList({ combos }: { combos: string[][] }): React.JSX.Element {
+function ShortcutHintList({ combos }: { combos: ShortcutKeyComboDetails[] }): React.JSX.Element {
   if (combos.length === 0) {
     return (
       <span className="text-xs text-muted-foreground">
@@ -75,10 +75,11 @@ function ShortcutHintList({ combos }: { combos: string[][] }): React.JSX.Element
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1 align-middle">
-      {combos.map((keys) => (
+      {combos.map((combo) => (
         <ShortcutKeyCombo
-          key={keys.join('-')}
-          keys={keys}
+          key={combo.keys.join('-')}
+          keys={combo.keys}
+          doubleTap={combo.doubleTap}
           className="inline-flex gap-0.5"
           separatorClassName="text-[10px] text-muted-foreground"
         />
@@ -98,8 +99,8 @@ export function AppearancePane({
   warpThemes
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const zoomInKeyCombos = useShortcutKeyCombos('zoom.in')
-  const zoomOutKeyCombos = useShortcutKeyCombos('zoom.out')
+  const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
+  const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)

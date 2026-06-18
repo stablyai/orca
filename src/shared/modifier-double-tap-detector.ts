@@ -1,4 +1,4 @@
-import type { ModifierToken } from './keybindings'
+import type { PhysicalModifierToken } from './keybindings'
 
 // Why: max gap between the first release and the second press. Internal — not
 // user-configurable — and tight enough that normal fast typing never triggers.
@@ -10,13 +10,13 @@ export type ModifierDoubleTapEventType = 'keyDown' | 'keyUp'
 export type ModifierDoubleTapEvent = {
   type: ModifierDoubleTapEventType
   // Which physical modifier this event is about, or null for any other key.
-  modifier: ModifierToken | null
+  modifier: PhysicalModifierToken | null
   // True only for a bare modifier press/release with no OTHER modifier held.
   isModifierOnly: boolean
   isAutoRepeat: boolean
 }
 
-export type DetectedDoubleTap = { modifier: ModifierToken }
+export type DetectedDoubleTap = { modifier: PhysicalModifierToken }
 
 export type ModifierKeyEventLike = {
   type: ModifierDoubleTapEventType
@@ -29,7 +29,7 @@ export type ModifierKeyEventLike = {
   isAutoRepeat?: boolean
 }
 
-const MODIFIER_BY_CODE: Record<string, ModifierToken> = {
+const MODIFIER_BY_CODE: Record<string, PhysicalModifierToken> = {
   ShiftLeft: 'Shift',
   ShiftRight: 'Shift',
   ControlLeft: 'Ctrl',
@@ -40,7 +40,7 @@ const MODIFIER_BY_CODE: Record<string, ModifierToken> = {
   MetaRight: 'Cmd'
 }
 
-const MODIFIER_BY_KEY: Record<string, ModifierToken> = {
+const MODIFIER_BY_KEY: Record<string, PhysicalModifierToken> = {
   Shift: 'Shift',
   Control: 'Ctrl',
   Alt: 'Alt',
@@ -52,14 +52,14 @@ const MODIFIER_BY_KEY: Record<string, ModifierToken> = {
 export function modifierFromKeyEvent(
   code: string | undefined,
   key: string | undefined
-): ModifierToken | null {
+): PhysicalModifierToken | null {
   if (code && MODIFIER_BY_CODE[code]) {
     return MODIFIER_BY_CODE[code]
   }
   return key ? (MODIFIER_BY_KEY[key] ?? null) : null
 }
 
-function otherModifierHeld(event: ModifierKeyEventLike, modifier: ModifierToken): boolean {
+function otherModifierHeld(event: ModifierKeyEventLike, modifier: PhysicalModifierToken): boolean {
   if (modifier !== 'Shift' && event.shift) {
     return true
   }
@@ -88,8 +88,8 @@ export function toModifierDoubleTapEvent(event: ModifierKeyEventLike): ModifierD
 
 type DetectorState =
   | { phase: 'idle' }
-  | { phase: 'down1'; modifier: ModifierToken }
-  | { phase: 'armed'; modifier: ModifierToken; deadlineMs: number }
+  | { phase: 'down1'; modifier: PhysicalModifierToken }
+  | { phase: 'armed'; modifier: PhysicalModifierToken; deadlineMs: number }
 
 export class ModifierDoubleTapDetector {
   private state: DetectorState = { phase: 'idle' }
@@ -114,7 +114,7 @@ export class ModifierDoubleTapDetector {
   }
 
   private onModifierDown(
-    modifier: ModifierToken,
+    modifier: PhysicalModifierToken,
     isAutoRepeat: boolean,
     timestampMs: number
   ): DetectedDoubleTap | null {
@@ -137,7 +137,7 @@ export class ModifierDoubleTapDetector {
     return null
   }
 
-  private onModifierUp(modifier: ModifierToken, timestampMs: number): void {
+  private onModifierUp(modifier: PhysicalModifierToken, timestampMs: number): void {
     if (this.state.phase === 'down1' && this.state.modifier === modifier) {
       this.state = { phase: 'armed', modifier, deadlineMs: timestampMs + DOUBLE_TAP_WINDOW_MS }
       return

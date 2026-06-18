@@ -722,6 +722,65 @@ export function createMainWindow(
     }
   }
 
+  const dispatchResolvedWindowShortcutAction = (
+    event: Electron.Event,
+    action: WindowShortcutAction,
+    options: {
+      isAutoRepeat: boolean
+      focusedShortcutContext: KeybindingMatchOptions
+    }
+  ): boolean => {
+    const { focusedShortcutContext, isAutoRepeat } = options
+    if (
+      floatingTerminalInputFocused &&
+      (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
+    ) {
+      return false
+    }
+
+    const capturedTerminalActionId =
+      focusedShortcutContext.context === 'terminal' &&
+      focusedShortcutContext.terminalShortcutPolicy === 'orca-first' &&
+      windowShortcutActionCapturesTerminal(action)
+        ? getWindowShortcutActionId(action)
+        : null
+
+    // Why: hold-mode dictation needs renderer keyup events, so the main process
+    // may only consume shortcuts that toggle dictation from a single keydown.
+    if (action.type === 'dictationKeyDown') {
+      const voiceSettings = store?.getSettings().voice
+      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
+        return false
+      }
+      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
+      if (dictationMode === 'hold') {
+        return false
+      }
+      if (isAutoRepeat) {
+        event.preventDefault()
+        return true
+      }
+      event.preventDefault()
+      if (capturedTerminalActionId) {
+        mainWindow.webContents.send('ui:terminalShortcutCaptured', {
+          actionId: capturedTerminalActionId
+        })
+      }
+      mainWindow.webContents.send('ui:dictationKeyDown')
+      return true
+    }
+
+    event.preventDefault()
+    if (capturedTerminalActionId) {
+      mainWindow.webContents.send('ui:terminalShortcutCaptured', {
+        actionId: capturedTerminalActionId
+      })
+    }
+
+    sendResolvedWindowShortcutAction(action)
+    return true
+  }
+
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (shortcutRecorderFocused) {
       return
@@ -743,6 +802,10 @@ export function createMainWindow(
       terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
         store?.getSettings().terminalShortcutPolicy
       )
+    }
+    const appShortcutContext: KeybindingMatchOptions = {
+      context: 'app',
+      terminalShortcutPolicy: terminalShortcutContext.terminalShortcutPolicy
     }
 
     // Why: detect double-tap-modifier gestures on the raw key stream. A bare
@@ -766,14 +829,18 @@ export function createMainWindow(
           { type: 'keyDown', doubleTapModifier: detected.modifier },
           process.platform,
           keybindings,
-          terminalShortcutContext
+          appShortcutContext
         )
-        if (doubleTapAction) {
+        if (
+          doubleTapAction &&
+          dispatchResolvedWindowShortcutAction(event, doubleTapAction, {
+            isAutoRepeat: false,
+            focusedShortcutContext: terminalShortcutContext
+          })
+        ) {
           // Only preventDefault the emitting keydown — never the first tap's
           // down/up. This suppresses the renderer DOM keydown so the renderer
           // detector cannot also fire for the same gesture.
-          event.preventDefault()
-          sendResolvedWindowShortcutAction(doubleTapAction)
           return
         }
         // No allowlisted action: let the keydown reach the renderer, whose
@@ -819,63 +886,14 @@ export function createMainWindow(
       return
     }
 
-    // Why: keep global app routing for non-terminal actions, but let floating
-    // xterm own shell control chars that overlap sidebar chrome shortcuts.
-    if (
-      floatingTerminalInputFocused &&
-      (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
-    ) {
-      return
-    }
-
     if (input.type !== 'keyDown') {
       return
     }
 
-    const capturedTerminalActionId =
-      terminalShortcutContext.context === 'terminal' &&
-      terminalShortcutContext.terminalShortcutPolicy === 'orca-first' &&
-      windowShortcutActionCapturesTerminal(action)
-        ? getWindowShortcutActionId(action)
-        : null
-
-    // Why: in hold mode, Cmd+E must NOT be intercepted here. Calling
-    // preventDefault() in before-input-event suppresses ALL subsequent DOM
-    // events for the key combo — including the keyUp the renderer needs to
-    // detect release. By letting the event through, the renderer's
-    // capture-phase DOM listeners handle both keydown and keyup normally.
-    // Toggle mode still uses the IPC path since it doesn't need keyUp.
-    if (action.type === 'dictationKeyDown') {
-      const voiceSettings = store?.getSettings().voice
-      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
-        return
-      }
-      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
-      if (dictationMode === 'hold') {
-        return
-      }
-      if (input.isAutoRepeat) {
-        event.preventDefault()
-        return
-      }
-      event.preventDefault()
-      if (capturedTerminalActionId) {
-        mainWindow.webContents.send('ui:terminalShortcutCaptured', {
-          actionId: capturedTerminalActionId
-        })
-      }
-      mainWindow.webContents.send('ui:dictationKeyDown')
-      return
-    }
-
-    event.preventDefault()
-    if (capturedTerminalActionId) {
-      mainWindow.webContents.send('ui:terminalShortcutCaptured', {
-        actionId: capturedTerminalActionId
-      })
-    }
-
-    sendResolvedWindowShortcutAction(action)
+    dispatchResolvedWindowShortcutAction(event, action, {
+      isAutoRepeat: Boolean(input.isAutoRepeat),
+      focusedShortcutContext: terminalShortcutContext
+    })
   })
 
   // Why: a mid-gesture focus loss must not leave the detector armed so the next

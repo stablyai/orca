@@ -5776,7 +5776,8 @@
           "97dccee14e": "Modified",
           "3b11ef3a43": "{{value0}} shortcut",
           "f6579be67b": "Change shortcut",
-          "6a7848fdac": "Listening for shortcut"
+          "6a7848fdac": "Listening for shortcut",
+          "a98d551407": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Status",

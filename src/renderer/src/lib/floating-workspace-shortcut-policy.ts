@@ -3,7 +3,7 @@ import {
   type KeybindingActionId,
   type KeybindingMatchOptions,
   type KeybindingOverrides,
-  type ModifierToken
+  type PhysicalModifierToken
 } from '../../../shared/keybindings'
 
 // Partial<> on the key/modifier fields so a synthetic double-tap input (which
@@ -11,7 +11,7 @@ import {
 type FloatingWorkspaceShortcutEvent = Partial<
   Pick<KeyboardEvent, 'altKey' | 'code' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'>
 > &
-  Pick<KeyboardEvent, 'target'> & { doubleTapModifier?: ModifierToken }
+  Pick<KeyboardEvent, 'target'> & { doubleTapModifier?: PhysicalModifierToken }
 
 const FLOATING_WORKSPACE_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
 const FLOATING_WORKSPACE_PANEL_SHORTCUT_ACTIONS: readonly KeybindingActionId[] = [

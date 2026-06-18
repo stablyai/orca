@@ -139,6 +139,7 @@ export type KeybindingDefinition = {
 }
 
 export type ModifierToken = 'Mod' | 'Cmd' | 'Ctrl' | 'Alt' | 'Shift'
+export type PhysicalModifierToken = Exclude<ModifierToken, 'Mod'>
 
 export type KeybindingInput = {
   key?: string
@@ -152,7 +153,7 @@ export type KeybindingInput = {
   ctrlKey?: boolean
   shiftKey?: boolean
   // Set only by the double-tap detector; always a physical token (never 'Mod').
-  doubleTapModifier?: ModifierToken
+  doubleTapModifier?: PhysicalModifierToken
 }
 
 type ParsedKeybinding = {
@@ -1367,7 +1368,7 @@ function keyTokenFromInput(input: KeybindingInput, platform: NodeJS.Platform): s
 // Why: the platform primary modifier canonicalizes to Mod, mirroring normal
 // capture where Cmd on macOS / Ctrl elsewhere both become Mod.
 function canonicalDoubleTapToken(
-  modifier: ModifierToken,
+  modifier: PhysicalModifierToken,
   platform: NodeJS.Platform
 ): ModifierToken {
   const isMac = platform === 'darwin'
@@ -1703,6 +1704,14 @@ export function keybindingMatchesInput(
   )
 }
 
+function keybindingConflictIdentity(binding: string, platform: NodeJS.Platform): string {
+  const parsed = parseKeybinding(binding)
+  if (!parsed?.doubleTapModifier) {
+    return binding
+  }
+  return `DoubleTap:${resolveModifierToken(parsed.doubleTapModifier, platform)}`
+}
+
 export function keybindingMatchesAction(
   actionId: KeybindingActionId,
   input: KeybindingInput,
@@ -1775,7 +1784,10 @@ export function formatKeybindingList(
     return 'Unassigned'
   }
   return bindings
-    .map((binding) => formatKeybinding(binding, platform).join(platform === 'darwin' ? '' : '+'))
+    .map((binding) => {
+      const separator = isDoubleTapBinding(binding) ? ' ' : platform === 'darwin' ? '' : '+'
+      return formatKeybinding(binding, platform).join(separator)
+    })
     .join(', ')
 }
 
@@ -1818,7 +1830,7 @@ export function findKeybindingConflicts(
   overrides?: KeybindingOverrides,
   options: FindKeybindingConflictOptions = {}
 ): KeybindingConflict[] {
-  const owners = new Map<string, KeybindingActionId[]>()
+  const owners = new Map<string, { binding: string; actionIds: Set<KeybindingActionId> }>()
   const ignoredActionIds = new Set(options.ignoredActionIds ?? [])
   const customizedActions = new Set(
     Object.keys(overrides ?? {}).filter(
@@ -1838,21 +1850,27 @@ export function findKeybindingConflicts(
         groups.add(definition.scope)
       }
       for (const group of groups) {
-        const conflictKey = `${group}\u0000${binding}`
-        const current = owners.get(conflictKey) ?? []
-        current.push(definition.id)
+        const conflictKey = `${group}\u0000${keybindingConflictIdentity(binding, platform)}`
+        const current = owners.get(conflictKey) ?? { binding, actionIds: new Set() }
+        current.actionIds.add(definition.id)
         owners.set(conflictKey, current)
       }
     }
   }
 
-  return Array.from(owners.entries())
-    .filter(
-      ([, actionIds]) =>
-        actionIds.length > 1 && actionIds.some((actionId) => customizedActions.has(actionId))
-    )
-    .map(([conflictKey, actionIds]) => ({
-      binding: conflictKey.slice(conflictKey.indexOf('\u0000') + 1),
-      actionIds
+  return Array.from(owners.values())
+    .filter(({ actionIds }) => actionIds.size > 1 && setIntersects(actionIds, customizedActions))
+    .map(({ binding, actionIds }) => ({
+      binding,
+      actionIds: Array.from(actionIds)
     }))
+}
+
+function setIntersects<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean {
+  for (const value of left) {
+    if (right.has(value)) {
+      return true
+    }
+  }
+  return false
 }
