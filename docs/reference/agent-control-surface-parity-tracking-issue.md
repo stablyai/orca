@@ -1,6 +1,7 @@
 Issue title: [Feature]: Agent Control Surface Parity
 Labels: enhancement, agent-workflow, P1
 Published issue: https://github.com/stablyai/orca/issues/5700
+Split workstream issues: #5702, #5703, #5704, #5705, #5706, #5707, #5708, #5709
 
 ## Summary
 
@@ -125,15 +126,13 @@ An Orca workflow reaches Agent Control Surface Parity when an agent can:
 - Broad claims that agents can control everything in Orca before each listed surface has stable targeting, execution, errors, and verification.
 - Long-term compatibility shims that leave two Orca-owned ways to do the same action without a clear migration path.
 
-## Notes for splitting follow-up issues
+## Split workstream issues
 
-Recommended workstream order:
-
-1. Stable agent addressing and selector grammar.
-2. Durable agent session lifecycle and exact resume.
-3. Workspace, repo, file, and terminal command parity.
-4. Embedded browser operation parity.
-5. Desktop Computer Use and mobile/emulator control parity.
-6. Structured multi-agent orchestration parity.
-7. Automations and scheduled agent runs.
-8. Runtime capability discovery, setup diagnostics, and self-description for agents.
+- [ ] #5702: Stable selectors and target addressing.
+- [ ] #5703: Durable session lifecycle and exact resume.
+- [ ] #5704: Workspace, file, and terminal command parity.
+- [ ] #5705: Embedded browser operation parity.
+- [ ] #5706: Desktop Computer Use and emulator control.
+- [ ] #5707: Structured multi-agent orchestration.
+- [ ] #5708: Automations and scheduled agent runs.
+- [ ] #5709: Capability discovery and setup diagnostics.

@@ -2,6 +2,8 @@
 
 Tracking issue: [stablyai/orca#5700](https://github.com/stablyai/orca/issues/5700)
 
+Split workstream issues: [#5702](https://github.com/stablyai/orca/issues/5702), [#5703](https://github.com/stablyai/orca/issues/5703), [#5704](https://github.com/stablyai/orca/issues/5704), [#5705](https://github.com/stablyai/orca/issues/5705), [#5706](https://github.com/stablyai/orca/issues/5706), [#5707](https://github.com/stablyai/orca/issues/5707), [#5708](https://github.com/stablyai/orca/issues/5708), and [#5709](https://github.com/stablyai/orca/issues/5709).
+
 Agent Control Surface Parity means Orca exposes the control surfaces that agents need to operate Orca itself: stable target discovery, deterministic selectors, executable commands or runtime methods, structured success and failure output, and verifiable resulting state.
 
 This is capability parity for agent operation. It is narrower than full product parity with Claude Code, Codex, Droid, Gemini, OpenCode, Grok, or Cursor Agent. It is broader than UI discoverability work.
@@ -258,6 +260,14 @@ These slices are ordered to unlock later work without overclaiming completion:
 
 ## Related issues
 
+- [#5702](https://github.com/stablyai/orca/issues/5702): stable selectors and target addressing.
+- [#5703](https://github.com/stablyai/orca/issues/5703): durable session lifecycle and exact resume.
+- [#5704](https://github.com/stablyai/orca/issues/5704): workspace, file, and terminal command parity.
+- [#5705](https://github.com/stablyai/orca/issues/5705): embedded browser operation parity.
+- [#5706](https://github.com/stablyai/orca/issues/5706): desktop Computer Use and emulator control.
+- [#5707](https://github.com/stablyai/orca/issues/5707): structured multi-agent orchestration.
+- [#5708](https://github.com/stablyai/orca/issues/5708): automations and scheduled agent runs.
+- [#5709](https://github.com/stablyai/orca/issues/5709): capability discovery and setup diagnostics.
 - [#5695](https://github.com/stablyai/orca/issues/5695): worktree `name:<displayName>` selector bug used as the first stable-selector slice.
 - [#5696](https://github.com/stablyai/orca/pull/5696): PR fixing `name:<displayName>` worktree selector resolution.
 - [#4376](https://github.com/stablyai/orca/issues/4376): improved orchestration and worker status signaling.
