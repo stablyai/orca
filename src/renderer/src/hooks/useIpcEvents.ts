@@ -111,6 +111,7 @@ import {
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { titleHasAgentName } from '../../../shared/agent-detection'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
@@ -695,6 +696,14 @@ function getActiveRuntimeEnvironmentId(): string | null {
   return useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
 }
 
+function isRepoOwnedByFocusedRuntime(repoId: string): boolean {
+  const activeEnvironmentId = getActiveRuntimeEnvironmentId()
+  return Boolean(
+    activeEnvironmentId &&
+      getRuntimeEnvironmentIdForRepo(useAppStore.getState(), repoId) === activeEnvironmentId
+  )
+}
+
 function getRuntimeClientEventEnvironmentIds(): string[] {
   const state = useAppStore.getState()
   const ids = new Set<string>()
@@ -812,10 +821,10 @@ export function useIpcEvents(): void {
       }: Extract<RuntimeClientEvent, { type: 'activateWorktree' }>,
       options: { allowRuntimeEnvironment: boolean }
     ): Promise<void> => {
-      if (!options.allowRuntimeEnvironment && isRuntimeEnvironmentActive()) {
+      if (!options.allowRuntimeEnvironment && isRepoOwnedByFocusedRuntime(repoId)) {
         // Why: local CLI-created worktree events carry local repo/worktree
-        // ids. Runtime server activation arrives through the remote event
-        // stream and is allowed through this helper separately.
+        // ids. Drop only events owned by the focused runtime; explicit local
+        // repos still need same-window agent-created worktrees to appear.
         return
       }
       const existedBeforeFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
@@ -973,9 +982,10 @@ export function useIpcEvents(): void {
           repoId: string
           renamed?: { oldWorktreeId: string; newWorktreeId: string }
         }) => {
-          if (isRuntimeEnvironmentActive()) {
-            // Why: local worktree events carry local repo ids. Fetching the
-            // active runtime with those ids can purge or overwrite server state.
+          if (isRepoOwnedByFocusedRuntime(data.repoId)) {
+            // Why: focused-runtime repos are refreshed from the runtime client
+            // event stream. Local-owned repos may still change while a runtime
+            // is selected, so those events must continue through this path.
             return
           }
           // A folder rename changes the worktree id; handleWorktreesChanged
@@ -987,7 +997,7 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.worktrees.onBaseStatus((event) => {
-        if (isRuntimeEnvironmentActive()) {
+        if (isRepoOwnedByFocusedRuntime(event.repoId)) {
           return
         }
         useAppStore.getState().updateWorktreeBaseStatus(event)
@@ -996,7 +1006,7 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.worktrees.onRemoteBranchConflict((event) => {
-        if (isRuntimeEnvironmentActive()) {
+        if (isRepoOwnedByFocusedRuntime(event.repoId)) {
           return
         }
         useAppStore.getState().updateWorktreeRemoteBranchConflict(event)
