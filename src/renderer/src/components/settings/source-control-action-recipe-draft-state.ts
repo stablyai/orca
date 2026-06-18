@@ -3,15 +3,13 @@ import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
 } from '../../../../shared/source-control-ai-types'
-import {
-  setSourceControlActionDefault,
-  type SourceControlActionId
-} from '../../../../shared/source-control-ai-actions'
+import type { SourceControlActionId } from '../../../../shared/source-control-ai-actions'
 import type { ActionRecipeDraftState } from './source-control-ai-action-recipe-draft'
 import {
   readActionRecipeInputValues,
   serializeActionRecipeInputValues
 } from './source-control-ai-action-recipe-draft'
+import { buildActionRecipeSavePatch } from './source-control-action-recipe-save-patch'
 
 type UseSourceControlActionRecipeDraftStateArgs = {
   config: SourceControlAiSettings
@@ -126,14 +124,7 @@ export function useSourceControlActionRecipeDraftState({
     }
     setSavingActionTemplateIds((current) => ({ ...current, [actionId]: true }))
     try {
-      await writeConfig((current) => {
-        return {
-          actions: setSourceControlActionDefault(current.actions, actionId, {
-            commandInputTemplate: nextValue.commandInputTemplate,
-            agentArgs: nextValue.agentArgs
-          })
-        }
-      })
+      await writeConfig((current) => buildActionRecipeSavePatch(current, actionId, nextValue))
       setActionRecipeDraftState((current) => ({
         values: current.values,
         baseValues: {
