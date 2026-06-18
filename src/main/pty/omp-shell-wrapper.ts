@@ -1,8 +1,7 @@
 // Why: OMP 15.x discovers built-in user extensions from ~/.omp/agent, but a
 // typed `omp` in an existing terminal still needs Orca's status extension
-// passed explicitly. Do not redirect PI_CODING_AGENT_DIR here: that variable
-// is OMP's mutable home, so config/auth/session commands must keep the user's
-// normal source of truth.
+// passed explicitly. PI_CODING_AGENT_DIR is OMP's mutable home, so the wrapper
+// switches or clears it only for the duration of an OMP command.
 
 const OMP_SUBCOMMANDS = [
   'acp',
@@ -44,20 +43,60 @@ __orca_omp_should_skip_extension() {
   __orca_omp_is_subcommand "\${1:-}"
 }
 __orca_omp() {
+  local __orca_prev_pi="\${PI_CODING_AGENT_DIR-}"
+  local __orca_had_pi=0
+  [[ -n "\${PI_CODING_AGENT_DIR+x}" ]] && __orca_had_pi=1
   local __orca_use_extension=1
   __orca_omp_should_skip_extension "\${1:-}" && __orca_use_extension=0
+  if [[ $__orca_use_extension -eq 1 ]]; then
+    if [[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then
+      export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
+    elif [[ -n "\${ORCA_OMP_SOURCE_AGENT_DIR:-}" ]]; then
+      export PI_CODING_AGENT_DIR="\${ORCA_OMP_SOURCE_AGENT_DIR}"
+    elif [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" && "\${PI_CODING_AGENT_DIR:-}" == "\${ORCA_PI_CODING_AGENT_DIR}" ]]; then
+      # Why: Pi-only Orca terminals restore PI_CODING_AGENT_DIR to the Pi
+      # overlay. OMP also consumes that env var, so a typed OMP launch would
+      # otherwise boot with Pi's empty profile instead of ~/.omp/agent.
+      unset PI_CODING_AGENT_DIR
+    fi
+  else
+    # Why: config/editing subcommands mutate OMP's home. Route those to the
+    # user's source home instead of Orca's status-extension runtime overlay.
+    if [[ -n "\${ORCA_OMP_SOURCE_AGENT_DIR:-}" ]]; then
+      export PI_CODING_AGENT_DIR="\${ORCA_OMP_SOURCE_AGENT_DIR}"
+    else
+      unset PI_CODING_AGENT_DIR
+    fi
+  fi
+
+  local __orca_status=0
   if [[ $__orca_use_extension -eq 1 && -n "\${ORCA_OMP_STATUS_EXTENSION:-}" && -f "\${ORCA_OMP_STATUS_EXTENSION}" ]]; then
     if [[ "\${1:-}" == "launch" ]]; then
       shift
-      command omp launch --extension "\${ORCA_OMP_STATUS_EXTENSION}" "$@"
+      if command omp launch --extension "\${ORCA_OMP_STATUS_EXTENSION}" "$@"; then
+        __orca_status=0
+      else
+        __orca_status=$?
+      fi
+    elif command omp --extension "\${ORCA_OMP_STATUS_EXTENSION}" "$@"; then
+      __orca_status=0
     else
-      command omp --extension "\${ORCA_OMP_STATUS_EXTENSION}" "$@"
+      __orca_status=$?
     fi
+  elif command omp "$@"; then
+    __orca_status=0
   else
-    command omp "$@"
+    __orca_status=$?
   fi
+
+  if [[ $__orca_had_pi -eq 1 ]]; then
+    export PI_CODING_AGENT_DIR="$__orca_prev_pi"
+  else
+    unset PI_CODING_AGENT_DIR
+  fi
+  return $__orca_status
 }
-if [[ -n "\${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
+if [[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" || -n "\${ORCA_OMP_SOURCE_AGENT_DIR:-}" || -n "\${ORCA_OMP_STATUS_EXTENSION:-}" || -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]]; then
   omp() { __orca_omp "$@"; }
 fi
 `
@@ -78,29 +117,60 @@ function Global:__OrcaOmpShouldSkipExtension {
     if (@("help", "--help", "-h", "--version", "-v") -contains $Name) { return $true }
     return __OrcaOmpIsSubcommand -Name $Name
 }
-if ($env:ORCA_OMP_STATUS_EXTENSION) {
+if ($env:ORCA_OMP_CODING_AGENT_DIR -or $env:ORCA_OMP_SOURCE_AGENT_DIR -or
+    $env:ORCA_OMP_STATUS_EXTENSION -or $env:ORCA_PI_CODING_AGENT_DIR) {
     function Global:omp {
+        $orcaPrevPi = $env:PI_CODING_AGENT_DIR
+        $orcaHadPi = Test-Path Env:PI_CODING_AGENT_DIR
         $orcaUseExtension = -not (__OrcaOmpShouldSkipExtension -Name ([string]($args[0])))
-        $orcaStatus = 0
-        $orcaCommand = Get-Command omp -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $orcaCommand) {
-            Write-Error "omp executable not found"
-            $orcaStatus = 127
-        } elseif ($orcaUseExtension -and $env:ORCA_OMP_STATUS_EXTENSION -and
-            (Test-Path -LiteralPath $env:ORCA_OMP_STATUS_EXTENSION)) {
-            if ($args.Count -gt 0 -and $args[0] -eq "launch") {
-                $orcaLaunchArgs = @($args | Select-Object -Skip 1)
-                & $orcaCommand.Source launch --extension $env:ORCA_OMP_STATUS_EXTENSION @orcaLaunchArgs
-            } else {
-                & $orcaCommand.Source --extension $env:ORCA_OMP_STATUS_EXTENSION @args
+        if ($orcaUseExtension) {
+            if ($env:ORCA_OMP_CODING_AGENT_DIR) {
+                $env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_CODING_AGENT_DIR
+            } elseif ($env:ORCA_OMP_SOURCE_AGENT_DIR) {
+                $env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_SOURCE_AGENT_DIR
+            } elseif ($env:ORCA_PI_CODING_AGENT_DIR -and
+                $env:PI_CODING_AGENT_DIR -eq $env:ORCA_PI_CODING_AGENT_DIR) {
+                # Why: a Pi-only shell's public env var points at Pi's overlay;
+                # OMP should fall back to its own source home instead.
+                Remove-Item Env:PI_CODING_AGENT_DIR -ErrorAction SilentlyContinue
             }
-            $orcaStatus = $LASTEXITCODE
         } else {
-            & $orcaCommand.Source @args
-            $orcaStatus = $LASTEXITCODE
+            # Why: config/editing subcommands mutate OMP's home. Route those to
+            # the user's source home instead of Orca's runtime overlay.
+            if ($env:ORCA_OMP_SOURCE_AGENT_DIR) {
+                $env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_SOURCE_AGENT_DIR
+            } else {
+                Remove-Item Env:PI_CODING_AGENT_DIR -ErrorAction SilentlyContinue
+            }
         }
 
-        $global:LASTEXITCODE = $orcaStatus
+        $orcaStatus = 0
+        try {
+            $orcaCommand = Get-Command omp -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $orcaCommand) {
+                Write-Error "omp executable not found"
+                $orcaStatus = 127
+            } elseif ($orcaUseExtension -and $env:ORCA_OMP_STATUS_EXTENSION -and
+                (Test-Path -LiteralPath $env:ORCA_OMP_STATUS_EXTENSION)) {
+                if ($args.Count -gt 0 -and $args[0] -eq "launch") {
+                    $orcaLaunchArgs = @($args | Select-Object -Skip 1)
+                    & $orcaCommand.Source launch --extension $env:ORCA_OMP_STATUS_EXTENSION @orcaLaunchArgs
+                } else {
+                    & $orcaCommand.Source --extension $env:ORCA_OMP_STATUS_EXTENSION @args
+                }
+                $orcaStatus = $LASTEXITCODE
+            } else {
+                & $orcaCommand.Source @args
+                $orcaStatus = $LASTEXITCODE
+            }
+        } finally {
+            if ($orcaHadPi) {
+                $env:PI_CODING_AGENT_DIR = $orcaPrevPi
+            } else {
+                Remove-Item Env:PI_CODING_AGENT_DIR -ErrorAction SilentlyContinue
+            }
+            $global:LASTEXITCODE = $orcaStatus
+        }
     }
 }
 `

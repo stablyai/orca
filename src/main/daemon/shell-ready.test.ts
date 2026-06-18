@@ -461,7 +461,7 @@ describePosix('daemon shell-ready launch config', () => {
     15_000
   )
 
-  it('writes wrappers without restoring Pi/OMP homes after user startup files', async () => {
+  it('writes wrappers that route OMP without restoring Pi/OMP homes after startup files', async () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()
 
     getShellReadyLaunchConfig('/bin/zsh')
@@ -476,21 +476,30 @@ describePosix('daemon shell-ready launch config', () => {
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
+    const piRestoreLine =
+      '[[ -n "${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
+    const ompRestoreLine =
+      '[[ -n "${ORCA_OMP_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="${ORCA_OMP_CODING_AGENT_DIR}"'
+    const piFallbackLine =
+      'ORCA_PI_CODING_AGENT_DIR:-}" && "${PI_CODING_AGENT_DIR:-}" == "${ORCA_PI_CODING_AGENT_DIR}"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
-    expect(zshrc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(zlogin).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(bashRc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
+    expect(zshrc).not.toContain(piRestoreLine)
+    expect(zlogin).not.toContain(piRestoreLine)
+    expect(bashRc).not.toContain(piRestoreLine)
     expect(zshrc).toContain(codexRestoreLine)
     expect(zlogin).toContain(codexRestoreLine)
     expect(zshrc).toContain(agentTeamsPathRestoreLine)
     expect(zlogin).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(codexRestoreLine)
-    expect(zshrc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
-    expect(zlogin).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
-    expect(bashRc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(zshrc).not.toContain(ompRestoreLine)
+    expect(zlogin).not.toContain(ompRestoreLine)
+    expect(bashRc).not.toContain(ompRestoreLine)
+    expect(zshrc).toContain(piFallbackLine)
+    expect(zlogin).toContain(piFallbackLine)
+    expect(bashRc).toContain(piFallbackLine)
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
