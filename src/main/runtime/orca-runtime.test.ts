@@ -1118,17 +1118,22 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getSettings: () => ({
         ...store.getSettings(),
-        experimentalNewWorktreeCardStyle: true
+        experimentalNewWorktreeCardStyle: true,
+        agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }]
       })
     } as never)
 
-    expect(runtime.getClientSettings()).toMatchObject({ experimentalNewWorktreeCardStyle: true })
+    expect(runtime.getClientSettings()).toMatchObject({
+      experimentalNewWorktreeCardStyle: true,
+      agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }]
+    })
   })
 
   it('accepts experimentalNewWorktreeCardStyle updates from paired clients', () => {
     let settings = {
       ...store.getSettings(),
-      experimentalNewWorktreeCardStyle: false
+      experimentalNewWorktreeCardStyle: false,
+      agentLaunchProfiles: []
     }
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
@@ -1140,14 +1145,26 @@ describe('OrcaRuntimeService', () => {
       updateSettings
     } as never)
 
-    expect(runtime.updateClientSettings({ experimentalNewWorktreeCardStyle: true })).toMatchObject({
-      experimentalNewWorktreeCardStyle: true
+    expect(
+      runtime.updateClientSettings({
+        experimentalNewWorktreeCardStyle: true,
+        agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }]
+      })
+    ).toMatchObject({
+      experimentalNewWorktreeCardStyle: true,
+      agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }]
     })
     expect(updateSettings).toHaveBeenCalledWith(
-      { experimentalNewWorktreeCardStyle: true },
+      {
+        experimentalNewWorktreeCardStyle: true,
+        agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }]
+      },
       { notifyListeners: true }
     )
-    expect(runtime.getClientSettings()).toMatchObject({ experimentalNewWorktreeCardStyle: true })
+    expect(runtime.getClientSettings()).toMatchObject({
+      experimentalNewWorktreeCardStyle: true,
+      agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }]
+    })
   })
 
   it('rejects relative paths for runtime nested repo scan/import', async () => {

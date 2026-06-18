@@ -706,6 +706,7 @@ type RuntimeStore = {
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
+    agentLaunchProfiles?: GlobalSettings['agentLaunchProfiles']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
@@ -2073,6 +2074,7 @@ export class OrcaRuntimeService {
     | 'agentCmdOverrides'
     | 'agentDefaultArgs'
     | 'agentDefaultEnv'
+    | 'agentLaunchProfiles'
     | 'agentStatusHooksEnabled'
     | 'defaultTaskSource'
     | 'defaultTaskViewPreset'
@@ -2092,6 +2094,7 @@ export class OrcaRuntimeService {
       agentCmdOverrides: settings.agentCmdOverrides ?? {},
       agentDefaultArgs: settings.agentDefaultArgs ?? {},
       agentDefaultEnv: settings.agentDefaultEnv ?? {},
+      agentLaunchProfiles: settings.agentLaunchProfiles ?? [],
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
@@ -2111,6 +2114,7 @@ export class OrcaRuntimeService {
       | 'disabledTuiAgents'
       | 'agentDefaultArgs'
       | 'agentDefaultEnv'
+      | 'agentLaunchProfiles'
       | 'defaultTaskSource'
       | 'defaultTaskViewPreset'
       | 'visibleTaskProviders'
@@ -2126,6 +2130,7 @@ export class OrcaRuntimeService {
     | 'agentCmdOverrides'
     | 'agentDefaultArgs'
     | 'agentDefaultEnv'
+    | 'agentLaunchProfiles'
     | 'agentStatusHooksEnabled'
     | 'defaultTaskSource'
     | 'defaultTaskViewPreset'
@@ -13096,6 +13101,7 @@ export class OrcaRuntimeService {
         afterTabId: afterDesktopTabId,
         targetGroupId: opts.targetGroupId,
         command,
+        launchAgent: opts.agent,
         startupCommandDelivery: opts.startupCommandDelivery,
         activate: opts.activate
       })

@@ -41,6 +41,7 @@ import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
+import { normalizeAgentLaunchProfiles } from '../../../shared/agent-launch-profiles'
 import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
@@ -2647,6 +2648,11 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
       runtimeSettings.experimentalNewWorktreeCardStyle =
         result.settings.experimentalNewWorktreeCardStyle
     }
+    // Why: older runtimes may omit profile settings; absence must not erase
+    // local persisted profiles on the web client.
+    if ('agentLaunchProfiles' in result.settings) {
+      runtimeSettings.agentLaunchProfiles = result.settings.agentLaunchProfiles
+    }
     const next = mergeSettings(local, runtimeSettings)
     writeJson(SETTINGS_STORAGE_KEY, next)
     return next
@@ -2666,6 +2672,11 @@ async function syncRuntimeBackedSettings(
   const runtimeUpdates: Partial<GlobalSettings> = {}
   if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
     runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
+  }
+  // Why: localNext has already merged and normalized updates, keeping
+  // runtime and local profile state aligned.
+  if ('agentLaunchProfiles' in updates) {
+    runtimeUpdates.agentLaunchProfiles = localNext.agentLaunchProfiles
   }
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext
@@ -2848,6 +2859,9 @@ function mergeSettings(
       updates.agentDefaultArgs ?? base.agentDefaultArgs
     ),
     agentDefaultEnv: normalizeTuiAgentEnvRecord(updates.agentDefaultEnv ?? base.agentDefaultEnv),
+    agentLaunchProfiles: normalizeAgentLaunchProfiles(
+      updates.agentLaunchProfiles ?? base.agentLaunchProfiles
+    ),
     voice: {
       ...(base.voice ?? defaults.voice),
       ...updates.voice

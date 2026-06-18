@@ -1449,12 +1449,10 @@ export function useIpcEvents(): void {
               })
             )
           }
-          const tab = store.createTab(
-            worktreeId,
-            data.targetGroupId,
-            undefined,
-            shouldActivate ? undefined : { activate: false, recordInteraction: false }
-          )
+          const tab = store.createTab(worktreeId, data.targetGroupId, undefined, {
+            ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
+            ...(data.launchAgent ? { launchAgent: data.launchAgent } : {})
+          })
           if (data.afterTabId) {
             const createdUnifiedTab = useAppStore
               .getState()

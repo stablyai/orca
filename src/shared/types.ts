@@ -2236,6 +2236,17 @@ export type TuiAgent =
   | 'devin' // Devin CLI
   | 'ante' // Ante (Antigma Labs)
 
+export type AgentLaunchProfile = {
+  id: string
+  agentId: TuiAgent
+  name: string
+  commandOverride?: string
+  args?: string
+  env?: Record<string, string>
+  disabled?: boolean
+  protected?: boolean
+}
+
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 
 /** Where the repo setup script runs when a worktree is created.
@@ -2625,6 +2636,8 @@ export type GlobalSettings = {
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+  /** Named launch profiles under built-in agent identity; default profile stays compatibility-backed. */
+  agentLaunchProfiles?: AgentLaunchProfile[]
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup does not reinstall global agent

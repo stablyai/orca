@@ -16,6 +16,7 @@ describe('client UI RPC methods', () => {
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
       agentCmdOverrides: { codex: 'codex --profile work' },
+      agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }],
       defaultTaskSource: 'gitlab',
       defaultTaskViewPreset: 'my-prs',
       visibleTaskProviders: ['github', 'gitlab'],
@@ -48,6 +49,7 @@ describe('client UI RPC methods', () => {
       defaultTaskSource: 'linear',
       defaultTaskViewPreset: 'issues',
       visibleTaskProviders: ['github', 'linear'],
+      agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }],
       defaultRepoSelection: ['repo-1', 'repo-2'],
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       experimentalNewWorktreeCardStyle: true,
@@ -72,6 +74,9 @@ describe('client UI RPC methods', () => {
         disabledTuiAgents: ['claude', 'not-real', 'claude'],
         defaultTaskSource: 'linear',
         visibleTaskProviders: ['github', 'linear'],
+        agentLaunchProfiles: [
+          { id: ' work ', agentId: 'codex', name: ' Work ', env: { CODEX_LOG: 'debug' } }
+        ],
         defaultTaskViewPreset: 'my-prs',
         experimentalNewWorktreeCardStyle: true,
         defaultRepoSelection: settings.defaultRepoSelection,
@@ -85,6 +90,9 @@ describe('client UI RPC methods', () => {
       disabledTuiAgents: ['claude'],
       defaultTaskSource: 'linear',
       visibleTaskProviders: ['github', 'linear'],
+      agentLaunchProfiles: [
+        { id: 'work', agentId: 'codex', name: 'Work', env: { CODEX_LOG: 'debug' } }
+      ],
       defaultTaskViewPreset: 'my-prs',
       experimentalNewWorktreeCardStyle: true,
       defaultRepoSelection: settings.defaultRepoSelection,

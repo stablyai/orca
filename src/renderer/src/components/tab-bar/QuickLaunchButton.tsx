@@ -1,15 +1,21 @@
 import React, { useCallback } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import {
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger
+} from '@/components/ui/dropdown-menu'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import type { TuiAgent } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
+import { buildTabAgentLaunchGroups, orderTabLaunchAgents } from './tab-agent-launch-options'
+import type { TabAgentLaunchGroup, TabAgentLaunchOption } from './tab-agent-launch-options'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -30,25 +36,6 @@ export type QuickLaunchAgentMenuItemsProps = {
   launchSource?: LaunchSource
   /** Called after a prompt is queued into the agent, or immediately for argv prompt launches. */
   onPromptDelivered?: () => void
-}
-
-function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
-  return getAgentCatalog().find((a) => a.id === agent) ?? null
-}
-
-function orderAgents(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detected: TuiAgent[]
-): TuiAgent[] {
-  const inCatalogOrder = getAgentCatalog()
-    .filter((entry) => detected.includes(entry.id))
-    .map((entry) => entry.id)
-  if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
-    return inCatalogOrder
-  }
-  // Why: surface the user's configured default first — matches the prior
-  // split-button behavior where the default agent was the primary action.
-  return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
 }
 
 export function shouldShowLaunchWatchdogTimeout({ hasPty }: { hasPty: boolean }): boolean {
@@ -123,11 +110,11 @@ function QuickLaunchAgentMenuItemsInner({
   }, [openSettingsPage, openSettingsTarget])
 
   const runLaunch = useCallback(
-    (agent: TuiAgent) => {
-      const entry = getCatalogEntry(agent)
-      const label = entry?.label ?? agent
+    (option: TabAgentLaunchOption) => {
+      const label = option.label
       const result = launchAgentInNewTab({
-        agent,
+        agent: option.agent,
+        ...(option.profileId ? { profileId: option.profileId } : {}),
         worktreeId,
         groupId,
         ...(prompt !== undefined ? { prompt } : {}),
@@ -176,12 +163,15 @@ function QuickLaunchAgentMenuItemsInner({
     [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
   )
 
+  const agentCmdOverrides = useAppStore((s) => s.settings?.agentCmdOverrides ?? {})
+  const agentLaunchProfiles = useAppStore((s) => s.settings?.agentLaunchProfiles ?? [])
   const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
-  const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
+  const agents = detectedIds ? orderTabLaunchAgents(defaultAgent, enabledDetectedIds) : []
+  const launchGroups = buildTabAgentLaunchGroups(agents, agentCmdOverrides, agentLaunchProfiles)
 
   return (
     <>
-      {agents.length === 0 ? (
+      {launchGroups.length === 0 ? (
         <DropdownMenuItem
           disabled
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
@@ -194,25 +184,9 @@ function QuickLaunchAgentMenuItemsInner({
               )}
         </DropdownMenuItem>
       ) : null}
-      {agents.map((agent) => {
-        const entry = getCatalogEntry(agent)
-        const label = entry?.label ?? agent
-        return (
-          <DropdownMenuItem
-            key={agent}
-            onSelect={() => runLaunch(agent)}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            title={translate(
-              'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
-              'Launch {{value0}} in a new terminal',
-              { value0: label }
-            )}
-          >
-            <AgentIcon agent={agent} size={14} />
-            {label}
-          </DropdownMenuItem>
-        )
-      })}
+      {launchGroups.map((group) => (
+        <QuickLaunchAgentMenuGroup key={group.agent} group={group} onLaunch={runLaunch} />
+      ))}
       <DropdownMenuItem
         onSelect={openAgentSettings}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium text-muted-foreground"
@@ -225,3 +199,94 @@ function QuickLaunchAgentMenuItemsInner({
 }
 
 export const QuickLaunchAgentMenuItems = React.memo(QuickLaunchAgentMenuItemsInner)
+
+function QuickLaunchAgentMenuGroup({
+  group,
+  onLaunch
+}: {
+  group: TabAgentLaunchGroup
+  onLaunch: (option: TabAgentLaunchOption) => void
+}): React.JSX.Element | null {
+  if (group.options.length <= 1) {
+    const option = group.options[0]
+    if (!option) {
+      return null
+    }
+    return <QuickLaunchAgentMenuItem option={option} onLaunch={onLaunch} />
+  }
+  const defaultOption = group.options[0]
+  if (!defaultOption) {
+    return null
+  }
+
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onLaunch(defaultOption)
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') {
+            return
+          }
+          event.preventDefault()
+          event.stopPropagation()
+          onLaunch(defaultOption)
+        }}
+        title={translate(
+          'auto.components.tab.bar.QuickLaunchButton.e0e971d3db',
+          'Launch {{value0}}. Hover for launch options.',
+          { value0: group.label }
+        )}
+      >
+        <AgentIcon agent={group.agent} size={14} />
+        <span className="min-w-0 flex-1 truncate">{group.label}</span>
+        <span
+          aria-label={translate(
+            'auto.components.tab.bar.QuickLaunchButton.f4cc2c3aa4',
+            '{{value0}} launch choices',
+            { value0: group.options.length }
+          )}
+          className="flex h-4 min-w-5 shrink-0 items-center justify-center rounded-full border border-border/70 px-1.5 text-[10px] leading-none text-muted-foreground"
+        >
+          {group.options.length}
+        </span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="min-w-40">
+        {group.options.map((option) => (
+          <QuickLaunchAgentMenuItem
+            key={`${option.agent}:${option.profileId ?? 'default'}`}
+            option={option}
+            onLaunch={onLaunch}
+          />
+        ))}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
+}
+
+function QuickLaunchAgentMenuItem({
+  option,
+  onLaunch
+}: {
+  option: TabAgentLaunchOption
+  onLaunch: (option: TabAgentLaunchOption) => void
+}): React.JSX.Element {
+  return (
+    <DropdownMenuItem
+      onSelect={() => onLaunch(option)}
+      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      title={translate(
+        'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+        'Launch {{value0}} in a new terminal',
+        { value0: option.label }
+      )}
+    >
+      <AgentIcon agent={option.agent} size={14} />
+      {option.menuLabel}
+    </DropdownMenuItem>
+  )
+}

@@ -351,7 +351,12 @@ describe('web settings preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: { settings: { experimentalNewWorktreeCardStyle: true } },
+            result: {
+              settings: {
+                experimentalNewWorktreeCardStyle: true,
+                agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }]
+              }
+            },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -368,10 +373,13 @@ describe('web settings preload API', () => {
     const settings = await globals.window.api.settings.get()
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       experimentalNewWorktreeCardStyle?: boolean
+      agentLaunchProfiles?: unknown[]
     }
 
     expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(settings.agentLaunchProfiles).toEqual([{ id: 'work', agentId: 'codex', name: 'Work' }])
     expect(stored.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(stored.agentLaunchProfiles).toEqual([{ id: 'work', agentId: 'codex', name: 'Work' }])
     expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
   })
 
@@ -418,7 +426,12 @@ describe('web settings preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: { settings: { experimentalNewWorktreeCardStyle: true } },
+            result: {
+              settings: {
+                experimentalNewWorktreeCardStyle: true,
+                agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }]
+              }
+            },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -433,12 +446,20 @@ describe('web settings preload API', () => {
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.set({
-      experimentalNewWorktreeCardStyle: true
+      experimentalNewWorktreeCardStyle: true,
+      agentLaunchProfiles: [{ id: ' work ', agentId: 'codex', name: ' Work ' }]
     })
 
     expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(settings.agentLaunchProfiles).toEqual([{ id: 'work', agentId: 'codex', name: 'Work' }])
     expect(runtimeCalls).toEqual([
-      { method: 'settings.update', params: { experimentalNewWorktreeCardStyle: true } }
+      {
+        method: 'settings.update',
+        params: {
+          experimentalNewWorktreeCardStyle: true,
+          agentLaunchProfiles: [{ id: 'work', agentId: 'codex', name: 'Work' }]
+        }
+      }
     ])
   })
 })

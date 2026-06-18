@@ -12,6 +12,7 @@ import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
+import { AgentLaunchProfilesSection } from './AgentLaunchProfilesSection'
 import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
@@ -822,6 +823,8 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
       <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
 
       <AgentPermissionsSetting mode={agentPermissionMode} onChange={saveAgentPermissionMode} />
+
+      <AgentLaunchProfilesSection settings={settings} updateSettings={updateSettings} />
 
       {detectedAgents.length > 0 && (
         <section className="space-y-3">

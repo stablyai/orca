@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings } from '../../../shared/types'
 
 const mockCreateTab = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
@@ -13,7 +14,11 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
-  settings: { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null as string | null },
+  settings: {
+    agentCmdOverrides: {},
+    activeRuntimeEnvironmentId: null as string | null
+  } as Pick<GlobalSettings, 'agentCmdOverrides' | 'activeRuntimeEnvironmentId'> &
+    Partial<GlobalSettings>,
   projects: [
     {
       id: 'repo-1',
@@ -101,7 +106,11 @@ describe('launchAgentInNewTab', () => {
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue(true)
     store.activeRepoId = 'repo-1'
     store.activeWorktreeId = 'wt-1'
-    store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
+    store.settings = {
+      agentCmdOverrides: {},
+      activeRuntimeEnvironmentId: null,
+      agentLaunchProfiles: []
+    }
     store.projects = [
       {
         id: 'repo-1',
@@ -406,6 +415,48 @@ describe('launchAgentInNewTab', () => {
       'tab-1',
       expect.objectContaining({
         command: "codex '--model' 'gpt-5.5'"
+      })
+    )
+  })
+
+  it('launches a named Codex profile with profile args while preserving codex identity', async () => {
+    store.settings = {
+      agentCmdOverrides: {},
+      activeRuntimeEnvironmentId: null,
+      agentLaunchProfiles: [
+        {
+          id: 'codex:work',
+          agentId: 'codex',
+          name: 'Work',
+          args: '--profile work',
+          env: { CODEX_LOG: 'info' }
+        }
+      ]
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      profileId: 'codex:work',
+      worktreeId: 'wt-1'
+    })
+
+    expect(result?.startupPlan).toMatchObject({
+      agent: 'codex',
+      launchCommand: "codex '--profile' 'work'",
+      env: { CODEX_LOG: 'info' }
+    })
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      launchAgent: 'codex'
+    })
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command: "codex '--profile' 'work'",
+        env: { CODEX_LOG: 'info' },
+        telemetry: expect.objectContaining({
+          agent_kind: 'codex'
+        })
       })
     )
   })

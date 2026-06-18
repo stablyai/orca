@@ -2389,6 +2389,7 @@ export type PreloadApi = {
         command?: string
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
+        launchAgent?: TuiAgent
         activate?: boolean
       }) => void
     ) => () => void

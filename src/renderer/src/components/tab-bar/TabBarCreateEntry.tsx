@@ -18,7 +18,6 @@ import {
   findMatchingTabCreateMenuOptions,
   type TabCreateMenuOption
 } from './tab-create-menu-options'
-import type { TuiAgent } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 const EMPTY_AGENT_OPTIONS: readonly TabAgentLaunchOption[] = []
@@ -30,7 +29,7 @@ type TabBarCreateEntryProps = {
   menuOpen: boolean
   menuOptions?: readonly TabCreateMenuOption[]
   onDidOpenEntry?: () => void
-  onLaunchAgent?: (agent: TuiAgent) => void
+  onLaunchAgent?: (option: TabAgentLaunchOption) => void
   onOpenDefaultTerminal?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   onQueryChange?: (query: string) => void
@@ -153,7 +152,7 @@ export default function TabBarCreateEntry({
       return
     }
     if (selectedOption.kind === 'agent') {
-      onLaunchAgent?.(selectedOption.option.agent)
+      onLaunchAgent?.(selectedOption.option)
       onDidOpenEntry?.()
       return
     }
@@ -267,7 +266,7 @@ function isActiveEntryOption(option: TabEntryOption): option is ActiveEntryOptio
 
 function getActiveOptionId(option: ActiveOption): string {
   if (option.kind === 'agent') {
-    return `agent:${option.option.agent}`
+    return `agent:${option.option.agent}:${option.option.profileId ?? 'default'}`
   }
   if (option.kind === 'menu') {
     return `menu:${option.option.id}`

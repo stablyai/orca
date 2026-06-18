@@ -3777,6 +3777,42 @@ describe('Store', () => {
     expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.kilo).toBe('')
   })
 
+  it('normalizes agent launch profiles on load and update', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          agentLaunchProfiles: [
+            {
+              id: ' work ',
+              agentId: 'codex',
+              name: ' Work ',
+              env: { ' CODEX_LOG ': 'debug', BAD: 1 }
+            },
+            { id: 'bad-agent', agentId: 'custom', name: 'Custom' }
+          ]
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().agentLaunchProfiles).toEqual([
+      { id: 'work', agentId: 'codex', name: 'Work', env: { CODEX_LOG: 'debug' } }
+    ])
+
+    const updated = store.updateSettings({
+      agentLaunchProfiles: [
+        { id: ' personal ', agentId: 'claude', name: ' Personal ' },
+        { id: 'mixed', agentId: 'codex', name: 'Mixed', managedAccount: { kind: 'claude' } }
+      ] as never
+    })
+
+    expect(updated.agentLaunchProfiles).toEqual([
+      { id: 'personal', agentId: 'claude', name: 'Personal' },
+      { id: 'mixed', agentId: 'codex', name: 'Mixed' }
+    ])
+  })
+
   it('normalizes app icon on load and update', async () => {
     writeFileSync(
       join(testState.dir, 'orca-data.json'),

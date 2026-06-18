@@ -3,13 +3,13 @@ import { useAppStore } from '@/store'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
+  type AgentDraftLaunchPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
-import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
-import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
@@ -17,15 +17,14 @@ import {
   isWebRuntimeSessionActive,
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
+import { resolveAgentLaunchOptions } from './launch-agent-profile-options'
+import { scheduleAgentDraftPasteAfterLaunch } from './agent-draft-paste-after-launch'
+
+const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -38,6 +37,8 @@ export type LaunchAgentInNewTabArgs = {
   prompt?: string
   /** Optional CLI arguments appended to the selected agent command. */
   agentArgs?: string | null
+  /** Optional named profile id. Profiles preserve the built-in agent identity. */
+  profileId?: string | null
   /** Force generated prompt text out of the shell launch command. `draft`
    *  leaves it editable; `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -68,21 +69,21 @@ export type LaunchAgentInNewTabResult = {
   pasteDraftAfterLaunch: boolean
 } | null
 
-function seedCommandCodeSubmittedPromptStatus(tabId: string, prompt: string): void {
-  const state = useAppStore.getState()
-  const leafId = state.terminalLayoutsByTabId[tabId]?.activeLeafId
-  if (!leafId) {
-    return
+function canUseInlineDraftLaunchPlan(
+  plan: AgentDraftLaunchPlan,
+  platform: NodeJS.Platform
+): boolean {
+  if (platform !== 'win32') {
+    return true
   }
-  try {
-    state.setAgentStatus(makePaneKey(tabId, leafId), {
-      state: 'working',
-      prompt,
-      agentType: 'command-code'
-    })
-  } catch {
-    // Best-effort UI seed. Real hooks still own refinement/completion.
-  }
+  const envChars = Object.entries(plan.env ?? {}).reduce(
+    (total, [key, value]) => total + key.length + value.length,
+    0
+  )
+  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
+  // generated drafts should use the existing post-ready paste path instead of
+  // failing the PTY spawn before the agent starts.
+  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
 }
 
 /**
@@ -114,6 +115,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     groupId,
     prompt,
     agentArgs,
+    profileId,
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
@@ -131,12 +133,16 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
           repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
         )
       : CLIENT_PLATFORM)
-  const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const effectiveAgentArgs =
-    agentArgs !== undefined
-      ? agentArgs
-      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  const launchOptions = resolveAgentLaunchOptions({
+    agent,
+    agentArgs,
+    profileId,
+    settings: store.settings
+  })
+  if (!launchOptions) {
+    return null
+  }
+  const { cmdOverrides, agentArgs: resolvedAgentArgs, agentEnv } = launchOptions
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -159,7 +165,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: resolvedLaunchPlatform,
-      agentArgs: effectiveAgentArgs,
+      agentArgs: resolvedAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: true
     })
@@ -172,10 +178,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       draft: trimmedPrompt,
       cmdOverrides,
       platform: resolvedLaunchPlatform,
-      agentArgs: effectiveAgentArgs,
+      agentArgs: resolvedAgentArgs,
       agentEnv
     })
-    if (draftLaunchPlan) {
+    if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, resolvedLaunchPlatform)) {
       startupPlan = {
         agent: draftLaunchPlan.agent,
         launchCommand: draftLaunchPlan.launchCommand,
@@ -192,7 +198,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         prompt: '',
         cmdOverrides,
         platform: resolvedLaunchPlatform,
-        agentArgs: effectiveAgentArgs,
+        agentArgs: resolvedAgentArgs,
         agentEnv,
         allowEmptyPromptLaunch: true
       })
@@ -204,7 +210,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: resolvedLaunchPlatform,
-      agentArgs: effectiveAgentArgs,
+      agentArgs: resolvedAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: true
     })
@@ -215,7 +221,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
       platform: resolvedLaunchPlatform,
-      agentArgs: effectiveAgentArgs,
+      agentArgs: resolvedAgentArgs,
       agentEnv,
       allowEmptyPromptLaunch: !hasPrompt
     })
@@ -236,9 +242,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       environmentId: runtimeEnvironmentId,
       targetGroupId: groupId,
       activate: true,
-      ...(hasPrompt
+      ...(hasPrompt || profileId?.trim() || agentArgs !== undefined
         ? {
             command: startupPlan.launchCommand,
+            agent,
             ...(startupPlan.startupCommandDelivery
               ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
               : {})
@@ -304,57 +311,14 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // for agents with a `draftPromptFlag`, so calling it on the followup path
   // is safe even when the draft was already injected via the native flag.
   if (pasteDraftAfterLaunch !== null) {
-    // Why: surface silent paste failures — without onTimeout, a stalled agent
-    // readiness wait drops the user's notes with no feedback. Suppress when
-    // the user closed the tab or switched worktrees so the toast/telemetry
-    // don't fire for user-initiated cancellation (mirrors the 5s launch
-    // watchdog in QuickLaunchButton).
-    const tabId = tab.id
-    void pasteDraftWhenAgentReady({
-      tabId,
+    scheduleAgentDraftPasteAfterLaunch({
+      tabId: tab.id,
       content: pasteDraftAfterLaunch,
       agent,
       submit: submitPastedPrompt,
       forcePaste: forcePasteAfterLaunch,
-      onTimeout: () => {
-        const state = useAppStore.getState()
-        const tabsForWorktree = state.tabsByWorktree[worktreeId] ?? []
-        const tab = tabsForWorktree.find((t) => t.id === tabId)
-        // Why: if the PTY never spawned, QuickLaunch's 5s watchdog already
-        // surfaced the launch failure. Don't double-toast for the same root
-        // cause. Looking up directly in `worktreeId` (not scanning every
-        // worktree) also preserves "still in this worktree" intent.
-        if (!tab) {
-          return // tab closed by user
-        }
-        if (tab.ptyId === null) {
-          return // launch failed; QuickLaunch handled the user-facing toast
-        }
-        if (state.activeWorktreeId !== worktreeId) {
-          return
-        }
-        const label = submitPastedPrompt ? 'prompt' : 'notes'
-        toast.message(
-          translate(
-            'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
-            "Your {{value0}} wasn't sent — paste it once the agent is ready.",
-            { value0: label }
-          )
-        )
-        track('agent_error', {
-          error_class: 'paste_readiness_timeout',
-          agent_kind: tuiAgentToAgentKind(agent)
-        })
-      }
-    }).then((delivered) => {
-      if (delivered) {
-        if (agent === 'command-code' && submitPastedPrompt) {
-          // Why: Command Code has no prompt-submit hook; when Orca submits a
-          // generated prompt after readiness, seed working at delivery time.
-          seedCommandCodeSubmittedPromptStatus(tabId, pasteDraftAfterLaunch)
-        }
-        onPromptDelivered?.()
-      }
+      worktreeId,
+      ...(onPromptDelivered ? { onPromptDelivered } : {})
     })
   } else if (hasPrompt) {
     onPromptDelivered?.()

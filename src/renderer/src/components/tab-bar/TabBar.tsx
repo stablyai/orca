@@ -67,7 +67,11 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
-import { buildTabAgentLaunchOptions, orderTabLaunchAgents } from './tab-agent-launch-options'
+import {
+  buildTabAgentLaunchOptions,
+  orderTabLaunchAgents,
+  type TabAgentLaunchOption
+} from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
 import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
@@ -318,6 +322,7 @@ function TabBarInner({
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
+  const agentLaunchProfiles = useAppStore((s) => s.settings?.agentLaunchProfiles ?? [])
   const agentDetectionTargetKey = useAppStore((s): string | undefined => {
     const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
     const worktree = allWorktrees.find((w) => w.id === worktreeId)
@@ -355,9 +360,10 @@ function TabBarInner({
     () =>
       buildTabAgentLaunchOptions(
         orderTabLaunchAgents(defaultAgent, detectedIds ?? []),
-        agentCmdOverrides
+        agentCmdOverrides,
+        agentLaunchProfiles
       ),
-    [agentCmdOverrides, defaultAgent, detectedIds]
+    [agentCmdOverrides, agentLaunchProfiles, defaultAgent, detectedIds]
   )
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
@@ -600,10 +606,10 @@ function TabBarInner({
         break
     }
   }
-  const launchAgentFromNewTabEntry = (agent: TuiAgent): void => {
-    const option = agentLaunchOptions.find((candidate) => candidate.agent === agent)
+  const launchAgentFromNewTabEntry = (option: TabAgentLaunchOption): void => {
     const result = launchAgentInNewTab({
-      agent,
+      agent: option.agent,
+      ...(option.profileId ? { profileId: option.profileId } : {}),
       worktreeId,
       groupId: resolvedGroupId,
       launchSource: 'tab_bar_quick_launch'
@@ -613,7 +619,7 @@ function TabBarInner({
         translate(
           'auto.components.tab.bar.TabBar.ab589350e5',
           'Could not build launch command for {{value0}}.',
-          { value0: option?.label ?? agent }
+          { value0: option.label }
         )
       )
       return

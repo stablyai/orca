@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildTabAgentLaunchGroups,
   buildTabAgentLaunchOptions,
   findMatchingTabAgentLaunchOptions,
   orderTabLaunchAgents
@@ -29,5 +30,65 @@ describe('tab agent launch options', () => {
     expect(findMatchingTabAgentLaunchOptions('agy', options).map((option) => option.agent)).toEqual(
       ['antigravity']
     )
+  })
+
+  it('groups named launch profile choices under the built-in agent identity', () => {
+    const groups = buildTabAgentLaunchGroups(['codex'], {}, [
+      {
+        id: 'codex:work',
+        agentId: 'codex',
+        name: 'Work',
+        args: '--profile work'
+      }
+    ])
+
+    expect(groups).toEqual([
+      expect.objectContaining({
+        agent: 'codex',
+        label: 'Codex',
+        options: [
+          expect.objectContaining({ agent: 'codex', label: 'Codex', menuLabel: 'Codex' }),
+          expect.objectContaining({
+            agent: 'codex',
+            label: 'Codex: Work',
+            menuLabel: 'Work',
+            profileId: 'codex:work'
+          })
+        ]
+      })
+    ])
+  })
+
+  it('keeps named launch profile choices searchable by profile label and args', () => {
+    const options = buildTabAgentLaunchOptions(['codex'], {}, [
+      {
+        id: 'codex:work',
+        agentId: 'codex',
+        name: 'Work',
+        args: '--profile work'
+      }
+    ])
+
+    expect(options).toEqual([
+      expect.objectContaining({ agent: 'codex', label: 'Codex', menuLabel: 'Codex' }),
+      expect.objectContaining({
+        agent: 'codex',
+        label: 'Codex: Work',
+        menuLabel: 'Work',
+        profileId: 'codex:work'
+      })
+    ])
+    expect(
+      findMatchingTabAgentLaunchOptions('Codex: Work', options).map((option) => ({
+        agent: option.agent,
+        profileId: option.profileId
+      }))
+    ).toEqual([{ agent: 'codex', profileId: 'codex:work' }])
+    expect(
+      findMatchingTabAgentLaunchOptions('--profile work', options).map((option) => ({
+        agent: option.agent,
+        profileId: option.profileId
+      }))
+    ).toEqual([{ agent: 'codex', profileId: 'codex:work' }])
   })
 })

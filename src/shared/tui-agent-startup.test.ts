@@ -5,6 +5,7 @@ import {
   buildAgentStartupPlan,
   buildShellCommandFromArgv
 } from './tui-agent-startup'
+import { resolveAgentLaunchProfileStartupOptions } from './agent-launch-profiles'
 import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
 
 describe('tui agent startup plans', () => {
@@ -203,6 +204,44 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).toBe('goose')
     expect(plan?.env).toEqual({ GOOSE_MODE: 'auto' })
+  })
+
+  it('applies resolved launch profile options while preserving built-in agent identity', () => {
+    const options = resolveAgentLaunchProfileStartupOptions({
+      agent: 'codex',
+      profileId: 'work',
+      profiles: [
+        {
+          id: 'work',
+          agentId: 'codex',
+          name: 'Work',
+          commandOverride: 'codex-nightly',
+          args: '--profile work',
+          env: { CODEX_LOG: 'debug' }
+        }
+      ]
+    })
+    expect(options.ok).toBe(true)
+    if (!options.ok) {
+      throw new Error(options.error)
+    }
+
+    const plan = buildAgentStartupPlan({
+      agent: options.agent,
+      prompt: 'fix it',
+      cmdOverrides: options.cmdOverrides,
+      agentArgs: options.agentArgs,
+      agentEnv: options.agentEnv,
+      platform: 'linux'
+    })
+
+    expect(plan).toMatchObject({
+      agent: 'codex',
+      launchCommand: "codex-nightly '--profile' 'work' 'fix it'",
+      expectedProcess: 'codex',
+      followupPrompt: null,
+      env: { CODEX_LOG: 'debug' }
+    })
   })
 
   it('does not append the unsupported OpenCode TUI skip-permissions arg', () => {

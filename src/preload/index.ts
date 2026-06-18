@@ -44,6 +44,7 @@ import type {
   FloatingTerminalCwdRequest,
   MarkdownDocument,
   SearchResult,
+  TuiAgent,
   UpdateStatus,
   WorktreeBaseStatusEvent,
   WorktreeDefaultTabsLaunch,
@@ -3006,6 +3007,7 @@ const api = {
         command?: string
         startupCommandDelivery?: StartupCommandDelivery
         title?: string
+        launchAgent?: TuiAgent
         activate?: boolean
       }) => void
     ): (() => void) => {
@@ -3019,6 +3021,7 @@ const api = {
           command?: string
           startupCommandDelivery?: StartupCommandDelivery
           title?: string
+          launchAgent?: TuiAgent
           activate?: boolean
         }
       ) => callback(data)
