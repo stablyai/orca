@@ -2710,6 +2710,8 @@ export async function getPRChecks(
           }[]
         }
         const checkRunNames = new Set(checkRuns.map((check) => check.name))
+        // Why: GitHub can expose the same provider through both APIs. Keep
+        // check-run metadata when names collide, and only add legacy-only statuses.
         const legacyStatuses = (statusData.statuses ?? [])
           .filter((status) => typeof status.context === 'string' && status.context.length > 0)
           .filter((status) => !checkRunNames.has(status.context ?? ''))
