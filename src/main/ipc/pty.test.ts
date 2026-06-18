@@ -904,6 +904,40 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
     })
 
+    it('does not restore managed Pi source metadata when hooks are disabled without a legacy overlay', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          PI_CODING_AGENT_DIR: '/tmp/user-selected-pi-agent',
+          ORCA_PI_SOURCE_AGENT_DIR: '/tmp/managed-pi-source'
+        },
+        undefined,
+        undefined,
+        () => ({ agentStatusHooksEnabled: false })
+      )
+
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.PI_CODING_AGENT_DIR).toBe('/tmp/user-selected-pi-agent')
+      expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+    })
+
+    it('does not create PI_CODING_AGENT_DIR from managed OMP source metadata when hooks are disabled', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          ORCA_OMP_SOURCE_AGENT_DIR: '/tmp/managed-omp-source'
+        },
+        undefined,
+        undefined,
+        () => ({ agentStatusHooksEnabled: false })
+      )
+
+      expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_OMP_STATUS_EXTENSION).toBeUndefined()
+    })
+
     posixOnlyIt(
       'uses Pi config exported only by shell startup files as the managed extension target',
       async () => {

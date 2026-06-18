@@ -289,7 +289,7 @@ exit 0
     expect(capture).toContain(`PI=${sourceDir}`)
     expect(capture).toContain('ARG1=launch')
     expect(capture).toContain('ARG2=--help')
-    expect(capture).not.toContain('ARG2=--extension')
+    expect(capture).not.toMatch(/^ARG\d+=--extension$/m)
   })
   itWithBash(
     'does not let a Pi-only Orca shell route typed OMP through the Pi overlay',
@@ -341,6 +341,52 @@ exit 0
     }
   )
 
+  itWithBash('clears inherited legacy relay Pi overlays without metadata markers', async () => {
+    const tempDir = makeTempDir()
+    const binDir = join(tempDir, 'bin')
+    const legacyRelayPiOverlayDir = join(tempDir, '.orca-relay', 'pi-overlays', 'legacy')
+    const defaultOmpDir = join(tempDir, '.omp', 'agent')
+    mkdirSync(binDir)
+    mkdirSync(legacyRelayPiOverlayDir, { recursive: true })
+    mkdirSync(defaultOmpDir, { recursive: true })
+    writeFakeOmp(binDir)
+
+    const captureFile = join(tempDir, 'legacy-relay-pi-capture')
+    const afterPiFile = join(tempDir, 'legacy-relay-pi-after')
+    const env: Record<string, string> = {
+      ...process.env,
+      HOME: tempDir,
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      PI_CODING_AGENT_DIR: legacyRelayPiOverlayDir,
+      ORCA_FAKE_OMP_DEFAULT_DIR: defaultOmpDir,
+      ORCA_CAPTURE_FILE: captureFile,
+      ORCA_AFTER_PI_FILE: afterPiFile,
+      TERM: process.env.TERM || 'xterm-256color'
+    } as Record<string, string>
+    delete env.ORCA_PI_CODING_AGENT_DIR
+    delete env.ORCA_PI_SOURCE_AGENT_DIR
+    delete env.ORCA_OMP_CODING_AGENT_DIR
+    delete env.ORCA_OMP_SOURCE_AGENT_DIR
+    delete env.ORCA_OMP_STATUS_EXTENSION
+
+    const output = await runInteractiveBashPty({
+      cwd: tempDir,
+      rcfileContent: getPosixOmpShellWrapper(),
+      env,
+      input: `type omp
+omp ask
+printf '%s' "$PI_CODING_AGENT_DIR" > "$ORCA_AFTER_PI_FILE"
+exit 0
+`
+    })
+
+    const capture = readFileSync(captureFile, 'utf8')
+    expect(output).toContain('omp is a function')
+    expect(capture).toContain('PI=\n')
+    expect(capture).toContain(`EFFECTIVE=${defaultOmpDir}`)
+    expect(capture).toContain('ARG1=ask')
+    expect(readFileSync(afterPiFile, 'utf8')).toBe(legacyRelayPiOverlayDir)
+  })
   itWithBash(
     'clears inherited legacy Pi overlays after managed source metadata replaced overlay env',
     async () => {

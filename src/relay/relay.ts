@@ -555,7 +555,9 @@ async function main(): Promise<void> {
             : ctx.env.ORCA_OMP_SOURCE_AGENT_DIR
         const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'omp')
         if (dir) {
-          env.ORCA_OMP_STATUS_EXTENSION = getRelayPiStatusExtensionPath(dir)
+          if (pluginOverlay.hasManagedPiExtension(dir)) {
+            env.ORCA_OMP_STATUS_EXTENSION = getRelayPiStatusExtensionPath(dir)
+          }
           env.ORCA_OMP_SOURCE_AGENT_DIR = dir
         }
       }

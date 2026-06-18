@@ -19,6 +19,7 @@
 import { createHash } from 'crypto'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -43,6 +44,8 @@ const PI_EXTENSION_FILE = 'orca-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
 const ORCA_MANAGED_EXTENSION_MARKER_LINE = `// ${ORCA_MANAGED_EXTENSION_MARKER}`
+// Why: only an exact line-1 marker is Orca ownership. Marker-like text in
+// user extensions must not make the file overwriteable.
 
 function withOrcaManagedPiExtensionMarker(source: string): string {
   return source.startsWith(`${ORCA_MANAGED_EXTENSION_MARKER_LINE}\n`)
@@ -223,8 +226,25 @@ export class PluginOverlayManager {
     return join(this.homeDir, PI_AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
   }
 
+  private canUseManagedPiExtension(path: string): boolean {
+    try {
+      const stat = lstatSync(path)
+      if (stat.isSymbolicLink()) {
+        return false
+      }
+      const [firstLine] = readFileSync(path, 'utf8').split(/\r?\n/, 1)
+      return firstLine === ORCA_MANAGED_EXTENSION_MARKER_LINE
+    } catch {
+      return false
+    }
+  }
+
   private canOverwritePiExtension(path: string): boolean {
     try {
+      const stat = lstatSync(path)
+      if (stat.isSymbolicLink()) {
+        return false
+      }
       const [firstLine] = readFileSync(path, 'utf8').split(/\r?\n/, 1)
       return firstLine === ORCA_MANAGED_EXTENSION_MARKER_LINE
     } catch (err) {
@@ -232,9 +252,13 @@ export class PluginOverlayManager {
     }
   }
 
+  hasManagedPiExtension(sourceAgentDir: string): boolean {
+    return this.canUseManagedPiExtension(join(sourceAgentDir, 'extensions', PI_EXTENSION_FILE))
+  }
+
   /** Install the Pi/OMP status extension into the remote real agent dir and
-   *  return that directory. `kind` selects which Pi-compatible agent's default
-   *  dir to use when `existingAgentDir` is not supplied. */
+   *  return that directory. A user-owned same-name extension still returns the
+   *  source dir so shell wrappers get source metadata without status injection. */
   materializePi(id: string, existingAgentDir?: string, kind: PiAgentKind = 'pi'): string | null {
     const extensionSource = this.getPiExtensionSource(kind)
     if (!extensionSource || !isUsableId(id)) {
@@ -248,10 +272,9 @@ export class PluginOverlayManager {
       const extensionsDir = join(sourceAgentDir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })
       const extensionPath = join(extensionsDir, PI_EXTENSION_FILE)
-      if (!this.canOverwritePiExtension(extensionPath)) {
-        return null
+      if (this.canOverwritePiExtension(extensionPath)) {
+        writeFileSync(extensionPath, extensionSource)
       }
-      writeFileSync(extensionPath, extensionSource)
       return sourceAgentDir
     } catch (err) {
       process.stderr.write(

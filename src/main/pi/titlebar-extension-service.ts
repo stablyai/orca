@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import { app } from 'electron'
@@ -28,6 +28,8 @@ export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
 const ORCA_MANAGED_EXTENSION_MARKER_LINE = `// ${ORCA_MANAGED_EXTENSION_MARKER}`
+// Why: only an exact line-1 marker is Orca ownership. Marker-like text in
+// user extensions must not make the file overwriteable.
 
 type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
 
@@ -93,6 +95,10 @@ export class PiTitlebarExtensionService {
 
   private canOverwriteManagedExtension(path: string): boolean {
     try {
+      const stat = lstatSync(path)
+      if (stat.isSymbolicLink()) {
+        return false
+      }
       const [firstLine] = readFileSync(path, 'utf8').split(/\r?\n/, 1)
       return firstLine === ORCA_MANAGED_EXTENSION_MARKER_LINE
     } catch (err) {
@@ -101,7 +107,7 @@ export class PiTitlebarExtensionService {
   }
 
   private writeManagedExtension(path: string, source: string): ManagedExtensionWriteResult {
-    if (existsSync(path) && !this.canOverwriteManagedExtension(path)) {
+    if (!this.canOverwriteManagedExtension(path)) {
       return 'skipped-user-owned'
     }
 

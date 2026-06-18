@@ -58,6 +58,7 @@ __orca_omp_has_pi_only_home() {
   fi
   case "\${PI_CODING_AGENT_DIR:-}" in
     */pi-agent-overlays/*) return 0 ;;
+    */.orca-relay/pi-overlays/*) return 0 ;;
   esac
   return 1
 }
@@ -151,8 +152,9 @@ function Global:__OrcaOmpHasPiOnlyHome {
         return $true
     }
     if ($env:ORCA_PI_SOURCE_AGENT_DIR) { return $true }
-    $orcaPiHome = [string]$env:PI_CODING_AGENT_DIR
-    return $orcaPiHome.Replace("\\", "/") -like "*/pi-agent-overlays/*"
+    $orcaPiHome = ([string]$env:PI_CODING_AGENT_DIR).Replace("\\", "/")
+    return $orcaPiHome -like "*/pi-agent-overlays/*" -or
+        $orcaPiHome -like "*/.orca-relay/pi-overlays/*"
 }
 if ($env:ORCA_OMP_CODING_AGENT_DIR -or $env:ORCA_OMP_SOURCE_AGENT_DIR -or
     $env:ORCA_OMP_STATUS_EXTENSION -or $env:ORCA_PI_CODING_AGENT_DIR -or

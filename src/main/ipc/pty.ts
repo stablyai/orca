@@ -596,6 +596,28 @@ function restoreOrStripOverlayEnv(
   delete baseEnv[keys.source]
 }
 
+function restoreOrStripLegacyPiOverlayEnv(
+  baseEnv: Record<string, string>,
+  keys: {
+    primary: string
+    overlay: string
+    source: string
+  }
+): void {
+  const sourceValue = baseEnv[keys.source] ?? process.env[keys.source]
+  const overlayValue = baseEnv[keys.overlay] ?? process.env[keys.overlay]
+  const primaryValue = baseEnv[keys.primary] ?? process.env[keys.primary]
+  if (overlayValue && primaryValue === overlayValue) {
+    if (sourceValue) {
+      baseEnv[keys.primary] = sourceValue
+    } else {
+      delete baseEnv[keys.primary]
+    }
+  }
+  delete baseEnv[keys.overlay]
+  delete baseEnv[keys.source]
+}
+
 function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
   const sourceDir =
     baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
@@ -722,14 +744,15 @@ export function buildPtyHostEnv(
       exposePiManagedExtensionEnv(baseEnv, 'omp', ompEnv)
     }
   } else {
-    // Why: when agent status is disabled we must strip BOTH kinds' shadow vars
-    // so a nested PTY does not inherit a stale overlay from either agent.
-    restoreOrStripOverlayEnv(baseEnv, {
+    // Why: managed source metadata is not an overlay restore value. Only
+    // restore from ORCA_*_SOURCE_AGENT_DIR when PI_CODING_AGENT_DIR still
+    // equals the matching legacy ORCA_*_CODING_AGENT_DIR overlay.
+    restoreOrStripLegacyPiOverlayEnv(baseEnv, {
       primary: 'PI_CODING_AGENT_DIR',
       overlay: 'ORCA_PI_CODING_AGENT_DIR',
       source: 'ORCA_PI_SOURCE_AGENT_DIR'
     })
-    restoreOrStripOverlayEnv(baseEnv, {
+    restoreOrStripLegacyPiOverlayEnv(baseEnv, {
       primary: 'PI_CODING_AGENT_DIR',
       overlay: 'ORCA_OMP_CODING_AGENT_DIR',
       source: 'ORCA_OMP_SOURCE_AGENT_DIR'

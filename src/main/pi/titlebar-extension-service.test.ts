@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  lstatSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -243,6 +244,22 @@ describe('PiTitlebarExtensionService', () => {
       userStatusExtension
     )
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'does not follow a dangling same-name extension symlink',
+    () => {
+      const extensionFile = join(piHome, 'extensions', 'orca-agent-status.ts')
+      const outsideTarget = join(piHome, 'outside-status-target.ts')
+      symlinkSync(outsideTarget, extensionFile, 'file')
+
+      const svc = new PiTitlebarExtensionService()
+      const env = svc.buildPtyEnv('pty-dangling-status-symlink', piHome, 'pi')
+
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe(piHome)
+      expect(lstatSync(extensionFile).isSymbolicLink()).toBe(true)
+      expect(existsSync(outsideTarget)).toBe(false)
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'writes bundled extensions through a symlinked user extensions dir',

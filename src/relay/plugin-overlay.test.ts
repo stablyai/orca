@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   existsSync,
   mkdirSync,
+  lstatSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -84,9 +85,11 @@ describe('PluginOverlayManager', () => {
     const extensionFile = join(piAgentDir, 'extensions', 'orca-agent-status.ts')
     mkdirSync(join(piAgentDir, 'extensions'), { recursive: true })
     writeFileSync(extensionFile, 'user-owned remote status extension')
-
     manager.setSources({ piExtensionSource: '// pi extension' })
-    expect(manager.materializePi('tab-user-owned-pi:0')).toBeNull()
+
+    const dir = manager.materializePi('tab-user-owned-pi:0')
+    expect(dir).toBe(piAgentDir)
+    expect(manager.hasManagedPiExtension(dir!)).toBe(false)
     expect(readFileSync(extensionFile, 'utf8')).toBe('user-owned remote status extension')
   })
 
@@ -97,11 +100,32 @@ describe('PluginOverlayManager', () => {
       '/* @orca-managed-pi-extension */\nuser-owned remote status extension'
     mkdirSync(join(piAgentDir, 'extensions'), { recursive: true })
     writeFileSync(extensionFile, userStatusExtension)
-
     manager.setSources({ piExtensionSource: '// pi extension' })
-    expect(manager.materializePi('tab-incidental-marker:0')).toBeNull()
+
+    const dir = manager.materializePi('tab-incidental-marker:0')
+    expect(dir).toBe(piAgentDir)
+    expect(manager.hasManagedPiExtension(dir!)).toBe(false)
     expect(readFileSync(extensionFile, 'utf8')).toBe(userStatusExtension)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'does not follow a dangling same-name remote Pi extension symlink',
+    () => {
+      const piAgentDir = join(homeDir, '.pi', 'agent')
+      const extensionFile = join(piAgentDir, 'extensions', 'orca-agent-status.ts')
+      const outsideTarget = join(homeDir, 'outside-status-target.ts')
+      mkdirSync(join(piAgentDir, 'extensions'), { recursive: true })
+      symlinkSync(outsideTarget, extensionFile, 'file')
+
+      manager.setSources({ piExtensionSource: '// pi extension' })
+      const dir = manager.materializePi('tab-dangling-pi:0')
+
+      expect(dir).toBe(piAgentDir)
+      expect(manager.hasManagedPiExtension(dir!)).toBe(false)
+      expect(lstatSync(extensionFile).isSymbolicLink()).toBe(true)
+      expect(existsSync(outsideTarget)).toBe(false)
+    }
+  )
 
   it('uses the kind-specific Pi-compatible extension source when available', () => {
     manager.setSources({

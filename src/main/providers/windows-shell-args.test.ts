@@ -72,9 +72,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const promptIndex = command.indexOf('function Global:prompt')
 
     expect(command).not.toContain('$PROFILE')
-    expect(command).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(command).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
-    expect(command).not.toContain('$env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_SOURCE_AGENT_DIR')
+    expect(command).toContain('ORCA_PI_CODING_AGENT_DIR')
+    expect(command).toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(command).toContain('$env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_SOURCE_AGENT_DIR')
     expect(outputEncodingIndex).toBeGreaterThanOrEqual(0)
     expect(opencodeRestoreIndex).toBeGreaterThan(outputEncodingIndex)
     expect(ompWrapperIndex).toBeGreaterThan(opencodeRestoreIndex)
