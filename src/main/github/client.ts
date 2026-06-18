@@ -79,6 +79,8 @@ export {
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,
+  mapCommitStatusRESTStatus,
+  mapCommitStatusRESTConclusion,
   mapCheckStatus,
   mapCheckConclusion,
   mapPRState,
@@ -2663,11 +2665,12 @@ export async function getPRChecks(
         // Why: --cache 60s saves rate-limit budget during polling, but when the
         // user explicitly clicks refresh we must skip it so gh fetches fresh data.
         const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
+        const encodedHeadSha = encodeURIComponent(headSha)
         const { stdout } = await ghExecFileAsync(
           [
             'api',
             ...cacheArgs,
-            `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodeURIComponent(headSha)}/check-runs?per_page=100`
+            `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodedHeadSha}/check-runs?per_page=100`
           ],
           ghOptions
         )
@@ -2682,15 +2685,43 @@ export async function getPRChecks(
             details_url: string | null
           }[]
         }
-        if (data.check_runs.length > 0) {
-          return data.check_runs.map((d) => ({
-            name: d.name,
-            status: mapCheckRunRESTStatus(d.status),
-            conclusion: mapCheckRunRESTConclusion(d.status, d.conclusion),
-            url: d.details_url || d.html_url || null,
-            ...(typeof d.id === 'number' ? { checkRunId: d.id } : {}),
-            workflowRunId: parseActionsRunId(d.details_url || d.html_url || null)
+        const checkRuns = data.check_runs.map((d) => ({
+          name: d.name,
+          status: mapCheckRunRESTStatus(d.status),
+          conclusion: mapCheckRunRESTConclusion(d.status, d.conclusion),
+          url: d.details_url || d.html_url || null,
+          ...(typeof d.id === 'number' ? { checkRunId: d.id } : {}),
+          workflowRunId: parseActionsRunId(d.details_url || d.html_url || null)
+        }))
+        const statusResult = await ghExecFileAsync(
+          [
+            'api',
+            ...cacheArgs,
+            `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodedHeadSha}/status`
+          ],
+          ghOptions
+        )
+        noteRateLimitSpend('core')
+        const statusData = JSON.parse(statusResult.stdout) as {
+          statuses?: {
+            context?: string
+            state?: string
+            target_url?: string | null
+          }[]
+        }
+        const checkRunNames = new Set(checkRuns.map((check) => check.name))
+        const legacyStatuses = (statusData.statuses ?? [])
+          .filter((status) => typeof status.context === 'string' && status.context.length > 0)
+          .filter((status) => !checkRunNames.has(status.context ?? ''))
+          .map((status) => ({
+            name: status.context ?? '',
+            status: mapCommitStatusRESTStatus(status.state ?? ''),
+            conclusion: mapCommitStatusRESTConclusion(status.state ?? ''),
+            url: status.target_url || null,
+            workflowRunId: parseActionsRunId(status.target_url || null)
           }))
+        if (checkRuns.length > 0 || legacyStatuses.length > 0) {
+          return [...checkRuns, ...legacyStatuses]
         }
       } catch (err) {
         // Why: a PR can outlive the cached head SHA after force-pushes or remote

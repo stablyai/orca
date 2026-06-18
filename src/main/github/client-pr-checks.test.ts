@@ -92,19 +92,21 @@ describe('getPRChecks', () => {
 
   it('queries check-runs by PR head SHA when GitHub remote metadata is available', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
-    ghExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify({
-        check_runs: [
-          {
-            name: 'build',
-            status: 'completed',
-            conclusion: 'success',
-            html_url: 'https://github.com/acme/widgets/actions/runs/1',
-            details_url: null
-          }
-        ]
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          check_runs: [
+            {
+              name: 'build',
+              status: 'completed',
+              conclusion: 'success',
+              html_url: 'https://github.com/acme/widgets/actions/runs/1',
+              details_url: null
+            }
+          ]
+        })
       })
-    })
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ statuses: [] }) })
 
     const checks = await getPRChecks('/repo-root', 42, 'head-oid')
 
@@ -123,10 +125,71 @@ describe('getPRChecks', () => {
     ])
   })
 
+  it('merges REST check-runs with legacy commit statuses', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          check_runs: [
+            {
+              id: 88,
+              name: 'Summary',
+              status: 'completed',
+              conclusion: 'success',
+              html_url: 'https://github.com/acme/widgets/actions/runs/88',
+              details_url: null
+            }
+          ]
+        })
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          statuses: [
+            {
+              context: 'continuous-integration/jenkins/pr-merge',
+              state: 'pending',
+              target_url: 'https://jenkins.example.com/job/merge/1'
+            },
+            {
+              context: 'Summary',
+              state: 'success',
+              target_url: 'https://example.com/duplicate-summary'
+            }
+          ]
+        })
+      })
+
+    const checks = await getPRChecks('/repo-root', 42, 'head-oid')
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      ['api', '--cache', '60s', 'repos/acme/widgets/commits/head-oid/status'],
+      { cwd: '/repo-root' }
+    )
+    expect(checks).toEqual([
+      {
+        name: 'Summary',
+        status: 'completed',
+        conclusion: 'success',
+        url: 'https://github.com/acme/widgets/actions/runs/88',
+        checkRunId: 88,
+        workflowRunId: 88
+      },
+      {
+        name: 'continuous-integration/jenkins/pr-merge',
+        status: 'queued',
+        conclusion: 'pending',
+        url: 'https://jenkins.example.com/job/merge/1',
+        workflowRunId: undefined
+      }
+    ])
+  })
+
   it('falls back to gh pr checks when the head SHA has no check runs', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify({ check_runs: [] }) })
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ statuses: [] }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify([
           { name: 'verify', state: 'PENDING', link: 'https://example.com/verify' }
@@ -136,7 +199,7 @@ describe('getPRChecks', () => {
     const checks = await getPRChecks('/repo-root', 42, 'head-oid')
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       ['pr', 'checks', '42', '--json', 'name,state,link', '--repo', 'acme/widgets'],
       { cwd: '/repo-root' }
     )
@@ -156,6 +219,7 @@ describe('getPRChecks', () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify({ check_runs: [] }) })
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ statuses: [] }) })
       .mockRejectedValueOnce(
         Object.assign(new Error('Command failed: gh pr checks 42'), {
           stderr: "no checks reported on the 'codex/keybindings-toml' branch\n",
@@ -175,6 +239,7 @@ describe('getPRChecks', () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify({ check_runs: [] }) })
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ statuses: [] }) })
       .mockRejectedValueOnce(
         Object.assign(new Error('Command failed: gh pr checks 42'), {
           stderr: 'GraphQL: Could not resolve to a PullRequest',
@@ -256,6 +321,7 @@ describe('getPRChecks', () => {
           ]
         })
       })
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ statuses: [] }) })
       .mockResolvedValueOnce({
         stdout: JSON.stringify([
           {

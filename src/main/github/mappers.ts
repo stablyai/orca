@@ -38,6 +38,28 @@ export function mapCheckRunRESTConclusion(
   return conclusionMap[conclusion.toLowerCase()] ?? null
 }
 
+// ── REST API commit status mapping ──────────────────────────────────────
+// Legacy Jenkins/Prow integrations report commit statuses, not check runs.
+
+export function mapCommitStatusRESTStatus(state: string): PRCheckDetail['status'] {
+  const s = state?.toLowerCase()
+  return s === 'pending' ? 'queued' : 'completed'
+}
+
+export function mapCommitStatusRESTConclusion(state: string): PRCheckDetail['conclusion'] {
+  const s = state?.toLowerCase()
+  if (s === 'success') {
+    return 'success'
+  }
+  if (s === 'failure' || s === 'error') {
+    return 'failure'
+  }
+  if (s === 'pending') {
+    return 'pending'
+  }
+  return null
+}
+
 // ── gh pr checks mapping (single "state" string) ─────────────────────
 
 export function mapCheckStatus(state: string): PRCheckDetail['status'] {
