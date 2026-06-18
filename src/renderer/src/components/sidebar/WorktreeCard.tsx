@@ -1309,7 +1309,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             {metaAutomationProvenance && (
               <Badge
                 variant="secondary"
-                className="h-[16px] gap-1 px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
+                className="h-4 gap-1 px-1.5 text-xs font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
                 aria-label={translate(
                   'auto.components.sidebar.WorktreeCard.automationCreatedBadge',
                   'Created by automation'

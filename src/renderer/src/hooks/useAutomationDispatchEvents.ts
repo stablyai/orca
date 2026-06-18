@@ -84,95 +84,95 @@ export function useAutomationDispatchEvents(): void {
           return
         }
 
-        if (repo.connectionId) {
-          const needsPrompt = await window.api.ssh.needsPassphrasePrompt({
-            targetId: repo.connectionId
-          })
-          if (needsPrompt) {
+        try {
+          if (repo.connectionId) {
+            const needsPrompt = await window.api.ssh.needsPassphrasePrompt({
+              targetId: repo.connectionId
+            })
+            if (needsPrompt) {
+              await markDispatchResult({
+                runId: run.id,
+                status: 'skipped_needs_interactive_auth',
+                workspaceId: dispatchWorkspaceId,
+                workspaceDisplayName: dispatchWorkspaceDisplayName,
+                error: translate(
+                  'auto.hooks.useAutomationDispatchEvents.16a21d6413',
+                  'SSH reconnect requires interactive credentials.'
+                )
+              })
+              return
+            }
+            const sshState = await window.api.ssh.getState({ targetId: repo.connectionId })
+            if (sshState?.status !== 'connected') {
+              try {
+                const connected = await window.api.ssh.connect({ targetId: repo.connectionId })
+                if (connected?.status !== 'connected') {
+                  throw new Error('SSH target is unavailable.')
+                }
+              } catch (error) {
+                await markDispatchResult({
+                  runId: run.id,
+                  status: 'skipped_unavailable',
+                  workspaceId: dispatchWorkspaceId,
+                  workspaceDisplayName: dispatchWorkspaceDisplayName,
+                  error: error instanceof Error ? error.message : String(error)
+                })
+                return
+              }
+            }
+          }
+
+          if (
+            automation.workspaceMode === 'existing' &&
+            automationWorktree &&
+            automation.runContext?.repoId &&
+            automationWorktree.repoId !== automation.runContext.repoId
+          ) {
             await markDispatchResult({
               runId: run.id,
-              status: 'skipped_needs_interactive_auth',
-              workspaceId: dispatchWorkspaceId,
+              status: 'skipped_unavailable',
+              workspaceId: automation.workspaceId,
               workspaceDisplayName: dispatchWorkspaceDisplayName,
               error: translate(
-                'auto.hooks.useAutomationDispatchEvents.16a21d6413',
-                'SSH reconnect requires interactive credentials.'
+                'auto.hooks.useAutomationDispatchEvents.3ad7d77f57',
+                'The target workspace is on a different host than this automation run target.'
               )
             })
             return
           }
-          const sshState = await window.api.ssh.getState({ targetId: repo.connectionId })
-          if (sshState?.status !== 'connected') {
-            try {
-              const connected = await window.api.ssh.connect({ targetId: repo.connectionId })
-              if (connected?.status !== 'connected') {
-                throw new Error('SSH target is unavailable.')
-              }
-            } catch (error) {
+
+          if (automation.workspaceMode === 'existing' && !automationWorktree) {
+            await markDispatchResult({
+              runId: run.id,
+              status: 'skipped_unavailable',
+              workspaceId: automation.workspaceId,
+              workspaceDisplayName: dispatchWorkspaceDisplayName,
+              error: translate(
+                'auto.hooks.useAutomationDispatchEvents.59718b120b',
+                'The target workspace is no longer available.'
+              )
+            })
+            return
+          }
+
+          if (run.trigger === 'scheduled' && automation.precheck) {
+            precheckResult = await window.api.automations.runPrecheck({
+              automationId: automation.id,
+              runId: run.id
+            })
+            if (precheckResult && !didAutomationPrecheckPass(precheckResult)) {
               await markDispatchResult({
                 runId: run.id,
-                status: 'skipped_unavailable',
+                status: 'skipped_precheck',
                 workspaceId: dispatchWorkspaceId,
                 workspaceDisplayName: dispatchWorkspaceDisplayName,
-                error: error instanceof Error ? error.message : String(error)
+                precheckResult,
+                error: formatAutomationPrecheckFailure(precheckResult)
               })
               return
             }
           }
-        }
 
-        if (
-          automation.workspaceMode === 'existing' &&
-          automationWorktree &&
-          automation.runContext?.repoId &&
-          automationWorktree.repoId !== automation.runContext.repoId
-        ) {
-          await markDispatchResult({
-            runId: run.id,
-            status: 'skipped_unavailable',
-            workspaceId: automation.workspaceId,
-            workspaceDisplayName: dispatchWorkspaceDisplayName,
-            error: translate(
-              'auto.hooks.useAutomationDispatchEvents.3ad7d77f57',
-              'The target workspace is on a different host than this automation run target.'
-            )
-          })
-          return
-        }
-
-        if (automation.workspaceMode === 'existing' && !automationWorktree) {
-          await markDispatchResult({
-            runId: run.id,
-            status: 'skipped_unavailable',
-            workspaceId: automation.workspaceId,
-            workspaceDisplayName: dispatchWorkspaceDisplayName,
-            error: translate(
-              'auto.hooks.useAutomationDispatchEvents.59718b120b',
-              'The target workspace is no longer available.'
-            )
-          })
-          return
-        }
-
-        if (run.trigger === 'scheduled' && automation.precheck) {
-          precheckResult = await window.api.automations.runPrecheck({
-            automationId: automation.id,
-            runId: run.id
-          })
-          if (precheckResult && !didAutomationPrecheckPass(precheckResult)) {
-            await markDispatchResult({
-              runId: run.id,
-              status: 'skipped_precheck',
-              workspaceId: dispatchWorkspaceId,
-              workspaceDisplayName: dispatchWorkspaceDisplayName,
-              precheckResult,
-              error: formatAutomationPrecheckFailure(precheckResult)
-            })
-            return
-          }
-        }
-
-        try {
           const automationWorkspaceCreateRequestId = createBrowserUuid()
           const worktree =
             automation.workspaceMode === 'new_per_run'

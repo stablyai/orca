@@ -377,7 +377,7 @@ describe('worktree RPC methods', () => {
           id: 'run-1',
           automationId: 'automation-1',
           title: 'Nightly review run',
-          status: 'completed',
+          status: 'dispatching',
           workspaceId: null
         }
       ]),

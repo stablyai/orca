@@ -1,11 +1,14 @@
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
 import type { Repo } from '../../shared/types'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 
+const repoPath = path.join('tmp', 'orca')
+
 const repo: Repo = {
   id: 'repo-1',
-  path: '/tmp/orca',
+  path: repoPath,
   displayName: 'orca',
   badgeColor: '#000',
   addedAt: 1,
@@ -25,7 +28,7 @@ const automation: Automation = {
     hostId: 'ssh:ssh-target-1',
     projectHostSetupId: 'setup-1',
     repoId: 'repo-1',
-    path: '/tmp/orca'
+    path: repoPath
   },
   sourceContext: null,
   projectId: 'legacy-repo-1',
