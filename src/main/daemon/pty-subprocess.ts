@@ -500,8 +500,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     if (opts.env?.TERM) {
       env.TERM = opts.env.TERM
     }
-    // Why: any Orca-injected overlay env that user rc files can clobber
-    // needs the wrapper so the post-rc restore line runs.
+    // Why: OpenCode/Codex path restoration and OMP's typed-command status
+    // wrapper need shell-ready code after user startup files run.
     let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     if (opts.command && isCodexStartupCommand) {
       // Why: Codex needs the env-restoring wrapper, but waiting for a shell
@@ -513,8 +513,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellLaunch =
         env.ORCA_ATTRIBUTION_SHIM_DIR ||
         env.ORCA_OPENCODE_CONFIG_DIR ||
-        env.ORCA_PI_CODING_AGENT_DIR ||
-        env.ORCA_OMP_CODING_AGENT_DIR ||
+        env.ORCA_OMP_STATUS_EXTENSION ||
         env.ORCA_CODEX_HOME ||
         env.ORCA_AGENT_TEAMS_SHIM_DIR
           ? getAttributionShellLaunchConfig(shellPath)

@@ -694,10 +694,12 @@ describe('PtyHandler', () => {
     async () => {
       const oldShell = process.env.SHELL
       const oldHome = process.env.HOME
+      const oldOrcaPi = process.env.ORCA_PI_CODING_AGENT_DIR
       const homeDir = mkdtempSync(join(tmpdir(), 'relay-pty-shell-launch-'))
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
+      delete process.env.ORCA_PI_CODING_AGENT_DIR
       try {
         if (!existsSync('/bin/bash')) {
           return
@@ -706,8 +708,7 @@ describe('PtyHandler', () => {
         handler.addEnvAugmenter(() => ({
           OPENCODE_CONFIG_DIR: '/remote/overlay/opencode',
           ORCA_OPENCODE_CONFIG_DIR: '/remote/overlay/opencode',
-          PI_CODING_AGENT_DIR: '/remote/overlay/pi',
-          ORCA_PI_CODING_AGENT_DIR: '/remote/overlay/pi'
+          ORCA_OMP_STATUS_EXTENSION: '/remote/.omp/agent/extensions/orca-agent-status.ts'
         }))
 
         await dispatcher.callRequest('pty.spawn', { env: { HOME: homeDir } })
@@ -722,6 +723,11 @@ describe('PtyHandler', () => {
         } else {
           process.env.HOME = oldHome
         }
+        if (oldOrcaPi === undefined) {
+          delete process.env.ORCA_PI_CODING_AGENT_DIR
+        } else {
+          process.env.ORCA_PI_CODING_AGENT_DIR = oldOrcaPi
+        }
       }
 
       const shellArgs = mockPtySpawn.mock.calls[0][1]
@@ -730,13 +736,12 @@ describe('PtyHandler', () => {
 
       expect(shellArgs).toEqual(['--rcfile', rcfile])
       expect(spawnOptions.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/remote/overlay/opencode')
-      expect(spawnOptions.env.ORCA_PI_CODING_AGENT_DIR).toBe('/remote/overlay/pi')
+      expect(spawnOptions.env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(readFileSync(rcfile, 'utf8')).toContain(
         'export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
       )
-      expect(readFileSync(rcfile, 'utf8')).toContain(
-        'export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
-      )
+      expect(readFileSync(rcfile, 'utf8')).not.toContain('ORCA_PI_CODING_AGENT_DIR')
+      expect(readFileSync(rcfile, 'utf8')).toContain('command omp --extension')
 
       rmSync(homeDir, { recursive: true, force: true })
     }

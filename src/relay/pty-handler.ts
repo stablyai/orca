@@ -736,14 +736,11 @@ export class PtyHandler {
       const shell = resolveDefaultShell()
       // Why: `command` is intentionally absent from this revive path because
       // SerializedPtyEntry (see line 99) does not persist it — ManagedPty
-      // never stored the renderer-chosen launch command. The Pi/OMP overlay
-      // augmenter in src/relay/relay.ts therefore sees `ctx.command ===
-      // undefined` for revived PTYs and falls back to the Pi-default kind
-      // (see detectPiAgentKindFromCommand in src/shared/pi-agent-kind.ts).
-      // Acceptable pre-OMP fallback: a cold-restart revived OMP shell that
-      // later relaunches `omp` keeps the historical behavior of loading the
-      // Pi overlay. Plumbing `command` through serialization is a separate,
-      // larger change (out of scope for PR #2662).
+      // never stored the renderer-chosen launch command. The Pi/OMP extension
+      // installer in src/relay/relay.ts therefore sees `ctx.command ===
+      // undefined` for revived PTYs and prepares the Pi default plus OMP's
+      // typed-command wrapper. Plumbing `command` through serialization is a
+      // separate, larger change.
       const spawnEnv = this.buildSpawnEnv(revivedEnv, {
         id: entry.id,
         paneKey: entry.paneKey,

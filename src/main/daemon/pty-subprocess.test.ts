@@ -864,7 +864,7 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
-  it('uses shell wrapper when Pi config must survive shell startup', () => {
+  it('uses shell wrapper when typed OMP commands need the status extension', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -877,8 +877,7 @@ describe('createPtySubprocess', () => {
         rows: 24,
         env: {
           SHELL: '/bin/zsh',
-          PI_CODING_AGENT_DIR: '/tmp/orca-pi-agent-overlay',
-          ORCA_PI_CODING_AGENT_DIR: '/tmp/orca-pi-agent-overlay'
+          ORCA_OMP_STATUS_EXTENSION: '/tmp/.omp/agent/extensions/orca-agent-status.ts'
         }
       })
     } finally {

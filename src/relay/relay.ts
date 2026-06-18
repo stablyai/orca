@@ -510,14 +510,9 @@ async function main(): Promise<void> {
   // restart.
   ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
 
-  // Why: per-PTY plugin overlays for OpenCode and Pi. `OPENCODE_CONFIG_DIR`
-  // and `PI_CODING_AGENT_DIR` only make sense on the relay's own filesystem
-  // — paths the renderer would synthesize for the Orca host's userData are
-  // meaningless on the remote. The overlay manager materializes a per-PTY
-  // dir on the remote (rooted at $HOME/.orca-relay/) so the agent CLI inside
-  // the relay-spawned PTY loads the bundled status plugin and posts to the
-  // relay's hook server. Source bodies arrive over JSON-RPC (see
-  // `agent_hook.installPlugins` below) — not bundled with the relay binary.
+  // Why: plugin install paths must be resolved on the relay host. OpenCode
+  // still needs a relay-local config overlay, while Pi/OMP receive guarded
+  // status extensions in their real remote agent dirs.
   const pluginOverlay = new PluginOverlayManager()
   ptyHandler.addEnvAugmenter((ctx) => {
     const env: Record<string, string> = {}
@@ -539,9 +534,8 @@ async function main(): Promise<void> {
     }
     if (pluginOverlay.hasPiSource()) {
       // Why: source-dir defaulting is keyed on which Pi-compatible agent is
-      // being launched (Pi vs OMP). The renderer-supplied `command` is the
-      // only signal - disk-presence guessing silently shadows the other
-      // agent's extensions when both `~/.pi/agent` and `~/.omp/agent` exist.
+      // being launched (Pi vs OMP). Install Orca's guarded extension into that
+      // real remote agent dir without redirecting PI_CODING_AGENT_DIR.
       const kind = detectPiAgentKindFromCommand(ctx.command)
       const hasLaunchCommand = typeof ctx.command === 'string' && ctx.command.trim().length > 0
       const shouldPrepareOmpShadow = kind === 'omp' || !hasLaunchCommand
@@ -549,33 +543,20 @@ async function main(): Promise<void> {
         const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'pi')
         const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'pi')
         if (dir) {
-          env.PI_CODING_AGENT_DIR = dir
-          // Why: shadow var is agent-scoped so remote shell-ready wrappers can
-          // restore Pi by default while the `omp` wrapper switches on demand.
-          env.ORCA_PI_CODING_AGENT_DIR = dir
-          if (sourceDir) {
-            env.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
-          }
+          env.ORCA_PI_SOURCE_AGENT_DIR = dir
         }
       }
       if (shouldPrepareOmpShadow) {
-        // Why: in a bare shell, PI_CODING_AGENT_DIR is historically Pi's
-        // default. Do not mirror it into OMP; use OMP's own default unless an
-        // OMP-scoped source shadow is already present from a nested Orca shell.
+        // Why: in a bare shell, prepare OMP's status extension so a typed
+        // `omp` gets integration, but do not make OMP the shell's home.
         const sourceDir =
           kind === 'omp'
             ? resolvePiSourceAgentDir(ctx.env, ctx.shell, 'omp')
             : ctx.env.ORCA_OMP_SOURCE_AGENT_DIR
         const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'omp')
         if (dir) {
-          if (kind === 'omp') {
-            env.PI_CODING_AGENT_DIR = dir
-          }
-          env.ORCA_OMP_CODING_AGENT_DIR = dir
           env.ORCA_OMP_STATUS_EXTENSION = getRelayPiStatusExtensionPath(dir)
-          if (sourceDir) {
-            env.ORCA_OMP_SOURCE_AGENT_DIR = sourceDir
-          }
+          env.ORCA_OMP_SOURCE_AGENT_DIR = dir
         }
       }
     }
@@ -608,8 +589,8 @@ async function main(): Promise<void> {
   // the wire at session-ready (the renderer's bundled hook-service strings
   // change as new agent events are added — pinning them to the relay binary
   // would force a relay redeploy on every Orca update). Cache them so each
-  // subsequent PTY spawn can materialize a per-PTY overlay rooted under
-  // $HOME/.orca-relay/. See docs/design/agent-status-over-ssh.md §4.
+  // subsequent PTY spawn can materialize the remote OpenCode overlay and
+  // install Pi/OMP managed extensions. See docs/design/agent-status-over-ssh.md §4.
   // Why: bound the per-source size so a buggy/hostile Orca can't OOM the
   // relay by pushing a giant string. The HTTP path has HOOK_REQUEST_MAX_BYTES
   // = 1 MB; the JSON-RPC path needs an equivalent ceiling. Real plugin sources

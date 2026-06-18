@@ -19,7 +19,6 @@ import { openCodeHookService } from '../opencode/hook-service'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
-import { ORCA_PI_AGENT_STATUS_EXTENSION_FILE } from '../pi/agent-status-extension-source'
 import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-agent-kind'
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
@@ -347,11 +346,11 @@ function finishPtyShutdown(
 // ─── Host PTY env assembly ──────────────────────────────────────────
 // Why: both the LocalPtyProvider.buildSpawnEnv closure and the daemon-active
 // fallback in pty:spawn need the same set of host-local env injections
-// (OpenCode plugin dir, agent-hook server coordinates, Pi overlay, Codex
-// account home, dev-mode CLI overrides, GitHub attribution shims). They used
-// to be implemented twice, which silently drifted — daemon-backed PTYs never
-// got the OpenCode plugin, Pi overlay, Codex home, or dev CLI PATH prepend,
-// so status dots, Pi state, Codex account switching, and CLI→dev
+// (OpenCode plugin dir, agent-hook server coordinates, Pi/OMP managed
+// extensions, Codex account home, dev-mode CLI overrides, GitHub attribution
+// shims). They used to be implemented twice, which silently drifted —
+// daemon-backed PTYs never got the OpenCode plugin, Pi integration, Codex
+// home, or dev CLI PATH prepend, so status dots, Pi state, Codex switching, and CLI→dev
 // routing were all broken for daemon users (the common case).
 //
 // Centralizing the injections here makes future additions fail-safe: a new
@@ -364,8 +363,8 @@ export type BuildPtyHostEnvOptions = {
   skipCodexHomeEnv?: boolean
   githubAttributionEnabled: boolean
   /** The launch command the renderer chose for this PTY (e.g. 'pi', 'omp',
-   *  'claude'). Used to resolve the per-agent overlay source dir for Pi /
-   *  OMP - both consume `PI_CODING_AGENT_DIR` but default to different
+   *  'claude'). Used to resolve the per-agent managed extension target for
+   *  Pi / OMP - both consume `PI_CODING_AGENT_DIR` but default to different
    *  `~/.<kind>/agent` paths. Undefined for bare-shell spawns; defaults
    *  resolve to Pi for back-compat. NEVER infer from disk presence; that's
    *  the bug this option fixes (cross-agent shadowing when both dirs exist). */
@@ -504,10 +503,6 @@ function resolveScopedPiAgentSourceDir(
   return readEnvWithProcessFallback(baseEnv, sourceKey)
 }
 
-function getPiAgentStatusExtensionPath(agentDir: string): string {
-  return join(agentDir, 'extensions', ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
-}
-
 function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKind): void {
   if (kind === 'omp') {
     delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
@@ -519,29 +514,28 @@ function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKin
   delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
 }
 
-function exposePiAgentOverlayEnv(
+function exposePiManagedExtensionEnv(
   baseEnv: Record<string, string>,
   kind: PiAgentKind,
-  overlayDir: string,
-  sourceDir: string | undefined
+  managedEnv: Record<string, string>
 ): void {
   if (kind === 'omp') {
-    baseEnv.ORCA_OMP_CODING_AGENT_DIR = overlayDir
-    baseEnv.ORCA_OMP_STATUS_EXTENSION = getPiAgentStatusExtensionPath(overlayDir)
-    if (sourceDir) {
-      // Why: preserve the original OMP root across nested Orca terminals; the
-      // public env var is intentionally restored to the current PTY overlay.
-      baseEnv.ORCA_OMP_SOURCE_AGENT_DIR = sourceDir
+    delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
+    if (managedEnv.ORCA_OMP_SOURCE_AGENT_DIR) {
+      baseEnv.ORCA_OMP_SOURCE_AGENT_DIR = managedEnv.ORCA_OMP_SOURCE_AGENT_DIR
     } else {
       delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
     }
+    if (managedEnv.ORCA_OMP_STATUS_EXTENSION) {
+      baseEnv.ORCA_OMP_STATUS_EXTENSION = managedEnv.ORCA_OMP_STATUS_EXTENSION
+    } else {
+      delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    }
     return
   }
-  baseEnv.ORCA_PI_CODING_AGENT_DIR = overlayDir
-  if (sourceDir) {
-    // Why: preserve the original Pi root across nested Orca terminals; the
-    // public env var is intentionally restored to the current PTY overlay.
-    baseEnv.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
+  delete baseEnv.ORCA_PI_CODING_AGENT_DIR
+  if (managedEnv.ORCA_PI_SOURCE_AGENT_DIR) {
+    baseEnv.ORCA_PI_SOURCE_AGENT_DIR = managedEnv.ORCA_PI_SOURCE_AGENT_DIR
   } else {
     delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
   }
@@ -568,8 +562,9 @@ function getInheritedAgentHookEnvKeysToDelete(
 }
 
 // Why: when agent status is disabled, a nested Orca terminal can still pass
-// through a prior PTY's OpenCode/Pi overlay env. Restore the user's original
-// source dir when Orca recorded one, otherwise strip only values known to be ours.
+// through prior OpenCode or legacy Pi/OMP overlay env. Restore the user's
+// original source dir when Orca recorded one, otherwise strip only values
+// known to be ours.
 function restoreOrStripOverlayEnv(
   baseEnv: Record<string, string>,
   keys: {
@@ -660,8 +655,7 @@ export function buildPtyHostEnv(
     // value cannot coexist with an Orca-only injection. Hand the user's value
     // (when present) to the hook service and let it materialize a source-scoped
     // mirror overlay that lets the user's plugins and Orca's status plugin
-    // load together — same pattern Pi uses below for PI_CODING_AGENT_DIR. See
-    // docs/opencode-config-dir-collision.md.
+    // load together. See docs/opencode-config-dir-collision.md.
     Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
     if (baseEnv.OPENCODE_CONFIG_DIR) {
       // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
@@ -698,36 +692,22 @@ export function buildPtyHostEnv(
     Object.assign(baseEnv, agentHookServer.buildPtyEnv())
   }
 
-  // Why: PI_CODING_AGENT_DIR owns Pi's / OMP's full config/session root (OMP
-  // inherits the env var name from Pi by design; its CHANGELOG documents the
-  // OMP_CODING_AGENT_DIR -> PI_CODING_AGENT_DIR rename. Build a source-scoped
-  // overlay from the caller's chosen root so Orca extensions load without
-  // making each terminal look like a separate Pi home.
+  // Why: PI_CODING_AGENT_DIR owns Pi's / OMP's full config/session root. Keep
+  // that home as the user's normal source of truth and install only Orca-owned,
+  // env-guarded extension files into the selected agent's extension dir.
   if (opts.agentStatusHooksEnabled) {
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
     if (piAgentKind === 'pi') {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi')
       Object.assign(baseEnv, piEnv)
-      if (piEnv.PI_CODING_AGENT_DIR) {
-        // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
-        // wrappers restore this PTY-scoped value after user startup files run.
-        baseEnv.PI_CODING_AGENT_DIR = piEnv.PI_CODING_AGENT_DIR
-        exposePiAgentOverlayEnv(baseEnv, 'pi', piEnv.PI_CODING_AGENT_DIR, preexistingPiAgentDir)
-      }
+      exposePiManagedExtensionEnv(baseEnv, 'pi', piEnv)
     }
 
     if (shouldPrepareOmpShadow) {
       const ompEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmpAgentDir, 'omp')
-      if (ompEnv.PI_CODING_AGENT_DIR) {
-        if (piAgentKind === 'omp') {
-          // Why: an OMP-launched PTY should default the binary-facing env var to
-          // OMP. Bare shells keep the Pi primary and use the `omp` shell wrapper
-          // to switch only while OMP is running.
-          baseEnv.PI_CODING_AGENT_DIR = ompEnv.PI_CODING_AGENT_DIR
-        }
-        exposePiAgentOverlayEnv(baseEnv, 'omp', ompEnv.PI_CODING_AGENT_DIR, preexistingOmpAgentDir)
-      }
+      Object.assign(baseEnv, ompEnv)
+      exposePiManagedExtensionEnv(baseEnv, 'omp', ompEnv)
     }
   } else {
     // Why: when agent status is disabled we must strip BOTH kinds' shadow vars
@@ -2181,18 +2161,18 @@ export function registerPtyHandlers(
       }
       // Why: the daemon-backed provider replaces LocalPtyProvider and therefore
       // never runs its buildSpawnEnv closure. We must assemble the same
-      // host-local env (OpenCode plugin, agent-hook server, Pi overlay, Codex
-      // home, dev CLI overrides, GitHub attribution shims) here so both spawn
-      // paths behave identically. buildPtyHostEnv is the shared helper that
-      // encapsulates the full set of injections and their order/guards.
+      // host-local env (OpenCode plugin, agent-hook server, Pi/OMP managed
+      // extensions, Codex home, dev CLI overrides, GitHub attribution shims)
+      // here so both spawn paths behave identically. buildPtyHostEnv is the
+      // shared helper that encapsulates the full set of injections and guards.
       //
       // Safety: skip the entire injection when a remote (SSH) connection is in
       // play. Every injection here is either host-loopback (the agent-hook
       // server binds 127.0.0.1, so shipping its token to an SSH host would
       // leak a loopback secret for no functional benefit) or a path on the
-      // local filesystem (OpenCode plugin dir, Pi overlay, Codex home, dev
-      // CLI bin, attribution shim dir) that would resolve to nothing — or
-      // something misleading — on the remote machine.
+      // local filesystem (OpenCode plugin dir, Pi/OMP extension paths, Codex
+      // home, dev CLI bin, attribution shim dir) that would resolve to
+      // nothing — or something misleading — on the remote machine.
       const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
       // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so
       // provider hooks and legacy Pi overlay cleanup can run in buildPtyHostEnv.
@@ -2206,8 +2186,8 @@ export function registerPtyHandlers(
       // fresh UUID per spawn; that would orphan reconnectable terminal state.
       // Why: only state for ids we minted in THIS request should be cleared on
       // spawn failure. If the caller supplied args.sessionId it may refer to
-      // an existing PTY whose state (OpenCode hooks, Pi overlay, agent-hook
-      // pane caches) we must not clobber on a retry/attach failure.
+      // an existing PTY whose state (OpenCode hooks, legacy Pi overlay cleanup,
+      // agent-hook pane caches) we must not clobber on a retry/attach failure.
       const isMintedSessionId = args.sessionId === undefined && isDaemonHostSpawn
       const effectiveSessionId =
         args.sessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
@@ -2326,8 +2306,8 @@ export function registerPtyHandlers(
           })
           promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
         } catch (err) {
-          // Why: buildPtyHostEnv has filesystem side-effects (Pi overlay
-          // materialization). If it throws before we reach provider.spawn,
+          // Why: buildPtyHostEnv has filesystem side-effects (Pi/OMP managed
+          // extension installation). If it throws before we reach provider.spawn,
           // clear per-PTY state so the next attempt starts clean.
           //
           // Only sweep state for ids we MINTED in this request — caller-

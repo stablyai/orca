@@ -248,12 +248,11 @@ describe('tui agent startup plans', () => {
   })
 
   it('returns an OMP draft plan with ORCA_OMP_PREFILL (OMP-scoped, not Pi-shared)', () => {
-    // Why: OMP owns its own overlay tree, bundled prefill extension, and
-    // prefill env var. The OMP overlay's orca-prefill.ts reads
-    // ORCA_OMP_PREFILL — see src/main/pi/titlebar-extension-service.ts —
-    // so a draft plan for OMP MUST emit that name. A regression here would
-    // either silently drop the draft (Pi var ignored by OMP overlay) or
-    // honor a stale Pi-PTY draft from a previous launch.
+    // Why: OMP owns its own managed prefill extension and env var.
+    // orca-prefill.ts reads ORCA_OMP_PREFILL for OMP launches — see
+    // src/main/pi/titlebar-extension-service.ts — so a draft plan for OMP
+    // MUST emit that name. A regression here would either silently drop the
+    // draft (Pi var ignored by OMP) or honor a stale Pi-PTY draft.
     const plan = buildAgentDraftLaunchPlan({
       agent: 'omp',
       draft: 'fix the omp regression',

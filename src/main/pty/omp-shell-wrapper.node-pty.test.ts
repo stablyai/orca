@@ -118,10 +118,11 @@ describePosix('OMP shell wrapper node-pty reproduction', () => {
       ...process.env,
       HOME: tempDir,
       PATH: `${binDir}:${process.env.PATH ?? ''}`,
-      PI_CODING_AGENT_DIR: piDir,
-      ORCA_PI_CODING_AGENT_DIR: piDir,
-      ORCA_OMP_CODING_AGENT_DIR: ompDir,
+      PI_CODING_AGENT_DIR: '',
+      ORCA_PI_CODING_AGENT_DIR: '',
+      ORCA_OMP_CODING_AGENT_DIR: '',
       ORCA_OMP_STATUS_EXTENSION: statusExtension,
+      ORCA_FAKE_OMP_DEFAULT_DIR: ompDir,
       ORCA_CAPTURE_FILE: captureFile,
       ORCA_AFTER_PI_FILE: afterPiFile,
       TERM: process.env.TERM || 'xterm-256color'
@@ -140,7 +141,8 @@ exit 0
     })
 
     const unwrapped = readFileSync(unwrappedCapture, 'utf8')
-    expect(unwrapped).toContain(`PI=${piDir}`)
+    expect(unwrapped).toContain('PI=\n')
+    expect(unwrapped).toContain(`EFFECTIVE=${ompDir}`)
     expect(unwrapped).toContain('ARG1=ask')
     expect(unwrapped).not.toContain('ARG1=--extension')
 
@@ -148,8 +150,7 @@ exit 0
     const wrappedAfterPi = join(tempDir, 'wrapped-after-pi')
     const wrappedOutput = await runInteractiveBashPty({
       cwd: tempDir,
-      rcfileContent: `[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-${getPosixOmpShellWrapper()}`,
+      rcfileContent: getPosixOmpShellWrapper(),
       env: makeEnv(wrappedCapture, wrappedAfterPi),
       input: `type omp
 omp ask
@@ -160,19 +161,19 @@ exit 0
 
     const wrapped = readFileSync(wrappedCapture, 'utf8')
     expect(wrappedOutput).toContain('omp is a function')
-    expect(wrapped).toContain(`PI=${ompDir}`)
+    expect(wrapped).toContain('PI=\n')
+    expect(wrapped).toContain(`EFFECTIVE=${ompDir}`)
     expect(wrapped).toContain('ARG1=--extension')
     expect(wrapped).toContain(`ARG2=${statusExtension}`)
     expect(wrapped).toContain('ARG3=ask')
-    expect(readFileSync(wrappedAfterPi, 'utf8')).toBe(piDir)
+    expect(readFileSync(wrappedAfterPi, 'utf8')).toBe('')
   })
 
-  itWithBash('runs OMP config subcommands against the source home, not the overlay', async () => {
+  itWithBash('runs OMP config subcommands without redirecting the home', async () => {
     const tempDir = makeTempDir()
     const binDir = join(tempDir, 'bin')
     const sourceDir = join(tempDir, 'source-omp-agent')
-    const overlayDir = join(tempDir, 'overlay-omp-agent')
-    const extensionDir = join(overlayDir, 'extensions')
+    const extensionDir = join(sourceDir, 'extensions')
     mkdirSync(binDir)
     mkdirSync(sourceDir, { recursive: true })
     mkdirSync(extensionDir, { recursive: true })
@@ -183,14 +184,14 @@ exit 0
     const captureFile = join(tempDir, 'config-capture')
     await runInteractiveBashPty({
       cwd: tempDir,
-      rcfileContent: `[[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-${getPosixOmpShellWrapper()}`,
+      rcfileContent: getPosixOmpShellWrapper(),
       env: {
         ...process.env,
         HOME: tempDir,
         PATH: `${binDir}:${process.env.PATH ?? ''}`,
-        PI_CODING_AGENT_DIR: overlayDir,
-        ORCA_OMP_CODING_AGENT_DIR: overlayDir,
+        PI_CODING_AGENT_DIR: '',
+        ORCA_PI_CODING_AGENT_DIR: '',
+        ORCA_OMP_CODING_AGENT_DIR: '',
         ORCA_OMP_SOURCE_AGENT_DIR: sourceDir,
         ORCA_OMP_STATUS_EXTENSION: statusExtension,
         ORCA_FAKE_OMP_DEFAULT_DIR: sourceDir,
@@ -203,11 +204,10 @@ exit 0
     })
 
     const capture = readFileSync(captureFile, 'utf8')
-    expect(capture).toContain(`PI=${sourceDir}`)
+    expect(capture).toContain('PI=\n')
     expect(capture).toContain(`EFFECTIVE=${sourceDir}`)
     expect(capture).toContain('ARG1=config')
     expect(readFileSync(join(sourceDir, 'config.yml'), 'utf8')).toBe('updated-by-omp-config\n')
-    expect(() => readFileSync(join(overlayDir, 'config.yml'), 'utf8')).toThrow()
   })
 
   itWithBash(
@@ -216,8 +216,7 @@ exit 0
       const tempDir = makeTempDir()
       const binDir = join(tempDir, 'bin')
       const defaultOmpDir = join(tempDir, '.omp', 'agent')
-      const overlayDir = join(tempDir, 'overlay-omp-agent')
-      const extensionDir = join(overlayDir, 'extensions')
+      const extensionDir = join(defaultOmpDir, 'extensions')
       mkdirSync(binDir)
       mkdirSync(defaultOmpDir, { recursive: true })
       mkdirSync(extensionDir, { recursive: true })
@@ -228,14 +227,14 @@ exit 0
       const captureFile = join(tempDir, 'default-config-capture')
       await runInteractiveBashPty({
         cwd: tempDir,
-        rcfileContent: `[[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
-${getPosixOmpShellWrapper()}`,
+        rcfileContent: getPosixOmpShellWrapper(),
         env: {
           ...process.env,
           HOME: tempDir,
           PATH: `${binDir}:${process.env.PATH ?? ''}`,
-          PI_CODING_AGENT_DIR: overlayDir,
-          ORCA_OMP_CODING_AGENT_DIR: overlayDir,
+          PI_CODING_AGENT_DIR: '',
+          ORCA_PI_CODING_AGENT_DIR: '',
+          ORCA_OMP_CODING_AGENT_DIR: '',
           ORCA_OMP_STATUS_EXTENSION: statusExtension,
           ORCA_FAKE_OMP_DEFAULT_DIR: defaultOmpDir,
           ORCA_CAPTURE_FILE: captureFile,
@@ -252,7 +251,6 @@ exit 0
       expect(readFileSync(join(defaultOmpDir, 'config.yml'), 'utf8')).toBe(
         'updated-by-omp-config\n'
       )
-      expect(() => readFileSync(join(overlayDir, 'config.yml'), 'utf8')).toThrow()
     }
   )
 })
