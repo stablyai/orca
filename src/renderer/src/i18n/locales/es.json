@@ -7988,7 +7988,7 @@
           "2b3c4d5e6f": "Aplicar a",
           "3c4d5e6f7a": "Anula el valor predeterminado del cliente",
           "4d5e6f7a8b": "Hereda el valor predeterminado del cliente",
-          "5e6f7a8b9c": "Reiniciar",
+          "5e6f7a8b9c": "Restablecer",
           "6f7a8b9cad": "Usa una ruta relativa (p. ej. .orca/worktrees) para una ubicación por proyecto, o una ruta absoluta para una carpeta compartida."
         },
         "ProviderHostScopeControl": {
