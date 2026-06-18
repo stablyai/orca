@@ -151,7 +151,7 @@ export function TabBarQuickCommandsButton({
                 'Add quick command'
               )}
             >
-              <Play className="size-3.5" fill="currentColor" strokeWidth={0} />
+              <Play className="size-3.5" />
               <span className="text-[12px] font-medium">
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
