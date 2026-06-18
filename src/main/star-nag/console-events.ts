@@ -15,7 +15,10 @@ export function logStarNagConsoleEvent(
 ): void {
   const ui = store.getUI()
   const threshold = ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
-  const agentsSinceBaseline = stats.getTotalAgentsSpawned() - (ui.starNagBaselineAgents ?? 0)
+  const agentsSinceBaseline = Math.max(
+    0,
+    stats.getTotalAgentsSpawned() - (ui.starNagBaselineAgents ?? 0)
+  )
 
   console.info({
     event,

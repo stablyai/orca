@@ -3,6 +3,8 @@ import { useShallow } from 'zustand/react/shallow'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { useAppStore } from '@/store'
 
+// Why: leave a short quiet window after agents finish so the prompt does not
+// interrupt follow-up typing or status churn from the completed run.
 const QUIET_WINDOW_MS = 1200
 const CHECK_DELAY_MS = 1200
 const ACTIVE_AGENT_STATES = new Set(['working', 'waiting', 'blocked'])

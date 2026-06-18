@@ -127,6 +127,12 @@ describe('checkOrcaStarred', () => {
     )
   })
 
+  it('returns true for an HTTP 200 starred response', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({ stdout: 'HTTP/2.0 200 OK\r\n', stderr: '' })
+
+    await expect(checkOrcaStarred()).resolves.toBe(true)
+  })
+
   it('returns false for GitHub 404 not starred responses', async () => {
     execFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Not Found'))
 

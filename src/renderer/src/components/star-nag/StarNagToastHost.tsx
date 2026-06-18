@@ -66,9 +66,17 @@ function StarNagToast({
       ok = false
     }
     if (!ok) {
-      setMode('web')
-      setDismissSuppressed(false)
-      setStatus('idle')
+      try {
+        await window.api.shell.openUrl(ORCA_REPO_URL)
+        await window.api.starNag.openWeb()
+        markResolved()
+        setMode('web')
+        setStatus('opened')
+      } catch {
+        setMode('web')
+        setDismissSuppressed(false)
+        setStatus('idle')
+      }
       return
     }
     markResolved()
@@ -89,20 +97,23 @@ function StarNagToast({
             : translate('auto.components.star.nag.StarNagToastHost.starOnGithub', 'Star on GitHub')
 
   const completedStar = status === 'starred'
+  const primaryActionClass =
+    mode === 'web'
+      ? 'min-w-0 flex-1 gap-1.5'
+      : completedStar
+        ? 'min-w-0 flex-1 gap-1.5 border-amber-400/40 bg-amber-400/15 text-amber-700 hover:bg-amber-400/15 dark:text-amber-200'
+        : 'min-w-0 flex-1 gap-1.5 border-amber-400/60 bg-amber-400/15 text-amber-800 hover:bg-amber-400/25 dark:text-amber-100'
 
   return (
     <div className="relative w-[340px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-border bg-popover p-3.5 text-popover-foreground shadow-xs">
-      <div className="absolute inset-x-0 top-0 h-0.5 bg-accent" aria-hidden="true">
-        <div className="h-full w-full bg-primary/45" />
-      </div>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1.5">
           <div className="flex items-center gap-2">
             <span
               className={
                 completedStar
-                  ? 'flex size-6 shrink-0 items-center justify-center rounded-full border border-status-success-border bg-status-success-background text-status-success'
-                  : 'flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-accent text-muted-foreground'
+                  ? 'flex size-6 shrink-0 items-center justify-center rounded-full border border-amber-400/40 bg-amber-400/10 text-amber-500'
+                  : 'flex size-6 shrink-0 items-center justify-center rounded-full border border-status-success-border bg-status-success-background text-status-success'
               }
               aria-hidden="true"
             >
@@ -149,7 +160,7 @@ function StarNagToast({
         <Button
           variant="default"
           size="sm"
-          className="min-w-0 flex-1 gap-1.5"
+          className={primaryActionClass}
           onClick={() => void act()}
           disabled={busy || status === 'starred' || status === 'opened'}
         >

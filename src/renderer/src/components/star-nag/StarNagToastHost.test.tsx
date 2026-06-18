@@ -163,6 +163,29 @@ describe('StarNagToastHost', () => {
     expect(toastContainer.textContent).toContain('GitHub opened in your browser.')
   })
 
+  it('opens GitHub immediately when direct star fails', async () => {
+    starNag.starOrca.mockResolvedValueOnce(false)
+    ;({ root, container } = renderHost())
+
+    act(() => showCallback?.({ mode: 'gh', surface: 'toast' }))
+    toastContainer = document.createElement('div')
+    document.body.appendChild(toastContainer)
+    renderToastFromCustomCall(toastContainer)
+
+    const button = Array.from(toastContainer.querySelectorAll('button')).find((candidate) =>
+      candidate.textContent?.includes('Star on GitHub')
+    )
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(starNag.starOrca).toHaveBeenCalledTimes(1)
+    expect(shell.openUrl).toHaveBeenCalledWith('https://github.com/stablyai/orca')
+    expect(starNag.openWeb).toHaveBeenCalledTimes(1)
+    expect(toastContainer.textContent).toContain('GitHub opened in your browser.')
+    expect(toastContainer.textContent).toContain('GitHub opened')
+  })
+
   it('routes Later and unresolved close through existing star nag paths', () => {
     ;({ root, container } = renderHost())
 
