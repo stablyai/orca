@@ -538,7 +538,20 @@ export function buildSearchBaseRefsArgv(
   // as `<remote>/<branch>`, so users naturally retype that format; this
   // branch is what makes re-typing a visible result actually find it.
   const segmented = tokens.map((token) => `*${token}*`).join('/')
-  return [...base, `refs/remotes/${segmented}`, `refs/heads/${segmented}`]
+  const substringQuery = tokens.join('/')
+  return [
+    ...base,
+    `refs/remotes/${segmented}`,
+    `refs/heads/${segmented}`,
+    // Why: branch names often contain slashes (`plan/docs`). Segment-wise
+    // globs only align when the query matches `<remote>/<branch>`; widened
+    // patterns also match those paths as substrings across remote prefixes
+    // (`origin/plan/docs`).
+    `refs/heads/**/*${substringQuery}*`,
+    `refs/heads/**/*${substringQuery}*/**`,
+    `refs/remotes/**/*${substringQuery}*`,
+    `refs/remotes/**/*${substringQuery}*/**`
+  ]
 }
 
 export function isForEachRefExcludeUnsupportedError(error: unknown): boolean {

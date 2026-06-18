@@ -64,6 +64,8 @@ describe('buildSearchBaseRefsArgv', () => {
     expect(argv).toContain('--count=40')
     expect(argv).toContain('refs/remotes/*upstream*/*main*')
     expect(argv).toContain('refs/heads/*upstream*/*main*')
+    expect(argv).toContain('refs/remotes/**/*upstream/main*')
+    expect(argv).toContain('refs/heads/**/*upstream/main*')
   })
 
   it('adds fallback headroom when remote HEAD cannot be excluded by git', () => {
@@ -350,6 +352,23 @@ describe('searchBaseRefs (widened glob)', () => {
     expect(await searchBaseRefs(tmpDir, 'upstream/')).toContain('upstream/main')
     expect(await searchBaseRefs(tmpDir, '/upstream')).toContain('upstream/main')
     expect(await searchBaseRefs(tmpDir, 'upstream//main')).toContain('upstream/main')
+  })
+
+  it('finds a remote branch when the query is the local branch name with slashes', async () => {
+    const sha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, 'origin/plan/unified-brainstorm-plan-docs', sha)
+
+    const results = await searchBaseRefs(tmpDir, 'plan/unified-brainstorm-plan-docs')
+
+    expect(results).toContain('origin/plan/unified-brainstorm-plan-docs')
+  })
+
+  it('finds a local slashed branch when the query repeats the full branch name', async () => {
+    git(tmpDir, ['branch', 'plan/unified-brainstorm-plan-docs'])
+
+    const results = await searchBaseRefs(tmpDir, 'plan/unified-brainstorm-plan-docs')
+
+    expect(results).toContain('plan/unified-brainstorm-plan-docs')
   })
 })
 
