@@ -792,6 +792,7 @@ export default function SessionScreen() {
     created?: string
     warning?: string
   }>()
+  const isFolderWorkspaceRoute = worktreeId.startsWith('folder:')
   const router = useRouter()
   const insets = useSafeAreaInsets()
   // Why: shared client per host owned by RpcClientProvider. See
@@ -4209,18 +4210,20 @@ export default function SessionScreen() {
             >
               <Folder size={18} color={colors.textSecondary} strokeWidth={2.1} />
             </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.filesButton,
-                pressed && styles.filesButtonPressed,
-                activePanel === 'sourceControl' && styles.filesButtonActive
-              ]}
-              onPress={() => handlePanelTap('sourceControl')}
-              hitSlop={8}
-              accessibilityLabel="Open source control"
-            >
-              <GitBranch size={18} color={colors.textSecondary} strokeWidth={2.1} />
-            </Pressable>
+            {!isFolderWorkspaceRoute && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.filesButton,
+                  pressed && styles.filesButtonPressed,
+                  activePanel === 'sourceControl' && styles.filesButtonActive
+                ]}
+                onPress={() => handlePanelTap('sourceControl')}
+                hitSlop={8}
+                accessibilityLabel="Open source control"
+              >
+                <GitBranch size={18} color={colors.textSecondary} strokeWidth={2.1} />
+              </Pressable>
+            )}
             {prRepoContextLoaded && prIsGithubRepo ? (
               <Pressable
                 style={({ pressed }) => [

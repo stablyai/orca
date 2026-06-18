@@ -7,6 +7,7 @@ import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 
 export type Worktree = {
+  workspaceKind?: 'git' | 'folder-workspace'
   worktreeId: string
   repoId: string
   repo: string

@@ -18,10 +18,12 @@ function displayBranch(branch: string): string {
 // Minimal row shape needed for rendering — a structural subset of the screen's
 // Worktree so this component stays decoupled from the screen's local type.
 export type WorktreeListRowItem = {
+  workspaceKind?: 'git' | 'folder-workspace'
   worktreeId: string
   repo: string
   branch: string
   displayName: string
+  path?: string
   liveTerminalCount: number
   preview: string
   unread: boolean
@@ -48,7 +50,7 @@ type Props<T extends WorktreeListRowItem> = {
   hideRepo?: boolean
   status: WorktreeRollupStatus
   onPress: (item: T) => void
-  onLongPress: (item: T) => void
+  onLongPress?: (item: T) => void
 }
 
 export function WorktreeListRow<T extends WorktreeListRowItem>({
@@ -62,6 +64,10 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
   onPress,
   onLongPress
 }: Props<T>) {
+  const isFolderWorkspace = item.workspaceKind === 'folder-workspace'
+  const folderMeta = item.comment?.trim() || item.path || 'Folder'
+  const metaText = isFolderWorkspace ? folderMeta : displayBranch(item.branch)
+
   return (
     <Pressable
       style={({ pressed }) => [
@@ -71,10 +77,14 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
       ]}
       disabled={isReadOnly}
       onPress={() => onPress(item)}
-      onLongPress={() => {
-        triggerMediumImpact()
-        onLongPress(item)
-      }}
+      onLongPress={
+        onLongPress
+          ? () => {
+              triggerMediumImpact()
+              onLongPress(item)
+            }
+          : undefined
+      }
       delayLongPress={400}
     >
       <View style={styles.indicatorCol}>
@@ -109,6 +119,11 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
               </Text>
             </View>
           )}
+          {isFolderWorkspace && (
+            <View style={styles.folderBadge}>
+              <Text style={styles.folderBadgeText}>Folder</Text>
+            </View>
+          )}
           <WorktreeMetaGlyphs
             comment={item.comment}
             linkedLinearIssue={item.linkedLinearIssue}
@@ -130,7 +145,7 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
             </>
           )}
           <Text style={styles.branchName} numberOfLines={1}>
-            {displayBranch(item.branch)}
+            {metaText}
           </Text>
         </View>
         {/* Only agents get a secondary activity line, matching desktop. A plain
@@ -209,6 +224,16 @@ const styles = StyleSheet.create({
     borderRadius: 4
   },
   prNumber: {
+    fontSize: 10,
+    color: colors.textSecondary
+  },
+  folderBadge: {
+    backgroundColor: colors.bgRaised,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4
+  },
+  folderBadgeText: {
     fontSize: 10,
     color: colors.textSecondary
   },

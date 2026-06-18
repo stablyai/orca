@@ -1242,7 +1242,7 @@ export function HostScreen({
               repoIcon={repoIconsByName.get(item.repo) ?? null}
               hideRepo={groupMode === 'repo'}
               onPress={openWorktreeSession}
-              onLongPress={setActionTarget}
+              onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
             />
           )}
         />
