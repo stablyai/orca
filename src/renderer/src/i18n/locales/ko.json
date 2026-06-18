@@ -4282,7 +4282,9 @@
           "6627e75c92": "HTTP/1.1 호환성 설명",
           "e9506d3377": "HTTP/1.1 호환성",
           "8b7a8df299": "지원 문제 해결을 위한 낮은 수준의 해결 방법입니다.",
-          "8d8d8ac599": "호환성"
+          "8d8d8ac599": "호환성",
+          "network": "네트워크",
+          "networkDescription": "프록시 및 기업 환경을 위한 앱 수준 네트워크 라우팅."
         },
         "AgentLocationSetting": {
           "92f4238f1a": "WSL 기본값",
@@ -4770,7 +4772,7 @@
           "d21136d9ef": "Orca가 파일 편집을 유지하는 방법을 구성합니다.",
           "45c6e85c4d": "편집자"
         },
-        "GeneralNetworkSettingsSection": {
+        "AdvancedNetworkSettingsSection": {
           "3e431564b5": "로컬호스트, 127.0.0.1, *.internal",
           "33ee3ca3af": "선택 사항. 쉼표, 세미콜론 또는 새 줄로 호스트를 구분합니다.",
           "f6d76cc8f4": "프록시 우회 규칙",
@@ -4781,7 +4783,8 @@
           "f00daf6324": "HTTP 프록시",
           "823e0f15b1": "Orca 네트워크 요청 및 로컬 terminal 하위 항목에 대한 프록시 URL입니다.",
           "d93c7cd531": "앱 수준 네트워크 라우팅을 구성합니다.",
-          "c46cdbbd4e": "회로망"
+          "c46cdbbd4e": "회로망",
+          "configureProxy": "프록시 구성"
         },
         "GeneralPane": {
           "d58fccfd84": "항해",

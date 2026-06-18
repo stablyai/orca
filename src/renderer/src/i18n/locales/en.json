@@ -4297,7 +4297,9 @@
           "6627e75c92": "Explain HTTP/1.1 compatibility",
           "e9506d3377": "HTTP/1.1 Compatibility",
           "8b7a8df299": "Low-level workarounds for support troubleshooting.",
-          "8d8d8ac599": "Compatibility"
+          "8d8d8ac599": "Compatibility",
+          "network": "Network",
+          "networkDescription": "App-level network routing for proxies and corporate environments."
         },
         "AgentLocationSetting": {
           "92f4238f1a": "WSL default",
@@ -4785,7 +4787,7 @@
           "d21136d9ef": "Configure how Orca persists file edits.",
           "45c6e85c4d": "Editor"
         },
-        "GeneralNetworkSettingsSection": {
+        "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "Optional. Separate hosts with commas, semicolons, or new lines.",
           "f6d76cc8f4": "Proxy Bypass Rules",
@@ -4796,7 +4798,8 @@
           "f00daf6324": "HTTP Proxy",
           "823e0f15b1": "Proxy URL for Orca network requests and local terminal children.",
           "d93c7cd531": "Configure app-level network routing.",
-          "c46cdbbd4e": "Network"
+          "c46cdbbd4e": "Network",
+          "configureProxy": "Configure proxy"
         },
         "GeneralPane": {
           "d58fccfd84": "Navigation",

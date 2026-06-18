@@ -5,6 +5,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
+import { AdvancedNetworkSettingsSection } from './AdvancedNetworkSettingsSection'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitch } from './SettingsFormControls'
 import { getAdvancedPaneSearchEntries, getAdvancedSearchEntry } from './advanced-search'
@@ -134,6 +135,17 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
             </div>
           ) : null}
         </SearchableSetting>
+      </section>
+
+      <section className="space-y-3">
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.AdvancedPane.network', 'Network')}
+          description={translate(
+            'auto.components.settings.AdvancedPane.networkDescription',
+            'App-level network routing for proxies and corporate environments.'
+          )}
+        />
+        <AdvancedNetworkSettingsSection settings={settings} updateSettings={updateSettings} />
       </section>
     </div>
   )

@@ -4,7 +4,6 @@ import { useAppStore } from '../../store'
 import { Separator } from '../ui/separator'
 import { CliSection } from './CliSection'
 import { GeneralEditorSettingsSection } from './GeneralEditorSettingsSection'
-import { GeneralNetworkSettingsSection } from './GeneralNetworkSettingsSection'
 import { GeneralSupportSection } from './GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
@@ -12,7 +11,6 @@ import {
   getGeneralCliSearchEntries,
   getGeneralEditorSearchEntries,
   getGeneralNavigationSearchEntries,
-  getGeneralNetworkSearchEntries,
   getGeneralPaneSearchEntries,
   getGeneralSupportSearchEntries,
   getGeneralUpdateSearchEntries,
@@ -31,15 +29,6 @@ export {
   updateAutoSaveDelayDraftState,
   type AutoSaveDelayDraftState
 } from './GeneralEditorSettingsSection'
-export {
-  createHttpProxyBypassRulesDraftState,
-  createHttpProxyUrlDraftState,
-  setHttpProxyUrlDraftErrorState,
-  updateHttpProxyBypassRulesDraftState,
-  updateHttpProxyUrlDraftState,
-  type HttpProxyBypassRulesDraftState,
-  type HttpProxyUrlDraftState
-} from './GeneralNetworkSettingsSection'
 export { shouldCommitOpenInApplicationsDraft } from './OpenInMenuSetting'
 
 type GeneralSearchEntry = ReturnType<typeof getGeneralNavigationSearchEntries>[number]
@@ -182,13 +171,6 @@ export function GeneralPane({
           wslCapabilitiesLoading={Boolean(wslCapabilitiesLoading)}
         />
       </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralNetworkSearchEntries()) ? (
-      <GeneralNetworkSettingsSection
-        key="network"
-        settings={settings}
-        updateSettings={updateSettings}
-      />
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralEditorSearchEntries()) ? (
       <GeneralEditorSettingsSection
