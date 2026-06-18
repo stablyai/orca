@@ -14,9 +14,9 @@ import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../..
 import {
   AGENT_ACTIVITY_DISPLAY_OPTIONS,
   CARD_LAYOUT_OPTIONS,
-  PROPERTY_OPTIONS,
   getWorktreeCardPropertyOptions
 } from './sidebar-workspace-option-items'
+import { PROPERTY_OPTIONS } from './worktree-card-display-property-options'
 import { translate } from '@/i18n/i18n'
 
 type WorktreeCardDisplayMenuSectionProps = {

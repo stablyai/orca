@@ -335,6 +335,67 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Reviewer handoff note')
   })
 
+  it('shows automation-created workspaces as a visible card property badge', async () => {
+    worktreeCardProperties = ['status', 'automation']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          automationProvenance: {
+            kind: 'created-by-automation',
+            automationId: 'automation-1',
+            automationNameSnapshot: 'Nightly triage automation',
+            automationRunId: 'run-1',
+            automationRunTitleSnapshot: 'Nightly triage run',
+            createdAt: 1,
+            executionTargetType: 'local',
+            executionTargetId: 'local',
+            projectId: 'repo-1',
+            repoId: 'repo-1',
+            hostId: 'local'
+          }
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('Created by automation')
+    expect(markup).toContain('>Automation</span>')
+  })
+
+  it('hides automation-created card surfaces when the Automation property is disabled', async () => {
+    worktreeCardProperties = ['status']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          automationProvenance: {
+            kind: 'created-by-automation',
+            automationId: 'automation-1',
+            automationNameSnapshot: 'Nightly triage automation',
+            automationRunId: 'run-1',
+            automationRunTitleSnapshot: 'Nightly triage run',
+            createdAt: 1,
+            executionTargetType: 'local',
+            executionTargetId: 'local',
+            projectId: 'repo-1',
+            repoId: 'repo-1',
+            hostId: 'local'
+          }
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('Created by automation')
+    expect(markup).not.toContain('>Automation</span>')
+    expect(markup).not.toContain('Nightly triage automation')
+  })
+
   it('hides live port metadata when the Ports card property is disabled', async () => {
     const worktree = makeWorktree()
     workspacePortScan = {

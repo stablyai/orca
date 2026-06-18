@@ -13,6 +13,7 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   ...FIXED_WORKTREE_CARD_PROPERTIES,
   ...TASK_WORKTREE_CARD_PROPERTIES,
   'pr',
+  'automation',
   'comment',
   'ports',
   // Why: agent activity is the primary reason users opt into the feature, so
@@ -21,7 +22,7 @@ export const DEFAULT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = [
   'inline-agents'
 ]
 
-export const COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status']
+export const COMPACT_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status', 'automation']
 
 const WORKTREE_CARD_PROPERTY_ORDER: WorktreeCardProperty[] = [
   'status',
@@ -31,6 +32,7 @@ const WORKTREE_CARD_PROPERTY_ORDER: WorktreeCardProperty[] = [
   'issue',
   'linear-issue',
   'pr',
+  'automation',
   'comment',
   'ports',
   'inline-agents'

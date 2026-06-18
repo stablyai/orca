@@ -489,6 +489,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showIssue = cardProps.includes('issue')
   const showLinearIssue = cardProps.includes('linear-issue')
   const showPR = cardProps.includes('pr')
+  const showAutomation = cardProps.includes('automation')
   const showComment = cardProps.includes('comment')
   const showPorts = cardProps.includes('ports')
   const shouldRefreshHostedReview = newCardStyle ? showStatus : showPR
@@ -916,6 +917,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const metaIssue = showIssue ? hoverIssue : null
   const metaLinearIssue = showLinearIssue ? hoverLinearIssue : null
   const metaReview = showPR ? hoverReview : null
+  const metaAutomationProvenance = showAutomation ? worktree.automationProvenance : null
   const metaComment = showComment ? hoverComment : null
   const handleOpenGitHubIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
@@ -1006,7 +1008,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     linearIssue: metaLinearIssue,
     review: newCardStyle ? null : metaReview,
     comment: metaComment,
-    automationProvenance: worktree.automationProvenance
+    automationProvenance: metaAutomationProvenance
   })
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id)
@@ -1063,7 +1065,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       linearIssue: hoverLinearIssue,
       review: hoverReview,
       comment: hoverComment,
-      automationProvenance: worktree.automationProvenance
+      automationProvenance: metaAutomationProvenance
     }) ||
       workspacePorts.length > 0 ||
       showBranchIdentityHover)
@@ -1080,7 +1082,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             linearIssue={metaLinearIssue}
             review={metaReview}
             comment={metaComment}
-            automationProvenance={worktree.automationProvenance}
+            automationProvenance={metaAutomationProvenance}
             automationHostId={worktree.hostId}
             branchName={showBranchIdentityHover ? branch : undefined}
             workspaceTitle={worktree.displayName}
@@ -1140,7 +1142,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             linearIssue={metaLinearIssue}
             review={newCardStyle ? null : metaReview}
             comment={metaComment}
-            automationProvenance={worktree.automationProvenance}
+            automationProvenance={metaAutomationProvenance}
             className="ml-0 pr-0"
           />
         )}
@@ -1153,7 +1155,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         linearIssue={metaLinearIssue}
         review={metaReview}
         comment={metaComment}
-        automationProvenance={worktree.automationProvenance}
+        automationProvenance={metaAutomationProvenance}
         automationHostId={worktree.hostId}
         detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
         hoverControl={detailsHoverControl}
@@ -1308,6 +1310,20 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 {repo
                   ? getRepoKindLabel(repo)
                   : translate('auto.components.sidebar.WorktreeCard.93aebe4529', 'Folder')}
+              </Badge>
+            )}
+
+            {metaAutomationProvenance && (
+              <Badge
+                variant="secondary"
+                className="h-[16px] gap-1 px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
+                aria-label={translate(
+                  'auto.components.sidebar.WorktreeCard.automationCreatedBadge',
+                  'Created by automation'
+                )}
+              >
+                <Workflow className="size-2.5" />
+                {translate('auto.components.sidebar.WorktreeCard.automationBadge', 'Automation')}
               </Badge>
             )}
 
@@ -1609,7 +1625,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         linearIssue={hoverLinearIssue}
         review={hoverReview}
         comment={hoverComment}
-        automationProvenance={worktree.automationProvenance}
+        automationProvenance={metaAutomationProvenance}
         automationHostId={worktree.hostId}
         branchName={showBranchIdentityHover ? branch : undefined}
         workspaceTitle={showBranchIdentityHover ? visibleCardTitle : undefined}

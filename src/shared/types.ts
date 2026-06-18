@@ -2936,6 +2936,7 @@ export type WorktreeCardProperty =
   | 'issue'
   | 'linear-issue'
   | 'pr'
+  | 'automation'
   | 'comment'
   | 'ports'
   // Why: inline list of agent activity rendered directly inside each
