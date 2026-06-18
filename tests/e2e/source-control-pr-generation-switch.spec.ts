@@ -1,4 +1,4 @@
-import type { TestInfo } from '@stablyai/playwright-test'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs'
 import path from 'path'
 import { test, expect } from './helpers/orca-app'
@@ -22,6 +22,114 @@ function readLog(pathname: string): string {
   } catch {
     return ''
   }
+}
+
+async function waitForPrGenerationStored(page: Page, worktreeId: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate((worktreeId) => {
+          const records = window.__store?.getState().pullRequestGenerationRecords ?? {}
+          const record = Object.values(records).find(
+            (candidate) => candidate.context.worktreeId === worktreeId
+          )
+          return {
+            status: record?.status ?? null,
+            title: record?.result?.title ?? null
+          }
+        }, worktreeId),
+      {
+        timeout: 10_000,
+        message: 'PR generation result was not stored before Source Control remount'
+      }
+    )
+    .toMatchObject({
+      status: 'succeeded',
+      title: 'Generated PR title after switch'
+    })
+}
+
+async function waitForPrGenerationHydrated(page: Page, worktreeId: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate((worktreeId) => {
+          const records = window.__store?.getState().pullRequestGenerationRecords ?? {}
+          const record = Object.values(records).find(
+            (candidate) => candidate.context.worktreeId === worktreeId
+          )
+          return {
+            status: record?.status ?? null,
+            title: record?.result?.title ?? null,
+            hydrated: record?.hydrated ?? null
+          }
+        }, worktreeId),
+      {
+        timeout: 10_000,
+        message: 'PR generation result was not hydrated into the Source Control form'
+      }
+    )
+    .toMatchObject({
+      status: 'succeeded',
+      title: 'Generated PR title after switch',
+      hydrated: true
+    })
+}
+
+async function waitForCommitGenerationStored(page: Page, worktreeId: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate((worktreeId) => {
+          const records = window.__store?.getState().commitMessageGenerationRecords ?? {}
+          const record = records[worktreeId]
+          return {
+            status: record?.status ?? null,
+            message: record?.message ?? null
+          }
+        }, worktreeId),
+      {
+        timeout: 10_000,
+        message: 'Commit message generation result was not stored before Source Control remount'
+      }
+    )
+    .toMatchObject({
+      status: 'succeeded',
+      message: [
+        'Generated commit message after switch',
+        '',
+        'Generated from staged e2e-commit-message-generation.txt after switching worktrees'
+      ].join('\n')
+    })
+}
+
+async function waitForCommitGenerationHydrated(page: Page, worktreeId: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate((worktreeId) => {
+          const records = window.__store?.getState().commitMessageGenerationRecords ?? {}
+          const record = records[worktreeId]
+          return {
+            status: record?.status ?? null,
+            message: record?.message ?? null,
+            hydrated: record?.hydrated ?? null
+          }
+        }, worktreeId),
+      {
+        timeout: 10_000,
+        message: 'Commit message generation result was not hydrated into the Source Control form'
+      }
+    )
+    .toMatchObject({
+      status: 'succeeded',
+      message: [
+        'Generated commit message after switch',
+        '',
+        'Generated from staged e2e-commit-message-generation.txt after switching worktrees'
+      ].join('\n'),
+      hydrated: true
+    })
 }
 
 async function writeEvidence(
@@ -108,7 +216,9 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await expect
       .poll(() => readFileSync(callLogPath, 'utf8'), { timeout: 10_000 })
       .toContain('finish')
+    await waitForPrGenerationStored(orcaPage, prWorktreeId)
     await openSourceControl(orcaPage, prWorktreeId)
+    await waitForPrGenerationHydrated(orcaPage, prWorktreeId)
     await expect(orcaPage.getByRole('textbox', { name: 'Pull request title' })).toHaveValue(
       'Generated PR title after switch',
       { timeout: 10_000 }
@@ -373,8 +483,10 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await expect
       .poll(() => readFileSync(callLogPath, 'utf8'), { timeout: 10_000 })
       .toContain('finish')
+    await waitForPrGenerationStored(orcaPage, prWorktreeId)
 
     await openSourceControl(orcaPage, prWorktreeId)
+    await waitForPrGenerationHydrated(orcaPage, prWorktreeId)
     await expect(orcaPage.getByRole('textbox', { name: 'Pull request title' })).toHaveValue(
       'Generated PR title after switch',
       { timeout: 10_000 }
@@ -466,7 +578,9 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await expect
       .poll(() => readFileSync(callLogPath, 'utf8'), { timeout: 10_000 })
       .toContain('finish')
+    await waitForCommitGenerationStored(orcaPage, commitWorktreeId)
     await openSourceControl(orcaPage, commitWorktreeId)
+    await waitForCommitGenerationHydrated(orcaPage, commitWorktreeId)
     await expect(orcaPage.getByRole('textbox', { name: 'Commit message' })).toHaveValue(
       'Generated commit message after switch\n\nGenerated from staged e2e-commit-message-generation.txt after switching worktrees',
       { timeout: 10_000 }
@@ -536,8 +650,10 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await expect
       .poll(() => readFileSync(callLogPath, 'utf8'), { timeout: 10_000 })
       .toContain('finish')
+    await waitForCommitGenerationStored(orcaPage, commitWorktreeId)
 
     await openSourceControl(orcaPage, commitWorktreeId)
+    await waitForCommitGenerationHydrated(orcaPage, commitWorktreeId)
     await expect(orcaPage.getByRole('textbox', { name: 'Commit message' })).toHaveValue(
       [
         'Generated commit message after switch',
