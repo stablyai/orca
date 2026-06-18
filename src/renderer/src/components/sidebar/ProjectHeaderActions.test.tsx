@@ -33,7 +33,7 @@ describe('ProjectHeaderActions', () => {
     expect(actions?.className).toContain('can-hover:absolute')
     expect(actions?.className).toContain('can-hover:pointer-events-none')
     expect(actions?.className).toContain('group-hover:pointer-events-auto')
-    expect(actions?.className).toContain('group-focus-within:pointer-events-auto')
+    expect(actions?.className).toContain('has-[:focus-visible]:pointer-events-auto')
     expect(actions?.className).toContain('has-[button[data-state=open]]:pointer-events-auto')
   })
 })

@@ -9,7 +9,7 @@ export const PROJECT_HEADER_ACTIONS_CLASS_NAME = cn(
   'can-hover:rounded-md can-hover:bg-worktree-sidebar can-hover:pl-1',
   'can-hover:pointer-events-none can-hover:opacity-0 can-hover:transition-opacity',
   'group-hover:pointer-events-auto group-hover:opacity-100',
-  'group-focus-within:pointer-events-auto group-focus-within:opacity-100',
+  'has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100',
   'has-[button[data-state=open]]:pointer-events-auto has-[button[data-state=open]]:opacity-100'
 )
 
