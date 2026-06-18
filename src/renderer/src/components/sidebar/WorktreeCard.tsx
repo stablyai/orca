@@ -1209,6 +1209,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
             onToggleUnread={handleToggleUnreadQuick}
             prDisplay={hoverReview}
             newCardStyle={newCardStyle}
+            hasBranchIdentity={!isFolder && branch.length > 0}
           />
         </div>
       ) : null}

@@ -3636,7 +3636,8 @@
           "8d62c68b35": "메모",
           "2d74665a56": "포트",
           "65a9820bd1": "Agent 상태",
-          "219ebf1961": "브랜치 이름"
+          "219ebf1961": "브랜치 이름",
+          "automation": "Automation"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",

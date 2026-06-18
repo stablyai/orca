@@ -3636,7 +3636,8 @@
           "8d62c68b35": "ノート",
           "2d74665a56": "ポート",
           "65a9820bd1": "Agent ステータス",
-          "219ebf1961": "ブランチ名"
+          "219ebf1961": "ブランチ名",
+          "automation": "Automation"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
