@@ -8540,20 +8540,7 @@
             "b715ef615b": "{{value0}} commits ahead of {{value1}}",
             "c1a8f3e204": "1 commit behind {{value0}}",
             "d2b9g4f315": "{{value0}} commits behind {{value1}}",
-            "e9c2a5d416": "Even with {{value0}}",
-            "branchContextEvenLabel": "even",
-            "pullPolicyNoticeTitle": "Pull needs a policy",
-            "pullPolicyNoticeBadge": "Diverged",
-            "pullPolicyNoticeDescription": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
-            "pullPolicyCopyCommandLabel": "Copy {{value0}} pull policy command",
-            "pullPolicyCopiedTooltip": "Copied",
-            "pullPolicyCopyCommandTooltip": "Copy command",
-            "pullPolicyMergeLabel": "Merge",
-            "pullPolicyRebaseLabel": "Rebase",
-            "pullPolicyFastForwardLabel": "Fast-forward only",
-            "pullPolicyMergeDescription": "Create a merge commit when local and remote both changed.",
-            "pullPolicyRebaseDescription": "Replay local commits on top of the remote branch.",
-            "pullPolicyFastForwardDescription": "Only pull when no merge or rebase is needed."
+            "e9c2a5d416": "Even with {{value0}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

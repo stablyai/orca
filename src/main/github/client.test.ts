@@ -1688,7 +1688,10 @@ describe('getPRForBranch', () => {
         }
       })
     })
-    getRemoteUrlForRepoMock.mockResolvedValueOnce('git@github.com:stablyai/orca.git')
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'git@github.com:stablyai/orca.git\n',
+      stderr: ''
+    })
 
     const target = await getPullRequestPushTarget('/repo-root', 1738)
 
@@ -1722,7 +1725,10 @@ describe('getPRForBranch', () => {
         }
       })
     })
-    getRemoteUrlForRepoMock.mockResolvedValueOnce('git@github.com:stablyai/orca.git')
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'git@github.com:stablyai/orca.git\n',
+      stderr: ''
+    })
 
     await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
       pushTarget: {
