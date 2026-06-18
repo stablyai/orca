@@ -20,7 +20,7 @@ import {
 } from './general-search'
 import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { RecentTabOrderControl } from './RecentTabOrderControl'
-import { matchesSettingsSearch } from './settings-search'
+import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
@@ -55,6 +55,22 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
 }
 
 export { getGeneralPaneSearchEntries }
+
+/**
+ * The Project Runtime section is Windows-only. Gate on the platform directly:
+ * an empty search query makes matchesSettingsSearch return true even for an
+ * empty entries array, which would otherwise render an orphaned header (the
+ * inner control self-hides) on non-Windows hosts.
+ */
+export function shouldShowProjectRuntimeSection(
+  wslSupportedPlatform: boolean | undefined,
+  searchQuery: string,
+  projectRuntimeSearchEntries: SettingsSearchEntry[]
+): boolean {
+  return (
+    Boolean(wslSupportedPlatform) && matchesSettingsSearch(searchQuery, projectRuntimeSearchEntries)
+  )
+}
 
 export function getTabOrderControlSearchKeywords(
   navigationEntries: GeneralSearchEntry[] = getGeneralNavigationSearchEntries()
@@ -141,7 +157,11 @@ export function GeneralPane({
         updateSettings={updateSettings}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, projectRuntimeSearchEntries) ? (
+    shouldShowProjectRuntimeSection(
+      wslSupportedPlatform,
+      searchQuery,
+      projectRuntimeSearchEntries
+    ) ? (
       <section key="project-runtime" className="space-y-4">
         <SettingsSubsectionHeader
           title={translate(
