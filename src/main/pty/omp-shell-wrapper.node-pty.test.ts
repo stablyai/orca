@@ -303,4 +303,57 @@ exit 0
       expect(readFileSync(afterPiFile, 'utf8')).toBe(piDir)
     }
   )
+
+  itWithBash(
+    'clears inherited legacy Pi overlays after managed source metadata replaced overlay env',
+    async () => {
+      const tempDir = makeTempDir()
+      const binDir = join(tempDir, 'bin')
+      const legacyPiOverlayDir = join(tempDir, 'pi-agent-overlays', 'legacy')
+      const piSourceDir = join(tempDir, '.pi', 'agent')
+      const defaultOmpDir = join(tempDir, '.omp', 'agent')
+      mkdirSync(binDir)
+      mkdirSync(legacyPiOverlayDir, { recursive: true })
+      mkdirSync(piSourceDir, { recursive: true })
+      mkdirSync(defaultOmpDir, { recursive: true })
+      writeFakeOmp(binDir)
+
+      const captureFile = join(tempDir, 'managed-source-pi-capture')
+      const afterPiFile = join(tempDir, 'managed-source-pi-after')
+      const env: Record<string, string> = {
+        ...process.env,
+        HOME: tempDir,
+        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        PI_CODING_AGENT_DIR: legacyPiOverlayDir,
+        ORCA_PI_SOURCE_AGENT_DIR: piSourceDir,
+        ORCA_FAKE_OMP_DEFAULT_DIR: defaultOmpDir,
+        ORCA_CAPTURE_FILE: captureFile,
+        ORCA_AFTER_PI_FILE: afterPiFile,
+        TERM: process.env.TERM || 'xterm-256color'
+      } as Record<string, string>
+      delete env.ORCA_PI_CODING_AGENT_DIR
+      delete env.ORCA_OMP_CODING_AGENT_DIR
+      delete env.ORCA_OMP_SOURCE_AGENT_DIR
+      delete env.ORCA_OMP_STATUS_EXTENSION
+
+      const output = await runInteractiveBashPty({
+        cwd: tempDir,
+        rcfileContent: getPosixOmpShellWrapper(),
+        env,
+        input: `type omp
+omp ask
+printf '%s' "$PI_CODING_AGENT_DIR" > "$ORCA_AFTER_PI_FILE"
+exit 0
+`
+      })
+
+      const capture = readFileSync(captureFile, 'utf8')
+      expect(output).toContain('omp is a function')
+      expect(capture).toContain('PI=\n')
+      expect(capture).toContain(`EFFECTIVE=${defaultOmpDir}`)
+      expect(capture).toContain('ARG1=ask')
+      expect(capture).not.toContain('ARG1=--extension')
+      expect(readFileSync(afterPiFile, 'utf8')).toBe(legacyPiOverlayDir)
+    }
+  )
 })

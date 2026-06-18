@@ -42,6 +42,18 @@ __orca_omp_should_skip_extension() {
   esac
   __orca_omp_is_subcommand "\${1:-}"
 }
+__orca_omp_has_pi_only_home() {
+  if [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" && "\${PI_CODING_AGENT_DIR:-}" == "\${ORCA_PI_CODING_AGENT_DIR}" ]]; then
+    return 0
+  fi
+  if [[ -n "\${ORCA_PI_SOURCE_AGENT_DIR:-}" ]]; then
+    return 0
+  fi
+  case "\${PI_CODING_AGENT_DIR:-}" in
+    */pi-agent-overlays/*) return 0 ;;
+  esac
+  return 1
+}
 __orca_omp() {
   local __orca_prev_pi="\${PI_CODING_AGENT_DIR-}"
   local __orca_had_pi=0
@@ -53,10 +65,10 @@ __orca_omp() {
       export PI_CODING_AGENT_DIR="\${ORCA_OMP_CODING_AGENT_DIR}"
     elif [[ -n "\${ORCA_OMP_SOURCE_AGENT_DIR:-}" ]]; then
       export PI_CODING_AGENT_DIR="\${ORCA_OMP_SOURCE_AGENT_DIR}"
-    elif [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" && "\${PI_CODING_AGENT_DIR:-}" == "\${ORCA_PI_CODING_AGENT_DIR}" ]]; then
-      # Why: Pi-only Orca terminals restore PI_CODING_AGENT_DIR to the Pi
-      # overlay. OMP also consumes that env var, so a typed OMP launch would
-      # otherwise boot with Pi's empty profile instead of ~/.omp/agent.
+    elif __orca_omp_has_pi_only_home; then
+      # Why: managed Pi shells expose source metadata after legacy overlay env
+      # is stripped; older shells may leave only the overlay path. Neither is
+      # a valid OMP home.
       unset PI_CODING_AGENT_DIR
     fi
   else
@@ -96,7 +108,7 @@ __orca_omp() {
   fi
   return $__orca_status
 }
-if [[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" || -n "\${ORCA_OMP_SOURCE_AGENT_DIR:-}" || -n "\${ORCA_OMP_STATUS_EXTENSION:-}" || -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]]; then
+if [[ -n "\${ORCA_OMP_CODING_AGENT_DIR:-}" || -n "\${ORCA_OMP_SOURCE_AGENT_DIR:-}" || -n "\${ORCA_OMP_STATUS_EXTENSION:-}" || -n "\${ORCA_PI_CODING_AGENT_DIR:-}" || -n "\${ORCA_PI_SOURCE_AGENT_DIR:-}" ]] || __orca_omp_has_pi_only_home; then
   omp() { __orca_omp "$@"; }
 fi
 `
@@ -117,8 +129,18 @@ function Global:__OrcaOmpShouldSkipExtension {
     if (@("help", "--help", "-h", "--version", "-v") -contains $Name) { return $true }
     return __OrcaOmpIsSubcommand -Name $Name
 }
+function Global:__OrcaOmpHasPiOnlyHome {
+    if ($env:ORCA_PI_CODING_AGENT_DIR -and
+        $env:PI_CODING_AGENT_DIR -eq $env:ORCA_PI_CODING_AGENT_DIR) {
+        return $true
+    }
+    if ($env:ORCA_PI_SOURCE_AGENT_DIR) { return $true }
+    $orcaPiHome = [string]$env:PI_CODING_AGENT_DIR
+    return $orcaPiHome.Replace("\\", "/") -like "*/pi-agent-overlays/*"
+}
 if ($env:ORCA_OMP_CODING_AGENT_DIR -or $env:ORCA_OMP_SOURCE_AGENT_DIR -or
-    $env:ORCA_OMP_STATUS_EXTENSION -or $env:ORCA_PI_CODING_AGENT_DIR) {
+    $env:ORCA_OMP_STATUS_EXTENSION -or $env:ORCA_PI_CODING_AGENT_DIR -or
+    $env:ORCA_PI_SOURCE_AGENT_DIR -or (__OrcaOmpHasPiOnlyHome)) {
     function Global:omp {
         $orcaPrevPi = $env:PI_CODING_AGENT_DIR
         $orcaHadPi = Test-Path Env:PI_CODING_AGENT_DIR
@@ -128,10 +150,10 @@ if ($env:ORCA_OMP_CODING_AGENT_DIR -or $env:ORCA_OMP_SOURCE_AGENT_DIR -or
                 $env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_CODING_AGENT_DIR
             } elseif ($env:ORCA_OMP_SOURCE_AGENT_DIR) {
                 $env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_SOURCE_AGENT_DIR
-            } elseif ($env:ORCA_PI_CODING_AGENT_DIR -and
-                $env:PI_CODING_AGENT_DIR -eq $env:ORCA_PI_CODING_AGENT_DIR) {
-                # Why: a Pi-only shell's public env var points at Pi's overlay;
-                # OMP should fall back to its own source home instead.
+            } elseif (__OrcaOmpHasPiOnlyHome) {
+                # Why: managed Pi shells expose source metadata after legacy
+                # overlay env is stripped; older shells may leave only the
+                # overlay path. Neither is a valid OMP home.
                 Remove-Item Env:PI_CODING_AGENT_DIR -ErrorAction SilentlyContinue
             }
         } else {

@@ -10,9 +10,11 @@ describe('PowerShell OSC 133 bootstrap', () => {
 
     expect(script).toContain('[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()')
     expect(script).toContain('ORCA_OPENCODE_CONFIG_DIR')
-    expect(script).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(script).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(script).toContain('ORCA_PI_CODING_AGENT_DIR')
+    expect(script).toContain('ORCA_PI_SOURCE_AGENT_DIR')
+    expect(script).toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(script).toContain('ORCA_OMP_STATUS_EXTENSION')
+    expect(script).toContain('Remove-Item Env:PI_CODING_AGENT_DIR')
     expect(script).toContain('function Global:omp')
     expect(script).toContain('--extension $env:ORCA_OMP_STATUS_EXTENSION')
     expect(script).toContain('ORCA_CODEX_HOME')

@@ -96,6 +96,23 @@ describe('getRelayShellLaunchConfig', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'wraps zsh when only Pi source metadata is present',
+    () => {
+      const config = getRelayShellLaunchConfig('/bin/zsh', {
+        HOME: homeDir,
+        ORCA_PI_SOURCE_AGENT_DIR: '/remote/.pi/agent'
+      })
+      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zlogin = readFileSync(join(zshRoot, '.zlogin'), 'utf8')
+
+      expect(config.args).toEqual(['-l'])
+      expect(config.env.ZDOTDIR).toBe(zshRoot)
+      expect(zlogin).toContain('ORCA_PI_SOURCE_AGENT_DIR')
+      expect(zlogin).toContain('omp() { __orca_omp "$@"; }')
+    }
+  )
+
   it('does not pass POSIX login flags to Windows shells', () => {
     expect(
       getRelayShellLaunchConfig('C:\\Windows\\System32\\cmd.exe', { HOME: homeDir }, 'win32')
