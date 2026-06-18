@@ -4102,10 +4102,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           showLocalPathOpenBlockedToast()
           return
         }
-        // Why: terminal file links already authorize clicked external paths
-        // before opening them in Orca. Markdown file:// links need the same
-        // user-gesture authorization so /tmp screenshots can use ImageViewer.
-        await window.api.fs.authorizeExternalPath({ targetPath: target.absolutePath })
+        // Why: file:// links outside authorized roots are a client-local escape
+        // hatch. The main process now owns any external path grants, so raw
+        // markdown links fail closed unless a trusted picker/import flow granted access.
       } else {
         let stats: { isDirectory: boolean }
         try {

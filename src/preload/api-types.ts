@@ -2018,7 +2018,6 @@ export type PreloadApi = {
       connectionId?: string
       recursive?: boolean
     }) => Promise<void>
-    authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
     stat: (args: {
       filePath: string
       connectionId?: string

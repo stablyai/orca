@@ -87,8 +87,7 @@ import {
   resolveAuthorizedPath,
   resolveRegisteredWorktreePath,
   validateGitRelativeFilePath,
-  isENOENT,
-  authorizeExternalPath
+  isENOENT
 } from './filesystem-auth'
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
@@ -629,10 +628,6 @@ export function registerFilesystemHandlers(
   )
 
   registerFilesystemMutationHandlers(store)
-
-  ipcMain.handle('fs:authorizeExternalPath', (_event, args: { targetPath: string }): void => {
-    authorizeExternalPath(args.targetPath)
-  })
 
   ipcMain.handle(
     'fs:stat',

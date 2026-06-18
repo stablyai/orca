@@ -2406,8 +2406,6 @@ const api = {
       connectionId?: string
       recursive?: boolean
     }): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
-    authorizeExternalPath: (args: { targetPath: string }): Promise<void> =>
-      ipcRenderer.invoke('fs:authorizeExternalPath', args),
     stat: (args: {
       filePath: string
       connectionId?: string

@@ -109,9 +109,9 @@ export function useEditorPanelContentState({
             // without an explicit upload/import flow.
             throw new Error('External local files are not available for remote workspaces.')
           }
-          // Why: restored external-file tabs need their main-process path grant
-          // refreshed because that authorization is only held in memory.
-          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
+          // Why: external-file grants are main-process capabilities. After
+          // restart they cannot be refreshed by restored renderer state.
+          throw new Error('External local files must be reopened from a trusted picker.')
         }
         const readScope = getRuntimeFileReadScope(readSettings, connectionId)
         const key = inFlightReadKey(readScope, filePath)

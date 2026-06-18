@@ -79,7 +79,6 @@ export function useSidebarProjectDrop(): {
 
       setIsHandlingDrop(true)
       try {
-        await window.api.fs.authorizeExternalPath({ targetPath: pathResolution.path })
         const stat = await window.api.fs.stat({ filePath: pathResolution.path })
         if (!mountedRef.current) {
           return

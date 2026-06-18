@@ -7,6 +7,7 @@ import type { ShellOpenLocalPathResult } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import { resolveCliCommand } from '../codex-cli/command'
 import { getSpawnArgsForWindows } from '../win32-utils'
+import { authorizeExternalPath } from './filesystem-auth'
 
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
 
@@ -142,8 +143,8 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
 }
 
 export function registerShellHandlers(): void {
-  ipcMain.handle('shell:openPath', (_event, path: string) => {
-    shell.showItemInFolder(path)
+  ipcMain.handle('shell:openPath', (_event, path: string): Promise<ShellOpenLocalPathResult> => {
+    return openInFileManager(path)
   })
 
   ipcMain.handle(
@@ -222,7 +223,9 @@ export function registerShellHandlers(): void {
       if (result.canceled || result.filePaths.length === 0) {
         return null
       }
-      return result.filePaths[0]
+      const dirPath = result.filePaths[0]
+      authorizeExternalPath(dirPath)
+      return dirPath
     }
   )
 
@@ -235,7 +238,9 @@ export function registerShellHandlers(): void {
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
-    return result.filePaths[0]
+    const filePath = result.filePaths[0]
+    authorizeExternalPath(filePath)
+    return filePath
   })
 
   // Why: window.prompt() and <input type="file"> are unreliable in Electron,
@@ -250,7 +255,9 @@ export function registerShellHandlers(): void {
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
-    return result.filePaths[0]
+    const filePath = result.filePaths[0]
+    authorizeExternalPath(filePath)
+    return filePath
   })
 
   ipcMain.handle(
@@ -265,6 +272,7 @@ export function registerShellHandlers(): void {
       }
 
       const filePath = result.filePaths[0]
+      authorizeExternalPath(filePath)
       const extension = extname(filePath).toLowerCase()
       const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
       if (!mimeType) {
@@ -292,7 +300,9 @@ export function registerShellHandlers(): void {
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
-    return result.filePaths[0]
+    const filePath = result.filePaths[0]
+    authorizeExternalPath(filePath)
+    return filePath
   })
 
   // Why: copying a picked image next to the markdown file lets us insert a

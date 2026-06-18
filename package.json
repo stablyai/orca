@@ -102,7 +102,7 @@
     "sherpa-onnx": "1.12.37",
     "ssh2": "^1.17.0",
     "tweetnacl": "^1.0.3",
-    "ws": "^8.20.0",
+    "ws": "^8.20.1",
     "yaml": "^2.8.4",
     "zod": "~4.4.3"
   },
@@ -220,6 +220,12 @@
   },
   "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a",
   "pnpm": {
+    "overrides": {
+      "dompurify": "^3.4.2",
+      "esbuild": "0.28.1",
+      "hono": "4.12.25",
+      "tmp": "0.2.7"
+    },
     "supportedArchitectures": {
       "os": [
         "current",

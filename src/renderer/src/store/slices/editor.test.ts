@@ -3580,14 +3580,14 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
-  it('opens explicit file URLs outside the worktree in Orca after authorizing them', async () => {
+  it('opens explicit file URLs outside the worktree without renderer-side authorization', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('file:///tmp/image.png', {
       sourceFilePath: '/repo/docs/note.md',
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/image.png' })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
         filePath: '/tmp/image.png',

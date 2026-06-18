@@ -1278,7 +1278,6 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         recursive
       })
     },
-    authorizeExternalPath: () => Promise.resolve(),
     stat: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.stat', {

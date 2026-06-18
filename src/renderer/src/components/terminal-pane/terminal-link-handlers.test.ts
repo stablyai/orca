@@ -400,7 +400,7 @@ describe('handleOscLink', () => {
     // before asserting on positive behavior.
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' }),
       { forceContentReload: true }
@@ -423,9 +423,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: 'C:/repo/src/index.ts'
-    })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: 'C:/repo/src/index.ts' }),
       { forceContentReload: true }
@@ -452,9 +450,7 @@ describe('handleOscLink', () => {
     )
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '//server/share/repo/test.txt'
-    })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '//server/share/repo/test.txt' }),
       { forceContentReload: true }
@@ -485,7 +481,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' }),
@@ -510,7 +506,7 @@ describe('handleOscLink', () => {
     )
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFilePathMock).toHaveBeenCalledWith('/tmp/test.txt')
     expect(openFileMock).not.toHaveBeenCalled()
     expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
@@ -528,7 +524,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/tmp/test.txt' }),
       { forceContentReload: true }
@@ -556,9 +552,7 @@ describe('handleOscLink', () => {
     await flushAsyncWork()
     await flushDoubleRaf()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '//server/Share/Repo/src/app.ts'
-    })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '//server/Share/Repo/src/app.ts',
@@ -589,9 +583,7 @@ describe('handleOscLink', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '/tmp/project/docs/README.md'
-    })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/tmp/project/docs/README.md',
@@ -617,9 +609,7 @@ describe('handleOscLink', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '/home/alice/file.ts'
-    })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/home/alice/file.ts'
@@ -801,9 +791,7 @@ describe('handleOscLink', () => {
     })
     await flushAsyncWork()
 
-    expect(authorizeExternalPathMock).toHaveBeenCalledWith({
-      targetPath: '/tmp/other-worktree'
-    })
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(statMock).toHaveBeenCalled()
     expect(openFilePathMock).toHaveBeenCalledWith('/tmp/other-worktree')
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()

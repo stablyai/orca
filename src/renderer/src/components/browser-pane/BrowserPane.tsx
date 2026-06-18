@@ -125,11 +125,7 @@ import {
   setBrowserPageZoomLevel,
   type BrowserPageZoomDirection
 } from './browser-page-zoom'
-import {
-  isRemoteRuntimeFileOperation,
-  statRuntimePath,
-  type RuntimeFileOperationArgs
-} from '@/runtime/runtime-file-client'
+import { statRuntimePath, type RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   callRuntimeRpc,
   RuntimeRpcCallError,
@@ -4338,9 +4334,6 @@ function BrowserPagePane({
               worktreeId,
               worktreePath: activeWorktree?.path,
               connectionId: undefined
-            }
-            if (!isRemoteRuntimeFileOperation(fileContext, notebookPath)) {
-              await window.api.fs.authorizeExternalPath({ targetPath: notebookPath })
             }
             const stat = await statRuntimePath(fileContext, notebookPath)
             if (stat.isDirectory) {

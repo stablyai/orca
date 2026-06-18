@@ -1962,7 +1962,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const folderPaths: string[] = []
       for (const filePath of paths) {
         try {
-          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
           const stat = await window.api.fs.stat({ filePath })
           if (stat.isDirectory) {
             folderPaths.push(filePath)
