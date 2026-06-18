@@ -381,6 +381,26 @@ describe('TabBar PowerShell launch wiring', () => {
   })
 
   it('hides the WSL terminal row for local host-runtime projects', async () => {
+    appStoreSnapshot.activeRepoId = 'repo-1'
+    appStoreSnapshot.activeWorktreeId = 'wt-1'
+    appStoreSnapshot.projects = [
+      {
+        id: 'project-1',
+        localWindowsRuntimePreference: { kind: 'windows-host' },
+        sourceRepoIds: ['repo-1']
+      }
+    ]
+    appStoreSnapshot.repos = [{ id: 'repo-1' }]
+    appStoreSnapshot.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'wt-1',
+          repoId: 'repo-1',
+          path: 'C:\\repo',
+          projectId: 'project-1'
+        }
+      ]
+    }
     vi.stubGlobal('window', {
       api: {
         wsl: {

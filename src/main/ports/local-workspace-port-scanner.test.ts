@@ -201,7 +201,10 @@ describe('scanWorkspacePorts attribution work', () => {
     const posixWorktreePathResolveCalls = posixResolveSpy.mock.calls.filter(
       ([input]) => input === '/repo' || input === '/repo/worktrees/feature'
     )
-    expect(worktreePathResolveCalls).toHaveLength(0)
+    // Why: POSIX hosts expose path.resolve and path.posix.resolve as the same function.
+    if (path.resolve !== path.posix.resolve) {
+      expect(worktreePathResolveCalls).toHaveLength(0)
+    }
     expect(posixWorktreePathResolveCalls).toHaveLength(worktrees.length)
   })
 })
