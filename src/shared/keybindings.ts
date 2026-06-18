@@ -37,6 +37,7 @@ export type KeybindingActionId =
   | 'workspace.create'
   | 'workspace.rename'
   | 'workspace.delete'
+  | 'workspace.openBoard'
   | 'voice.dictation'
   | 'view.tasks'
   | 'sidebar.left.toggle'
@@ -137,6 +138,9 @@ export type KeybindingDefinition = {
   conflictGroup?: string
 }
 
+export type ModifierToken = 'Mod' | 'Cmd' | 'Ctrl' | 'Alt' | 'Shift'
+export type PhysicalModifierToken = Exclude<ModifierToken, 'Mod'>
+
 export type KeybindingInput = {
   key?: string
   code?: string
@@ -148,6 +152,8 @@ export type KeybindingInput = {
   metaKey?: boolean
   ctrlKey?: boolean
   shiftKey?: boolean
+  // Set only by the double-tap detector; always a physical token (never 'Mod').
+  doubleTapModifier?: PhysicalModifierToken
 }
 
 type ParsedKeybinding = {
@@ -157,6 +163,7 @@ type ParsedKeybinding = {
   alt: boolean
   shift: boolean
   key: string
+  doubleTapModifier?: ModifierToken
 }
 
 type NormalizeKeybindingOptions = {
@@ -270,6 +277,17 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     ],
     // Why: ship the command now without claiming a default chord; user
     // overrides still win automatically when a future default is assigned.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'workspace.openBoard',
+    title: 'Open Workspace Board',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'workspace', 'board', 'kanban', 'worktree'],
+    // Why: make the command configurable without taking a global chord from
+    // terminal/browser/editor users by default.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },
@@ -970,6 +988,84 @@ function normalizeKeyToken(token: string): string | null {
   return simple[upper] ?? null
 }
 
+function parseModifierToken(rawPart: string): ModifierToken | null {
+  const part = rawPart.toLowerCase()
+  if (part === 'mod' || part === 'cmdorctrl' || part === 'commandorcontrol') {
+    return 'Mod'
+  }
+  if (part === 'cmd' || part === 'command' || part === 'meta' || rawPart === '⌘') {
+    return 'Cmd'
+  }
+  if (part === 'ctrl' || part === 'control' || rawPart === '⌃') {
+    return 'Ctrl'
+  }
+  if (part === 'alt' || part === 'option' || part === 'opt' || rawPart === '⌥') {
+    return 'Alt'
+  }
+  if (part === 'shift' || rawPart === '⇧') {
+    return 'Shift'
+  }
+  return null
+}
+
+function applyModifierToken(parsed: ParsedKeybinding, modifier: ModifierToken): void {
+  if (modifier === 'Mod') {
+    parsed.mod = true
+  } else if (modifier === 'Cmd') {
+    parsed.meta = true
+  } else if (modifier === 'Ctrl') {
+    parsed.control = true
+  } else if (modifier === 'Alt') {
+    parsed.alt = true
+  } else {
+    parsed.shift = true
+  }
+}
+
+function emptyParsedKeybinding(): ParsedKeybinding {
+  return { mod: false, meta: false, control: false, alt: false, shift: false, key: '' }
+}
+
+// Why: a double-tap is a bare modifier with no key, so it cannot reuse the
+// normal "one key required" parse path; validation of conflicting/extra
+// modifiers is deferred to normalizeKeybindingWithOptions for shared errors.
+function parseDoubleTapKeybinding(rawParts: string[]): ParsedKeybinding | null {
+  const modifiers: ModifierToken[] = []
+  let sawDoubleTap = false
+  for (const rawPart of rawParts) {
+    if (rawPart.toLowerCase() === 'doubletap') {
+      if (sawDoubleTap) {
+        return null
+      }
+      sawDoubleTap = true
+      continue
+    }
+    const modifier = parseModifierToken(rawPart)
+    if (!modifier) {
+      return null
+    }
+    modifiers.push(modifier)
+  }
+  if (modifiers.length === 0) {
+    return null
+  }
+  const parsed = emptyParsedKeybinding()
+  for (const modifier of modifiers) {
+    applyModifierToken(parsed, modifier)
+  }
+  // Mod combined with a platform-specific modifier: keep both flags so normalize
+  // emits the shared "Mod or platform-specific, not both" error.
+  if (parsed.mod && (parsed.meta || parsed.control)) {
+    parsed.doubleTapModifier = 'Mod'
+    return parsed
+  }
+  if (modifiers.length > 1) {
+    return null
+  }
+  parsed.doubleTapModifier = modifiers[0]
+  return parsed
+}
+
 function parseKeybinding(binding: string): ParsedKeybinding | null {
   const rawParts = binding
     .split('+')
@@ -979,35 +1075,15 @@ function parseKeybinding(binding: string): ParsedKeybinding | null {
     return null
   }
 
-  const parsed: ParsedKeybinding = {
-    mod: false,
-    meta: false,
-    control: false,
-    alt: false,
-    shift: false,
-    key: ''
+  if (rawParts.some((part) => part.toLowerCase() === 'doubletap')) {
+    return parseDoubleTapKeybinding(rawParts)
   }
 
+  const parsed = emptyParsedKeybinding()
   for (const rawPart of rawParts) {
-    const part = rawPart.toLowerCase()
-    if (part === 'mod' || part === 'cmdorctrl' || part === 'commandorcontrol') {
-      parsed.mod = true
-      continue
-    }
-    if (part === 'cmd' || part === 'command' || part === 'meta' || rawPart === '⌘') {
-      parsed.meta = true
-      continue
-    }
-    if (part === 'ctrl' || part === 'control' || rawPart === '⌃') {
-      parsed.control = true
-      continue
-    }
-    if (part === 'alt' || part === 'option' || part === 'opt' || rawPart === '⌥') {
-      parsed.alt = true
-      continue
-    }
-    if (part === 'shift' || rawPart === '⇧') {
-      parsed.shift = true
+    const modifier = parseModifierToken(rawPart)
+    if (modifier) {
+      applyModifierToken(parsed, modifier)
       continue
     }
     if (parsed.key) {
@@ -1024,6 +1100,9 @@ function parseKeybinding(binding: string): ParsedKeybinding | null {
 }
 
 function canonicalizeParsedKeybinding(parsed: ParsedKeybinding): string {
+  if (parsed.doubleTapModifier) {
+    return `DoubleTap+${parsed.doubleTapModifier}`
+  }
   const parts: string[] = []
   if (parsed.mod) {
     parts.push('Mod')
@@ -1074,6 +1153,9 @@ function normalizeKeybindingWithOptions(
   if (parsed.mod && (parsed.meta || parsed.control)) {
     return { ok: false, error: 'Use either Mod or a platform-specific modifier, not both.' }
   }
+  if (parsed.doubleTapModifier) {
+    return { ok: true, value: canonicalizeParsedKeybinding(parsed) }
+  }
   const isShiftInsert = parsed.shift && parsed.key === 'Insert'
   const isBareAllowed = options.allowBareKeybindings === true && isSafeBareKey(parsed)
   if (
@@ -1091,6 +1173,10 @@ function normalizeKeybindingWithOptions(
 
 export function normalizeKeybinding(binding: string): KeybindingValidationResult {
   return normalizeKeybindingWithOptions(binding)
+}
+
+export function isDoubleTapBinding(binding: string): boolean {
+  return Boolean(parseKeybinding(binding)?.doubleTapModifier)
 }
 
 function normalizeKeybindingListWithOptions(
@@ -1279,11 +1365,33 @@ function keyTokenFromInput(input: KeybindingInput, platform: NodeJS.Platform): s
   return physicalCodeKeyTokenFromInput(input)
 }
 
+// Why: the platform primary modifier canonicalizes to Mod, mirroring normal
+// capture where Cmd on macOS / Ctrl elsewhere both become Mod.
+function canonicalDoubleTapToken(
+  modifier: PhysicalModifierToken,
+  platform: NodeJS.Platform
+): ModifierToken {
+  const isMac = platform === 'darwin'
+  if (modifier === 'Cmd' && isMac) {
+    return 'Mod'
+  }
+  if (modifier === 'Ctrl' && !isMac) {
+    return 'Mod'
+  }
+  return modifier
+}
+
 function keybindingFromInputWithOptions(
   input: KeybindingInput,
   platform: NodeJS.Platform,
   options: NormalizeKeybindingOptions = {}
 ): KeybindingValidationResult {
+  if (input.doubleTapModifier) {
+    return normalizeKeybindingWithOptions(
+      `DoubleTap+${canonicalDoubleTapToken(input.doubleTapModifier, platform)}`,
+      options
+    )
+  }
   const key = keyTokenFromInput(input, platform)
   if (!key) {
     return { ok: false, error: 'Press a key, not only a modifier.' }
@@ -1552,6 +1660,24 @@ function keyMatches(
   return canUsePhysicalCodeFallback(input) && physicalCodeKeyTokenFromInput(input) === parsedKey
 }
 
+function resolveModifierToken(
+  modifier: ModifierToken,
+  platform: NodeJS.Platform
+): 'meta' | 'control' | 'alt' | 'shift' {
+  switch (modifier) {
+    case 'Mod':
+      return platform === 'darwin' ? 'meta' : 'control'
+    case 'Cmd':
+      return 'meta'
+    case 'Ctrl':
+      return 'control'
+    case 'Alt':
+      return 'alt'
+    case 'Shift':
+      return 'shift'
+  }
+}
+
 export function keybindingMatchesInput(
   binding: string,
   input: KeybindingInput,
@@ -1561,9 +1687,29 @@ export function keybindingMatchesInput(
   if (!parsed) {
     return false
   }
+  // A double-tap binding matches only a synthetic double-tap input, resolved per
+  // platform; a normal binding never matches a synthetic input, and vice-versa.
+  if (parsed.doubleTapModifier) {
+    return (
+      input.doubleTapModifier !== undefined &&
+      resolveModifierToken(parsed.doubleTapModifier, platform) ===
+        resolveModifierToken(input.doubleTapModifier, platform)
+    )
+  }
+  if (input.doubleTapModifier !== undefined) {
+    return false
+  }
   return (
     modifierStateMatches(parsed, input, platform) && keyMatches(parsed.key, input, parsed, platform)
   )
+}
+
+function keybindingConflictIdentity(binding: string, platform: NodeJS.Platform): string {
+  const parsed = parseKeybinding(binding)
+  if (!parsed?.doubleTapModifier) {
+    return binding
+  }
+  return `DoubleTap:${resolveModifierToken(parsed.doubleTapModifier, platform)}`
 }
 
 export function keybindingMatchesAction(
@@ -1585,12 +1731,31 @@ export function keybindingMatchesAction(
   )
 }
 
+function formatModifierGlyph(modifier: ModifierToken, isMac: boolean): string {
+  switch (modifier) {
+    case 'Mod':
+      return isMac ? '⌘' : 'Ctrl'
+    case 'Cmd':
+      return isMac ? '⌘' : 'Cmd'
+    case 'Ctrl':
+      return isMac ? '⌃' : 'Ctrl'
+    case 'Alt':
+      return isMac ? '⌥' : 'Alt'
+    case 'Shift':
+      return isMac ? '⇧' : 'Shift'
+  }
+}
+
 export function formatKeybinding(binding: string, platform: NodeJS.Platform): string[] {
   const parsed = parseKeybinding(binding)
   if (!parsed) {
     return [binding]
   }
   const isMac = platform === 'darwin'
+  if (parsed.doubleTapModifier) {
+    const glyph = formatModifierGlyph(parsed.doubleTapModifier, isMac)
+    return [glyph, glyph]
+  }
   const parts: string[] = []
   if (parsed.mod) {
     parts.push(isMac ? '⌘' : 'Ctrl')
@@ -1619,7 +1784,10 @@ export function formatKeybindingList(
     return 'Unassigned'
   }
   return bindings
-    .map((binding) => formatKeybinding(binding, platform).join(platform === 'darwin' ? '' : '+'))
+    .map((binding) => {
+      const separator = isDoubleTapBinding(binding) ? ' ' : platform === 'darwin' ? '' : '+'
+      return formatKeybinding(binding, platform).join(separator)
+    })
     .join(', ')
 }
 
@@ -1662,7 +1830,7 @@ export function findKeybindingConflicts(
   overrides?: KeybindingOverrides,
   options: FindKeybindingConflictOptions = {}
 ): KeybindingConflict[] {
-  const owners = new Map<string, KeybindingActionId[]>()
+  const owners = new Map<string, { binding: string; actionIds: Set<KeybindingActionId> }>()
   const ignoredActionIds = new Set(options.ignoredActionIds ?? [])
   const customizedActions = new Set(
     Object.keys(overrides ?? {}).filter(
@@ -1682,21 +1850,27 @@ export function findKeybindingConflicts(
         groups.add(definition.scope)
       }
       for (const group of groups) {
-        const conflictKey = `${group}\u0000${binding}`
-        const current = owners.get(conflictKey) ?? []
-        current.push(definition.id)
+        const conflictKey = `${group}\u0000${keybindingConflictIdentity(binding, platform)}`
+        const current = owners.get(conflictKey) ?? { binding, actionIds: new Set() }
+        current.actionIds.add(definition.id)
         owners.set(conflictKey, current)
       }
     }
   }
 
-  return Array.from(owners.entries())
-    .filter(
-      ([, actionIds]) =>
-        actionIds.length > 1 && actionIds.some((actionId) => customizedActions.has(actionId))
-    )
-    .map(([conflictKey, actionIds]) => ({
-      binding: conflictKey.slice(conflictKey.indexOf('\u0000') + 1),
-      actionIds
+  return Array.from(owners.values())
+    .filter(({ actionIds }) => actionIds.size > 1 && setIntersects(actionIds, customizedActions))
+    .map(({ binding, actionIds }) => ({
+      binding,
+      actionIds: Array.from(actionIds)
     }))
+}
+
+function setIntersects<T>(left: ReadonlySet<T>, right: ReadonlySet<T>): boolean {
+  for (const value of left) {
+    if (right.has(value)) {
+      return true
+    }
+  }
+  return false
 }

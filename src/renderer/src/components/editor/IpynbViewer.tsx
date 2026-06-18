@@ -49,7 +49,7 @@ import {
 } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import { useShortcutKeys } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import { editorShortcutMatches, installEditorSaveShortcut } from './editor-shortcuts'
 import MonacoCodeExcerpt from './MonacoCodeExcerpt'
@@ -264,13 +264,13 @@ function NotebookCellHeader({
 function NotebookHeaderButton({
   label,
   disabled = false,
-  shortcutKeys,
+  shortcut,
   onClick,
   children
 }: {
   label: string
   disabled?: boolean
-  shortcutKeys?: string[]
+  shortcut?: ShortcutKeyComboDetails
   onClick: () => void
   children: React.ReactNode
 }): React.JSX.Element {
@@ -292,7 +292,9 @@ function NotebookHeaderButton({
       <TooltipContent>
         <span className="flex items-center gap-2">
           <span>{label}</span>
-          {shortcutKeys ? <ShortcutKeyCombo keys={shortcutKeys} /> : null}
+          {shortcut && shortcut.keys.length > 0 ? (
+            <ShortcutKeyCombo keys={shortcut.keys} doubleTap={shortcut.doubleTap} />
+          ) : null}
         </span>
       </TooltipContent>
     </Tooltip>
@@ -729,7 +731,7 @@ export default function IpynbViewer({
     const latestContent = flushSourceDrafts()
     await onSave(latestContent)
   }, [flushSourceDrafts, onSave])
-  const saveShortcutKeys = useShortcutKeys('editor.save')
+  const saveShortcut = useShortcutKeyDetails('editor.save')
 
   const handleNotebookKeyDownCapture = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -885,7 +887,7 @@ export default function IpynbViewer({
         <div className="ml-auto flex items-center gap-2">
           <NotebookHeaderButton
             label={translate('auto.components.editor.IpynbViewer.15ec40a735', 'Save notebook')}
-            shortcutKeys={saveShortcutKeys}
+            shortcut={saveShortcut}
             onClick={() => void saveNotebook()}
           >
             <Save className="size-3.5" />

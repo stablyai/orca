@@ -7,6 +7,7 @@ import { createPreflightSlice } from './preflight'
 
 const preflightCheck = vi.fn()
 const callRuntimeRpc = vi.fn()
+const platformGet = vi.fn(() => ({ platform: 'linux' }))
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
@@ -31,6 +32,9 @@ globalThis.window = {
         pathFailureReason: 'spawn_error'
       }),
       detectRemoteAgents: vi.fn().mockResolvedValue([])
+    },
+    platform: {
+      get: platformGet
     }
   } as unknown as Window['api']
 } as Window & typeof globalThis
@@ -47,6 +51,7 @@ function createTestStore() {
 function resetPreflightMocks(): void {
   preflightCheck.mockReset()
   callRuntimeRpc.mockReset()
+  platformGet.mockReset().mockReturnValue({ platform: 'linux' })
 }
 
 function makeStatus(glabInstalled: boolean): PreflightStatus {
@@ -183,6 +188,85 @@ describe('createPreflightSlice', () => {
     await store.getState().refreshPreflightStatus()
 
     expect(preflightCheck).toHaveBeenCalledWith({ wslDistro: 'Ubuntu' })
+  })
+
+  it('checks integrations through the resolved project runtime on Windows', async () => {
+    resetPreflightMocks()
+    platformGet.mockReturnValue({ platform: 'win32' })
+    preflightCheck.mockResolvedValueOnce(makeStatus(true))
+    const store = createTestStore()
+    store.setState({
+      repos: [
+        makeRepo({
+          id: 'repo-1',
+          path: 'C:\\repo'
+        })
+      ],
+      worktreesByRepo: {
+        'repo-1': [
+          makeWorktree({
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+          })
+        ]
+      },
+      activeRepoId: 'repo-1',
+      activeWorktreeId: 'wt-1'
+    } as Partial<AppState>)
+
+    await store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).toHaveBeenCalledWith({
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'repo-1',
+          distro: 'Ubuntu',
+          reason: 'project-override',
+          cacheKey: 'repo-1:wsl:Ubuntu'
+        }
+      },
+      wslDistro: 'Ubuntu'
+    })
+  })
+
+  it('passes repair-required project runtime context through Windows preflight errors', async () => {
+    resetPreflightMocks()
+    platformGet.mockReturnValue({ platform: 'win32' })
+    preflightCheck.mockRejectedValueOnce(
+      new Error('Project runtime requires repair before preflight: wsl-distro-required')
+    )
+    const store = createTestStore()
+    store.setState({
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
+      },
+      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      worktreesByRepo: {},
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null
+    } as Partial<AppState>)
+
+    await store.getState().refreshPreflightStatus()
+
+    expect(preflightCheck).toHaveBeenCalledWith({
+      projectRuntime: {
+        status: 'repair-required',
+        repair: {
+          projectId: 'repo-1',
+          preferredRuntime: { kind: 'wsl', distro: null },
+          reason: 'wsl-distro-required',
+          source: 'global-default',
+          cacheKey: 'repo-1:repair:wsl-distro-required:default'
+        }
+      }
+    })
+    expect(store.getState().preflightStatusError).toBe(
+      'Project runtime requires repair before preflight: wsl-distro-required'
+    )
   })
 
   it('keeps preflight request dedupe scoped by WSL distro context', async () => {

@@ -578,6 +578,11 @@ function includesPathBoundary(commandLine: string, normalizedPath: string): bool
 }
 
 function normalizeComparablePath(input: string): string {
+  if (input.startsWith('/')) {
+    // Why: command-line evidence for SSH/WSL/POSIX workspaces can be evaluated
+    // on a Windows host; path.resolve would reinterpret "/repo" as "G:/repo".
+    return normalizeComparableText(path.posix.resolve(input))
+  }
   return normalizeComparableText(path.resolve(input))
 }
 

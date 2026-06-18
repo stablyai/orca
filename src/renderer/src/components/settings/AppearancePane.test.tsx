@@ -22,7 +22,7 @@ vi.mock('../../store', () => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutKeyCombos: () => []
+  useShortcutKeyComboDetails: () => []
 }))
 
 vi.mock('../status-bar/use-available-status-bar-toggles', () => ({

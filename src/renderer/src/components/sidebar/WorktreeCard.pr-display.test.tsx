@@ -11,7 +11,7 @@ const fetchLinearIssue = vi.fn()
 const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
 
-let worktreeCardProperties: WorktreeCardProperty[] = ['pr']
+let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let hostedReviewCache: Record<string, unknown> = {}
 let workspacePortScan: WorkspacePortScanResult | null = null
 let settings: Partial<GlobalSettings> | null = null
@@ -49,7 +49,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({
-  useWorktreeActivityStatus: () => 'idle'
+  useWorktreeActivityStatus: () => 'active'
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -126,22 +126,36 @@ function renderWorktreeCardMarkup(element: ReactNode): string {
 describe('WorktreeCard linked PR display', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    worktreeCardProperties = ['pr']
+    worktreeCardProperties = ['status']
     hostedReviewCache = {}
     workspacePortScan = null
     settings = null
   })
 
-  it('shows linked GH PR metadata in detailed cards before hosted review details are cached', async () => {
+  it('keeps linked GH PR status out of the left status slot by default', async () => {
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     const markup = renderWorktreeCardMarkup(
       <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
     )
 
-    expect(markup).toContain('Linked PR #456')
-    expect(markup).not.toContain('Loading PR')
-  }, 10_000)
+    expect(markup).toContain('Active')
+    expect(markup).toContain('bg-emerald-500')
+    expect(markup).not.toContain('PR: Open')
+    expect(markup).not.toContain('Linked PR #456')
+  }, 20_000)
+
+  it('shows linked GH PR status in the left status slot before hosted review details are cached when new card style is on', async () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('PR: Open')
+    expect(markup).not.toContain('Linked PR #456')
+  }, 20_000)
 
   it('does not show cached branch PR details when the worktree has no linked PR', async () => {
     hostedReviewCache = {
@@ -166,6 +180,7 @@ describe('WorktreeCard linked PR display', () => {
   })
 
   it('shows branch-discovered hosted review providers without linked worktree metadata', async () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
     hostedReviewCache = {
       'local::repo-1::feature/local-branch': {
         data: makeHostedReview({
@@ -187,11 +202,64 @@ describe('WorktreeCard linked PR display', () => {
       />
     )
 
-    expect(markup).toContain('Linked PR #789')
+    expect(markup).toContain('PR checks: Passing')
+    expect(markup).not.toContain('Linked PR #789')
   })
 
-  it('shows issue, Linear issue, PR, and notes metadata in detailed cards', async () => {
-    worktreeCardProperties = ['issue', 'linear-issue', 'pr', 'comment']
+  it('keeps the stored branch title by default when a hosted review title is available', async () => {
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview(),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'feature/local-branch',
+          linkedPR: 456
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('data-worktree-title-inline-rename=""')
+    expect(markup).toContain('>feature/local-branch</span>')
+    expect(markup).not.toContain('>Fix stale GH PR</span>')
+  })
+
+  it('uses the hosted review title when new card style is on and stored title is the branch', async () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview(),
+        fetchedAt: Date.now()
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          displayName: 'feature/local-branch',
+          linkedPR: 456
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('data-worktree-title-inline-rename=""')
+    expect(markup).toContain('>Fix stale GH PR</span>')
+    expect(markup).not.toContain('>feature/local-branch</span>')
+  })
+
+  it('shows task and notes metadata while keeping PR out of the right metadata list', async () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'issue', 'linear-issue', 'comment']
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     const markup = renderWorktreeCardMarkup(
@@ -209,17 +277,17 @@ describe('WorktreeCard linked PR display', () => {
 
     expect(markup).toContain('Linked issue #123')
     expect(markup).toContain('Linked Linear ENG-123')
-    expect(markup).toContain('Linked PR #456')
+    expect(markup).toContain('PR: Open')
+    expect(markup).not.toContain('Linked PR #456')
     expect(markup).toContain('Workspace notes')
     expect(markup).not.toContain('data-slot="badge"')
     expect(markup).not.toContain('Loading issue')
-    expect(markup).not.toContain('Loading PR')
     expect(markup).not.toContain('Reviewer handoff note')
   })
 
-  it('keeps issue, Linear issue, PR, and notes metadata out of compact cards', async () => {
-    settings = { compactWorktreeCards: true }
-    worktreeCardProperties = ['issue', 'linear-issue', 'pr', 'comment']
+  it('shows selected task and notes metadata on compact cards when new card style is on', async () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status', 'issue', 'linear-issue', 'comment']
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     const markup = renderWorktreeCardMarkup(
@@ -235,10 +303,11 @@ describe('WorktreeCard linked PR display', () => {
       />
     )
 
-    expect(markup).not.toContain('Linked issue #123')
-    expect(markup).not.toContain('Linked Linear ENG-123')
+    expect(markup).toContain('Linked issue #123')
+    expect(markup).toContain('Linked Linear ENG-123')
     expect(markup).not.toContain('Linked PR #456')
-    expect(markup).not.toContain('Workspace notes')
+    expect(markup).toContain('Workspace notes')
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
     expect(markup).not.toContain('Reviewer handoff note')
   })
 
@@ -303,8 +372,9 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('58941')
   })
 
-  it('does not render standalone CI or linked PR status icons on the closed card', async () => {
-    worktreeCardProperties = ['pr', 'ci']
+  it('renders linked PR status in the left status slot instead of the right metadata list', async () => {
+    settings = { experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status']
     hostedReviewCache = {
       'local::repo-1::feature/local-branch': {
         data: makeHostedReview({ status: 'failure' }),
@@ -317,8 +387,9 @@ describe('WorktreeCard linked PR display', () => {
       <WorktreeCard worktree={makeWorktree({ linkedPR: 456 })} repo={makeRepo()} isActive={false} />
     )
 
-    expect(markup).toContain('Linked PR #456')
+    expect(markup).toContain('PR checks: Failed')
     expect(markup).toContain('text-rose-500/85')
+    expect(markup).not.toContain('Linked PR #456')
     expect(markup).not.toContain('CI checks')
   })
 })

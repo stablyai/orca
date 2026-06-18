@@ -584,7 +584,6 @@ export function createAgentCompletionCoordinator(
       workingStatusObserved = true
       requiresFreshWorking = false
       lastCompletionIdentity = null
-      lastCompletionIdentityByPaneKey.delete(options.paneKey)
       currentTurn += 1
       dropPendingTitle()
       return

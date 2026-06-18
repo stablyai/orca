@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChecksPanelReviewHeader } from './ChecksPanel'
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -19,12 +19,22 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }) => <div data-disabled={disabled ? 'true' : undefined}>{children}</div>
 }))
 
+beforeEach(() => {
+  vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 function renderHeader({
   canUnlinkPullRequest = true,
-  provider = 'github'
+  provider = 'github',
+  showSystemBrowserHint = true
 }: {
   canUnlinkPullRequest?: boolean
   provider?: 'github' | 'gitlab'
+  showSystemBrowserHint?: boolean
 } = {}): string {
   const isGitLab = provider === 'gitlab'
   return renderToStaticMarkup(
@@ -43,6 +53,7 @@ function renderHeader({
       }}
       isRefreshing={false}
       canUnlinkPullRequest={canUnlinkPullRequest}
+      showSystemBrowserHint={showSystemBrowserHint}
       onRefresh={vi.fn()}
       onOpenReview={vi.fn()}
       onUnlinkPullRequest={vi.fn()}
@@ -56,6 +67,9 @@ describe('ChecksPanelReviewHeader', () => {
     const markup = renderHeader()
 
     expect(markup).toContain('Open on GitHub')
+    expect(markup).toContain('system browser')
+    expect(markup).toContain('⇧⌘+click')
+    expect(markup).not.toContain('⌘+click to open')
     expect(markup).toContain('#2964')
     expect(markup).toContain('underline decoration-border underline-offset-2')
     expect(markup).toContain('More PR actions')
@@ -63,6 +77,23 @@ describe('ChecksPanelReviewHeader', () => {
     expect(markup).toContain('Link another PR')
     expect(markup).toContain('lucide-ellipsis')
     expect(markup).not.toContain('lucide-external-link')
+  })
+
+  it('omits the system-browser hint when plain clicks already open externally', () => {
+    const markup = renderHeader({ showSystemBrowserHint: false })
+
+    expect(markup).toContain('Open on GitHub')
+    expect(markup).not.toContain('system browser')
+    expect(markup).not.toContain('⇧⌘+click')
+  })
+
+  it('shows the Ctrl system-browser hint off macOS', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+
+    const markup = renderHeader()
+
+    expect(markup).toContain('Shift+Ctrl+click for system browser')
+    expect(markup).not.toContain('Ctrl+click to open')
   })
 
   it('disables unlinking when the displayed PR is not manually linked', () => {

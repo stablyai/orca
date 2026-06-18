@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   parseGitHubIssueOrPRNumber,
@@ -69,6 +70,7 @@ import {
   getLinkedWorkItemPromptContext,
   resolveQuickCreateLinkedWorkItemPrompt
 } from '@/lib/linked-work-item-context'
+import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import {
   buildLinearIssueLinkedWorkItem,
@@ -563,6 +565,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [eligibleRepos, projectHostSetups, projects, repoId, workspaceHostScope]
   )
   const selectedRepo = eligibleRepos.find((repo) => repo.id === repoId)
+  const selectedRepoAgentLaunchPlatform = useMemo(() => {
+    if (!selectedRepo) {
+      return CLIENT_PLATFORM
+    }
+    const projectRuntime = selectedRepo.connectionId
+      ? undefined
+      : getLocalRepoProjectExecutionRuntimeContext(
+          {
+            activeRepoId,
+            activeWorktreeId: null,
+            projects,
+            repos,
+            settings,
+            worktreesByRepo
+          },
+          selectedRepo.id,
+          CLIENT_PLATFORM
+        )
+    return getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)
+  }, [activeRepoId, projects, repos, selectedRepo, settings, worktreesByRepo])
   const selectedRepoProjectId =
     selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.projectId : null
   const selectedProjectId = selectedProjectGroup
@@ -2854,7 +2876,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         cmdOverrides: settings?.agentCmdOverrides ?? {},
         agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
-        platform: CLIENT_PLATFORM
+        platform: selectedRepoAgentLaunchPlatform
       })
 
       // Why: backend startup is safe only when the launch command is
@@ -2996,6 +3018,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     resolvedSetupDecision,
     resolvedInitialWorkspaceStatus,
     selectedRepo,
+    selectedRepoAgentLaunchPlatform,
     selectedRepoIsGit,
     selectedRepoRequiresConnection,
     showProjectRequiredError,
@@ -3162,7 +3185,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
                 agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
                 agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
-                platform: CLIENT_PLATFORM
+                platform: selectedRepoAgentLaunchPlatform
               })
 
         let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
@@ -3181,7 +3204,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             cmdOverrides: settings?.agentCmdOverrides ?? {},
             agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
             agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
-            platform: CLIENT_PLATFORM,
+            platform: selectedRepoAgentLaunchPlatform,
             allowEmptyPromptLaunch: true
           })
           if (startupPlan && quickDraftPrompt) {
@@ -3302,6 +3325,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       resolvedSetupDecision,
       resolvedInitialWorkspaceStatus,
       selectedRepo,
+      selectedRepoAgentLaunchPlatform,
       selectedRepoIsGit,
       selectedRepoSettings,
       selectedRepoRequiresConnection,

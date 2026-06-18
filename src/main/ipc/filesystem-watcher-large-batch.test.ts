@@ -1,3 +1,4 @@
+import { join, resolve } from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock } = vi.hoisted(() => ({
@@ -54,6 +55,7 @@ describe('local filesystem watcher large batches', () => {
   it('accepts a large local watcher event batch without overflowing V8 arguments', async () => {
     vi.useFakeTimers()
     vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    const worktreePath = resolve('/tmp/repo')
     let watcherCallback: ((err: Error | null, events: WatcherEvent[]) => void) | undefined
     vi.mocked(subscribeParcelWatcher).mockImplementation(async (_root, callback) => {
       watcherCallback = callback as typeof watcherCallback
@@ -62,12 +64,12 @@ describe('local filesystem watcher large batches', () => {
 
     await handlers['fs:watchWorktree'](
       { sender: { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 } },
-      { worktreePath: '/tmp/repo' }
+      { worktreePath }
     )
 
     const events = Array.from(
       { length: 200_000 },
-      (_, index): WatcherEvent => ({ type: 'delete', path: `/tmp/repo/file-${index}` })
+      (_, index): WatcherEvent => ({ type: 'delete', path: join(worktreePath, `file-${index}`) })
     )
 
     expect(() => watcherCallback?.(null, events)).not.toThrow()
@@ -83,14 +85,18 @@ describe('local filesystem watcher large batches', () => {
       watcherCallback = callback as typeof watcherCallback
       return { unsubscribe: vi.fn() } as never
     })
+    const worktreePath = resolve('/tmp/repo')
     const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
 
-    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath })
     watcherCallback?.(
       null,
       Array.from(
         { length: 5_001 },
-        (_, index): WatcherEvent => ({ type: 'update', path: `/tmp/repo/file-${index}.txt` })
+        (_, index): WatcherEvent => ({
+          type: 'update',
+          path: join(worktreePath, `file-${index}.txt`)
+        })
       )
     )
 
@@ -98,8 +104,8 @@ describe('local filesystem watcher large batches', () => {
 
     expect(stat).toHaveBeenCalledTimes(1)
     expect(sender.send).toHaveBeenCalledWith('fs:changed', {
-      worktreePath: '/tmp/repo',
-      events: [{ kind: 'overflow', absolutePath: '/tmp/repo' }]
+      worktreePath,
+      events: [{ kind: 'overflow', absolutePath: worktreePath }]
     })
     await closeAllWatchers()
     vi.useRealTimers()

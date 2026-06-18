@@ -183,6 +183,7 @@ import {
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getCommitFailureDialogWorktreeKey,
   shouldShowCommitFailureDialog,
@@ -1037,7 +1038,10 @@ function SourceControlInner(): React.JSX.Element {
     : null
   const activeSourceControlLaunchPlatform = resolveSourceControlLaunchPlatform({
     connectionId: activeConnectionId,
-    worktreePath
+    worktreePath,
+    projectRuntime: activeConnectionId
+      ? undefined
+      : getLocalProjectExecutionRuntimeContext(useAppStore.getState(), activeWorktreeId)
   })
   const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null

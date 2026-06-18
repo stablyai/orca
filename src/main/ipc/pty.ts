@@ -10,6 +10,11 @@ export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-rea
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/types'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import {
+  isWslShellName,
+  resolveLocalWindowsTerminalRuntimeOptions
+} from '../../shared/local-windows-terminal-runtime'
 import { openCodeHookService } from '../opencode/hook-service'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
@@ -70,6 +75,7 @@ import {
   getFolderWorkspacePathStatus
 } from '../project-groups/folder-workspace-path-status'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -410,11 +416,6 @@ function deleteRequestedEnvKeys(
   for (const key of keys) {
     delete env[key]
   }
-}
-
-function isWslShellName(shellPath: string | undefined): boolean {
-  const shellName = shellPath?.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
-  return shellName === 'wsl.exe' || shellName === 'wsl'
 }
 
 function shouldSkipCodexHomeEnvForWindowsShell(
@@ -1644,14 +1645,22 @@ export function registerPtyHandlers(
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
-      const daemonShellOverride =
+      // Why: runtime-created terminals do not carry renderer-computed
+      // projectRuntime, so resolve from worktreeId to honor project Windows runtime.
+      const terminalRuntimeOptions =
         process.platform === 'win32' && !args.connectionId
-          ? getSettings?.()?.terminalWindowsShell
-          : undefined
+          ? resolveLocalWindowsTerminalRuntimeOptions({
+              requestedShellOverride: undefined,
+              settings: getSettings?.(),
+              projectRuntime: resolveLocalProjectRuntimeForWorktreeId(store, args.worktreeId),
+              fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
+            })
+          : { shellOverride: undefined, terminalWindowsWslDistro: null }
+      const daemonShellOverride = terminalRuntimeOptions.shellOverride
       const codexSelectionTarget = getCodexSelectionTargetForPty(
         daemonShellOverride,
         args.cwd,
-        getSettings?.()?.terminalWindowsWslDistro ?? null
+        terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
       const claudeAuth =
         isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(codexSelectionTarget) : null
@@ -1769,8 +1778,9 @@ export function registerPtyHandlers(
         ptySizes.set(effectiveSessionAppId ?? sessionId, { cols: args.cols, rows: args.rows })
       }
       if (process.platform === 'win32' && !args.connectionId) {
-        spawnOptions.shellOverride = getSettings?.()?.terminalWindowsShell
-        spawnOptions.terminalWindowsWslDistro = getSettings?.()?.terminalWindowsWslDistro ?? null
+        spawnOptions.shellOverride = terminalRuntimeOptions.shellOverride
+        spawnOptions.terminalWindowsWslDistro =
+          terminalRuntimeOptions.terminalWindowsWslDistro ?? null
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
@@ -2112,6 +2122,7 @@ export function registerPtyHandlers(
         worktreeId?: string
         sessionId?: string
         shellOverride?: string
+        projectRuntime?: ProjectExecutionRuntimeResolution
         // Why: closes the SIGKILL race documented in INVESTIGATION.md by
         // letting main patch + sync-flush the (worktreeId, tabId, leafId →
         // ptyId) binding before pty:spawn returns. Only the renderer's
@@ -2143,15 +2154,20 @@ export function registerPtyHandlers(
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
-      const initialShellOverride =
-        args.shellOverride ??
-        (process.platform === 'win32' && !args.connectionId
-          ? getSettings?.()?.terminalWindowsShell
-          : undefined)
+      const terminalRuntimeOptions =
+        process.platform === 'win32' && !args.connectionId
+          ? resolveLocalWindowsTerminalRuntimeOptions({
+              requestedShellOverride: args.shellOverride,
+              settings: getSettings?.(),
+              projectRuntime: args.projectRuntime,
+              fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
+            })
+          : { shellOverride: args.shellOverride, terminalWindowsWslDistro: null }
+      const initialShellOverride = terminalRuntimeOptions.shellOverride
       const initialSelectionTarget = getCodexSelectionTargetForPty(
         initialShellOverride,
         args.cwd,
-        getSettings?.()?.terminalWindowsWslDistro ?? null
+        terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
       const claudeAuth =
         isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(initialSelectionTarget) : null
@@ -2261,15 +2277,11 @@ export function registerPtyHandlers(
         runtime && !(provider instanceof LocalPtyProvider)
           ? runtime.createPreAllocatedTerminalHandle()
           : null
-      const effectiveShellOverride =
-        args.shellOverride ??
-        (process.platform === 'win32' && !args.connectionId
-          ? getSettings?.()?.terminalWindowsShell
-          : undefined)
+      const effectiveShellOverride = terminalRuntimeOptions.shellOverride
       const codexSelectionTarget = getCodexSelectionTargetForPty(
         effectiveShellOverride,
         args.cwd,
-        getSettings?.()?.terminalWindowsWslDistro ?? null
+        terminalRuntimeOptions.terminalWindowsWslDistro ?? null
       )
       const selectedCodexHomePath = isDaemonHostSpawn
         ? getCompatibleSelectedCodexHomePath(
@@ -2386,7 +2398,8 @@ export function registerPtyHandlers(
         // the persisted implementation choice through spawnOptions so both the
         // in-process and daemon-backed PTY paths can resolve the same effective
         // executable without inventing a fourth top-level shell.
-        spawnOptions.terminalWindowsWslDistro = getSettings?.()?.terminalWindowsWslDistro ?? null
+        spawnOptions.terminalWindowsWslDistro =
+          terminalRuntimeOptions.terminalWindowsWslDistro ?? null
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined

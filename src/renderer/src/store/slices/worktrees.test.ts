@@ -3449,6 +3449,67 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(store.getState().hasHydratedWorktreePurge).toBe(true)
   })
 
+  it('bounds concurrent repo scans during hydration-time refresh', async () => {
+    const store = createTestStore()
+    const repos = Array.from({ length: 7 }, (_, index) => ({
+      id: `repo-${index}`,
+      path: `/repos/${index}`,
+      displayName: `repo-${index}`,
+      badgeColor: '#000',
+      addedAt: 0
+    }))
+    let activeScans = 0
+    let maxActiveScans = 0
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+      activeScans += 1
+      maxActiveScans = Math.max(maxActiveScans, activeScans)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      activeScans -= 1
+      return [makeWorktree({ id: `${repoId}::/wt`, repoId, path: `/wt/${repoId}` })]
+    })
+
+    store.setState({ repos } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(maxActiveScans).toBeLessThanOrEqual(5)
+    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(repos.length)
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+  })
+
+  it('bounds concurrent repo scans after the hydration purge has run', async () => {
+    const store = createTestStore()
+    const repos = Array.from({ length: 7 }, (_, index) => ({
+      id: `repo-${index}`,
+      path: `/repos/${index}`,
+      displayName: `repo-${index}`,
+      badgeColor: '#000',
+      addedAt: 0
+    }))
+    let activeScans = 0
+    let maxActiveScans = 0
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) => {
+      activeScans += 1
+      maxActiveScans = Math.max(maxActiveScans, activeScans)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      activeScans -= 1
+      return [makeWorktree({ id: `${repoId}::/wt`, repoId, path: `/wt/${repoId}` })]
+    })
+
+    store.setState({
+      hasHydratedWorktreePurge: true,
+      repos
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(maxActiveScans).toBeLessThanOrEqual(5)
+    expect(mockApi.worktrees.list).toHaveBeenCalledTimes(repos.length)
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+  })
+
   it('preserves floating workspace state while purging a real stale worktree', async () => {
     const store = createTestStore()
     const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })

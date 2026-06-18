@@ -23,6 +23,7 @@ import type {
   TuiAgent,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import { useAppStore } from '../../store'
 import { buildStatusMap } from '../right-sidebar/status-display'
@@ -49,6 +50,7 @@ import {
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   type BuiltInWindowsTerminalShell,
@@ -81,6 +83,18 @@ const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const AGENT_DETECTION_LOCAL_TARGET_KEY = 'local'
+
+function getProjectRuntimeShellMenuMode(
+  projectRuntime: ProjectExecutionRuntimeResolution | undefined
+): 'host' | 'wsl' | null {
+  if (!projectRuntime) {
+    return null
+  }
+  if (projectRuntime.status === 'repair-required') {
+    return 'wsl'
+  }
+  return projectRuntime.runtime.kind === 'wsl' ? 'wsl' : 'host'
+}
 
 type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
@@ -282,6 +296,12 @@ function TabBarInner({
   const defaultWindowsPowerShellImplementation = useAppStore(
     (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
+  const activeRepoId = useAppStore((s) => s.activeRepoId)
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const projects = useAppStore((s) => s.projects)
+  const repos = useAppStore((s) => s.repos)
+  const settings = useAppStore((s) => s.settings)
+  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   // Why: probe Windows shell capabilities on the host that owns this worktree, so
   // the offered shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore(
@@ -361,6 +381,45 @@ function TabBarInner({
   const shouldShowWindowsShellMenu =
     (isWindows || windowsTerminalCapabilities.hostPlatform === 'win32') &&
     !worktreeHasRemoteConnection
+  const localProjectRuntime = useMemo(() => {
+    if (!shouldShowWindowsShellMenu || activeRuntimeEnvironmentId?.trim()) {
+      return undefined
+    }
+    return getLocalProjectExecutionRuntimeContext(
+      {
+        activeRepoId,
+        activeWorktreeId,
+        projects,
+        repos,
+        settings,
+        worktreesByRepo
+      },
+      worktreeId,
+      'win32',
+      {
+        wslAvailable: windowsTerminalCapabilities.isLoading
+          ? undefined
+          : windowsTerminalCapabilities.wslAvailable,
+        availableWslDistros: windowsTerminalCapabilities.isLoading
+          ? null
+          : windowsTerminalCapabilities.wslDistros
+      }
+    )
+  }, [
+    activeRepoId,
+    activeRuntimeEnvironmentId,
+    activeWorktreeId,
+    projects,
+    repos,
+    settings,
+    shouldShowWindowsShellMenu,
+    windowsTerminalCapabilities.isLoading,
+    windowsTerminalCapabilities.wslAvailable,
+    windowsTerminalCapabilities.wslDistros,
+    worktreeId,
+    worktreesByRepo
+  ])
+  const projectRuntimeShellMenuMode = getProjectRuntimeShellMenuMode(localProjectRuntime)
   const resolvedGroupId = groupId ?? activeGroupIdForWorktree ?? worktreeId
 
   const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])
@@ -437,35 +496,39 @@ function TabBarInner({
     if (!shouldShowWindowsShellMenu || !onNewTerminalWithShell) {
       return undefined
     }
+    const includeHostShells = projectRuntimeShellMenuMode !== 'wsl'
+    const includeWslShell = projectRuntimeShellMenuMode !== 'host'
     const allShells: {
       label: string
       shell: BuiltInWindowsTerminalShell
-    }[] = [
-      {
-        label: translate('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
-        shell: 'powershell.exe'
-      },
-      {
-        label: translate('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
-        shell: 'cmd.exe'
-      },
-      ...(windowsTerminalCapabilities.gitBashAvailable
-        ? ([
-            {
-              label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
-              shell: WINDOWS_GIT_BASH_SHELL
-            }
-          ] as const)
-        : []),
-      ...(windowsTerminalCapabilities.wslAvailable
-        ? ([
-            {
-              label: translate('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
-              shell: 'wsl.exe'
-            }
-          ] as const)
-        : [])
-    ]
+    }[] = []
+    if (includeHostShells) {
+      allShells.push(
+        {
+          label: translate('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
+          shell: 'powershell.exe'
+        },
+        {
+          label: translate('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
+          shell: 'cmd.exe'
+        }
+      )
+      if (windowsTerminalCapabilities.gitBashAvailable) {
+        allShells.push({
+          label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
+          shell: WINDOWS_GIT_BASH_SHELL
+        })
+      }
+    }
+    if (includeWslShell && windowsTerminalCapabilities.wslAvailable) {
+      allShells.push({
+        label: translate('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
+        shell: 'wsl.exe'
+      })
+    }
+    if (allShells.length === 0) {
+      return undefined
+    }
     const defaultEntry =
       allShells.find((shell) => shell.shell === defaultWindowsShell) ?? allShells[0]
     const orderedShells = [
@@ -476,6 +539,7 @@ function TabBarInner({
   }, [
     defaultWindowsShell,
     onNewTerminalWithShell,
+    projectRuntimeShellMenuMode,
     shouldShowWindowsShellMenu,
     windowsTerminalCapabilities.gitBashAvailable,
     windowsTerminalCapabilities.wslAvailable

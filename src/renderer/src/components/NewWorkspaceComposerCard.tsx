@@ -480,6 +480,7 @@ export default function NewWorkspaceComposerCard({
   return (
     <div
       ref={setComposerNode}
+      data-workspace-composer-root="true"
       // Why: preload classifies native OS file drops by the nearest
       // `data-native-file-drop-target` marker in the composedPath. Tagging
       // the composer root makes drops anywhere on the card route to the

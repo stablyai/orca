@@ -1184,6 +1184,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const prVisibleRefreshGeneration = useAppStore((s) => s.prVisibleRefreshGeneration)
   const settings = useAppStore((s) => s.settings)
+  const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const reorderRepos = useAppStore((s) => s.reorderRepos)
 
   useEffect(
@@ -3028,7 +3029,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         (currentWorktree.linkedPR ?? null) !== null)
     const shouldTrackSidebarWorktree = rightSidebarShowsPR && sidebarWorktreeHasGitHubReview
     const shouldTrackVisibleRows =
-      groupBy === 'pr-status' || cardProps.includes('pr') || cardProps.includes('ci')
+      groupBy === 'pr-status' ||
+      (newCardStyle
+        ? cardProps.includes('status')
+        : cardProps.includes('pr') || cardProps.includes('ci'))
     if (!shouldTrackVisibleRows && !shouldTrackSidebarWorktree) {
       if (lastVisibleRefreshKeyRef.current !== '__hidden__') {
         lastVisibleRefreshKeyRef.current = '__hidden__'
@@ -3079,6 +3083,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     prVisibleRefreshGeneration,
     rightSidebarShowsPR,
     sshConnectedGeneration,
+    newCardStyle,
     virtualItems,
     worktreeMap
   ])
@@ -4426,10 +4431,15 @@ const WorktreeList = React.memo(function WorktreeList({
 
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
 
-  // PR cache is needed for PR-status grouping and when the PR card property
-  // is visible.
+  // PR cache is needed for PR-status grouping and when the status lane can
+  // show PR state on quiet/done workspace cards.
   const prCache = useAppStore((s) =>
-    groupBy === 'pr-status' || cardProps.includes('pr') ? s.prCache : null
+    groupBy === 'pr-status' ||
+    (s.settings?.experimentalNewWorktreeCardStyle === true
+      ? cardProps.includes('status')
+      : cardProps.includes('pr'))
+      ? s.prCache
+      : null
   )
   const settings = useAppStore((s) => s.settings)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)

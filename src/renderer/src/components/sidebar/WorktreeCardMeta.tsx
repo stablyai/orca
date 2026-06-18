@@ -124,6 +124,7 @@ export function WorktreeCardDetailsHover({
   children,
   branchName,
   workspaceTitle,
+  identityOrder = 'workspace-first',
   detailsAfter,
   openDelay = 250,
   closeDelay = 120,
@@ -162,6 +163,27 @@ export function WorktreeCardDetailsHover({
   }
 
   const issueLabels = issue?.labels ?? []
+  const branchIdentity = branchName ? (
+    <div
+      className={cn(
+        'truncate font-mono text-[11px] leading-none text-muted-foreground',
+        identityOrder === 'workspace-first' && 'mt-1'
+      )}
+    >
+      {branchName}
+    </div>
+  ) : null
+  const workspaceIdentity =
+    workspaceTitle && workspaceTitle !== branchName ? (
+      <div
+        className={cn(
+          'truncate text-[13px] font-semibold leading-snug text-foreground',
+          identityOrder === 'branch-first' && 'mt-1'
+        )}
+      >
+        {workspaceTitle}
+      </div>
+    ) : null
 
   return (
     <HoverCard
@@ -185,16 +207,8 @@ export function WorktreeCardDetailsHover({
             <div className="min-w-0 border-l border-border/70 pl-2">
               {/* Why: the closed card no longer carries a branch row; custom-titled
                   worktrees still need their git branch available in the hover. */}
-              {branchName && (
-                <div className="truncate font-mono text-[11px] leading-none text-muted-foreground">
-                  {branchName}
-                </div>
-              )}
-              {workspaceTitle && workspaceTitle !== branchName && (
-                <div className="mt-1 truncate text-[13px] font-semibold leading-snug text-foreground">
-                  {workspaceTitle}
-                </div>
-              )}
+              {identityOrder === 'branch-first' ? branchIdentity : workspaceIdentity}
+              {identityOrder === 'branch-first' ? workspaceIdentity : branchIdentity}
             </div>
           )}
 

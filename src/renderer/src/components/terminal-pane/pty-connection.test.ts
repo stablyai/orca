@@ -57,6 +57,13 @@ type StoreState = {
     displayName?: string
     executionHostId?: string | null
   }[]
+  projects: {
+    id: string
+    localWindowsRuntimePreference?:
+      | { kind: 'inherit-global' }
+      | { kind: 'windows-host' }
+      | { kind: 'wsl'; distro: string }
+  }[]
   sshConnectionStates: Map<string, { status: string }>
   cacheTimerByKey: Record<string, number | null>
   settings: {
@@ -64,6 +71,9 @@ type StoreState = {
     promptCacheTimerEnabled?: boolean
     activeRuntimeEnvironmentId?: string | null
     experimentalTerminalAttention?: boolean
+    terminalWindowsShell?: string
+    terminalWindowsWslDistro?: string | null
+    localWindowsRuntimeDefault?: { kind: 'windows-host' } | { kind: 'wsl'; distro: string | null }
     notifications?: {
       enabled?: boolean
       agentTaskComplete?: boolean
@@ -471,6 +481,7 @@ describe('connectPanePty', () => {
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1', displayName: 'feat/notis' }]
       },
       repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
+      projects: [],
       sshConnectionStates: new Map(),
       cacheTimerByKey: {},
       settings: { promptCacheTimerEnabled: true, experimentalTerminalAttention: true },
@@ -522,6 +533,9 @@ describe('connectPanePty', () => {
           declarePendingPaneSerializer: vi.fn().mockResolvedValue(1),
           settlePaneSerializer: vi.fn().mockResolvedValue(undefined),
           clearPendingPaneSerializer: vi.fn().mockResolvedValue(undefined)
+        },
+        platform: {
+          get: vi.fn(() => ({ platform: 'win32', osRelease: '10.0.26100' }))
         },
         notifications: {
           dispatch: vi.fn().mockResolvedValue({ delivered: true }),
@@ -582,6 +596,36 @@ describe('connectPanePty', () => {
     expect((globalThis as Record<string, unknown>).__ptyConnectDiag).toBeUndefined()
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('[pty-connect]'))
     logSpy.mockRestore()
+  })
+
+  it('threads the resolved local project runtime into IPC terminal transport options', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      settings: {
+        ...mockStoreState.settings,
+        terminalWindowsShell: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian',
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Debian' }
+      },
+      projects: [{ id: 'repo1', localWindowsRuntimePreference: { kind: 'windows-host' } }]
+    }
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+
+    expect(createdTransportOptions[0]?.projectRuntime).toEqual({
+      status: 'resolved',
+      runtime: {
+        kind: 'windows-host',
+        hostPlatform: 'win32',
+        projectId: 'repo1',
+        reason: 'project-override',
+        cacheKey: 'repo1:windows-host'
+      }
+    })
   })
 
   it('observes live terminal GitHub PR URLs before agent completion', async () => {
@@ -3100,6 +3144,77 @@ describe('connectPanePty', () => {
     )
     expect(transport.sendInput).toHaveBeenCalledWith(
       "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\r"
+    )
+  })
+
+  it('uses WSL quoting for cold-restored agent resume in Windows-path WSL projects', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: 'fresh-pty',
+          coldRestore: { scrollback: 'cold-payload', cwd: 'C:\\tmp\\wt-1' }
+        }
+      }
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {},
+        localWindowsRuntimeDefault: { kind: 'windows-host' }
+      },
+      projects: [
+        {
+          id: 'repo1',
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: 'C:\\tmp\\wt-1',
+            displayName: 'feat/notis'
+          }
+        ]
+      },
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'finish the task',
+          agentType: 'codex',
+          paneKey,
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: "codex-session-1's" }
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('cold-payload', expect.any(Function))
+    expect(transport.sendInput).toHaveBeenCalledWith(
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'\\''s'\r"
     )
   })
 

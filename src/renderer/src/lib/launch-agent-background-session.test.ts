@@ -32,11 +32,34 @@ function expectStablePaneSpawn(): string {
 }
 
 const state = {
+  activeRepoId: 'repo-1',
+  activeWorktreeId: 'wt-1',
   settings: { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null as string | null },
-  repos: [{ id: 'repo-1', connectionId: null as string | null }],
-  allWorktrees: vi.fn(() => [
-    { id: 'wt-1', repoId: 'repo-1', path: '/repo/worktree', displayName: 'main' }
-  ]),
+  projects: [
+    {
+      id: 'repo-1',
+      localWindowsRuntimePreference: { kind: 'inherit-global' as const }
+    }
+  ] as {
+    id: string
+    localWindowsRuntimePreference:
+      | { kind: 'inherit-global' }
+      | { kind: 'windows-host' }
+      | { kind: 'wsl'; distro: string | null }
+  }[],
+  repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
+  worktreesByRepo: {
+    'repo-1': [
+      {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        projectId: 'repo-1',
+        path: '/repo/worktree',
+        displayName: 'main'
+      }
+    ]
+  },
+  allWorktrees: vi.fn(() => state.worktreesByRepo['repo-1']),
   createTab: mockCreateTab,
   setTabCustomTitle: mockSetTabCustomTitle,
   updateTabPtyId: mockUpdateTabPtyId,
@@ -75,8 +98,27 @@ describe('launchAgentBackgroundSession', () => {
       (args) =>
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
     )
+    state.activeRepoId = 'repo-1'
+    state.activeWorktreeId = 'wt-1'
     state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
-    state.repos = [{ id: 'repo-1', connectionId: null }]
+    state.projects = [
+      {
+        id: 'repo-1',
+        localWindowsRuntimePreference: { kind: 'inherit-global' }
+      }
+    ]
+    state.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
+    state.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'wt-1',
+          repoId: 'repo-1',
+          projectId: 'repo-1',
+          path: '/repo/worktree',
+          displayName: 'main'
+        }
+      ]
+    }
     mockCreateTab.mockReturnValue({ id: 'tab-1', title: 'Terminal 1' })
     mockSpawn.mockResolvedValue({ id: 'pty-1' })
     mockRuntimeEnvironmentCall.mockResolvedValue({
@@ -155,6 +197,45 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(result).toMatchObject({ tabId: 'tab-1', ptyId: 'pty-1' })
+  })
+
+  it('uses WSL launch quoting for Windows-path projects forced to WSL', async () => {
+    state.projects = [
+      {
+        id: 'repo-1',
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    ]
+    state.repos = [{ id: 'repo-1', connectionId: null, path: 'C:\\Users\\jinwo\\repo' }]
+    state.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'wt-1',
+          repoId: 'repo-1',
+          projectId: 'repo-1',
+          path: 'C:\\Users\\jinwo\\repo\\feature',
+          displayName: 'feature'
+        }
+      ]
+    }
+
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: "don't use powershell quoting"
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: 'C:\\Users\\jinwo\\repo\\feature',
+        command: "claude '--dangerously-skip-permissions' 'don'\\''t use powershell quoting'",
+        connectionId: null,
+        worktreeId: 'wt-1',
+        tabId: 'tab-1'
+      })
+    )
   })
 
   it('pre-marks trust for agents with first-launch trust prompts', async () => {
@@ -277,7 +358,7 @@ describe('launchAgentBackgroundSession', () => {
   it('injects startup commands into SSH background sessions after shell output arrives', async () => {
     vi.useFakeTimers()
     try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
       await launchAgentBackgroundSession({

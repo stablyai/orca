@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { createServer, connect, type Server } from 'net'
 import { DaemonServer } from './daemon-server'
-import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
+import { getDaemonPidPath, getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
   getProcessStartedAtMs,
   healthCheckDaemon,
@@ -65,7 +65,7 @@ describe('daemon health', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-health-test-'))
-    socketPath = join(dir, 'daemon.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'daemon.token')
   })
 

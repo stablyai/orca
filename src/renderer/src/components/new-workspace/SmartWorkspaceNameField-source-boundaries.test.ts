@@ -87,4 +87,12 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     expect(FIELD_SOURCE).toContain('onActiveSourceModeChange?.(mode)')
     expect(FIELD_SOURCE).toContain('[mode, onActiveSourceModeChange]')
   })
+
+  it('defers the source popover until composer interaction', () => {
+    expect(FIELD_SOURCE).toContain('deferSourcePopoverUntilInteractionRef')
+    expect(FIELD_SOURCE).toContain('handleSourcePopoverOpenChange')
+    expect(FIELD_SOURCE).toContain('isComposerFieldToFieldFocus')
+    expect(FIELD_SOURCE).toContain('onPointerDown={() => {')
+    expect(FIELD_SOURCE).toContain('markSourcePopoverUserEngaged()')
+  })
 })

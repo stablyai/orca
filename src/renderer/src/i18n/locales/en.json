@@ -495,6 +495,12 @@
             "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
           }
         }
+      },
+      "projectSkillRuntime": {
+        "wslUnavailable": "Project runtime needs WSL before this skill can be installed.",
+        "distroRequired": "Select a WSL distro for this project before installing this skill.",
+        "distroMissing": "The selected WSL distro is unavailable. Choose an available distro or switch this project to Windows.",
+        "wslDefault": "WSL default"
       }
     },
     "hooks": {
@@ -521,6 +527,7 @@
       },
       "useIpcEvents": {
         "0e3cf53060": "Browser tab {{value0}} not found",
+        "2f6637fe6c": "Browser tab {{value0}} is pinned",
         "a8d2bf8e9e": "No active browser tab to close",
         "291c8ed902": "Browser tabs are unavailable while a remote runtime is active",
         "f45fa2b03c": "Browser profiles are unavailable while a remote runtime is active",
@@ -907,23 +914,6 @@
         "0d0ace8861": "Star on GitHub",
         "ec43b38ba7": "Starred on GitHub",
         "157bb5ecbb": "Open GitHub"
-      },
-      "star": {
-        "nag": {
-          "StarNagToastHost": {
-            "starredThanks": "Starred — thank you!",
-            "githubOpened": "GitHub opened",
-            "opening": "Opening…",
-            "starring": "Starring…",
-            "openGithub": "Open GitHub",
-            "starOnGithub": "Star on GitHub",
-            "onboardingCompleted": "You’re all set!",
-            "body": "If you’re enjoying Orca so far, a GitHub star helps other developers discover it.",
-            "openedBrowser": "GitHub opened in your browser.",
-            "dismiss": "Dismiss",
-            "later": "Later"
-          }
-        }
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -2364,6 +2354,13 @@
                 }
               }
             }
+          },
+          "PinnedTabCloseDialog": {
+            "6c190f295a": "Close pinned tab?",
+            "0d1963f4a6": "This tab is pinned. Are you sure you want to close it?",
+            "dont_ask_again": "Don't ask again for pinned tabs",
+            "0b38ee2f86": "Cancel",
+            "c337c9d75c": "Close"
           }
         }
       },
@@ -2708,7 +2705,15 @@
             "cd9d7b40ff": "Restart {{value0}} Sessions",
             "6cd6650b4c": "Restart Session",
             "1446d0d8a0": "{{value0}} Codex sessions are still on the old account.",
-            "605901a495": "1 Codex session is still on the old account"
+            "605901a495": "1 Codex session is still on the old account",
+            "5e5f9f5160": "1 rate-limit reset available",
+            "5ecae9197c": "{{value0}} rate-limit resets available",
+            "25d8bbde69": "Using reset…",
+            "e159fc1fd7": "Reset now",
+            "972a1ff497": "Reset Codex limits?",
+            "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "f077f586db": "Don't ask again",
+            "c0e972d726": "Cancel"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -2850,7 +2855,9 @@
             "a9a318b7a3": "Refresh failed — showing cached data",
             "7ad719c4bf": "Limited",
             "e740f92596": "Refresh failed",
-            "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in."
+            "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in.",
+            "45198c7d95": "1 rate-limit reset available",
+            "bce421cba3": "{{value0}} rate-limit resets available"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3230,14 +3237,12 @@
         "AddRepoCreateStep": {
           "0ae45b8238": "my-project",
           "a8149a3a5a": "Name",
-          "038729c107": "Folder",
           "11fd2a7db8": "Git repository",
-          "180e9b5e48": "Project kind",
           "c7b9f94456": "Create a new project",
           "b100311784": "Name it and Orca will create a real project with sensible defaults.",
           "685b5eefe1": "{{kind}} in {{parent}}",
           "2a762f3b19": "Checking Git on this host...",
-          "fe1e616c5b": "Git isn't installed, so a plain folder is the default.",
+          "fe1e616c5b": "Git is required to create a project.",
           "c234df77f7": "Choose or enter a host parent folder before creating.",
           "3a13f6e88b": "location not selected",
           "6ed14c0281": "host folder not selected",
@@ -3614,6 +3619,9 @@
           "3d4b9c4997": "Hover",
           "ba87080fb7": "Show properties",
           "320b675c9a": "Card layout",
+          "newCardDisplay": {
+            "title": "Card display"
+          },
           "09faabd875": "Project order",
           "7bada3b1ab": "Sort by",
           "dc0bb670bc": "Group by",
@@ -3637,12 +3645,21 @@
           "b8dcc6f321": "PR/MR link",
           "ca4d3c522e": "Linear issue",
           "91dfc653e8": "GitHub ticket",
+          "bdd23b4e07": "GitHub issues",
+          "44713a5d04": "Linear issues",
           "cc17bd443b": "Detailed",
           "0f9b959b31": "PR",
           "e029a2d775": "Status",
           "c2c7a45cda": "None",
           "680043342f": "compact",
-          "c7591b6014": "repo"
+          "c7591b6014": "repo",
+          "2d4f0eb933": "Default",
+          "1a0eec0d35": "Status",
+          "b5536d5a88": "Tasks",
+          "8d62c68b35": "Notes",
+          "2d74665a56": "Ports",
+          "65a9820bd1": "Agent statuses",
+          "219ebf1961": "Branch name"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Connecting...",
@@ -3681,7 +3698,9 @@
           "8ce44af9a8": "Rename {{value0}}",
           "395e541d5d": "Statuses",
           "34f03eb0de": "Board settings",
-          "26cbc92150": "Workspace board settings"
+          "26cbc92150": "Workspace board settings",
+          "87d24a0c2f": "Sync board and issue status",
+          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists."
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Empty",
@@ -3701,8 +3720,6 @@
           "0f33af979b": "Partial checkout. Files outside these paths are not on disk.",
           "4f964d5e8c": "sparse",
           "7d517f82e2": "primary",
-          "c6833b5187": "This worktree will be renamed from the first agent message",
-          "f62a3dadbc": "rename pending",
           "4eba2ea99e": "Auto-name failed. Click to see details.",
           "74522ee457": "rename failed",
           "02e19349f4": "Auto-rename failed: view error",
@@ -4122,6 +4139,19 @@
           "822ff300ad": "Dismiss",
           "b7e3a91c4f": "Drag project headers to reorder, or switch to",
           "e8c1f4a2b9": "in workspace options."
+        },
+        "WorkspaceKanbanDrawer": {
+          "1975a4e480": "Task status sync failed",
+          "e02b0d92ff": "Task status sync skipped",
+          "c1d2e3f4a5": "Linear issue {{value0}} could not be read.",
+          "d2e3f4a5b6": "No matching Linear workflow state for {{value0}}.",
+          "e3f4a5b6c7": "Multiple Linear workflow states match {{value0}}.",
+          "f4a5b6c7d8": "Could not update Linear issue {{value0}}.",
+          "a5b6c7d8e9": "Could not sync Linear issue {{value0}}.",
+          "b6c7d8e9f0": "Task status sync could not finish.",
+          "c7d8e9f0a1": "{{value0}} updated",
+          "d8e9f0a1b2": "{{value0}} skipped",
+          "e9f0a1b2c3": "{{value0}} failed"
         }
       },
       "shared": {
@@ -4688,6 +4718,12 @@
             "title": "Agent hibernation",
             "toggleLabel": "Toggle agent hibernation"
           },
+          "newWorktreeCardStyle": {
+            "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+            "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+            "title": "New card style",
+            "toggleLabel": "Toggle new card style"
+          },
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner."
@@ -4755,7 +4791,11 @@
           "c46cdbbd4e": "Network"
         },
         "GeneralPane": {
-          "d58fccfd84": "Navigation"
+          "d58fccfd84": "Navigation",
+          "5cb5475664": "Confirm before closing pinned tabs",
+          "36b2a5dc6d": "Show a confirmation dialog before a pinned tab is closed.",
+          "projectRuntime": "Project Runtime",
+          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
         },
         "GeneralSupportSection": {
           "af7d9f4396": "Thanks for the support!",
@@ -5484,7 +5524,9 @@
           "addPlannedHostHelp": "Remember this host and finish adding the project later.",
           "existingFolder": "Existing folder",
           "addPlannedHostToHost": "Add {{host}}",
-          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later."
+          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later.",
+          "projectRuntime": "Project Runtime",
+          "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
@@ -5759,7 +5801,8 @@
           "97dccee14e": "Modified",
           "3b11ef3a43": "{{value0}} shortcut",
           "f6579be67b": "Change shortcut",
-          "6a7848fdac": "Listening for shortcut"
+          "6a7848fdac": "Listening for shortcut",
+          "a98d551407": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Status",
@@ -6771,6 +6814,17 @@
               "terminal": "terminal",
               "title": "Agent hibernation"
             },
+            "newWorktreeCardStyle": {
+              "card": "card",
+              "cards": "cards",
+              "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+              "menu": "menu",
+              "metadata": "metadata",
+              "status": "status",
+              "title": "New card style",
+              "worktree": "worktree",
+              "worktrees": "worktrees"
+            },
             "fe5688b761": "sidebar",
             "ca5d1f3f46": "timeline",
             "d01b3882ba": "notifications",
@@ -6946,7 +7000,11 @@
             "7887a2c262": "folder",
             "7baf524b04": "workspace",
             "d0bc793689": "Root directory where workspace folders are created.",
-            "4c95d08fa2": "Workspace Directory"
+            "4c95d08fa2": "Workspace Directory",
+            "161a86a9da": "Confirm before closing pinned tabs",
+            "8e593f04fc": "Show a confirmation dialog before a pinned tab is closed.",
+            "defaultProjectRuntime": "Default Project Runtime",
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
           }
         },
         "git": {
@@ -7411,7 +7469,9 @@
             "883aad2801": "Project-specific display details for the sidebar and tabs.",
             "7e1e456a95": "Display Name",
             "keepForkUpToDate": "Keep Fork Up to Date",
-            "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream."
+            "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream.",
+            "projectRuntime": "Project Runtime",
+            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
           }
         },
         "runtime": {
@@ -7970,6 +8030,40 @@
           "ask": "Ask",
           "safeAuto": "Safe Auto",
           "off": "Off"
+        },
+        "DefaultWindowsProjectRuntimeSetting": {
+          "defaultRuntime": "Default project runtime",
+          "windows": "Windows",
+          "wsl": "WSL",
+          "selectDistro": "Select distro",
+          "windowsDescription": "Projects inherit Windows unless a project overrides it.",
+          "wslUnavailable": "WSL is not available. Projects that inherit WSL will need repair.",
+          "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
+          "wslDescription": "Projects inherit {{value0}} via WSL unless a project overrides it."
+        },
+        "ProjectWindowsRuntimeSetting": {
+          "projectRuntime": "Project runtime",
+          "defaultRuntime": "Default ({{value0}})",
+          "windows": "Windows",
+          "wsl": "WSL",
+          "selectDistro": "Select distro",
+          "runtimeChangeHelp": "Runtime changes apply to new terminals, agent checks, and skill discovery for this project. Existing terminals keep their current runtime.",
+          "wslUnavailable": "WSL is not available. Switch this project to Windows or repair WSL.",
+          "distroMissing": "{{value0}} is not installed in WSL. Choose an installed distro or switch this project to Windows.",
+          "distroRequired": "Choose a WSL distro or switch this project to Windows.",
+          "inheritedWsl": "No project override. General settings select {{value0}} via WSL.",
+          "projectWsl": "This project runs in {{value0}} via WSL.",
+          "inheritedWindows": "No project override. General settings select Windows.",
+          "projectWindows": "This project runs on Windows.",
+          "liveTerminalSingular": "{{count}} live terminal",
+          "liveTerminalPlural": "{{count}} live terminals",
+          "activeTaskSingular": "{{count}} active task",
+          "activeTaskPlural": "{{count}} active tasks",
+          "runtimeSessionJoin": "{{value0}} and {{value1}}",
+          "runtimeSessionWarning": "{{value0}} will keep running in the current runtime. Let tasks finish or restart terminals before continuing.",
+          "pendingRuntimeChange": "Runtime change pending. New project work will use the selected runtime after you apply.",
+          "cancel": "Cancel",
+          "applyRuntimeChange": "Apply runtime change"
         },
         "PrivacyDiagnosticsRows": {
           "5a7cbe069a": "DO_NOT_TRACK=1 is set — creating and sending diagnostic files is disabled.",
@@ -8742,26 +8836,6 @@
                   "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
                   "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
                 }
-              },
-              "pull": {
-                "policy": {
-                  "error": {
-                    "notice": {
-                      "merge": "Merge",
-                      "mergeDescription": "Create a merge commit when local and remote both changed.",
-                      "rebase": "Rebase",
-                      "rebaseDescription": "Replay local commits on top of the remote branch.",
-                      "fastForwardOnly": "Fast-forward only",
-                      "fastForwardOnlyDescription": "Only pull when no merge or rebase is needed.",
-                      "title": "Pull needs a policy",
-                      "diverged": "Diverged",
-                      "body": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
-                      "copyPolicyCommand": "Copy {{value0}} pull policy command",
-                      "copied": "Copied",
-                      "copyCommand": "Copy command"
-                    }
-                  }
-                }
               }
             }
           },
@@ -8935,6 +9009,24 @@
             "8c2d5fab13": "Copy commit hash",
             "9d3e60bc24": "Copy commit message",
             "ae4f71cd35": "Explain changes"
+          },
+          "pull": {
+            "policy": {
+              "notice": {
+                "merge": "Merge",
+                "mergeDescription": "Create a merge commit when local and remote both changed.",
+                "rebase": "Rebase",
+                "rebaseDescription": "Replay local commits on top of the remote branch.",
+                "fastForwardOnly": "Fast-forward only",
+                "fastForwardOnlyDescription": "Only pull when no merge or rebase is needed.",
+                "title": "Pull needs a policy",
+                "diverged": "Diverged",
+                "body": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+                "copyAria": "Copy {{value0}} pull policy command",
+                "copied": "Copied",
+                "copyCommand": "Copy command"
+              }
+            }
           }
         }
       },
@@ -11372,6 +11464,26 @@
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
         "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+      },
+      "ShortcutKeyCombo": {
+        "07eb4985a1": "Double-tap {{value0}}"
+      },
+      "star": {
+        "nag": {
+          "StarNagToastHost": {
+            "starredThanks": "Starred — thank you!",
+            "githubOpened": "GitHub opened",
+            "opening": "Opening…",
+            "starring": "Starring…",
+            "openGithub": "Open GitHub",
+            "starOnGithub": "Star on GitHub",
+            "onboardingCompleted": "You’re all set!",
+            "body": "If you’re enjoying Orca so far, a GitHub star helps other developers discover it.",
+            "openedBrowser": "GitHub opened in your browser.",
+            "dismiss": "Dismiss",
+            "later": "Later"
+          }
+        }
       }
     },
     "i18n": {

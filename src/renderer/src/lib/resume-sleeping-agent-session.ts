@@ -5,6 +5,7 @@ import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { isWslUncPath } from '../../../shared/wsl-paths'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -16,6 +17,13 @@ function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId)
+  if (projectRuntime?.status === 'repair-required') {
+    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
+  }
+  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+    return 'linux'
+  }
   if (repo?.connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
     return 'linux'
   }
@@ -81,11 +89,10 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
 export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): number {
   const records = Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
-    // Why: quit-time captures (#5232) cover panes that still exist in the
-    // restored session. Those panes own their own recovery — warm reattach
-    // when the daemon kept the agent alive, or the pane-level cold-restore
-    // resume — so launching a separate tab here would duplicate the session.
-    .filter((record) => record.origin !== 'quit')
+    // Why: pane-owned captures (#5232/#5626) cover panes that still exist in
+    // the restored session. Those panes own their own recovery — warm reattach
+    // when the daemon kept the agent alive, or pane-level cold-restore resume.
+    .filter((record) => record.origin !== 'quit' && record.origin !== 'live')
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
 
   let launched = 0

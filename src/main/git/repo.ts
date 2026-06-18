@@ -13,6 +13,17 @@ import { normalizeGitUsername } from './git-username'
 
 const GH_LOGIN_TIMEOUT_MS = 2500
 
+type LocalGitExecOptions = {
+  wslDistro?: string
+}
+
+function gitExecOptions(
+  cwd: string,
+  options: LocalGitExecOptions = {}
+): { cwd: string; wslDistro?: string } {
+  return options.wslDistro ? { cwd, wslDistro: options.wslDistro } : { cwd }
+}
+
 /**
  * Ordered probe list used to resolve a repo's default base ref when no
  * explicit origin/HEAD symbolic-ref is set. `returnAs` is the short-name
@@ -324,8 +335,11 @@ export function getDefaultBaseRef(path: string): string | null {
   return null
 }
 
-export async function getBaseRefDefault(path: string): Promise<string | null> {
-  return getDefaultBaseRefAsync(path)
+export async function getBaseRefDefault(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<string | null> {
+  return getDefaultBaseRefAsync(path, options)
 }
 
 /**
@@ -341,12 +355,13 @@ export async function getBaseRefDefault(path: string): Promise<string | null> {
 export function getRemoteDrift(
   repoPath: string,
   localRef: string,
-  remoteRef: string
+  remoteRef: string,
+  options: LocalGitExecOptions = {}
 ): { ahead: number; behind: number } | null {
   try {
     const stdout = gitExecFileSync(
       ['rev-list', '--left-right', '--count', `${localRef}...${remoteRef}`],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     const [aheadStr, behindStr] = stdout.trim().split(/\s+/)
     const ahead = Number(aheadStr)
@@ -372,12 +387,13 @@ export function getRecentDriftSubjects(
   repoPath: string,
   localRef: string,
   remoteRef: string,
-  limit: number
+  limit: number,
+  options: LocalGitExecOptions = {}
 ): string[] {
   try {
     const stdout = gitExecFileSync(
       ['log', '--format=%s', '-n', String(limit), `${localRef}..${remoteRef}`],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     return stdout.split('\n').filter((s) => s.trim().length > 0)
   } catch {
@@ -450,8 +466,13 @@ export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<strin
   })
 }
 
-async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
-  return resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, { cwd: path }))
+async function getDefaultBaseRefAsync(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<string | null> {
+  return resolveDefaultBaseRefViaExec((argv) =>
+    gitExecFileAsync(argv, gitExecOptions(path, options))
+  )
 }
 
 /**
@@ -562,8 +583,11 @@ export function isForEachRefExcludeUnsupportedError(error: unknown): boolean {
  * Order: remote configured on the current default branch → origin → the single
  * remote when the repo has exactly one → error.
  */
-export async function getDefaultRemote(path: string): Promise<string> {
-  const defaultRef = await getDefaultBaseRefAsync(path)
+export async function getDefaultRemote(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<string> {
+  const defaultRef = await getDefaultBaseRefAsync(path, options)
   // Why: getDefaultBaseRefAsync returns null when no default branch can be
   // detected (e.g. a brand-new repo with no commits on origin). Guard so we
   // don't crash on .includes(); fall through to the remote-list heuristics.
@@ -577,7 +601,7 @@ export async function getDefaultRemote(path: string): Promise<string> {
     try {
       const { stdout } = await gitExecFileAsync(
         ['config', '--get', `branch.${defaultBranch}.remote`],
-        { cwd: path }
+        gitExecOptions(path, options)
       )
       const value = stdout.trim()
       if (value) {
@@ -589,7 +613,7 @@ export async function getDefaultRemote(path: string): Promise<string> {
   }
 
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
     const remotes = stdout
       .split('\n')
       .map((line) => line.trim())
@@ -659,9 +683,9 @@ export async function searchBaseRefDetails(
   }
 }
 
-async function listRemoteNames(path: string): Promise<string[]> {
+async function listRemoteNames(path: string, options: LocalGitExecOptions = {}): Promise<string[]> {
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
     return stdout
       .split('\n')
       .map((line) => line.trim())
@@ -753,9 +777,13 @@ export function normalizeRefSearchQuery(query: string): string {
   return query.trim().replace(/[*?[\]\\]/g, '')
 }
 
-async function hasGitRefAsync(path: string, ref: string): Promise<boolean> {
+async function hasGitRefAsync(
+  path: string,
+  ref: string,
+  options: LocalGitExecOptions = {}
+): Promise<boolean> {
   try {
-    await gitExecFileAsync(['rev-parse', '--verify', ref], { cwd: path })
+    await gitExecFileAsync(['rev-parse', '--verify', ref], gitExecOptions(path, options))
     return true
   } catch {
     return false
@@ -767,17 +795,18 @@ export type BranchConflictKind = 'local' | 'remote'
 export async function getBranchConflictKind(
   path: string,
   branchName: string,
-  allowedBaseRef?: string
+  allowedBaseRef?: string,
+  options: LocalGitExecOptions = {}
 ): Promise<BranchConflictKind | null> {
-  if (await hasGitRefAsync(path, `refs/heads/${branchName}`)) {
+  if (await hasGitRefAsync(path, `refs/heads/${branchName}`, options)) {
     return 'local'
   }
 
   try {
-    const remoteNames = (await listRemoteNames(path)).sort((a, b) => b.length - a.length)
+    const remoteNames = (await listRemoteNames(path, options)).sort((a, b) => b.length - a.length)
     const { stdout } = await gitExecFileAsync(
       ['for-each-ref', '--format=%(refname)', 'refs/remotes'],
-      { cwd: path }
+      gitExecOptions(path, options)
     )
     const hasRemoteConflict = stdout.split('\n').some((ref) => {
       const trimmed = ref.trim()

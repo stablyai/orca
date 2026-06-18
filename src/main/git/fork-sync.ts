@@ -4,11 +4,14 @@ import {
   type GitForkSyncExpectedUpstream,
   type GitForkSyncResult
 } from '../../shared/git-fork-sync'
+import type { GitRuntimeOptions } from './git-runtime-options'
+import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
 
 export async function gitSyncForkDefaultBranch(
   worktreePath: string,
-  expectedUpstream: GitForkSyncExpectedUpstream
+  expectedUpstream: GitForkSyncExpectedUpstream,
+  options: GitRuntimeOptions = {}
 ): Promise<GitForkSyncResult> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 60_000)
@@ -16,7 +19,7 @@ export async function gitSyncForkDefaultBranch(
     return await syncForkDefaultBranch(
       (args) =>
         gitExecFileAsync(args, {
-          cwd: worktreePath,
+          ...gitOptionsForWorktree(worktreePath, options),
           timeout: 60_000,
           signal: controller.signal
         }),

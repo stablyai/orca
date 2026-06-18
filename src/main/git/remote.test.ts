@@ -484,6 +484,26 @@ describe('git remote operations', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', '--prune'], { cwd: '/repo' })
   })
 
+  it('passes the selected WSL distro through fetch validation and execution', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitFetch(
+      '/repo',
+      {
+        remoteName: 'fork',
+        branchName: 'feature/fix'
+      },
+      { wslDistro: 'Ubuntu' }
+    )
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo', wslDistro: 'Ubuntu' }],
+      [['fetch', '--prune', 'fork'], { cwd: '/repo', wslDistro: 'Ubuntu' }]
+    ])
+  })
+
   it('fetches the explicit publish target remote when provided', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: '', stderr: '' })

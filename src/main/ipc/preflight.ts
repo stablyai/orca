@@ -14,13 +14,9 @@ import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-ws
 import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
 import { buildLocalPreflightEnv } from './preflight-local-env'
+import { getPreflightWslTarget, type PreflightRuntimeContext } from './preflight-runtime-target'
 const execFileAsync = promisify(execFile)
 const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
-
-type PreflightRuntimeContext = {
-  wslDistro?: string | null
-  wslDefault?: boolean
-}
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -153,17 +149,6 @@ function uniqueAgentIds(ids: Iterable<string>): string[] {
   return [...new Set(ids)]
 }
 
-function getPreflightWslTarget(context?: PreflightRuntimeContext): WslPreflightTarget | null {
-  if (process.platform !== 'win32') {
-    return null
-  }
-  const distro = context?.wslDistro?.trim()
-  if (distro) {
-    return { distro }
-  }
-  return context?.wslDefault ? {} : null
-}
-
 async function detectCommandRuntime(
   command: string,
   context?: PreflightRuntimeContext
@@ -236,6 +221,17 @@ export type RefreshAgentsResult = {
 export async function refreshShellPathAndDetectAgents(
   context?: PreflightRuntimeContext
 ): Promise<RefreshAgentsResult> {
+  if (getPreflightWslTarget(context)) {
+    const agents = await detectInstalledAgents(context)
+    return {
+      agents,
+      addedPathSegments: [],
+      shellHydrationOk: true,
+      pathSource: 'sync_seed_only',
+      pathFailureReason: 'none'
+    }
+  }
+
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
   const agents = await detectInstalledAgents(context)

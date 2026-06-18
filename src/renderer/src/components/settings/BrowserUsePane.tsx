@@ -15,6 +15,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
@@ -28,6 +29,11 @@ import { BrowserUseEnableSwitch } from './BrowserUseEnableSwitch'
 import { BrowserUseSkillStep } from './BrowserUseSkillStep'
 import { BrowserUseCliStep } from './BrowserUseCliStep'
 import { BrowserUseCookieImportStep } from './BrowserUseCookieImportStep'
+import {
+  buildSkillInstallCommandForRuntime,
+  ensureWslCliAvailableForAgentSkillTerminal,
+  getWslCliDistroRequest
+} from './CliSkillRuntimeSetup'
 import { translate } from '@/i18n/i18n'
 
 type BrowserUseSetupProps = {
@@ -48,9 +54,17 @@ export function BrowserUseSetup({
   const [cliLoading, setCliLoading] = useState(true)
   const [cliBusy, setCliBusy] = useState(false)
   const mountedRef = useMountedRef()
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const browserUseInstallCommand =
+    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
+      ? buildSkillInstallCommandForRuntime(
+          ORCA_CLI_SKILL_INSTALL_COMMAND,
+          activeSkillRuntime.agentRuntime
+        )
+      : ORCA_CLI_SKILL_INSTALL_COMMAND
 
   const handleCliStatusChange = useCallback(
-    (nextStatus: CliInstallStatus): void => {
+    (nextStatus: CliInstallStatus | null): void => {
       if (mountedRef.current) {
         setCliStatus(nextStatus)
       }
@@ -73,7 +87,17 @@ export function BrowserUseSetup({
   const refreshCli = useCallback(async (): Promise<void> => {
     setCliLoading(true)
     try {
-      handleCliStatusChange(await window.api.cli.getInstallStatus())
+      if (activeSkillRuntime.installDisabledReason) {
+        handleCliStatusChange(null)
+        return
+      }
+      const nextStatus =
+        activeSkillRuntime.agentRuntime?.runtime === 'wsl'
+          ? await window.api.cli.getWslInstallStatus(
+              getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
+            )
+          : await window.api.cli.getInstallStatus()
+      handleCliStatusChange(nextStatus)
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
@@ -90,7 +114,7 @@ export function BrowserUseSetup({
         setCliLoading(false)
       }
     }
-  }, [handleCliStatusChange, mountedRef])
+  }, [activeSkillRuntime, handleCliStatusChange, mountedRef])
 
   useEffect(() => {
     if (!browserUseEnabled) {
@@ -114,15 +138,25 @@ export function BrowserUseSetup({
     refresh: refreshSkill
   } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
     enabled: browserUseEnabled,
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
   const handleEnableCli = async (): Promise<void> => {
+    if (activeSkillRuntime.installDisabledReason) {
+      return
+    }
     setCliBusy(true)
     try {
-      const next = await ensureOrcaCliAvailableForAgentSkillTerminal({
-        onStatusChange: handleCliStatusChange
-      })
+      const next =
+        activeSkillRuntime.agentRuntime?.runtime === 'wsl'
+          ? await ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
+          : await ensureOrcaCliAvailableForAgentSkillTerminal({
+              onStatusChange: handleCliStatusChange
+            })
+      if (activeSkillRuntime.agentRuntime?.runtime === 'wsl') {
+        handleCliStatusChange(next)
+      }
       if (mountedRef.current && isOrcaCliAvailableOnPath(next)) {
         toast.success(
           translate(
@@ -146,7 +180,8 @@ export function BrowserUseSetup({
   const showStep2 = matchesSettingsSearch(searchQuery, [getBrowserUsePaneSearchEntries()[1]])
   const showStep3 = matchesSettingsSearch(searchQuery, [getBrowserUsePaneSearchEntries()[2]])
   const completedCount = [cliEnabled, skillDetected, cookiesImported].filter(Boolean).length
-  const step2Blocked = !cliEnabled && !skillDetected
+  const step2Blocked =
+    Boolean(activeSkillRuntime.installDisabledReason) || (!cliEnabled && !skillDetected)
   const step3Blocked = !cookiesImported && (!cliEnabled || !skillDetected)
 
   const sourceLabel = defaultProfile?.source
@@ -239,17 +274,27 @@ export function BrowserUseSetup({
           )}
         >
           <BrowserUseSkillStep
-            command={ORCA_CLI_SKILL_INSTALL_COMMAND}
+            command={browserUseInstallCommand}
             skillDetected={skillDetected}
             skillLoading={skillLoading}
-            skillError={skillError}
+            skillError={activeSkillRuntime.installDisabledReason ?? skillError}
             disabled={step2Blocked}
+            terminalShellOverride={activeSkillRuntime.terminalShellOverride}
             preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+            getPrerequisiteStatus={() =>
+              activeSkillRuntime.agentRuntime?.runtime === 'wsl'
+                ? window.api.cli.getWslInstallStatus(
+                    getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
+                  )
+                : window.api.cli.getInstallStatus()
+            }
             onBeforeOpenTerminal={async () => {
               useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
-              await ensureOrcaCliAvailableForAgentSkillTerminal({
-                onStatusChange: handleCliStatusChange
-              })
+              await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
+                ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
+                : ensureOrcaCliAvailableForAgentSkillTerminal({
+                    onStatusChange: handleCliStatusChange
+                  }))
             }}
             onRecheck={refreshSkill}
           />

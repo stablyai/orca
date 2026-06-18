@@ -495,6 +495,12 @@
             "unavailable": "Orca no puede verificar esta carpeta ahora mismo. Revisa el runtime o la conexión SSH e inténtalo de nuevo."
           }
         }
+      },
+      "projectSkillRuntime": {
+        "wslUnavailable": "Project runtime needs WSL before this skill can be installed.",
+        "distroRequired": "Select a WSL distro for this project before installing this skill.",
+        "distroMissing": "The selected WSL distro is unavailable. Choose an available distro or switch this project to Windows.",
+        "wslDefault": "WSL default"
       }
     },
     "hooks": {
@@ -521,6 +527,7 @@
       },
       "useIpcEvents": {
         "0e3cf53060": "Pestaña del navegador {{value0}} no encontrada",
+        "2f6637fe6c": "La pestaña del navegador {{value0}} está fijada",
         "a8d2bf8e9e": "No hay ninguna pestaña activa del navegador para cerrar",
         "291c8ed902": "Las pestañas del navegador no están disponibles mientras un tiempo de ejecución remoto está activo",
         "f45fa2b03c": "Los perfiles del navegador no están disponibles mientras un tiempo de ejecución remoto está activo",
@@ -2347,6 +2354,13 @@
                 }
               }
             }
+          },
+          "PinnedTabCloseDialog": {
+            "6c190f295a": "¿Cerrar pestaña fijada?",
+            "0d1963f4a6": "Esta pestaña está fijada. ¿Seguro que quieres cerrarla?",
+            "dont_ask_again": "No volver a preguntar por pestañas fijadas",
+            "0b38ee2f86": "Cancelar",
+            "c337c9d75c": "Cerrar"
           }
         }
       },
@@ -2691,7 +2705,15 @@
             "cd9d7b40ff": "Reiniciar {{value0}} sesiones",
             "6cd6650b4c": "Reiniciar sesión",
             "1446d0d8a0": "{{value0}} Las sesiones del Codex todavía están en la cuenta anterior.",
-            "605901a495": "1 sesión del Codex todavía está en la cuenta anterior"
+            "605901a495": "1 sesión del Codex todavía está en la cuenta anterior",
+            "5e5f9f5160": "1 rate-limit reset available",
+            "5ecae9197c": "{{value0}} rate-limit resets available",
+            "25d8bbde69": "Using reset…",
+            "e159fc1fd7": "Reset now",
+            "972a1ff497": "Reset Codex limits?",
+            "6d1042aa6f": "This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.",
+            "f077f586db": "Don't ask again",
+            "c0e972d726": "Cancel"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -2833,7 +2855,9 @@
             "a9a318b7a3": "Error al actualizar: se muestran datos almacenados en caché",
             "7ad719c4bf": "Limitado",
             "e740f92596": "Error al actualizar",
-            "8418ec448d": "No se pudo actualizar el uso de {{value0}}. Es posible que las sesiones de agente sigan iniciadas."
+            "8418ec448d": "No se pudo actualizar el uso de {{value0}}. Es posible que las sesiones de agente sigan iniciadas.",
+            "45198c7d95": "1 rate-limit reset available",
+            "bce421cba3": "{{value0}} rate-limit resets available"
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3213,9 +3237,7 @@
         "AddRepoCreateStep": {
           "0ae45b8238": "mi-proyecto",
           "a8149a3a5a": "Nombre",
-          "038729c107": "Carpeta",
           "11fd2a7db8": "Repositorio Git",
-          "180e9b5e48": "Tipo de proyecto",
           "5e97f0c4b9": "Proyecto creado",
           "2c12db1511": "Proyecto ya agregado",
           "875dda0995": "Introduzca una ruta principal del servidor.",
@@ -3225,7 +3247,7 @@
           "b100311784": "Ponle un nombre y Orca creará un proyecto real con valores predeterminados sensatos.",
           "685b5eefe1": "{{kind}} en {{parent}}",
           "2a762f3b19": "Comprobando Git en este host...",
-          "fe1e616c5b": "Git no está instalado, así que una carpeta simple será el valor predeterminado.",
+          "fe1e616c5b": "Git es necesario para crear un proyecto.",
           "c234df77f7": "Elige o introduce una carpeta principal del servidor antes de crear.",
           "3a13f6e88b": "ubicación no seleccionada",
           "6ed14c0281": "carpeta del servidor no seleccionada",
@@ -3577,6 +3599,9 @@
           "3d4b9c4997": "Flotar",
           "ba87080fb7": "Mostrar propiedades",
           "320b675c9a": "Diseño de tarjeta",
+          "newCardDisplay": {
+            "title": "Visualización de tarjeta"
+          },
           "09faabd875": "Orden del proyecto",
           "7bada3b1ab": "Ordenar por",
           "dc0bb670bc": "Agrupar por",
@@ -3599,6 +3624,8 @@
           "b8dcc6f321": "Enlace PR/MR",
           "ca4d3c522e": "Cuestión Linear",
           "91dfc653e8": "billete de GitHub",
+          "bdd23b4e07": "Issues de GitHub",
+          "44713a5d04": "Issues de Linear",
           "cc17bd443b": "Detallado",
           "0f9b959b31": "relaciones públicas",
           "e029a2d775": "Estado",
@@ -3611,7 +3638,14 @@
           "projectSshHost": "Project SSH",
           "activeRuntimeHost": "Active server",
           "projectRuntimeHost": "Project server",
-          "631b97eea9": "Host scope"
+          "631b97eea9": "Host scope",
+          "2d4f0eb933": "Predeterminado",
+          "1a0eec0d35": "Estado",
+          "b5536d5a88": "Tareas",
+          "8d62c68b35": "Notas",
+          "2d74665a56": "Puertos",
+          "65a9820bd1": "Estados del agente",
+          "219ebf1961": "Nombre de rama"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -3650,7 +3684,9 @@
           "8ce44af9a8": "Cambiar nombre {{value0}}",
           "395e541d5d": "Estados",
           "34f03eb0de": "Configuración del tablero",
-          "26cbc92150": "Configuración del tablero del espacio de trabajo"
+          "26cbc92150": "Configuración del tablero del espacio de trabajo",
+          "87d24a0c2f": "Sincronizar el estado del tablero y de incidencias",
+          "4c2eaa78cc": "Al mover un espacio de trabajo vinculado, se actualiza el estado de su incidencia de Linear cuando existe un estado de flujo de trabajo coincidente."
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Vacío",
@@ -3670,8 +3706,6 @@
           "0f33af979b": "Pago parcial. Los archivos fuera de estas rutas no están en el disco.",
           "4f964d5e8c": "escaso",
           "7d517f82e2": "primario",
-          "c6833b5187": "Se cambiará el nombre del mensaje del primer agente.",
-          "f62a3dadbc": "cambiar nombre pendiente",
           "4eba2ea99e": "Falló el nombre automático. Haga clic para ver detalles.",
           "74522ee457": "cambiar el nombre falló",
           "02e19349f4": "Error al cambiar el nombre automáticamente: ver error",
@@ -4105,6 +4139,19 @@
           "2d3e4f5a6b": "Check connection",
           "3c4d5e6f7a": "Manage host…",
           "6e7f8a9b0c": "Remove host…"
+        },
+        "WorkspaceKanbanDrawer": {
+          "1975a4e480": "Error al sincronizar el estado de la tarea",
+          "e02b0d92ff": "Sincronización del estado de la tarea omitida",
+          "c1d2e3f4a5": "No se pudo leer la incidencia {{value0}} de Linear.",
+          "d2e3f4a5b6": "No hay ningún estado de flujo de trabajo de Linear que coincida con {{value0}}.",
+          "e3f4a5b6c7": "Varios estados de flujo de trabajo de Linear coinciden con {{value0}}.",
+          "f4a5b6c7d8": "No se pudo actualizar la incidencia {{value0}} de Linear.",
+          "a5b6c7d8e9": "No se pudo sincronizar la incidencia {{value0}} de Linear.",
+          "b6c7d8e9f0": "No se pudo completar la sincronización del estado de la tarea.",
+          "c7d8e9f0a1": "{{value0}} actualizadas",
+          "d8e9f0a1b2": "{{value0}} omitidas",
+          "e9f0a1b2c3": "{{value0}} fallidas"
         }
       },
       "shared": {
@@ -4673,6 +4720,12 @@
             "idleMinutesSuffix": "minutos",
             "title": "Hibernación de agentes",
             "toggleLabel": "Alternar hibernación de agentes"
+          },
+          "newWorktreeCardStyle": {
+            "copy": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
+            "description": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
+            "title": "Nuevo estilo de tarjeta",
+            "toggleLabel": "Alternar nuevo estilo de tarjeta"
           }
         },
         "FloatingWorkspacePane": {
@@ -4738,7 +4791,11 @@
           "c46cdbbd4e": "Red"
         },
         "GeneralPane": {
-          "d58fccfd84": "Navegación"
+          "d58fccfd84": "Navegación",
+          "5cb5475664": "Confirmar antes de cerrar pestañas fijadas",
+          "36b2a5dc6d": "Muestra un diálogo de confirmación antes de cerrar una pestaña fijada.",
+          "projectRuntime": "Project Runtime",
+          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
         },
         "GeneralSupportSection": {
           "af7d9f4396": "¡Gracias por el apoyo!",
@@ -5430,7 +5487,9 @@
           "addPlannedHostHelp": "Remember this host and finish adding the project later.",
           "existingFolder": "Existing folder",
           "addPlannedHostToHost": "Add {{host}}",
-          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later."
+          "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later.",
+          "projectRuntime": "Project Runtime",
+          "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Plantilla de comando",
@@ -5705,7 +5764,8 @@
           "97dccee14e": "Modificado",
           "3b11ef3a43": "{{value0}} atajo",
           "f6579be67b": "Cambiar acceso directo",
-          "6a7848fdac": "Escuchando atajos"
+          "6a7848fdac": "Escuchando atajos",
+          "a98d551407": "Pulsa un atajo o toca dos veces una tecla modificadora (p. ej., {{value0}}). Esc cancela."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Estado",
@@ -6733,6 +6793,17 @@
               "sleep": "suspender",
               "terminal": "terminal",
               "title": "Hibernación de agentes"
+            },
+            "newWorktreeCardStyle": {
+              "card": "tarjeta",
+              "cards": "tarjetas",
+              "description": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
+              "menu": "menú",
+              "metadata": "metadatos",
+              "status": "estado",
+              "title": "Nuevo estilo de tarjeta",
+              "worktree": "worktree",
+              "worktrees": "worktrees"
             }
           }
         },
@@ -6892,7 +6963,11 @@
             "7887a2c262": "carpeta",
             "7baf524b04": "espacio de trabajo",
             "d0bc793689": "Directorio raíz donde se crean las carpetas del espacio de trabajo.",
-            "4c95d08fa2": "Directorio de espacio de trabajo"
+            "4c95d08fa2": "Directorio de espacio de trabajo",
+            "161a86a9da": "Confirmar antes de cerrar pestañas fijadas",
+            "8e593f04fc": "Muestra un diálogo de confirmación antes de cerrar una pestaña fijada.",
+            "defaultProjectRuntime": "Default Project Runtime",
+            "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
           }
         },
         "git": {
@@ -7357,7 +7432,9 @@
             "remote": "remote",
             "vm": "vm",
             "keepForkUpToDate": "Mantener el fork actualizado",
-            "keepForkUpToDateDescription": "Avanza este fork de forma segura desde upstream con fast-forward."
+            "keepForkUpToDateDescription": "Avanza este fork de forma segura desde upstream con fast-forward.",
+            "projectRuntime": "Project Runtime",
+            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
           }
         },
         "runtime": {
@@ -7953,6 +8030,40 @@
           "ask": "Preguntar",
           "safeAuto": "Seguro automático",
           "off": "Desactivado"
+        },
+        "DefaultWindowsProjectRuntimeSetting": {
+          "defaultRuntime": "Default project runtime",
+          "windows": "Windows",
+          "wsl": "WSL",
+          "selectDistro": "Select distro",
+          "windowsDescription": "Projects inherit Windows unless a project overrides it.",
+          "wslUnavailable": "WSL is not available. Projects that inherit WSL will need repair.",
+          "distroRequired": "Choose a WSL distro before projects can inherit WSL.",
+          "wslDescription": "Projects inherit {{value0}} via WSL unless a project overrides it."
+        },
+        "ProjectWindowsRuntimeSetting": {
+          "projectRuntime": "Project runtime",
+          "defaultRuntime": "Default ({{value0}})",
+          "windows": "Windows",
+          "wsl": "WSL",
+          "selectDistro": "Select distro",
+          "runtimeChangeHelp": "Runtime changes apply to new terminals, agent checks, and skill discovery for this project. Existing terminals keep their current runtime.",
+          "wslUnavailable": "WSL is not available. Switch this project to Windows or repair WSL.",
+          "distroMissing": "{{value0}} is not installed in WSL. Choose an installed distro or switch this project to Windows.",
+          "distroRequired": "Choose a WSL distro or switch this project to Windows.",
+          "inheritedWsl": "No project override. General settings select {{value0}} via WSL.",
+          "projectWsl": "This project runs in {{value0}} via WSL.",
+          "inheritedWindows": "No project override. General settings select Windows.",
+          "projectWindows": "This project runs on Windows.",
+          "liveTerminalSingular": "{{count}} terminal activo",
+          "liveTerminalPlural": "{{count}} terminales activos",
+          "activeTaskSingular": "{{count}} tarea activa",
+          "activeTaskPlural": "{{count}} tareas activas",
+          "runtimeSessionJoin": "{{value0}} y {{value1}}",
+          "runtimeSessionWarning": "{{value0}} seguirá ejecutándose en el runtime actual. Deja que las tareas terminen o reinicia las terminales antes de continuar.",
+          "pendingRuntimeChange": "Runtime change pending. New project work will use the selected runtime after you apply.",
+          "cancel": "Cancel",
+          "applyRuntimeChange": "Apply runtime change"
         },
         "PrivacyDiagnosticsRows": {
           "5a7cbe069a": "DO_NOT_TRACK=1 está configurado: crear y enviar archivos de diagnóstico está deshabilitado.",
@@ -8725,26 +8836,6 @@
                   "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
                   "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
                 }
-              },
-              "pull": {
-                "policy": {
-                  "error": {
-                    "notice": {
-                      "merge": "Merge",
-                      "mergeDescription": "Create a merge commit when local and remote both changed.",
-                      "rebase": "Rebase",
-                      "rebaseDescription": "Replay local commits on top of the remote branch.",
-                      "fastForwardOnly": "Fast-forward only",
-                      "fastForwardOnlyDescription": "Only pull when no merge or rebase is needed.",
-                      "title": "Pull needs a policy",
-                      "diverged": "Diverged",
-                      "body": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
-                      "copyPolicyCommand": "Copy {{value0}} pull policy command",
-                      "copied": "Copied",
-                      "copyCommand": "Copy command"
-                    }
-                  }
-                }
               }
             }
           },
@@ -8918,6 +9009,24 @@
             "8c2d5fab13": "Copiar hash del commit",
             "9d3e60bc24": "Copiar mensaje del commit",
             "ae4f71cd35": "Explicar los cambios"
+          },
+          "pull": {
+            "policy": {
+              "notice": {
+                "merge": "Merge",
+                "mergeDescription": "Create a merge commit when local and remote both changed.",
+                "rebase": "Rebase",
+                "rebaseDescription": "Replay local commits on top of the remote branch.",
+                "fastForwardOnly": "Fast-forward only",
+                "fastForwardOnlyDescription": "Only pull when no merge or rebase is needed.",
+                "title": "Pull needs a policy",
+                "diverged": "Diverged",
+                "body": "This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.",
+                "copyAria": "Copy {{value0}} pull policy command",
+                "copied": "Copied",
+                "copyCommand": "Copy command"
+              }
+            }
           }
         }
       },
@@ -11355,6 +11464,9 @@
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
         "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+      },
+      "ShortcutKeyCombo": {
+        "07eb4985a1": "Double-tap {{value0}}"
       },
       "star": {
         "nag": {

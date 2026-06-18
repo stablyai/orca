@@ -3,6 +3,7 @@
  * asserted without mounting the full Electron renderer. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import type { BrowserTab, Tab, TabGroup, TerminalTab } from '../../../../shared/types'
 import type { OpenFile } from '@/store/slices/editor'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
@@ -61,6 +62,7 @@ type FloatingPanelStoreState = {
   pinFile: (fileId: string, tabId?: string) => void
   openFile: (file: unknown, options?: unknown) => void
   browserDefaultUrl: string
+  keybindings?: KeybindingOverrides
   tabBarOrderByWorktree: Record<string, string[]>
   settings: { activeRuntimeEnvironmentId?: string | null; floatingTerminalCwd?: string }
 }
@@ -430,6 +432,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
     setTabColor: mocks.setTabColor,
     setTabPaneExpanded: mocks.setTabPaneExpanded,
     browserDefaultUrl: 'about:blank',
+    keybindings: {},
     tabBarOrderByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs.map((tab) => tab.id) },
     settings: { floatingTerminalCwd: '' }
   } satisfies FloatingPanelStoreState
@@ -1160,6 +1163,143 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     expect(preventDefault).toHaveBeenCalledWith()
     expect(mocks.pickFloatingMarkdownDocument).toHaveBeenCalledWith()
+  })
+
+  it('routes focused floating terminal double-tap shortcuts to the floating workspace', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
+      'tab.newTerminal': ['DoubleTap+Shift']
+    }
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const target = {
+      classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
+      closest: vi.fn((selector: string) =>
+        selector === '[data-floating-terminal-panel]' ? panelElement : null
+      )
+    }
+    Object.setPrototypeOf(target, HTMLElement.prototype)
+    attachRef(panel.props.ref, panelElement)
+    vi.stubGlobal('document', {
+      activeElement: target,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
+      | ((event: unknown) => void)
+      | undefined
+    const keyupListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keyup')?.[1] as ((event: unknown) => void) | undefined
+    if (!keydownListener || !keyupListener) {
+      throw new Error('keyboard listeners not registered')
+    }
+
+    const modifierEvent = {
+      altKey: false,
+      code: 'ShiftLeft',
+      ctrlKey: false,
+      defaultPrevented: false,
+      key: 'Shift',
+      metaKey: false,
+      repeat: false,
+      shiftKey: true,
+      target
+    }
+    const firstPreventDefault = vi.fn()
+    keydownListener({ ...modifierEvent, preventDefault: firstPreventDefault })
+    keyupListener({ ...modifierEvent })
+    const preventDefault = vi.fn()
+    const stopPropagation = vi.fn()
+    const stopImmediatePropagation = vi.fn()
+    keydownListener({
+      ...modifierEvent,
+      preventDefault,
+      stopImmediatePropagation,
+      stopPropagation
+    })
+    await flushAsyncWork()
+
+    expect(firstPreventDefault).not.toHaveBeenCalled()
+    expect(preventDefault).toHaveBeenCalledWith()
+    expect(stopPropagation).toHaveBeenCalledWith()
+    expect(stopImmediatePropagation).toHaveBeenCalledWith()
+    expect(mocks.createTab).toHaveBeenCalledTimes(1)
+    expect(mocks.createTab).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'floating-group',
+      undefined,
+      { activate: false }
+    )
+    expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
+  })
+
+  it('resets focused floating terminal double-tap detection on window blur', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+    ;(storeBox.state as FloatingPanelStoreState).keybindings = {
+      'tab.newTerminal': ['DoubleTap+Shift']
+    }
+    const element = await renderPanel(true)
+    const panel = findByProp(element, 'data-floating-terminal-panel')
+    const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+    const target = {
+      classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
+      closest: vi.fn((selector: string) =>
+        selector === '[data-floating-terminal-panel]' ? panelElement : null
+      )
+    }
+    Object.setPrototypeOf(target, HTMLElement.prototype)
+    attachRef(panel.props.ref, panelElement)
+    vi.stubGlobal('document', {
+      activeElement: target,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    })
+    runEffects()
+    const keydownListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keydown')?.[1] as
+      | ((event: unknown) => void)
+      | undefined
+    const keyupListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'keyup')?.[1] as ((event: unknown) => void) | undefined
+    const blurListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([type]) => type === 'blur')?.[1] as (() => void) | undefined
+    if (!keydownListener || !keyupListener || !blurListener) {
+      throw new Error('keyboard listeners not registered')
+    }
+
+    const modifierEvent = {
+      altKey: false,
+      code: 'ShiftLeft',
+      ctrlKey: false,
+      defaultPrevented: false,
+      key: 'Shift',
+      metaKey: false,
+      repeat: false,
+      shiftKey: true,
+      target
+    }
+    keydownListener({ ...modifierEvent, preventDefault: vi.fn() })
+    keyupListener({ ...modifierEvent })
+    blurListener()
+    const preventDefault = vi.fn()
+    keydownListener({
+      ...modifierEvent,
+      preventDefault,
+      stopImmediatePropagation: vi.fn(),
+      stopPropagation: vi.fn()
+    })
+    await flushAsyncWork()
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
   it('routes focused floating tab switch shortcuts to the floating workspace', async () => {

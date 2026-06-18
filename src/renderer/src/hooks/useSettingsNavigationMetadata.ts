@@ -98,7 +98,8 @@ export function buildSettingsNavigationMetadata({
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   const terminalPaneSearchEntries = getTerminalPaneSearchEntries({
-    isWindows: isWindowsTerminalHost,
+    isWindows,
+    isWindowsTerminalHost,
     isMac
   })
   const runtimeEnvironmentsSearchEntry = isWebClient
@@ -213,7 +214,7 @@ export function buildSettingsNavigationMetadata({
         'Workspace defaults, app setup, and maintenance.'
       ),
       icon: SlidersHorizontal,
-      searchEntries: getGeneralPaneSearchEntries(),
+      searchEntries: getGeneralPaneSearchEntries({ includeProjectRuntime: isWindowsTerminalHost }),
       group: 'setup'
     },
     {
@@ -489,7 +490,9 @@ export function buildSettingsNavigationMetadata({
       title: repo.displayName,
       description: `${getRepoKindLabel(repo)} • ${repo.path}`,
       icon: SlidersHorizontal,
-      searchEntries: getRepositoryPaneSearchEntries(repo),
+      searchEntries: getRepositoryPaneSearchEntries(repo, {
+        windowsRuntimeSupported: isWindowsTerminalHost
+      }),
       group: 'repositories'
     }))
   ]

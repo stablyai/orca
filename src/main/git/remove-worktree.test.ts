@@ -687,6 +687,47 @@ describe('listWorktrees', () => {
     expect(translateWslOutputPathsMock).toHaveBeenCalledTimes(2)
   })
 
+  it('passes the selected WSL distro when translating Windows-path worktree output', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        'worktree /mnt/c/Users/me/repo\nHEAD abc123\nbranch refs/heads/main\nsparse\n\n' +
+        'worktree /mnt/c/Users/me/repo-feature\nHEAD def456\nbranch refs/heads/feature/test\nsparse\n\n'
+    })
+    translateWslOutputPathsMock.mockImplementation((output: string) =>
+      output
+        .replace('/mnt/c/Users/me/repo-feature', 'C:\\Users\\me\\repo-feature')
+        .replace('/mnt/c/Users/me/repo', 'C:\\Users\\me\\repo')
+    )
+
+    await expect(listWorktrees('C:\\Users\\me\\repo', { wslDistro: 'Ubuntu' })).resolves.toEqual([
+      {
+        path: 'C:\\Users\\me\\repo',
+        head: 'abc123',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isSparse: true,
+        isMainWorktree: true
+      },
+      {
+        path: 'C:\\Users\\me\\repo-feature',
+        head: 'def456',
+        branch: 'refs/heads/feature/test',
+        isBare: false,
+        isSparse: true,
+        isMainWorktree: false
+      }
+    ])
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
+      cwd: 'C:\\Users\\me\\repo',
+      wslDistro: 'Ubuntu'
+    })
+    expect(translateWslOutputPathsMock).toHaveBeenCalledWith(
+      expect.any(String),
+      'C:\\Users\\me\\repo',
+      { wslDistro: 'Ubuntu' }
+    )
+  })
+
   it('returns no worktrees when the repo path is gone', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     gitExecFileAsyncMock.mockRejectedValueOnce(
@@ -805,7 +846,7 @@ describe('listWorktrees', () => {
       await new Promise<void>((resolve) => pendingProbeResolves.push(resolve))
       activeProbes -= 1
 
-      if (filePath.includes(sparseWorktreePath)) {
+      if (filePath.replaceAll('\\', '/').includes(sparseWorktreePath)) {
         return { isFile: () => true, size: 32 }
       }
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })

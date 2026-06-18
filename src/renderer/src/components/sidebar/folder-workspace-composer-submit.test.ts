@@ -11,7 +11,10 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace
 }))
 
-import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
+import {
+  getFolderWorkspaceAgentLaunchPlatform,
+  submitFolderWorkspaceCreate
+} from './folder-workspace-composer-submit'
 
 function makeProjectGroup(): ProjectGroup {
   return {
@@ -218,6 +221,71 @@ describe('submitFolderWorkspaceCreate', () => {
       linkedTask: null,
       createdWithAgent: 'codex'
     })
+  })
+
+  it('quotes quick-agent startup for POSIX when the folder group is a local WSL UNC path', async () => {
+    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const projectGroup = {
+      ...makeProjectGroup(),
+      parentPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform'
+    }
+
+    expect(getFolderWorkspaceAgentLaunchPlatform(projectGroup)).toBe('linux')
+
+    await submitFolderWorkspaceCreate({
+      projectGroup,
+      name: 'WSL folder',
+      lastAutoName: '',
+      linkedWorkItem: null,
+      note: "Use Bob's POSIX startup",
+      quickAgent: 'claude',
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      createFolderWorkspace,
+      onOpenChange: vi.fn()
+    })
+
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
+      'folder-workspace-1',
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          command: "claude 'Use Bob'\\''s POSIX startup'"
+        })
+      })
+    )
+  })
+
+  it('quotes quick-agent startup for Windows when the remote folder group uses a Windows path', async () => {
+    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const projectGroup = {
+      ...makeProjectGroup(),
+      connectionId: 'ssh-windows',
+      parentPath: 'C:\\Users\\alice\\platform'
+    }
+
+    expect(getFolderWorkspaceAgentLaunchPlatform(projectGroup)).toBe('win32')
+
+    await submitFolderWorkspaceCreate({
+      projectGroup,
+      name: 'Remote Windows folder',
+      lastAutoName: '',
+      linkedWorkItem: null,
+      note: "Use Bob's Windows startup",
+      quickAgent: 'claude',
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      createFolderWorkspace,
+      onOpenChange: vi.fn()
+    })
+
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
+      'folder-workspace-1',
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          command: "claude 'Use Bob''s Windows startup'"
+        })
+      })
+    )
   })
 
   it('preserves SSH group ownership when creating and activating a folder workspace', async () => {

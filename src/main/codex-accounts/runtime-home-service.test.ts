@@ -113,6 +113,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     skipDeleteWorktreeConfirm: false,
     skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
+    skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],
@@ -124,6 +125,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
+    confirmClosePinnedTab: true,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     terminalJISYenToBackslash: false,
@@ -138,6 +140,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides,
+    localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,
     agentStatusHooksEnabled,
@@ -1543,6 +1546,76 @@ describe('CodexRuntimeHomeService', () => {
 
       expect(readFileSync(managedAuthPath, 'utf-8')).toBe(reauthedAuth)
       expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(reauthedAuth)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('reads active WSL token refreshes back before restart using the selected distro', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const wslHome = join(testState.userDataDir, 'wsl-home')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome
+    }))
+    const managedAuth = createCodexAuthJson('wsl@example.com', 'acct-wsl', 'managed', 1_000)
+    const refreshedAuth = createCodexAuthJson(
+      'wsl@example.com',
+      'acct-wsl',
+      'runtime-refreshed',
+      2_000
+    )
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+    const managedAuthPath = join(managedHomePath, 'auth.json')
+    const store = createStore(
+      createSettings({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'wsl@example.com',
+            managedHomePath,
+            managedHomeRuntime: 'wsl',
+            wslDistro: null,
+            wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/account-1/home',
+            providerAccountId: 'acct-wsl',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-wsl',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: 'account-1' }
+        }
+      })
+    )
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+      const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
+      const wslRuntimeHomePath = join(
+        wslHome,
+        '.local',
+        'share',
+        'orca',
+        'codex-runtime-home',
+        'home'
+      )
+      const runtimeAuthPath = join(wslRuntimeHomePath, 'auth.json')
+
+      expect(service.prepareForCodexLaunch(target)).toBe(wslRuntimeHomePath)
+      writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
+
+      service.syncActiveWslSelectionsBeforeRestart()
+
+      expect(readFileSync(managedAuthPath, 'utf-8')).toBe(refreshedAuth)
+      expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)

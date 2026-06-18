@@ -31,7 +31,11 @@ import {
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
+  COMPACT_WORKTREE_CARD_PROPERTIES,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
+  TASK_WORKTREE_CARD_PROPERTIES,
+  getWorktreeCardModeProperties,
+  getWorktreeCardModeUpdates,
   normalizeWorktreeCardProperties
 } from './worktree-card-properties'
 
@@ -233,6 +237,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalWindowsWslDistro: null,
     localAccountRuntime: 'host',
     localAccountWslDistro: null,
+    localWindowsRuntimeDefault: { kind: 'windows-host' },
     // Why: Windows users expect "PowerShell" to mean modern PowerShell when it
     // is installed, with a safe fallback to the inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',
@@ -289,6 +294,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     skipDeleteWorktreeConfirm: false,
     skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
+    skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: [...TASK_PROVIDERS],
@@ -304,6 +310,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     agentYoloDefaultsMigrated: true,
     agentStatusHooksEnabled: true,
     tabAutoGenerateTitle: false,
+    confirmClosePinnedTab: true,
     keepComputerAwakeWhileAgentsRun: false,
     // Why: 'auto' runs a layout-aware probe at boot (see
     // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and
@@ -329,6 +336,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalTerminalAttention: false,
     experimentalAgentHibernation: false,
     agentHibernationIdleMs: 30 * 60 * 1000,
+    experimentalNewWorktreeCardStyle: false,
     compactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
     // Why: local desktop remains the default server until the user explicitly
@@ -442,10 +450,12 @@ export function getDefaultUIState(): PersistedUIState {
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+    _worktreeCardModeDefaulted: true,
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
     workspaceBoardColumnWidth: 308,
+    syncTaskStatusFromWorkspaceBoard: false,
     _workspaceStatusesDefaultOrderMigrated: true,
     _workspaceStatusesDefaultWorkflowMigrated: true,
     _workspaceStatusesDefaultVisualsMigrated: true,

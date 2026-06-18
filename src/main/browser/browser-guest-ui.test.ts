@@ -414,6 +414,14 @@ describe('setupGuestShortcutForwarding', () => {
     return preventDefault
   }
 
+  function triggerGuestBlur(): void {
+    const handler = guestOnMock.mock.calls.find((call) => call[0] === 'blur')?.[1] as
+      | (() => void)
+      | undefined
+    expect(handler).toBeTypeOf('function')
+    handler!()
+  }
+
   beforeEach(() => {
     rendererSendMock = vi.fn()
     guestOnMock = vi.fn()
@@ -551,5 +559,86 @@ describe('setupGuestShortcutForwarding', () => {
     expect(defaultPreventDefault).not.toHaveBeenCalled()
     expect(customPreventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', 'in')
+  })
+
+  it('forwards double-tap window shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getKeybindings: () => ({
+        'worktree.quickOpen': ['DoubleTap+Shift']
+      })
+    })
+
+    const modifierInput = {
+      code: 'ShiftLeft',
+      key: 'Shift',
+      shift: true,
+      meta: false,
+      control: false,
+      alt: false
+    }
+    const firstDownPreventDefault = triggerBeforeInput(modifierInput)
+    const firstUpPreventDefault = triggerBeforeInput({ ...modifierInput, type: 'keyUp' })
+    const secondDownPreventDefault = triggerBeforeInput(modifierInput)
+
+    expect(firstDownPreventDefault).not.toHaveBeenCalled()
+    expect(firstUpPreventDefault).not.toHaveBeenCalled()
+    expect(secondDownPreventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:openQuickOpen')
+  })
+
+  it('forwards double-tap tab shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getKeybindings: () => ({
+        'tab.newBrowser': ['DoubleTap+Shift']
+      })
+    })
+
+    const modifierInput = {
+      code: 'ShiftLeft',
+      key: 'Shift',
+      shift: true,
+      meta: false,
+      control: false,
+      alt: false
+    }
+    triggerBeforeInput(modifierInput)
+    triggerBeforeInput({ ...modifierInput, type: 'keyUp' })
+    const secondDownPreventDefault = triggerBeforeInput(modifierInput)
+
+    expect(secondDownPreventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:newBrowserTab')
+  })
+
+  it('resets guest double-tap detection on blur', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getKeybindings: () => ({
+        'worktree.quickOpen': ['DoubleTap+Shift']
+      })
+    })
+
+    const modifierInput = {
+      code: 'ShiftLeft',
+      key: 'Shift',
+      shift: true,
+      meta: false,
+      control: false,
+      alt: false
+    }
+    triggerBeforeInput(modifierInput)
+    triggerBeforeInput({ ...modifierInput, type: 'keyUp' })
+    triggerGuestBlur()
+    const nextDownPreventDefault = triggerBeforeInput(modifierInput)
+
+    expect(nextDownPreventDefault).not.toHaveBeenCalled()
+    expect(rendererSendMock).not.toHaveBeenCalledWith('ui:openQuickOpen')
   })
 })

@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   appRestart: vi.fn(),
   updaterCheck: vi.fn(),
   shellOpenUrl: vi.fn(),
-  useShortcutKeys: vi.fn(),
+  useShortcutKeyDetails: vi.fn(),
   setupProgress: {
     ready: true,
     coreDoneCount: 2,
@@ -32,7 +32,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutKeys: mocks.useShortcutKeys
+  useShortcutKeyDetails: mocks.useShortcutKeyDetails
 }))
 
 vi.mock('@/hooks/useMountedRef', () => ({
@@ -99,7 +99,7 @@ vi.mock('./SidebarFeedbackDialog', () => ({
 describe('SidebarSettingsHelpMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.useShortcutKeys.mockReturnValue(['⌘', ','])
+    mocks.useShortcutKeyDetails.mockReturnValue({ keys: ['⌘', ','], doubleTap: false })
     updateStatus = { state: 'idle' }
     mocks.setupProgress = {
       ready: true,

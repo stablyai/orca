@@ -58,6 +58,20 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
+  it('skips live-checkpoint records — their restored pane owns recovery', () => {
+    const record = makeRecord({ origin: 'live' })
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(1)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
   it('resumes legacy sleep records without an origin even when their tab still exists', () => {
     const record = makeRecord()
     useAppStore.setState({
@@ -91,5 +105,51 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(tabs[0]?.launchAgent).toBe('claude')
     expect(state.pendingStartupByTabId[tabs[0]!.id]?.showSessionRestoredBanner).toBe(true)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+  })
+
+  it('uses WSL resume quoting for Windows-path projects forced to WSL', () => {
+    const record = makeRecord({
+      providerSession: { key: 'session_id', id: "sess-1's" },
+      origin: 'worktree-sleep'
+    })
+    useAppStore.setState({
+      activeRepoId: 'repo-1',
+      activeWorktreeId: 'wt-1',
+      repos: [{ id: 'repo-1', path: 'C:\\repo', displayName: 'repo', addedAt: 1 }],
+      projects: [
+        {
+          id: 'repo-1',
+          sourceRepoIds: ['repo-1'],
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        }
+      ],
+      settings: {
+        localWindowsRuntimeDefault: { kind: 'windows-host' },
+        agentCmdOverrides: {}
+      },
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-1',
+            repoId: 'repo-1',
+            path: 'C:\\repo',
+            displayName: 'repo',
+            branch: 'main'
+          }
+        ]
+      },
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(1)
+    const state = useAppStore.getState()
+    const resumedTab = state.tabsByWorktree['wt-1']?.[0]
+    expect(resumedTab?.launchAgent).toBe('claude')
+    expect(state.pendingStartupByTabId[resumedTab!.id]?.command).toContain(
+      "'--resume' 'sess-1'\\''s'"
+    )
   })
 })

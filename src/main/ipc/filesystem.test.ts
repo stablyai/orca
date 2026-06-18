@@ -196,6 +196,18 @@ function dirEntry({ name, directory, file, symlink }: MockDirEntry): {
   }
 }
 
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
+  const original = Object.getOwnPropertyDescriptor(process, 'platform')
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return await run()
+  } finally {
+    if (original) {
+      Object.defineProperty(process, 'platform', original)
+    }
+  }
+}
+
 describe('registerFilesystemHandlers', () => {
   const store = {
     getRepos: () => [
@@ -466,7 +478,7 @@ describe('registerFilesystemHandlers', () => {
     ).resolves.toEqual({ canceled: false, destinationPath: '/downloads/report.pdf' })
 
     const tempPath = provider.downloadFile.mock.calls[0][1]
-    expect(tempPath).toContain('/downloads')
+    expect(path.dirname(tempPath)).toBe(path.normalize('/downloads'))
     expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
     expect(renameMock).toHaveBeenCalledWith(tempPath, '/downloads/report.pdf')
     expect(rmMock).not.toHaveBeenCalledWith(tempPath, expect.anything())
@@ -816,7 +828,11 @@ describe('registerFilesystemHandlers', () => {
 
     // Why: validateGitRelativeFilePath uses path.relative() which produces
     // platform-specific separators (backslashes on Windows).
-    expect(stageFileMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, path.join('src', 'file.ts'))
+    expect(stageFileMock).toHaveBeenCalledWith(
+      WORKTREE_FEATURE_PATH,
+      path.join('src', 'file.ts'),
+      {}
+    )
   })
 
   it('uses worktree roots seeded by worktrees:list without rebuilding the cache', async () => {
@@ -892,10 +908,11 @@ describe('registerFilesystemHandlers', () => {
       })
     ).resolves.toEqual(['build/output.js'])
 
-    expect(checkIgnoredPathsMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, [
-      path.join('dist', 'bundle.js'),
-      path.join('src', 'index.ts')
-    ])
+    expect(checkIgnoredPathsMock).toHaveBeenCalledWith(
+      WORKTREE_FEATURE_PATH,
+      [path.join('dist', 'bundle.js'), path.join('src', 'index.ts')],
+      {}
+    )
     expect(sshProvider.checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', [
       path.join('build', 'output.js')
     ])
@@ -917,7 +934,7 @@ describe('registerFilesystemHandlers', () => {
       connectionId: 'ssh-1'
     })
 
-    expect(abortMergeMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(abortMergeMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {})
     expect(sshProvider.abortMerge).toHaveBeenCalledWith('/remote/repo')
   })
 
@@ -937,7 +954,7 @@ describe('registerFilesystemHandlers', () => {
       connectionId: 'ssh-1'
     })
 
-    expect(abortRebaseMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(abortRebaseMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {})
     expect(sshProvider.abortRebase).toHaveBeenCalledWith('/remote/repo')
   })
 
@@ -978,10 +995,11 @@ describe('registerFilesystemHandlers', () => {
       filePaths: ['./src/../src/file.ts', 'nested//child.ts']
     })
 
-    expect(bulkStageFilesMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, [
-      path.join('src', 'file.ts'),
-      path.join('nested', 'child.ts')
-    ])
+    expect(bulkStageFilesMock).toHaveBeenCalledWith(
+      WORKTREE_FEATURE_PATH,
+      [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
+      {}
+    )
   })
 
   it('normalizes git file paths for bulk discard requests', async () => {
@@ -994,10 +1012,11 @@ describe('registerFilesystemHandlers', () => {
       filePaths: ['./src/../src/file.ts', 'nested//child.ts']
     })
 
-    expect(bulkDiscardChangesMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, [
-      path.join('src', 'file.ts'),
-      path.join('nested', 'child.ts')
-    ])
+    expect(bulkDiscardChangesMock).toHaveBeenCalledWith(
+      WORKTREE_FEATURE_PATH,
+      [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
+      {}
+    )
   })
 
   it('rejects bulk unstage requests that escape the selected worktree', async () => {
@@ -1176,7 +1195,7 @@ describe('registerFilesystemHandlers', () => {
       baseRef: 'origin/main'
     })
 
-    expect(getBranchCompareMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'origin/main')
+    expect(getBranchCompareMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'origin/main', {})
   })
 
   it('routes local git:commit through commitChanges and returns success', async () => {
@@ -1191,7 +1210,7 @@ describe('registerFilesystemHandlers', () => {
       })
     ).resolves.toEqual({ success: true })
 
-    expect(commitChangesMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'feat: ship commit')
+    expect(commitChangesMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'feat: ship commit', {})
   })
 
   it('returns local commit hook failure payload from git:commit', async () => {
@@ -1229,7 +1248,7 @@ describe('registerFilesystemHandlers', () => {
       })
     ).resolves.toEqual({ success: true, message: 'Update README' })
 
-    expect(getStagedCommitContextMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
+    expect(getStagedCommitContextMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {})
     expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(context, params, {
       kind: 'local',
       cwd: WORKTREE_FEATURE_PATH
@@ -1340,6 +1359,71 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
+  it('routes local WSL project commit-message generation through the project runtime target', async () => {
+    await withPlatform('win32', async () => {
+      const context = {
+        branch: 'feature/ai',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      }
+      const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
+      const prepareForCodexLaunch = vi.fn(() => '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.codex')
+      resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+      getStagedCommitContextMock.mockResolvedValue(context)
+      generateCommitMessageFromContextMock.mockResolvedValue({
+        success: true,
+        message: 'Update README'
+      })
+      const wslStore = {
+        ...store,
+        getRepos: () => [
+          {
+            id: 'repo-1',
+            path: WORKTREE_FEATURE_PATH,
+            displayName: 'repo',
+            badgeColor: '#000',
+            addedAt: 0
+          }
+        ],
+        getProjects: () => [
+          {
+            id: 'project-1',
+            sourceRepoIds: ['repo-1'],
+            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+          }
+        ],
+        getSettings: () => ({
+          workspaceDir: WORKSPACE_DIR,
+          localWindowsRuntimeDefault: { kind: 'windows-host' }
+        })
+      }
+
+      registerFilesystemHandlers(wslStore as never, { prepareForCodexLaunch })
+
+      await handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+
+      expect(getStagedCommitContextMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+        wslDistro: 'Ubuntu'
+      })
+      expect(prepareForCodexLaunch).toHaveBeenCalledWith({
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu'
+      })
+      expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+        context,
+        params,
+        expect.objectContaining({
+          kind: 'local',
+          cwd: WORKTREE_FEATURE_PATH,
+          wslDistro: 'Ubuntu',
+          env: expect.objectContaining({ CODEX_HOME: '/home/tester/.codex' })
+        })
+      )
+    })
+  })
+
   it('returns a sanitized error when local agent account preparation fails', async () => {
     const context = {
       branch: 'feature/ai',
@@ -1445,6 +1529,66 @@ describe('registerFilesystemHandlers', () => {
       undefined,
       'npx codex'
     )
+  })
+
+  it('routes local WSL project model discovery through the project runtime target', async () => {
+    await withPlatform('win32', async () => {
+      discoverCommitMessageModelsLocalMock.mockResolvedValue({
+        success: true,
+        capability: {
+          id: 'codex',
+          label: 'Codex',
+          modelSource: 'dynamic',
+          defaultModelId: 'gpt-5.5',
+          models: [{ id: 'gpt-5.5', label: 'GPT-5.5' }]
+        },
+        models: [{ id: 'gpt-5.5', label: 'GPT-5.5' }],
+        defaultModelId: 'gpt-5.5'
+      })
+      const prepareForCodexLaunch = vi.fn(() => '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.codex')
+      const wslStore = {
+        ...store,
+        getRepos: () => [
+          {
+            id: 'repo-1',
+            path: WORKTREE_FEATURE_PATH,
+            displayName: 'repo',
+            badgeColor: '#000',
+            addedAt: 0
+          }
+        ],
+        getProjects: () => [
+          {
+            id: 'project-1',
+            sourceRepoIds: ['repo-1'],
+            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+          }
+        ],
+        getSettings: () => ({
+          workspaceDir: WORKSPACE_DIR,
+          agentCmdOverrides: { codex: 'npx codex' },
+          localWindowsRuntimeDefault: { kind: 'windows-host' }
+        })
+      }
+
+      registerFilesystemHandlers(wslStore as never, { prepareForCodexLaunch })
+
+      await handlers.get('git:discoverCommitMessageModels')!(null, {
+        agentId: 'codex',
+        worktreePath: WORKTREE_FEATURE_PATH
+      })
+
+      expect(prepareForCodexLaunch).toHaveBeenCalledWith({
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu'
+      })
+      expect(discoverCommitMessageModelsLocalMock).toHaveBeenCalledWith(
+        'codex',
+        expect.objectContaining({ CODEX_HOME: '/home/tester/.codex' }),
+        'npx codex',
+        { cwd: WORKTREE_FEATURE_PATH, wslDistro: 'Ubuntu' }
+      )
+    })
   })
 
   it('routes SSH model discovery through the remote git provider', async () => {
@@ -1809,7 +1953,7 @@ describe('registerFilesystemHandlers', () => {
       baseRef: 'origin/main'
     })
 
-    expect(getBranchCompareMock).toHaveBeenCalledWith(externalWorktreePath, 'origin/main')
+    expect(getBranchCompareMock).toHaveBeenCalledWith(externalWorktreePath, 'origin/main', {})
   })
 
   it('rejects branchCompare for a worktree added after cache was built, then succeeds after invalidation', async () => {
@@ -1876,7 +2020,7 @@ describe('registerFilesystemHandlers', () => {
       baseRef: 'origin/main'
     })
 
-    expect(getBranchCompareMock).toHaveBeenCalledWith(cliWorktreePath, 'origin/main')
+    expect(getBranchCompareMock).toHaveBeenCalledWith(cliWorktreePath, 'origin/main', {})
   })
 
   it('routes branch diff queries through the pinned branch diff helper', async () => {
@@ -1904,12 +2048,16 @@ describe('registerFilesystemHandlers', () => {
 
     // Why: validateGitRelativeFilePath uses path.relative() which produces
     // platform-specific separators (backslashes on Windows).
-    expect(getBranchDiffMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
-      headOid: 'head-oid',
-      mergeBase: 'merge-base-oid',
-      filePath: path.join('src', 'file.ts'),
-      oldPath: path.join('src', 'old-file.ts')
-    })
+    expect(getBranchDiffMock).toHaveBeenCalledWith(
+      WORKTREE_FEATURE_PATH,
+      {
+        headOid: 'head-oid',
+        mergeBase: 'merge-base-oid',
+        filePath: path.join('src', 'file.ts'),
+        oldPath: path.join('src', 'old-file.ts')
+      },
+      {}
+    )
   })
 
   // Why: the original SSH Quick Open bug had two halves — relay-side policy

@@ -3,7 +3,11 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useWorkspaceBoardPanel, type WorkspaceBoardPanelState } from './useWorkspaceBoardPanel'
+import {
+  OPEN_WORKSPACE_BOARD_EVENT,
+  useWorkspaceBoardPanel,
+  type WorkspaceBoardPanelState
+} from './useWorkspaceBoardPanel'
 
 const mocks = vi.hoisted(() => ({
   recordFeatureInteraction: vi.fn()
@@ -82,6 +86,18 @@ describe('useWorkspaceBoardPanel', () => {
     expect(panelState().workspaceBoardOpen).toBe(false)
     expect(panelState().workspaceBoardRenderedOpen).toBe(false)
     expect(mocks.recordFeatureInteraction).toHaveBeenCalledOnce()
+  })
+
+  it('opens the board from the shortcut bridge event', async () => {
+    await renderHookProbe()
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
+    })
+
+    expect(panelState().workspaceBoardOpen).toBe(true)
+    expect(panelState().workspaceBoardRenderedOpen).toBe(true)
+    expect(mocks.recordFeatureInteraction).toHaveBeenCalledExactlyOnceWith('workspace-board')
   })
 
   it('renders a drag preview without recording an open interaction', async () => {

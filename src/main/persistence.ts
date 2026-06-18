@@ -37,6 +37,7 @@ import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
 import type {
   PersistedState,
   Project,
+  ProjectUpdateArgs,
   ProjectHostSetup,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
@@ -66,6 +67,10 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+import {
+  deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
+  normalizeProjectRuntimePreference
+} from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import {
   buildTaskSourceContextFromRepo,
@@ -171,6 +176,7 @@ import {
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
+import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
 import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
@@ -994,11 +1000,8 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   return onboarding.closedAt !== null || persistedDismissed === true
 }
 
-// Why: read a settings field that was removed from the GlobalSettings type
-// but still round-trips on disk via the ...parsed.settings spread. One-shot
-// use only — for the inline-agents default-on migration's Case B discriminator.
-// Delete with the migration in the cleanup release (2+ stable releases after
-// _inlineAgentsDefaultedForAllUsers ships).
+// Why: read a settings field that was removed from GlobalSettings but can
+// still exist on disk. One-shot use for the inline-agents migration.
 function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
   return (
     (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
@@ -1912,6 +1915,9 @@ function mergeProjectHostSetupCompatibilityState(
   repos: readonly Repo[]
 ): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
   const projection = projectHostSetupProjectionFromRepos(repos)
+  const existingProjectsById = new Map(
+    (state.projects ?? []).map((project) => [project.id, project])
+  )
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
@@ -1932,8 +1938,18 @@ function mergeProjectHostSetupCompatibilityState(
       ...project,
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
+  const projectedProjects = projection.projects.map((project) => {
+    const existingProject = existingProjectsById.get(project.id)
+    return existingProject?.localWindowsRuntimePreference
+      ? {
+          ...project,
+          localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
+          updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
+        }
+      : project
+  })
   return {
-    projects: [...projection.projects, ...independentProjects],
+    projects: [...projectedProjects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
   }
 }
@@ -2569,6 +2585,16 @@ export class Store {
         ) {
           migratedDisabledTuiAgents.push('claude-agent-teams')
         }
+        const migratedWindowsRuntimeDefault =
+          parsed.settings?.localWindowsRuntimeDefault === undefined
+            ? deriveGlobalWindowsRuntimeDefaultFromLegacySettings(parsed.settings).defaultRuntime
+            : parsed.settings.localWindowsRuntimeDefault
+        if (
+          parsed.settings?.localWindowsRuntimeDefault === undefined &&
+          migratedWindowsRuntimeDefault.kind === 'wsl'
+        ) {
+          this.loadNeedsSave = true
+        }
         if (!autoRenameBranchFromWorkDefaultedOn) {
           this.loadNeedsSave = true
         }
@@ -2627,6 +2653,7 @@ export class Store {
             experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
+            localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
             floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -2711,33 +2738,6 @@ export class Store {
             ) {
               this.loadNeedsSave = true
             }
-            // Why: the 'inline-agents' card property was added after the
-            // feature shipped behind an experimental toggle. Now that the
-            // feature is default-on for everyone, every existing user needs
-            // 'inline-agents' appended to their persisted
-            // worktreeCardProperties on first load after upgrade so the
-            // inline agent rows render without further opt-in. A flag
-            // prevents re-firing so a deliberate uncheck from the Workspaces
-            // view options menu sticks across restarts.
-            //
-            // TRAP — do not key this on `_inlineAgentsDefaultedForExperiment`.
-            // That legacy flag was stamped unconditionally on every successful
-            // load() in prior builds, regardless of whether the experiment was
-            // toggled on. Every prior-RC user therefore already has it set to
-            // true on disk, including the opt-out cohort this widened
-            // migration was specifically written to reach. Gating on the
-            // legacy flag would silently skip exactly those users. The
-            // dedicated `_inlineAgentsDefaultedForAllUsers` flag exists so
-            // the new default-on migration can distinguish "already migrated
-            // under the new rules" from "happened to launch a prior build".
-            //
-            // Case B preservation: a user who turned the experiment on and then
-            // deliberately unchecked 'inline-agents' from the sidebar options
-            // menu has the same on-disk shape as a never-touched user. The
-            // discriminator below reads the deprecated `experimentalAgentDashboard`
-            // value as a one-shot signal. Both branches of the migration stamp
-            // `_inlineAgentsDefaultedForAllUsers`, so subsequent launches don't
-            // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
             const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
             const expandedCardPropsMigrated =
@@ -3159,6 +3159,25 @@ export class Store {
 
   getProjects(): Project[] {
     return [...this.state.projects]
+  }
+
+  updateProject(id: string, updates: ProjectUpdateArgs['updates']): Project | null {
+    const project = this.state.projects.find((entry) => entry.id === id)
+    if (!project) {
+      return null
+    }
+    if ('localWindowsRuntimePreference' in updates) {
+      if (updates.localWindowsRuntimePreference === undefined) {
+        delete project.localWindowsRuntimePreference
+      } else {
+        project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
+          updates.localWindowsRuntimePreference
+        )
+      }
+    }
+    project.updatedAt = Date.now()
+    this.scheduleSave()
+    return { ...project }
   }
 
   getProjectHostSetups(): ProjectHostSetup[] {
@@ -4556,6 +4575,7 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
       ),
+      syncTaskStatusFromWorkspaceBoard: this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds
@@ -4575,6 +4595,7 @@ export class Store {
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
     const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
+    const previousUI = this.getUI()
     const currentUI = {
       ...getDefaultUIState(),
       ...stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
@@ -4595,7 +4616,7 @@ export class Store {
               this.state.ui?.rightSidebarExplorerView,
               nextRightSidebarTab
             )
-    this.state.ui = {
+    const nextUI = {
       ...currentUI,
       ...sanitizedUpdates,
       groupBy: sanitizedUpdates.groupBy
@@ -4627,6 +4648,10 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         sanitizedUpdates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       ),
+      syncTaskStatusFromWorkspaceBoard:
+        sanitizedUpdates.syncTaskStatusFromWorkspaceBoard !== undefined
+          ? sanitizedUpdates.syncTaskStatusFromWorkspaceBoard === true
+          : this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
       ),
@@ -4669,6 +4694,10 @@ export class Store {
             )
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
+    if (persistedUIValuesEqual(previousUI, nextUI)) {
+      return
+    }
+    this.state.ui = nextUI
     this.scheduleSave()
     this.notifyUIChanged()
   }

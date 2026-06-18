@@ -22,6 +22,8 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stab
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
@@ -50,6 +52,7 @@ import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
@@ -180,19 +183,22 @@ function resolveCreatedTabShellOverride(
   explicitShellOverride: string | undefined,
   defaultWindowsShell: string | undefined,
   isRemoteWorktree: boolean,
-  isWslWorktree: boolean
+  isWslWorktree: boolean,
+  projectRuntime: ProjectExecutionRuntimeResolution | undefined
 ): string | undefined {
   if (isRemoteWorktree) {
     return undefined
   }
+  if (isWindowsRendererRuntime()) {
+    return resolveLocalWindowsTerminalShellOverrideForTab({
+      explicitShellOverride,
+      defaultWindowsShell,
+      isWslWorktree,
+      projectRuntime
+    })
+  }
   if (explicitShellOverride !== undefined) {
     return explicitShellOverride
-  }
-  if (isWindowsRendererRuntime()) {
-    if (isWslWorktree) {
-      return 'wsl.exe'
-    }
-    return defaultWindowsShell
   }
   return undefined
 }
@@ -667,16 +673,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
       const quickCommandLabel = options?.quickCommandLabel?.trim()
+      const isRemoteWorktree = worktreeUsesRemoteConnection(s, worktreeId)
+      const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
       const createdShellOverride = resolveCreatedTabShellOverride(
         shellOverride,
         s.settings?.terminalWindowsShell,
         // Why: SSH PTYs ignore local Windows shell selection; persisting a
         // local shell icon would mislabel a remote terminal.
-        worktreeUsesRemoteConnection(s, worktreeId),
+        isRemoteWorktree,
         // Why: WSL UNC worktrees are repo-scoped WSL environments. New default
         // terminals should enter that distro even when the global Windows shell
         // preference is PowerShell or cmd.exe.
-        worktreeUsesWslPath(s, worktreeId)
+        isWslWorktree,
+        isRemoteWorktree ? undefined : getLocalProjectExecutionRuntimeContext(s, worktreeId)
       )
       tab = {
         id,

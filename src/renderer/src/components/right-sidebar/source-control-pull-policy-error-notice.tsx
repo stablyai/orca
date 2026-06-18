@@ -7,47 +7,29 @@ import { translate } from '@/i18n/i18n'
 
 const PULL_POLICY_ERROR_PREFIX = 'Pull needs a Git pull policy for divergent branches.'
 
-function getPullPolicyOptions(): readonly {
-  label: string
-  description: string
-  command: string
-}[] {
-  return [
-    {
-      label: translate(
-        'auto.components.right.sidebar.source.control.pull.policy.error.notice.merge',
-        'Merge'
-      ),
-      description: translate(
-        'auto.components.right.sidebar.source.control.pull.policy.error.notice.mergeDescription',
-        'Create a merge commit when local and remote both changed.'
-      ),
-      command: 'git config pull.rebase false'
-    },
-    {
-      label: translate(
-        'auto.components.right.sidebar.source.control.pull.policy.error.notice.rebase',
-        'Rebase'
-      ),
-      description: translate(
-        'auto.components.right.sidebar.source.control.pull.policy.error.notice.rebaseDescription',
-        'Replay local commits on top of the remote branch.'
-      ),
-      command: 'git config pull.rebase true'
-    },
-    {
-      label: translate(
-        'auto.components.right.sidebar.source.control.pull.policy.error.notice.fastForwardOnly',
-        'Fast-forward only'
-      ),
-      description: translate(
-        'auto.components.right.sidebar.source.control.pull.policy.error.notice.fastForwardOnlyDescription',
-        'Only pull when no merge or rebase is needed.'
-      ),
-      command: 'git config pull.ff only'
-    }
-  ] as const
-}
+const PULL_POLICY_OPTIONS = [
+  {
+    labelKey: 'auto.components.right.sidebar.pull.policy.notice.merge',
+    labelFallback: 'Merge',
+    descriptionKey: 'auto.components.right.sidebar.pull.policy.notice.mergeDescription',
+    descriptionFallback: 'Create a merge commit when local and remote both changed.',
+    command: 'git config pull.rebase false'
+  },
+  {
+    labelKey: 'auto.components.right.sidebar.pull.policy.notice.rebase',
+    labelFallback: 'Rebase',
+    descriptionKey: 'auto.components.right.sidebar.pull.policy.notice.rebaseDescription',
+    descriptionFallback: 'Replay local commits on top of the remote branch.',
+    command: 'git config pull.rebase true'
+  },
+  {
+    labelKey: 'auto.components.right.sidebar.pull.policy.notice.fastForwardOnly',
+    labelFallback: 'Fast-forward only',
+    descriptionKey: 'auto.components.right.sidebar.pull.policy.notice.fastForwardOnlyDescription',
+    descriptionFallback: 'Only pull when no merge or rebase is needed.',
+    command: 'git config pull.ff only'
+  }
+] as const
 
 export function isPullPolicyRemoteActionError(message: string): boolean {
   return message.startsWith(PULL_POLICY_ERROR_PREFIX)
@@ -92,28 +74,27 @@ export function PullPolicyRemoteActionNotice({
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
               <span className="text-xs font-semibold text-foreground">
                 {translate(
-                  'auto.components.right.sidebar.source.control.pull.policy.error.notice.title',
+                  'auto.components.right.sidebar.pull.policy.notice.title',
                   'Pull needs a policy'
                 )}
               </span>
               <span className="shrink-0 rounded-full bg-destructive/10 px-1.5 py-px text-[10px] leading-4 font-semibold text-destructive">
-                {translate(
-                  'auto.components.right.sidebar.source.control.pull.policy.error.notice.diverged',
-                  'Diverged'
-                )}
+                {translate('auto.components.right.sidebar.pull.policy.notice.diverged', 'Diverged')}
               </span>
             </div>
             <p className="text-[11px] leading-4 text-muted-foreground">
               {translate(
-                'auto.components.right.sidebar.source.control.pull.policy.error.notice.body',
+                'auto.components.right.sidebar.pull.policy.notice.body',
                 'This branch has local and remote commits. Run one command in this worktree or on the SSH host, then try Pull or Sync again.'
               )}
             </p>
           </div>
         </div>
         <div className="space-y-1.5">
-          {getPullPolicyOptions().map((option) => {
+          {PULL_POLICY_OPTIONS.map((option) => {
             const copied = copiedCommand === option.command
+            const label = translate(option.labelKey, option.labelFallback)
+            const description = translate(option.descriptionKey, option.descriptionFallback)
             return (
               <div
                 key={option.command}
@@ -122,11 +103,9 @@ export function PullPolicyRemoteActionNotice({
                 <div className="flex min-w-0 items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="text-[11px] leading-4 font-semibold text-foreground">
-                      {option.label}
+                      {label}
                     </div>
-                    <p className="text-[11px] leading-4 text-muted-foreground">
-                      {option.description}
-                    </p>
+                    <p className="text-[11px] leading-4 text-muted-foreground">{description}</p>
                   </div>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -136,9 +115,9 @@ export function PullPolicyRemoteActionNotice({
                         size="icon-xs"
                         className="mt-0.5 shrink-0"
                         aria-label={translate(
-                          'auto.components.right.sidebar.source.control.pull.policy.error.notice.copyPolicyCommand',
+                          'auto.components.right.sidebar.pull.policy.notice.copyAria',
                           'Copy {{value0}} pull policy command',
-                          { value0: option.label.toLowerCase() }
+                          { value0: label.toLowerCase() }
                         )}
                         onClick={() => handleCopyCommand(option.command)}
                       >
@@ -152,11 +131,11 @@ export function PullPolicyRemoteActionNotice({
                     <TooltipContent side="top" sideOffset={4}>
                       {copied
                         ? translate(
-                            'auto.components.right.sidebar.source.control.pull.policy.error.notice.copied',
+                            'auto.components.right.sidebar.pull.policy.notice.copied',
                             'Copied'
                           )
                         : translate(
-                            'auto.components.right.sidebar.source.control.pull.policy.error.notice.copyCommand',
+                            'auto.components.right.sidebar.pull.policy.notice.copyCommand',
                             'Copy command'
                           )}
                     </TooltipContent>

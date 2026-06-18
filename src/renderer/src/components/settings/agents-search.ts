@@ -68,23 +68,6 @@ export const getAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: buildAgentSettingsKeywords()
   },
   {
-    title: translate('auto.components.settings.agents.search.ef804b7337', 'Agent Location'),
-    description: translate(
-      'auto.components.settings.agents.search.cbdd7f3b9e',
-      'Choose whether installed agents are detected on this device or in WSL.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.agents.search.96ba2373b6', 'agent'),
-      ...translateSearchKeyword('auto.components.settings.agents.search.d2952dfd74', 'location'),
-      ...translateSearchKeyword('auto.components.settings.agents.search.77c02fa3c3', 'windows'),
-      ...translateSearchKeyword('auto.components.settings.agents.search.d608654c03', 'wsl'),
-      ...translateSearchKeyword('auto.components.settings.agents.search.f622b8eb2a', 'linux'),
-      ...translateSearchKeyword('auto.components.settings.agents.search.839e82c81f', 'detect'),
-      ...translateSearchKeyword('auto.components.settings.agents.search.2814401339', 'installed'),
-      ...translateSearchKeyword('auto.components.settings.agents.search.719f53350c', 'path')
-    ]
-  },
-  {
     title: getAgentStatusHooksTitle(),
     description: getAgentStatusHooksDescription(),
     keywords: getAgentStatusHooksSearchKeywords()

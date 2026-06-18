@@ -20,10 +20,13 @@ import {
   getGeneralUpdateSearchEntries,
   getGeneralWorkspaceSearchEntries
 } from './general-search'
+import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { RecentTabOrderControl } from './RecentTabOrderControl'
 import { matchesSettingsSearch } from './settings-search'
-import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { SearchableSetting } from './SearchableSetting'
+import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { DefaultWindowsProjectRuntimeSetting } from './DefaultWindowsProjectRuntimeSetting'
 
 export {
   createAutoSaveDelayDraftState,
@@ -41,6 +44,8 @@ export {
 } from './GeneralNetworkSettingsSection'
 export { shouldCommitOpenInApplicationsDraft } from './OpenInMenuSetting'
 
+type GeneralSearchEntry = ReturnType<typeof getGeneralNavigationSearchEntries>[number]
+
 export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | 'win32' | 'other' {
   if (userAgent.includes('Mac')) {
     return 'darwin'
@@ -53,11 +58,27 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
 
 export { getGeneralPaneSearchEntries }
 
+export function getTabOrderControlSearchKeywords(
+  navigationEntries: GeneralSearchEntry[] = getGeneralNavigationSearchEntries()
+): string[] {
+  const tabOrderSearchEntry = navigationEntries[0]
+  return tabOrderSearchEntry
+    ? [
+        tabOrderSearchEntry.title,
+        tabOrderSearchEntry.description ?? '',
+        ...(tabOrderSearchEntry.keywords ?? [])
+      ]
+    : []
+}
+
+const EMPTY_WSL_DISTROS: string[] = []
+
 type GeneralPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
+  wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
 }
 
@@ -66,25 +87,53 @@ export function GeneralPane({
   updateSettings,
   wslSupportedPlatform,
   wslAvailable,
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading
 }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const generalNavigationSearchEntries = getGeneralNavigationSearchEntries()
+  const tabOrderKeywords = getTabOrderControlSearchKeywords(generalNavigationSearchEntries)
+  const projectRuntimeSearchEntries = wslSupportedPlatform
+    ? getGeneralProjectRuntimeSearchEntries()
+    : []
 
   const visibleSections = [
-    matchesSettingsSearch(searchQuery, getGeneralNavigationSearchEntries()) ? (
+    matchesSettingsSearch(searchQuery, generalNavigationSearchEntries) ? (
       <section key="navigation" className="space-y-4">
         <SettingsSubsectionHeader
           title={translate('auto.components.settings.GeneralPane.d58fccfd84', 'Navigation')}
         />
         <RecentTabOrderControl
           ctrlTabOrderMode={settings.ctrlTabOrderMode ?? 'mru'}
-          keywords={getGeneralNavigationSearchEntries().flatMap((entry) => [
-            entry.title,
-            entry.description ?? '',
-            ...(entry.keywords ?? [])
-          ])}
+          keywords={tabOrderKeywords}
           updateSettings={updateSettings}
         />
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GeneralPane.5cb5475664',
+            'Confirm before closing pinned tabs'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.36b2a5dc6d',
+            'Show a confirmation dialog before a pinned tab is closed.'
+          )}
+          keywords={['pinned', 'tab', 'confirm', 'close']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.GeneralPane.5cb5475664',
+              'Confirm before closing pinned tabs'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralPane.36b2a5dc6d',
+              'Show a confirmation dialog before a pinned tab is closed.'
+            )}
+            checked={settings.confirmClosePinnedTab ?? true}
+            onChange={() =>
+              updateSettings({ confirmClosePinnedTab: !(settings.confirmClosePinnedTab ?? true) })
+            }
+          />
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (
@@ -93,6 +142,28 @@ export function GeneralPane({
         settings={settings}
         updateSettings={updateSettings}
       />
+    ) : null,
+    matchesSettingsSearch(searchQuery, projectRuntimeSearchEntries) ? (
+      <section key="project-runtime" className="space-y-4">
+        <SettingsSubsectionHeader
+          title={translate(
+            'auto.components.settings.GeneralPane.projectRuntime',
+            'Project Runtime'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.projectRuntimeDescription',
+            'Default runtime for local Windows projects that do not override it.'
+          )}
+        />
+        <DefaultWindowsProjectRuntimeSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          wslSupportedPlatform={Boolean(wslSupportedPlatform)}
+          wslAvailable={Boolean(wslAvailable)}
+          wslDistros={wslDistros}
+          wslCapabilitiesLoading={Boolean(wslCapabilitiesLoading)}
+        />
+      </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralNetworkSearchEntries()) ? (
       <GeneralNetworkSettingsSection
@@ -113,7 +184,6 @@ export function GeneralPane({
         key="cli"
         currentPlatform={getDesktopPlatformFromUserAgent(navigator.userAgent)}
         settings={settings}
-        updateSettings={updateSettings}
         wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}
         wslCapabilitiesLoading={wslCapabilitiesLoading}

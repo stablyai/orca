@@ -21,6 +21,11 @@ import { StringDecoder } from 'string_decoder'
 import { withGitSpan } from '../observability/instrumentation'
 import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
+import {
+  buildWslLoginShellCommand,
+  escapeWslShCommandForWindows,
+  quotePosixShell
+} from '../../shared/wsl-login-shell-command'
 
 // ─── Core resolution ────────────────────────────────────────────────
 
@@ -43,23 +48,25 @@ type ResolvedCommand = {
  * (C:\Users\...) are converted to /mnt/c/Users/...
  */
 function translateArgsForWsl(args: string[]): string[] {
-  return args.map((arg) => {
-    // WSL UNC path → native linux path
-    const wslInfo = parseWslPath(arg)
-    if (wslInfo) {
-      return wslInfo.linuxPath
-    }
+  return args.map(translateArgForWsl)
+}
 
-    // Windows drive path (e.g. C:\Users\...) → /mnt/c/Users/...
-    const driveMatch = arg.match(/^([A-Za-z]):[/\\](.*)$/)
-    if (driveMatch) {
-      const driveLetter = driveMatch[1].toLowerCase()
-      const rest = driveMatch[2].replace(/\\/g, '/')
-      return `/mnt/${driveLetter}/${rest}`
-    }
+function translateArgForWsl(arg: string): string {
+  // WSL UNC path → native linux path
+  const wslInfo = parseWslPath(arg)
+  if (wslInfo) {
+    return wslInfo.linuxPath
+  }
 
-    return arg
-  })
+  // Windows drive path (e.g. C:\Users\...) → /mnt/c/Users/...
+  const driveMatch = arg.match(/^([A-Za-z]):[/\\](.*)$/)
+  if (driveMatch) {
+    const driveLetter = driveMatch[1].toLowerCase()
+    const rest = driveMatch[2].replace(/\\/g, '/')
+    return `/mnt/${driveLetter}/${rest}`
+  }
+
+  return arg
 }
 
 function hasExplicitRepoArg(args: string[]): boolean {
@@ -161,7 +168,8 @@ function resolveCommand(
   command: string,
   args: string[],
   cwd: string | undefined,
-  wslDistroOverride?: string
+  wslDistroOverride?: string,
+  options: { useWslLoginShell?: boolean } = {}
 ): ResolvedCommand {
   if (process.platform !== 'win32') {
     return { binary: command, args, cwd, wsl: null }
@@ -185,18 +193,36 @@ function resolveCommand(
   }
 
   const translatedArgs = translateArgsForWsl(args)
+  const escapedCommand = quotePosixShell(command)
   // Why: shell-escape each argument to prevent word splitting / glob expansion
   // inside the bash -c string. Single quotes are safe for all chars except
   // single quotes themselves, which we escape as '\'' (end quote, escaped
   // literal, reopen quote).
-  const escapedArgs = translatedArgs.map((a) => `'${a.replace(/'/g, "'\\''")}'`)
+  const escapedArgs = translatedArgs.map(quotePosixShell)
   // Why: when cwd is supplied as a WSL UNC path, prepend `cd <linuxPath> &&`
   // so the command runs in the expected directory. When the caller only
   // supplied a distro override (no cwd), skip the cd entirely — the gh CLI
   // doesn't need a particular cwd for global calls like `api rate_limit`.
-  const shellCmd = cwdWsl
-    ? `cd '${cwdWsl.linuxPath.replace(/'/g, "'\\''")}' && ${command} ${escapedArgs.join(' ')}`
-    : `${command} ${escapedArgs.join(' ')}`
+  const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
+  const shellCmd = linuxCwd
+    ? `cd ${quotePosixShell(linuxCwd)} && ${escapedCommand} ${escapedArgs.join(' ')}`
+    : `${escapedCommand} ${escapedArgs.join(' ')}`
+
+  if (options.useWslLoginShell) {
+    return {
+      binary: 'wsl.exe',
+      args: [
+        '-d',
+        wsl.distro,
+        '--',
+        'sh',
+        '-lc',
+        escapeWslShCommandForWindows(buildWslLoginShellCommand(shellCmd))
+      ],
+      cwd: undefined,
+      wsl
+    }
+  }
 
   return {
     binary: 'wsl.exe',
@@ -226,6 +252,7 @@ type GitExecOptions = {
   timeout?: number
   env?: NodeJS.ProcessEnv
   signal?: AbortSignal
+  wslDistro?: string
 }
 
 type CommandExecOptions = {
@@ -533,7 +560,9 @@ export async function gitExecFileAsync(
   return withGitSpan(
     { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
     async () => {
-      const resolved = resolveCommand('git', args, options.cwd)
+      const resolved = resolveCommand('git', args, options.cwd, options.wslDistro, {
+        useWslLoginShell: Boolean(options.wslDistro)
+      })
       const { stdout, stderr } = await execFileCapture(resolved.binary, resolved.args, {
         cwd: resolved.cwd,
         encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
@@ -598,9 +627,11 @@ export async function commandExecFileAsync(
  */
 export async function gitExecFileAsyncBuffer(
   args: string[],
-  options: { cwd: string; maxBuffer?: number }
+  options: { cwd: string; maxBuffer?: number; wslDistro?: string }
 ): Promise<{ stdout: Buffer }> {
-  const resolved = resolveCommand('git', args, options.cwd)
+  const resolved = resolveCommand('git', args, options.cwd, options.wslDistro, {
+    useWslLoginShell: Boolean(options.wslDistro)
+  })
   const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
     encoding: 'buffer',
@@ -616,6 +647,7 @@ export type GitStreamResult = { stoppedEarly: boolean }
 type GitStreamOptions = {
   cwd: string
   env?: NodeJS.ProcessEnv
+  wslDistro?: string
   /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
   maxBuffer?: number
   /**
@@ -647,6 +679,7 @@ export async function gitStreamStdout(
         cwd: options.cwd,
         env: nonInteractiveGitEnv(options.env),
         stdio: ['ignore', 'pipe', 'pipe'],
+        wslDistro: options.wslDistro,
         windowsHide: true
       })
 
@@ -767,10 +800,16 @@ export function gitExecFileSync(
  * Spawn a git child process. Drop-in replacement for
  * `spawn('git', args, { cwd, stdio, ... })`.
  */
-export function gitSpawn(args: string[], options: SpawnOptions & { cwd: string }): ChildProcess {
-  const resolved = resolveCommand('git', args, options.cwd)
+export function gitSpawn(
+  args: string[],
+  options: SpawnOptions & { cwd: string; wslDistro?: string }
+): ChildProcess {
+  const { wslDistro, ...spawnOptions } = options
+  const resolved = resolveCommand('git', args, options.cwd, wslDistro, {
+    useWslLoginShell: Boolean(wslDistro)
+  })
   return spawn(resolved.binary, resolved.args, {
-    ...options,
+    ...spawnOptions,
     cwd: resolved.cwd
   })
 }
@@ -1191,11 +1230,14 @@ export async function glabExecFileAsync(
 export function wslAwareSpawn(
   command: string,
   args: string[],
-  options: SpawnOptions & { cwd?: string }
+  options: SpawnOptions & { cwd?: string; wslDistro?: string; useWslLoginShell?: boolean }
 ): ChildProcess {
-  const resolved = resolveCommand(command, args, options.cwd)
+  const { wslDistro, useWslLoginShell, ...spawnOptions } = options
+  const resolved = resolveCommand(command, args, options.cwd, wslDistro, {
+    useWslLoginShell
+  })
   return spawn(resolved.binary, resolved.args, {
-    ...options,
+    ...spawnOptions,
     cwd: resolved.cwd
   })
 }
@@ -1209,16 +1251,21 @@ export function wslAwareSpawn(
  * are Linux-native (/home/user/repo). The rest of Orca needs Windows UNC
  * paths (\\wsl.localhost\Ubuntu\home\user\repo) to read files via Node fs.
  */
-export function translateWslOutputPaths(output: string, originalCwd: string): string {
+export function translateWslOutputPaths(
+  output: string,
+  originalCwd: string,
+  options: { wslDistro?: string } = {}
+): string {
   const wsl = parseWslPath(originalCwd)
-  if (!wsl) {
+  const distro = wsl?.distro ?? options.wslDistro
+  if (!distro) {
     return output
   }
 
   // Replace absolute Linux paths that start with / and look like filesystem
   // paths in structured git output (e.g. "worktree /home/user/repo/feature")
   return output.replace(/(?<=worktree )(\/.+)$/gm, (_match, linuxPath: string) =>
-    toWindowsWslPath(linuxPath, wsl.distro)
+    toWindowsWslPath(linuxPath, distro)
   )
 }
 

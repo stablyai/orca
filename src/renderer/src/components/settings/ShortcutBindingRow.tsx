@@ -2,10 +2,16 @@ import React, { useEffect, useRef } from 'react'
 import { Ban, Plus, RotateCcw, Terminal } from 'lucide-react'
 import {
   formatKeybinding,
+  isDoubleTapBinding,
   type KeybindingActionId,
   type KeybindingDefinition,
   type KeybindingInput
 } from '../../../../shared/keybindings'
+import {
+  ModifierDoubleTapDetector,
+  modifierFromKeyEvent,
+  toModifierDoubleTapEvent
+} from '../../../../shared/modifier-double-tap-detector'
 import { cn } from '../../lib/utils'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { Badge } from '../ui/badge'
@@ -55,17 +61,31 @@ export function ShortcutBindingRow({
   onReset
 }: ShortcutBindingRowProps): React.JSX.Element {
   const recordButtonRef = useRef<HTMLButtonElement | null>(null)
+  const doubleTapDetectorRef = useRef<ModifierDoubleTapDetector | null>(null)
+  if (!doubleTapDetectorRef.current) {
+    doubleTapDetectorRef.current = new ModifierDoubleTapDetector()
+  }
 
   useEffect(() => {
     if (recording) {
       recordButtonRef.current?.focus()
+    } else {
+      // Stale taps mustn't survive into the next recording session.
+      doubleTapDetectorRef.current?.reset()
     }
     window.api.ui.setShortcutRecorderFocused(recording)
     return () => window.api.ui.setShortcutRecorderFocused(false)
   }, [recording])
 
   const statusMessage = error ?? (warnings.length > 0 ? warnings.join(' ') : '')
-  const recordingMessage = recording ? 'Listening for shortcut. Esc cancels recording.' : ''
+  const doubleTapHint = platform === 'darwin' ? '⇧⇧' : 'Shift Shift'
+  const recordingMessage = recording
+    ? translate(
+        'auto.components.settings.ShortcutBindingRow.a98d551407',
+        'Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',
+        { value0: doubleTapHint }
+      )
+    : ''
   const helperMessage = statusMessage || recordingMessage
   const hasBinding = effective.length > 0
 
@@ -82,11 +102,37 @@ export function ShortcutBindingRow({
     event.stopPropagation()
 
     if (event.key === 'Escape') {
+      doubleTapDetectorRef.current?.reset()
       onClearError(item.id)
       onCancelRecording()
       return
     }
 
+    // A modifier press never captures on its own — the detector decides whether
+    // it completes a double-tap, leaving normal chords to capture on their key.
+    if (modifierFromKeyEvent(event.code, event.key) !== null) {
+      const detected = doubleTapDetectorRef.current?.process(
+        toModifierDoubleTapEvent({
+          type: 'keyDown',
+          code: event.code,
+          key: event.key,
+          shift: event.shiftKey,
+          control: event.ctrlKey,
+          alt: event.altKey,
+          meta: event.metaKey,
+          isAutoRepeat: event.repeat
+        }),
+        Date.now()
+      )
+      if (detected) {
+        onClearError(item.id)
+        onCapture(item.id, { doubleTapModifier: detected.modifier })
+        doubleTapDetectorRef.current?.reset()
+      }
+      return
+    }
+
+    doubleTapDetectorRef.current?.reset()
     onClearError(item.id)
     onCapture(item.id, {
       key: event.key,
@@ -96,6 +142,26 @@ export function ShortcutBindingRow({
       control: event.ctrlKey,
       shift: event.shiftKey
     })
+  }
+
+  const handleRecordKeyUp = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+    if (!recording) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    doubleTapDetectorRef.current?.process(
+      toModifierDoubleTapEvent({
+        type: 'keyUp',
+        code: event.code,
+        key: event.key,
+        shift: event.shiftKey,
+        control: event.ctrlKey,
+        alt: event.altKey,
+        meta: event.metaKey
+      }),
+      Date.now()
+    )
   }
 
   // Why: the recorder is the row's primary control — clicking the keys (or the
@@ -230,6 +296,7 @@ export function ShortcutBindingRow({
                 }
               }}
               onKeyDown={handleRecordKeyDown}
+              onKeyUp={handleRecordKeyUp}
               className={cn(
                 'flex min-h-7 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-md border px-2 py-1 text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
                 recording
@@ -249,7 +316,11 @@ export function ShortcutBindingRow({
               ) : hasBinding ? (
                 <span className="flex flex-wrap items-center justify-end gap-1.5">
                   {effective.map((binding) => (
-                    <ShortcutKeyCombo key={binding} keys={formatKeybinding(binding, platform)} />
+                    <ShortcutKeyCombo
+                      key={binding}
+                      keys={formatKeybinding(binding, platform)}
+                      doubleTap={isDoubleTapBinding(binding)}
+                    />
                   ))}
                 </span>
               ) : (
