@@ -8,6 +8,9 @@ export type PreflightIssue = {
   description: string
   fixLabel: string
   fixUrl: string
+  /** Git is a hard global dependency and stays pinned; provider-specific CLI
+   *  setup is a soft nudge the user can dismiss. */
+  dismissible?: boolean
 }
 
 export type LandingPreflightStatus = {
@@ -58,7 +61,8 @@ export function getLandingPreflightIssues(
         'Orca uses the GitHub CLI (gh) to show pull requests, issues, and checks.'
       ),
       fixLabel: 'Install GitHub CLI',
-      fixUrl: 'https://cli.github.com'
+      fixUrl: 'https://cli.github.com',
+      dismissible: true
     })
   } else if (!status.gh.authenticated) {
     issues.push({
@@ -69,7 +73,8 @@ export function getLandingPreflightIssues(
         'Run "gh auth login" in a terminal to connect your GitHub account.'
       ),
       fixLabel: 'Learn more',
-      fixUrl: 'https://cli.github.com/manual/gh_auth_login'
+      fixUrl: 'https://cli.github.com/manual/gh_auth_login',
+      dismissible: true
     })
   }
 

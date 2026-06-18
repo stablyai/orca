@@ -41,6 +41,13 @@ function getProjectProviderIdentity(
     : null
 }
 
+/** True when the repo resolves to a GitHub provider identity (via explicit
+ *  upstream or a GitHub-sourced avatar icon). Used to scope GitHub-CLI setup
+ *  prompts to users who actually have GitHub-backed projects. */
+export function isGitHubBackedRepo(repo: Pick<Repo, 'upstream' | 'repoIcon'>): boolean {
+  return getProjectProviderIdentity(repo) !== null
+}
+
 export function getProjectIdentityKey(repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon'>): string {
   const identity = getProjectProviderIdentity(repo)
   if (!identity) {

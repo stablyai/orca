@@ -95,6 +95,7 @@ type WorktreeCardProps = {
   lineageChildCount?: number
   lineageCollapsed?: boolean
   lineageChildren?: React.ReactNode
+  lineageChildrenStyle?: React.CSSProperties
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
   onActivate?: () => void
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
@@ -198,6 +199,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   lineageChildCount = 0,
   lineageCollapsed = false,
   lineageChildren,
+  lineageChildrenStyle,
   onLineageToggle,
   affiliateListMode = false
 }: WorktreeCardProps) {
@@ -1066,15 +1068,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
       ? `calc(0.125rem + ${contentIndent}px)`
       : null
   const cardStyle = cardPaddingLeft ? { paddingLeft: cardPaddingLeft } : undefined
-  const lineageChildrenStyle = newCardStyle
-    ? {
-        // Why: nested child surfaces should start in the parent's title/chip
-        // column while remaining inside the parent card surface.
-        marginLeft: '0.5rem',
-        width: 'calc(100% - 0.5rem)'
-      }
-    : undefined
-
   const detailsAndPortsContent =
     hasDetails || hasPorts ? (
       <div className="flex shrink-0 items-center gap-1">

@@ -21,6 +21,7 @@ import {
   waitForPtyColumnsAtMost,
   waitForRenderedTerminalColumnsAtMost
 } from './terminal-column-probes'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 type TerminalRenderDiagnostics = {
   cols: number
@@ -605,6 +606,7 @@ test.describe('Terminal long table scroll restore repro', () => {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
     const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const runId = randomUUID()
     const marker = `LONG_TABLE_SCROLL_RESTORE_${runId}`
     const scriptPath = path.join(testRepoPath, `.orca-long-table-${runId}.mjs`)
@@ -673,6 +675,7 @@ test.describe('Terminal long table scroll restore repro', () => {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
     const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
     const runId = randomUUID()
     const marker = `NARROW_SIGNER_TABLE_RESTORE_${runId}`
     const scriptPath = path.join(testRepoPath, `.orca-narrow-signer-table-${runId}.mjs`)

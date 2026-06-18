@@ -913,7 +913,8 @@
         "16e9e3df89": "별표가 붙은",
         "0d0ace8861": "GitHub에서 별표 주기",
         "ec43b38ba7": "GitHub에 별표 표시됨",
-        "157bb5ecbb": "GitHub 열기"
+        "157bb5ecbb": "GitHub 열기",
+        "preflightDismiss": "Dismiss"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",

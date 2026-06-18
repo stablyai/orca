@@ -49,6 +49,18 @@ describe('landing preflight issues', () => {
     expect(issues.map((issue) => issue.id)).toContain('gh')
   })
 
+  it('reports GitHub auth issue when gh is installed but unauthenticated', () => {
+    const issues = getLandingPreflightIssues(
+      {
+        git: { installed: true },
+        gh: { installed: true, authenticated: false }
+      },
+      { hasGitHubBackedProject: true }
+    )
+
+    expect(issues.map((issue) => issue.id)).toContain('gh-auth')
+  })
+
   it('treats GitLab-only registered projects as not GitHub-backed', () => {
     expect(
       hasGitHubBackedProject([

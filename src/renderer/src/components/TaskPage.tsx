@@ -7557,7 +7557,9 @@ export default function TaskPage(): React.JSX.Element {
                                   )
                                 })
                               }}
+                              data-task-source={source.id}
                               aria-label={sourceAvailabilityNotice?.label ?? source.label}
+                              aria-pressed={active}
                               className={cn(
                                 'group flex h-8 w-8 items-center justify-center rounded-md border transition',
                                 active

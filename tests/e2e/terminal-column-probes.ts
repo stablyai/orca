@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
-import { getTerminalContent, sendToTerminal } from './helpers/terminal'
+import { sendToTerminal } from './helpers/terminal'
+import {
+  getTerminalContentForPtyId,
+  waitForPtyPaneMounted,
+  waitForPtyShellEcho
+} from './terminal-pty-readiness'
 
 type TerminalColumnProbeWindow = Window & {
   __store?: {
@@ -63,6 +68,8 @@ export async function waitForPtyColumnsAtMost(
   timeoutMs = 30_000
 ): Promise<number> {
   const deadline = Date.now() + timeoutMs
+  await waitForPtyPaneMounted(page, ptyId, Math.min(10_000, timeoutMs))
+  await waitForPtyShellEcho(page, ptyId, Math.min(15_000, Math.max(0, deadline - Date.now())))
   let markerObserved = false
   let lastObservedCols: number | null = null
   let lastMarker = ''
@@ -70,16 +77,21 @@ export async function waitForPtyColumnsAtMost(
   while (Date.now() < deadline) {
     const marker = `ORCA_PTY_COLUMNS_${randomUUID()}`
     lastMarker = marker
+    // Why: a few CI shells occasionally eat the first printable byte when a
+    // command is written immediately after Ctrl+C/Ctrl+U. Split control bytes
+    // from the probe command so the shell sees the whole `node` executable.
+    await sendToTerminal(page, ptyId, '\x03')
+    await page.waitForTimeout(50)
+    await sendToTerminal(page, ptyId, '\x15')
+    await page.waitForTimeout(50)
     await sendToTerminal(
       page,
       ptyId,
-      `\x03\x15node -e ${JSON.stringify(
-        `console.log('${marker}:' + (process.stdout.columns || 0))`
-      )}\r`
+      `node -e ${JSON.stringify(`console.log('${marker}:' + (process.stdout.columns || 0))`)}\r`
     )
     const probeDeadline = Date.now() + Math.min(5_000, Math.max(0, deadline - Date.now()))
     while (Date.now() < probeDeadline) {
-      const content = await getTerminalContent(page, 30_000)
+      const content = await getTerminalContentForPtyId(page, ptyId, 30_000)
       lastTerminalTail = content
       const match = content.match(new RegExp(`${marker}:(\\d+)`))
       const observedCols = Number(match?.[1] ?? 0)
@@ -98,7 +110,7 @@ export async function waitForPtyColumnsAtMost(
       await page.waitForTimeout(retryDelayMs)
     }
   }
-  lastTerminalTail = await getTerminalContent(page, 30_000)
+  lastTerminalTail = await getTerminalContentForPtyId(page, ptyId, 30_000)
   const finalState = {
     lastMarker,
     markerObserved,

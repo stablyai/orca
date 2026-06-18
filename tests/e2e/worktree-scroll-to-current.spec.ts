@@ -1,11 +1,10 @@
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-
-const WORKTREE_OPTION_PREFIX = 'worktree-list-option-'
+import { worktreeRow } from './worktree-row-locators'
 
 function worktreeOption(page: Page, worktreeId: string) {
-  return page.locator(`[id="${WORKTREE_OPTION_PREFIX}${encodeURIComponent(worktreeId)}"]`)
+  return worktreeRow(page, worktreeId)
 }
 
 async function prepareSidebarForScrollTest(page: Page): Promise<void> {
@@ -30,7 +29,9 @@ async function prepareSidebarForScrollTest(page: Page): Promise<void> {
 async function forceCurrentWorkspaceClipped(page: Page, targetId: string): Promise<void> {
   await page.locator('[data-worktree-sidebar]').evaluate((element, targetId) => {
     const scroller = element as HTMLElement
-    const target = document.getElementById(`worktree-list-option-${encodeURIComponent(targetId)}`)
+    const target = [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
+      (candidate) => candidate.dataset.worktreeId === targetId
+    )
     if (!target) {
       throw new Error('Target workspace row is not mounted')
     }
@@ -58,8 +59,8 @@ async function forceCurrentWorkspaceClipped(page: Page, targetId: string): Promi
       () =>
         page.evaluate((targetId) => {
           const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
-          const target = document.getElementById(
-            `worktree-list-option-${encodeURIComponent(targetId)}`
+          const target = [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
+            (candidate) => candidate.dataset.worktreeId === targetId
           )
           if (!scroller || !target) {
             return false
@@ -87,7 +88,9 @@ async function expectNoRevealHighlightDuring(
   const deadline = Date.now() + durationMs
   while (Date.now() < deadline) {
     const isHighlighted = await page.evaluate((targetId) => {
-      const target = document.getElementById(`worktree-list-option-${encodeURIComponent(targetId)}`)
+      const target = [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
+        (candidate) => candidate.dataset.worktreeId === targetId
+      )
       return target?.getAttribute('data-scroll-reveal-highlight') === 'true'
     }, targetId)
     expect(isHighlighted).toBe(false)
@@ -109,12 +112,11 @@ test.describe('Reveal active workspace button', () => {
     const renderedOptions = orcaPage.locator('[data-worktree-sidebar] [role="option"]')
     await expect(renderedOptions).toHaveCount(2)
 
-    const targetIdAttribute = await renderedOptions.last().getAttribute('id')
-    if (!targetIdAttribute?.startsWith(WORKTREE_OPTION_PREFIX)) {
-      throw new Error('Bottom workspace row did not expose the expected option id')
+    const targetId = await renderedOptions.last().getAttribute('data-worktree-id')
+    if (!targetId) {
+      throw new Error('Bottom workspace row did not expose a data-worktree-id')
     }
 
-    const targetId = decodeURIComponent(targetIdAttribute.slice(WORKTREE_OPTION_PREFIX.length))
     const targetRow = worktreeOption(orcaPage, targetId)
     const revealButton = orcaPage.getByRole('button', { name: 'Reveal active workspace' })
 
@@ -136,8 +138,8 @@ test.describe('Reveal active workspace button', () => {
         () =>
           orcaPage.evaluate((targetId) => {
             const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
-            const target = document.getElementById(
-              `worktree-list-option-${encodeURIComponent(targetId)}`
+            const target = [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
+              (candidate) => candidate.dataset.worktreeId === targetId
             )
             if (!scroller || !target) {
               return false
@@ -168,12 +170,11 @@ test.describe('Reveal active workspace button', () => {
     const renderedOptions = orcaPage.locator('[data-worktree-sidebar] [role="option"]')
     await expect(renderedOptions).toHaveCount(2)
 
-    const targetIdAttribute = await renderedOptions.last().getAttribute('id')
-    if (!targetIdAttribute?.startsWith(WORKTREE_OPTION_PREFIX)) {
-      throw new Error('Bottom workspace row did not expose the expected option id')
+    const targetId = await renderedOptions.last().getAttribute('data-worktree-id')
+    if (!targetId) {
+      throw new Error('Bottom workspace row did not expose a data-worktree-id')
     }
 
-    const targetId = decodeURIComponent(targetIdAttribute.slice(WORKTREE_OPTION_PREFIX.length))
     const targetRow = worktreeOption(orcaPage, targetId)
     const revealButton = orcaPage.getByRole('button', { name: 'Reveal active workspace' })
 
