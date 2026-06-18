@@ -57,6 +57,7 @@ import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
 import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
+import { setCachedRepos } from '../../../src/cache/repo-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
 import { leaveHostRoute } from '../../../src/host-route-exit'
@@ -120,6 +121,8 @@ const GROUP_OPTIONS: PickerOption<MobileGroupMode>[] = [
   { value: 'prStatus', label: 'PR Status' }
 ]
 
+const REPO_METADATA_REFRESH_MS = 60_000
+
 type HostScreenProps = {
   // Why: when true, this worktree list is rendered as the persistent tablet
   // sidebar by the host layout rather than as its own routed screen. That
@@ -161,6 +164,8 @@ export function HostScreen({
   const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const fetchWorktreesInFlightRef = useRef(false)
+  const fetchRepoMetadataInFlightRef = useRef(false)
+  const repoMetadataFetchedAtRef = useRef(0)
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
@@ -340,6 +345,7 @@ export function HostScreen({
     setCompatVerdict({ kind: 'ok' })
     setRepoColorsByName(new Map())
     setRepoIconsByName(new Map())
+    repoMetadataFetchedAtRef.current = 0
     // Why: re-seed from the current host's cache on every hostId change.
     // The useState initializer only runs on first mount, so if Expo Router
     // reuses this screen with a different hostId, we must reset here.
@@ -374,6 +380,54 @@ export function HostScreen({
     }
   }, [hostId])
 
+  const fetchRepoMetadata = useCallback(
+    async (options: { force?: boolean } = {}) => {
+      if (!client || connState !== 'connected' || !hostId) {
+        return
+      }
+      if (fetchRepoMetadataInFlightRef.current) {
+        return
+      }
+      const now = Date.now()
+      if (!options.force && now - repoMetadataFetchedAtRef.current < REPO_METADATA_REFRESH_MS) {
+        return
+      }
+      fetchRepoMetadataInFlightRef.current = true
+      const requestClient = client
+      const requestHostId = hostId
+      try {
+        const repoResponse = await requestClient.sendRequest('repo.list')
+        if (clientRef.current !== requestClient || hostId !== requestHostId || !repoResponse.ok) {
+          return
+        }
+        const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
+        repoMetadataFetchedAtRef.current = Date.now()
+        setCachedRepos(requestHostId, repoResult.repos)
+        setRepoColorsByName(
+          new Map(
+            repoResult.repos.map((repo) => [
+              repo.displayName,
+              repo.badgeColor || repoColor(repo.displayName)
+            ])
+          )
+        )
+        setRepoIconsByName(
+          new Map(
+            repoResult.repos.flatMap((repo) =>
+              repo.repoIcon ? [[repo.displayName, repo.repoIcon] as const] : []
+            )
+          )
+        )
+        setRepoIdsByName(new Map(repoResult.repos.map((repo) => [repo.displayName, repo.id])))
+      } catch {
+        // Repo metadata is decorative; the next throttled refresh can retry.
+      } finally {
+        fetchRepoMetadataInFlightRef.current = false
+      }
+    },
+    [client, connState, hostId]
+  )
+
   const fetchWorktrees = useCallback(async () => {
     if (!client || connState !== 'connected') {
       return
@@ -407,31 +461,6 @@ export function HostScreen({
             ? null
             : pending
         )
-
-        try {
-          const repoResponse = await requestClient.sendRequest('repo.list')
-          if (clientRef.current === requestClient && hostId === requestHostId && repoResponse.ok) {
-            const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
-            setRepoColorsByName(
-              new Map(
-                repoResult.repos.map((repo) => [
-                  repo.displayName,
-                  repo.badgeColor || repoColor(repo.displayName)
-                ])
-              )
-            )
-            setRepoIconsByName(
-              new Map(
-                repoResult.repos.flatMap((repo) =>
-                  repo.repoIcon ? [[repo.displayName, repo.repoIcon] as const] : []
-                )
-              )
-            )
-            setRepoIdsByName(new Map(repoResult.repos.map((repo) => [repo.displayName, repo.id])))
-          }
-        } catch {
-          // Repo metadata is decorative; the next serialized poll can retry.
-        }
 
         // Clear optimistic sleep overrides once the server confirms the
         // worktree is actually inactive (liveTerminalCount dropped to 0).
@@ -526,6 +555,7 @@ export function HostScreen({
         return
       }
       void fetchWorktrees()
+      void fetchRepoMetadata()
       // Pull desktop's shared view settings on focus so desktop-side changes
       // show up here without a manual refresh.
       void syncViewSettingsFromDesktop()
@@ -533,9 +563,10 @@ export function HostScreen({
       // poll the host list while this route is visible.
       const interval = setInterval(() => {
         void fetchWorktrees()
+        void fetchRepoMetadata()
       }, 3000)
       return () => clearInterval(interval)
-    }, [embedded, connState, fetchWorktrees, syncViewSettingsFromDesktop])
+    }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
   )
 
   // Why: as the persistent tablet sidebar this list is never the focused
@@ -546,12 +577,14 @@ export function HostScreen({
       return
     }
     void fetchWorktrees()
+    void fetchRepoMetadata()
     void syncViewSettingsFromDesktop()
     const interval = setInterval(() => {
       void fetchWorktrees()
+      void fetchRepoMetadata()
     }, 3000)
     return () => clearInterval(interval)
-  }, [embedded, connState, fetchWorktrees, syncViewSettingsFromDesktop])
+  }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -1394,6 +1427,7 @@ export function HostScreen({
       <NewWorktreeModal
         visible={showNewWorktree}
         client={client}
+        hostId={hostId}
         existingWorktreePaths={worktrees.map((w) => w.path)}
         onCreated={(worktreeId, worktreeName) => {
           void fetchWorktrees()

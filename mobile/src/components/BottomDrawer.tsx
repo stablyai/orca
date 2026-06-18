@@ -40,6 +40,7 @@ type Props = {
   onClose: () => void
   children: ReactNode
   dragContentToDismiss?: boolean
+  contentScrollable?: boolean
   zIndex?: number
 }
 
@@ -48,6 +49,7 @@ export function BottomDrawer({
   onClose,
   children,
   dragContentToDismiss = true,
+  contentScrollable = true,
   zIndex
 }: Props) {
   const [mounted, setMounted] = useState(visible)
@@ -71,6 +73,7 @@ export function BottomDrawer({
       onClose={onClose}
       onHidden={() => setMounted(false)}
       dragContentToDismiss={dragContentToDismiss}
+      contentScrollable={contentScrollable}
       zIndex={zIndex}
     >
       {children}
@@ -88,6 +91,7 @@ function MountedBottomDrawer({
   onHidden,
   children,
   dragContentToDismiss = true,
+  contentScrollable = true,
   zIndex = 1000
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
@@ -280,7 +284,20 @@ function MountedBottomDrawer({
               drawerStyle
             ]}
           >
-            {dragContentToDismiss ? (
+            {!contentScrollable ? (
+              <>
+                <GestureDetector gesture={handlePanGesture}>
+                  <Animated.View
+                    style={styles.handleHitArea}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dismiss drawer"
+                  >
+                    <View style={styles.handle} />
+                  </Animated.View>
+                </GestureDetector>
+                <View style={styles.staticContent}>{children}</View>
+              </>
+            ) : dragContentToDismiss ? (
               <>
                 <GestureDetector gesture={handlePanGesture}>
                   <Animated.View
@@ -381,6 +398,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: spacing.sm,
     paddingBottom: spacing.md
+  },
+  staticContent: {
+    minHeight: 0
   },
   bottomExtension: {
     position: 'absolute',

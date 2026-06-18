@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
@@ -39,6 +40,7 @@ import {
   resolveNewWorktreeAgentSelection,
   type NewWorktreeAgentOption as AgentOption
 } from './new-worktree-agent-selection'
+import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
 
 type Repo = {
   id: string
@@ -102,68 +104,12 @@ function repoBadgeColor(repo: Repo | null): string {
   return repo?.badgeColor || repoColor(repo?.displayName ?? 'repository')
 }
 
-// ── Picker sub-modal ────────────────────────────────────────────────
-// Why: inline dropdowns with position:absolute + ScrollView have persistent
-// touch-conflict issues in React Native. A separate modal for the picker
-// list is the standard mobile pattern — it scrolls reliably and feels native.
-
-function PickerListModal<T extends { id: string; label: string }>({
-  visible,
-  title,
-  items,
-  selectedId,
-  onSelect,
-  onClose,
-  renderIcon
-}: {
-  visible: boolean
-  title: string
-  items: T[]
-  selectedId: string
-  onSelect: (item: T) => void
-  onClose: () => void
-  renderIcon?: (item: T) => React.ReactNode
-}) {
-  return (
-    <BottomDrawer visible={visible} onClose={onClose}>
-      <View style={styles.pickerHeader}>
-        <Text style={styles.pickerTitle}>{title}</Text>
-      </View>
-      <View style={styles.pickerGroup}>
-        {items.map((item, index) => {
-          const selected = item.id === selectedId
-          return (
-            <View key={item.id}>
-              {index > 0 && <View style={styles.pickerSeparator} />}
-              <Pressable
-                style={({ pressed }) => [styles.pickerItem, pressed && styles.pickerItemPressed]}
-                onPress={() => {
-                  onSelect(item)
-                  onClose()
-                }}
-              >
-                {renderIcon?.(item)}
-                <Text
-                  style={[styles.pickerItemText, selected && styles.pickerItemTextSelected]}
-                  numberOfLines={1}
-                >
-                  {item.label}
-                </Text>
-                {selected && <Check size={14} color={colors.textPrimary} />}
-              </Pressable>
-            </View>
-          )
-        })}
-      </View>
-    </BottomDrawer>
-  )
-}
-
 // ── Main modal ──────────────────────────────────────────────────────
 
 type Props = {
   visible: boolean
   client: RpcClient | null
+  hostId?: string
   // Why: existing worktree paths from the host so we can pick a unique
   // marine-creature default when the user leaves the name blank, matching
   // the desktop UI's behavior. The "already exists locally" collision is
@@ -177,6 +123,7 @@ type Props = {
 export function NewWorktreeModal({
   visible,
   client,
+  hostId,
   existingWorktreePaths,
   onCreated,
   onClose
@@ -200,6 +147,7 @@ export function NewWorktreeModal({
       key={`${openEpochRef.current}:${clientEpochRef.current.epoch}`}
       visible={visible}
       client={client}
+      hostId={hostId}
       existingWorktreePaths={existingWorktreePaths}
       onCreated={onCreated}
       onClose={onClose}
@@ -210,12 +158,16 @@ export function NewWorktreeModal({
 function NewWorktreeModalContent({
   visible,
   client,
+  hostId,
   existingWorktreePaths,
   onCreated,
   onClose
 }: Props) {
-  const [repos, setRepos] = useState<Repo[]>([])
-  const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
+  const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
+  const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
+  const [selectedRepo, setSelectedRepo] = useState<Repo | null>(
+    initialRepos?.length === 1 ? initialRepos[0]! : null
+  )
   const [showRepoPicker, setShowRepoPicker] = useState(false)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
@@ -239,7 +191,7 @@ function NewWorktreeModalContent({
   const [runSetup, setRunSetup] = useState(true)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(initialRepos == null)
 
   // Why: matches the desktop UI — the input shows a generic "Workspace name"
   // placeholder, not the suggested creature. The creature name is only used
@@ -288,10 +240,44 @@ function NewWorktreeModalContent({
     }
     let stale = false
 
+    if (repos.length === 0) {
+      setLoading(true)
+    }
+
+    void client
+      .sendRequest('repo.list')
+      .then((repoResponse) => {
+        if (stale) {
+          return
+        }
+        if (repoResponse.ok) {
+          const result = (repoResponse as RpcSuccess).result as { repos: Repo[] }
+          setRepos(result.repos)
+          if (hostId) {
+            setCachedRepos(hostId, result.repos)
+          }
+          setSelectedRepo((current) => {
+            if (current) {
+              return result.repos.find((repo) => repo.id === current.id) ?? current
+            }
+            return result.repos.length === 1 ? result.repos[0]! : null
+          })
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setRepos([])
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setLoading(false)
+        }
+      })
+
     void (async () => {
       try {
-        const [repoResponse, settingsResponse, uiResponse] = await Promise.all([
-          client.sendRequest('repo.list'),
+        const [settingsResponse, uiResponse] = await Promise.all([
           client.sendRequest('settings.get'),
           client.sendRequest('ui.get')
         ])
@@ -308,29 +294,14 @@ function NewWorktreeModalContent({
           }
           setTrustedOrcaHooks(result.ui?.trustedOrcaHooks ?? {})
         }
-        if (repoResponse.ok) {
-          const result = (repoResponse as RpcSuccess).result as { repos: Repo[] }
-          setRepos(result.repos)
-          if (result.repos.length === 1) {
-            setSelectedRepo(result.repos[0]!)
-          } else {
-            setSelectedRepo(null)
-          }
-        }
       } catch {
-        if (!stale) {
-          setRepos([])
-        }
-      } finally {
-        if (!stale) {
-          setLoading(false)
-        }
+        // Non-critical; repo.list owns the visible loading state.
       }
     })()
     return () => {
       stale = true
     }
-  }, [visible, client])
+  }, [visible, client, hostId])
 
   useEffect(() => {
     if (!visible || !client || !selectedRepoConnectionId) {
@@ -652,13 +623,10 @@ function NewWorktreeModalContent({
   }
 
   const needsSetupChoice = Boolean(setupCommand) && setupRunPolicy === 'ask'
-  const agentDetectionPending =
-    selectedRepo != null && !sshGate.requiresConnection && detectedAgentIds === null
   const canCreate =
     selectedRepo != null &&
     !creating &&
     !sshGate.requiresConnection &&
-    !agentDetectionPending &&
     (!needsSetupChoice || setupDecisionChoice != null)
   const visibleAgentOptions =
     detectedAgentIds === null
@@ -674,6 +642,10 @@ function NewWorktreeModalContent({
             isMobileTuiAgentEnabled(agent.id, runtimeSettings?.disabledTuiAgents)
         )
   const pickerAgentOptions = [...visibleAgentOptions, BLANK_TERMINAL]
+  const repoPickerItems = useMemo(
+    () => repos.map((repo) => ({ id: repo.id, label: repo.displayName, repo })),
+    [repos]
+  )
 
   return (
     <>
@@ -898,20 +870,19 @@ function NewWorktreeModalContent({
 
       {/* Sub-modals for pickers — rendered outside the main modal so they
           layer on top and scroll without touch conflicts. */}
-      <PickerListModal
+      <PickerListDrawer
         visible={visible && showRepoPicker}
         title="Repository"
-        items={repos.map((r) => ({ id: r.id, label: r.displayName, _repo: r }))}
+        items={repoPickerItems}
         selectedId={selectedRepo?.id ?? ''}
-        onSelect={(item) => setSelectedRepo((item as { _repo: Repo })._repo)}
+        onSelect={(item) => setSelectedRepo(item.repo)}
         onClose={() => setShowRepoPicker(false)}
         renderIcon={(item) => {
-          const repo = (item as { _repo: Repo })._repo
-          return <View style={[styles.repoDot, { backgroundColor: repoBadgeColor(repo) }]} />
+          return <View style={[styles.repoDot, { backgroundColor: repoBadgeColor(item.repo) }]} />
         }}
       />
 
-      <PickerListModal
+      <PickerListDrawer
         visible={visible && showAgentPicker}
         title="Agent"
         items={pickerAgentOptions}
@@ -1306,47 +1277,6 @@ const styles = StyleSheet.create({
   createText: {
     color: colors.bgBase,
     fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  // Picker sub-modal styles
-  pickerHeader: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  pickerTitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
-  pickerGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  pickerSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  pickerList: {
-    flexGrow: 0
-  },
-  pickerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  pickerItemPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  pickerItemText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  pickerItemTextSelected: {
     fontWeight: '600'
   }
 })
