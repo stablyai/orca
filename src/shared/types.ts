@@ -28,6 +28,7 @@ import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
 } from './source-control-ai-types'
+import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
@@ -1865,6 +1866,7 @@ export type WorktreeSetupLaunch = {
 export type WorktreeStartupLaunch = {
   command: string
   env?: Record<string, string>
+  startupCommandDelivery?: StartupCommandDelivery
   telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
 }
 

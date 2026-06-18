@@ -900,6 +900,7 @@ type RuntimePtyController = {
     rows: number
     cwd?: string
     command?: string
+    startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
     envToDelete?: string[]
     telemetry?: WorktreeStartupLaunch['telemetry']
@@ -3156,6 +3157,7 @@ export class OrcaRuntimeService {
           await this.createHeadlessMobileSessionTerminal(
             worktreeId,
             true,
+            undefined,
             undefined,
             undefined,
             {
@@ -9857,6 +9859,9 @@ export class OrcaRuntimeService {
         agent,
         startup: {
           command: draftLaunchPlan.launchCommand,
+          ...(draftLaunchPlan.startupCommandDelivery
+            ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
+            : {}),
           ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
         }
       }
@@ -9878,6 +9883,9 @@ export class OrcaRuntimeService {
       agent,
       startup: {
         command: startupPlan.launchCommand,
+        ...(startupPlan.startupCommandDelivery
+          ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+          : {}),
         ...(startupPlan.env ? { env: startupPlan.env } : {})
       },
       draftPaste: { agent, content }
@@ -9915,6 +9923,9 @@ export class OrcaRuntimeService {
       agent,
       startup: {
         command: startupPlan.launchCommand,
+        ...(startupPlan.startupCommandDelivery
+          ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+          : {}),
         ...(startupPlan.env ? { env: startupPlan.env } : {})
       },
       ...(startupPlan.followupPrompt
@@ -10334,6 +10345,7 @@ export class OrcaRuntimeService {
           const terminal = await this.createTerminal(`id:${worktree.id}`, {
             command: effectiveStartup.command,
             env: effectiveStartup.env,
+            startupCommandDelivery: effectiveStartup.startupCommandDelivery,
             telemetry: effectiveStartup.telemetry
           })
           if (effectiveDraftPaste) {
@@ -10915,6 +10927,7 @@ export class OrcaRuntimeService {
         const terminal = await this.createTerminal(`id:${worktree.id}`, {
           command: effectiveStartup.command,
           env: effectiveStartup.env,
+          startupCommandDelivery: effectiveStartup.startupCommandDelivery,
           telemetry: effectiveStartup.telemetry
         })
         if (effectiveDraftPaste) {
@@ -11171,6 +11184,7 @@ export class OrcaRuntimeService {
         const terminal = await this.createTerminal(`path:${result.worktree.path}`, {
           command: args.startup.command,
           env: args.startup.env,
+          startupCommandDelivery: args.startup.startupCommandDelivery,
           telemetry: args.startup.telemetry
         })
         if (args.startupDraftPaste) {
@@ -12699,6 +12713,7 @@ export class OrcaRuntimeService {
     opts: {
       command?: string
       env?: Record<string, string>
+      startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       telemetry?: WorktreeStartupLaunch['telemetry']
       title?: string
       focus?: boolean
@@ -12776,6 +12791,7 @@ export class OrcaRuntimeService {
         rows: 40,
         cwd: workspace.path,
         command: agentTeamsPlan?.command ?? opts.command,
+        startupCommandDelivery: opts.startupCommandDelivery,
         env,
         envToDelete: agentTeamsPlan?.envToDelete,
         telemetry: opts.telemetry,
@@ -12872,6 +12888,7 @@ export class OrcaRuntimeService {
         requestId,
         worktreeId,
         command: opts.command,
+        startupCommandDelivery: opts.startupCommandDelivery,
         title: opts.title,
         activate: opts.focus === true || opts.activate === true
       })
@@ -12908,6 +12925,7 @@ export class OrcaRuntimeService {
     return await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,
       env: startup.startup.env,
+      startupCommandDelivery: startup.startup.startupCommandDelivery,
       telemetry: startup.startup.telemetry,
       title: opts.title
     })
@@ -12919,6 +12937,7 @@ export class OrcaRuntimeService {
       afterTabId?: string
       targetGroupId?: string
       command?: string
+      startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
       activate?: boolean
     } = {}
@@ -12945,6 +12964,7 @@ export class OrcaRuntimeService {
         opts.activate !== false,
         opts.afterTabId,
         command,
+        opts.startupCommandDelivery,
         undefined,
         opts.agent
       )
@@ -12978,6 +12998,7 @@ export class OrcaRuntimeService {
         afterTabId: afterDesktopTabId,
         targetGroupId: opts.targetGroupId,
         command,
+        startupCommandDelivery: opts.startupCommandDelivery,
         activate: opts.activate
       })
     })
@@ -13031,6 +13052,7 @@ export class OrcaRuntimeService {
     activate: boolean,
     afterTabId?: string,
     command?: string,
+    startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery'],
     identity?: { tabId: string; leafId: string; sessionId?: string },
     launchAgent?: TuiAgent
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
@@ -13043,6 +13065,7 @@ export class OrcaRuntimeService {
     const terminal = await this.createTerminal(`id:${worktreeId}`, {
       focus: false,
       command,
+      startupCommandDelivery,
       ...(identity
         ? {
             tabId: identity.tabId,

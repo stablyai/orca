@@ -6,7 +6,10 @@ import {
 } from './agent-session-resume'
 import { tokenizeCustomCommandTemplate } from './commit-message-prompt'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { TuiAgent } from './types'
+
+const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
 export type AgentStartupPlan = {
   agent: TuiAgent
@@ -15,6 +18,7 @@ export type AgentStartupPlan = {
   followupPrompt: string | null
   draftPrompt?: string | null
   env?: Record<string, string>
+  startupCommandDelivery?: StartupCommandDelivery
 }
 
 export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
@@ -143,6 +147,7 @@ export function buildAgentStartupPlan(args: {
       launchCommand: `${baseCommand.command} ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
+      ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
@@ -229,6 +234,23 @@ export type AgentDraftLaunchPlan = {
   launchCommand: string
   expectedProcess: string
   env?: Record<string, string>
+  startupCommandDelivery?: StartupCommandDelivery
+}
+
+function inlineDraftPlanFitsPlatform(
+  plan: AgentDraftLaunchPlan,
+  platform: NodeJS.Platform
+): boolean {
+  if (platform !== 'win32') {
+    return true
+  }
+  const envChars = Object.entries(plan.env ?? {}).reduce(
+    (total, [key, value]) => total + key.length + value.length,
+    0
+  )
+  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
+  // generated drafts should use the existing post-ready paste fallback.
+  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
 }
 
 export function buildAgentDraftLaunchPlan(args: {
@@ -256,25 +278,30 @@ export function buildAgentDraftLaunchPlan(args: {
   if (!baseCommand.ok) {
     return null
   }
+  let plan: AgentDraftLaunchPlan | null = null
   if (config.draftPromptFlag) {
     const quoted = quoteStartupArg(trimmed, shell)
-    return {
+    plan = {
       agent,
       launchCommand: `${baseCommand.command} ${config.draftPromptFlag} ${quoted}`,
       expectedProcess: config.expectedProcess,
+      // Why: native draft flags carry user text on argv and must survive rc-file startup.
+      ...(agent === 'codex' ? { startupCommandDelivery: 'shell-ready' as const } : {}),
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
-  }
-  if (config.draftPromptEnvVar) {
+  } else if (config.draftPromptEnvVar) {
     const clearVar = clearEnvCommand(config.draftPromptEnvVar, shell)
-    return {
+    plan = {
       agent,
       launchCommand: `${baseCommand.command}${commandSeparator(shell)}${clearVar}`,
       expectedProcess: config.expectedProcess,
       env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
     }
   }
-  return null
+  if (!plan || !inlineDraftPlanFitsPlatform(plan, platform)) {
+    return null
+  }
+  return plan
 }
 
 export { isShellProcess }

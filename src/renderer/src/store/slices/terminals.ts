@@ -23,6 +23,7 @@ import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shar
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
@@ -304,6 +305,7 @@ export type TerminalSlice = {
       /** Renderer-delivered startup input for callers that need xterm paste
        *  semantics before the submit Enter. */
       delivery?: 'terminal-paste'
+      startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       /** Initial prompt-start status for agents that lack native prompt hooks. */
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
@@ -444,6 +446,7 @@ export type TerminalSlice = {
     startup: {
       command: string
       delivery?: 'terminal-paste'
+      startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       showSessionRestoredBanner?: boolean
@@ -453,6 +456,7 @@ export type TerminalSlice = {
   consumeTabStartupCommand: (tabId: string) => {
     command: string
     delivery?: 'terminal-paste'
+    startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
     initialAgentStatus?: { agent: TuiAgent; prompt: string }
     showSessionRestoredBanner?: boolean

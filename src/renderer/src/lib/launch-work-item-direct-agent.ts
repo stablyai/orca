@@ -25,6 +25,9 @@ export function buildDirectWorkItemStartupOpts(
     startup: {
       command: plan.launchCommand,
       ...(plan.env ? { env: plan.env } : {}),
+      ...(plan.startupCommandDelivery
+        ? { startupCommandDelivery: plan.startupCommandDelivery }
+        : {}),
       ...(telemetry ? { telemetry } : {})
     }
   }

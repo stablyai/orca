@@ -24,6 +24,7 @@ import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import { SSH_SESSION_EXPIRED_ERROR, isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
@@ -1770,6 +1771,9 @@ export function registerPtyHandlers(
       if (args.command !== undefined) {
         spawnOptions.command = args.command
       }
+      if (args.startupCommandDelivery !== undefined) {
+        spawnOptions.startupCommandDelivery = args.startupCommandDelivery
+      }
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId
       }
@@ -2118,6 +2122,7 @@ export function registerPtyHandlers(
         env?: Record<string, string>
         envToDelete?: string[]
         command?: string
+        startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
         worktreeId?: string
         sessionId?: string
@@ -2367,6 +2372,9 @@ export function registerPtyHandlers(
       }
       if (args.command !== undefined) {
         spawnOptions.command = args.command
+      }
+      if (args.startupCommandDelivery !== undefined) {
+        spawnOptions.startupCommandDelivery = args.startupCommandDelivery
       }
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId

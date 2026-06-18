@@ -50,6 +50,9 @@ export function buildOnboardingFolderAgentStartup(
   return {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: 'onboarding',

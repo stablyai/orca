@@ -165,6 +165,76 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'enables shell-ready marker env for delivery-hinted startup commands',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-shell-ready-spawn-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          startupCommandDelivery: 'shell-ready'
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'enables shell-ready marker env for Codex native prefill commands',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-codex-prefill-spawn-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: "codex --prefill 'linked issue context'"
+        })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_READY_MARKER).toBe('1')
+    }
+  )
+
   it('terminates spawned PTY when request becomes stale before response', async () => {
     const killSpy = vi.fn()
     const term = { ...mockPtyInstance, kill: killSpy, onData: vi.fn(), onExit: vi.fn() }
