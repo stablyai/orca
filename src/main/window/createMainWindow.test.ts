@@ -159,7 +159,10 @@ describe('createMainWindow', () => {
         titleBarStyle: 'hidden'
       })
     } else {
+      // Linux: native frame is dropped so the renderer titlebar isn't stacked
+      // under the WM title bar (double title bar). titleBarStyle stays unset.
       expect(browserWindowOptions.titleBarStyle).toBeUndefined()
+      expect(browserWindowOptions.frame).toBe(false)
     }
 
     expect(windowHandlers.windowOpen({ url: 'https://example.com' })).toEqual({ action: 'deny' })

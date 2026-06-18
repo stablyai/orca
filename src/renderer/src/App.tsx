@@ -153,7 +153,13 @@ import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialo
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
+const isLinux = !isMac && !isWindows
 const shortcutPlatform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+// Why: Windows and Linux both run with the native title bar removed (Windows
+// via titleBarStyle: 'hidden', Linux via frame: false), so the renderer draws
+// its own logo/menu anchor and min/max/close controls on both. macOS keeps the
+// native traffic lights, so it's excluded.
+const hasCustomTitleBar = isWindows || isLinux
 
 function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -177,9 +183,10 @@ type ShortcutDispatchInput = {
   preventDefault: () => void
 }
 
-// Why: 'hidden' titleBarStyle on Windows removes the native OS title bar,
-// so we render our own minimize/maximize/close buttons.  These SVG icons match
-// the Fluent/Win11 style: thin 10×10 paths on a 40×30 hit area.
+// Why: Windows ('hidden' titleBarStyle) and Linux (frame: false) both remove
+// the native OS title bar, so we render our own minimize/maximize/close
+// buttons. These SVG icons match the Fluent/Win11 style: thin 10×10 paths on a
+// 40×30 hit area.
 function WindowControls(): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
@@ -1776,9 +1783,9 @@ function App(): React.JSX.Element {
       <div className="flex h-full items-center">
         {isMac && !isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
-        ) : isWindows ? (
-          /* Why: on Windows the native title bar is hidden, so we render the
-             Orca logo as a non-interactive identity anchor and a ··· button
+        ) : hasCustomTitleBar ? (
+          /* Why: on Windows/Linux the native title bar is removed, so we render
+             the Orca logo as a non-interactive identity anchor and a ··· button
              that pops up the application menu (the same menu revealed by Alt
              on the default autoHideMenuBar). */
           <>
@@ -1801,7 +1808,7 @@ function App(): React.JSX.Element {
         ) : (
           <div className="pl-2" />
         )}
-        {showSidebar && !isWindows && (
+        {showSidebar && !hasCustomTitleBar && (
           <>
             {settings?.showTitlebarAppName !== false && (
               <ContextMenu>
@@ -1944,8 +1951,8 @@ function App(): React.JSX.Element {
       visible at a time. */}
       {!rightSidebarOpen && rightSidebarToggle}
       {/* Why: reserve space so content is not obscured by the
-      fixed-position window-controls overlay on Windows. */}
-      {isWindows && <div className="window-controls-titlebar-spacer" />}
+      fixed-position window-controls overlay on Windows/Linux. */}
+      {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )
 
@@ -1957,12 +1964,13 @@ function App(): React.JSX.Element {
         {
           '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
           // Why: consumed by anything that needs to avoid the fixed-position
-          // window-controls overlay on Windows (floating sidebar toggle, right
-          // sidebar header, etc.) without hardcoding 138px in multiple places.
-          '--window-controls-width': isWindows ? '138px' : '0px',
+          // window-controls overlay on Windows/Linux (floating sidebar toggle,
+          // right sidebar header, etc.) without hardcoding 138px in multiple
+          // places.
+          '--window-controls-width': hasCustomTitleBar ? '138px' : '0px',
           // Why: consumed by the side-position activity bar to push icons below
-          // the fixed-position window-controls overlay on Windows.
-          '--window-controls-height': isWindows ? '36px' : '0px'
+          // the fixed-position window-controls overlay on Windows/Linux.
+          '--window-controls-height': hasCustomTitleBar ? '36px' : '0px'
         } as React.CSSProperties
       }
     >
@@ -2558,7 +2566,7 @@ function App(): React.JSX.Element {
           in DOM order. Electron's hit-test for drag regions is DOM-order-based and
           ignores z-index — placing WindowControls earlier caused the drag region to
           win, making the buttons unclickable. */}
-      {isWindows && <WindowControls />}
+      {hasCustomTitleBar && <WindowControls />}
     </div>
   )
 }

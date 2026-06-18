@@ -258,6 +258,12 @@ export function createMainWindow(
         : process.platform === 'win32'
           ? 'hidden'
           : undefined,
+    // Why: Linux ignores titleBarStyle: 'hidden', so without this the native
+    // WM title bar stays and stacks on top of our renderer titlebar (double
+    // title bar). frame: false drops the native frame; the renderer draws its
+    // own titlebar + window controls (see WindowControls in App.tsx), matching
+    // the Windows custom-titlebar path.
+    ...(process.platform === 'linux' ? { frame: false } : {}),
     // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts
     // dynamically when the user changes UI zoom.
     ...(process.platform === 'darwin'
