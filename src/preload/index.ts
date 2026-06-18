@@ -172,6 +172,7 @@ import {
 import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
 import type { RuntimeEnvironmentSubscriptionHandle } from './runtime-environment-subscriptions'
 import type { HostedReviewForBranchArgs } from '../shared/hosted-review'
+import type { ReadClipboardTextOptions } from '../shared/clipboard-text'
 import type {
   CrashReportBreadcrumbData,
   CrashReportSubmitArgs,
@@ -2936,6 +2937,21 @@ const api = {
       ipcRenderer.on('ui:toggleStatusBar', listener)
       return () => ipcRenderer.removeListener('ui:toggleStatusBar', listener)
     },
+    onAppMenuPaste: (callback: () => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent) => callback()
+      ipcRenderer.on('ui:appMenuPaste', listener)
+      return () => ipcRenderer.removeListener('ui:appMenuPaste', listener)
+    },
+    onEditableContextPaste: (
+      callback: (data: { plainTextOnly: boolean }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { plainTextOnly: boolean }
+      ): void => callback({ plainTextOnly: data?.plainTextOnly === true })
+      ipcRenderer.on('ui:editableContextPaste', listener)
+      return () => ipcRenderer.removeListener('ui:editableContextPaste', listener)
+    },
     onDictationKeyDown: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:dictationKeyDown', listener)
@@ -3194,9 +3210,10 @@ const api = {
       ipcRenderer.on('terminal:zoom', listener)
       return () => ipcRenderer.removeListener('terminal:zoom', listener)
     },
-    readClipboardText: (): Promise<string> => ipcRenderer.invoke('clipboard:readText'),
-    readSelectionClipboardText: (): Promise<string> =>
-      ipcRenderer.invoke('clipboard:readSelectionText'),
+    readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
+      ipcRenderer.invoke('clipboard:readText', options),
+    readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
+      ipcRenderer.invoke('clipboard:readSelectionText', options),
     saveClipboardImageAsTempFile: (args?: {
       connectionId?: string | null
     }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
@@ -3206,6 +3223,11 @@ const api = {
       ipcRenderer.invoke('clipboard:writeSelectionText', text),
     writeClipboardImage: (dataUrl: string): Promise<void> =>
       ipcRenderer.invoke('clipboard:writeImage', dataUrl),
+    performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }): void => {
+      ipcRenderer.send('ui:performNativePaste', {
+        mode: options?.mode === 'paste-and-match-style' ? 'paste-and-match-style' : 'paste'
+      })
+    },
     onFileDrop: (callback: (data: NativeFileDropPayload) => void): (() => void) =>
       subscribeNativeFileDrop(callback),
     getZoomLevel: (): number => webFrame.getZoomLevel(),

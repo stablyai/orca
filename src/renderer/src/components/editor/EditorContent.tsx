@@ -25,7 +25,10 @@ import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
 import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
-import { findGitConflictBlocks } from './monaco-conflict-decorations'
+import {
+  findGitConflictBlocks,
+  getGitConflictMarkerLineLength
+} from './monaco-conflict-decorations'
 import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
@@ -42,7 +45,25 @@ const CsvViewer = lazy(() => import('./CsvViewer'))
 const IpynbViewer = lazy(() => import('./IpynbViewer'))
 
 export function getMarkdownSourceLineOffset(frontMatterRaw: string): number {
-  return (frontMatterRaw.match(/\r\n|\r|\n/g) ?? []).length
+  let offset = 0
+
+  for (let index = 0; index < frontMatterRaw.length; index++) {
+    const code = frontMatterRaw.charCodeAt(index)
+
+    if (code === 13) {
+      offset++
+      if (frontMatterRaw.charCodeAt(index + 1) === 10) {
+        index++
+      }
+      continue
+    }
+
+    if (code === 10) {
+      offset++
+    }
+  }
+
+  return offset
 }
 
 type FileContent = {
@@ -202,7 +223,7 @@ export function EditorContent({
             return
           }
           const line = blocks[nextIndex].startLine
-          const markerLine = content.split(/\r?\n/)[line - 1] ?? ''
+          const markerLineLength = getGitConflictMarkerLineLength(content, line)
           setConflictNavigationIndexByFile((prev) => ({ ...prev, [file.id]: nextIndex }))
           // Why: a same-location reveal can be requested twice before Monaco
           // consumes the first one. Clearing first guarantees the prop changes
@@ -213,7 +234,7 @@ export function EditorContent({
               filePath: file.filePath,
               line,
               column: 1,
-              matchLength: markerLine.length
+              matchLength: markerLineLength
             })
           })
         }

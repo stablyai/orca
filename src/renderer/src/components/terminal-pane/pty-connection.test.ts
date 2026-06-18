@@ -6,6 +6,7 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
+import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -21,6 +22,18 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 async function flushAsyncTicks(count = 6): Promise<void> {
   for (let i = 0; i < count; i++) {
     await Promise.resolve()
+  }
+}
+
+async function drainPendingTimeouts(pendingTimeouts: (() => void)[], limit = 100): Promise<void> {
+  let iterations = 0
+  while (pendingTimeouts.length > 0) {
+    if (iterations >= limit) {
+      throw new Error('Timed out draining pending timeouts')
+    }
+    iterations += 1
+    pendingTimeouts.shift()?.()
+    await flushAsyncTicks()
   }
 }
 
@@ -1190,14 +1203,124 @@ describe('connectPanePty', () => {
       expect(capturedDataCallback.current).not.toBeNull()
 
       capturedDataCallback.current?.('user@host $ ')
-      for (const fn of pendingTimeouts) {
-        fn()
-      }
+      await drainPendingTimeouts(pendingTimeouts)
       await flushAsyncTicks()
 
       expect(pane.terminal.paste).toHaveBeenCalledWith(command)
       expect(transport.sendInput).toHaveBeenCalledWith('\r')
       expect(transport.sendInput).not.toHaveBeenCalledWith(`${command}\r`)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+    }
+  })
+
+  it('chunks large terminal-paste startup commands through the PTY before submitting', async () => {
+    const pendingTimeouts: (() => void)[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = vi.fn((fn: () => void) => {
+      pendingTimeouts.push(fn)
+      return 999 as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      const transport = createMockTransport('pty-id')
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-local-paste'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        repos: [{ id: 'repo1', connectionId: null }]
+      }
+
+      const pane = createPane(1)
+      pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+        callback?.()
+      })
+      const manager = createManager(1)
+      const command = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
+      const deps = createDeps({ startup: { command, delivery: 'terminal-paste' } })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      expect(createdTransportOptions[0]?.command).toBeUndefined()
+      expect(capturedDataCallback.current).not.toBeNull()
+
+      capturedDataCallback.current?.('user@host $ ')
+      await drainPendingTimeouts(pendingTimeouts)
+      await flushAsyncTicks()
+
+      const writtenInput = transport.sendInput.mock.calls.map((call) => call[0])
+      expect(pane.terminal.paste).not.toHaveBeenCalled()
+      expect(writtenInput.at(-1)).toBe('\r')
+      expect(writtenInput.slice(0, -1).join('')).toBe(command)
+      expect(writtenInput.slice(0, -1).length).toBeGreaterThan(1)
+      expect(transport.sendInput).not.toHaveBeenCalledWith(`${command}\r`)
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+    }
+  })
+
+  it('does not submit a terminal-paste startup command after the PTY changes mid-paste', async () => {
+    const pendingTimeouts: (() => void)[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = vi.fn((fn: () => void) => {
+      pendingTimeouts.push(fn)
+      return 999 as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+
+      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+      const transport = createMockTransport('pty-id')
+      let livePtyId = 'pty-local-paste'
+      transport.getPtyId.mockImplementation(() => livePtyId)
+      transport.sendInput.mockImplementation((data: string) => {
+        if (data !== '\r') {
+          livePtyId = 'pty-replaced'
+        }
+        return true
+      })
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-local-paste'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        repos: [{ id: 'repo1', connectionId: null }]
+      }
+
+      const pane = createPane(1)
+      pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+        callback?.()
+      })
+      const manager = createManager(1)
+      const command = `${'x'.repeat(TERMINAL_PASTE_DIRECT_MAX_BYTES)}tail`
+      const deps = createDeps({ startup: { command, delivery: 'terminal-paste' } })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      expect(capturedDataCallback.current).not.toBeNull()
+
+      capturedDataCallback.current?.('user@host $ ')
+      await drainPendingTimeouts(pendingTimeouts)
+      await flushAsyncTicks()
+
+      expect(pane.terminal.paste).not.toHaveBeenCalled()
+      expect(transport.sendInput).not.toHaveBeenCalledWith('\r')
+      expect(transport.sendInput.mock.calls.map((call) => call[0]).join('')).not.toBe(command)
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }

@@ -16,6 +16,7 @@ export type RichMarkdownImageInsertArgs = {
   worktreeId: string | null
   runtimeEnvironmentId?: string | null
   insertPos: number
+  canInsert?: (editor: Editor) => boolean
 }
 
 export async function insertRichMarkdownImageFromPath({
@@ -24,7 +25,8 @@ export async function insertRichMarkdownImageFromPath({
   sourcePath,
   worktreeId,
   runtimeEnvironmentId,
-  insertPos
+  insertPos,
+  canInsert
 }: RichMarkdownImageInsertArgs): Promise<void> {
   try {
     const connectionId = getConnectionId(worktreeId) ?? undefined
@@ -57,6 +59,10 @@ export async function insertRichMarkdownImageFromPath({
       toast.error(
         translate('auto.components.editor.useLocalImagePick.175cb8b8ce', 'Failed to insert image.')
       )
+      return
+    }
+
+    if (canInsert && !canInsert(editor)) {
       return
     }
 

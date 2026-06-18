@@ -1982,6 +1982,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
+    performNativePaste: () => {
+      // Native Electron paste fallback has no browser equivalent.
+    },
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
       zoomLevel = level
@@ -2032,6 +2035,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
     onDictationKeyDown: () => noopUnsubscribe,
+    onAppMenuPaste: () => noopUnsubscribe,
+    onEditableContextPaste: () => noopUnsubscribe,
     onActivateWorktree: () => noopUnsubscribe,
     onCreateTerminal: () => noopUnsubscribe,
     onRequestTerminalCreate: () => noopUnsubscribe,
