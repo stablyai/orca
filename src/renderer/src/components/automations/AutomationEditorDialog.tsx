@@ -4,7 +4,9 @@ import { getAgentCatalog } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type {
   AutomationSchedulePreset,
-  AutomationWorkspaceMode
+  AutomationWebhookSecretMode,
+  AutomationWorkspaceMode,
+  WebhookServerEndpoint
 } from '../../../../shared/automations-types'
 import type { GlobalSettings, Repo, TuiAgent, Worktree } from '../../../../shared/types'
 import {
@@ -41,6 +43,9 @@ export type AutomationDraft = {
   customSchedule: string
   missedRunGraceMinutes: string
   scheduleWarning: string | null
+  webhookEnabled: boolean
+  webhookSecretMode: AutomationWebhookSecretMode
+  webhookSecret: string
 }
 
 export type AutomationCreateTarget = 'orca' | 'hermes'
@@ -57,7 +62,10 @@ type AutomationEditorDialogProps = {
   worktrees: Worktree[]
   settings: GlobalSettings | null
   draft: AutomationDraft
+  automationId: string | null
+  webhookEndpoint: WebhookServerEndpoint | null
   onProjectChange: (projectId: string) => void
+  onGenerateWebhookSecret: () => void
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
   onCreateTargetChange: (target: AutomationCreateTarget) => void
   onOpenChange: (open: boolean) => void
@@ -78,12 +86,15 @@ export function AutomationEditorDialog({
   worktrees,
   settings,
   draft,
+  automationId,
+  webhookEndpoint,
   onProjectChange,
   getRepoHostLabel,
   onCreateTargetChange,
   onOpenChange,
   onDraftChange,
   onApplyTemplate,
+  onGenerateWebhookSecret,
   onSave
 }: AutomationEditorDialogProps): React.JSX.Element {
   const [templateOpen, setTemplateOpen] = React.useState(false)
@@ -147,8 +158,13 @@ export function AutomationEditorDialog({
         <AutomationEditorPromptSection
           draft={draft}
           isHermesCreate={isHermesCreate}
+          allowWebhook={createTarget === 'orca' && !isEditingExternal}
+          automationId={automationId}
+          webhookEndpoint={webhookEndpoint}
           pickerTriggerClassName={PICKER_TRIGGER_CLASS}
+          toggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
           onDraftChange={onDraftChange}
+          onGenerateWebhookSecret={onGenerateWebhookSecret}
         />
 
         <AutomationEditorDialogFooter

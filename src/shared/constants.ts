@@ -8,7 +8,8 @@ import type {
   PersistedUIState,
   RepoHookSettings,
   WorkspaceSessionState,
-  AgentActivityDisplayMode
+  AgentActivityDisplayMode,
+  WebhookServerSettings
 } from './types'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
@@ -102,6 +103,12 @@ export const getDefaultPrimarySelectionMiddleClickPaste = (
  * efficiently via virtualized line rendering.
  */
 export const RICH_MARKDOWN_MAX_SIZE_BYTES = 300 * 1024
+
+/** Default port for the inbound-webhook listener (issue #2). Chosen in the
+ *  user/registered range, unlikely to collide with common dev servers. */
+export const DEFAULT_WEBHOOK_SERVER_PORT = 8473
+export const MIN_WEBHOOK_SERVER_PORT = 1
+export const MAX_WEBHOOK_SERVER_PORT = 65535
 
 export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000
 export const MIN_EDITOR_AUTO_SAVE_DELAY_MS = 250
@@ -368,8 +375,41 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
-    voice: getDefaultVoiceSettings()
+    voice: getDefaultVoiceSettings(),
+    webhookServer: getDefaultWebhookServerSettings()
   }
+}
+
+export function getDefaultWebhookServerSettings(): WebhookServerSettings {
+  return {
+    enabled: false,
+    // Why: loopback-only by default so enabling automations never silently
+    // opens a LAN-reachable port. Users opt into a wider bind interface.
+    bindAddress: '127.0.0.1',
+    port: DEFAULT_WEBHOOK_SERVER_PORT
+  }
+}
+
+/** Normalize untrusted webhook-server settings: clamp the port into range and
+ *  fall back to the loopback default for a blank bind address. Missing fields
+ *  inherit from `current` (or the defaults) so a partial update never drops
+ *  the others. */
+export function normalizeWebhookServerSettings(
+  input: Partial<WebhookServerSettings> | null | undefined,
+  current?: WebhookServerSettings | null
+): WebhookServerSettings {
+  const base = current ?? getDefaultWebhookServerSettings()
+  const enabled = typeof input?.enabled === 'boolean' ? input.enabled : base.enabled
+  const bindAddressRaw =
+    typeof input?.bindAddress === 'string' ? input.bindAddress.trim() : base.bindAddress
+  const bindAddress = bindAddressRaw.length > 0 ? bindAddressRaw : '127.0.0.1'
+  const portRaw =
+    typeof input?.port === 'number' && Number.isFinite(input.port) ? input.port : base.port
+  const port = Math.min(
+    MAX_WEBHOOK_SERVER_PORT,
+    Math.max(MIN_WEBHOOK_SERVER_PORT, Math.trunc(portRaw))
+  )
+  return { enabled, bindAddress, port }
 }
 
 export function getDefaultVoiceSettings(): VoiceSettings {

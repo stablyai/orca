@@ -112,6 +112,10 @@ import { initializeBrowserSessionsForApp } from './browser/browser-session-start
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
+import { composeAutomationDispatchPrompt } from '../shared/automation-webhook'
+import { WebhookServer } from './webhooks/webhook-server'
+import { generateWebhookSecret } from './webhooks/webhook-secret'
+import { getDefaultWebhookServerSettings } from '../shared/constants'
 import { AgentAwakeService } from './agent-awake-service'
 import {
   getCrashBreadcrumbSnapshot,
@@ -179,6 +183,8 @@ let unsubscribeAgentAwakeStatusChanges: (() => void) | null = null
 let watcherShutdownPromise: Promise<void> | null = null
 let watcherShutdownDone = false
 let automations: AutomationService | null = null
+let webhookServer: WebhookServer | null = null
+let unsubscribeWebhookSettings: (() => void) | null = null
 let keybindings: KeybindingService | null = null
 let expectedRendererReload: { webContentsId: number; until: number } | null = null
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
@@ -1357,6 +1363,9 @@ app.whenReady().then(async () => {
           let terminalSessionId: string | null = null
           let workspaceId: string
           let workspaceDisplayName: string | null = null
+          // Why: webhook-triggered runs append the request body to the prompt;
+          // keep this in sync with the renderer dispatch path.
+          const dispatchPrompt = composeAutomationDispatchPrompt(automation, run)
 
           if (automation.workspaceMode === 'new_per_run') {
             const created = await runtimeService.createManagedWorktree({
@@ -1367,7 +1376,7 @@ app.whenReady().then(async () => {
               activate: false,
               createdWithAgent: automation.agentId,
               startupAgent: automation.agentId,
-              startupPrompt: automation.prompt,
+              startupPrompt: dispatchPrompt,
               telemetrySource: 'unknown'
             })
             terminalHandle = created.startupTerminal?.handle ?? ''
@@ -1388,7 +1397,7 @@ app.whenReady().then(async () => {
               `id:${automation.workspaceId}`,
               {
                 agent: automation.agentId,
-                prompt: automation.prompt,
+                prompt: dispatchPrompt,
                 title: run.title
               }
             )
@@ -1434,6 +1443,25 @@ app.whenReady().then(async () => {
       : undefined
   })
   runtimeService.setAutomationService(automations)
+  // Why: inbound-webhook listener (issue #2). The bind interface/port live in
+  // settings; apply() starts/stops/rebinds to match, and the settings
+  // subscription keeps it in sync when the user changes the config live.
+  const automationsService = automations
+  webhookServer = new WebhookServer({
+    getAutomation: (id) => store!.listAutomations().find((entry) => entry.id === id),
+    triggerWebhook: (id, delivery) => automationsService.triggerWebhook(id, delivery)
+  })
+  void webhookServer.apply(store!.getSettings().webhookServer ?? getDefaultWebhookServerSettings())
+  unsubscribeWebhookSettings?.()
+  unsubscribeWebhookSettings = store!.onSettingsChanged((updates) => {
+    if ('webhookServer' in updates) {
+      void webhookServer?.apply(
+        store!.getSettings().webhookServer ?? getDefaultWebhookServerSettings()
+      )
+    }
+  })
+  ipcMain.handle('automations:webhookEndpoint', () => webhookServer?.getEndpoint() ?? null)
+  ipcMain.handle('automations:generateWebhookSecret', () => generateWebhookSecret())
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: local Codex hooks and auth now live in Orca's managed runtime home
@@ -1682,6 +1710,9 @@ app.on('will-quit', (e) => {
   // agent_start events with no matching stops.
   starNag?.stop()
   automations?.stop()
+  unsubscribeWebhookSettings?.()
+  unsubscribeWebhookSettings = null
+  webhookServer?.stop()
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
   stats?.flush()

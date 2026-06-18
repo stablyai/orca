@@ -145,7 +145,8 @@ import type {
   ExternalAutomationUpdateInput,
   AutomationRun,
   AutomationPrecheckResult,
-  AutomationUpdateInput
+  AutomationUpdateInput,
+  WebhookServerEndpoint
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 import type { AiVaultListArgs } from '../shared/ai-vault-types'
@@ -3666,6 +3667,10 @@ const api = {
     snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }): Promise<number> =>
       ipcRenderer.invoke('automations:snapshotWorkspaceName', args),
     rendererReady: (): Promise<void> => ipcRenderer.invoke('automations:rendererReady'),
+    getWebhookEndpoint: (): Promise<WebhookServerEndpoint | null> =>
+      ipcRenderer.invoke('automations:webhookEndpoint'),
+    generateWebhookSecret: (): Promise<string> =>
+      ipcRenderer.invoke('automations:generateWebhookSecret'),
     onDispatchRequested: (callback: (request: AutomationDispatchRequest) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, request: AutomationDispatchRequest) =>
         callback(request)

@@ -2189,7 +2189,8 @@ export class OrcaRuntimeService {
       rrule: input.rrule,
       dtstart: input.dtstart,
       enabled: input.enabled,
-      missedRunGraceMinutes: input.missedRunGraceMinutes
+      missedRunGraceMinutes: input.missedRunGraceMinutes,
+      webhook: input.webhook
     })
   }
 
@@ -2237,6 +2238,9 @@ export class OrcaRuntimeService {
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'missedRunGraceMinutes')) {
       patch.missedRunGraceMinutes = updates.missedRunGraceMinutes
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'webhook')) {
+      patch.webhook = updates.webhook
     }
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||

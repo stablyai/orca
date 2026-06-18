@@ -2736,6 +2736,22 @@ export type GlobalSettings = {
    *  effectively present at runtime — the renderer should still fall back to
    *  defaults when reading optional sub-fields. */
   voice?: VoiceSettings
+  /** Inbound-webhook receiver config (issue #2). Optional for profiles saved
+   *  before the feature; `getDefaultSettings()` hydrates the default via the
+   *  `{ ...defaults, ...parsed }` merge. The bind interface is configurable so
+   *  a self-hosted Git server on the same network can reach the listener;
+   *  the default stays loopback-only. */
+  webhookServer?: WebhookServerSettings
+}
+
+/** Configuration for the inbound-webhook HTTP listener that lets external
+ *  events (e.g. GitLab MR hooks) trigger automations. */
+export type WebhookServerSettings = {
+  enabled: boolean
+  /** Interface to bind. Defaults to '127.0.0.1' (loopback only). Set to a LAN
+   *  IP or '0.0.0.0' to accept requests from other hosts. */
+  bindAddress: string
+  port: number
 }
 
 export type OrcaWorkspaceLayout = {
