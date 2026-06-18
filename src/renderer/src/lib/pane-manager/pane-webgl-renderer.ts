@@ -16,6 +16,14 @@ export function resetTerminalWebglSuggestion(): void {
 }
 
 export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
+  // Why: @xterm/addon-webgl currently paints cell background rectangles with
+  // alpha=1 when the theme background carries transparency, and in the observed
+  // transparent path it can leave cursor/selection feedback invisible. In auto
+  // mode, keep translucent terminals on the DOM renderer so the blurred window
+  // material, cursor, and selection all remain visible during output repaints.
+  if (pane.terminal.options?.allowTransparency && pane.terminalGpuAcceleration !== 'on') {
+    return false
+  }
   if (pane.terminalGpuAcceleration === 'on') {
     return true
   }

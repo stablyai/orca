@@ -25,10 +25,26 @@
   width: 100%;
 }
 
-.pane-manager-root .xterm-viewport {
+.xterm .xterm-viewport {
   /* Why: xterm/VS Code keep the scrollbar gutter stable. `auto` lets Linux
-     DOM scrollbars appear/disappear, which can feed resize/reflow jitter. */
+     DOM scrollbars appear/disappear, which can feed resize/reflow jitter.
+     Hide the native scrollbar paint so transparent terminals do not inherit a
+     bright system scrollbar over the blurred window material. */
   overflow-y: scroll;
+  scrollbar-width: none !important;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+  background: transparent !important;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track,
+.xterm .xterm-viewport::-webkit-scrollbar-thumb {
+  background: transparent !important;
+  border: 0 !important;
 }
 
 /* xterm.css hard-codes the viewport background to #000 (for opaque macOS
@@ -42,9 +58,15 @@
   background-color: transparent;
 }
 
-/* Round the xterm DOM scrollbar thumb; xterm has no option for this, and its
-   default .xterm-slider has square corners. */
+/* Round and tint the xterm DOM scrollbar thumb; xterm has no option for this,
+   and the default macOS/system scrollbar can become a bright line over
+   transparent terminals. */
+.xterm .xterm-scrollable-element > .xterm-scrollbar {
+  background: transparent !important;
+}
+
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider {
+  background: rgb(180 180 185 / 32%) !important;
   border-radius: 4px;
 }
 

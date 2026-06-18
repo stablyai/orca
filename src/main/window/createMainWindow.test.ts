@@ -216,6 +216,58 @@ describe('createMainWindow', () => {
     expect(attachGuestPoliciesMock).toHaveBeenCalledWith(guest)
   })
 
+  it('keeps macOS blur transparent while the window is inactive', () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    try {
+      const browserWindowInstance = {
+        webContents: {
+          on: vi.fn(),
+          setZoomLevel: vi.fn(),
+          setBackgroundThrottling: vi.fn(),
+          invalidate: vi.fn(),
+          setWindowOpenHandler: vi.fn(),
+          send: vi.fn(),
+          isDevToolsOpened: vi.fn(),
+          openDevTools: vi.fn(),
+          closeDevTools: vi.fn()
+        },
+        on: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+      browserWindowMock.mockImplementation(function () {
+        return browserWindowInstance
+      })
+
+      createMainWindow({
+        getUI: () => ({}),
+        getSettings: () => ({ windowBackgroundBlur: true }),
+        updateUI: vi.fn()
+      } as never)
+
+      expect(browserWindowMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          backgroundColor: '#00000000',
+          transparent: true,
+          vibrancy: 'under-window',
+          visualEffectState: 'active'
+        })
+      )
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
   it('supports all minus key variants for terminal zoom out', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
