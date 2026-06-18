@@ -152,16 +152,14 @@ export default function MobilePage(): React.JSX.Element {
         await window.api.mobile.revokeDevice({ deviceId })
         const remaining = await loadDevices()
         if (mountedRef.current) {
-          toast.success(translate('auto.components.mobile.MobilePage.255372e6e8', 'Device revoked'))
+          toast.success(translate("auto.components.mobile.MobilePage.255372e6e8", "Device revoked"))
         }
         if (remaining.length === 0 && mountedRef.current) {
           showStage('intro')
         }
       } catch {
         if (mountedRef.current) {
-          toast.error(
-            translate('auto.components.mobile.MobilePage.4e1eb5d55c', 'Failed to revoke device')
-          )
+          toast.error(translate("auto.components.mobile.MobilePage.4e1eb5d55c", "Failed to revoke device"))
         }
       } finally {
         if (mountedRef.current) {
@@ -218,22 +216,12 @@ export default function MobilePage(): React.JSX.Element {
           hasGeneratedRef.current = true
         } else {
           if (mountedRef.current) {
-            toast.error(
-              translate(
-                'auto.components.mobile.MobilePage.b353e18de1',
-                'WebSocket transport is not running'
-              )
-            )
+            toast.error(translate("auto.components.mobile.MobilePage.b353e18de1", "WebSocket transport is not running"))
           }
         }
       } catch {
         if (mountedRef.current) {
-          toast.error(
-            translate(
-              'auto.components.mobile.MobilePage.4c8bd11c1a',
-              'Failed to generate pairing code'
-            )
-          )
+          toast.error(translate("auto.components.mobile.MobilePage.4c8bd11c1a", "Failed to generate pairing code"))
         }
       } finally {
         if (mountedRef.current) {
@@ -295,16 +283,12 @@ export default function MobilePage(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(pairingUrl)
       if (mountedRef.current) {
-        toast.success(
-          translate('auto.components.mobile.MobilePage.3c1f7168bb', 'Pairing code copied')
-        )
+        toast.success(translate("auto.components.mobile.MobilePage.3c1f7168bb", "Pairing code copied"))
       }
     } catch (err) {
       console.error('writeClipboardText failed', err)
       if (mountedRef.current) {
-        toast.error(
-          translate('auto.components.mobile.MobilePage.6a66e38943', 'Failed to copy pairing code')
-        )
+        toast.error(translate("auto.components.mobile.MobilePage.6a66e38943", "Failed to copy pairing code"))
       }
     }
   }, [mountedRef, pairingUrl])
@@ -381,16 +365,12 @@ export default function MobilePage(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(PLATFORM_COPY[platform].url)
       if (mountedRef.current) {
-        toast.success(
-          translate('auto.components.mobile.MobilePage.fad833de8d', 'Install link copied')
-        )
+        toast.success(translate("auto.components.mobile.MobilePage.fad833de8d", "Install link copied"))
       }
     } catch (err) {
       console.error('writeClipboardText failed', err)
       if (mountedRef.current) {
-        toast.error(
-          translate('auto.components.mobile.MobilePage.baea63c445', 'Failed to copy link')
-        )
+        toast.error(translate("auto.components.mobile.MobilePage.baea63c445", "Failed to copy link"))
       }
     }
   }
@@ -437,9 +417,9 @@ export default function MobilePage(): React.JSX.Element {
       />
       <section className="mp-hero">
         <div className="mp-hero-copy">
-          {stage === null ? null : stage === 'intro' ? (
+          {stage === null ? null : stage === "intro" ? (
             <HeroIntro onStart={enterFlow} />
-          ) : stage === 'paired' ? (
+          ) : stage === "paired" ? (
             <HeroPaired
               devices={devices}
               onPairAnother={pairAnotherDevice}
@@ -472,10 +452,7 @@ export default function MobilePage(): React.JSX.Element {
           )}
         </div>
 
-        <div
-          className="mp-stage"
-          aria-label={translate('auto.components.mobile.MobilePage.e17393c6a3', 'Phone preview')}
-        >
+        <div className="mp-stage" aria-label={translate("auto.components.mobile.MobilePage.e17393c6a3", "Phone preview")}>
           <PhoneCarousel />
         </div>
       </section>
