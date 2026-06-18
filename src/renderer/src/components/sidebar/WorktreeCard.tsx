@@ -1038,7 +1038,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const showCombinedStatusSlot = showStatus
   const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
   const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
-  const showTitleRowIndicators = newCardStyle && (hasDetails || hasPorts)
+  const showTitleRowIndicators = (newCardStyle || compactCards) && (hasDetails || hasPorts)
   // Why: detailed cards need a stable metadata lane only when it has content.
   // Grouped project views can hide the repo badge; don't reserve a blank
   // metadata lane unless branch or detached-head identity has content.
