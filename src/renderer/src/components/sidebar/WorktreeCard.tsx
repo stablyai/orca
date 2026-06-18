@@ -428,8 +428,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const cardTitleDisplay = getWorktreeCardTitleDisplay({
     storedDisplayName: worktree.displayName,
     branchName: branch,
-    path: worktree.path,
-    repositoryName: repo?.displayName,
     linearIssueTitle: linearIssueDisplay?.title,
     issueTitle: issueDisplay?.title,
     reviewTitle: prDisplay?.title
