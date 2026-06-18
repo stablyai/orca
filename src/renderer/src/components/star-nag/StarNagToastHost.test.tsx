@@ -160,10 +160,11 @@ describe('StarNagToastHost', () => {
     expect(shell.openUrl).toHaveBeenCalledWith('https://github.com/stablyai/orca')
     expect(starNag.openWeb).toHaveBeenCalledTimes(1)
     expect(starNag.starOrca).not.toHaveBeenCalled()
-    expect(toastContainer.textContent).toContain('GitHub opened in your browser.')
+    expect(toastContainer.textContent).toContain('GitHub opened')
+    expect(toastContainer.textContent).not.toContain('GitHub opened in your browser.')
   })
 
-  it('opens GitHub immediately when direct star fails', async () => {
+  it('switches to the explicit GitHub fallback when direct star fails', async () => {
     starNag.starOrca.mockResolvedValueOnce(false)
     ;({ root, container } = renderHost())
 
@@ -180,10 +181,10 @@ describe('StarNagToastHost', () => {
     })
 
     expect(starNag.starOrca).toHaveBeenCalledTimes(1)
-    expect(shell.openUrl).toHaveBeenCalledWith('https://github.com/stablyai/orca')
-    expect(starNag.openWeb).toHaveBeenCalledTimes(1)
-    expect(toastContainer.textContent).toContain('GitHub opened in your browser.')
-    expect(toastContainer.textContent).toContain('GitHub opened')
+    expect(shell.openUrl).not.toHaveBeenCalled()
+    expect(starNag.openWeb).not.toHaveBeenCalled()
+    expect(toastContainer.textContent).toContain('Open GitHub')
+    expect(toastContainer.textContent).toContain('Later')
   })
 
   it('routes Later and unresolved close through existing star nag paths', () => {

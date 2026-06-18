@@ -66,17 +66,9 @@ function StarNagToast({
       ok = false
     }
     if (!ok) {
-      try {
-        await window.api.shell.openUrl(ORCA_REPO_URL)
-        await window.api.starNag.openWeb()
-        markResolved()
-        setMode('web')
-        setStatus('opened')
-      } catch {
-        setMode('web')
-        setDismissSuppressed(false)
-        setStatus('idle')
-      }
+      setMode('web')
+      setDismissSuppressed(false)
+      setStatus('idle')
       return
     }
     markResolved()
@@ -136,14 +128,6 @@ function StarNagToast({
               'If you’re enjoying Orca so far, a GitHub star helps other developers discover it.'
             )}
           </p>
-          {status === 'opened' ? (
-            <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.star.nag.StarNagToastHost.openedBrowser',
-                'GitHub opened in your browser.'
-              )}
-            </p>
-          ) : null}
         </div>
         <Button
           variant="ghost"

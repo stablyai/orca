@@ -70,7 +70,7 @@ describe('StarNagCard', () => {
     container = null
   })
 
-  it('opens GitHub immediately when direct starring fails', async () => {
+  it('switches to the explicit GitHub fallback when direct starring fails', async () => {
     starNag.starOrca.mockResolvedValueOnce(false)
     ;({ root, container } = renderCard())
 
@@ -85,8 +85,8 @@ describe('StarNagCard', () => {
     })
 
     expect(starNag.starOrca).toHaveBeenCalledTimes(1)
-    expect(shell.openUrl).toHaveBeenCalledWith('https://github.com/stablyai/orca')
-    expect(starNag.openWeb).toHaveBeenCalledTimes(1)
-    expect(container.textContent).not.toContain('Open GitHub')
+    expect(shell.openUrl).not.toHaveBeenCalled()
+    expect(starNag.openWeb).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Open GitHub')
   })
 })

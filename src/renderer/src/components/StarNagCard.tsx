@@ -126,10 +126,9 @@ export function StarNagCard(): React.JSX.Element | null {
     }
     try {
       if (!ok) {
-        // Why: direct star failure should not make the user click a second time;
-        // immediately hand off to GitHub, matching the onboarding toast flow.
-        const opened = await openGithubFallback()
-        if (!opened && mountedRef.current) {
+        // Why: preflight chooses whether direct starring should be offered. If
+        // the later star call fails, let the user choose the browser handoff.
+        if (mountedRef.current) {
           setMode('web')
         }
         return
