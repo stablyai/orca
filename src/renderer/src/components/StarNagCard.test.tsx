@@ -76,17 +76,24 @@ describe('StarNagCard', () => {
 
     act(() => showCallback?.({ mode: 'gh', surface: 'card' }))
     expect(container.textContent).toContain('Star on GitHub')
-
-    const button = Array.from(container.querySelectorAll('button')).find((candidate) =>
+    const initialButton = Array.from(container.querySelectorAll('button')).find((candidate) =>
       candidate.textContent?.includes('Star on GitHub')
     )
+    expect(initialButton?.className).toContain('bg-amber-400/15')
+    expect(initialButton?.parentElement?.className).toContain('flex gap-2')
+
     await act(async () => {
-      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      initialButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(starNag.starOrca).toHaveBeenCalledTimes(1)
     expect(shell.openUrl).not.toHaveBeenCalled()
     expect(starNag.openWeb).not.toHaveBeenCalled()
     expect(container.textContent).toContain('Open GitHub')
+    const fallbackButton = Array.from(container.querySelectorAll('button')).find((candidate) =>
+      candidate.textContent?.includes('Open GitHub')
+    )
+    expect(fallbackButton?.className).toContain('bg-amber-400/15')
+    expect(fallbackButton?.parentElement?.textContent).toContain('Later')
   })
 })

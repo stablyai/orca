@@ -88,6 +88,9 @@ export function StarNagCard(): React.JSX.Element | null {
     return null
   }
 
+  const primaryActionClass =
+    'min-w-0 flex-1 gap-1.5 border-amber-400/60 bg-amber-400/15 text-amber-800 hover:bg-amber-400/25 dark:text-amber-100'
+
   const handleStar = async (): Promise<void> => {
     if (busy) {
       return
@@ -181,31 +184,37 @@ export function StarNagCard(): React.JSX.Element | null {
             )}
           </p>
 
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => void handleStar()}
-            disabled={busy}
-            className="mt-0.5 w-full gap-1.5"
-          >
-            {mode === 'web' ? <ExternalLink className="size-3.5" /> : <Star className="size-3.5" />}
-            {busy
-              ? mode === 'web'
-                ? translate('auto.components.StarNagCard.d32015fec7', 'Opening...')
-                : translate('auto.components.StarNagCard.af3c9bbb37', 'Starring…')
-              : mode === 'web'
-                ? translate('auto.components.StarNagCard.157bb5ecbb', 'Open GitHub')
-                : translate('auto.components.StarNagCard.2d67b6c849', 'Star on GitHub')}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="h-7 w-full"
-            onClick={handleLater}
-            disabled={busy}
-          >
-            {translate('auto.components.StarNagCard.8c967b4d15', 'Later')}
-          </Button>
+          <div className="mt-0.5 flex gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => void handleStar()}
+              disabled={busy}
+              className={primaryActionClass}
+            >
+              {mode === 'web' ? (
+                <ExternalLink className="size-3.5" />
+              ) : (
+                <Star className="size-3.5" />
+              )}
+              {busy
+                ? mode === 'web'
+                  ? translate('auto.components.StarNagCard.d32015fec7', 'Opening...')
+                  : translate('auto.components.StarNagCard.af3c9bbb37', 'Starring…')
+                : mode === 'web'
+                  ? translate('auto.components.StarNagCard.157bb5ecbb', 'Open GitHub')
+                  : translate('auto.components.StarNagCard.2d67b6c849', 'Star on GitHub')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="w-[84px]"
+              onClick={handleLater}
+              disabled={busy}
+            >
+              {translate('auto.components.StarNagCard.8c967b4d15', 'Later')}
+            </Button>
+          </div>
         </div>
       </Card>
     </div>
