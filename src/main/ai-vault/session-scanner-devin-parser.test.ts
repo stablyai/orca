@@ -48,4 +48,48 @@ describe('parseDevinSessionFile', () => {
     expect(session?.messageCount).toBe(1)
     expect(session?.title).toBe('Hello Devin')
   })
+
+  it('parses current ATIF token and model fields', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-devin-parser-'))
+    tempDirs.push(dir)
+    const path = join(dir, 'current.json')
+    const mtimeMs = Date.now()
+    await writeFile(
+      path,
+      JSON.stringify({
+        session_id: 'current',
+        agent: {},
+        steps: [
+          {
+            role: 'assistant',
+            metadata: {
+              created_at: '2026-05-26T00:00:00Z',
+              generation_model: 'swe-1-6',
+              total_input_tokens: 10,
+              output_tokens: 4,
+              cache_read_tokens: 3,
+              cache_creation_tokens: 2
+            },
+            message: {
+              content: 'Done'
+            }
+          }
+        ]
+      })
+    )
+
+    const session = await parseDevinSessionFile({
+      path,
+      mtimeMs,
+      modifiedAt: new Date(mtimeMs).toISOString()
+    })
+
+    expect(session?.model).toBe('swe-1-6')
+    expect(session?.totalTokens).toBe(19)
+    expect(session?.messageCount).toBe(1)
+    expect(session?.previewMessages[0]).toMatchObject({
+      role: 'assistant',
+      text: 'Done'
+    })
+  })
 })

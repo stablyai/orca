@@ -1833,7 +1833,7 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'hermes':
       return eventName === 'pre_llm_call' || eventName === 'on_session_start'
     case 'devin':
-      return eventName === 'UserPromptSubmit'
+      return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
   }
 }
 
@@ -1971,9 +1971,9 @@ function normalizeClaudeEvent(
   )
 }
 
-// Why: Devin CLI emits Claude Code–compatible lifecycle hooks. This normalizer
-// is a clone of normalizeClaudeEvent with `agentType: 'devin'` so Orca can
-// attribute status events to the Devin agent rather than Claude.
+// Why: Devin uses Claude-compatible hook payload shapes but has its own
+// documented lifecycle event set. Keep attribution as Devin while normalizing
+// those event names into Orca's shared status states.
 function normalizeDevinEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -1982,14 +1982,15 @@ function normalizeDevinEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const stateName =
+    eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure'
+    eventName === 'PostCompaction'
       ? 'working'
       : eventName === 'PermissionRequest'
         ? 'waiting'
-        : eventName === 'Stop' || eventName === 'StopFailure'
+        : eventName === 'Stop' || eventName === 'SessionEnd'
           ? 'done'
           : null
 

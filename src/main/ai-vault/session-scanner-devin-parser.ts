@@ -26,10 +26,15 @@ export async function parseDevinSessionFile(
     return null
   }
   const sessionId =
-    extractString(record.session_id) ?? extractString(record.sessionId) ?? sessionIdFromFileName(file.path)
+    extractString(record.session_id) ??
+    extractString(record.sessionId) ??
+    sessionIdFromFileName(file.path)
   const accumulator = createAccumulator({ agent: 'devin', file, sessionId })
   const agentRecord = asRecord(record.agent)
-  accumulator.model = extractString(agentRecord?.model_name)
+  accumulator.model =
+    extractString(agentRecord?.model_name) ??
+    extractString(agentRecord?.model) ??
+    extractString(record.generation_model)
   accumulator.cwd = extractString(record.working_directory)
   const steps = arrayValue(record.steps)
   for (const step of steps) {
@@ -40,9 +45,9 @@ export async function parseDevinSessionFile(
     const metadata = asRecord(stepRecord.metadata)
     updateTimeline(accumulator, extractString(metadata?.created_at))
     const metrics = asRecord(metadata?.metrics)
-    const inputTokens = numberValue(metrics?.input_tokens)
-    const outputTokens = numberValue(metrics?.output_tokens)
-    accumulator.totalTokens += inputTokens + outputTokens
+    accumulator.model ??=
+      extractString(metadata?.generation_model) ?? extractString(metrics?.generation_model)
+    accumulator.totalTokens += devinStepTokenTotal(metadata, metrics)
     const isUser = metadata?.is_user_input === true
     if (isUser) {
       accumulator.messageCount++
@@ -73,4 +78,38 @@ function extractDevinStepText(step: Record<string, unknown>): string | null {
     return extractContentText(message.content) ?? extractString(message.content)
   }
   return extractString(step.text)
+}
+
+function devinStepTokenTotal(
+  metadata: Record<string, unknown> | null,
+  metrics: Record<string, unknown> | null
+): number {
+  return (
+    numberFromDevinMetadata(metadata, metrics, ['total_input_tokens', 'input_tokens']) +
+    numberFromDevinMetadata(metadata, metrics, ['output_tokens']) +
+    numberFromDevinMetadata(metadata, metrics, ['cache_read_tokens', 'cache_read_input_tokens']) +
+    numberFromDevinMetadata(metadata, metrics, [
+      'cache_creation_tokens',
+      'cache_creation_input_tokens'
+    ])
+  )
+}
+
+function numberFromDevinMetadata(
+  metadata: Record<string, unknown> | null,
+  metrics: Record<string, unknown> | null,
+  keys: readonly string[]
+): number {
+  for (const source of [metadata, metrics]) {
+    if (!source) {
+      continue
+    }
+    for (const key of keys) {
+      const value = numberValue(source[key])
+      if (value > 0) {
+        return value
+      }
+    }
+  }
+  return 0
 }

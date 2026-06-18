@@ -42,10 +42,21 @@ describe('DevinHookService', () => {
     const config = JSON.parse(
       readFileSync(join(homeDir, '.config', 'devin', 'config.json'), 'utf8')
     ) as {
-      hooks: Record<string, { hooks: { command: string }[] }[]>
+      hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
       agent?: { model: string }
     }
-    expect(config.hooks.UserPromptSubmit[0].hooks[0].command).toContain('devin-hook')
+    for (const eventName of [
+      'SessionStart',
+      'UserPromptSubmit',
+      'Stop',
+      'PostCompaction',
+      'SessionEnd'
+    ]) {
+      expect(config.hooks[eventName][0].hooks[0].command).toContain('devin-hook')
+    }
+    for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
+      expect(config.hooks[eventName][0].matcher).toBeUndefined()
+    }
     const script = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'devin-hook.sh'), 'utf8')
     expect(script).toContain('/hook/devin')
   })
@@ -91,7 +102,7 @@ describe('DevinHookService', () => {
     mkdirSync(dirname(configPath), { recursive: true })
     writeFileSync(
       configPath,
-      `${JSON.stringify({ hooks: {}, read_config_from: ['claude'] }, null, 2)}\n`
+      `${JSON.stringify({ hooks: {}, read_config_from: { claude: true } }, null, 2)}\n`
     )
 
     const status = new DevinHookService().getStatus()
@@ -100,13 +111,13 @@ describe('DevinHookService', () => {
     expect(status.detail).toContain('claude')
   })
 
-  it('uses forward slashes in managed hook command on Windows', () => {
+  it('uses a cmd.exe wrapper for managed hook command on Windows', () => {
     const previous = process.platform
     Object.defineProperty(process, 'platform', { value: 'win32' })
     try {
-      const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\devin-hook.cmd'
+      const scriptPath = 'C:\\Users\\Ada Lovelace\\.orca\\agent-hooks\\devin-hook.cmd'
       expect(getDevinManagedCommand(scriptPath)).toBe(
-        'C:/Users/alice/.orca/agent-hooks/devin-hook.cmd'
+        'cmd /d /s /c ""C:\\Users\\Ada Lovelace\\.orca\\agent-hooks\\devin-hook.cmd""'
       )
     } finally {
       Object.defineProperty(process, 'platform', { value: previous })
@@ -161,11 +172,12 @@ describe('DevinHookService', () => {
     expect(status.state).toBe('partial')
     expect(status.managedHooksPresent).toBe(true)
     expect(status.detail).toContain('Stop')
-    expect(status.detail).toContain('StopFailure')
     expect(status.detail).toContain('PreToolUse')
     expect(status.detail).toContain('PostToolUse')
-    expect(status.detail).toContain('PostToolUseFailure')
     expect(status.detail).toContain('PermissionRequest')
+    expect(status.detail).toContain('SessionStart')
+    expect(status.detail).toContain('PostCompaction')
+    expect(status.detail).toContain('SessionEnd')
   })
 
   it('uses APPDATA on Windows for Devin config path', () => {
@@ -180,9 +192,7 @@ describe('DevinHookService', () => {
 
       // Fallback when APPDATA is unset
       delete process.env.APPDATA
-      expect(getDevinConfigPath()).toBe(
-        join(homeDir, 'AppData', 'Roaming', 'devin', 'config.json')
-      )
+      expect(getDevinConfigPath()).toBe(join(homeDir, 'AppData', 'Roaming', 'devin', 'config.json'))
     } finally {
       Object.defineProperty(process, 'platform', { value: previous })
       if (previousAppData !== undefined) {
@@ -192,4 +202,4 @@ describe('DevinHookService', () => {
       }
     }
   })
- })
+})

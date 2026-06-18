@@ -10,55 +10,58 @@ export function readDevinHooksConfig(configPath: string): HooksConfig | null {
 
   try {
     const text = readFileSync(configPath, 'utf-8')
-    const errors: ParseError[] = []
-    const parsed = parseJsonc(text, errors)
-    if (errors.length > 0) {
-      console.warn(
-        `Could not parse Devin config.json: ${errors.map((e) => `offset ${e.offset} length ${e.length}`).join(', ')}`
-      )
-      return null
-    }
-    if (parsed === undefined) {
-      return null
-    }
-    return isPlainObject(parsed) ? (parsed as HooksConfig) : null
+    return parseDevinHooksConfigText(text, 'Devin config.json')
   } catch {
     return null
   }
 }
 
-const ORCA_MANAGED_AGENT_IDS: Record<string, true> = {
-  claude: true,
-  openclaude: true,
-  codex: true,
-  gemini: true,
-  cursor: true,
-  copilot: true,
-  grok: true,
-  devin: true
+export function parseDevinHooksConfigText(
+  text: string,
+  diagnosticName: string
+): HooksConfig | null {
+  const errors: ParseError[] = []
+  const parsed = parseJsonc(text, errors)
+  if (errors.length > 0) {
+    console.warn(
+      `Could not parse ${diagnosticName}: ${errors.map((e) => `offset ${e.offset} length ${e.length}`).join(', ')}`
+    )
+    return null
+  }
+  if (parsed === undefined) {
+    return null
+  }
+  return isPlainObject(parsed) ? (parsed as HooksConfig) : null
 }
 
-/** Devin `read_config_from` can duplicate Orca-managed hooks from other agents. */
+/** Devin imports Claude hooks by default, so surface that overlap explicitly. */
 export function readConfigFromOrcaOverlapDetail(
   config: HooksConfig & { read_config_from?: unknown }
 ): string | null {
-  const raw = config.read_config_from
-  if (!Array.isArray(raw)) {
+  if (!isClaudeConfigImportEnabled(config.read_config_from)) {
     return null
   }
-  const overlaps = raw
-    .filter((entry): entry is string => typeof entry === 'string')
-    .filter((entry) => entry in ORCA_MANAGED_AGENT_IDS)
-  if (overlaps.length === 0) {
-    return null
-  }
-  return `Devin read_config_from (${overlaps.join(', ')}) may fire duplicate Orca hook posts alongside Devin hooks.`
+
+  return 'Devin read_config_from.claude is enabled; imported Claude hooks may fire alongside Devin hooks.'
 }
 
-export function mergeHookInstallDetail(
-  base: string | null,
-  extra: string | null
-): string | null {
+function isClaudeConfigImportEnabled(raw: unknown): boolean {
+  if (raw === undefined || raw === null || raw === true) {
+    return true
+  }
+  if (raw === false) {
+    return false
+  }
+  if (Array.isArray(raw)) {
+    return raw.includes('claude')
+  }
+  if (!isPlainObject(raw)) {
+    return false
+  }
+  return raw.claude !== false
+}
+
+export function mergeHookInstallDetail(base: string | null, extra: string | null): string | null {
   if (!extra) {
     return base
   }

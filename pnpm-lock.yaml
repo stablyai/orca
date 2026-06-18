@@ -6,10 +6,10 @@ settings:
 
 patchedDependencies:
   '@xterm/addon-ligatures@0.11.0-beta.285':
-    hash: qlbwmvc2hvopky2zg66qvmmw74
+    hash: 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
     path: config/patches/@xterm__addon-ligatures@0.11.0-beta.285.patch
   node-pty@1.1.0:
-    hash: 5x6nsonkybimz7efx4m6tn3nza
+    hash: 407ae07e1e0e2ff2e8b58696449c54c31e51d87535bc6aa4a7a7b0b561407282
     path: config/patches/node-pty@1.1.0.patch
 
 importers:
@@ -51,7 +51,7 @@ importers:
         version: 3.3.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=5x6nsonkybimz7efx4m6tn3nza)
+        version: 1.1.0(patch_hash=407ae07e1e0e2ff2e8b58696449c54c31e51d87535bc6aa4a7a7b0b561407282)
       posthog-node:
         specifier: ^5.33.3
         version: 5.33.3
@@ -82,22 +82,6 @@ importers:
       zod:
         specifier: ~4.4.3
         version: 4.4.3
-    optionalDependencies:
-      sherpa-onnx-darwin-arm64:
-        specifier: 1.12.37
-        version: 1.12.37
-      sherpa-onnx-darwin-x64:
-        specifier: 1.12.37
-        version: 1.12.37
-      sherpa-onnx-linux-arm64:
-        specifier: 1.12.37
-        version: 1.12.37
-      sherpa-onnx-linux-x64:
-        specifier: 1.12.37
-        version: 1.12.37
-      sherpa-onnx-win-x64:
-        specifier: 1.12.37
-        version: 1.12.37
     devDependencies:
       '@dnd-kit/core':
         specifier: ^6.3.1
@@ -203,7 +187,7 @@ importers:
         version: 0.12.0-beta.285(@xterm/xterm@6.1.0-beta.285)
       '@xterm/addon-ligatures':
         specifier: 0.11.0-beta.285
-        version: 0.11.0-beta.285(patch_hash=qlbwmvc2hvopky2zg66qvmmw74)(@xterm/xterm@6.1.0-beta.285)
+        version: 0.11.0-beta.285(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.285)
       '@xterm/addon-search':
         specifier: 0.17.0-beta.285
         version: 0.17.0-beta.285(@xterm/xterm@6.1.0-beta.285)
@@ -369,6 +353,22 @@ importers:
       zustand:
         specifier: ^5.0.13
         version: 5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
+    optionalDependencies:
+      sherpa-onnx-darwin-arm64:
+        specifier: 1.12.37
+        version: 1.12.37
+      sherpa-onnx-darwin-x64:
+        specifier: 1.12.37
+        version: 1.12.37
+      sherpa-onnx-linux-arm64:
+        specifier: 1.12.37
+        version: 1.12.37
+      sherpa-onnx-linux-x64:
+        specifier: 1.12.37
+        version: 1.12.37
+      sherpa-onnx-win-x64:
+        specifier: 1.12.37
+        version: 1.12.37
 
 packages:
 
@@ -9034,7 +9034,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.285
 
-  '@xterm/addon-ligatures@0.11.0-beta.285(patch_hash=qlbwmvc2hvopky2zg66qvmmw74)(@xterm/xterm@6.1.0-beta.285)':
+  '@xterm/addon-ligatures@0.11.0-beta.285(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.285)':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.285
       lru-cache: 11.5.1
@@ -11485,7 +11485,7 @@ snapshots:
       undici: 6.25.0
       which: 6.0.1
 
-  node-pty@1.1.0(patch_hash=5x6nsonkybimz7efx4m6tn3nza):
+  node-pty@1.1.0(patch_hash=407ae07e1e0e2ff2e8b58696449c54c31e51d87535bc6aa4a7a7b0b561407282):
     dependencies:
       node-addon-api: 7.1.1
 

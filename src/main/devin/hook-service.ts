@@ -2,33 +2,29 @@ import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   buildWindowsAgentHookPostCommand,
-  isPlainObject,
-  type HooksConfig,
   writeHooksJson,
-  writeManagedScript,
+  writeManagedScript
 } from '../agent-hooks/installer-utils'
 import {
   readTextFileRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
-import { parse as parseJsonc } from 'jsonc-parser'
 import {
-  applyManagedHooks,
-  CLAUDE_EVENTS,
-  removeManagedHooks
-} from '../claude/hook-settings'
-import {
+  applyDevinManagedHooks,
+  DEVIN_EVENTS,
   getDevinConfigPath,
   getDevinManagedCommand,
   getDevinManagedScriptFileName,
   getDevinManagedScriptPath,
   getDevinPosixManagedScriptFileName,
   getDevinRemoteConfigPath,
-  getDevinRemoteManagedCommand
+  getDevinRemoteManagedCommand,
+  removeDevinManagedHooks
 } from './hook-settings'
 import {
   mergeHookInstallDetail,
+  parseDevinHooksConfigText,
   readConfigFromOrcaOverlapDetail,
   readDevinHooksConfig
 } from './hook-config-json'
@@ -100,7 +96,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 }
 
 export class DevinHookService {
-
   getStatus(): AgentHookInstallStatus {
     const configPath = getDevinConfigPath()
     const scriptPath = getDevinManagedScriptPath()
@@ -117,12 +112,12 @@ export class DevinHookService {
 
     // Why: Report `partial` when only some managed events are registered so the
     // sidebar surfaces a degraded install rather than a false-positive
-    // `installed`. Each CLAUDE_EVENTS entry must contain the managed command for
+    // `installed`. Each DEVIN_EVENTS entry must contain the managed command for
     // the integration to function end-to-end.
     const command = getDevinManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
-    for (const event of CLAUDE_EVENTS) {
+    for (const event of DEVIN_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
@@ -172,11 +167,7 @@ export class DevinHookService {
     }
 
     const command = getDevinManagedCommand(scriptPath)
-    const nextConfig = applyManagedHooks(
-      config,
-      command,
-      getDevinManagedScriptFileName()
-    )
+    const nextConfig = applyDevinManagedHooks(config, command, getDevinManagedScriptFileName())
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
@@ -201,18 +192,12 @@ export class DevinHookService {
     // specifically means "file present but unparseable" — keep that branch
     // distinct so the user sees an actionable message.
     try {
-      // Why: Devin config.json is JSONC (comments + trailing commas); stock
+      // Why: Devin config.json is JSONC (comments); stock
       // JSON.parse rejects them. Read the raw text via SFTP and parse with
       // jsonc-parser, mirroring the local readDevinHooksConfig path.
       const body = await readTextFileRemote(sftp, remoteConfigPath)
-      const config = body === null
-        ? {}
-        : (() => {
-            const parsed = parseJsonc(body)
-            return parsed !== undefined && isPlainObject(parsed)
-              ? (parsed as HooksConfig)
-              : null
-          })()
+      const config =
+        body === null ? {} : parseDevinHooksConfigText(body, 'remote Devin config.json')
       if (!config) {
         return {
           agent: 'devin',
@@ -226,7 +211,7 @@ export class DevinHookService {
       // Why: the POSIX wrapper is identical regardless of where the script
       // lands; only the path differs. Reuse the same wrapper helper.
       const command = getDevinRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
+      const nextConfig = applyDevinManagedHooks(config, command, remoteScriptFileName)
 
       // Why: write the script first, then the settings — settings.json
       // referencing a missing script body would fire `command not found` on
@@ -269,7 +254,7 @@ export class DevinHookService {
         detail: 'Could not parse Devin config.json'
       }
     }
-    const { config: nextConfig, changed } = removeManagedHooks(
+    const { config: nextConfig, changed } = removeDevinManagedHooks(
       config,
       getDevinManagedScriptFileName()
     )

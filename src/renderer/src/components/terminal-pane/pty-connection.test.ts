@@ -6631,6 +6631,43 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('resolves synthetic terminal titles for remote hook status updates', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-devin')
+    transportFactoryQueue.push(transport)
+    enableActiveRuntimeEnvironment()
+    mockStoreState.runtimePaneTitlesByTabId = { 'tab-1': { 1: '\u280b Devin' } }
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const statusHandler = createdTransportOptions[0]?.onAgentStatus as
+      | ((payload: { state: 'done'; prompt: string; agentType: 'devin' }) => void)
+      | undefined
+    if (!statusHandler) {
+      throw new Error('Expected onAgentStatus to be registered')
+    }
+
+    statusHandler({
+      state: 'done',
+      prompt: 'finish the implementation',
+      agentType: 'devin'
+    })
+
+    expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_1),
+      {
+        state: 'done',
+        prompt: 'finish the implementation',
+        agentType: 'devin'
+      },
+      'Devin ready'
+    )
+  })
+
   it('leaves local IPC OSC 9999 status ownership in the main runtime', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-local')

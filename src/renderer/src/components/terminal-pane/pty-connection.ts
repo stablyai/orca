@@ -95,6 +95,7 @@ import {
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -1698,7 +1699,11 @@ export function connectPanePty(
             // be stored against a title that was never paired with it.
             const currentState = useAppStore.getState()
             const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
-            currentState.setAgentStatus(cacheKey, payload, title)
+            currentState.setAgentStatus(
+              cacheKey,
+              payload,
+              resolveAgentStatusTerminalTitle(payload, title)
+            )
             if (syncAgentTaskCompleteTrackingEnabled()) {
               const storedStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]
               const notificationPayload =

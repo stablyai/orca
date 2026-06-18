@@ -1,8 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import {
+  parseDevinHooksConfigText,
   readConfigFromOrcaOverlapDetail,
   readDevinHooksConfig
 } from './hook-config-json'
@@ -37,10 +38,22 @@ describe('readDevinHooksConfig', () => {
       permissions: { mode: 'normal' }
     })
   })
+
+  it('rejects recovered partial parses from malformed JSONC', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      expect(parseDevinHooksConfigText('{"hooks": }', 'Devin config.json')).toBeNull()
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not parse Devin config.json')
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
 })
 
 describe('readConfigFromOrcaOverlapDetail', () => {
-  it('warns when read_config_from imports another Orca-managed agent', () => {
+  it('warns when legacy read_config_from imports Claude', () => {
     const detail = readConfigFromOrcaOverlapDetail({
       hooks: {},
       read_config_from: ['claude', 'custom']
@@ -48,5 +61,31 @@ describe('readConfigFromOrcaOverlapDetail', () => {
 
     expect(detail).toContain('read_config_from')
     expect(detail).toContain('claude')
+  })
+
+  it('warns when object-shaped read_config_from leaves Claude enabled', () => {
+    const detail = readConfigFromOrcaOverlapDetail({
+      hooks: {},
+      read_config_from: { claude: true }
+    })
+
+    expect(detail).toContain('read_config_from.claude')
+  })
+
+  it('warns when read_config_from is omitted because imports default to enabled', () => {
+    const detail = readConfigFromOrcaOverlapDetail({
+      hooks: {}
+    })
+
+    expect(detail).toContain('read_config_from.claude')
+  })
+
+  it('does not warn when read_config_from disables Claude', () => {
+    const detail = readConfigFromOrcaOverlapDetail({
+      hooks: {},
+      read_config_from: { claude: false }
+    })
+
+    expect(detail).toBeNull()
   })
 })
