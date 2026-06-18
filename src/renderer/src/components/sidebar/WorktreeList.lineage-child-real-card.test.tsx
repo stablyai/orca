@@ -372,6 +372,16 @@ describe('WorktreeList real child WorktreeCard integration', () => {
     expect(childOption?.textContent).toContain('Child handoff note')
   })
 
+  it('keeps expanded child cards in the parent title column', async () => {
+    mockStore.state.settings = { experimentalNewWorktreeCardStyle: true }
+    const container = await renderWorktreeList()
+    const childList = container.querySelector<HTMLElement>('[data-worktree-lineage-children]')
+
+    expect(childList).not.toBeNull()
+    expect(childList!.style.marginLeft).toBe('0.5rem')
+    expect(childList!.style.width).toBe('calc(100% - 0.5rem)')
+  })
+
   it('double-clicking a nested child opens edit metadata for the child only', async () => {
     const container = await renderWorktreeList()
     const childCard = container.querySelector<HTMLElement>(

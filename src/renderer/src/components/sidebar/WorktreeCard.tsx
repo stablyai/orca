@@ -1068,12 +1068,12 @@ const WorktreeCard = React.memo(function WorktreeCard({
       ? `calc(0.125rem + ${contentIndent}px)`
       : null
   const cardStyle = cardPaddingLeft ? { paddingLeft: cardPaddingLeft } : undefined
-  const lineageChildrenStyle = cardPaddingLeft
+  const lineageChildrenStyle = newCardStyle
     ? {
-        // Why: descendants already carry row-level lineage indentation; pull
-        // them back out of the parent content inset so nesting is not counted twice.
-        marginLeft: `calc(-1 * (${cardPaddingLeft}))`,
-        width: `calc(100% + (${cardPaddingLeft}))`
+        // Why: nested child surfaces should start in the parent's title/chip
+        // column while remaining inside the parent card surface.
+        marginLeft: '0.5rem',
+        width: 'calc(100% - 0.5rem)'
       }
     : undefined
 
