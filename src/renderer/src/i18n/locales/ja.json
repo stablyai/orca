@@ -7984,11 +7984,12 @@
           "thisDevice": "This device"
         },
         "WorkspaceDirectorySetting": {
-          "1a2b3c4d5e": "Client default",
-          "2b3c4d5e6f": "Apply to",
-          "3c4d5e6f7a": "Overrides client default",
-          "4d5e6f7a8b": "Inherits the client default",
-          "5e6f7a8b9c": "リセット"
+          "1a2b3c4d5e": "クライアントのデフォルト",
+          "2b3c4d5e6f": "適用先",
+          "3c4d5e6f7a": "クライアントのデフォルトを上書き",
+          "4d5e6f7a8b": "クライアントのデフォルトを継承",
+          "5e6f7a8b9c": "リセット",
+          "6f7a8b9cad": "相対パス（例: .orca/worktrees）を指定するとプロジェクトごとの場所になり、絶対パスを指定すると全プロジェクトで 1 つのフォルダーを共有します。"
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",

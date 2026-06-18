@@ -7984,11 +7984,12 @@
           "thisDevice": "This device"
         },
         "WorkspaceDirectorySetting": {
-          "1a2b3c4d5e": "Client default",
-          "2b3c4d5e6f": "Apply to",
-          "3c4d5e6f7a": "Overrides client default",
-          "4d5e6f7a8b": "Inherits the client default",
-          "5e6f7a8b9c": "Reset"
+          "1a2b3c4d5e": "클라이언트 기본값",
+          "2b3c4d5e6f": "적용 대상",
+          "3c4d5e6f7a": "클라이언트 기본값 재정의",
+          "4d5e6f7a8b": "클라이언트 기본값 상속",
+          "5e6f7a8b9c": "재설정",
+          "6f7a8b9cad": "상대 경로(예: .orca/worktrees)를 사용하면 프로젝트별 위치가 되고, 절대 경로를 사용하면 모든 프로젝트가 하나의 폴더를 공유합니다."
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",

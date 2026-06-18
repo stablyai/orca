@@ -7984,11 +7984,12 @@
           "thisDevice": "This device"
         },
         "WorkspaceDirectorySetting": {
-          "1a2b3c4d5e": "Client default",
-          "2b3c4d5e6f": "Apply to",
-          "3c4d5e6f7a": "Overrides client default",
-          "4d5e6f7a8b": "Inherits the client default",
-          "5e6f7a8b9c": "重置"
+          "1a2b3c4d5e": "客户端默认值",
+          "2b3c4d5e6f": "应用于",
+          "3c4d5e6f7a": "覆盖客户端默认值",
+          "4d5e6f7a8b": "继承客户端默认值",
+          "5e6f7a8b9c": "重置",
+          "6f7a8b9cad": "使用相对路径（例如 .orca/worktrees）可让每个项目使用各自的位置，使用绝对路径则所有项目共用一个文件夹。"
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",
