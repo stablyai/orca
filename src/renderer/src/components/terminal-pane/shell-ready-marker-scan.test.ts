@@ -23,4 +23,17 @@ describe('scanForShellReadyMarker', () => {
       matched: true
     })
   })
+
+  it('flushes marker-like output when the full marker is not BEL-terminated', () => {
+    const state = createShellReadyMarkerScanState()
+
+    expect(scanForShellReadyMarker(state, 'before \x1b]777;orca-shell-readyx')).toEqual({
+      output: 'before \x1b]777;orca-shell-readyx',
+      matched: false
+    })
+    expect(scanForShellReadyMarker(state, ' after')).toEqual({
+      output: ' after',
+      matched: false
+    })
+  })
 })

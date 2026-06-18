@@ -2165,6 +2165,9 @@ export function connectPanePty(
           } else if (typeof gen === 'number') {
             void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
           }
+          if (resolvedPtyId && connectionId) {
+            schedulePendingStartupCommandDelivery()
+          }
           return resolvedPtyId
         })
         .catch(async () => {

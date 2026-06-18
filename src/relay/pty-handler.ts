@@ -434,6 +434,8 @@ export class PtyHandler {
     const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
+    // Why: only explicit shell-ready hints are trusted here; native Codex
+    // prefill detection still auto-enables readiness through the predicate.
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       emitReadyMarker: shouldUseShellReadyStartupDelivery({
         command,

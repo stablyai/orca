@@ -269,6 +269,8 @@ export function getRelayShellLaunchConfig(
   if (shellName !== 'zsh' && shellName !== 'bash') {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }
+  // Why: preserve plain zsh startup fast path; only force wrappers when
+  // shell-ready or overlay env restoration is requested.
   if (shellName === 'zsh' && !hasOverlayRestoreEnv(env) && !emitReadyMarker) {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }

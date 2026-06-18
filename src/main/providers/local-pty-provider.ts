@@ -545,6 +545,9 @@ export class LocalPtyProvider implements IPtyProvider {
         : undefined
     })
     shellPath = spawnResult.shellPath
+    if (args.command && getFallbackShellReadyConfig) {
+      shellReadyLaunch = getFallbackShellReadyConfig(shellPath)
+    }
 
     if (process.platform !== 'win32') {
       finalEnv.SHELL = shellPath

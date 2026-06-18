@@ -97,6 +97,8 @@ export function createSshBackgroundStartupDelivery(
     clear() {
       clearInjectTimer()
       clearFallbackTimer()
+      pendingCommand = null
+      lastPtyId = null
     }
   }
 }

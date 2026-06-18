@@ -6,11 +6,13 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
+import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { GlobalSettings, OnboardingState } from '../../../shared/types'
 
 export type OnboardingFolderAgentStartup = {
   command: string
   env?: Record<string, string>
+  startupCommandDelivery?: StartupCommandDelivery
   telemetry: AgentStartedTelemetry
 }
 

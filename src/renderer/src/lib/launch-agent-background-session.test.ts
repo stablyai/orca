@@ -461,6 +461,32 @@ describe('launchAgentBackgroundSession', () => {
     }
   })
 
+  it('does not rearm SSH background startup delivery after exit cleanup', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation',
+        title: 'Nightly audit'
+      })
+
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      const exitSidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1] as (code: number) => void
+      exitSidecar(0)
+
+      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('creates background sessions on the active runtime environment', async () => {
     state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'env-1' }
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')

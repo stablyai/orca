@@ -2599,6 +2599,62 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('falls back for quiet SSH shell-ready startup commands with no output', async () => {
+    const pendingTimeouts: (() => void)[] = []
+    const originalSetTimeout = globalThis.setTimeout
+    globalThis.setTimeout = vi.fn((fn: () => void) => {
+      pendingTimeouts.push(fn)
+      return 999 as unknown as ReturnType<typeof setTimeout>
+    }) as unknown as typeof setTimeout
+
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+
+      const capturedDataCallback: { current: ((data: string) => void) | null } = {
+        current: null
+      }
+      const transport = createMockTransport('pty-id')
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-ssh-1'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+        repos: [{ id: 'repo1', connectionId: 'ssh-conn-1' }]
+      }
+
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps({
+        startup: {
+          command: "codex 'linked issue context'",
+          startupCommandDelivery: 'shell-ready'
+        }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks()
+      expect(capturedDataCallback.current).not.toBeNull()
+      expect(transport.sendInput).not.toHaveBeenCalled()
+
+      for (const fn of pendingTimeouts.splice(0)) {
+        fn()
+      }
+      for (const fn of pendingTimeouts.splice(0)) {
+        fn()
+      }
+
+      expect(transport.sendInput).toHaveBeenCalledWith("codex 'linked issue context'\r")
+    } finally {
+      globalThis.setTimeout = originalSetTimeout
+    }
+  })
+
   it('waits for shell-ready for SSH Codex native prefill commands without an explicit hint', async () => {
     const pendingTimeouts: (() => void)[] = []
     const originalSetTimeout = globalThis.setTimeout

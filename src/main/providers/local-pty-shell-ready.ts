@@ -74,7 +74,15 @@ export function scanForShellReady(
       state.matchPos = 0
       return { output: output + remaining, matched: true }
     } else {
-      state.heldBytes += ch
+      output += state.heldBytes
+      state.heldBytes = ''
+      state.matchPos = 0
+      if (ch === SHELL_READY_MARKER[0]) {
+        state.heldBytes = ch
+        state.matchPos = 1
+      } else {
+        output += ch
+      }
     }
   }
 
