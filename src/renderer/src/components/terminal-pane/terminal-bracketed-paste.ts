@@ -110,7 +110,11 @@ function forceBracketedPaste(
     terminal.input(BRACKETED_PASTE_START)
     try {
       const writeChunk = (chunk: string): void => terminal.input(chunk)
-      await writePasteChunks(sanitizedText, writeChunk, yieldAfterChunk ?? defaultYieldAfterPasteChunk)
+      await writePasteChunks(
+        sanitizedText,
+        writeChunk,
+        yieldAfterChunk ?? defaultYieldAfterPasteChunk
+      )
     } finally {
       terminal.input(BRACKETED_PASTE_END)
     }

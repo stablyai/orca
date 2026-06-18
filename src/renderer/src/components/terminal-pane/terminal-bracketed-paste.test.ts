@@ -278,4 +278,21 @@ describe('terminal bracketed paste policy', () => {
     ])
     expect(terminal.paste).not.toHaveBeenCalled()
   })
+
+  it('does not split surrogate pairs across chunk boundaries', async () => {
+    const terminal = createTerminal(true)
+    const payload = `${'a'.repeat(511)}😀${'b'.repeat(512)}`
+
+    await pasteTerminalText(terminal, payload, {
+      yieldAfterChunk: () => Promise.resolve()
+    })
+
+    const chunks = terminal.paste.mock.calls.map(([chunk]) => chunk)
+    for (let index = 0; index < chunks.length - 1; index += 1) {
+      const leftEnd = chunks[index].charCodeAt(chunks[index].length - 1)
+      const rightStart = chunks[index + 1].charCodeAt(0)
+      expect(leftEnd >= 0xd800 && leftEnd <= 0xdbff).toBe(false)
+      expect(rightStart >= 0xdc00 && rightStart <= 0xdfff).toBe(false)
+    }
+  })
 })

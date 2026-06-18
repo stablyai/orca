@@ -1422,7 +1422,6 @@ export default function TerminalPane({
       return
     }
 
-
     const isMac = navigator.userAgent.includes('Mac')
     const shortcutPlatform: NodeJS.Platform = isMac
       ? 'darwin'

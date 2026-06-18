@@ -45,6 +45,8 @@ export function handleTerminalProgrammaticTextPaste({
   const ptyId = transport?.getPtyId() ?? null
   const platform = getShortcutPlatform()
   const connectionId = getConnectionId(worktreeId) ?? null
+  // Why: large paste payloads are chunked asynchronously; input tracking and
+  // focus must reflect the terminal after the paste has completed.
   void planTerminalPasteWithYield({
     text: detail.text,
     source: 'programmatic',
@@ -93,6 +95,9 @@ export function handleTerminalProgrammaticTextPaste({
       }
       recordTerminalUserInputForLeaf(tabId, pane.leafId)
       pane.terminal.focus()
+    })
+    .catch((error) => {
+      console.error('Failed to paste terminal text', error)
     })
 }
 
