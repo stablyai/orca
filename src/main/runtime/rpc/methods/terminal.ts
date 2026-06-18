@@ -75,6 +75,7 @@ type TerminalMultiplexStream = {
   // Why: the cols the mobile client last rewrapped to. Re-stream the full
   // scrollback only when a reflow actually changes the width.
   lastResizeCols: number | undefined
+  resizeGeneration: number
   outputBatcher: ReturnType<typeof createTerminalOutputBatcher>
   unsubscribeData: () => void
   unsubscribeResize: () => void
@@ -382,7 +383,8 @@ async function sendMobileResizeRestream(
   runtime: OrcaRuntimeService,
   ptyId: string,
   sendFrame: (opcode: TerminalStreamOpcode, payload?: Uint8Array<ArrayBufferLike>) => void,
-  event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
+  event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number },
+  shouldSend?: () => boolean
 ): Promise<boolean> {
   // Why: only a true PTY geometry reflow rewraps scrollback; mode-change ticks
   // that did not change dims would re-send the whole buffer for nothing.
@@ -392,6 +394,9 @@ async function sendMobileResizeRestream(
   const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, true)
   if (!serialized) {
     return false
+  }
+  if (shouldSend && !shouldSend()) {
+    return true
   }
   sendSnapshotFrames(sendFrame, {
     kind: 'resized',
@@ -1189,6 +1194,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           pendingOutputBytes: 0,
           pendingOutputOverflowed: false,
           lastResizeCols: undefined,
+          resizeGeneration: 0,
           outputBatcher: createTerminalOutputBatcher((data, meta) => {
             for (const chunk of splitTerminalOutputFrameChunks(data, meta)) {
               sendFrame(request.streamId, TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
@@ -1309,8 +1315,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
           stream.unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
             stream.outputBatcher.flush()
+            const resizeGeneration = stream.resizeGeneration + 1
+            stream.resizeGeneration = resizeGeneration
             const widthChanged = stream.isMobile && event.cols !== stream.lastResizeCols
             if (widthChanged) {
+              stream.lastResizeCols = event.cols
               // Why: re-serialize+replay the full scrollback at the new cols so
               // restored hard-wrapped lines rewrap; the await means later live
               // output still flows on this stream after the snapshot lands.
@@ -1318,22 +1327,32 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 runtime,
                 ptyId,
                 (opcode, payload) => sendFrame(request.streamId, opcode, payload),
-                event
+                event,
+                () =>
+                  !closed &&
+                  streams.get(request.streamId) === stream &&
+                  stream.resizeGeneration === resizeGeneration
               )
                 .then((restreamed) => {
-                  if (closed || streams.get(request.streamId) !== stream) {
+                  if (
+                    closed ||
+                    streams.get(request.streamId) !== stream ||
+                    stream.resizeGeneration !== resizeGeneration
+                  ) {
                     return
                   }
-                  if (restreamed) {
-                    stream.lastResizeCols = event.cols
-                    return
+                  if (!restreamed) {
+                    sendResizedFrame(stream, event)
                   }
-                  sendResizedFrame(stream, event)
                 })
                 // Why: if re-stream serialization/runtime throws, still emit the
                 // geometry-only Resized frame so the client never misses the resize.
                 .catch(() => {
-                  if (closed || streams.get(request.streamId) !== stream) {
+                  if (
+                    closed ||
+                    streams.get(request.streamId) !== stream ||
+                    stream.resizeGeneration !== resizeGeneration
+                  ) {
                     return
                   }
                   sendResizedFrame(stream, event)
@@ -1493,6 +1512,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       // Why: the cols the mobile client last rewrapped to; gate the
       // resize re-stream so it only fires on an actual width change.
       let lastResizeCols: number | undefined
+      let resizeGeneration = 0
       const pendingOutput: string[] = []
       let pendingOutputBytes = 0
       let unsubscribeData = (): void => {}
@@ -1681,6 +1701,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
         unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
           outputBatcher?.flush()
+          const eventGeneration = resizeGeneration + 1
+          resizeGeneration = eventGeneration
           // Why: a width reflow rewraps scrollback. xterm can only re-wrap
           // soft-wrapped lines, so a geometry-only Resized frame leaves the
           // hard-wrapped restored snapshot at the old cols. Re-serialize and
@@ -1688,21 +1710,26 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           // alt-screen TUIs keep the geometry-only frame + TUI redraw.
           const widthChanged = isMobile && event.cols !== lastResizeCols
           if (widthChanged) {
-            void sendMobileResizeRestream(runtime, ptyId, sendFrame, event)
+            lastResizeCols = event.cols
+            void sendMobileResizeRestream(
+              runtime,
+              ptyId,
+              sendFrame,
+              event,
+              () => !closed && resizeGeneration === eventGeneration
+            )
               .then((restreamed) => {
-                if (closed) {
+                if (closed || resizeGeneration !== eventGeneration) {
                   return
                 }
-                if (restreamed) {
-                  lastResizeCols = event.cols
-                  return
+                if (!restreamed) {
+                  sendResizedFrame(event)
                 }
-                sendResizedFrame(event)
               })
               // Why: if re-stream serialization/runtime throws, still emit the
               // geometry-only Resized frame so the client never misses the resize.
               .catch(() => {
-                if (closed) {
+                if (closed || resizeGeneration !== eventGeneration) {
                   return
                 }
                 sendResizedFrame(event)
