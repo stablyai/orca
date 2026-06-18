@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
+import {
+  TERMINAL_INPUT_MAX_BYTES,
+  TERMINAL_INPUT_TOO_LARGE_ERROR
+} from '../../../shared/terminal-input'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
@@ -16,6 +21,10 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('terminal send RPC', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('reports whether a terminal handle is running a recognized agent', async () => {
     const runtime = stubRuntime({
       isTerminalRunningAgent: vi.fn().mockResolvedValue(true)
@@ -99,6 +108,92 @@ describe('terminal send RPC', () => {
       interrupt: false
     })
     expect(runtime.mobileTookFloor).toHaveBeenCalledWith('pty-1', 'mobile-1')
+  })
+
+  it('rejects oversized terminal send text before runtime dispatch', async () => {
+    const secret = 'terminal-send-secret'
+    const runtime = stubRuntime({
+      sendTerminal: vi.fn()
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        text: [secret, 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1)].join('')
+      })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: TERMINAL_INPUT_TOO_LARGE_ERROR
+      }
+    })
+    expect(JSON.stringify(response)).not.toContain(secret)
+    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+  })
+
+  it('rejects multibyte oversized terminal send text before runtime dispatch', async () => {
+    const runtime = stubRuntime({
+      sendTerminal: vi.fn()
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const text = '😀'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 4) + 1)
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        text
+      })
+    )
+
+    expect(text.length).toBeLessThan(TERMINAL_INPUT_MAX_BYTES)
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: TERMINAL_INPUT_TOO_LARGE_ERROR
+      }
+    })
+    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+  })
+
+  it('yields while validating large accepted terminal send text before runtime dispatch', async () => {
+    vi.useFakeTimers()
+    const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'desktop' }),
+      sendTerminal: vi.fn().mockResolvedValue({
+        handle: 'terminal-1',
+        accepted: true,
+        bytesWritten: text.length
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const responsePromise = dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        text
+      })
+    )
+    await Promise.resolve()
+
+    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(responsePromise).resolves.toMatchObject({
+      ok: true,
+      result: { send: { accepted: true } }
+    })
+    expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
+      text,
+      enter: false,
+      interrupt: false
+    })
   })
 
   it('routes terminal restore fit through the runtime driver state machine', async () => {

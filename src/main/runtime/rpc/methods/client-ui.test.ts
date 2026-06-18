@@ -138,7 +138,6 @@ describe('client UI RPC methods', () => {
       rightSidebarTab: 'checks',
       rightSidebarExplorerView: 'search',
       showActiveOnly: true,
-      hideAutomationGeneratedWorkspaces: true,
       filterRepoIds: ['repo-1']
     }
     const runtime = {
@@ -154,7 +153,6 @@ describe('client UI RPC methods', () => {
         rightSidebarExplorerView: 'search',
         showActiveOnly: true,
         hideSleepingWorkspaces: true,
-        hideAutomationGeneratedWorkspaces: true,
         filterRepoIds: ['repo-1']
       })
     )
@@ -165,7 +163,6 @@ describe('client UI RPC methods', () => {
       rightSidebarExplorerView: 'search',
       showActiveOnly: true,
       hideSleepingWorkspaces: true,
-      hideAutomationGeneratedWorkspaces: true,
       filterRepoIds: ['repo-1']
     })
     expect(response).toMatchObject({ ok: true, result: { ui: updated } })
