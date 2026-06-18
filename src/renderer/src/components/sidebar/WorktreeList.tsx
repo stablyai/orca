@@ -226,6 +226,7 @@ import { orderHostSectionOptions } from './host-section-order'
 import { useHostHeaderDrag } from './host-header-drag'
 import { buildSidebarHostOptions } from './sidebar-host-options'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
+import { ProjectHeaderActions } from './ProjectHeaderActions'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -3510,7 +3511,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     data-workspace-status={headerWorkspaceStatus ?? undefined}
                     data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
                     className={cn(
-                      'group flex h-7 w-full items-center gap-1.5 pr-1 text-left transition-all',
+                      'group relative flex h-7 w-full items-center gap-1.5 pr-1 text-left transition-all',
                       'cursor-pointer',
                       isDraggingThis &&
                         'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
@@ -3599,355 +3600,357 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       </div>
                     </div>
 
-                    <div className="flex size-4 shrink-0 cursor-pointer items-center justify-center text-muted-foreground/60 can-hover:opacity-0 transition-opacity group-hover:opacity-100">
-                      <ChevronDown
-                        className={cn(
-                          'size-3.5 cursor-pointer transition-transform [&_path]:cursor-pointer',
-                          isCollapsed && '-rotate-90'
-                        )}
-                      />
-                    </div>
+                    <ProjectHeaderActions>
+                      <div className="flex size-4 shrink-0 cursor-pointer items-center justify-center text-muted-foreground/60 can-hover:opacity-0 transition-opacity group-hover:opacity-100">
+                        <ChevronDown
+                          className={cn(
+                            'size-3.5 cursor-pointer transition-transform [&_path]:cursor-pointer',
+                            isCollapsed && '-rotate-90'
+                          )}
+                        />
+                      </div>
 
-                    {isProjectGroupHeader && !row.repo && row.projectGroup?.id ? (
-                      <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            data-repo-header-action=""
-                            className="size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                            aria-label={translate(
-                              'auto.components.sidebar.WorktreeList.79465e9034',
-                              'Group actions for {{value0}}',
-                              { value0: row.label }
-                            )}
-                            onClick={(event) => event.stopPropagation()}
-                            onKeyDown={stopRepoHeaderKeyboardToggle}
-                            onPointerDown={handleRepoHeaderActionPointerDown}
-                          >
-                            <Ellipsis className="size-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          side="bottom"
-                          sideOffset={6}
-                          // Why: Radix portals preserve React bubbling through
-                          // the project header. Keep menu interactions from
-                          // arming row drag/collapse handlers behind it.
-                          onPointerDown={stopRepoHeaderMenuEvent}
-                          onMouseDown={stopRepoHeaderMenuEvent}
-                          onPointerUp={stopRepoHeaderMenuEvent}
-                          onMouseUp={stopRepoHeaderMenuEvent}
-                          onClick={stopRepoHeaderMenuEvent}
-                          onKeyDown={stopRepoHeaderMenuEvent}
-                        >
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              if (row.projectGroup?.id) {
-                                handleRenameProjectGroup(row.projectGroup.id, row.label)
-                              }
-                            }}
-                          >
-                            {translate(
-                              'auto.components.sidebar.WorktreeList.4d7b73658c',
-                              'Rename group'
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onSelect={() => {
-                              if (row.projectGroup?.id) {
-                                handleDeleteProjectGroup(row.projectGroup.id, row.label)
-                              }
-                            }}
-                          >
-                            {translate(
-                              'auto.components.sidebar.WorktreeList.902115cdbe',
-                              'Delete group'
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    ) : null}
-
-                    {isProjectGroupHeader &&
-                    !row.repo &&
-                    row.projectGroup &&
-                    'parentPath' in row.projectGroup &&
-                    row.projectGroup.parentPath ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-xs"
-                            data-repo-header-action=""
-                            className={cn(
-                              'size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100',
-                              folderWorkspaceCreateDisabled &&
-                                'cursor-not-allowed text-muted-foreground/60 hover:bg-transparent hover:text-muted-foreground/60'
-                            )}
-                            aria-label={translate(
-                              'auto.components.sidebar.WorktreeList.bd37a57ac8',
-                              'Create workspace for {{value0}}',
-                              { value0: row.label }
-                            )}
-                            aria-disabled={folderWorkspaceCreateDisabled}
-                            onKeyDown={stopRepoHeaderKeyboardToggle}
-                            onPointerDown={handleRepoHeaderActionPointerDown}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              if (folderWorkspaceCreateDisabled) {
-                                return
-                              }
-                              if (
-                                row.projectGroup &&
-                                'parentPath' in row.projectGroup &&
-                                row.projectGroup.parentPath
-                              ) {
-                                handleCreateFolderWorkspace(row.projectGroup)
-                              }
-                            }}
-                          >
-                            <Plus className="size-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" sideOffset={6}>
-                          {projectGroupPathStatus?.exists === false
-                            ? getFolderWorkspacePathStatusDescription(projectGroupPathStatus)
-                            : translate(
-                                'auto.components.sidebar.WorktreeList.bd37a57ac8',
-                                'Create workspace for {{value0}}',
-                                { value0: row.label }
-                              )}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : null}
-
-                    {row.repo && groupBy === 'repo' ? (
-                      <DropdownMenu modal={false}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                data-repo-header-action=""
-                                className="size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                                aria-label={translate(
-                                  'auto.components.sidebar.WorktreeList.609633a9e6',
-                                  'Project actions for {{value0}}',
-                                  { value0: row.label }
-                                )}
-                                onClick={(event) => event.stopPropagation()}
-                                onKeyDown={stopRepoHeaderKeyboardToggle}
-                                onPointerDown={handleRepoHeaderActionPointerDown}
-                              >
-                                <Ellipsis className="size-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" sideOffset={6}>
-                            {translate(
-                              'auto.components.sidebar.WorktreeList.2ef41bf9a7',
-                              'Project actions'
-                            )}
-                          </TooltipContent>
-                        </Tooltip>
-                        <DropdownMenuContent
-                          align="end"
-                          side="bottom"
-                          sideOffset={6}
-                          // Why: Radix portals preserve React bubbling through
-                          // the project header. Keep menu interactions from
-                          // arming row drag/collapse handlers behind it.
-                          onPointerDown={stopRepoHeaderMenuEvent}
-                          onMouseDown={stopRepoHeaderMenuEvent}
-                          onPointerUp={stopRepoHeaderMenuEvent}
-                          onMouseUp={stopRepoHeaderMenuEvent}
-                          onClick={stopRepoHeaderMenuEvent}
-                          onKeyDown={stopRepoHeaderMenuEvent}
-                        >
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              if (row.repo) {
-                                handleOpenRepoSettings(row.repo.id)
-                              }
-                            }}
-                          >
-                            <SlidersHorizontal className="size-3.5" />
-                            {translate(
-                              'auto.components.sidebar.WorktreeList.2cdffbc728',
-                              'Project Settings'
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              if (row.repo) {
-                                handleOpenRepoSettings(
-                                  row.repo.id,
-                                  getRepositoryIconSectionId(row.repo.id)
-                                )
-                              }
-                            }}
-                          >
-                            <Shapes className="size-3.5" />
-                            {translate(
-                              'auto.components.sidebar.WorktreeList.e82d3589a1',
-                              'Change Project Icon'
-                            )}
-                          </DropdownMenuItem>
-                          {row.repo && isGitRepoKind(row.repo) ? (
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                if (row.repo) {
-                                  handleOpenWorktreeVisibility(row.repo.id)
-                                }
-                              }}
-                            >
-                              <Eye className="size-3.5" />
-                              {getWorktreeVisibilityMenuLabel(row.repo)}
-                            </DropdownMenuItem>
-                          ) : null}
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              if (row.repo) {
-                                handleCreateGroupFromRepo(row.repo)
-                              }
-                            }}
-                          >
-                            <FolderPlus className="size-3.5" />
-                            {translate(
-                              'auto.components.sidebar.WorktreeList.cbfd565f83',
-                              'New group from project'
-                            )}
-                          </DropdownMenuItem>
-                          {projectGroups.length > 0 ? (
-                            <DropdownMenuSub>
-                              <DropdownMenuSubTrigger>
-                                <FolderInput className="size-3.5" />
-                                {translate(
-                                  'auto.components.sidebar.WorktreeList.4a08fb55f2',
-                                  'Move to group'
-                                )}
-                              </DropdownMenuSubTrigger>
-                              <DropdownMenuSubContent>
-                                {projectGroups.map((group) => (
-                                  <DropdownMenuItem
-                                    key={group.id}
-                                    disabled={row.repo?.projectGroupId === group.id}
-                                    onSelect={() => {
-                                      if (row.repo) {
-                                        handleMoveProjectToGroup(row.repo, group.id)
-                                      }
-                                    }}
-                                  >
-                                    <span className="max-w-48 truncate">{group.name}</span>
-                                  </DropdownMenuItem>
-                                ))}
-                              </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                          ) : null}
-                          {row.repo.projectGroupId ? (
-                            <DropdownMenuItem
-                              onSelect={() => {
-                                if (row.repo) {
-                                  handleRemoveProjectFromGroup(row.repo)
-                                }
-                              }}
-                            >
-                              <CircleX className="size-3.5" />
-                              {translate(
-                                'auto.components.sidebar.WorktreeList.64e55f7f01',
-                                'Remove from group'
-                              )}
-                            </DropdownMenuItem>
-                          ) : null}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            variant="destructive"
-                            onSelect={() => {
-                              if (row.repo) {
-                                handleRemoveProject(row.repo)
-                              }
-                            }}
-                          >
-                            <Trash2 className="size-3.5" />
-                            {translate(
-                              'auto.components.sidebar.WorktreeList.c83968f87f',
-                              'Remove Project'
-                            )}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    ) : null}
-
-                    {row.repo && groupBy === 'repo' ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          {createState?.disabled ? (
-                            <span
-                              data-repo-header-action=""
-                              className="inline-flex cursor-not-allowed can-hover:opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
-                              tabIndex={0}
-                              aria-label={createState.ariaLabel}
-                              onKeyDown={stopRepoHeaderKeyboardToggle}
-                              onClick={(event) => event.stopPropagation()}
-                              onPointerDown={handleRepoHeaderActionPointerDown}
-                            >
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                className="pointer-events-none size-5 shrink-0 rounded-md text-muted-foreground transition-opacity opacity-60"
-                                aria-label={createState.ariaLabel}
-                                disabled
-                              >
-                                <Plus className="size-3" />
-                              </Button>
-                            </span>
-                          ) : (
+                      {isProjectGroupHeader && !row.repo && row.projectGroup?.id ? (
+                        <DropdownMenu modal={false}>
+                          <DropdownMenuTrigger asChild>
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon-xs"
                               data-repo-header-action=""
-                              className="size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
-                              aria-label={
-                                createState?.ariaLabel ??
-                                translate(
-                                  'auto.components.sidebar.WorktreeList.bb85cd86ba',
-                                  'Create workspace for {{value0}}',
-                                  { value0: row.label }
-                                )
-                              }
+                              className="size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                              aria-label={translate(
+                                'auto.components.sidebar.WorktreeList.79465e9034',
+                                'Group actions for {{value0}}',
+                                { value0: row.label }
+                              )}
+                              onClick={(event) => event.stopPropagation()}
                               onKeyDown={stopRepoHeaderKeyboardToggle}
+                              onPointerDown={handleRepoHeaderActionPointerDown}
+                            >
+                              <Ellipsis className="size-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            side="bottom"
+                            sideOffset={6}
+                            // Why: Radix portals preserve React bubbling through
+                            // the project header. Keep menu interactions from
+                            // arming row drag/collapse handlers behind it.
+                            onPointerDown={stopRepoHeaderMenuEvent}
+                            onMouseDown={stopRepoHeaderMenuEvent}
+                            onPointerUp={stopRepoHeaderMenuEvent}
+                            onMouseUp={stopRepoHeaderMenuEvent}
+                            onClick={stopRepoHeaderMenuEvent}
+                            onKeyDown={stopRepoHeaderMenuEvent}
+                          >
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                if (row.projectGroup?.id) {
+                                  handleRenameProjectGroup(row.projectGroup.id, row.label)
+                                }
+                              }}
+                            >
+                              {translate(
+                                'auto.components.sidebar.WorktreeList.4d7b73658c',
+                                'Rename group'
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={() => {
+                                if (row.projectGroup?.id) {
+                                  handleDeleteProjectGroup(row.projectGroup.id, row.label)
+                                }
+                              }}
+                            >
+                              {translate(
+                                'auto.components.sidebar.WorktreeList.902115cdbe',
+                                'Delete group'
+                              )}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
+
+                      {isProjectGroupHeader &&
+                      !row.repo &&
+                      row.projectGroup &&
+                      'parentPath' in row.projectGroup &&
+                      row.projectGroup.parentPath ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              data-repo-header-action=""
+                              className={cn(
+                                'size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100',
+                                folderWorkspaceCreateDisabled &&
+                                  'cursor-not-allowed text-muted-foreground/60 hover:bg-transparent hover:text-muted-foreground/60'
+                              )}
+                              aria-label={translate(
+                                'auto.components.sidebar.WorktreeList.bd37a57ac8',
+                                'Create workspace for {{value0}}',
+                                { value0: row.label }
+                              )}
+                              aria-disabled={folderWorkspaceCreateDisabled}
+                              onKeyDown={stopRepoHeaderKeyboardToggle}
+                              onPointerDown={handleRepoHeaderActionPointerDown}
                               onClick={(event) => {
                                 event.preventDefault()
                                 event.stopPropagation()
-                                if (row.repo) {
-                                  handleCreateForRepo(row.repo.id)
+                                if (folderWorkspaceCreateDisabled) {
+                                  return
+                                }
+                                if (
+                                  row.projectGroup &&
+                                  'parentPath' in row.projectGroup &&
+                                  row.projectGroup.parentPath
+                                ) {
+                                  handleCreateFolderWorkspace(row.projectGroup)
                                 }
                               }}
                             >
                               <Plus className="size-3" />
                             </Button>
-                          )}
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" sideOffset={6}>
-                          {createState?.tooltip ??
-                            translate(
-                              'auto.components.sidebar.WorktreeList.bb85cd86ba',
-                              'Create workspace for {{value0}}',
-                              { value0: row.label }
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {projectGroupPathStatus?.exists === false
+                              ? getFolderWorkspacePathStatusDescription(projectGroupPathStatus)
+                              : translate(
+                                  'auto.components.sidebar.WorktreeList.bd37a57ac8',
+                                  'Create workspace for {{value0}}',
+                                  { value0: row.label }
+                                )}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null}
+
+                      {row.repo && groupBy === 'repo' ? (
+                        <DropdownMenu modal={false}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  data-repo-header-action=""
+                                  className="size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                                  aria-label={translate(
+                                    'auto.components.sidebar.WorktreeList.609633a9e6',
+                                    'Project actions for {{value0}}',
+                                    { value0: row.label }
+                                  )}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onKeyDown={stopRepoHeaderKeyboardToggle}
+                                  onPointerDown={handleRepoHeaderActionPointerDown}
+                                >
+                                  <Ellipsis className="size-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" sideOffset={6}>
+                              {translate(
+                                'auto.components.sidebar.WorktreeList.2ef41bf9a7',
+                                'Project actions'
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                          <DropdownMenuContent
+                            align="end"
+                            side="bottom"
+                            sideOffset={6}
+                            // Why: Radix portals preserve React bubbling through
+                            // the project header. Keep menu interactions from
+                            // arming row drag/collapse handlers behind it.
+                            onPointerDown={stopRepoHeaderMenuEvent}
+                            onMouseDown={stopRepoHeaderMenuEvent}
+                            onPointerUp={stopRepoHeaderMenuEvent}
+                            onMouseUp={stopRepoHeaderMenuEvent}
+                            onClick={stopRepoHeaderMenuEvent}
+                            onKeyDown={stopRepoHeaderMenuEvent}
+                          >
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                if (row.repo) {
+                                  handleOpenRepoSettings(row.repo.id)
+                                }
+                              }}
+                            >
+                              <SlidersHorizontal className="size-3.5" />
+                              {translate(
+                                'auto.components.sidebar.WorktreeList.2cdffbc728',
+                                'Project Settings'
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                if (row.repo) {
+                                  handleOpenRepoSettings(
+                                    row.repo.id,
+                                    getRepositoryIconSectionId(row.repo.id)
+                                  )
+                                }
+                              }}
+                            >
+                              <Shapes className="size-3.5" />
+                              {translate(
+                                'auto.components.sidebar.WorktreeList.e82d3589a1',
+                                'Change Project Icon'
+                              )}
+                            </DropdownMenuItem>
+                            {row.repo && isGitRepoKind(row.repo) ? (
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  if (row.repo) {
+                                    handleOpenWorktreeVisibility(row.repo.id)
+                                  }
+                                }}
+                              >
+                                <Eye className="size-3.5" />
+                                {getWorktreeVisibilityMenuLabel(row.repo)}
+                              </DropdownMenuItem>
+                            ) : null}
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                if (row.repo) {
+                                  handleCreateGroupFromRepo(row.repo)
+                                }
+                              }}
+                            >
+                              <FolderPlus className="size-3.5" />
+                              {translate(
+                                'auto.components.sidebar.WorktreeList.cbfd565f83',
+                                'New group from project'
+                              )}
+                            </DropdownMenuItem>
+                            {projectGroups.length > 0 ? (
+                              <DropdownMenuSub>
+                                <DropdownMenuSubTrigger>
+                                  <FolderInput className="size-3.5" />
+                                  {translate(
+                                    'auto.components.sidebar.WorktreeList.4a08fb55f2',
+                                    'Move to group'
+                                  )}
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                  {projectGroups.map((group) => (
+                                    <DropdownMenuItem
+                                      key={group.id}
+                                      disabled={row.repo?.projectGroupId === group.id}
+                                      onSelect={() => {
+                                        if (row.repo) {
+                                          handleMoveProjectToGroup(row.repo, group.id)
+                                        }
+                                      }}
+                                    >
+                                      <span className="max-w-48 truncate">{group.name}</span>
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                            ) : null}
+                            {row.repo.projectGroupId ? (
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  if (row.repo) {
+                                    handleRemoveProjectFromGroup(row.repo)
+                                  }
+                                }}
+                              >
+                                <CircleX className="size-3.5" />
+                                {translate(
+                                  'auto.components.sidebar.WorktreeList.64e55f7f01',
+                                  'Remove from group'
+                                )}
+                              </DropdownMenuItem>
+                            ) : null}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={() => {
+                                if (row.repo) {
+                                  handleRemoveProject(row.repo)
+                                }
+                              }}
+                            >
+                              <Trash2 className="size-3.5" />
+                              {translate(
+                                'auto.components.sidebar.WorktreeList.c83968f87f',
+                                'Remove Project'
+                              )}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
+
+                      {row.repo && groupBy === 'repo' ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            {createState?.disabled ? (
+                              <span
+                                data-repo-header-action=""
+                                className="inline-flex cursor-not-allowed can-hover:opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
+                                tabIndex={0}
+                                aria-label={createState.ariaLabel}
+                                onKeyDown={stopRepoHeaderKeyboardToggle}
+                                onClick={(event) => event.stopPropagation()}
+                                onPointerDown={handleRepoHeaderActionPointerDown}
+                              >
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  className="pointer-events-none size-5 shrink-0 rounded-md text-muted-foreground transition-opacity opacity-60"
+                                  aria-label={createState.ariaLabel}
+                                  disabled
+                                >
+                                  <Plus className="size-3" />
+                                </Button>
+                              </span>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                data-repo-header-action=""
+                                className="size-5 shrink-0 rounded-md text-muted-foreground can-hover:opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+                                aria-label={
+                                  createState?.ariaLabel ??
+                                  translate(
+                                    'auto.components.sidebar.WorktreeList.bb85cd86ba',
+                                    'Create workspace for {{value0}}',
+                                    { value0: row.label }
+                                  )
+                                }
+                                onKeyDown={stopRepoHeaderKeyboardToggle}
+                                onClick={(event) => {
+                                  event.preventDefault()
+                                  event.stopPropagation()
+                                  if (row.repo) {
+                                    handleCreateForRepo(row.repo.id)
+                                  }
+                                }}
+                              >
+                                <Plus className="size-3" />
+                              </Button>
                             )}
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : null}
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {createState?.tooltip ??
+                              translate(
+                                'auto.components.sidebar.WorktreeList.bb85cd86ba',
+                                'Create workspace for {{value0}}',
+                                { value0: row.label }
+                              )}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null}
+                    </ProjectHeaderActions>
                   </div>
                 </div>
               )
