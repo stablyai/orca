@@ -1620,6 +1620,26 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('resolves name selectors against worktree display names', async () => {
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: TEST_WORKTREE_PATH,
+        head: 'abc',
+        branch: 'refs/heads/wolfiesch/orca-skill-smoke',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const runtime = new OrcaRuntimeService(store)
+
+    const worktree = await runtime.showManagedWorktree('name:foo')
+    expect(worktree).toMatchObject({
+      displayName: 'foo',
+      path: TEST_WORKTREE_PATH
+    })
+  })
+
   it('routes SSH-backed forward-slash UNC file and git paths without collapsing the root', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(listWorktrees).mockRejectedValue(new Error('local git should not run for SSH repos'))

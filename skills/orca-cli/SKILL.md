@@ -64,7 +64,7 @@ orca worktree rm --worktree id:<worktreeId> --force --json
 
 Selectors:
 
-- `id:<worktreeId>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
+- `id:<worktreeId>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
 - `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
 
 Lineage rules:

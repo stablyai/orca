@@ -13964,6 +13964,10 @@ export class OrcaRuntimeService {
       candidates = worktrees.filter((worktree) =>
         branchSelectorMatches(worktree.branch, branchSelector)
       )
+    } else if (selector.startsWith('name:')) {
+      // Keep display-name matching exact so selector behavior stays deterministic
+      // and duplicate names use the same ambiguity path as other selectors.
+      candidates = worktrees.filter((worktree) => worktree.displayName === selector.slice(5))
     } else if (selector.startsWith('issue:')) {
       candidates = worktrees.filter(
         (worktree) =>
