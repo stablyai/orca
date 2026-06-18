@@ -12,9 +12,7 @@ export type GitHubPrMutationOutcome = { ok: true } | { ok: false; error: string 
 // Sends a request whose host result is a bare boolean (not the `{ ok }` envelope),
 // normalizing a transport throw into a failure so the raw-boolean callers below
 // never see an unhandled rejection.
-type RawResult =
-  | { ok: true; result: unknown }
-  | { ok: false; error: string }
+type RawResult = { ok: true; result: unknown } | { ok: false; error: string }
 
 async function sendRaw(
   client: Pick<RpcClient, 'sendRequest'>,

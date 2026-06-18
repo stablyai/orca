@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildUpdatePRTitleParams,
-  canEditPRTitle,
-  isSubmittablePRTitle
-} from './pr-title-edit'
+import { buildUpdatePRTitleParams, canEditPRTitle, isSubmittablePRTitle } from './pr-title-edit'
 
 describe('canEditPRTitle', () => {
   it('allows editing on open and draft PRs', () => {

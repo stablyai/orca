@@ -213,9 +213,15 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
     error,
     clearError: useCallback(() => setError(null), []),
     isReplyBusy: useCallback((commentId: number) => busyKeys.has(replyKey(commentId)), [busyKeys]),
-    isResolveBusy: useCallback((threadId: string) => busyKeys.has(resolveKey(threadId)), [busyKeys]),
+    isResolveBusy: useCallback(
+      (threadId: string) => busyKeys.has(resolveKey(threadId)),
+      [busyKeys]
+    ),
     isEditBusy: useCallback((commentId: number) => busyKeys.has(editKey(commentId)), [busyKeys]),
-    isDeleteBusy: useCallback((commentId: number) => busyKeys.has(deleteKey(commentId)), [busyKeys]),
+    isDeleteBusy: useCallback(
+      (commentId: number) => busyKeys.has(deleteKey(commentId)),
+      [busyKeys]
+    ),
     isRootBusy: busyKeys.has(ROOT_KEY),
     reply,
     toggleResolve,

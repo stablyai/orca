@@ -59,10 +59,14 @@ describe('fetchResolveReviewThread / fetchUpdatePRTitle — bare-boolean host re
   })
 
   it('treats false as failure', async () => {
-    const resolve = await fetchResolveReviewThread(clientReturning(okResponse(false)), WORKTREE_ID, {
-      threadId: 't',
-      resolve: false
-    })
+    const resolve = await fetchResolveReviewThread(
+      clientReturning(okResponse(false)),
+      WORKTREE_ID,
+      {
+        threadId: 't',
+        resolve: false
+      }
+    )
     expect(resolve.ok).toBe(false)
   })
 })
@@ -74,10 +78,14 @@ describe('mutation transport rejection normalization', () => {
   })
 
   it('normalizes a thrown sendRequest for bare-boolean mutations', async () => {
-    const resolve = await fetchResolveReviewThread(clientRejecting('connection dropped'), WORKTREE_ID, {
-      threadId: 't',
-      resolve: true
-    })
+    const resolve = await fetchResolveReviewThread(
+      clientRejecting('connection dropped'),
+      WORKTREE_ID,
+      {
+        threadId: 't',
+        resolve: true
+      }
+    )
     expect(resolve).toEqual({ ok: false, error: 'connection dropped' })
     const title = await fetchUpdatePRTitle(clientRejecting('connection dropped'), WORKTREE_ID, {
       prNumber: 1,
@@ -123,7 +131,9 @@ describe('fetchUpdateIssueComment / fetchDeleteIssueComment — slug-addressed e
 
   it('surfaces a host object error { type, message } as failure', async () => {
     const out = await fetchUpdateIssueComment(
-      clientReturning(okResponse({ ok: false, error: { type: 'permission', message: 'not authorized' } })),
+      clientReturning(
+        okResponse({ ok: false, error: { type: 'permission', message: 'not authorized' } })
+      ),
       { owner: 'o', repo: 'r', commentId: 5, body: 'x' }
     )
     expect(out).toEqual({ ok: false, error: 'not authorized' })

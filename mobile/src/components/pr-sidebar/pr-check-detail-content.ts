@@ -75,9 +75,11 @@ function mapJob(job: PRCheckJob): CheckDetailJob {
 }
 
 export function presentCheckDetail(details: PRCheckRunDetails): CheckDetailContent {
-  const summaryLines = [details.conclusion ?? details.status, details.title, details.summary].filter(
-    (line): line is string => typeof line === 'string' && line.trim().length > 0
-  )
+  const summaryLines = [
+    details.conclusion ?? details.status,
+    details.title,
+    details.summary
+  ].filter((line): line is string => typeof line === 'string' && line.trim().length > 0)
 
   // Why: prefer failing jobs (the actionable ones); fall back to all jobs only
   // when nothing is failing, matching the desktop panel.
