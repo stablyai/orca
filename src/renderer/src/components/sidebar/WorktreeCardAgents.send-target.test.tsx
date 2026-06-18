@@ -12,18 +12,9 @@ const mockSendPromptToSidebarAgentTarget = vi.fn()
 function agentRow(paneKey: string, state: string, now: number): unknown {
   return {
     paneKey,
-    tab: { id: 'tab-1', title: 'Terminal' },
+    tab: { id: 'tab-1' },
     state,
-    startedAt: now,
-    agentType: 'codex',
-    entry: {
-      prompt: state === 'working' ? 'Busy' : 'Ready',
-      state,
-      stateStartedAt: now,
-      stateHistory: [],
-      lastAssistantMessage: '',
-      orchestration: undefined
-    }
+    entry: { stateStartedAt: now, orchestration: undefined }
   }
 }
 
@@ -70,9 +61,6 @@ function targetStoreState(now: number): Record<string, unknown> {
           '22222222-2222-4222-8222-222222222222': 'pty-2'
         }
       }
-    },
-    ptyIdsByTabId: {
-      'tab-1': ['pty-1', 'pty-2']
     }
   }
 }
@@ -90,7 +78,6 @@ vi.mock('@/store', () => ({
       agentStatusEpoch: 0,
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
-      ptyIdsByTabId: {},
       sendPromptToSidebarAgentTarget: mockSendPromptToSidebarAgentTarget,
       ...mockStoreState
     })
@@ -157,7 +144,7 @@ describe('WorktreeCardAgents send targets', () => {
     expect(markup).toContain('data-disabled-reason="Agent is working"')
     expect(markup).toContain(`data-pane-key="${WORKING_PANE_KEY}"`)
     expect(markup).toContain('data-has-send-handler="true"')
-  }, 10_000)
+  })
 
   it('leaves other worktree rows in ordinary mode during target selection', async () => {
     mockStoreState = {
@@ -191,19 +178,5 @@ describe('WorktreeCardAgents send targets', () => {
     expect(markup).toContain('data-agent-send-target="sending"')
     expect(markup).toContain('data-disabled-reason="Sending..."')
     expect(markup).toContain(`data-pane-key="${READY_PANE_KEY}"`)
-  })
-
-  it('marks compact active-worktree rows as send targets in the default row UI', async () => {
-    mockStoreState = {
-      ...mockStoreState,
-      agentActivityDisplayMode: 'compact'
-    }
-    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
-
-    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
-
-    expect(markup).toContain('data-agent-send-target="eligible"')
-    expect(markup).toContain('data-agent-send-target="disabled"')
-    expect(markup).toContain('title="Agent is working"')
   })
 })

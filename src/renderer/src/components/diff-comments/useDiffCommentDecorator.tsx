@@ -6,6 +6,7 @@ import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
 import type { DiffComment } from '../../../../shared/types'
+import { getCommentBodyLayoutLineCount } from '@/lib/comment-body-line-count'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { useAppStore } from '@/store'
@@ -602,7 +603,7 @@ export function useDiffCommentDecorator({
         // covers fixed chrome (inline wrapper padding ~10, card border 2, card
         // padding 12, header+meta ~24, body margin 2) and the per-line factor
         // matches the 13.5px/1.5 body line-height.
-        const lineCount = c.body.split('\n').length
+        const lineCount = getCommentBodyLayoutLineCount(c.body)
         const heightInPx = Math.max(ZONE_MIN_PX, ZONE_CHROME_PX + lineCount * ZONE_LINE_PX)
 
         // Why: suppressMouseDown: false so clicks inside the zone (Delete

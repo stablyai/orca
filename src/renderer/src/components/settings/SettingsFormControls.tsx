@@ -9,6 +9,11 @@ import { Label } from '../ui/label'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
 import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
+import {
+  filterFontSuggestions,
+  filterTerminalThemeOptions,
+  isSettingsFormOptionQueryTooLarge
+} from './settings-form-option-filter'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
@@ -303,10 +308,10 @@ export function ThemePicker({
     return () => clearTimeout(timer)
   }, [importedHighlightSignal])
 
-  const normalizedQuery = query.trim().toLowerCase()
-  const matchingThemes = themeOptions.filter((theme) =>
-    `${theme.label} ${theme.sourceLabel ?? ''}`.toLowerCase().includes(normalizedQuery)
-  )
+  const themeQuery = query.trim()
+  const shouldShowThemeQueryLabel =
+    themeQuery.length > 0 && !isSettingsFormOptionQueryTooLarge(themeQuery)
+  const matchingThemes = filterTerminalThemeOptions(themeOptions, query)
   const selectedThemeLabel =
     themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
   const groupedThemes = [
@@ -348,11 +353,11 @@ export function ThemePicker({
           <span>
             {translate('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
             {visibleThemeCount}
-            {normalizedQuery
+            {shouldShowThemeQueryLabel
               ? translate(
                   'auto.components.settings.SettingsFormControls.c822571b2e',
                   ' matching "{{value0}}"',
-                  { value0: query.trim() }
+                  { value0: themeQuery }
                 )
               : translate(
                   'auto.components.settings.SettingsFormControls.cb330ef7f8',
@@ -621,15 +626,10 @@ export function FontAutocomplete({
 
   const normalizedQuery = query.trim().toLowerCase()
   const normalizedValue = value.trim().toLowerCase()
-  const filteredSuggestions = useMemo(() => {
-    const startsWith = suggestions.filter((font) => font.toLowerCase().startsWith(normalizedQuery))
-    const includes = suggestions.filter(
-      (font) =>
-        !font.toLowerCase().startsWith(normalizedQuery) &&
-        font.toLowerCase().includes(normalizedQuery)
-    )
-    return normalizedQuery ? [...startsWith, ...includes] : suggestions
-  }, [suggestions, normalizedQuery])
+  const filteredSuggestions = useMemo(
+    () => filterFontSuggestions(suggestions, query),
+    [suggestions, query]
+  )
   // Why: a committed font fills the input, but typed searches can also mirror
   // into `value`; only expand exact matches outside an active search session.
   const visibleSuggestions =

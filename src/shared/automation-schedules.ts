@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: automation scheduling needs RRULE presets and
  * custom cron parsing to share one execution path for main/renderer parity. */
 import type { AutomationSchedulePreset } from './automations-types'
+import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const HOUR_MS = 60 * 60 * 1000
@@ -8,6 +9,7 @@ const MINUTE_MS = 60 * 1000
 // Why: valid cron expressions like Feb 29 can have an 8-year gap across non-leap centuries.
 const CRON_SCAN_DAYS = 9 * 366
 const CRON_SCAN_MINUTES = CRON_SCAN_DAYS * 24 * 60
+export const AUTOMATION_CRON_EXPRESSION_MAX_BYTES = 2 * 1024
 
 type ParsedRrule = {
   kind: 'rrule'
@@ -177,7 +179,7 @@ function parseCronField(args: {
 }
 
 function parseCronExpression(expression: string): ParsedCron {
-  const parts = expression.trim().split(/\s+/)
+  const parts = getAutomationCronExpressionFields(expression, 6)
   if (parts.length !== 5) {
     throw new Error('Cron schedule must have five fields.')
   }
@@ -206,6 +208,47 @@ function parseCronExpression(expression: string): ParsedCron {
     dayOfMonthRestricted: daysOfMonth.size !== 31,
     dayOfWeekRestricted: daysOfWeek.size !== 7
   }
+}
+
+export function getAutomationCronExpressionFields(expression: string, maxFields = 5): string[] {
+  if (isClipboardTextByteLengthOverLimit(expression, AUTOMATION_CRON_EXPRESSION_MAX_BYTES)) {
+    return []
+  }
+  const fields: string[] = []
+  let tokenStart = -1
+  for (let index = 0; index <= expression.length; index += 1) {
+    const isEnd = index === expression.length
+    if (!isEnd && !isAutomationCronFieldWhitespace(expression.charCodeAt(index))) {
+      if (tokenStart === -1) {
+        tokenStart = index
+      }
+      continue
+    }
+    if (tokenStart !== -1) {
+      fields.push(expression.slice(tokenStart, index))
+      tokenStart = -1
+      if (fields.length >= maxFields) {
+        break
+      }
+    }
+  }
+  return fields
+}
+
+function isAutomationCronFieldWhitespace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 5760 ||
+    (code >= 8192 && code <= 8202) ||
+    code === 8232 ||
+    code === 8233 ||
+    code === 8239 ||
+    code === 8287 ||
+    code === 12288 ||
+    code === 65279
+  )
 }
 
 function parseSchedule(schedule: string): ParsedSchedule {

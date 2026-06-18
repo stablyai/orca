@@ -1,7 +1,7 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import { CalendarClock, CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
+import { CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -24,7 +24,6 @@ import type {
 } from './worktree-card-meta-types'
 import { translate } from '@/i18n/i18n'
 import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSection'
-import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 
 export type {
   WorktreeCardIssueDisplay,
@@ -42,20 +41,19 @@ export function hasWorktreeCardDetails({
   issue,
   linearIssue,
   review,
-  comment,
-  automationProvenance
+  comment
 }: WorktreeCardMetaBadgesProps): boolean {
-  return Boolean(issue || linearIssue || review || hasComment(comment) || automationProvenance)
+  return Boolean(issue || linearIssue || review || hasComment(comment))
 }
 
 export const WorktreeCardMetaBadges = React.forwardRef<
   HTMLDivElement,
   WorktreeCardMetaBadgesRootProps
 >(function WorktreeCardMetaBadges(
-  { issue, linearIssue, review, comment, automationProvenance, className, ...props },
+  { issue, linearIssue, review, comment, className, ...props },
   ref
 ): React.JSX.Element | null {
-  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment, automationProvenance })) {
+  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
     return null
   }
 
@@ -79,16 +77,6 @@ export const WorktreeCardMetaBadges = React.forwardRef<
           )}
         >
           <StickyNote className="text-muted-foreground" />
-        </MetaIconBadge>
-      )}
-      {automationProvenance && (
-        <MetaIconBadge
-          label={translate(
-            'auto.components.sidebar.WorktreeCardMeta.automationCreated',
-            'Created by automation'
-          )}
-        >
-          <CalendarClock className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {issue && (
@@ -133,12 +121,10 @@ export function WorktreeCardDetailsHover({
   linearIssue,
   review,
   comment,
-  automationProvenance,
   children,
   branchName,
   workspaceTitle,
   identityOrder = 'workspace-first',
-  automationHostId,
   detailsAfter,
   openDelay = 250,
   closeDelay = 120,
@@ -148,8 +134,6 @@ export function WorktreeCardDetailsHover({
   onOpenLinearIssueInOrca,
   onOpenReviewInOrca,
   onUnlinkReview,
-  onOpenAutomation,
-  onOpenAutomationRun,
   hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
@@ -172,7 +156,7 @@ export function WorktreeCardDetailsHover({
 
   if (
     !showIdentityHeader &&
-    !hasWorktreeCardDetails({ issue, linearIssue, review, comment, automationProvenance }) &&
+    !hasWorktreeCardDetails({ issue, linearIssue, review, comment }) &&
     !detailsAfter
   ) {
     return children
@@ -358,17 +342,6 @@ export function WorktreeCardDetailsHover({
             onUnlinkReview={onUnlinkReview}
             closeHover={closeHover}
           />
-
-          {automationProvenance && (
-            <WorktreeCardAutomationDetailSection
-              provenance={automationProvenance}
-              worktreeHostId={automationHostId}
-              onOpenAutomation={onOpenAutomation ? dismissAndRun(onOpenAutomation) : undefined}
-              onOpenAutomationRun={
-                onOpenAutomationRun ? dismissAndRun(onOpenAutomationRun) : undefined
-              }
-            />
-          )}
 
           {hasComment(comment) && (
             <WorktreeCardDetailSection>

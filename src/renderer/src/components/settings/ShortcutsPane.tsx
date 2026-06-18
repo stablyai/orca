@@ -28,6 +28,7 @@ import {
   getShortcutSearchEntry,
   matchesShortcutFilter,
   matchesShortcutLocalSearch,
+  normalizeShortcutLocalSearchQuery,
   ShortcutFilterRail,
   type ShortcutFilter,
   type ShortcutRowsByGroup
@@ -35,7 +36,7 @@ import {
 import { ShortcutRowsList } from './ShortcutRowsList'
 import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
 import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
-import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { matchesSettingsSearch } from './settings-search'
 import { clearRecordingActionForShortcutMutation } from './shortcut-recording-state'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
@@ -190,13 +191,13 @@ export function ShortcutsPane(): React.JSX.Element {
       })),
     [conflictByAction, groups, keybindings, terminalShortcutPolicy]
   )
-  const shortcutSearchQuery = normalizeSettingsSearchQuery(shortcutQuery)
+  const shortcutSearchQuery = normalizeShortcutLocalSearchQuery(shortcutQuery)
   const shortcutRows = shortcutGroups.flatMap((group) => group.rows)
-  const baseVisibleRows = shortcutRows.filter(
-    (row) =>
-      matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
-      matchesShortcutLocalSearch(row, shortcutSearchQuery, platform)
-  )
+  const matchesShortcutSearch = (row: ShortcutRowsByGroup['rows'][number]): boolean =>
+    shortcutSearchQuery !== null &&
+    matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
+    matchesShortcutLocalSearch(row, shortcutSearchQuery, platform)
+  const baseVisibleRows = shortcutRows.filter((row) => matchesShortcutSearch(row))
   const filterCounts: Record<ShortcutFilter, number> = {
     all: baseVisibleRows.length,
     modified: baseVisibleRows.filter((row) => row.modified).length,
@@ -207,10 +208,7 @@ export function ShortcutsPane(): React.JSX.Element {
     .map((group) => ({
       title: group.title,
       rows: group.rows.filter(
-        (row) =>
-          matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
-          matchesShortcutLocalSearch(row, shortcutSearchQuery, platform) &&
-          matchesShortcutFilter(row, shortcutFilter)
+        (row) => matchesShortcutSearch(row) && matchesShortcutFilter(row, shortcutFilter)
       )
     }))
     .filter((group) => group.rows.length > 0)

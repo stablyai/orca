@@ -93,18 +93,7 @@ describe('stripOrcaProvenanceMetaUpdates', () => {
         comment: 'keep me',
         orcaCreatedAt: 123,
         orcaCreationSource: 'desktop',
-        orcaCreationWorkspaceLayout: { path: '/workspace', nestWorkspaces: false },
-        automationProvenance: {
-          kind: 'created-by-automation',
-          automationId: 'automation-1',
-          automationNameSnapshot: 'Nightly review',
-          automationRunId: 'run-1',
-          automationRunTitleSnapshot: 'Nightly review run',
-          createdAt: 123,
-          executionTargetType: 'local',
-          executionTargetId: 'local',
-          projectId: 'repo-1'
-        }
+        orcaCreationWorkspaceLayout: { path: '/workspace', nestWorkspaces: false }
       })
     ).toEqual({ comment: 'keep me' })
   })

@@ -354,20 +354,7 @@ describe('mergeWorktree', () => {
       sortOrder: 5,
       lastActivityAt: 1000,
       workspaceStatus: 'in-review',
-      diffComments: [],
-      automationProvenance: {
-        kind: 'created-by-automation' as const,
-        automationId: 'automation-1',
-        automationNameSnapshot: 'Nightly review',
-        automationRunId: 'run-1',
-        automationRunTitleSnapshot: 'Nightly review run',
-        createdAt: 123,
-        executionTargetType: 'ssh' as const,
-        executionTargetId: 'openclaw-2',
-        projectId: 'github:stablyai/orca',
-        repoId: 'repo1',
-        hostId: 'ssh:openclaw-2' as const
-      }
+      diffComments: []
     }
     const result = mergeWorktree('repo1', baseGit, meta)
     expect(result).toEqual({
@@ -400,20 +387,7 @@ describe('mergeWorktree', () => {
       sortOrder: 5,
       lastActivityAt: 1000,
       workspaceStatus: 'in-review',
-      diffComments: [],
-      automationProvenance: {
-        kind: 'created-by-automation',
-        automationId: 'automation-1',
-        automationNameSnapshot: 'Nightly review',
-        automationRunId: 'run-1',
-        automationRunTitleSnapshot: 'Nightly review run',
-        createdAt: 123,
-        executionTargetType: 'ssh',
-        executionTargetId: 'openclaw-2',
-        projectId: 'github:stablyai/orca',
-        repoId: 'repo1',
-        hostId: 'ssh:openclaw-2'
-      }
+      diffComments: []
     })
   })
 

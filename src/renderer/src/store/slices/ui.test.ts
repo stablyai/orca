@@ -233,9 +233,6 @@ describe('createUISlice agent send target mode', () => {
           }
         }
       },
-      ptyIdsByTabId: {
-        [tabId]: ['pty-ready', 'pty-working']
-      },
       agentStatusByPaneKey: {
         [readyPaneKey]: {
           state: 'done',
@@ -301,14 +298,8 @@ describe('createUISlice agent send target mode', () => {
           },
           activeLeafId: readyLeafId,
           expandedLeafId: null,
-          ptyIdsByLeafId: {
-            [readyLeafId]: 'pty-ready',
-            [workingLeafId]: 'pty-working'
-          }
+          ptyIdsByLeafId: {}
         }
-      },
-      ptyIdsByTabId: {
-        [tabId]: []
       }
     })
 

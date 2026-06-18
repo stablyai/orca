@@ -2,6 +2,7 @@ import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
 } from '../../../shared/terminal-quick-commands'
+import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import type { TerminalQuickCommand } from '../../../shared/types'
 
 type RankedCommand = {
@@ -11,11 +12,23 @@ type RankedCommand = {
 }
 
 const NO_MATCH = Number.POSITIVE_INFINITY
+export const TERMINAL_QUICK_COMMAND_SEARCH_QUERY_MAX_BYTES = 2 * 1024
+
+export function isTerminalQuickCommandSearchQueryTooLarge(
+  query: string,
+  maxBytes = TERMINAL_QUICK_COMMAND_SEARCH_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
 
 export function searchTerminalQuickCommands(
   commands: readonly TerminalQuickCommand[],
   rawQuery: string
 ): TerminalQuickCommand[] {
+  if (isTerminalQuickCommandSearchQueryTooLarge(rawQuery)) {
+    return []
+  }
+
   const query = normalizeSearchText(rawQuery)
   if (!query) {
     return [...commands]
@@ -42,7 +55,12 @@ export function getTerminalQuickCommandPickerValue({
   filteredCommands: readonly TerminalQuickCommand[]
   rawQuery: string
 }): string {
-  if (!normalizeSearchText(rawQuery)) {
+  if (isTerminalQuickCommandSearchQueryTooLarge(rawQuery)) {
+    return ''
+  }
+
+  const query = normalizeSearchText(rawQuery)
+  if (!query) {
     if (
       preferredCommandId &&
       filteredCommands.some((command) => command.id === preferredCommandId)
@@ -86,5 +104,35 @@ function scoreCandidate(query: string, rawCandidate: string, baseScore: number):
 }
 
 function normalizeSearchText(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+  let normalized = ''
+  let pendingWhitespace = false
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (isTerminalQuickCommandSearchWhitespace(code)) {
+      pendingWhitespace = normalized.length > 0
+      continue
+    }
+    if (pendingWhitespace) {
+      normalized += ' '
+      pendingWhitespace = false
+    }
+    normalized += value.charAt(index).toLowerCase()
+  }
+  return normalized
+}
+
+function isTerminalQuickCommandSearchWhitespace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 5760 ||
+    (code >= 8192 && code <= 8202) ||
+    code === 8232 ||
+    code === 8233 ||
+    code === 8239 ||
+    code === 8287 ||
+    code === 12288 ||
+    code === 65279
+  )
 }

@@ -128,7 +128,7 @@ export function rovoRoleFromKind(value: unknown): 'user' | 'assistant' | null {
 }
 
 export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): string | null {
-  const texts: string[] = []
+  const textParts: string[] = []
   for (const part of parts) {
     const record = asRecord(part)
     if (!record) {
@@ -141,12 +141,17 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
     if (role === 'assistant' && kind !== 'text') {
       continue
     }
-    const text = extractString(record.content) ?? extractString(record.text)
-    if (text) {
-      texts.push(text)
+    const text =
+      typeof record.content === 'string'
+        ? record.content
+        : typeof record.text === 'string'
+          ? record.text
+          : null
+    if (text !== null) {
+      textParts.push(text)
     }
   }
-  return normalizeTitleText(texts.join(' '))
+  return extractContentText(textParts)
 }
 
 export async function parseMessageGraphSessionFile(

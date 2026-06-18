@@ -183,7 +183,6 @@ export type AutomationUpdateInput = Partial<
 export type AutomationDispatchRequest = {
   automation: Automation
   run: AutomationRun
-  dispatchToken: string
 }
 
 export type AutomationDispatchResult = {

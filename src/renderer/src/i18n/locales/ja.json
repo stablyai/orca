@@ -56,7 +56,8 @@
     "zoomOut": "ズームアウト",
     "openWorktreePalette": "ワークツリーパレットを開く",
     "window": "ウィンドウ",
-    "help": "ヘルプ"
+    "help": "ヘルプ",
+    "paste": "Paste"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -523,7 +524,11 @@
       "useGlobalFileDrop": {
         "38c9f034ff": "ドロップされたファイルのアップロードに失敗しました。",
         "d720e2f855": "ドロップされた一部のファイルはアップロードできませんでした。",
-        "245faa95b9": "ドロップされたファイルに使用できるリモート ワークスペース パスがありません。"
+        "245faa95b9": "ドロップされたファイルに使用できるリモート ワークスペース パスがありません。",
+        "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
+        "nativeDropTooManyPaths": "Drop contains too many files.",
+        "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
+        "nativeDropPathsTooLarge": "Drop path list is too large."
       },
       "useIpcEvents": {
         "0e3cf53060": "ブラウザタブ {{value0}} が見つかりません",
@@ -602,6 +607,12 @@
         "f70ac54d38": "AI プロバイダー アカウント",
         "4121f7a0a2": "AI agents を管理し、デフォルトを設定し、コマンドをカスタマイズします。",
         "b49abbd2f7": "Agents"
+      },
+      "useAppMenuPaste": {
+        "pasteTooLarge": "Paste is too large."
+      },
+      "useLargeTextControlPaste": {
+        "pasteTooLarge": "Paste is too large."
       }
     },
     "components": {
@@ -794,7 +805,8 @@
         "16c1abe76c": "閲覧済みとしてマークする",
         "ba8e329d92": "閲覧済みのマークを外す",
         "3f79ffc8b7": "PR の詳細を開いて、現在のレビュアーを表示します。",
-        "5c1c973855": "レビュアーを削除"
+        "5c1c973855": "レビュアーを削除",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "再度開く",
@@ -858,7 +870,8 @@
         "40c56b95e2": "{{value0}} 承認{{value1}} 残り",
         "3a051b8ade": "作業項目",
         "32f8bef818": "ログは出力されません。",
-        "4168eb2c51": "解決"
+        "4168eb2c51": "解決",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "コメント",
@@ -892,7 +905,8 @@
         "54649eaeab": "+ 担当者",
         "2a829a2f00": "優先度",
         "693be070d0": "遷移",
-        "ef21405c6d": "Jira Issue"
+        "ef21405c6d": "Jira Issue",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "Landing": {
         "76a95f7f47": "作成",
@@ -1014,7 +1028,8 @@
         "858d0630da": "プレビューを閉じる",
         "39883467f4": "Linear Issue",
         "fda549766e": "コメントするには{{value0}}",
-        "d71cd3003e": "+ 担当者"
+        "d71cd3003e": "+ 担当者",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "ローカル Git プロジェクトでのみ使用できます。",
@@ -1069,7 +1084,8 @@
         "setupKindFolder": "Folder",
         "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
         "importingHostSetup": "Importing...",
-        "importHostSetup": "インポート"
+        "importHostSetup": "インポート",
+        "notePasteTooLarge": "Paste is too large for the note field."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "ワークスペースを作成する前に、プロジェクト、ワークスペース名、および agent を選択します。"
@@ -1238,7 +1254,8 @@
         "50b8fb290f": "閲覧済みとしてマークする",
         "2b4fdb880c": "閲覧済みのマークを外す",
         "56ec6eafb7": "PR の詳細を開いて、現在のレビュアーを表示します。",
-        "7f964a365a": "レビュアーを削除"
+        "7f964a365a": "レビュアーを削除",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -1826,7 +1843,8 @@
                 "c3e829b4d9": "保存",
                 "463d030ae4": "削除",
                 "8564f58542": "編集",
-                "5f104bf855": "コメントはまだありません。"
+                "5f104bf855": "コメントはまだありません。",
+                "commentTooLarge": "Comment is too large to submit safely."
               },
               "LabelsEditor": {
                 "34dd57d6c8": "読み込み中…",
@@ -1854,7 +1872,8 @@
           "b7e4a1c902": "Paste, drop, or click to add files",
           "8f1c2d4e6a": "Nothing to preview",
           "c91f0a2b14": "Write",
-          "d82b1e3f05": "Preview"
+          "d82b1e3f05": "Preview",
+          "imageUrlTooLarge": "Image URL is too large."
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "からの Issue を表示しています",
@@ -1944,7 +1963,8 @@
           "f6a7b8c9d0": "Close issue",
           "b1c2d3e4f5": "Reopen issue",
           "0a73f59e85": "Send comment",
-          "bf43425540": "コメント"
+          "bf43425540": "コメント",
+          "commentTooLarge": "Comment is too large to submit safely."
         },
         "GitHubWorkItemAssigneePopoverContent": {
           "cddd9b04a7": "Loading assignees",
@@ -2348,7 +2368,11 @@
                 "53f015fd85": "{{value0}} シンボリックリンク{{value1}} をスキップしました。",
                 "29c031b49a": "{{value0}} ファイル{{value1}} をランタイムにアップロードしています…",
                 "0c77693641": "ワークツリーの準備ができていません - しばらくしてからもう一度お試しください。",
-                "ce8248b835": "ワークツリーのパスが使用できません。"
+                "ce8248b835": "ワークツリーのパスが使用できません。",
+                "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
+                "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
+                "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
             }
           },
@@ -2523,7 +2547,8 @@
                   "097a982ee0": "ファイルをロード中...",
                   "5a9c83c04b": "任意のファイル、URL、agent などを開きます...",
                   "90eb94dc48": "http:// または https:// URL を入力します。",
-                  "5553b283ce": "URL またはファイル パスを入力します。"
+                  "5553b283ce": "URL またはファイル パスを入力します。",
+                  "queryTooLarge": "Search text is too large."
                 }
               },
               "menu": {
@@ -3441,7 +3466,8 @@
           "f8b1deb1a4": "キャンセル",
           "51001182e3": "空のディレクトリ",
           "971d85cc84": "リモート プロジェクトとして開きます · {{value0}}",
-          "00c4235c10": "「{{value0}}」に一致するものはありません"
+          "00c4235c10": "「{{value0}}」に一致するものはありません",
+          "largeInputNoMatches": "No matches for this long input"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "削除",
@@ -3519,8 +3545,7 @@
           "f506a1262a": "ワークスペースのフィルタリング",
           "75405270ed": "フィルターの編集 ({{value0}} がアクティブ)",
           "489d1c8c9f": "プロジェクトを検索...",
-          "ee240a39eb": "フィルターの編集",
-          "automationCreated": "自動化で作成されたワークスペースを非表示"
+          "ee240a39eb": "フィルターの編集"
         },
         "SidebarHeader": {
           "92154beb7e": "新規ワークスペース",
@@ -3582,8 +3607,7 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "デフォルトのブランチを非表示にする",
           "ed1611b65b": "スリープ中を非表示",
-          "82594419ba": "フィルター",
-          "automationCreated": "自動化で作成されたワークスペースを非表示"
+          "82594419ba": "フィルター"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent アクティビティのレイアウト",
@@ -3735,15 +3759,7 @@
           "3ea2702e62": "リンク済み {{value0}} #{{value1}}",
           "b105fd3057": "リンク Linear {{value0}}",
           "3f2649eeb8": "リンクされた Issue #{{value0}}",
-          "fe075cb851": "ワークスペースのメモ",
-          "automationHeader": "自動化",
-          "openAutomation": "自動化を開く",
-          "openAutomationRun": "実行を開く",
-          "automationCreated": "自動化によって作成",
-          "checkingAutomationAvailability": "自動化の利用可否を確認中...",
-          "automationMissing": "自動化は利用できなくなりました。",
-          "automationRunMissing": "実行履歴は利用できなくなりました。",
-          "automationAvailabilityUnavailable": "自動化の利用可否を確認できませんでした。"
+          "fe075cb851": "ワークスペースのメモ"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状態: オープン",
@@ -4356,7 +4372,8 @@
           "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual"
+          "agentPermissionsManual": "Manual",
+          "3f1bdf3cb4": "Environment text is too large to parse safely."
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",
@@ -8764,7 +8781,8 @@
                   "f49e0a21e0": "コード",
                   "542bf6a7e2": "イタリック",
                   "256300f8ea": "太字",
-                  "87aff03d63": "送信中..."
+                  "87aff03d63": "送信中...",
+                  "commentTooLarge": "Comment is too large to submit safely."
                 }
               }
             }
@@ -10165,6 +10183,11 @@
                 }
               }
             }
+          },
+          "useEmulatorScreenKeyboard": {
+            "pasteTooLarge": "Paste is too large for emulator keyboard input.",
+            "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
+            "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
           }
         }
       },
@@ -10416,7 +10439,8 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "選択したテキストにメモを追加する",
-          "fd68ae03b3": "ファイル内を検索"
+          "fd68ae03b3": "ファイル内を検索",
+          "largePasteTooLarge": "Paste is too large."
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "リモート URL をコピー",
@@ -10697,6 +10721,9 @@
               }
             }
           }
+        },
+        "richMarkdownLargeTextPaste": {
+          "tooLarge": "Paste is too large."
         }
       },
       "diff": {
@@ -10713,7 +10740,8 @@
           "DiffCommentPopover": {
             "2b3ce6d394": "キャンセル",
             "e05063cfc1": "{{value0}} 行目",
-            "c845170b3b": "行 {{value0}}-{{value1}}"
+            "c845170b3b": "行 {{value0}}-{{value1}}",
+            "commentTooLarge": "Comment is too large to submit safely."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "このメモ"
@@ -11186,9 +11214,7 @@
           "d441032f7e": "一時停止",
           "5918020edc": "走る",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source",
-          "pendingAutomationMissing": "自動化は利用できなくなりました。",
-          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。"
+          "53f06f0ad5": "Retry source"
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo ブランチを検索...",

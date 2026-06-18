@@ -14,7 +14,6 @@ import { runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
 import { collectAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
-import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
 import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
@@ -132,7 +131,6 @@ export class AutomationService {
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
     const run = this.store.updateAutomationRun(result)
-    clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalRunStatus(run.status)) {
       return run
     }
@@ -233,11 +231,7 @@ export class AutomationService {
       workspaceId: automation.workspaceId,
       error: null
     })
-    const payload: AutomationDispatchRequest = {
-      automation,
-      run: updated,
-      dispatchToken: createAutomationDispatchToken(automation.id, updated.id)
-    }
+    const payload: AutomationDispatchRequest = { automation, run: updated }
     webContents.send('automations:dispatchRequested', payload)
     return updated
   }

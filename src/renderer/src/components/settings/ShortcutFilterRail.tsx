@@ -1,5 +1,6 @@
 import React from 'react'
 import { Search, X } from 'lucide-react'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { formatKeybindingList, type KeybindingDefinition } from '../../../../shared/keybindings'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
@@ -29,6 +30,22 @@ const SHORTCUT_FILTER_LABELS: Record<ShortcutFilter, string> = {
   modified: 'Modified',
   unassigned: 'Unassigned',
   conflicts: 'Conflicts'
+}
+
+export const SHORTCUT_LOCAL_SEARCH_QUERY_MAX_BYTES = 2 * 1024
+
+export function isShortcutLocalSearchQueryTooLarge(
+  query: string,
+  maxBytes = SHORTCUT_LOCAL_SEARCH_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
+export function normalizeShortcutLocalSearchQuery(query: string): string | null {
+  if (isShortcutLocalSearchQueryTooLarge(query)) {
+    return null
+  }
+  return query.trim().toLowerCase()
 }
 
 export function getShortcutSearchEntry(row: ShortcutRowModel): SettingsSearchEntry {
@@ -63,6 +80,9 @@ export function matchesShortcutLocalSearch(
 ): boolean {
   if (!query) {
     return true
+  }
+  if (isShortcutLocalSearchQueryTooLarge(query)) {
+    return false
   }
   const searchableText = [
     row.item.title,

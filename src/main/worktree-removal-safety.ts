@@ -22,8 +22,7 @@ const ORCA_CREATION_SOURCES = new Set<NonNullable<WorktreeMeta['orcaCreationSour
 const ORCA_OWNED_PROVENANCE_META_KEYS = [
   'orcaCreatedAt',
   'orcaCreationSource',
-  'orcaCreationWorkspaceLayout',
-  'automationProvenance'
+  'orcaCreationWorkspaceLayout'
 ] as const
 type UnregisteredOrcaCleanupMeta = Pick<
   WorktreeMeta,

@@ -31,6 +31,10 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
 import { useAppStore } from '@/store'
 import type {
   GitLabAssignableUser,
@@ -727,12 +731,21 @@ export default function GitLabItemDialog({
     }
     const file = (details.files ?? []).find((row) => row.path === inlineCommentFilePath)
     const line = Number.parseInt(inlineCommentLine, 10)
-    const body = inlineCommentBody.trim()
-    if (!file || !Number.isFinite(line) || line <= 0 || !body) {
+    const bodyState = getCommentBodySubmitState(inlineCommentBody)
+    if (!file || !Number.isFinite(line) || line <= 0 || bodyState.status === 'empty') {
       toast.error(
         translate(
           'auto.components.GitLabItemDialog.00d0d25825',
           'File, line, and comment are required.'
+        )
+      )
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.GitLabItemDialog.commentTooLarge',
+          'Comment is too large to submit safely.'
         )
       )
       return
@@ -753,7 +766,7 @@ export default function GitLabItemDialog({
         iid: item.number,
         projectRef: details.item.projectRef ?? item.projectRef ?? null,
         input: {
-          body,
+          body: bodyState.body,
           path: file.path,
           ...(file.oldPath ? { oldPath: file.oldPath } : {}),
           line,
@@ -880,8 +893,17 @@ export default function GitLabItemDialog({
   }, [item, repoSelector, mountedRef, handleRefresh])
 
   const handleSubmitComment = useCallback(async (): Promise<void> => {
-    const body = commentDraft.trim()
-    if (!body || !item || !repoSelector) {
+    const bodyState = getCommentBodySubmitState(commentDraft)
+    if (bodyState.status === 'empty' || !item || !repoSelector) {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.GitLabItemDialog.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setCommentSubmitting(true)
@@ -890,8 +912,16 @@ export default function GitLabItemDialog({
       // Branch on the item type to hit the right channel.
       const res =
         item.type === 'mr'
-          ? await window.api.gl.addMRComment({ ...repoSelector, iid: item.number, body })
-          : await window.api.gl.addIssueComment({ ...repoSelector, number: item.number, body })
+          ? await window.api.gl.addMRComment({
+              ...repoSelector,
+              iid: item.number,
+              body: bodyState.body
+            })
+          : await window.api.gl.addIssueComment({
+              ...repoSelector,
+              number: item.number,
+              body: bodyState.body
+            })
       if (res.ok) {
         if (mountedRef.current) {
           setCommentDraftState((current) =>
@@ -911,6 +941,8 @@ export default function GitLabItemDialog({
       }
     }
   }, [commentDraft, item, itemId, repoSelector, mountedRef, handleRefresh])
+  const canSubmitInlineComment = hasBoundedCommentBodyText(inlineCommentBody)
+  const canSubmitComment = hasBoundedCommentBodyText(commentDraft)
 
   const handleResolveDiscussion = useCallback(
     async (threadId: string, resolved: boolean): Promise<void> => {
@@ -1460,7 +1492,7 @@ export default function GitLabItemDialog({
                                 inlineCommentSubmitting ||
                                 !inlineCommentFilePath ||
                                 !inlineCommentLine.trim() ||
-                                !inlineCommentBody.trim()
+                                !canSubmitInlineComment
                               }
                               onClick={() => void handleSubmitInlineComment()}
                             >
@@ -1577,7 +1609,7 @@ export default function GitLabItemDialog({
                   onKeyDown={(e) => {
                     // Why: this is local textarea submit behavior; Settings
                     // keybindings only cover app commands.
-                    if (isScreenSubmitShortcut(e) && commentDraft.trim() && !commentSubmitting) {
+                    if (isScreenSubmitShortcut(e) && canSubmitComment && !commentSubmitting) {
                       e.preventDefault()
                       void handleSubmitComment()
                     }
@@ -1585,7 +1617,7 @@ export default function GitLabItemDialog({
                 />
                 <Button
                   size="sm"
-                  disabled={!commentDraft.trim() || commentSubmitting}
+                  disabled={!canSubmitComment || commentSubmitting}
                   onClick={() => void handleSubmitComment()}
                   className="shrink-0 gap-1.5"
                 >

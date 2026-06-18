@@ -30,24 +30,80 @@ export function getMarkdownReviewExcerpt(
   content: string,
   note: Pick<DiffComment, 'lineNumber' | 'startLine'>
 ): string {
-  const lines = content.split(/\r?\n/)
   const startLine = Math.max(1, note.startLine ?? note.lineNumber)
   const endLine = Math.max(startLine, note.lineNumber)
-  const selected = lines.slice(startLine - 1, endLine)
-  if (selected.length === 0) {
+  const selected = getMarkdownReviewSelectedLines(content, startLine, endLine)
+  if (selected.count === 0) {
     return ''
   }
 
   const excerpt =
-    selected.length <= MAX_EXCERPT_LINES
-      ? selected
-      : [
-          ...selected.slice(0, Math.ceil(MAX_EXCERPT_LINES / 2)),
-          '...',
-          ...selected.slice(selected.length - Math.floor(MAX_EXCERPT_LINES / 2))
-        ]
+    selected.count <= MAX_EXCERPT_LINES
+      ? selected.lines
+      : [...selected.headLines, '...', ...selected.tailLines]
 
   return excerpt.map((line) => `> ${line}`).join('\n')
+}
+
+function getMarkdownReviewSelectedLines(
+  content: string,
+  startLine: number,
+  endLine: number
+): {
+  count: number
+  lines: string[]
+  headLines: string[]
+  tailLines: string[]
+} {
+  const headLimit = Math.ceil(MAX_EXCERPT_LINES / 2)
+  const tailLimit = Math.floor(MAX_EXCERPT_LINES / 2)
+  const lines: string[] = []
+  const tailLines: string[] = []
+  let count = 0
+
+  forEachMarkdownReviewLine(content, (line, lineNumber) => {
+    if (lineNumber < startLine) {
+      return
+    }
+    if (lineNumber > endLine) {
+      return false
+    }
+    count += 1
+    if (count <= MAX_EXCERPT_LINES) {
+      lines.push(line)
+      return lineNumber >= endLine ? false : undefined
+    }
+    if (count === MAX_EXCERPT_LINES + 1) {
+      tailLines.push(...lines.slice(-(tailLimit - 1)), line)
+      return lineNumber >= endLine ? false : undefined
+    }
+    tailLines.push(line)
+    if (tailLines.length > tailLimit) {
+      tailLines.shift()
+    }
+    return lineNumber >= endLine ? false : undefined
+  })
+
+  return { count, lines, headLines: lines.slice(0, headLimit), tailLines }
+}
+
+function forEachMarkdownReviewLine(
+  content: string,
+  visit: (line: string, lineNumber: number) => boolean | void
+): void {
+  let lineStart = 0
+  let lineNumber = 1
+  for (let index = 0; index <= content.length; index += 1) {
+    if (index < content.length && content.charCodeAt(index) !== 10) {
+      continue
+    }
+    const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
+    if (visit(content.slice(lineStart, lineEnd), lineNumber) === false) {
+      return
+    }
+    lineStart = index + 1
+    lineNumber += 1
+  }
 }
 
 export function getMarkdownReviewHighlightedText(
@@ -59,22 +115,53 @@ export function getMarkdownReviewHighlightedText(
     return selectedText
   }
   const excerpt = getMarkdownReviewExcerpt(content, note)
-  return excerpt
-    .split('\n')
-    .map((line) => line.replace(/^> ?/, ''))
-    .join('\n')
-    .trim()
+  return excerpt.replace(/^> ?/gm, '').trim()
 }
 
 export function formatMarkdownReviewCardQuote(text: string | null | undefined): string | undefined {
-  const normalized = text?.replace(/\s+/g, ' ').trim()
-  if (!normalized) {
+  if (text === null || text === undefined) {
     return undefined
   }
-  if (normalized.length <= MAX_CARD_QUOTE_LENGTH) {
-    return normalized
+  return formatBoundedMarkdownReviewCardQuote(text)
+}
+
+// Why: selected review text can come from large pasted markdown; card quotes
+// only need a short preview, not a fully normalized copy of the selection.
+function formatBoundedMarkdownReviewCardQuote(text: string): string | undefined {
+  let normalized = ''
+  let pendingWhitespace = false
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index)
+    if (isMarkdownReviewCardQuoteWhitespace(code)) {
+      pendingWhitespace = normalized.length > 0
+      continue
+    }
+    if (pendingWhitespace) {
+      normalized += ' '
+      pendingWhitespace = false
+    }
+    normalized += text.charAt(index)
+    if (normalized.length > MAX_CARD_QUOTE_LENGTH) {
+      return `${normalized.slice(0, MAX_CARD_QUOTE_LENGTH - 3).trimEnd()}...`
+    }
   }
-  return `${normalized.slice(0, MAX_CARD_QUOTE_LENGTH - 3).trimEnd()}...`
+  return normalized.length > 0 ? normalized : undefined
+}
+
+function isMarkdownReviewCardQuoteWhitespace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 5760 ||
+    (code >= 8192 && code <= 8202) ||
+    code === 8232 ||
+    code === 8233 ||
+    code === 8239 ||
+    code === 8287 ||
+    code === 12288 ||
+    code === 65279
+  )
 }
 
 export function getMarkdownReviewCardQuote(
@@ -94,10 +181,7 @@ function escapeMarkdownReviewNoteBody(body: string): string {
 
 function formatMarkdownReviewNoteDetails(note: MarkdownReviewNote, content: string): string {
   const excerpt = note.selectedText
-    ? getMarkdownReviewHighlightedText(content, note)
-        .split(/\r\n|\r|\n/)
-        .map((line) => `> ${line}`)
-        .join('\n')
+    ? quoteMarkdownReviewText(getMarkdownReviewHighlightedText(content, note))
     : getMarkdownReviewExcerpt(content, note)
   const parts = [
     getDiffCommentLineLabel(note),
@@ -105,6 +189,10 @@ function formatMarkdownReviewNoteDetails(note: MarkdownReviewNote, content: stri
     `User comment: "${escapeMarkdownReviewNoteBody(note.body)}"`
   ]
   return parts.filter((part): part is string => part !== null).join('\n')
+}
+
+function quoteMarkdownReviewText(text: string): string {
+  return `> ${text.replace(/\r\n|\r|\n/g, '\n> ')}`
 }
 
 export function formatMarkdownReviewNotes(

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
+  AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES,
   filterAiVaultSessions,
   folderLabel,
   groupAiVaultSessions,
+  isAiVaultSessionFilterQueryTooLarge,
   parseVaultQuery
 } from './ai-vault-session-filters'
 
@@ -105,6 +107,36 @@ describe('filterAiVaultSessions', () => {
         }
       )
     ).toHaveLength(1)
+  })
+
+  it('returns no sessions for oversized pasted queries before reading session fields', () => {
+    const unreadableSession = { ...baseSession }
+    Object.defineProperty(unreadableSession, 'agent', {
+      get() {
+        throw new Error('session should not be scanned')
+      }
+    })
+
+    expect(
+      filterAiVaultSessions([unreadableSession], {
+        query: 'x'.repeat(AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES + 1),
+        agents: ['claude'],
+        scope: 'all',
+        sort: 'updated',
+        activeWorktreePath: null,
+        hideEmptySessions: false
+      })
+    ).toEqual([])
+  })
+})
+
+describe('isAiVaultSessionFilterQueryTooLarge', () => {
+  it('counts UTF-8 bytes rather than UTF-16 code units', () => {
+    expect(
+      isAiVaultSessionFilterQueryTooLarge(
+        'é'.repeat(AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES / 2 + 1)
+      )
+    ).toBe(true)
   })
 })
 

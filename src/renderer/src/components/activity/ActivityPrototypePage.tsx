@@ -64,6 +64,7 @@ import {
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { translate } from '@/i18n/i18n'
 
@@ -997,6 +998,15 @@ function threadSearchText(thread: AgentPaneThread): string {
   return `${thread.paneTitle} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
 }
 
+export const ACTIVITY_SEARCH_QUERY_MAX_BYTES = 2 * 1024
+
+export function isActivitySearchQueryTooLarge(
+  query: string,
+  maxBytes = ACTIVITY_SEARCH_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 export function activityThreadMatchesSearchQuery({
   thread,
   searchQuery
@@ -1004,8 +1014,14 @@ export function activityThreadMatchesSearchQuery({
   thread: AgentPaneThread
   searchQuery: string
 }): boolean {
-  const trimmedQuery = searchQuery.trim().toLowerCase()
-  return !trimmedQuery || threadSearchText(thread).includes(trimmedQuery)
+  if (isActivitySearchQueryTooLarge(searchQuery)) {
+    return false
+  }
+  const trimmedQuery = searchQuery.trim()
+  if (!trimmedQuery) {
+    return true
+  }
+  return threadSearchText(thread).includes(trimmedQuery.toLowerCase())
 }
 
 function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): React.JSX.Element {
@@ -1341,7 +1357,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   }
 
   const visibleThreads = useMemo(() => {
-    const trimmedQuery = query.trim().toLowerCase()
+    const normalizedQuery = isActivitySearchQueryTooLarge(query) ? null : query.trim().toLowerCase()
     return allThreads.filter((thread) => {
       // Why: keep the just-selected thread visible even after auto-mark-read
       // flips it to read, otherwise clicking a row in unread-only mode makes it
@@ -1353,7 +1369,10 @@ export default function ActivityPrototypePage(): React.JSX.Element {
       ) {
         return false
       }
-      return activityThreadMatchesSearchQuery({ thread, searchQuery: trimmedQuery })
+      if (normalizedQuery === null) {
+        return false
+      }
+      return activityThreadMatchesSearchQuery({ thread, searchQuery: normalizedQuery })
     })
   }, [allThreads, readFilter, query, effectiveSelectedPaneKey])
   const visibleThreadGroups = useMemo(
