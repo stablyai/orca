@@ -15483,6 +15483,16 @@ describe('OrcaRuntimeService', () => {
       agent: 'gemini'
     })
     expect(result.fork.forkPoint).toBeUndefined()
+
+    await expect(
+      runtime.preflightAgentSessionFork({
+        worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+        agent: 'gemini',
+        providerSession: { key: 'session_id', id: 'gemini-source-session' },
+        contextOptions: { fallbackContextSource: 'transcript' }
+      })
+    ).rejects.toThrow('A source terminal is required for transcript fallback.')
+
     const command = String(spawn.mock.calls[0]?.[0]?.command)
     expect(command).toContain('gemini')
     expect(command).toContain('structured prompt history')
@@ -15583,6 +15593,13 @@ describe('OrcaRuntimeService', () => {
       nativeProviderReason: 'provider-native-fork-unsupported',
       agent: 'gemini'
     })
+
+    await expect(
+      runtime.preflightAgentSessionFork({
+        terminalHandle: sourceTerminal!.handle,
+        contextOptions: { fallbackContextSource: 'transcript' }
+      })
+    ).rejects.toThrow('No terminal transcript was available for this fork.')
   })
 
   it('rejects terminal forks when transcript and structured history are unavailable', async () => {
@@ -15594,7 +15611,9 @@ describe('OrcaRuntimeService', () => {
       runtime.preflightAgentSessionFork({
         terminalHandle: sourceTerminal!.handle
       })
-    ).rejects.toThrow('No terminal transcript was available for this fork.')
+    ).rejects.toThrow(
+      'No terminal transcript or recorded structured prompt history was available for this fork.'
+    )
   })
 
   it('rejects missing structured message fork points before transcript fallback', async () => {
@@ -15843,6 +15862,18 @@ describe('OrcaRuntimeService', () => {
       }
     ])
     expect(initialPreflight.contextDelivery.mode).toBe('transcript-fallback')
+
+    const structuredPreferredPreflight = await runtime.preflightAgentSessionFork({
+      terminalHandle: sourceTerminal!.handle,
+      contextOptions: { fallbackContextSource: 'structured' }
+    })
+    expect(structuredPreferredPreflight.contextDelivery).toEqual({
+      mode: 'structured-history-fallback',
+      promptDelivery: 'startup-agent',
+      includedPromptCount: 2,
+      nativeProviderReason: 'provider-session-metadata-unavailable',
+      agent: 'codex'
+    })
 
     const preflight = await runtime.preflightAgentSessionFork({
       terminalHandle: sourceTerminal!.handle,

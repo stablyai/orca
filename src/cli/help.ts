@@ -207,7 +207,7 @@ Common Commands:
   orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
   orca worktree ps [--limit <n>] [--json]
-  orca fork [--terminal <handle>] [--message <id>] [--worktree <selector> --agent <id> --provider-session <id> [--provider-session-key session_id|conversation_id|session_path]] [--name <label>] [--activate] [--no-copy-files] [--json]
+  orca fork [--terminal <handle>] [--message <id>] [--worktree <selector> --agent <id> --provider-session <id> [--provider-session-key session_id|conversation_id|session_path]] [--fallback-context auto|structured|transcript] [--context-chars <n>] [--context-lines <n>] [--name <label>] [--activate] [--no-copy-files] [--json]
   orca fork list [--worktree <selector>] [--limit <n>] [--json]
   orca fork show <fork-id> [--json]
   orca fork diff <fork-id> [--json]
@@ -463,6 +463,8 @@ export function formatFlagHelp(flag: string): string {
     'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
     command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',
+    'context-chars': '--context-chars <n>    Max fallback prompt context characters',
+    'context-lines': '--context-lines <n>    Max terminal lines for transcript fallback',
     cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
     action: '--action <name>       Secondary accessibility action name',
     activate: '--activate             Reveal the new worktree in the Orca app',
@@ -475,6 +477,8 @@ export function formatFlagHelp(flag: string): string {
     enter: '--enter                Append Enter after sending text',
     force: '--force                Force worktree removal when supported',
     focus: '--focus                Reveal the created terminal session in Orca',
+    'fallback-context':
+      '--fallback-context <mode> auto, structured, or transcript fallback context',
     for: '--for exit|tui-idle    Wait condition to satisfy',
     fork: '--fork <id>            Fork id, currently the child worktree id',
     'from-element-index': '--from-element-index <n> Source element index from get-app-state',

@@ -31,6 +31,26 @@ describe('folder workspace copy rules', () => {
     ).toBe(false)
   })
 
+  it('excludes common package-manager and mobile build caches by default', () => {
+    for (const relativePath of [
+      '.pnpm-store/v3/files/index',
+      '.yarn/cache/react.zip',
+      'apps/mobile/.expo/settings.json',
+      'apps/web/.angular/cache/17/angular-webpack/cache.bin',
+      'services/api/.serverless/build.zip',
+      'ios/Pods/Manifest.lock',
+      'mac/DerivedData/App/Build/index'
+    ]) {
+      expect(
+        shouldExcludeFolderWorkspaceCopyPath({
+          relativePath,
+          isDirectory: false,
+          ignorePatterns: DEFAULT_FOLDER_WORKSPACE_COPY_IGNORE_PATTERNS
+        })
+      ).toBe(true)
+    }
+  })
+
   it('matches root relative and basename wildcard patterns', () => {
     const ignorePatterns = ['cache/', '/secrets.json', '*.sqlite']
     expect(

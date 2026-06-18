@@ -20,7 +20,10 @@ describe('fork RPC methods', () => {
       makeRequest('fork.preflight', {
         terminal: 'term-1',
         message: 'opencode-message-1',
-        noCopyFiles: true
+        noCopyFiles: true,
+        fallbackContextSource: 'structured',
+        maxContextChars: 72000,
+        transcriptLineLimit: 1600
       })
     )
 
@@ -30,7 +33,12 @@ describe('fork RPC methods', () => {
       agent: undefined,
       providerSession: undefined,
       forkPoint: { kind: 'message', id: 'opencode-message-1' },
-      noCopyFiles: true
+      noCopyFiles: true,
+      contextOptions: {
+        fallbackContextSource: 'structured',
+        maxContextChars: 72000,
+        transcriptLineLimit: 1600
+      }
     })
   })
 

@@ -2,12 +2,19 @@ const ESC = String.fromCharCode(27)
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, 'g')
 const OSC_SEQUENCE_PATTERN = new RegExp(`${ESC}\\][^\\u0007]*(?:\\u0007|${ESC}\\\\)`, 'g')
 const SINGLE_ESCAPE_PATTERN = new RegExp(`${ESC}(?:[@-Z\\\\-_]|[()*+\\-./][0-~]|c)`, 'g')
-const MAX_FORK_CONTEXT_CHARS = 36_000
+export const DEFAULT_AGENT_SESSION_FORK_CONTEXT_CHARS = 36_000
+export const MIN_AGENT_SESSION_FORK_CONTEXT_CHARS = 1_000
+export const MAX_AGENT_SESSION_FORK_CONTEXT_CHARS = 200_000
+export const DEFAULT_AGENT_SESSION_FORK_TRANSCRIPT_LINES = 800
+export const MAX_AGENT_SESSION_FORK_TRANSCRIPT_LINES = 5_000
+
+export type AgentSessionForkFallbackContextSource = 'auto' | 'structured' | 'transcript'
 
 export type AgentSessionForkPromptInput = {
   capturedText: string
   sourceLabel?: string | null
   agentLabel?: string | null
+  maxContextChars?: number
 }
 
 export type AgentSessionForkPoint = {
@@ -26,12 +33,14 @@ export type AgentSessionMessageForkPromptInput = {
   interactions: AgentSessionForkPromptInteraction[]
   sourceLabel?: string | null
   agentLabel?: string | null
+  maxContextChars?: number
 }
 
 export type AgentSessionStructuredHistoryForkPromptInput = {
   interactions: AgentSessionForkPromptInteraction[]
   sourceLabel?: string | null
   agentLabel?: string | null
+  maxContextChars?: number
 }
 
 export function normalizeAgentSessionForkPoint(value: unknown): AgentSessionForkPoint | undefined {
@@ -49,15 +58,33 @@ export function normalizeAgentSessionForkPoint(value: unknown): AgentSessionFork
   return id.length > 0 ? { kind: 'message', id } : undefined
 }
 
-function trimToContextBudget(value: string): string {
-  if (value.length <= MAX_FORK_CONTEXT_CHARS) {
+export function normalizeAgentSessionForkContextChars(value: number | undefined): number {
+  if (!Number.isInteger(value) || value === undefined) {
+    return DEFAULT_AGENT_SESSION_FORK_CONTEXT_CHARS
+  }
+  return Math.min(
+    Math.max(value, MIN_AGENT_SESSION_FORK_CONTEXT_CHARS),
+    MAX_AGENT_SESSION_FORK_CONTEXT_CHARS
+  )
+}
+
+export function normalizeAgentSessionForkTranscriptLines(value: number | undefined): number {
+  if (!Number.isInteger(value) || value === undefined) {
+    return DEFAULT_AGENT_SESSION_FORK_TRANSCRIPT_LINES
+  }
+  return Math.min(Math.max(value, 1), MAX_AGENT_SESSION_FORK_TRANSCRIPT_LINES)
+}
+
+function trimToContextBudget(value: string, maxContextChars?: number): string {
+  const limit = normalizeAgentSessionForkContextChars(maxContextChars)
+  if (value.length <= limit) {
     return value
   }
   // Why: terminal scrollback can be very large; keep the newest turns where
   // the current user intent and latest findings are most likely to live.
-  const omitted = value.length - MAX_FORK_CONTEXT_CHARS
-  const marker = `\n\n[Earlier terminal output omitted: ${omitted} characters]\n\n`
-  return marker + value.slice(-(MAX_FORK_CONTEXT_CHARS - marker.length))
+  const omitted = value.length - limit
+  const marker = `\n\n[Earlier fork context omitted: ${omitted} characters]\n\n`
+  return marker + value.slice(-(limit - marker.length))
 }
 
 function getMarkdownFenceForTranscript(value: string): string {
@@ -97,9 +124,13 @@ export function cleanAgentSessionForkTranscript(value: string): string {
 export function buildAgentSessionForkPrompt({
   capturedText,
   sourceLabel,
-  agentLabel
+  agentLabel,
+  maxContextChars
 }: AgentSessionForkPromptInput): string | null {
-  const transcript = trimToContextBudget(cleanAgentSessionForkTranscript(capturedText))
+  const transcript = trimToContextBudget(
+    cleanAgentSessionForkTranscript(capturedText),
+    maxContextChars
+  )
   if (!transcript) {
     return null
   }
@@ -130,7 +161,8 @@ export function buildAgentSessionMessageForkPrompt({
   forkPoint,
   interactions,
   sourceLabel,
-  agentLabel
+  agentLabel,
+  maxContextChars
 }: AgentSessionMessageForkPromptInput): string | null {
   const forkIndex = interactions.findIndex((interaction) => interaction.id === forkPoint.id)
   if (forkIndex === -1) {
@@ -140,16 +172,19 @@ export function buildAgentSessionMessageForkPrompt({
   if (included.length === 0) {
     return null
   }
-  const structuredHistory = included
-    .map((interaction, index) => {
-      const prompt = interaction.prompt.trim() || '(prompt text unavailable)'
-      const observedAt =
-        typeof interaction.observedAt === 'number'
-          ? ` at ${new Date(interaction.observedAt).toISOString()}`
-          : ''
-      return `${index + 1}. [${interaction.id}]${observedAt}\n${prompt}`
-    })
-    .join('\n\n')
+  const structuredHistory = trimToContextBudget(
+    included
+      .map((interaction, index) => {
+        const prompt = interaction.prompt.trim() || '(prompt text unavailable)'
+        const observedAt =
+          typeof interaction.observedAt === 'number'
+            ? ` at ${new Date(interaction.observedAt).toISOString()}`
+            : ''
+        return `${index + 1}. [${interaction.id}]${observedAt}\n${prompt}`
+      })
+      .join('\n\n'),
+    maxContextChars
+  )
 
   const header = [
     'This is a message-level fork of an existing Orca agent session.',
@@ -174,7 +209,8 @@ export function buildAgentSessionMessageForkPrompt({
 export function buildAgentSessionStructuredHistoryForkPrompt({
   interactions,
   sourceLabel,
-  agentLabel
+  agentLabel,
+  maxContextChars
 }: AgentSessionStructuredHistoryForkPromptInput): string | null {
   if (interactions.length === 0) {
     return null
@@ -189,7 +225,8 @@ export function buildAgentSessionStructuredHistoryForkPrompt({
             : ''
         return `${index + 1}. [${interaction.id}]${observedAt}\n${prompt}`
       })
-      .join('\n\n')
+      .join('\n\n'),
+    maxContextChars
   )
 
   const header = [

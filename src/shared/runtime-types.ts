@@ -28,7 +28,10 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from './mobile-markdown-document'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
-import type { AgentSessionForkPoint } from './agent-session-fork'
+import type {
+  AgentSessionForkFallbackContextSource,
+  AgentSessionForkPoint
+} from './agent-session-fork'
 import type { RuntimeCapability } from './protocol-version'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
 
@@ -594,6 +597,12 @@ export type RuntimeAgentSessionForkPreflightResult = {
   forkPoint?: AgentSessionForkPoint
   availableForkPoints?: RuntimeAgentSessionForkPointOption[]
   contextDelivery: RuntimeAgentSessionForkContextDelivery
+}
+
+export type RuntimeAgentSessionForkContextOptions = {
+  fallbackContextSource?: AgentSessionForkFallbackContextSource
+  maxContextChars?: number
+  transcriptLineLimit?: number
 }
 
 export type RuntimeAgentSessionForkListResult = {

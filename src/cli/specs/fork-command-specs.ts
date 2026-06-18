@@ -6,7 +6,7 @@ export const FORK_COMMAND_SPECS: CommandSpec[] = [
     path: ['fork'],
     summary: 'Fork an agent session from a terminal or provider session',
     usage:
-      'orca fork [--terminal <handle>] [--message <id>] [--worktree <selector> --agent <id> --provider-session <id> [--provider-session-key session_id|conversation_id|session_path]] [--name <label>] [--activate] [--no-copy-files] [--json]',
+      'orca fork [--terminal <handle>] [--message <id>] [--worktree <selector> --agent <id> --provider-session <id> [--provider-session-key session_id|conversation_id|session_path]] [--fallback-context auto|structured|transcript] [--context-chars <n>] [--context-lines <n>] [--name <label>] [--activate] [--no-copy-files] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'terminal',
@@ -15,6 +15,9 @@ export const FORK_COMMAND_SPECS: CommandSpec[] = [
       'provider-session',
       'provider-session-key',
       'message',
+      'fallback-context',
+      'context-chars',
+      'context-lines',
       'name',
       'activate',
       'no-copy-files'
@@ -23,12 +26,15 @@ export const FORK_COMMAND_SPECS: CommandSpec[] = [
       'Creates a child workspace with parent-child lineage and starts a new agent with the best available provider-native, structured-history, or transcript context.',
       'When --terminal is omitted, Orca uses the active terminal when the runtime can resolve one.',
       '--message forks from a structured hook message id when Orca has recorded prompt history for the terminal or provider session.',
+      '--fallback-context controls non-native fallback delivery. auto keeps Orca defaults, structured requires recorded prompt history, and transcript requires live terminal scrollback.',
+      '--context-chars bounds fallback prompt context. --context-lines bounds terminal scrollback lines read for transcript fallback.',
       'Use --worktree, --agent, and --provider-session together to fork from a retained provider session when no source terminal is live. If the provider CLI has no native fork command, Orca uses recorded prompt history when available.',
       '--provider-session-key defaults to session_id. Use session_path for Pi session-file forks.',
       '--no-copy-files starts the fork in the source workspace without copying files or creating child workspace lineage.'
     ],
     examples: [
       'orca fork --terminal term_abc123 --name investigate-auth --activate --json',
+      'orca fork --terminal term_abc123 --fallback-context structured --context-chars 72000 --json',
       'orca fork --terminal term_abc123 --message opencode-message-msg-1 --name before-refactor --json',
       'orca fork --worktree id:<worktreeId> --agent claude --provider-session <session-id> --name investigate-auth --json',
       'orca fork --worktree id:<worktreeId> --agent gemini --provider-session <session-id> --name retained-context --json',

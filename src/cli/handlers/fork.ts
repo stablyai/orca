@@ -1,10 +1,17 @@
 import type {
+  RuntimeAgentSessionForkContextOptions,
   RuntimeAgentSessionForkCreateResult,
   RuntimeAgentSessionForkDiffResult,
   RuntimeAgentSessionForkListResult,
   RuntimeAgentSessionForkRemoveResult,
   RuntimeAgentSessionForkShowResult
 } from '../../shared/runtime-types'
+import {
+  MAX_AGENT_SESSION_FORK_CONTEXT_CHARS,
+  MAX_AGENT_SESSION_FORK_TRANSCRIPT_LINES,
+  MIN_AGENT_SESSION_FORK_CONTEXT_CHARS,
+  type AgentSessionForkFallbackContextSource
+} from '../../shared/agent-session-fork'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import {
@@ -26,6 +33,71 @@ function getProviderSessionKey(flags: Map<string, string | boolean>): ProviderSe
     'invalid_argument',
     '--provider-session-key must be session_id, conversation_id, or session_path'
   )
+}
+
+function getFallbackContextSource(
+  flags: Map<string, string | boolean>
+): AgentSessionForkFallbackContextSource | undefined {
+  const value = getOptionalStringFlag(flags, 'fallback-context')
+  if (value === undefined) {
+    return undefined
+  }
+  if (value === 'auto' || value === 'structured' || value === 'transcript') {
+    return value
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    '--fallback-context must be auto, structured, or transcript'
+  )
+}
+
+function getBoundedPositiveIntegerFlag(args: {
+  flags: Map<string, string | boolean>
+  name: string
+  min: number
+  max: number
+}): number | undefined {
+  const value = getOptionalPositiveIntegerFlag(args.flags, args.name)
+  if (value === undefined) {
+    return undefined
+  }
+  if (value < args.min || value > args.max) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--${args.name} must be between ${args.min} and ${args.max}`
+    )
+  }
+  return value
+}
+
+function getForkContextOptions(
+  flags: Map<string, string | boolean>
+): RuntimeAgentSessionForkContextOptions | undefined {
+  const fallbackContextSource = getFallbackContextSource(flags)
+  const maxContextChars = getBoundedPositiveIntegerFlag({
+    flags,
+    name: 'context-chars',
+    min: MIN_AGENT_SESSION_FORK_CONTEXT_CHARS,
+    max: MAX_AGENT_SESSION_FORK_CONTEXT_CHARS
+  })
+  const transcriptLineLimit = getBoundedPositiveIntegerFlag({
+    flags,
+    name: 'context-lines',
+    min: 1,
+    max: MAX_AGENT_SESSION_FORK_TRANSCRIPT_LINES
+  })
+  if (
+    fallbackContextSource === undefined &&
+    maxContextChars === undefined &&
+    transcriptLineLimit === undefined
+  ) {
+    return undefined
+  }
+  return {
+    ...(fallbackContextSource ? { fallbackContextSource } : {}),
+    ...(maxContextChars !== undefined ? { maxContextChars } : {}),
+    ...(transcriptLineLimit !== undefined ? { transcriptLineLimit } : {})
+  }
 }
 
 function hasProviderSessionSourceFlags(flags: Map<string, string | boolean>): boolean {
@@ -124,6 +196,7 @@ export const FORK_HANDLERS: Record<string, CommandHandler> = {
   fork: async ({ flags, client, cwd, json }) => {
     const terminal = getOptionalStringFlag(flags, 'terminal')
     const message = getOptionalStringFlag(flags, 'message')
+    const contextOptions = getForkContextOptions(flags)
     const usesProviderSessionSource = hasProviderSessionSourceFlags(flags)
     if (terminal && usesProviderSessionSource) {
       throw new RuntimeClientError(
@@ -147,14 +220,16 @@ export const FORK_HANDLERS: Record<string, CommandHandler> = {
             ...(message ? { message } : {}),
             name: getOptionalStringFlag(flags, 'name'),
             activate: flags.get('activate') === true,
-            noCopyFiles: flags.get('no-copy-files') === true
+            noCopyFiles: flags.get('no-copy-files') === true,
+            ...contextOptions
           }
         : {
             terminal,
             ...(message ? { message } : {}),
             name: getOptionalStringFlag(flags, 'name'),
             activate: flags.get('activate') === true,
-            noCopyFiles: flags.get('no-copy-files') === true
+            noCopyFiles: flags.get('no-copy-files') === true,
+            ...contextOptions
           },
       { timeoutMs: 10 * 60_000 }
     )

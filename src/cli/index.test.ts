@@ -258,11 +258,21 @@ describe('orca root help', () => {
     expect(forkHelp).toContain(
       '--message forks from a structured hook message id when Orca has recorded prompt history'
     )
+    expect(forkHelp).toContain('--fallback-context controls non-native fallback delivery')
+    expect(forkHelp).toContain('--context-chars')
+    expect(forkHelp).toContain('--context-lines')
     expect(forkHelp).toContain('Creates a child workspace with parent-child lineage')
     expect(forkHelp).toContain('Use --worktree, --agent, and --provider-session together')
     expect(forkHelp).toContain('recorded prompt history when available')
     expect(forkHelp).toContain('session_path')
     expect(forkHelp).toContain('--no-copy-files        Start the fork in the source workspace')
+
+    logSpy.mockClear()
+    await main(['--help'], '/tmp/repo')
+
+    expect(String(logSpy.mock.calls[0][0])).toContain(
+      '[--fallback-context auto|structured|transcript] [--context-chars <n>] [--context-lines <n>]'
+    )
     expect(callMock).not.toHaveBeenCalled()
   })
 })
@@ -2875,7 +2885,21 @@ describe('orca cli worktree awareness', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(
-      ['fork', '--terminal', 'term-1', '--name', 'repo-fork', '--activate', '--json'],
+      [
+        'fork',
+        '--terminal',
+        'term-1',
+        '--name',
+        'repo-fork',
+        '--activate',
+        '--fallback-context',
+        'structured',
+        '--context-chars',
+        '72000',
+        '--context-lines',
+        '1600',
+        '--json'
+      ],
       '/tmp/repo'
     )
 
@@ -2885,7 +2909,10 @@ describe('orca cli worktree awareness', () => {
         terminal: 'term-1',
         name: 'repo-fork',
         activate: true,
-        noCopyFiles: false
+        noCopyFiles: false,
+        fallbackContextSource: 'structured',
+        maxContextChars: 72000,
+        transcriptLineLimit: 1600
       },
       { timeoutMs: 10 * 60_000 }
     )
@@ -3295,6 +3322,50 @@ describe('orca cli worktree awareness', () => {
 
     expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
       '--provider-session-key must be session_id, conversation_id, or session_path'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects invalid fork fallback context values', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['fork', '--terminal', 'term-1', '--fallback-context', 'screen'], '/tmp/repo')
+
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--fallback-context must be auto, structured, or transcript'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects out-of-range fork context bounds', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['fork', '--terminal', 'term-1', '--context-chars', '999'], '/tmp/repo')
+
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--context-chars must be between 1000 and 200000'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+    expect(process.exitCode).toBe(1)
+
+    logSpy.mockClear()
+    errSpy.mockClear()
+    process.exitCode = priorExitCode
+
+    await main(['fork', '--terminal', 'term-1', '--context-lines', '5001'], '/tmp/repo')
+
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--context-lines must be between 1 and 5000'
     )
     expect(callMock).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)

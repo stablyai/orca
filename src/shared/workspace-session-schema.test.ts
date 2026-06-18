@@ -225,6 +225,47 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('drops sleeping agent records with invalid terminal tab ids without dropping valid siblings', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        },
+        'tab2:pane-1': {
+          paneKey: 'tab2:pane-1',
+          tabId: 'pty:tab2',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'bad-tab-session' },
+          prompt: 'ignore me',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.providerSession.id).toBe(
+        'codex-session'
+      )
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab2:pane-1']).toBeUndefined()
+    }
+  })
+
   it('drops sleeping agent records with unsafe provider session ids without dropping valid siblings', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -414,6 +455,49 @@ describe('parseWorkspaceSession', () => {
           worktreeId: 'wt',
           agent: 'codex',
           providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'ignore me',
+          state: 'done',
+          archivedAt: 10,
+          updatedAt: 9,
+          archiveReason: 'retained-dismissed'
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.archivedForkableAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe(
+        'droid'
+      )
+      expect(result.value.archivedForkableAgentSessionsByPaneKey?.['tab2:pane-1']).toBeUndefined()
+    }
+  })
+
+  it('drops archived forkable records with invalid terminal tab ids without dropping valid siblings', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      archivedForkableAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'droid',
+          providerSession: { key: 'session_id', id: 'droid-session' },
+          prompt: 'continue',
+          state: 'done',
+          archivedAt: 10,
+          updatedAt: 9,
+          archiveReason: 'retained-dismissed'
+        },
+        'tab2:pane-1': {
+          paneKey: 'tab2:pane-1',
+          tabId: 'pty:tab2',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'bad-tab-session' },
           prompt: 'ignore me',
           state: 'done',
           archivedAt: 10,

@@ -87,7 +87,10 @@ describe('RPC optional pipe schemas', () => {
     expectParses(methodParams(FORK_METHODS, 'fork.create'), {
       terminal: 'term-1',
       name: 'child',
-      activate: true
+      activate: true,
+      fallbackContextSource: 'structured',
+      maxContextChars: 72000,
+      transcriptLineLimit: 1600
     })
     expectParses(methodParams(FORK_METHODS, 'fork.preflight'), {
       terminal: 'term-1',
@@ -134,6 +137,26 @@ describe('RPC optional pipe schemas', () => {
       worktree: 'id:wt-1',
       agent: 'codex',
       providerSession: { key: 'session_id', id: '--unsafe' }
+    })
+    expectRejects(methodParams(FORK_METHODS, 'fork.create'), {
+      terminal: 'term-1',
+      fallbackContextSource: 'screen'
+    })
+    expectRejects(methodParams(FORK_METHODS, 'fork.create'), {
+      terminal: 'term-1',
+      maxContextChars: 999
+    })
+    expectRejects(methodParams(FORK_METHODS, 'fork.create'), {
+      terminal: 'term-1',
+      maxContextChars: '72000'
+    })
+    expectRejects(methodParams(FORK_METHODS, 'fork.create'), {
+      terminal: 'term-1',
+      transcriptLineLimit: 5001
+    })
+    expectRejects(methodParams(FORK_METHODS, 'fork.create'), {
+      terminal: 'term-1',
+      transcriptLineLimit: '1600'
     })
     expectParses(methodParams(FORK_METHODS, 'fork.show'), { fork: 'repo::/tmp/child' })
     expectParses(methodParams(FORK_METHODS, 'fork.diff'), { fork: 'repo::/tmp/child' })

@@ -38,8 +38,19 @@ describe('agent session fork context', () => {
       capturedText: `${'old'.repeat(20_000)}\nnew context`
     })
 
-    expect(prompt).toContain('Earlier terminal output omitted')
+    expect(prompt).toContain('Earlier fork context omitted')
     expect(prompt).toContain('new context')
+  })
+
+  it('honors a caller-provided transcript context budget', () => {
+    const prompt = buildAgentSessionForkPrompt({
+      capturedText: `very-old-marker\n${'old '.repeat(1_000)}\nnew context`,
+      maxContextChars: 1_000
+    })
+
+    expect(prompt).toContain('Earlier fork context omitted')
+    expect(prompt).toContain('new context')
+    expect(prompt).not.toContain('very-old-marker')
   })
 
   it('uses a longer fence when captured output contains markdown fences', () => {
@@ -97,7 +108,7 @@ describe('agent session fork context', () => {
       ]
     })
 
-    expect(prompt).toContain('Earlier terminal output omitted')
+    expect(prompt).toContain('Earlier fork context omitted')
     expect(prompt).toContain('new retained prompt')
   })
 })

@@ -8,10 +8,14 @@ import {
   normalizePromptInteractionHistory,
   type AgentStatusPromptInteraction
 } from './agent-status-types'
+import { isValidTerminalTabId } from './terminal-tab-id'
 import { isTuiAgent } from './tui-agent-config'
 import type { TuiAgent } from './types'
 
-const terminalTabIdSchema = z.string().min(1)
+const terminalTabIdSchema = z
+  .string()
+  .min(1)
+  .refine(isValidTerminalTabId, 'terminal tab id must not contain ":"')
 
 const agentProviderSessionSchema = z.preprocess(
   (raw) => normalizeAgentProviderSession(raw) ?? undefined,

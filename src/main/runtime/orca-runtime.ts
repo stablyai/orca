@@ -159,7 +159,10 @@ import {
   buildAgentSessionForkPrompt,
   buildAgentSessionMessageForkPrompt,
   buildAgentSessionStructuredHistoryForkPrompt,
+  normalizeAgentSessionForkContextChars,
   normalizeAgentSessionForkPoint,
+  normalizeAgentSessionForkTranscriptLines,
+  type AgentSessionForkFallbackContextSource,
   type AgentSessionForkPoint,
   type AgentSessionForkPromptInteraction
 } from '../../shared/agent-session-fork'
@@ -276,6 +279,7 @@ import type {
   RuntimeWorktreeCreateResult,
   RuntimeWorktreeRecord,
   RuntimeAgentSessionForkContextDelivery,
+  RuntimeAgentSessionForkContextOptions,
   RuntimeAgentSessionForkCreateResult,
   RuntimeAgentSessionForkDiffResult,
   RuntimeAgentSessionForkListResult,
@@ -1003,6 +1007,12 @@ type AgentSessionForkPlan = AgentSessionForkResolvedSource & {
   forkPoint?: AgentSessionForkPoint
   contextDelivery: RuntimeAgentSessionForkContextDelivery
   startupArgs: AgentSessionForkStartupArgs
+}
+
+type AgentSessionForkPlanOptions = RuntimeAgentSessionForkContextOptions & {
+  fallbackContextSource: AgentSessionForkFallbackContextSource
+  maxContextChars: number
+  transcriptLineLimit: number
 }
 
 function getAgentLaunchPlatformForRepo(
@@ -12062,7 +12072,8 @@ export class OrcaRuntimeService {
   private buildStartupForMessageAgentSessionFork(
     source: AgentSessionForkSourceStatus | null,
     sourceLabel: string,
-    forkPointInput: AgentSessionForkPoint
+    forkPointInput: AgentSessionForkPoint,
+    options: Pick<AgentSessionForkPlanOptions, 'maxContextChars'>
   ): {
     forkPoint: AgentSessionForkPoint
     contextDelivery: RuntimeAgentSessionForkContextDelivery
@@ -12089,7 +12100,8 @@ export class OrcaRuntimeService {
       forkPoint,
       interactions: promptInteractions,
       sourceLabel,
-      agentLabel: source.agent
+      agentLabel: source.agent,
+      maxContextChars: options.maxContextChars
     })
     if (!prompt) {
       throw new Error('No structured message history was available for this fork point.')
@@ -12110,7 +12122,8 @@ export class OrcaRuntimeService {
 
   private buildStartupForStructuredHistoryAgentSessionFork(
     source: AgentSessionForkSourceStatus | null,
-    sourceLabel: string
+    sourceLabel: string,
+    options: Pick<AgentSessionForkPlanOptions, 'maxContextChars'>
   ): {
     contextDelivery: RuntimeAgentSessionForkContextDelivery
     startupArgs: AgentSessionForkStartupArgs
@@ -12129,7 +12142,8 @@ export class OrcaRuntimeService {
     const prompt = buildAgentSessionStructuredHistoryForkPrompt({
       interactions: promptInteractions,
       sourceLabel,
-      agentLabel: source.agent
+      agentLabel: source.agent,
+      maxContextChars: options.maxContextChars
     })
     if (!prompt) {
       return null
@@ -12183,6 +12197,57 @@ export class OrcaRuntimeService {
       return 'provider-session-metadata-unavailable'
     }
     return 'provider-native-fork-plan-unavailable'
+  }
+
+  private normalizeAgentSessionForkPlanOptions(
+    options?: RuntimeAgentSessionForkContextOptions
+  ): AgentSessionForkPlanOptions {
+    return {
+      fallbackContextSource: options?.fallbackContextSource ?? 'auto',
+      maxContextChars: normalizeAgentSessionForkContextChars(options?.maxContextChars),
+      transcriptLineLimit: normalizeAgentSessionForkTranscriptLines(options?.transcriptLineLimit)
+    }
+  }
+
+  private async buildStartupForTranscriptAgentSessionFork(args: {
+    source: AgentSessionForkResolvedSource
+    sourceLabel: string
+    options: Pick<AgentSessionForkPlanOptions, 'maxContextChars' | 'transcriptLineLimit'>
+  }): Promise<{
+    contextDelivery: RuntimeAgentSessionForkContextDelivery
+    startupArgs: AgentSessionForkStartupArgs
+  } | null> {
+    if (!args.source.terminalHandle) {
+      throw new Error('A source terminal is required for transcript fallback.')
+    }
+    const read = await this.readTerminal(args.source.terminalHandle, {
+      limit: args.options.transcriptLineLimit
+    })
+    const sourceAgent = args.source.sourceStatus?.agent ?? null
+    const prompt = buildAgentSessionForkPrompt({
+      capturedText: read.tail.join('\n'),
+      sourceLabel: args.sourceLabel,
+      agentLabel: sourceAgent,
+      maxContextChars: args.options.maxContextChars
+    })
+    if (!prompt) {
+      return null
+    }
+    return {
+      contextDelivery: {
+        mode: 'transcript-fallback',
+        promptDelivery: sourceAgent ? 'startup-agent' : 'startup-draft',
+        transcriptLineCount: read.returnedLineCount ?? read.tail.length,
+        transcriptTruncated: read.truncated || read.limited === true,
+        nativeProviderReason: this.getAgentSessionForkNativeFallbackReason(
+          args.source.sourceStatus
+        ),
+        agent: sourceAgent
+      },
+      startupArgs: sourceAgent
+        ? { startupAgent: sourceAgent, startupPrompt: prompt }
+        : { startupDraft: prompt }
+    }
   }
 
   private toAgentSessionForkRecord(
@@ -12313,9 +12378,11 @@ export class OrcaRuntimeService {
     promptInteractions?: AgentStatusPromptInteraction[]
     forkPoint?: AgentSessionForkPoint
     noCopyFiles?: boolean
+    contextOptions?: RuntimeAgentSessionForkContextOptions
   }): Promise<AgentSessionForkPlan> {
     const source = await this.resolveAgentSessionForkSource(args)
     const { sourceWorktree, sourceStatus, allowTranscriptFallback } = source
+    const contextOptions = this.normalizeAgentSessionForkPlanOptions(args.contextOptions)
     if (sourceWorktree.isArchived || sourceWorktree.isBare) {
       throw new Error('This workspace cannot be forked.')
     }
@@ -12334,7 +12401,8 @@ export class OrcaRuntimeService {
     const nativeStartup = this.buildStartupForNativeAgentSessionFork(sourceRepo, sourceStatus)
     const structuredHistoryStartup = this.buildStartupForStructuredHistoryAgentSessionFork(
       sourceStatus,
-      sourceLabel
+      sourceLabel,
+      contextOptions
     )
     let contextDelivery: RuntimeAgentSessionForkContextDelivery
     let startupArgs: AgentSessionForkStartupArgs
@@ -12343,7 +12411,8 @@ export class OrcaRuntimeService {
       const messageStartup = this.buildStartupForMessageAgentSessionFork(
         sourceStatus,
         sourceLabel,
-        args.forkPoint
+        args.forkPoint,
+        contextOptions
       )
       forkPoint = messageStartup.forkPoint
       contextDelivery = messageStartup.contextDelivery
@@ -12355,6 +12424,9 @@ export class OrcaRuntimeService {
         createdWithAgent: nativeStartup.agent
       }
     } else if (!allowTranscriptFallback) {
+      if (contextOptions.fallbackContextSource === 'transcript') {
+        throw new Error('A source terminal is required for transcript fallback.')
+      }
       if (structuredHistoryStartup) {
         contextDelivery = structuredHistoryStartup.contextDelivery
         startupArgs = structuredHistoryStartup.startupArgs
@@ -12373,33 +12445,35 @@ export class OrcaRuntimeService {
         )
       }
     } else {
-      if (!source.terminalHandle) {
-        throw new Error('A source terminal is required for transcript fallback.')
-      }
-      const read = await this.readTerminal(source.terminalHandle, { limit: 800 })
-      const sourceAgent = sourceStatus?.agent ?? null
-      const prompt = buildAgentSessionForkPrompt({
-        capturedText: read.tail.join('\n'),
-        sourceLabel,
-        agentLabel: sourceAgent
-      })
-      if (!prompt && structuredHistoryStartup) {
+      const preferStructured = contextOptions.fallbackContextSource === 'structured'
+      const allowTranscript = contextOptions.fallbackContextSource !== 'structured'
+      const allowStructured = contextOptions.fallbackContextSource !== 'transcript'
+      if (preferStructured && structuredHistoryStartup) {
         contextDelivery = structuredHistoryStartup.contextDelivery
         startupArgs = structuredHistoryStartup.startupArgs
-      } else if (!prompt) {
-        throw new Error('No terminal transcript was available for this fork.')
       } else {
-        contextDelivery = {
-          mode: 'transcript-fallback',
-          promptDelivery: sourceAgent ? 'startup-agent' : 'startup-draft',
-          transcriptLineCount: read.returnedLineCount ?? read.tail.length,
-          transcriptTruncated: read.truncated || read.limited === true,
-          nativeProviderReason: this.getAgentSessionForkNativeFallbackReason(sourceStatus),
-          agent: sourceAgent
+        const transcriptStartup = allowTranscript
+          ? await this.buildStartupForTranscriptAgentSessionFork({
+              source,
+              sourceLabel,
+              options: contextOptions
+            })
+          : null
+        if (transcriptStartup) {
+          contextDelivery = transcriptStartup.contextDelivery
+          startupArgs = transcriptStartup.startupArgs
+        } else if (allowStructured && structuredHistoryStartup) {
+          contextDelivery = structuredHistoryStartup.contextDelivery
+          startupArgs = structuredHistoryStartup.startupArgs
+        } else if (contextOptions.fallbackContextSource === 'structured') {
+          throw new Error('No recorded structured prompt history was available for this fork.')
+        } else if (contextOptions.fallbackContextSource === 'transcript') {
+          throw new Error('No terminal transcript was available for this fork.')
+        } else {
+          throw new Error(
+            'No terminal transcript or recorded structured prompt history was available for this fork.'
+          )
         }
-        startupArgs = sourceAgent
-          ? { startupAgent: sourceAgent, startupPrompt: prompt }
-          : { startupDraft: prompt }
       }
     }
     return {
@@ -12421,6 +12495,7 @@ export class OrcaRuntimeService {
     promptInteractions?: AgentStatusPromptInteraction[]
     forkPoint?: AgentSessionForkPoint
     noCopyFiles?: boolean
+    contextOptions?: RuntimeAgentSessionForkContextOptions
   }): Promise<RuntimeAgentSessionForkPreflightResult> {
     const plan = await this.planAgentSessionFork(args)
     const availableForkPoints = this.getAgentSessionForkPointOptions(plan.sourceStatus)
@@ -12444,6 +12519,7 @@ export class OrcaRuntimeService {
     name?: string
     activate?: boolean
     noCopyFiles?: boolean
+    contextOptions?: RuntimeAgentSessionForkContextOptions
   }): Promise<RuntimeAgentSessionForkCreateResult> {
     const plan = await this.planAgentSessionFork(args)
     const {
