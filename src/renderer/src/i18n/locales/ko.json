@@ -3657,7 +3657,9 @@
           "8ce44af9a8": "{{value0}} 이름 바꾸기",
           "395e541d5d": "상태",
           "34f03eb0de": "보드 설정",
-          "26cbc92150": "워크스페이스 보드 설정"
+          "26cbc92150": "워크스페이스 보드 설정",
+          "87d24a0c2f": "보드와 이슈 상태 동기화",
+          "4c2eaa78cc": "연결된 워크스페이스를 이동하면 일치하는 워크플로 상태가 있을 때 Linear 이슈 상태가 업데이트됩니다."
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "비어 있는",
@@ -4129,6 +4131,19 @@
           "2d3e4f5a6b": "Check connection",
           "3c4d5e6f7a": "Manage host…",
           "6e7f8a9b0c": "Remove host…"
+        },
+        "WorkspaceKanbanDrawer": {
+          "1975a4e480": "작업 상태 동기화 실패",
+          "e02b0d92ff": "작업 상태 동기화 건너뜀",
+          "c1d2e3f4a5": "Linear 이슈 {{value0}}을(를) 읽을 수 없습니다.",
+          "d2e3f4a5b6": "{{value0}}에 일치하는 Linear 워크플로 상태가 없습니다.",
+          "e3f4a5b6c7": "{{value0}}에 일치하는 Linear 워크플로 상태가 여러 개입니다.",
+          "f4a5b6c7d8": "Linear 이슈 {{value0}}을(를) 업데이트할 수 없습니다.",
+          "a5b6c7d8e9": "Linear 이슈 {{value0}}을(를) 동기화할 수 없습니다.",
+          "b6c7d8e9f0": "작업 상태 동기화를 완료할 수 없습니다.",
+          "c7d8e9f0a1": "{{value0}}개 업데이트됨",
+          "d8e9f0a1b2": "{{value0}}개 건너뜀",
+          "e9f0a1b2c3": "{{value0}}개 실패"
         }
       },
       "shared": {

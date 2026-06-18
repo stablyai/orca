@@ -3657,7 +3657,9 @@
           "8ce44af9a8": "重命名 {{value0}}",
           "395e541d5d": "状态",
           "34f03eb0de": "董事会设置",
-          "26cbc92150": "工作区板设置"
+          "26cbc92150": "工作区板设置",
+          "87d24a0c2f": "同步看板和议题状态",
+          "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态。"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空的",
@@ -4129,6 +4131,19 @@
           "2d3e4f5a6b": "检查连接",
           "3c4d5e6f7a": "Manage host…",
           "6e7f8a9b0c": "删除主机..."
+        },
+        "WorkspaceKanbanDrawer": {
+          "1975a4e480": "任务状态同步失败",
+          "e02b0d92ff": "任务状态同步已跳过",
+          "c1d2e3f4a5": "无法读取 Linear 议题 {{value0}}。",
+          "d2e3f4a5b6": "没有与 {{value0}} 匹配的 Linear 工作流状态。",
+          "e3f4a5b6c7": "有多个 Linear 工作流状态与 {{value0}} 匹配。",
+          "f4a5b6c7d8": "无法更新 Linear 议题 {{value0}}。",
+          "a5b6c7d8e9": "无法同步 Linear 议题 {{value0}}。",
+          "b6c7d8e9f0": "无法完成任务状态同步。",
+          "c7d8e9f0a1": "已更新 {{value0}} 个",
+          "d8e9f0a1b2": "已跳过 {{value0}} 个",
+          "e9f0a1b2c3": "失败 {{value0}} 个"
         }
       },
       "shared": {

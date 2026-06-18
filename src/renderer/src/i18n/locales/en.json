@@ -3690,7 +3690,9 @@
           "8ce44af9a8": "Rename {{value0}}",
           "395e541d5d": "Statuses",
           "34f03eb0de": "Board settings",
-          "26cbc92150": "Workspace board settings"
+          "26cbc92150": "Workspace board settings",
+          "87d24a0c2f": "Sync board and issue status",
+          "4c2eaa78cc": "Moving a linked workspace updates its Linear issue status when a matching workflow state exists."
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Empty",
@@ -4129,6 +4131,19 @@
           "822ff300ad": "Dismiss",
           "b7e3a91c4f": "Drag project headers to reorder, or switch to",
           "e8c1f4a2b9": "in workspace options."
+        },
+        "WorkspaceKanbanDrawer": {
+          "1975a4e480": "Task status sync failed",
+          "e02b0d92ff": "Task status sync skipped",
+          "c1d2e3f4a5": "Linear issue {{value0}} could not be read.",
+          "d2e3f4a5b6": "No matching Linear workflow state for {{value0}}.",
+          "e3f4a5b6c7": "Multiple Linear workflow states match {{value0}}.",
+          "f4a5b6c7d8": "Could not update Linear issue {{value0}}.",
+          "a5b6c7d8e9": "Could not sync Linear issue {{value0}}.",
+          "b6c7d8e9f0": "Task status sync could not finish.",
+          "c7d8e9f0a1": "{{value0}} updated",
+          "d8e9f0a1b2": "{{value0}} skipped",
+          "e9f0a1b2c3": "{{value0}} failed"
         }
       },
       "shared": {

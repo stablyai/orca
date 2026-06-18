@@ -164,10 +164,13 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
         localGitOptions
       )
 
-      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['api', 'projects/g%2Fp/issues/9'], {
-        cwd: '/repo',
-        wslDistro: 'Ubuntu'
-      })
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', '--hostname', 'gitlab.com', 'projects/g%2Fp/issues/9'],
+        {
+          cwd: '/repo',
+          wslDistro: 'Ubuntu'
+        }
+      )
     })
 
     it('returns null when the API errors', async () => {
