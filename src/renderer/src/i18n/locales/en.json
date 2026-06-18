@@ -913,7 +913,8 @@
         "16e9e3df89": "starred",
         "0d0ace8861": "Star on GitHub",
         "ec43b38ba7": "Starred on GitHub",
-        "157bb5ecbb": "Open GitHub"
+        "157bb5ecbb": "Open GitHub",
+        "preflightDismiss": "Dismiss"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",

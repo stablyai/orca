@@ -913,7 +913,8 @@
         "16e9e3df89": "星付き",
         "0d0ace8861": "GitHub でスターを付ける",
         "ec43b38ba7": "GitHub でスター済み",
-        "157bb5ecbb": "GitHub を開く"
+        "157bb5ecbb": "GitHub を開く",
+        "preflightDismiss": "Dismiss"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",

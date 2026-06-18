@@ -913,7 +913,8 @@
         "16e9e3df89": "con estrella",
         "0d0ace8861": "Dar estrella en GitHub",
         "ec43b38ba7": "Con estrella en GitHub",
-        "157bb5ecbb": "Abrir GitHub"
+        "157bb5ecbb": "Abrir GitHub",
+        "preflightDismiss": "Dismiss"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
