@@ -32,7 +32,7 @@ const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // the drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
 const SHOW_DURATION = 180
-const HIDE_DURATION = 150
+export const BOTTOM_DRAWER_HIDE_DURATION_MS = 150
 const TOP_SCROLL_EPSILON = 1
 
 type Props = {
@@ -114,7 +114,7 @@ function MountedBottomDrawer({
       progress.value = withTiming(1, { duration: SHOW_DURATION })
     } else {
       Keyboard.dismiss()
-      progress.value = withTiming(0, { duration: HIDE_DURATION }, (finished) => {
+      progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
         if (finished) {
           runOnJS(onHidden)()
         }
@@ -149,21 +149,26 @@ function MountedBottomDrawer({
     }
   }, [visible, insets.bottom])
 
+  const dismiss = useCallback(() => {
+    Keyboard.dismiss()
+    progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
+      if (finished) {
+        runOnJS(onClose)()
+      }
+    })
+  }, [onClose, progress])
+
   useEffect(() => {
     if (!visible) {
       return
     }
 
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onClose()
+      dismiss()
       return true
     })
     return () => sub.remove()
-  }, [visible, onClose])
-
-  const dismiss = useCallback(() => {
-    onClose()
-  }, [onClose])
+  }, [visible, dismiss])
 
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = Math.max(event.contentOffset.y, 0)
@@ -187,7 +192,7 @@ function MountedBottomDrawer({
         const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
         translateY.value = withTiming(screenHeight, { duration })
         progress.value = withTiming(0, { duration }, () => {
-          runOnJS(dismiss)()
+          runOnJS(onClose)()
         })
       } else {
         translateY.value = withSpring(0, SPRING_CONFIG)
@@ -236,7 +241,7 @@ function MountedBottomDrawer({
         const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
         translateY.value = withTiming(screenHeight, { duration })
         progress.value = withTiming(0, { duration }, () => {
-          runOnJS(dismiss)()
+          runOnJS(onClose)()
         })
       } else {
         translateY.value = withSpring(0, SPRING_CONFIG)

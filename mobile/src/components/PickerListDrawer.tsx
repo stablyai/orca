@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer, BOTTOM_DRAWER_HIDE_DURATION_MS } from './BottomDrawer'
 
 type Props<T extends { id: string; label: string }> = {
   visible: boolean
@@ -24,10 +24,46 @@ export function PickerListDrawer<T extends { id: string; label: string }>({
   onClose,
   renderIcon
 }: Props<T>) {
+  const [closing, setClosing] = useState(false)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const drawerVisible = visible && !closing
+
+  useEffect(() => {
+    if (visible) {
+      setClosing(false)
+    }
+    return () => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current)
+        closeTimerRef.current = null
+      }
+    }
+  }, [visible])
+
+  const finishClose = useCallback(() => {
+    setClosing(false)
+    onClose()
+  }, [onClose])
+
+  const closeThenSelect = useCallback(
+    (item: T) => {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current)
+      }
+      setClosing(true)
+      closeTimerRef.current = setTimeout(() => {
+        closeTimerRef.current = null
+        onClose()
+        onSelect(item)
+      }, BOTTOM_DRAWER_HIDE_DURATION_MS)
+    },
+    [onClose, onSelect]
+  )
+
   return (
     <BottomDrawer
-      visible={visible}
-      onClose={onClose}
+      visible={drawerVisible}
+      onClose={finishClose}
       dragContentToDismiss={false}
       contentScrollable={false}
     >
@@ -47,10 +83,7 @@ export function PickerListDrawer<T extends { id: string; label: string }>({
           return (
             <Pressable
               style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
-              onPress={() => {
-                onClose()
-                onSelect(item)
-              }}
+              onPress={() => closeThenSelect(item)}
             >
               {renderIcon?.(item)}
               <Text

@@ -43,7 +43,7 @@ import {
 } from '../../../src/transport/connection-health'
 import type { RpcSuccess } from '../../../src/transport/types'
 import { StatusDot } from '../../../src/components/StatusDot'
-import { NewWorktreeModal } from '../../../src/components/NewWorktreeModal'
+import { NewWorktreeModalController } from '../../../src/components/NewWorktreeModalController'
 import { MobileRepoIcon } from '../../../src/components/MobileRepoIcon'
 import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
@@ -166,6 +166,7 @@ export function HostScreen({
   const fetchWorktreesInFlightRef = useRef(false)
   const fetchRepoMetadataInFlightRef = useRef(false)
   const repoMetadataFetchedAtRef = useRef(0)
+  const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
@@ -1010,7 +1011,7 @@ export function HostScreen({
                   styles.embeddedToolbarIconButton,
                   connState !== 'connected' && styles.toolbarIconDisabled
                 ]}
-                onPress={() => setShowNewWorktreeVisible(true)}
+                onPress={() => newWorktreeModalRef.current?.open()}
                 disabled={connState !== 'connected'}
                 accessibilityRole="button"
                 accessibilityLabel="New workspace"
@@ -1101,7 +1102,7 @@ export function HostScreen({
 
             <Pressable
               style={styles.newButton}
-              onPress={() => setShowNewWorktreeVisible(true)}
+              onPress={() => newWorktreeModalRef.current?.open()}
               disabled={connState !== 'connected'}
             >
               <Plus
@@ -1424,8 +1425,9 @@ export function HostScreen({
         onCancel={() => setConfirmRemoveHost(false)}
       />
 
-      <NewWorktreeModal
-        visible={showNewWorktree}
+      <NewWorktreeModalController
+        ref={newWorktreeModalRef}
+        routeVisible={showNewWorktree}
         client={client}
         hostId={hostId}
         existingWorktreePaths={worktrees.map((w) => w.path)}
@@ -1436,7 +1438,7 @@ export function HostScreen({
             `/h/${hostId}/session/${encodeURIComponent(worktreeId)}?${params.toString()}`
           )
         }}
-        onClose={() => setShowNewWorktreeVisible(false)}
+        onRouteVisibleChange={setShowNewWorktreeVisible}
       />
     </SafeAreaView>
   )
