@@ -123,7 +123,7 @@ describe('StarNagToastHost', () => {
     document.body.appendChild(toastContainer)
     renderToastFromCustomCall(toastContainer)
 
-    expect(toastContainer.textContent).toContain('You’re all set!')
+    expect(toastContainer.textContent).toContain('Onboarding completed!')
     expect(toastContainer.textContent).toContain(
       'If you’re enjoying Orca so far, a GitHub star helps other developers discover it.'
     )
@@ -153,6 +153,8 @@ describe('StarNagToastHost', () => {
     const button = Array.from(toastContainer.querySelectorAll('button')).find((candidate) =>
       candidate.textContent?.includes('Open GitHub')
     )
+    expect(button?.className).toContain('bg-amber-400/15')
+    expect(button?.className).toContain('text-amber-800')
     await act(async () => {
       button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -184,6 +186,11 @@ describe('StarNagToastHost', () => {
     expect(shell.openUrl).not.toHaveBeenCalled()
     expect(starNag.openWeb).not.toHaveBeenCalled()
     expect(toastContainer.textContent).toContain('Open GitHub')
+    const fallbackButton = Array.from(toastContainer.querySelectorAll('button')).find((candidate) =>
+      candidate.textContent?.includes('Open GitHub')
+    )
+    expect(fallbackButton?.className).toContain('bg-amber-400/15')
+    expect(fallbackButton?.className).toContain('text-amber-800')
     expect(toastContainer.textContent).toContain('Later')
   })
 

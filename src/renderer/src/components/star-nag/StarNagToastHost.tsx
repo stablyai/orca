@@ -89,12 +89,9 @@ function StarNagToast({
             : translate('auto.components.star.nag.StarNagToastHost.starOnGithub', 'Star on GitHub')
 
   const completedStar = status === 'starred'
-  const primaryActionClass =
-    mode === 'web'
-      ? 'min-w-0 flex-1 gap-1.5'
-      : completedStar
-        ? 'min-w-0 flex-1 gap-1.5 border-amber-400/40 bg-amber-400/15 text-amber-700 hover:bg-amber-400/15 dark:text-amber-200'
-        : 'min-w-0 flex-1 gap-1.5 border-amber-400/60 bg-amber-400/15 text-amber-800 hover:bg-amber-400/25 dark:text-amber-100'
+  const primaryActionClass = completedStar
+    ? 'min-w-0 flex-1 gap-1.5 border-amber-400/40 bg-amber-400/15 text-amber-700 hover:bg-amber-400/15 dark:text-amber-200'
+    : 'min-w-0 flex-1 gap-1.5 border-amber-400/60 bg-amber-400/15 text-amber-800 hover:bg-amber-400/25 dark:text-amber-100'
 
   return (
     <div className="relative w-[340px] max-w-[calc(100vw-32px)] overflow-hidden rounded-lg border border-border bg-popover p-3.5 text-popover-foreground shadow-xs">
@@ -118,7 +115,7 @@ function StarNagToast({
             <div className="text-sm font-semibold">
               {translate(
                 'auto.components.star.nag.StarNagToastHost.onboardingCompleted',
-                'You’re all set!'
+                'Onboarding completed!'
               )}
             </div>
           </div>
