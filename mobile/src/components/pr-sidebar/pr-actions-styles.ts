@@ -53,6 +53,15 @@ export const prActionsStyles = StyleSheet.create({
     backgroundColor: colors.textPrimary,
     borderColor: colors.textPrimary
   },
+  // Merge CTA: green fill + white text, matching the desktop ChecksPanel's
+  // bg-green-600 "Squash and merge". The merge still confirms before firing.
+  actionButtonMerge: {
+    backgroundColor: colors.mergeGreen,
+    borderColor: colors.mergeGreen
+  },
+  actionButtonTextMerge: {
+    color: colors.onMergeGreen
+  },
   actionButtonDisabled: {
     opacity: 0.5
   },

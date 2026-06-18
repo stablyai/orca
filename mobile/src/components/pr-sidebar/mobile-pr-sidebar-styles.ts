@@ -13,19 +13,19 @@ export const mobilePrSidebarStyles = StyleSheet.create({
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: colors.borderSubtle
   },
-  // Inner scroll area; the diff and the sidebar scroll independently.
+  // Inner scroll area; the diff and the sidebar scroll independently. Flat layout
+  // (desktop ChecksPanel): sections butt against each other with border-b
+  // dividers, so no outer padding or inter-section gap.
   scrollContent: {
-    padding: spacing.lg,
-    gap: spacing.md
+    paddingBottom: spacing.lg
   },
-  // Card chrome only (subtle bgPanel surface like the source-control panel's
-  // cards); padding now lives on the header/body so the header divider can span
-  // edge-to-edge, matching the desktop PR page's card-with-header-row pattern.
+  // Flat section band (desktop ChecksPanel sidebar): a full-bleed bgPanel block
+  // divided from the next by a bottom hairline, rather than a stacked rounded
+  // card. The header row keeps its own border-b for the title/body divide.
   section: {
-    borderRadius: radii.card,
     backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
     overflow: 'hidden'
   },
   // Section header row: title + optional trailing control, divided from the body

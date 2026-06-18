@@ -126,6 +126,30 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
   }
 }
 
+// Per-row status word shown beside each check (desktop ChecksList parity), so the
+// outcome is readable without expanding the row. Mirrors getCheckStatusLabel.
+export function checkStatusLabel(check: PRCheckDetail): string {
+  if (check.status !== 'completed') {
+    return check.status === 'in_progress' ? 'In progress' : 'Pending'
+  }
+  switch (check.conclusion) {
+    case 'success':
+      return 'Successful'
+    case 'failure':
+      return 'Failed'
+    case 'cancelled':
+      return 'Cancelled'
+    case 'timed_out':
+      return 'Timed out'
+    case 'neutral':
+      return 'Neutral'
+    case 'skipped':
+      return 'Skipped'
+    default:
+      return 'Pending'
+  }
+}
+
 export function checkOutcomeToken(outcome: CheckOutcome | 'none'): MobileStatusToken {
   switch (outcome) {
     case 'success':

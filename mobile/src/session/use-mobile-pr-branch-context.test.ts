@@ -3,7 +3,8 @@ import type { MobileGitBranchCompareResult } from '../source-control/mobile-bran
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import {
   deriveMobilePrBranchContext,
-  loadMobilePrBranchContext
+  loadMobilePrBranchContext,
+  loadMobilePrRepoContext
 } from './use-mobile-pr-branch-context'
 
 function status(overrides: Partial<MobileGitStatusResult>): MobileGitStatusResult {
@@ -109,7 +110,24 @@ describe('loadMobilePrBranchContext', () => {
       branch: 'feat',
       headSha: 'sha-status',
       isGithubRepo: true,
+      repoLoaded: true,
       loaded: true
     })
+  })
+
+  it('loads repo eligibility without waiting for git status or branch compare', async () => {
+    const sendRequest = vi.fn(async (method: string) => {
+      if (method === 'github.repoSlug') {
+        return { ok: true, result: { owner: 'stablyai', repo: 'orca' } }
+      }
+      return { ok: false, error: { message: `unexpected ${method}` } }
+    })
+    const out = await loadMobilePrRepoContext({ sendRequest } as never, 'repo::/wt')
+    expect(out).toEqual({ isGithubRepo: true })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest).toHaveBeenCalledWith(
+      'github.repoSlug',
+      expect.objectContaining({ repo: expect.any(String) })
+    )
   })
 })

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Check, ChevronDown } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { RpcClient } from '../transport/rpc-client'
 import { searchBaseRefs } from '../source-control/mobile-base-ref-search'
@@ -75,21 +76,24 @@ export function MobilePrBasePicker({
 
   return (
     <View>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={(text) => {
-          onChange(text)
-          queryRefs(text)
-        }}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholder="main"
-        placeholderTextColor={colors.textMuted}
-        autoCapitalize="none"
-        autoCorrect={false}
-        editable={editable}
-      />
+      <View style={[styles.inputShell, !editable && styles.inputShellDisabled]}>
+        <TextInput
+          style={styles.input}
+          value={value}
+          onChangeText={(text) => {
+            onChange(text)
+            queryRefs(text)
+          }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder="main"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={editable}
+        />
+        <ChevronDown size={14} color={colors.textSecondary} strokeWidth={2.2} />
+      </View>
       {focused && results.length > 0 ? (
         <View style={styles.results}>
           {results.map((ref) => (
@@ -104,6 +108,9 @@ export function MobilePrBasePicker({
               <Text style={styles.resultText} numberOfLines={1}>
                 {ref}
               </Text>
+              {ref === value ? (
+                <Check size={14} color={colors.textPrimary} strokeWidth={2.2} />
+              ) : null}
             </Pressable>
           ))}
         </View>
@@ -113,13 +120,26 @@ export function MobilePrBasePicker({
 }
 
 const styles = StyleSheet.create({
-  input: {
+  inputShell: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     backgroundColor: colors.bgRaised,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs
+  },
+  inputShellDisabled: {
+    opacity: 0.6
+  },
+  input: {
+    flex: 1,
+    minWidth: 0,
+    padding: 0,
     color: colors.textPrimary,
-    fontSize: typography.bodySize
+    fontSize: typography.bodySize,
+    fontFamily: typography.monoFamily
   },
   results: {
     marginTop: spacing.xs,
@@ -131,13 +151,18 @@ const styles = StyleSheet.create({
   },
   resultRow: {
     minHeight: 40,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
     paddingHorizontal: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
   },
   resultRowPressed: { backgroundColor: colors.bgRaised },
   resultText: {
+    flex: 1,
+    minWidth: 0,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     fontFamily: typography.monoFamily

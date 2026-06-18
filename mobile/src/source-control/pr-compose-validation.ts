@@ -25,3 +25,31 @@ export function isBaseHeadDistinct(base: string, head: string): boolean {
 export function canSubmitPrCompose(title: string, base: string, head: string): boolean {
   return title.trim().length > 0 && isBaseHeadDistinct(base, head)
 }
+
+export function getPrComposeDisabledReason({
+  title,
+  base,
+  head,
+  generating,
+  reviewLabel
+}: {
+  title: string
+  base: string
+  head: string
+  generating: boolean
+  reviewLabel: string
+}): string | null {
+  if (generating) {
+    return 'Wait for generation to finish.'
+  }
+  if (title.trim().length === 0) {
+    return `Enter a ${reviewLabel} title.`
+  }
+  if (base.trim().length === 0) {
+    return 'Choose a base branch.'
+  }
+  if (!isBaseHeadDistinct(base, head)) {
+    return 'Base branch must differ from the head branch.'
+  }
+  return null
+}

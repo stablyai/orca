@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { ArrowLeft, Pencil } from 'lucide-react-native'
+import { ArrowRight, Pencil } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { GitHubWorkItemDetails, PRInfo } from '../../../../src/shared/types'
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
@@ -18,7 +18,7 @@ type Props = {
   titleAction: MobilePrTitleAction
 }
 
-// Header: state badge (incl. draft — display-only), title, author, base<-head.
+// Header: state badge (incl. draft — display-only), title, author, head->base.
 // The title is inline-editable on an open/draft PR (desktop parity).
 export function PRSidebarHeader({ pr, details, titleAction }: Props) {
   const item = details?.item
@@ -58,10 +58,11 @@ export function PRSidebarHeader({ pr, details, titleAction }: Props) {
         />
         {author ? <Text style={styles.prMeta}>by {author}</Text> : null}
         {baseRef && headRef ? (
+          // head -> base reads in merge direction (desktop ChecksPanel parity).
           <View style={styles.branchRow}>
-            <Text style={styles.branchPill}>{baseRef}</Text>
-            <ArrowLeft size={12} color={colors.textSecondary} strokeWidth={2.2} />
             <Text style={styles.branchPill}>{headRef}</Text>
+            <ArrowRight size={12} color={colors.textSecondary} strokeWidth={2.2} />
+            <Text style={styles.branchPill}>{baseRef}</Text>
           </View>
         ) : null}
       </View>

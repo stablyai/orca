@@ -1,40 +1,34 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { GitPullRequestArrow, Link2, Link2Off } from 'lucide-react-native'
+import { GitPullRequestArrow, RefreshCw } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
 import { resolveMobilePrPrefill, type MobilePrPrefill } from '../../source-control/mobile-pr-create'
-import { fetchWorktreeLinkedPR, unlinkMobilePr } from '../../source-control/mobile-pr-link'
+import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
 import { openMobilePrUrl } from '../MobilePrComposeSheet'
 import { MobilePrComposeForm } from './MobilePrComposeForm'
-import { MobileLinkPrForm } from './MobileLinkPrForm'
-import { prActionsStyles as actionStyles } from './pr-actions-styles'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { prCreateEmptyStateStyles as styles } from './pr-create-empty-state-styles'
 
 type Props = {
   client: RpcClient | null
   worktreeId: string
   gitBranch: string | null
-  // Refetches the sidebar so it transitions from 'none' to the ready PR view.
+  // Refetches the sidebar after create or an explicit empty-state refresh.
   onCreated: () => void
 }
 
-type Mode = 'choose' | 'create' | 'link'
+type Mode = 'choose' | 'create'
 
-// Empty state for a branch with no PR: offers both Create and Link (desktop parity).
-// Create resolves the hosted-review prefill (provider/base/title/body — provider-
-// agnostic) and renders the compose form inline; Link renders a number/URL form
-// inline. Both forms render inline (not as a nested BottomDrawer, which a
-// ScrollView would clip) and refetch the sidebar on success.
+// Empty state for a branch with no PR. Keep this scoped to desktop's no-PR
+// surface: create/refresh here; linked-PR edits belong outside this panel.
 export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCreated }: Props) {
   const [prefill, setPrefill] = useState<MobilePrPrefill | null>(null)
   const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
-  // A persisted linkedPR while the branch shows no PR means the linked PR couldn't be
-  // resolved (deleted/transferred/cross-repo). Surface Unlink so the user can recover
-  // instead of being trapped re-linking a dead PR.
+  // A persisted linkedPR while the branch shows no PR means the linked PR could
+  // not be resolved. Mention it, but keep link editing out of this desktop-parity
+  // create surface.
   const [orphanLinkedPR, setOrphanLinkedPR] = useState<number | null>(null)
-  const [unlinking, setUnlinking] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -57,24 +51,6 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
       cancelled = true
     }
   }, [client, worktreeId])
-
-  const unlink = async (): Promise<void> => {
-    if (!client || unlinking) {
-      return
-    }
-    setUnlinking(true)
-    try {
-      const outcome = await unlinkMobilePr(client, worktreeId)
-      if (outcome.ok) {
-        setOrphanLinkedPR(null)
-        onCreated()
-      }
-    } catch {
-      // Best-effort: a failed unlink leaves the orphan state so the user can retry.
-    } finally {
-      setUnlinking(false)
-    }
-  }
 
   const openComposer = async (): Promise<void> => {
     if (!client || loading) {
@@ -107,7 +83,7 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
 
   if (mode === 'create' && prefill) {
     return (
-      <View style={styles.stateArea}>
+      <View style={styles.composerArea}>
         <MobilePrComposeForm
           client={client}
           worktreeId={worktreeId}
@@ -124,80 +100,51 @@ export function PrSidebarCreateEmptyState({ client, worktreeId, gitBranch, onCre
     )
   }
 
-  if (mode === 'link') {
-    return (
-      <View style={styles.stateArea}>
-        <MobileLinkPrForm
-          client={client}
-          worktreeId={worktreeId}
-          onCancel={() => setMode('choose')}
-          onLinked={() => {
-            setMode('choose')
-            onCreated()
-          }}
-        />
-      </View>
-    )
-  }
-
   return (
-    <View style={styles.stateArea}>
-      <Text style={styles.stateText}>
-        {orphanLinkedPR
-          ? `Linked pull request #${orphanLinkedPR} is unavailable. Create a new one, link another, or unlink.`
-          : 'No open pull request for this branch.'}
-      </Text>
-      <Pressable
-        style={[
-          actionStyles.actionButton,
-          actionStyles.actionButtonPrimary,
-          (!canCreate || loading) && actionStyles.actionButtonDisabled
-        ]}
-        onPress={() => void openComposer()}
-        disabled={!canCreate || loading}
-        accessibilityRole="button"
-        accessibilityLabel="Create pull request"
-      >
-        {loading ? (
-          <ActivityIndicator color={colors.bgBase} />
-        ) : (
-          <GitPullRequestArrow size={16} color={colors.bgBase} strokeWidth={2.2} />
-        )}
-        <Text style={[actionStyles.actionButtonText, actionStyles.actionButtonTextPrimary]}>
-          Create pull request
+    <View style={styles.section}>
+      <View style={styles.header}>
+        <View style={styles.headerTitle}>
+          <GitPullRequestArrow size={14} color={colors.textSecondary} strokeWidth={2.2} />
+          <Text style={styles.headerLabel}>Pull request</Text>
+        </View>
+        <View style={styles.headerActions}>
+          <Pressable
+            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
+            onPress={onCreated}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh pull request"
+            hitSlop={6}
+          >
+            <RefreshCw size={16} color={colors.textSecondary} strokeWidth={2.2} />
+          </Pressable>
+          <Pressable
+            style={[styles.createButton, (!canCreate || loading) && styles.createButtonDisabled]}
+            onPress={() => void openComposer()}
+            disabled={!canCreate || loading}
+            accessibilityRole="button"
+            accessibilityLabel="Create pull request"
+          >
+            {loading ? (
+              <ActivityIndicator color={colors.bgBase} />
+            ) : (
+              <GitPullRequestArrow size={14} color={colors.bgBase} strokeWidth={2.2} />
+            )}
+            <Text style={styles.createButtonText}>Create PR</Text>
+          </Pressable>
+        </View>
+      </View>
+      <View style={styles.body}>
+        <Text style={styles.bodyTitle}>
+          {orphanLinkedPR ? `Linked PR #${orphanLinkedPR} unavailable` : 'No open pull request'}
         </Text>
-      </Pressable>
-      <Pressable
-        style={[actionStyles.actionButton, !client && actionStyles.actionButtonDisabled]}
-        onPress={() => setMode('link')}
-        disabled={!client}
-        accessibilityRole="button"
-        accessibilityLabel="Link existing pull request"
-      >
-        <Link2 size={16} color={colors.textPrimary} strokeWidth={2.2} />
-        <Text style={actionStyles.actionButtonText} numberOfLines={1}>
-          Link existing pull request
+        <Text style={styles.bodyText}>
+          {orphanLinkedPR
+            ? 'Refresh to check again, or create a new PR for this branch.'
+            : gitBranch
+              ? `${gitBranch} is not linked to an open PR.`
+              : 'The current branch is not linked to an open PR.'}
         </Text>
-      </Pressable>
-      {orphanLinkedPR ? (
-        <Pressable
-          style={[
-            actionStyles.actionButton,
-            (!client || unlinking) && actionStyles.actionButtonDisabled
-          ]}
-          onPress={() => void unlink()}
-          disabled={!client || unlinking}
-          accessibilityRole="button"
-          accessibilityLabel="Unlink pull request"
-        >
-          {unlinking ? (
-            <ActivityIndicator color={colors.textSecondary} />
-          ) : (
-            <Link2Off size={16} color={colors.textSecondary} strokeWidth={2.2} />
-          )}
-          <Text style={actionStyles.actionButtonText}>Unlink</Text>
-        </Pressable>
-      ) : null}
+      </View>
     </View>
   )
 }

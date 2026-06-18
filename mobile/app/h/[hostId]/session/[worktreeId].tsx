@@ -824,6 +824,7 @@ export default function SessionScreen() {
     branch: prBranch,
     headSha: prHeadSha,
     isGithubRepo: prIsGithubRepo,
+    repoLoaded: prRepoContextLoaded,
     loaded: prContextLoaded
   } = useMobilePrBranchContext({
     client,
@@ -831,10 +832,10 @@ export default function SessionScreen() {
     worktreeId
   })
   useEffect(() => {
-    if (prContextLoaded && !prIsGithubRepo && activePanel === 'pr') {
+    if (prRepoContextLoaded && !prIsGithubRepo && activePanel === 'pr') {
       setActivePanel(null)
     }
-  }, [activePanel, prContextLoaded, prIsGithubRepo])
+  }, [activePanel, prRepoContextLoaded, prIsGithubRepo])
   const initialCreateWarning = typeof createdWarning === 'string' ? createdWarning.trim() : ''
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
@@ -4200,18 +4201,6 @@ export default function SessionScreen() {
               style={({ pressed }) => [
                 styles.filesButton,
                 pressed && styles.filesButtonPressed,
-                activePanel === 'sourceControl' && styles.filesButtonActive
-              ]}
-              onPress={() => handlePanelTap('sourceControl')}
-              hitSlop={8}
-              accessibilityLabel="Open source control"
-            >
-              <GitBranch size={18} color={colors.textSecondary} strokeWidth={2.1} />
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.filesButton,
-                pressed && styles.filesButtonPressed,
                 activePanel === 'files' && styles.filesButtonActive
               ]}
               onPress={() => handlePanelTap('files')}
@@ -4220,7 +4209,19 @@ export default function SessionScreen() {
             >
               <Folder size={18} color={colors.textSecondary} strokeWidth={2.1} />
             </Pressable>
-            {prContextLoaded && prIsGithubRepo ? (
+            <Pressable
+              style={({ pressed }) => [
+                styles.filesButton,
+                pressed && styles.filesButtonPressed,
+                activePanel === 'sourceControl' && styles.filesButtonActive
+              ]}
+              onPress={() => handlePanelTap('sourceControl')}
+              hitSlop={8}
+              accessibilityLabel="Open source control"
+            >
+              <GitBranch size={18} color={colors.textSecondary} strokeWidth={2.1} />
+            </Pressable>
+            {prRepoContextLoaded && prIsGithubRepo ? (
               <Pressable
                 style={({ pressed }) => [
                   styles.filesButton,
@@ -4843,7 +4844,7 @@ export default function SessionScreen() {
               branch={prBranch}
               headSha={prHeadSha}
               isGithubRepo={prIsGithubRepo}
-              branchContextLoaded={prContextLoaded}
+              branchContextLoaded={prContextLoaded && prRepoContextLoaded}
               availableWidth={sessionContentRowWidth}
               onRequestClose={() => setActivePanel(null)}
             />

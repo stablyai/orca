@@ -145,7 +145,7 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
           <Pressable
             style={[
               styles.actionButton,
-              styles.actionButtonPrimary,
+              styles.actionButtonMerge,
               mergeBusy && styles.actionButtonDisabled
             ]}
             onPress={() => setConfirm({ kind: 'merge', method: effectiveMethod })}
@@ -154,12 +154,12 @@ export function PRActionsSection({ pr, actions, client, worktreeId, onUnlinked }
             accessibilityLabel={`${methodLabel(effectiveMethod)} pull request`}
           >
             {mergeBusy ? (
-              <ActivityIndicator color={colors.bgBase} />
+              <ActivityIndicator color={colors.onMergeGreen} />
             ) : (
-              <GitMerge size={16} color={colors.bgBase} strokeWidth={2.2} />
+              <GitMerge size={16} color={colors.onMergeGreen} strokeWidth={2.2} />
             )}
-            <Text style={[styles.actionButtonText, styles.actionButtonTextPrimary]}>
-              {methodLabel(effectiveMethod)}
+            <Text style={[styles.actionButtonText, styles.actionButtonTextMerge]}>
+              {methodLabel(effectiveMethod)} and merge
             </Text>
           </Pressable>
         </>

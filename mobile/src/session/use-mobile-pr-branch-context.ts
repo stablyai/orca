@@ -11,6 +11,7 @@ export type MobilePrBranchContext = {
   branch: string | null
   headSha: string | null
   isGithubRepo: boolean
+  repoLoaded: boolean
   loaded: boolean
 }
 
@@ -28,10 +29,9 @@ export function deriveMobilePrBranchContext(
   }
 }
 
-// Loads git.status + git.branchCompare for the worktree (the standalone PR panel can't
-// ride on the review screen's state) and exposes isGithubRepo so the session header can
-// gate the PR icon without mounting the panel (KTD4). RPC plumbing only — the branch/SHA
-// derivation lives in the pure deriveMobilePrBranchContext for testing.
+// Loads repo eligibility independently from branch/SHA. The header PR icon only
+// needs the cheap GitHub probe; the panel can keep loading branch context after
+// the entry point is already stable in the top bar.
 export function useMobilePrBranchContext(input: {
   client: RpcClient | null
   connState: ConnectionState
@@ -42,6 +42,7 @@ export function useMobilePrBranchContext(input: {
     branch: null,
     headSha: null,
     isGithubRepo: false,
+    repoLoaded: false,
     loaded: false
   })
 
@@ -50,20 +51,65 @@ export function useMobilePrBranchContext(input: {
   useEffect(() => {
     let cancelled = false
     if (!ready || !client) {
-      setContext({ branch: null, headSha: null, isGithubRepo: false, loaded: false })
+      setContext({
+        branch: null,
+        headSha: null,
+        isGithubRepo: false,
+        repoLoaded: false,
+        loaded: false
+      })
       return
     }
-    void loadMobilePrBranchContext(client, worktreeId)
+    setContext({
+      branch: null,
+      headSha: null,
+      isGithubRepo: false,
+      repoLoaded: false,
+      loaded: false
+    })
+
+    void loadMobilePrRepoContext(client, worktreeId)
       .then((next) => {
         if (!cancelled) {
-          setContext(next)
+          setContext((prev) => ({
+            ...prev,
+            isGithubRepo: next.isGithubRepo,
+            repoLoaded: true
+          }))
         }
       })
-      // Why: a rejected read must not escape as an unhandled rejection; fall back
-      // to the empty (non-GitHub) context so the PR icon simply stays hidden.
+      // Why: a rejected repo probe should only hide the PR entry, not block
+      // branch context that can still power the panel's loading/error state.
       .catch(() => {
         if (!cancelled) {
-          setContext({ branch: null, headSha: null, isGithubRepo: false, loaded: true })
+          setContext((prev) => ({
+            ...prev,
+            isGithubRepo: false,
+            repoLoaded: true
+          }))
+        }
+      })
+
+    void loadMobilePrBranchIdentity(client, worktreeId)
+      .then((next) => {
+        if (!cancelled) {
+          setContext((prev) => ({
+            ...prev,
+            ...next,
+            loaded: true
+          }))
+        }
+      })
+      // Why: a rejected branch read must not escape as an unhandled rejection;
+      // keep repo eligibility and let the panel show "branch unavailable".
+      .catch(() => {
+        if (!cancelled) {
+          setContext((prev) => ({
+            ...prev,
+            branch: null,
+            headSha: null,
+            loaded: true
+          }))
         }
       })
     return () => {
@@ -78,18 +124,32 @@ export async function loadMobilePrBranchContext(
   client: RpcClient,
   worktreeId: string
 ): Promise<MobilePrBranchContext> {
-  const [status, branchCompare, slugOutcome] = await Promise.all([
+  const [branch, repo] = await Promise.all([
+    loadMobilePrBranchIdentity(client, worktreeId),
+    loadMobilePrRepoContext(client, worktreeId)
+  ])
+  return { ...branch, ...repo, repoLoaded: true, loaded: true }
+}
+
+export async function loadMobilePrRepoContext(
+  client: RpcClient,
+  worktreeId: string
+): Promise<Pick<MobilePrBranchContext, 'isGithubRepo'>> {
+  const slugOutcome = await fetchGithubRepoSlug(client, worktreeId)
+  return { isGithubRepo: slugOutcome.ok && slugOutcome.result !== null }
+}
+
+export async function loadMobilePrBranchIdentity(
+  client: RpcClient,
+  worktreeId: string
+): Promise<Pick<MobilePrBranchContext, 'branch' | 'headSha'>> {
+  const [status, branchCompare] = await Promise.all([
     readGitStatus(client, worktreeId),
     // Why: the standalone PR entry point only needs branchCompare as a head-SHA
     // fallback; compare failures must not hide the PR panel when git.status works.
-    readBranchCompare(client, worktreeId).catch(() => null),
-    fetchGithubRepoSlug(client, worktreeId)
+    readBranchCompare(client, worktreeId).catch(() => null)
   ])
-  return {
-    ...deriveMobilePrBranchContext(status, branchCompare),
-    isGithubRepo: slugOutcome.ok && slugOutcome.result !== null,
-    loaded: true
-  }
+  return deriveMobilePrBranchContext(status, branchCompare)
 }
 
 async function readGitStatus(

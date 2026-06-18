@@ -73,6 +73,10 @@ type Props = {
   onWebReady?: () => void
 } & TerminalSelectionEvents
 
+// Why: WebView treats source identity as page identity on some platforms; keep
+// parent/session re-renders from reloading xterm and forcing fresh snapshots.
+const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }
+
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function TerminalWebView(
   {
     style,
@@ -378,7 +382,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   return (
     <WebView
       ref={webViewRef}
-      source={{ html: XTERM_HTML }}
+      source={XTERM_WEBVIEW_SOURCE}
       style={[styles.webview, style]}
       originWhitelist={['*']}
       javaScriptEnabled

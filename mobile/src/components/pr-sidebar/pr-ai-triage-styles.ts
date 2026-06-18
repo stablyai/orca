@@ -8,6 +8,48 @@ export const prAiTriageStyles = StyleSheet.create({
   triageArea: {
     gap: spacing.xs
   },
+  // Top-of-section triage strip (desktop PRTriageStrip): failing-count summary +
+  // a Fix action on the right, tinted by the failure status color.
+  triageStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radii.button,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.statusRed,
+    backgroundColor: colors.diffDeletedBg
+  },
+  triageStripText: {
+    flex: 1,
+    minWidth: 0
+  },
+  triageStripTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '700'
+  },
+  triageStripSubtitle: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  // Compact Fix button sitting inside the strip (vs. the full-width footer button).
+  triageStripButton: {
+    minHeight: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.button,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgRaised
+  },
+  triageStripButtonText: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize,
+    fontWeight: '700'
+  },
   triageButton: {
     minHeight: 36,
     flexDirection: 'row',

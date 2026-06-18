@@ -1,23 +1,26 @@
 import { useCallback, useState } from 'react'
+import { ActivityIndicator, Pressable, Switch, Text, TextInput, View } from 'react-native'
 import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View
-} from 'react-native'
-import { Sparkles } from 'lucide-react-native'
+  ArrowRight,
+  GitMerge,
+  GitPullRequestArrow,
+  Sparkles,
+  TriangleAlert,
+  X
+} from 'lucide-react-native'
 import type { HostedReviewProvider } from '../../../../src/shared/hosted-review'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcSuccess } from '../../transport/types'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import { createMobilePr } from '../../source-control/mobile-pr-create'
 import { hostedReviewCopy } from '../../source-control/hosted-review-copy'
-import { canSubmitPrCompose } from '../../source-control/pr-compose-validation'
+import {
+  getPrComposeDisabledReason,
+  isBaseHeadDistinct
+} from '../../source-control/pr-compose-validation'
 import { MobilePrBasePicker } from '../MobilePrBasePicker'
+import { mobilePrComposeFormStyles as styles } from './mobile-pr-compose-form-styles'
 
 export type PrComposePrefill = {
   base: string
@@ -50,6 +53,7 @@ export function MobilePrComposeForm({
   onCreated
 }: Props) {
   const copy = hostedReviewCopy(prefill.provider)
+  const ReviewIcon = prefill.provider === 'gitlab' ? GitMerge : GitPullRequestArrow
   const [title, setTitle] = useState(prefill.title)
   const [body, setBody] = useState(prefill.body)
   const [base, setBase] = useState(prefill.base)
@@ -97,9 +101,17 @@ export function MobilePrComposeForm({
     }
   }, [base, body, client, draft, generating, title, worktreeId])
 
-  // With no head, base≠head reduces to "base non-empty" (every non-empty base
-  // differs from ''), so a single rule covers both callers.
-  const canSubmit = canSubmitPrCompose(title, base, head ?? '')
+  const headRef = head ?? ''
+  const baseConflict = base.trim().length > 0 && !isBaseHeadDistinct(base, headRef)
+  const submitDisabledReason = getPrComposeDisabledReason({
+    title,
+    base,
+    head: headRef,
+    generating,
+    reviewLabel: copy.reviewLabel
+  })
+  const canSubmit = submitDisabledReason === null
+  const fieldsLocked = submitting || generating
 
   const submit = useCallback(async () => {
     if (!client || submitting || !canSubmit) {
@@ -143,67 +155,107 @@ export function MobilePrComposeForm({
   ])
 
   return (
-    <View>
+    <View style={styles.root}>
       <View style={styles.headingRow}>
-        <Text style={styles.heading}>Create {copy.titleLabel}</Text>
-        <Pressable
-          onPress={onCancel}
-          disabled={submitting}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel"
-          hitSlop={8}
-        >
-          <Text style={styles.cancelText}>Cancel</Text>
-        </Pressable>
+        <View style={styles.headingTitle}>
+          <ReviewIcon size={14} color={colors.textSecondary} strokeWidth={2.2} />
+          <Text style={styles.heading}>New {copy.reviewLabel}</Text>
+        </View>
+        <View style={styles.headingActions}>
+          <Pressable
+            style={({ pressed }) => [styles.genButton, pressed && styles.genButtonPressed]}
+            disabled={generating || submitting}
+            onPress={() => void generate()}
+            accessibilityRole="button"
+            accessibilityLabel={`Generate ${copy.reviewLabel} details with AI`}
+          >
+            {generating ? (
+              <ActivityIndicator size="small" color={colors.textSecondary} />
+            ) : (
+              <Sparkles size={13} color={colors.textSecondary} strokeWidth={2.1} />
+            )}
+            <Text style={styles.genButtonText}>{generating ? 'Generating…' : 'Generate'}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.iconButton}
+            onPress={onCancel}
+            disabled={submitting}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
+            hitSlop={8}
+          >
+            <X size={16} color={colors.textSecondary} strokeWidth={2.2} />
+          </Pressable>
+        </View>
       </View>
-      <View style={styles.fieldRow}>
-        <Text style={styles.label}>Title</Text>
-        <Pressable
-          style={({ pressed }) => [styles.genButton, pressed && styles.genButtonPressed]}
-          disabled={generating || submitting}
-          onPress={() => void generate()}
-          accessibilityLabel="Generate PR fields with AI"
-        >
-          {generating ? (
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-          ) : (
-            <Sparkles size={14} color={colors.textSecondary} strokeWidth={2.1} />
-          )}
-        </Pressable>
+
+      {head ? (
+        <View style={styles.branchFlow}>
+          <Text style={styles.branchToken} numberOfLines={1}>
+            {head}
+          </Text>
+          <ArrowRight size={12} color={colors.textSecondary} strokeWidth={2.2} />
+          <Text
+            style={[styles.branchToken, baseConflict && styles.branchTokenError]}
+            numberOfLines={1}
+          >
+            {base || 'base'}
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.fieldStack}>
+        <TextInput
+          style={styles.titleInput}
+          value={title}
+          onChangeText={setTitle}
+          placeholder="Title"
+          placeholderTextColor={colors.textMuted}
+          editable={!fieldsLocked}
+          accessibilityLabel={`${copy.titleLabel} title`}
+        />
+        <TextInput
+          style={styles.bodyInput}
+          value={body}
+          onChangeText={setBody}
+          placeholder="Description (optional)"
+          placeholderTextColor={colors.textMuted}
+          multiline
+          editable={!fieldsLocked}
+          accessibilityLabel={`${copy.titleLabel} description`}
+        />
       </View>
-      <TextInput
-        style={styles.titleInput}
-        value={title}
-        onChangeText={setTitle}
-        placeholder={`${copy.titleLabel} title`}
-        placeholderTextColor={colors.textMuted}
-        editable={!submitting}
-      />
-      <Text style={styles.label}>
-        Base branch{head ? <Text style={styles.headHint}> ← {head}</Text> : null}
-      </Text>
-      <MobilePrBasePicker
-        client={client}
-        worktreeId={worktreeId}
-        value={base}
-        onChange={setBase}
-        editable={!submitting}
-      />
-      <Text style={styles.label}>Description</Text>
-      <TextInput
-        style={styles.bodyInput}
-        value={body}
-        onChangeText={setBody}
-        placeholder="Describe the change…"
-        placeholderTextColor={colors.textMuted}
-        multiline
-        editable={!submitting}
-      />
+
+      {generating ? (
+        <View style={styles.notice}>
+          <Sparkles size={13} color={colors.textSecondary} strokeWidth={2.1} />
+          <Text style={styles.noticeText}>Generating title and description…</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.baseRow}>
+        <Text style={styles.baseLabel}>Base</Text>
+        <View style={styles.baseControl}>
+          <MobilePrBasePicker
+            client={client}
+            worktreeId={worktreeId}
+            value={base}
+            onChange={setBase}
+            editable={!fieldsLocked}
+          />
+        </View>
+      </View>
+
       <View style={styles.draftRow}>
-        <Text style={styles.label}>Draft</Text>
-        <Switch value={draft} onValueChange={setDraft} disabled={submitting} />
+        <Text style={styles.draftText}>Create as draft</Text>
+        <Switch value={draft} onValueChange={setDraft} disabled={fieldsLocked} />
       </View>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error || submitDisabledReason ? (
+        <View style={styles.notice}>
+          <TriangleAlert size={13} color={colors.statusRed} strokeWidth={2.1} />
+          <Text style={[styles.noticeText, styles.errorText]}>{error ?? submitDisabledReason}</Text>
+        </View>
+      ) : null}
       <Pressable
         style={({ pressed }) => [
           styles.submit,
@@ -212,99 +264,17 @@ export function MobilePrComposeForm({
         ]}
         disabled={submitting || !canSubmit}
         onPress={() => void submit()}
+        accessibilityRole="button"
       >
         {submitting ? (
           <ActivityIndicator size="small" color={colors.bgBase} />
         ) : (
-          <Text style={styles.submitText}>Create {copy.titleLabel}</Text>
+          <ReviewIcon size={14} color={colors.bgBase} strokeWidth={2.2} />
         )}
+        <Text style={styles.submitText}>
+          {draft ? `Create draft ${copy.shortLabel}` : `Create ${copy.shortLabel}`}
+        </Text>
       </Pressable>
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  headingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
-  },
-  heading: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
-  cancelText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between'
-  },
-  label: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs
-  },
-  genButton: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.sm
-  },
-  genButtonPressed: { opacity: 0.7 },
-  headHint: { color: colors.textMuted, fontFamily: typography.monoFamily },
-  titleInput: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize
-  },
-  bodyInput: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    // Why: a moderate fixed height — flex:1 over-expands inside the sidebar scroll.
-    minHeight: 120,
-    textAlignVertical: 'top'
-  },
-  draftRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.md
-  },
-  error: {
-    color: colors.statusRed,
-    fontSize: typography.metaSize,
-    marginTop: spacing.md
-  },
-  submit: {
-    marginTop: spacing.lg,
-    minHeight: 46,
-    borderRadius: radii.button,
-    backgroundColor: colors.textPrimary,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  submitDisabled: { opacity: 0.45 },
-  submitPressed: { opacity: 0.8 },
-  submitText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  }
-})

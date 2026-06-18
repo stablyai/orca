@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, RotateCw, Sparkles } from 'lucide-react-native'
+import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native'
+import { ChevronDown, ChevronRight, ExternalLink, RotateCw, Sparkles } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import type { PRCheckDetail } from '../../../../src/shared/types'
 import type { RpcClient } from '../../transport/rpc-client'
@@ -9,6 +9,7 @@ import type { MobilePrActions } from '../../session/use-mobile-pr-actions'
 import {
   checkOutcome,
   checkOutcomeToken,
+  checkStatusLabel,
   firstFailingCheckKey,
   prCheckKey,
   sortPRChecks,
@@ -162,11 +163,41 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
         </>
       }
     >
+      {/* Triage strip at the top of the section (desktop PRTriageStrip): a failing
+          summary + a Fix action, so the most actionable state leads the list. */}
+      {triage && summary.failed > 0 ? (
+        <View style={triageStyles.triageStrip}>
+          <View style={triageStyles.triageStripText}>
+            <Text style={triageStyles.triageStripTitle} numberOfLines={1}>
+              {summary.failed} failing check{summary.failed === 1 ? '' : 's'}
+            </Text>
+            <Text style={triageStyles.triageStripSubtitle} numberOfLines={1}>
+              Inspect details or start an AI fix pass.
+            </Text>
+          </View>
+          <Pressable
+            style={({ pressed }) => [triageStyles.triageStripButton, pressed && { opacity: 0.7 }]}
+            onPress={triage.fixChecks}
+            disabled={triage.isBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Fix failing checks with AI"
+          >
+            {triage.isBusy ? (
+              <ActivityIndicator color={colors.textSecondary} />
+            ) : (
+              <Sparkles size={13} color={colors.textSecondary} strokeWidth={2.2} />
+            )}
+            <Text style={triageStyles.triageStripButtonText}>Fix</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {triage?.error ? <Text style={triageStyles.triageError}>{triage.error}</Text> : null}
       {sorted.map((check) => {
         const key = prCheckKey(check)
         const isOpen = expanded.has(key)
         const token = checkOutcomeToken(checkOutcome(check))
         const Chevron = isOpen ? ChevronDown : ChevronRight
+        const url = check.url
         return (
           <View key={key}>
             <Pressable
@@ -182,35 +213,27 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
                   {check.name}
                 </Text>
               </View>
+              {/* Status word + open-on-host icon (desktop ChecksList row), so the
+                  outcome reads without expanding. */}
+              <Text style={[styles.rowStatus, { color: statusColor(token) }]} numberOfLines={1}>
+                {checkStatusLabel(check)}
+              </Text>
+              {url ? (
+                <Pressable
+                  style={styles.rowTrailing}
+                  onPress={() => void Linking.openURL(url).catch(() => {})}
+                  hitSlop={6}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${check.name} on the web`}
+                >
+                  <ExternalLink size={13} color={colors.textSecondary} strokeWidth={2.2} />
+                </Pressable>
+              ) : null}
             </Pressable>
             {isOpen ? <PRCheckDetailView entry={detailCache[key]} /> : null}
           </View>
         )
       })}
-      {/* "Fix checks with AI" — offered only when something failed (desktop's
-          PRTriageStrip). Launches an agent in a fresh worktree terminal. */}
-      {triage && summary.failed > 0 ? (
-        <View style={triageStyles.triageArea}>
-          <Pressable
-            style={({ pressed }) => [
-              triageStyles.triageButton,
-              pressed && triageStyles.triageButtonPressed
-            ]}
-            onPress={triage.fixChecks}
-            disabled={triage.isBusy}
-            accessibilityRole="button"
-            accessibilityLabel="Fix failing checks with AI"
-          >
-            {triage.isBusy ? (
-              <ActivityIndicator color={colors.textSecondary} />
-            ) : (
-              <Sparkles size={14} color={colors.textSecondary} strokeWidth={2.2} />
-            )}
-            <Text style={triageStyles.triageButtonText}>Fix checks with AI</Text>
-          </Pressable>
-          {triage.error ? <Text style={triageStyles.triageError}>{triage.error}</Text> : null}
-        </View>
-      ) : null}
     </PRSection>
   )
 }
