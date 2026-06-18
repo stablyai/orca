@@ -317,11 +317,11 @@ export function ExperimentalPane({
         <SearchableSetting
           title={translate(
             'auto.components.settings.ExperimentalPane.24416f42cd',
-            'Symlinks on worktrees'
+            'Shared paths on worktrees'
           )}
           description={translate(
             'auto.components.settings.ExperimentalPane.fb82ea1d7a',
-            'Automatically symlink configured files or folders into newly created worktrees.'
+            'Automatically materialize configured files or folders into newly created worktrees.'
           )}
           keywords={getExperimentalSearchEntry().symlinksOnWorktrees.keywords}
           className="space-y-3 py-2"
@@ -331,13 +331,13 @@ export function ExperimentalPane({
               <Label>
                 {translate(
                   'auto.components.settings.ExperimentalPane.24416f42cd',
-                  'Symlinks on worktrees'
+                  'Shared paths on worktrees'
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.ExperimentalPane.9762364929',
-                  'Allows for automatic symlinks of certain folders or files that must be connected to created worktrees.'
+                  'Uses APFS clone-copy on macOS when possible, otherwise symlinks configured folders or files into created worktrees.'
                 )}
               </p>
             </div>
