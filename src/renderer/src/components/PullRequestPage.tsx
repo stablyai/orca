@@ -160,6 +160,8 @@ import {
 } from '@/lib/github-work-item-workspace-attachment'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
+import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -3978,9 +3980,16 @@ function ChecksTab({
     () =>
       resolveSourceControlLaunchPlatform({
         connectionId: repo?.connectionId ?? null,
-        worktreePath: repo?.path ?? null
+        worktreePath: repo?.path ?? null,
+        projectRuntime: repo?.connectionId
+          ? undefined
+          : getLocalRepoProjectExecutionRuntimeContext(
+              useAppStore.getState(),
+              repo?.id,
+              CLIENT_PLATFORM
+            )
       }),
-    [repo?.connectionId, repo?.path]
+    [repo?.connectionId, repo?.id, repo?.path]
   )
   const saveFixChecksActionDefault = useCallback(
     async (

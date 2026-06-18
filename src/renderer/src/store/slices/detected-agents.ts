@@ -24,6 +24,7 @@ export type DetectedAgentsSlice = {
    *  receive the same pending promise; store fields update once on resolve so
    *  every subscribed surface re-renders in the same tick. */
   refreshDetectedAgents: () => Promise<TuiAgent[]>
+  clearLocalDetectedAgents: () => void
 
   // Why: remote worktrees need per-connection agent detection. The local
   // detectedAgentIds field is connection-unaware, so remote state lives in a
@@ -46,6 +47,7 @@ export type DetectedAgentsSlice = {
 let detectPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let refreshPromise: { key: string; promise: Promise<TuiAgent[]> } | null = null
 let detectedContextKey: string | null = null
+let localDetectionGeneration = 0
 const remoteDetectPromises = new Map<string, Promise<TuiAgent[]>>()
 const runtimeDetectPromises = new Map<string, Promise<TuiAgent[]>>()
 
@@ -82,22 +84,27 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       detectedAgentIds: contextChanged ? null : get().detectedAgentIds,
       isDetectingAgents: true
     })
+    const requestGeneration = localDetectionGeneration
     const pending = window.api.preflight
       .detectAgents(context)
       .then((ids) => {
         const typed = ids as TuiAgent[]
-        set({ detectedAgentIds: typed, isDetectingAgents: false })
-        detectedContextKey = contextKey
+        if (requestGeneration === localDetectionGeneration) {
+          set({ detectedAgentIds: typed, isDetectingAgents: false })
+          detectedContextKey = contextKey
+        }
         return typed
       })
       .catch(() => {
         // Why: allow a retry on the next call if detection blew up (IPC timeout
         // during cold start). Do not cache the failure or show stale context.
-        detectPromise = null
-        set({
-          detectedAgentIds: contextChanged ? [] : get().detectedAgentIds,
-          isDetectingAgents: false
-        })
+        if (requestGeneration === localDetectionGeneration) {
+          detectPromise = null
+          set({
+            detectedAgentIds: contextChanged ? [] : get().detectedAgentIds,
+            isDetectingAgents: false
+          })
+        }
         return [] as TuiAgent[]
       })
     detectPromise = { key: contextKey, promise: pending }
@@ -115,28 +122,33 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       detectedAgentIds: contextChanged ? null : get().detectedAgentIds,
       isRefreshingAgents: true
     })
+    const requestGeneration = localDetectionGeneration
     const pending = window.api.preflight
       .refreshAgents(context)
       .then((result) => {
         const typed = result.agents as TuiAgent[]
-        set({
-          detectedAgentIds: typed,
-          isRefreshingAgents: false,
-          pathSource: result.pathSource,
-          pathFailureReason: result.pathFailureReason
-        })
-        // Why: once refresh has run, treat its result as the current detection
-        // snapshot so `ensureDetectedAgents` short-circuits.
-        detectedContextKey = contextKey
-        detectPromise = { key: contextKey, promise: Promise.resolve(typed) }
+        if (requestGeneration === localDetectionGeneration) {
+          set({
+            detectedAgentIds: typed,
+            isRefreshingAgents: false,
+            pathSource: result.pathSource,
+            pathFailureReason: result.pathFailureReason
+          })
+          // Why: once refresh has run, treat its result as the current detection
+          // snapshot so `ensureDetectedAgents` short-circuits.
+          detectedContextKey = contextKey
+          detectPromise = { key: contextKey, promise: Promise.resolve(typed) }
+        }
         return typed
       })
       .catch(() => {
         const fallback = contextChanged ? [] : (get().detectedAgentIds ?? [])
-        set({
-          detectedAgentIds: fallback,
-          isRefreshingAgents: false
-        })
+        if (requestGeneration === localDetectionGeneration) {
+          set({
+            detectedAgentIds: fallback,
+            isRefreshingAgents: false
+          })
+        }
         return fallback
       })
       .finally(() => {
@@ -146,6 +158,20 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       })
     refreshPromise = { key: contextKey, promise: pending }
     return pending
+  },
+
+  clearLocalDetectedAgents: () => {
+    localDetectionGeneration += 1
+    detectPromise = null
+    refreshPromise = null
+    detectedContextKey = null
+    set({
+      detectedAgentIds: null,
+      isDetectingAgents: false,
+      isRefreshingAgents: false,
+      pathSource: null,
+      pathFailureReason: null
+    })
   },
 
   remoteDetectedAgentIds: {},

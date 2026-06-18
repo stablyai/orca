@@ -473,6 +473,40 @@ describe('getUpstreamStatus', () => {
     ])
   })
 
+  it('routes explicit publish-target probes through the selected WSL distro', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '0\t0\n', stderr: '' })
+
+    await expect(
+      getUpstreamStatus(
+        '/repo',
+        {
+          remoteName: 'fork',
+          branchName: 'feature/fix'
+        },
+        { wslDistro: 'Ubuntu' }
+      )
+    ).resolves.toEqual({
+      hasUpstream: true,
+      upstreamName: 'fork/feature/fix',
+      ahead: 0,
+      behind: 0
+    })
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo', wslDistro: 'Ubuntu' }],
+      [
+        ['rev-parse', '--verify', '--quiet', 'refs/remotes/fork/feature/fix'],
+        { cwd: '/repo', wslDistro: 'Ubuntu' }
+      ],
+      [
+        ['rev-list', '--left-right', '--count', 'HEAD...refs/remotes/fork/feature/fix'],
+        { cwd: '/repo', wslDistro: 'Ubuntu' }
+      ]
+    ])
+  })
+
   it('reports no upstream when an explicit publish target has not been fetched yet', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: '', stderr: '' })

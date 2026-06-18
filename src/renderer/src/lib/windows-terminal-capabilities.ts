@@ -95,6 +95,10 @@ export function getCachedWindowsTerminalCapabilities(
   return cachedCapabilitiesByOwnerKey.get(ownerKey)?.capabilities ?? UNAVAILABLE_CAPABILITIES
 }
 
+export function hasCachedWindowsTerminalCapabilities(ownerKey = 'local'): boolean {
+  return cachedCapabilitiesByOwnerKey.has(ownerKey)
+}
+
 export function loadWindowsTerminalCapabilities(
   options: {
     force?: boolean

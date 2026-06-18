@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type {
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  GlobalSettings
 } from '../../../../shared/types'
-import { buildClaudeStatusSwitchGroups, buildCodexStatusSwitchGroups } from './StatusBar'
+import {
+  buildClaudeStatusSwitchGroups,
+  buildCodexStatusSwitchGroups,
+  getStatusBarPreferredWslDistro
+} from './StatusBar'
 
 const hostLabel = navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
 
@@ -103,5 +108,29 @@ describe('status bar runtime switch groups', () => {
       { key: 'host', label: hostLabel, targets: ['System default'] },
       { key: 'wsl:Ubuntu', label: 'WSL Ubuntu', targets: ['System default'] }
     ])
+  })
+
+  it('ignores stale terminal WSL distro for account runtime fallback groups', () => {
+    expect(
+      getStatusBarPreferredWslDistro(
+        {
+          localAccountWslDistro: null,
+          terminalWindowsWslDistro: 'Debian'
+        } as GlobalSettings,
+        ['Ubuntu']
+      )
+    ).toBe('Ubuntu')
+  })
+
+  it('uses the account WSL distro before single-distro fallback groups', () => {
+    expect(
+      getStatusBarPreferredWslDistro(
+        {
+          localAccountWslDistro: 'Fedora',
+          terminalWindowsWslDistro: 'Debian'
+        } as GlobalSettings,
+        ['Ubuntu']
+      )
+    ).toBe('Fedora')
   })
 })

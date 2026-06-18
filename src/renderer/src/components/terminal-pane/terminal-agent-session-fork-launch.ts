@@ -1,17 +1,19 @@
 import { toast } from 'sonner'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
 import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type {
   PreparedAgentSessionFork,
   StartAgentSessionForkOptions
 } from './terminal-agent-session-fork'
+import { getForkAgentLaunchPlatform } from './terminal-agent-session-fork-platform'
 import { startRuntimeAgentSessionFork } from './terminal-agent-session-fork-runtime'
 
 type ForkableWorktree = {
@@ -80,16 +82,6 @@ async function copyForkContext(prompt: string, fork: PreparedAgentSessionFork): 
   }
 }
 
-function getForkAgentLaunchPlatform(args: {
-  repo: ForkableRepo | null | undefined
-  worktreePath?: string | null
-}): NodeJS.Platform | undefined {
-  if (args.repo?.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
-    return 'linux'
-  }
-  return undefined
-}
-
 async function preflightForkAgentTrust(args: {
   agent: TuiAgent
   workspacePath?: string | null
@@ -121,6 +113,7 @@ async function startAgentSessionForkInSourceWorkspace(
   fork: PreparedAgentSessionFork,
   sourceWorktree: ForkableWorktree,
   sourceRepo: ForkableRepo | null | undefined,
+  sourceProjectRuntime: ProjectExecutionRuntimeResolution | undefined,
   options: StartAgentSessionForkOptions
 ): Promise<boolean> {
   if (sourceWorktree.isArchived || sourceWorktree.isBare) {
@@ -142,7 +135,8 @@ async function startAgentSessionForkInSourceWorkspace(
   })
   const launchPlatform = getForkAgentLaunchPlatform({
     repo: sourceRepo,
-    worktreePath: sourceWorktree.path
+    worktreePath: sourceWorktree.path,
+    projectRuntime: sourceProjectRuntime
   })
   const result = launchAgentInNewTab({
     agent: fork.agent,
@@ -201,8 +195,15 @@ export async function startAgentSessionFork(
     return false
   }
   const sourceRepo = store.repos.find((repo) => repo.id === sourceWorktree.repoId)
+  const sourceProjectRuntime = getLocalProjectExecutionRuntimeContext(store, fork.worktreeId)
   if (options.noCopyFiles === true) {
-    return startAgentSessionForkInSourceWorkspace(fork, sourceWorktree, sourceRepo, options)
+    return startAgentSessionForkInSourceWorkspace(
+      fork,
+      sourceWorktree,
+      sourceRepo,
+      sourceProjectRuntime,
+      options
+    )
   }
   const sourceBase = getUsableForkBase(sourceWorktree, sourceRepo, fork.worktreeId)
   if (sourceBase === null) {
@@ -273,7 +274,8 @@ export async function startAgentSessionFork(
   })
   const launchPlatform = getForkAgentLaunchPlatform({
     repo: sourceRepo,
-    worktreePath: created.worktree.path
+    worktreePath: created.worktree.path,
+    projectRuntime: sourceProjectRuntime
   })
   const result = launchAgentInNewTab({
     agent: fork.agent,

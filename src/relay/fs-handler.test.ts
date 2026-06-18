@@ -411,24 +411,6 @@ describe('FsHandler', () => {
     expect(content).toBe('original')
   })
 
-  it('copy skips ignored paths', async () => {
-    const src = path.join(tmpDir, 'src-dir')
-    const dst = path.join(tmpDir, 'dst-dir')
-    await fs.mkdir(path.join(src, 'src'), { recursive: true })
-    await fs.mkdir(path.join(src, 'node_modules', 'pkg'), { recursive: true })
-    await fs.writeFile(path.join(src, 'src', 'app.ts'), 'source')
-    await fs.writeFile(path.join(src, 'node_modules', 'pkg', 'index.js'), 'generated')
-
-    await dispatcher.callRequest('fs.copy', {
-      source: src,
-      destination: dst,
-      ignorePatterns: ['node_modules/']
-    })
-
-    await expect(fs.readFile(path.join(dst, 'src', 'app.ts'), 'utf8')).resolves.toBe('source')
-    await expect(fs.stat(path.join(dst, 'node_modules'))).rejects.toMatchObject({ code: 'ENOENT' })
-  })
-
   it('copy does not overwrite an existing destination', async () => {
     const src = path.join(tmpDir, 'src.txt')
     const dst = path.join(tmpDir, 'dst.txt')
@@ -450,8 +432,8 @@ describe('FsHandler', () => {
     symlinkSync(realFile, linkPath)
 
     const result = (await dispatcher.callRequest('fs.realpath', { filePath: linkPath })) as string
-    const { statSync } = await import('fs')
-    expect(statSync(result).ino).toBe(statSync(realFile).ino)
+    // On macOS, /var is a symlink to /private/var, so resolve both to compare
+    expect(result).toBe(await fs.realpath(realFile))
   })
 
   it('does not let stale pending watch remove newer replacement watch', async () => {

@@ -3,8 +3,6 @@ import type { Dirent } from 'fs'
 import { homedir, platform } from 'os'
 import path from 'path'
 
-type PathApi = typeof path.posix | typeof path.win32
-
 const WARP_CHANNELS = [
   { macName: '.warp', linuxName: 'warp-terminal', windowsName: 'Warp' },
   { macName: '.warp-preview', linuxName: 'warp-terminal-preview', windowsName: 'WarpPreview' },
@@ -32,9 +30,9 @@ function addDedupeDirectory(
   directories: string[],
   seenDirectories: Set<string>,
   directoryPath: string,
-  pathApi: PathApi
+  pathImpl: typeof path.posix
 ): void {
-  const normalizedPath = pathApi.normalize(pathApi.resolve(directoryPath))
+  const normalizedPath = pathImpl.normalize(pathImpl.resolve(directoryPath))
   if (seenDirectories.has(normalizedPath)) {
     return
   }
@@ -42,47 +40,52 @@ function addDedupeDirectory(
   directories.push(directoryPath)
 }
 
-function warpThemeDirectoriesFromDataHomes(dataHomes: string[], pathApi: PathApi): string[] {
+function warpThemeDirectoriesFromDataHomes(
+  dataHomes: string[],
+  pathImpl: typeof path.posix
+): string[] {
   const directories: string[] = []
   const seenDirectories = new Set<string>()
   for (const dataHome of dataHomes) {
-    addDedupeDirectory(directories, seenDirectories, pathApi.join(dataHome, 'themes'), pathApi)
+    addDedupeDirectory(directories, seenDirectories, pathImpl.join(dataHome, 'themes'), pathImpl)
   }
   return directories
 }
 
 function getMacWarpThemeDirectories(home: string): string[] {
+  const pathImpl = path.posix
   return warpThemeDirectoriesFromDataHomes(
     [
-      ...WARP_CHANNELS.map((channel) => path.posix.join(home, channel.macName)),
+      ...WARP_CHANNELS.map((channel) => pathImpl.join(home, channel.macName)),
       ...readDirectoryEntries(home)
         .filter((entry) => entry.isDirectory() && entry.name.startsWith('.warp'))
-        .map((entry) => path.posix.join(home, entry.name))
+        .map((entry) => pathImpl.join(home, entry.name))
     ],
-    path.posix
+    pathImpl
   )
 }
 
 function getLinuxWarpThemeDirectories(home: string): string[] {
+  const pathImpl = path.posix
   const xdgDataHome = process.env.XDG_DATA_HOME
   // Why: XDG_DATA_HOME is only valid as an absolute path; relative values would
   // make discovery depend on Orca's launch directory.
   const dataHome =
-    xdgDataHome && path.posix.isAbsolute(xdgDataHome)
+    xdgDataHome && pathImpl.isAbsolute(xdgDataHome)
       ? xdgDataHome
-      : path.posix.join(home, '.local', 'share')
+      : pathImpl.join(home, '.local', 'share')
   return warpThemeDirectoriesFromDataHomes(
     [
-      ...WARP_CHANNELS.map((channel) => path.posix.join(dataHome, channel.linuxName)),
+      ...WARP_CHANNELS.map((channel) => pathImpl.join(dataHome, channel.linuxName)),
       ...readDirectoryEntries(dataHome)
         .filter(
           (entry) =>
             entry.isDirectory() &&
             (entry.name === 'warp-terminal' || entry.name.startsWith('warp-'))
         )
-        .map((entry) => path.posix.join(dataHome, entry.name))
+        .map((entry) => pathImpl.join(dataHome, entry.name))
     ],
-    path.posix
+    pathImpl
   )
 }
 

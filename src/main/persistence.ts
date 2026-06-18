@@ -37,6 +37,7 @@ import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
 import type {
   PersistedState,
   Project,
+  ProjectUpdateArgs,
   ProjectHostSetup,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
@@ -66,6 +67,10 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+import {
+  deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
+  normalizeProjectRuntimePreference
+} from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import {
   buildTaskSourceContextFromRepo,
@@ -1915,6 +1920,9 @@ function mergeProjectHostSetupCompatibilityState(
   repos: readonly Repo[]
 ): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
   const projection = projectHostSetupProjectionFromRepos(repos)
+  const existingProjectsById = new Map(
+    (state.projects ?? []).map((project) => [project.id, project])
+  )
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
@@ -1935,8 +1943,18 @@ function mergeProjectHostSetupCompatibilityState(
       ...project,
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
+  const projectedProjects = projection.projects.map((project) => {
+    const existingProject = existingProjectsById.get(project.id)
+    return existingProject?.localWindowsRuntimePreference
+      ? {
+          ...project,
+          localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
+          updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
+        }
+      : project
+  })
   return {
-    projects: [...projection.projects, ...independentProjects],
+    projects: [...projectedProjects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
   }
 }
@@ -2579,6 +2597,16 @@ export class Store {
         ) {
           migratedDisabledTuiAgents.push('claude-agent-teams')
         }
+        const migratedWindowsRuntimeDefault =
+          parsed.settings?.localWindowsRuntimeDefault === undefined
+            ? deriveGlobalWindowsRuntimeDefaultFromLegacySettings(parsed.settings).defaultRuntime
+            : parsed.settings.localWindowsRuntimeDefault
+        if (
+          parsed.settings?.localWindowsRuntimeDefault === undefined &&
+          migratedWindowsRuntimeDefault.kind === 'wsl'
+        ) {
+          this.loadNeedsSave = true
+        }
         if (!autoRenameBranchFromWorkDefaultedOn) {
           this.loadNeedsSave = true
         }
@@ -2637,6 +2665,7 @@ export class Store {
             experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
+            localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
             floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -3142,6 +3171,25 @@ export class Store {
 
   getProjects(): Project[] {
     return [...this.state.projects]
+  }
+
+  updateProject(id: string, updates: ProjectUpdateArgs['updates']): Project | null {
+    const project = this.state.projects.find((entry) => entry.id === id)
+    if (!project) {
+      return null
+    }
+    if ('localWindowsRuntimePreference' in updates) {
+      if (updates.localWindowsRuntimePreference === undefined) {
+        delete project.localWindowsRuntimePreference
+      } else {
+        project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
+          updates.localWindowsRuntimePreference
+        )
+      }
+    }
+    project.updatedAt = Date.now()
+    this.scheduleSave()
+    return { ...project }
   }
 
   getProjectHostSetups(): ProjectHostSetup[] {

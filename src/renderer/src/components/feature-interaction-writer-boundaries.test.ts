@@ -16,10 +16,6 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   return source.slice(start, end)
 }
 
-function componentBodyBeforeRender(source: string, componentName: string): string {
-  return sourceBetween(source, `function ${componentName}`, '\n  return (\n    <')
-}
-
 describe('feature interaction writer boundaries', () => {
   it('keeps Cmd+J feature writers in open/selection handlers, not query or navigation rendering', () => {
     const source = componentSource('WorktreeJumpPalette.tsx')
@@ -45,11 +41,7 @@ describe('feature interaction writer boundaries', () => {
 
     const passiveSections = [
       sourceBetween(source, 'const handleRefreshGithubTasks', 'const [newIssueOpen'),
-      sourceBetween(
-        source,
-        'const handleLoadNextPage',
-        'useEffect(() => {\n    if (!taskResumeApplied)'
-      ),
+      sourceBetween(source, 'const handleLoadNextPage', 'const handleApplyTaskSearch'),
       sourceBetween(source, 'const handleApplyTaskSearch', 'const handleSetDefaultTaskPreset'),
       sourceBetween(source, 'const handleSelectGithubTaskKind', 'const handleResetGithubTaskSearch')
     ]
@@ -64,7 +56,7 @@ describe('feature interaction writer boundaries', () => {
     const mutationSections = [
       sourceBetween(source, 'function GHAssigneesCell', 'const triggerContent ='),
       sourceBetween(source, 'function PRReviewCell', 'const requestReviewer ='),
-      componentBodyBeforeRender(source, 'PRMergeCell'),
+      sourceBetween(source, 'function PRMergeCell', 'const handleAutoMerge'),
       sourceBetween(
         source,
         'const handleOpenOrUseGitHubWorkItem',
@@ -83,7 +75,7 @@ describe('feature interaction writer boundaries', () => {
       sourceBetween(source, 'function GHStatusCell', 'function GitHubAssigneeAvatar'),
       sourceBetween(source, 'function GHAssigneesCell', 'const triggerContent ='),
       sourceBetween(source, 'function PRReviewCell', 'function PRChecksCell'),
-      componentBodyBeforeRender(source, 'PRMergeCell'),
+      sourceBetween(source, 'function PRMergeCell', 'const handleAutoMerge'),
       sourceBetween(source, 'const handleCreateNewIssue', 'const handleCreateNewLinearProject')
     ]
 

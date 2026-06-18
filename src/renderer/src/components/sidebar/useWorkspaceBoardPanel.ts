@@ -11,6 +11,8 @@ const WORKSPACE_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
   '[role="listbox"][data-state="open"]'
 ].join(', ')
 
+export const OPEN_WORKSPACE_BOARD_EVENT = 'orca:open-workspace-board'
+
 export type WorkspaceBoardPanelState = {
   workspaceBoardOpen: boolean
   workspaceBoardRenderedOpen: boolean
@@ -136,6 +138,11 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
     document.addEventListener('keydown', handleKeyDown, true)
     return () => document.removeEventListener('keydown', handleKeyDown, true)
   }, [closeWorkspaceBoard, workspaceBoardMenuOpen, workspaceBoardOpen])
+
+  useEffect(() => {
+    window.addEventListener(OPEN_WORKSPACE_BOARD_EVENT, openWorkspaceBoard)
+    return () => window.removeEventListener(OPEN_WORKSPACE_BOARD_EVENT, openWorkspaceBoard)
+  }, [openWorkspaceBoard])
 
   return {
     workspaceBoardOpen,

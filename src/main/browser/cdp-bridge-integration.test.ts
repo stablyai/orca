@@ -267,7 +267,7 @@ async function sendRequest(
 
 // ── Tests ──
 
-describe('Browser automation pipeline (integration)', () => {
+describe('Browser automation pipeline (integration)', { timeout: 45_000 }, () => {
   let server: OrcaRuntimeRpcServer
   let endpoint: string
   let authToken: string

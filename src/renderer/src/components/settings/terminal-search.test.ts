@@ -15,6 +15,24 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
   })
 
+  it('keeps Windows host entries separate from Windows client entries', () => {
+    const entries = getTerminalPaneSearchEntries({
+      isWindows: false,
+      isWindowsTerminalHost: true,
+      isMac: false
+    })
+
+    expect(entries.some((entry) => entry.title === 'Default Shell')).toBe(true)
+    expect(entries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
+    expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(false)
+  })
+
+  it('omits legacy WSL distribution terminal settings on Windows', () => {
+    const entries = getTerminalPaneSearchEntries({ isWindows: true, isMac: false })
+    expect(entries.some((entry) => entry.title === 'WSL Distribution')).toBe(false)
+    expect(matchesSettingsSearch('ubuntu distro', entries)).toBe(false)
+  })
+
   it('omits the Windows right-click setting elsewhere', () => {
     const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
     expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(false)

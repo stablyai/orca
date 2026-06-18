@@ -344,6 +344,7 @@ describe('LocalPtyProvider', () => {
       await provider.spawn({
         cols: 80,
         rows: 24,
+        worktreeId: 'repo-1::C:\\Users\\jin\\repo',
         cwd: 'C:\\Users\\jin\\repo',
         shellOverride: 'wsl.exe',
         terminalWindowsWslDistro: 'Debian'
@@ -360,6 +361,7 @@ describe('LocalPtyProvider', () => {
         expect.stringContaining("cd '/mnt/c/Users/jin/repo'")
       ])
       expect(spawnCall[1][5]).toContain('exec "\\$_orca_wsl_shell" -l')
+      expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {

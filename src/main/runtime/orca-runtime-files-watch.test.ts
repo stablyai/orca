@@ -60,12 +60,8 @@ function createRuntimeFileCommands(rootPath: string) {
 
 describe('RuntimeFileCommands file watching', () => {
   const originalPlatform = process.platform
-  const mockPlatform = (platform: NodeJS.Platform) => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: platform
-    })
-  }
+  // Why: Windows runtime watches intentionally use fs.watch instead of the worker path.
+  const posixWorkerIt = process.platform === 'win32' ? it.skip : it
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -89,7 +85,10 @@ describe('RuntimeFileCommands file watching', () => {
   })
 
   it('uses a conservative Node watcher for Windows runtime file watches', async () => {
-    mockPlatform('win32')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
 
     const close = vi.fn()
     const on = vi.fn()
@@ -126,8 +125,7 @@ describe('RuntimeFileCommands file watching', () => {
 
   // Issue #5308: the local recursive watch runs in a worker thread so
   // @parcel/watcher's blocking initial crawl can't starve the serve runtime.
-  it('delegates local recursive watching to the worker thread', async () => {
-    mockPlatform('linux')
+  posixWorkerIt('delegates local recursive watching to the worker thread', async () => {
     resolveAuthorizedPathMock.mockResolvedValue('/home5/Brian')
     statMock.mockResolvedValue({ isDirectory: () => true })
 
@@ -157,8 +155,7 @@ describe('RuntimeFileCommands file watching', () => {
     expect(workerDispose).toHaveBeenCalledTimes(1)
   })
 
-  it('propagates a worker watch failure to the caller', async () => {
-    mockPlatform('linux')
+  posixWorkerIt('propagates a worker watch failure to the caller', async () => {
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     watchInWorkerMock.mockRejectedValue(new Error('worker_failed'))
@@ -167,8 +164,7 @@ describe('RuntimeFileCommands file watching', () => {
     await expect(commands.watchFileExplorer('id:wt-1', vi.fn())).rejects.toThrow('worker_failed')
   })
 
-  it('tracks worker unsubscribe work so shutdown can await it', async () => {
-    mockPlatform('linux')
+  posixWorkerIt('tracks worker unsubscribe work so shutdown can await it', async () => {
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
 

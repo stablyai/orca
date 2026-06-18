@@ -16,10 +16,12 @@ const {
   statMock,
   watchInWorkerMock,
   checkRgAvailableMock,
+  getLocalGitOptionsForRegisteredWorktreeMock,
   wslAwareSpawnMock,
   watchMock
 } = vi.hoisted(() => ({
   checkRgAvailableMock: vi.fn(),
+  getLocalGitOptionsForRegisteredWorktreeMock: vi.fn(),
   lstatMock: vi.fn(),
   readdirMock: vi.fn(),
   renameMock: vi.fn(),
@@ -71,6 +73,10 @@ vi.mock('../git/runner', async () => {
 
 vi.mock('../ipc/rg-availability', () => ({
   checkRgAvailable: checkRgAvailableMock
+}))
+
+vi.mock('../ipc/local-worktree-runtime-options', () => ({
+  getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
@@ -152,12 +158,6 @@ function createRuntimeSearchChild(): MockRuntimeSearchChild {
 
 describe('RuntimeFileCommands', () => {
   const originalPlatform = process.platform
-  const mockPlatform = (platform: NodeJS.Platform) => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: platform
-    })
-  }
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -169,7 +169,9 @@ describe('RuntimeFileCommands', () => {
     watchInWorkerMock.mockReset()
     watchMock.mockReset()
     checkRgAvailableMock.mockReset()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
     wslAwareSpawnMock.mockReset()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
     readdirMock.mockResolvedValue([])
     lstatMock.mockRejectedValue(enoent())
     renameMock.mockResolvedValue(undefined)
@@ -369,7 +371,10 @@ describe('RuntimeFileCommands', () => {
   })
 
   it('uses a conservative Node watcher for Windows runtime file watches', async () => {
-    mockPlatform('win32')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
 
     const close = vi.fn()
     const on = vi.fn()
@@ -403,7 +408,10 @@ describe('RuntimeFileCommands', () => {
   })
 
   it('delegates local recursive watching to the worker thread', async () => {
-    mockPlatform('linux')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     const dispose = vi.fn()
@@ -449,6 +457,48 @@ describe('RuntimeFileCommands', () => {
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
     expect(child.listenerCount('close')).toBe(0)
+  })
+
+  it('routes runtime rg searches through the registered WSL project runtime', async () => {
+    const resolveRuntimeGitTarget = vi.fn(async () => ({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: 'C:\\repo'
+      },
+      connectionId: null
+    }))
+    const { commands, store } = createRuntimeFileCommands({ resolveRuntimeGitTarget })
+    const child = createRuntimeSearchChild()
+    resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
+    checkRgAvailableMock.mockResolvedValue(true)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    wslAwareSpawnMock.mockReturnValue(child)
+
+    const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+      query: 'needle',
+      maxResults: 10
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    child.emit('close')
+
+    await expect(resultPromise).resolves.toMatchObject({ files: [] })
+    expect(getLocalGitOptionsForRegisteredWorktreeMock).toHaveBeenCalledWith(
+      store,
+      'C:\\repo',
+      'C:\\repo'
+    )
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      'rg',
+      expect.any(Array),
+      expect.objectContaining({
+        cwd: 'C:\\repo',
+        wslDistro: 'Ubuntu'
+      })
+    )
   })
 
   describe('resolveTerminalPath', () => {

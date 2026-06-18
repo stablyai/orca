@@ -112,14 +112,21 @@ export function deferMacQuitUntilInstallerReady(
 
 export function handleMacInstallerReady(
   hasNewerDownloadedVersion: boolean,
-  onReadyToInstall: () => void,
+  onReadyToInstall: () => void | Promise<void>,
   onReadyToReportDownloaded: () => void
 ): void {
   squirrelReady = true
   clearPendingInstallTimeout()
 
   if (installRequestedAfterSquirrelReady && hasNewerDownloadedVersion) {
-    onReadyToInstall()
+    void Promise.resolve()
+      .then(() => onReadyToInstall())
+      .catch((error) => {
+        console.warn(
+          '[updater] Deferred macOS install handoff failed:',
+          error instanceof Error ? error.name : typeof error
+        )
+      })
     return
   }
 

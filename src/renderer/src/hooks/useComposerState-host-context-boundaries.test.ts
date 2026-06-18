@@ -311,4 +311,26 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain('repoWorktreeBaseRef: selectedRepo.worktreeBaseRef')
     expect(section).toContain('getRuntimeRepoBaseRefDefault')
   })
+
+  it('plans new workspace agent startup from the selected repo runtime', () => {
+    expect(HOOK_SOURCE).toContain('const selectedRepoAgentLaunchPlatform = useMemo')
+    expect(HOOK_SOURCE).toContain('getLocalRepoProjectExecutionRuntimeContext')
+    expect(HOOK_SOURCE).toContain('getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)')
+
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+    expect(fullSubmit).toContain('platform: selectedRepoAgentLaunchPlatform')
+    expect(fullSubmit).not.toContain('platform: CLIENT_PLATFORM')
+
+    const quickSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submitQuick = useCallback',
+      'const createGateInput'
+    )
+    expect(quickSubmit).toContain('platform: selectedRepoAgentLaunchPlatform')
+    expect(quickSubmit).not.toContain('platform: CLIENT_PLATFORM')
+  })
 })

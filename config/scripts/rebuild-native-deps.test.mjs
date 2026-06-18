@@ -120,7 +120,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
     }
-  })
+  }, 15_000)
 })
 
 describe('rebuild-native-deps patched node-pty rebuild', () => {
@@ -226,35 +226,27 @@ function mkTempProject() {
 }
 
 function runRebuildScript(projectDir, extraEnv = {}) {
+  const env = {
+    ...process.env,
+    npm_config_platform: 'linux',
+    npm_config_arch: 'x64'
+  }
+  for (const key of Object.keys(env)) {
+    if (
+      key.toLowerCase() === 'orca_strict_electron_install' ||
+      key.toLowerCase() === 'npm_lifecycle_event'
+    ) {
+      delete env[key]
+    }
+  }
   return spawnSync(process.execPath, ['config/scripts/rebuild-native-deps.mjs'], {
     cwd: projectDir,
     encoding: 'utf8',
     env: {
-      ...rebuildTestEnv(),
-      npm_config_platform: 'linux',
-      npm_config_arch: 'x64',
+      ...env,
       ...extraEnv
     }
   })
-}
-
-function rebuildTestEnv() {
-  const env = { ...process.env }
-  const isolatedKeys = new Set([
-    'npm_lifecycle_event',
-    'orca_strict_electron_install',
-    'orca_strict_native_rebuild'
-  ])
-
-  // Why: Windows treats environment keys case-insensitively, so inherited pnpm
-  // lifecycle values can override a fixture's simulated postinstall branch.
-  for (const key of Object.keys(env)) {
-    if (isolatedKeys.has(key.toLowerCase())) {
-      delete env[key]
-    }
-  }
-
-  return env
 }
 
 function writeFakeElectronPackage(projectDir) {

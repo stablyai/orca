@@ -18,7 +18,6 @@ import {
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import {
   buildSkillInstallCommandForRuntime,
-  CliSkillRuntimeControl,
   ensureWslCliAvailableForAgentSkillTerminal,
   getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
@@ -30,7 +29,6 @@ import { translate } from '@/i18n/i18n'
 type CliAgentSkillSetupProps = {
   currentPlatform: string
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
   wslSupportedPlatform: boolean
   wslAvailable: boolean
   wslCapabilitiesLoading: boolean
@@ -40,7 +38,6 @@ type CliAgentSkillSetupProps = {
 export function CliAgentSkillSetup({
   currentPlatform,
   settings,
-  updateSettings,
   wslSupportedPlatform,
   wslAvailable,
   wslCapabilitiesLoading,
@@ -95,14 +92,6 @@ export function CliAgentSkillSetup({
           )}
         </p>
       </div>
-
-      <CliSkillRuntimeControl
-        runtime={agentRuntime}
-        updateSettings={updateSettings}
-        wslSupportedPlatform={wslSupportedPlatform}
-        wslAvailable={wslAvailable}
-        wslCapabilitiesLoading={wslCapabilitiesLoading}
-      />
 
       <AgentSkillSetupPanel
         className="mt-3"

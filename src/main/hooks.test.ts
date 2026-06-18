@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Why: hook parsing, shell selection, and execution-path regressions are tightly coupled, so these cases stay in one file to preserve the behavior matrix across platforms. */
 import type { Repo } from '../shared/types'
 
-import { describe, expect, it, vi } from 'vitest'
 import { join } from 'path'
+import { describe, expect, it, vi } from 'vitest'
 import { getDefaultTabsLaunch, parseOrcaYaml } from './hooks'
 
 // Mock fs and path used by loadHooks
@@ -15,9 +15,10 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn()
 }))
 
-const { execMock, execFileMock } = vi.hoisted(() => ({
+const { execMock, execFileMock, gitExecFileSyncMock } = vi.hoisted(() => ({
   execMock: vi.fn(),
-  execFileMock: vi.fn()
+  execFileMock: vi.fn(),
+  gitExecFileSyncMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
@@ -28,10 +29,9 @@ vi.mock('child_process', () => ({
   spawn: vi.fn()
 }))
 
-const TEST_REPO_PATH = join('/', 'test', 'repo')
-const TEST_WORKTREE_PATH = join('/', 'test', 'worktree')
-const repoFile = (...segments: string[]): string => join(TEST_REPO_PATH, ...segments)
-const worktreeFile = (...segments: string[]): string => join(TEST_WORKTREE_PATH, ...segments)
+vi.mock('./git/runner', () => ({
+  gitExecFileSync: gitExecFileSyncMock
+}))
 
 describe('parseOrcaYaml', () => {
   it('parses YAML with setup script only', () => {
@@ -255,45 +255,51 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
 describe('readIssueCommand', () => {
   it('prefers the local override over the shared orca.yaml command', async () => {
     const fs = await import('fs')
+    const repoPath = join('/test', 'repo')
+    const localIssueCommandPath = join(repoPath, '.orca', 'issue-command')
+    const sharedConfigPath = join(repoPath, 'orca.yaml')
     vi.mocked(fs.existsSync).mockImplementation(
-      (path) => path === repoFile('.orca', 'issue-command') || path === repoFile('orca.yaml')
+      (path) => path === localIssueCommandPath || path === sharedConfigPath
     )
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === repoFile('.orca', 'issue-command')) {
+      if (path === localIssueCommandPath) {
         return 'local command\n'
       }
-      if (path === repoFile('orca.yaml')) {
+      if (path === sharedConfigPath) {
         return 'issueCommand: |\n  shared command\n'
       }
       return ''
     })
 
     const { readIssueCommand } = await import('./hooks')
-    expect(readIssueCommand(TEST_REPO_PATH)).toEqual({
+    expect(readIssueCommand(repoPath)).toEqual({
       localContent: 'local command',
       sharedContent: 'shared command',
       effectiveContent: 'local command',
-      localFilePath: repoFile('.orca', 'issue-command'),
+      localFilePath: localIssueCommandPath,
       source: 'local'
     })
   })
 
   it('falls back to the shared orca.yaml command when no local override exists', async () => {
     const fs = await import('fs')
-    vi.mocked(fs.existsSync).mockImplementation((path) => path === repoFile('orca.yaml'))
+    const repoPath = join('/test', 'repo')
+    const localIssueCommandPath = join(repoPath, '.orca', 'issue-command')
+    const sharedConfigPath = join(repoPath, 'orca.yaml')
+    vi.mocked(fs.existsSync).mockImplementation((path) => path === sharedConfigPath)
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === repoFile('orca.yaml')) {
+      if (path === sharedConfigPath) {
         return 'issueCommand: |\n  shared command\n'
       }
       return ''
     })
 
     const { readIssueCommand } = await import('./hooks')
-    expect(readIssueCommand(TEST_REPO_PATH)).toEqual({
+    expect(readIssueCommand(repoPath)).toEqual({
       localContent: null,
       sharedContent: 'shared command',
       effectiveContent: 'shared command',
-      localFilePath: repoFile('.orca', 'issue-command'),
+      localFilePath: localIssueCommandPath,
       source: 'shared'
     })
   })
@@ -302,26 +308,30 @@ describe('readIssueCommand', () => {
 describe('writeIssueCommand', () => {
   it('writes only the local override file and keeps .orca ignored locally', async () => {
     const fs = await import('fs')
+    const repoPath = join('/test', 'repo')
+    const gitignorePath = join(repoPath, '.gitignore')
+    const localOrcaDir = join(repoPath, '.orca')
+    const localIssueCommandPath = join(localOrcaDir, 'issue-command')
     vi.mocked(fs.existsSync).mockImplementation(
-      (path) => path === repoFile('.gitignore') || path === repoFile('.orca')
+      (path) => path === gitignorePath || path === localOrcaDir
     )
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === repoFile('.gitignore')) {
+      if (path === gitignorePath) {
         return 'node_modules/\n'
       }
       return ''
     })
 
     const { writeIssueCommand } = await import('./hooks')
-    writeIssueCommand(TEST_REPO_PATH, 'local command')
+    writeIssueCommand(repoPath, 'local command')
 
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-      repoFile('.gitignore'),
+      gitignorePath,
       'node_modules/\n.orca\n',
       'utf-8'
     )
     expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-      repoFile('.orca', 'issue-command'),
+      localIssueCommandPath,
       'local command\n',
       'utf-8'
     )
@@ -329,10 +339,12 @@ describe('writeIssueCommand', () => {
 
   it('deletes the local override when the override is cleared', async () => {
     const fs = await import('fs')
+    const repoPath = join('/test', 'repo')
+    const localIssueCommandPath = join(repoPath, '.orca', 'issue-command')
     const { writeIssueCommand } = await import('./hooks')
-    writeIssueCommand(TEST_REPO_PATH, '   ')
+    writeIssueCommand(repoPath, '   ')
 
-    expect(vi.mocked(fs.rmSync)).toHaveBeenCalledWith(repoFile('.orca', 'issue-command'), {
+    expect(vi.mocked(fs.rmSync)).toHaveBeenCalledWith(localIssueCommandPath, {
       force: true
     })
   })
@@ -348,7 +360,7 @@ describe('getEffectiveHooks', () => {
   }) =>
     ({
       id: 'test-id',
-      path: TEST_REPO_PATH,
+      path: '/test/repo',
       displayName: 'Test Repo',
       badgeColor: '#000',
       addedAt: Date.now(),
@@ -374,21 +386,25 @@ describe('getEffectiveHooks', () => {
 
   it("loads setup hooks from the target worktree's orca.yaml when a worktree path is provided", async () => {
     const fs = await import('fs')
+    const repoPath = join('/test', 'repo')
+    const worktreePath = join('/test', 'worktree')
+    const repoConfigPath = join(repoPath, 'orca.yaml')
+    const worktreeConfigPath = join(worktreePath, 'orca.yaml')
     vi.mocked(fs.existsSync).mockImplementation(
-      (path) => path === repoFile('orca.yaml') || path === worktreeFile('orca.yaml')
+      (path) => path === repoConfigPath || path === worktreeConfigPath
     )
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === repoFile('orca.yaml')) {
+      if (path === repoConfigPath) {
         return 'scripts:\n  setup: |\n    echo old-version\n'
       }
-      if (path === worktreeFile('orca.yaml')) {
+      if (path === worktreeConfigPath) {
         return 'scripts:\n  setup: |\n    echo new-version\n'
       }
       return ''
     })
 
     const { getEffectiveHooks } = await import('./hooks')
-    const result = getEffectiveHooks(makeRepo(), TEST_WORKTREE_PATH)
+    const result = getEffectiveHooks(makeRepo(), worktreePath)
 
     expect(result).toEqual({
       scripts: {
@@ -794,6 +810,120 @@ describe('runHook', () => {
         expect.any(Function)
       )
       expect(execMock).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('runs Windows-path hooks through WSL when the project runtime targets WSL', async () => {
+    execMock.mockReset()
+    execFileMock.mockReset()
+    execFileMock.mockImplementation((_file, _args, options, callback) => {
+      callback?.(null, '', '')
+      expect(options).toEqual(
+        expect.objectContaining({
+          env: expect.objectContaining({
+            ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            ORCA_WORKTREE_PATH: '/mnt/c/Users/jinwo/git/orca-feature',
+            CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+            GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca'
+          })
+        })
+      )
+      return {} as never
+    })
+
+    const fs = await import('fs')
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo hello\n')
+
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    try {
+      const { runHook } = await import('./hooks')
+      const result = await runHook(
+        'setup',
+        'C:\\Users\\jinwo\\git\\orca-feature',
+        {
+          ...makeRepo(),
+          path: 'C:\\Users\\jinwo\\git\\orca'
+        },
+        undefined,
+        { wslDistro: 'Ubuntu' }
+      )
+
+      expect(result).toEqual({ success: true, output: '' })
+      expect(execFileMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        [
+          '-d',
+          'Ubuntu',
+          '--',
+          'bash',
+          '-c',
+          "cd '/mnt/c/Users/jinwo/git/orca-feature' && echo hello"
+        ],
+        expect.any(Object),
+        expect.any(Function)
+      )
+      expect(execMock).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('writes Windows-path setup runners through WSL git when the project runtime targets WSL', async () => {
+    gitExecFileSyncMock.mockReset()
+    gitExecFileSyncMock.mockReturnValue('/mnt/c/Users/jinwo/git/orca/.git/orca/setup-runner.sh\n')
+
+    const fs = await import('fs')
+    const mkdirSyncMock = vi.mocked(fs.mkdirSync)
+    const writeFileSyncMock = vi.mocked(fs.writeFileSync)
+    const chmodSyncMock = vi.mocked(fs.chmodSync)
+
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    try {
+      const { createSetupRunnerScript } = await import('./hooks')
+      const result = createSetupRunnerScript(
+        {
+          ...makeRepo(),
+          path: 'C:\\Users\\jinwo\\git\\orca'
+        },
+        'C:\\Users\\jinwo\\git\\orca-feature',
+        'echo hello',
+        { wslDistro: 'Ubuntu' }
+      )
+
+      expect(gitExecFileSyncMock).toHaveBeenCalledWith(
+        ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
+        {
+          cwd: 'C:\\Users\\jinwo\\git\\orca-feature',
+          wslDistro: 'Ubuntu'
+        }
+      )
+      expect(result.runnerScriptPath).toContain('setup-runner.sh')
+      expect(mkdirSyncMock).toHaveBeenCalled()
+      expect(writeFileSyncMock).toHaveBeenCalledWith(
+        expect.stringContaining('setup-runner.sh'),
+        '#!/usr/bin/env bash\nset -e\necho hello\n',
+        'utf-8'
+      )
+      expect(chmodSyncMock).toHaveBeenCalledWith(expect.stringContaining('setup-runner.sh'), 0o755)
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,

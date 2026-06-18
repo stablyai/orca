@@ -8,6 +8,7 @@ import type { AppState } from '../types'
 import type {
   GlobalSettings,
   Project,
+  ProjectUpdateArgs,
   Repo,
   ProjectGroup,
   ProjectHostSetup,
@@ -57,6 +58,7 @@ import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-fol
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
+import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -92,6 +94,8 @@ type RepoUpdate = Partial<
     | 'projectGroupOrder'
   >
 > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+
+type ProjectUpdate = ProjectUpdateArgs['updates']
 
 type NestedRepoScanControls = {
   scanId?: string
@@ -208,6 +212,22 @@ function getProjectSetupRuntimeTarget(
   const parsedHost = parseExecutionHostId(hostId)
   return parsedHost?.kind === 'runtime'
     ? { kind: 'environment', environmentId: parsedHost.environmentId }
+    : { kind: 'local' }
+}
+
+function getProjectUpdateRuntimeTarget(
+  state: AppState,
+  projectId: string
+): ReturnType<typeof getActiveRuntimeTarget> {
+  const target = getActiveRuntimeTarget(state.settings)
+  if (target.kind !== 'environment') {
+    return target
+  }
+  const runtimeHostId = getRuntimeTargetHostId(target)
+  return state.projectHostSetups.some(
+    (setup) => setup.projectId === projectId && setup.hostId === runtimeHostId
+  )
+    ? target
     : { kind: 'local' }
 }
 
@@ -701,6 +721,7 @@ export type RepoSlice = {
     order?: number
   ) => Promise<boolean>
   removeProject: (projectId: string) => Promise<void>
+  updateProject: (projectId: string, updates: ProjectUpdate) => Promise<boolean>
   updateRepo: (projectId: string, updates: RepoUpdate) => Promise<boolean>
   setActiveRepo: (projectId: string | null) => void
   reorderRepos: (orderedIds: string[]) => Promise<void>
@@ -1743,6 +1764,41 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       })
     } catch (err) {
       console.error('Failed to remove repo:', err)
+    }
+  },
+
+  updateProject: async (projectId, updates) => {
+    try {
+      const target = getProjectUpdateRuntimeTarget(get(), projectId)
+      const updatedProject =
+        target.kind === 'local'
+          ? await window.api.projects.update({ projectId, updates })
+          : (
+              await callRuntimeRpc<{ project: Project }>(
+                target,
+                'project.update',
+                { projectId, updates },
+                { timeoutMs: 15_000 }
+              )
+            ).project
+      if (!updatedProject) {
+        return false
+      }
+      const runtimePreferenceChanged = 'localWindowsRuntimePreference' in updates
+      set((state) => ({
+        projects: state.projects.map((project) =>
+          project.id === projectId ? updatedProject : project
+        ),
+        folderWorkspacePathStatuses: {}
+      }))
+      if (runtimePreferenceChanged) {
+        get().clearLocalDetectedAgents()
+        notifyInstalledAgentSkillsChanged()
+      }
+      return true
+    } catch (err) {
+      console.error('Failed to update project:', err)
+      return false
     }
   },
 

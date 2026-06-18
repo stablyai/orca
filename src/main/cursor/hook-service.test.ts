@@ -30,6 +30,10 @@ const CURSOR_EVENTS = [
   'afterAgentResponse'
 ]
 
+function getCursorScriptFileName(): string {
+  return process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
+}
+
 describe('CursorHookService', () => {
   let homeDir: string
 
@@ -67,9 +71,16 @@ describe('CursorHookService', () => {
       expect(definition?.hooks).toBeUndefined()
     }
 
-    const script = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'cursor-hook.sh'), 'utf8')
+    const script = readFileSync(
+      join(homeDir, '.orca', 'agent-hooks', getCursorScriptFileName()),
+      'utf8'
+    )
     expect(script).toContain('/hook/cursor')
-    expect(script).toContain('payload=$(cat)')
+    if (process.platform === 'win32') {
+      expect(script).toContain('powershell -NoProfile')
+    } else {
+      expect(script).toContain('payload=$(cat)')
+    }
   })
 
   it('preserves user-authored Cursor hook entries and removes stale managed entries', () => {
@@ -103,7 +114,9 @@ describe('CursorHookService', () => {
     }
     const promptCommands = config.hooks.beforeSubmitPrompt.map((definition) => definition.command)
     expect(promptCommands).toContain('/usr/local/bin/user-hook')
-    expect(promptCommands.filter((command) => command?.includes('cursor-hook.sh'))).toHaveLength(1)
+    expect(
+      promptCommands.filter((command) => command?.includes(getCursorScriptFileName()))
+    ).toHaveLength(1)
     expect(config.hooks.retiredEvent.map((definition) => definition.command)).toEqual([
       '/usr/local/bin/retired-user-hook'
     ])

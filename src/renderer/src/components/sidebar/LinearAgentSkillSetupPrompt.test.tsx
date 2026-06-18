@@ -3,6 +3,7 @@
 import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   LinearAgentSkillSetupPrompt,
@@ -11,6 +12,29 @@ import {
 
 const HOST_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.host'
 const FEDORA_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.wsl.Fedora'
+
+const projectHostRuntime: ProjectExecutionRuntimeResolution = {
+  status: 'resolved',
+  runtime: {
+    kind: 'windows-host',
+    hostPlatform: 'win32',
+    projectId: 'repo-1',
+    reason: 'project-override',
+    cacheKey: 'repo-1:windows-host'
+  }
+}
+
+const projectWslRuntime: ProjectExecutionRuntimeResolution = {
+  status: 'resolved',
+  runtime: {
+    kind: 'wsl',
+    hostPlatform: 'wsl',
+    projectId: 'repo-1',
+    distro: 'Ubuntu',
+    reason: 'project-override',
+    cacheKey: 'repo-1:wsl:Ubuntu'
+  }
+}
 
 const mocks = vi.hoisted(() => ({
   skillState: {
@@ -263,7 +287,6 @@ describe('LinearAgentSkillSetupPrompt', () => {
         localAgentRuntime: 'wsl',
         localAgentWslDistro: 'Fedora',
         terminalWindowsShell: 'wsl.exe',
-        terminalWindowsWslDistro: 'Ubuntu',
         activeRuntimeEnvironmentId: 'runtime-1'
       }
     })
@@ -299,7 +322,6 @@ describe('LinearAgentSkillSetupPrompt', () => {
         localAgentRuntime: 'wsl',
         localAgentWslDistro: 'Fedora',
         terminalWindowsShell: 'wsl.exe',
-        terminalWindowsWslDistro: 'Ubuntu',
         activeRuntimeEnvironmentId: null
       }
     })
@@ -385,6 +407,21 @@ describe('LinearAgentSkillSetupPrompt', () => {
     })
 
     expect(mocks.getWslCliStatus).toHaveBeenCalledWith(undefined)
+  })
+
+  it('keeps stale terminal WSL settings on host when project runtime is absent', async () => {
+    await renderPrompt({
+      linked: true,
+      remote: false,
+      currentPlatform: 'win32',
+      settings: {
+        terminalWindowsShell: 'wsl.exe',
+        activeRuntimeEnvironmentId: null
+      }
+    })
+
+    expect(mocks.getCliStatus).toHaveBeenCalled()
+    expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
   })
 
   it('opens the terminal setup panel in a dialog only after the user asks to set up', async () => {
@@ -796,6 +833,60 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(document.body.textContent).toContain(
       'WSL agents can now use linked Linear tickets from this workspace.'
     )
+  })
+
+  it('uses project host runtime for skill discovery when legacy settings still point at WSL', async () => {
+    await renderPrompt({
+      linked: true,
+      remote: false,
+      currentPlatform: 'win32',
+      projectRuntime: projectHostRuntime,
+      settings: {
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Fedora',
+        terminalWindowsShell: 'wsl.exe',
+        activeRuntimeEnvironmentId: null
+      }
+    })
+
+    expect(mocks.useInstalledAgentSkill).toHaveBeenLastCalledWith(
+      'linear-tickets',
+      expect.objectContaining({
+        discoveryTarget: { projectRuntime: projectHostRuntime }
+      })
+    )
+    expect(mocks.getCliStatus).toHaveBeenCalled()
+    expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
+  })
+
+  it('uses selected project WSL runtime for skill discovery and CLI status', async () => {
+    const rendered = await renderPrompt({
+      linked: true,
+      remote: false,
+      currentPlatform: 'win32',
+      projectRuntime: projectWslRuntime,
+      settings: {
+        localAgentRuntime: 'host',
+        terminalWindowsShell: 'powershell.exe',
+        activeRuntimeEnvironmentId: null
+      }
+    })
+
+    expect(mocks.useInstalledAgentSkill).toHaveBeenLastCalledWith(
+      'linear-tickets',
+      expect.objectContaining({
+        discoveryTarget: { projectRuntime: projectWslRuntime }
+      })
+    )
+    expect(mocks.getWslCliStatus).toHaveBeenCalledWith({ distro: 'Ubuntu' })
+    expect(mocks.getCliStatus).not.toHaveBeenCalled()
+    await act(async () => {
+      Array.from(rendered.querySelectorAll('button'))
+        .find((button) => button.textContent === 'Set up')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await settleRender()
+    expect(mocks.panelProps.at(-1)?.command).toContain("wsl.exe -d 'Ubuntu'")
   })
 
   it('uses remote-safe success copy for remote workspaces', async () => {

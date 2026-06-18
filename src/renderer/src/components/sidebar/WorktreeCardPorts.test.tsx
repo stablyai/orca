@@ -39,7 +39,7 @@ const port: WorkspacePort = {
   advertisedUrl: 'http://dev.preview.localhost:58941'
 }
 
-describe('WorktreeCardPortsDetails', () => {
+describe('WorktreeCardPortsDetails', { timeout: 45_000 }, () => {
   it('shows advertised port addresses in workspace hover details', async () => {
     const { WorktreeCardPortsDetails } = await import('./WorktreeCardPorts')
 

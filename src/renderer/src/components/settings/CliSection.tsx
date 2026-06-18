@@ -25,10 +25,10 @@ import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
   buildSkillInstallCommandForRuntime,
-  CliSkillRuntimeControl,
   ensureWslCliAvailableForAgentSkillTerminal,
   getAgentSkillTerminalShellOverride,
-  getSelectedAgentRuntime
+  getSelectedAgentRuntime,
+  getWslCliDistroRequest
 } from './CliSkillRuntimeSetup'
 import { WslCliRegistration } from './WslCliRegistration'
 import { translate } from '@/i18n/i18n'
@@ -36,7 +36,6 @@ import { translate } from '@/i18n/i18n'
 type CliSectionProps = {
   currentPlatform: string
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslCapabilitiesLoading?: boolean
@@ -72,7 +71,6 @@ function getFallbackCommandName(platform: string): string {
 export function CliSection({
   currentPlatform,
   settings,
-  updateSettings,
   wslSupportedPlatform = false,
   wslAvailable = false,
   wslCapabilitiesLoading = false
@@ -112,9 +110,9 @@ export function CliSection({
   const getCliSkillPrerequisiteStatus = useCallback(
     () =>
       agentRuntime.runtime === 'wsl'
-        ? window.api.cli.getWslInstallStatus()
+        ? window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
         : window.api.cli.getInstallStatus(),
-    [agentRuntime.runtime]
+    [agentRuntime]
   )
 
   const handleStatusChange = useCallback(
@@ -359,14 +357,6 @@ export function CliSection({
               </p>
             </div>
 
-            <CliSkillRuntimeControl
-              runtime={agentRuntime}
-              updateSettings={updateSettings}
-              wslSupportedPlatform={wslSupportedPlatform}
-              wslAvailable={wslAvailable}
-              wslCapabilitiesLoading={wslCapabilitiesLoading}
-            />
-
             <AgentSkillSetupPanel
               className="mt-3"
               variant="inline"
@@ -388,7 +378,7 @@ export function CliSection({
               isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
               onBeforeOpenTerminal={async () => {
                 await (agentRuntime.runtime === 'wsl'
-                  ? ensureWslCliAvailableForAgentSkillTerminal()
+                  ? ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
                   : ensureOrcaCliAvailableForAgentSkillTerminal({
                       onStatusChange: handleStatusChange
                     }))

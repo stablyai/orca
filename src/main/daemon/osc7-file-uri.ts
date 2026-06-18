@@ -10,14 +10,13 @@ export function parseFileUriPath(uri: string): string | null {
       return decodedPath
     }
 
-    // Why: Windows OSC-7 cwd updates can describe both drive-letter paths
-    // and UNC shares. Convert those native forms only; SSH/WSL-style POSIX
-    // paths must stay slash paths even when Orca itself runs on Windows.
-    if (url.hostname && url.hostname !== 'localhost') {
-      return `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`
-    }
     if (/^\/[A-Za-z]:/.test(decodedPath)) {
       return decodedPath.slice(1)
+    }
+    // Why: localhost/empty-host OSC-7 URIs are POSIX paths even when parsed by
+    // a Windows app; only non-local hosts describe Windows UNC shares.
+    if (url.hostname && url.hostname !== 'localhost') {
+      return `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`
     }
     return decodedPath
   } catch {

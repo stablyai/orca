@@ -4,6 +4,7 @@ states stay consistent across Claude and Codex. */
 import {
   AlertTriangle,
   Activity,
+  RotateCcw,
   Plug,
   ChevronDown,
   ChevronRight,
@@ -14,6 +15,15 @@ import {
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -159,12 +169,11 @@ function toCodexStatusRuntimeTarget(
   return { runtime: 'host', wslDistro: null }
 }
 
-function getStatusBarPreferredWslDistro(
+export function getStatusBarPreferredWslDistro(
   settings: GlobalSettings | null | undefined,
   wslDistros: string[]
 ): string | null {
-  const configuredDistro =
-    settings?.localAccountWslDistro?.trim() || settings?.terminalWindowsWslDistro?.trim() || null
+  const configuredDistro = settings?.localAccountWslDistro?.trim() || null
   if (configuredDistro) {
     return configuredDistro
   }
@@ -1118,11 +1127,14 @@ function CodexSwitcherMenu({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [accountsExpanded, setAccountsExpanded] = useState(false)
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+  const [skipFutureResetConfirm, setSkipFutureResetConfirm] = useState(false)
   const [accounts, setAccounts] = useState<CodexRateLimitAccountsState>({
     accounts: [],
     activeAccountId: null
   })
   const [isSwitching, setIsSwitching] = useState(false)
+  const [isRedeemingReset, setIsRedeemingReset] = useState(false)
   const [reauthenticatingAccountId, setReauthenticatingAccountId] = useState<string | null>(null)
   const mountedRef = useRef(true)
   const accountsExpandedRef = useRef(accountsExpanded)
@@ -1138,8 +1150,10 @@ function CodexSwitcherMenu({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const refreshCodexRateLimitsForTarget = useAppStore((s) => s.refreshCodexRateLimitsForTarget)
+  const consumeCodexRateLimitResetCredit = useAppStore((s) => s.consumeCodexRateLimitResetCredit)
   const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
   const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
@@ -1271,6 +1285,49 @@ function CodexSwitcherMenu({
     }
   }
 
+  const handleRedeemReset = async (): Promise<void> => {
+    if (isRedeemingReset) {
+      return
+    }
+    setIsRedeemingReset(true)
+    try {
+      await consumeCodexRateLimitResetCredit()
+    } catch (error) {
+      console.error('Failed to redeem Codex rate-limit reset from status bar:', error)
+    } finally {
+      if (mountedRef.current) {
+        setIsRedeemingReset(false)
+      }
+    }
+  }
+
+  const handleResetMenuSelect = (): void => {
+    if (settings?.skipCodexRateLimitResetConfirm) {
+      void handleRedeemReset()
+      return
+    }
+    setSkipFutureResetConfirm(false)
+    setResetConfirmOpen(true)
+  }
+
+  const handleConfirmReset = async (): Promise<void> => {
+    if (isRedeemingReset) {
+      return
+    }
+    if (skipFutureResetConfirm) {
+      try {
+        await updateSettings({ skipCodexRateLimitResetConfirm: true })
+      } catch (error) {
+        console.error('Failed to save Codex reset confirmation preference:', error)
+      }
+    }
+    await handleRedeemReset()
+    if (mountedRef.current) {
+      setResetConfirmOpen(false)
+      setSkipFutureResetConfirm(false)
+    }
+  }
+
   const handleOpenChange = useCallback((nextOpen: boolean): void => {
     setOpen(nextOpen)
     if (!nextOpen) {
@@ -1306,6 +1363,8 @@ function CodexSwitcherMenu({
   const selectedGroup =
     switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
+  const resetCreditCount = codex.rateLimitResetCredits?.availableCount ?? null
+  const canRedeemReset = resetCreditCount !== null && resetCreditCount > 0
 
   return (
     <ProviderDetailsMenu
@@ -1330,6 +1389,78 @@ function CodexSwitcherMenu({
       open={open}
       onOpenChange={handleOpenChange}
     >
+      <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>
+              {translate('auto.components.status.bar.StatusBar.972a1ff497', 'Reset Codex limits?')}
+            </DialogTitle>
+            <DialogDescription>
+              {translate(
+                'auto.components.status.bar.StatusBar.6d1042aa6f',
+                'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-xs text-foreground/80 transition-colors hover:text-foreground">
+            <Checkbox
+              checked={skipFutureResetConfirm}
+              onCheckedChange={(checked) => setSkipFutureResetConfirm(checked === true)}
+            />
+            <span>
+              {translate('auto.components.status.bar.StatusBar.f077f586db', "Don't ask again")}
+            </span>
+          </label>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetConfirmOpen(false)}>
+              {translate('auto.components.status.bar.StatusBar.c0e972d726', 'Cancel')}
+            </Button>
+            <Button onClick={() => void handleConfirmReset()} disabled={isRedeemingReset}>
+              {isRedeemingReset ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RotateCcw className="size-4" />
+              )}
+              {isRedeemingReset
+                ? translate('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
+                : translate('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {resetCreditCount !== null ? (
+        <>
+          <DropdownMenuLabel>
+            {resetCreditCount === 1
+              ? translate(
+                  'auto.components.status.bar.StatusBar.5e5f9f5160',
+                  '1 rate-limit reset available'
+                )
+              : translate(
+                  'auto.components.status.bar.StatusBar.5ecae9197c',
+                  '{{value0}} rate-limit resets available',
+                  { value0: resetCreditCount }
+                )}
+          </DropdownMenuLabel>
+          {canRedeemReset ? (
+            <DropdownMenuItem
+              disabled={isRedeemingReset}
+              onSelect={(event) => {
+                event.preventDefault()
+                handleResetMenuSelect()
+              }}
+            >
+              {isRedeemingReset ? (
+                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+              ) : null}
+              {isRedeemingReset
+                ? translate('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
+                : translate('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
       <DropdownMenuLabel>
         {translate('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
       </DropdownMenuLabel>

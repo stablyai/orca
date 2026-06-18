@@ -65,6 +65,12 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
   })
 
+  it('defaults local Windows projects to the host runtime', () => {
+    expect(getDefaultSettings('/tmp').localWindowsRuntimeDefault).toEqual({
+      kind: 'windows-host'
+    })
+  })
+
   it('suppresses notifications for the focused worktree by default for new users', () => {
     expect(getDefaultNotificationSettings().suppressWhenFocused).toBe(true)
     expect(getDefaultSettings('/tmp').notifications.suppressWhenFocused).toBe(true)

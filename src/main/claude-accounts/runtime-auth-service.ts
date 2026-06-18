@@ -112,19 +112,23 @@ export class ClaudeRuntimeAuthService {
   async prepareForClaudeLaunch(
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection(target)
-    return this.getPreparation(target)
+    const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
+    await this.syncForCurrentSelection(effectiveTarget)
+    return this.getPreparation(effectiveTarget)
   }
 
   async prepareForRateLimitFetch(
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
-    await this.syncForCurrentSelection(target)
-    return this.getPreparation(target)
+    const effectiveTarget = target ?? this.getDefaultAccountSelectionTarget()
+    await this.syncForCurrentSelection(effectiveTarget)
+    return this.getPreparation(effectiveTarget)
   }
 
   async syncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
-    await this.serializeMutation(() => this.doSyncForCurrentSelection(target))
+    await this.serializeMutation(() =>
+      this.doSyncForCurrentSelection(target ?? this.getDefaultAccountSelectionTarget())
+    )
   }
 
   async forceMaterializeCurrentSelectionForRollback(): Promise<void> {
@@ -624,13 +628,7 @@ export class ClaudeRuntimeAuthService {
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
     const normalizedTarget = this.resolveWslDefaultTarget(
-      target ??
-        (process.platform === 'win32' && settings.terminalWindowsShell === 'wsl.exe'
-          ? ({
-              runtime: 'wsl',
-              wslDistro: settings.terminalWindowsWslDistro ?? null
-            } satisfies ClaudeAccountSelectionTarget)
-          : ({ runtime: 'host' } satisfies ClaudeAccountSelectionTarget))
+      target ?? this.getDefaultAccountSelectionTarget(settings)
     )
     const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
     const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
@@ -704,6 +702,17 @@ export class ClaudeRuntimeAuthService {
       return null
     }
     return accounts.find((account) => account.id === activeAccountId) ?? null
+  }
+
+  private getDefaultAccountSelectionTarget(
+    settings = this.store.getSettings()
+  ): ClaudeAccountSelectionTarget {
+    if (process.platform === 'win32' && settings.localAccountRuntime === 'wsl') {
+      // Why: account auth defaults follow account runtime settings, not hidden
+      // legacy terminal WSL settings that can outlive the Terminal UI control.
+      return { runtime: 'wsl', wslDistro: settings.localAccountWslDistro ?? null }
+    }
+    return { runtime: 'host' }
   }
 
   private resolveWslDefaultTarget(

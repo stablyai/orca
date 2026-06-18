@@ -29,6 +29,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Why: Windows can orphan a Vitest fork under full-suite load; keep enough
+    // parallelism for coverage while avoiding worker-pool exits.
+    ...(process.platform === 'win32' ? { maxWorkers: 8 } : {}),
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'config/scripts/**/*.test.mjs']
   }
 })

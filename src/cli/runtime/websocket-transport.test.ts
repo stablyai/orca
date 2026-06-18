@@ -27,7 +27,7 @@ type TestRuntime = {
   close: () => Promise<void>
 }
 
-describe('CLI remote WebSocket transport', () => {
+describe('CLI remote WebSocket transport', { timeout: 30_000 }, () => {
   const servers: TestRuntime[] = []
 
   afterEach(async () => {

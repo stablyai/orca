@@ -124,7 +124,7 @@ function canonicalize(p: string): string {
   // (orca caches realpath()'d worktree paths) matches the agent's lookup.
   try {
     if (existsSync(p)) {
-      return realpathSync(p)
+      return realpathSync.native(p)
     }
   } catch {
     // Fall through to the raw input.
@@ -134,8 +134,8 @@ function canonicalize(p: string): string {
 
 function cursorWorkspaceSlug(absPath: string): string {
   const stripped = absPath.replace(/^[\\/]+/, '')
-  const slug = stripped.replace(/[\\/]+/g, '-')
-  // Why: Windows drive-letter colons cannot be used as directory names, but
-  // Cursor still derives the trust slug from the absolute workspace path.
-  return process.platform === 'win32' ? slug.replace(/[<>:"|?*]/g, '-') : slug
+  // Why: Windows absolute paths include characters such as ":" that cannot
+  // be used in the ~/.cursor/projects/<slug> directory name.
+  const slug = stripped.replace(/[\\/:*?"<>|]+/g, '-')
+  return slug
 }

@@ -1162,19 +1162,113 @@ describe('setActiveWorktree', () => {
       const wt = 'repo1::/path/wt1'
 
       seedStore(store, {
-        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'wsl.exe' },
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'cmd.exe' },
         worktreesByRepo: {
           repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
         }
       })
 
       const terminal = store.getState().createTab(wt)
-      expect(terminal.shellOverride).toBe('wsl.exe')
+      expect(terminal.shellOverride).toBe('cmd.exe')
 
       store.setState({
-        settings: { ...store.getState().settings!, terminalWindowsShell: 'cmd.exe' }
+        settings: { ...store.getState().settings!, terminalWindowsShell: 'powershell.exe' }
       })
-      expect(store.getState().tabsByWorktree[wt][0].shellOverride).toBe('wsl.exe')
+      expect(store.getState().tabsByWorktree[wt][0].shellOverride).toBe('cmd.exe')
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
+  it('stamps host shell metadata when project runtime overrides stale WSL defaults', () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'repo1::C:\\repo'
+
+      seedStore(store, {
+        settings: {
+          ...getDefaultSettings('/tmp'),
+          terminalWindowsShell: 'wsl.exe',
+          terminalWindowsWslDistro: 'Debian'
+        },
+        projects: [
+          {
+            id: 'project-1',
+            displayName: 'Project',
+            badgeColor: '#000',
+            sourceRepoIds: ['repo1'],
+            localWindowsRuntimePreference: { kind: 'windows-host' },
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        worktreesByRepo: {
+          repo1: [
+            makeWorktree({
+              id: wt,
+              repoId: 'repo1',
+              projectId: 'project-1',
+              path: 'C:\\repo'
+            })
+          ]
+        }
+      })
+
+      const terminal = store.getState().createTab(wt, undefined, 'wsl.exe')
+      expect(terminal.shellOverride).toBe('powershell.exe')
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
+  it('stamps WSL shell metadata when project runtime overrides host defaults', () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'repo1::C:\\repo'
+
+      seedStore(store, {
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'powershell.exe' },
+        projects: [
+          {
+            id: 'project-1',
+            displayName: 'Project',
+            badgeColor: '#000',
+            sourceRepoIds: ['repo1'],
+            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        worktreesByRepo: {
+          repo1: [
+            makeWorktree({
+              id: wt,
+              repoId: 'repo1',
+              projectId: 'project-1',
+              path: 'C:\\repo'
+            })
+          ]
+        }
+      })
+
+      const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
+      expect(terminal.shellOverride).toBe('wsl.exe')
     } finally {
       Object.defineProperty(globalThis, 'navigator', {
         value: originalNavigator,

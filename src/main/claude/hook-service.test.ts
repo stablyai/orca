@@ -18,22 +18,9 @@ import type { SFTPWrapper } from 'ssh2'
 import { ClaudeHookService } from './hook-service'
 import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
-function stubHomeForHomedir(home: string): void {
-  vi.stubEnv('HOME', home)
-  vi.stubEnv('USERPROFILE', home)
-}
-
-function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
-  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-  try {
-    return run()
-  } finally {
-    if (originalPlatform) {
-      Object.defineProperty(process, 'platform', originalPlatform)
-    }
-  }
-}
+const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
+const OPENCLAUDE_SCRIPT_FILE_NAME =
+  process.platform === 'win32' ? 'openclaude-hook.cmd' : 'openclaude-hook.sh'
 
 type FakeFs = {
   files: Map<string, string>
@@ -121,72 +108,71 @@ function createFakeSftp(): { sftp: SFTPWrapper; fs: FakeFs } {
 
 describe('ClaudeHookService.install', () => {
   it('installs managed hooks into Claude settings and preserves user Bedrock settings', () => {
-    withPlatform('linux', () => {
-      const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-hooks-'))
-      stubHomeForHomedir(tmpHome)
-      try {
-        const legacyPath = join(tmpHome, '.claude', 'settings.json')
-        mkdirSync(join(tmpHome, '.claude'), { recursive: true })
-        writeFileSync(
-          legacyPath,
-          JSON.stringify({
-            apiKeyHelper: '/opt/company/claude-key-helper',
-            awsAuthRefresh: '/opt/company/aws-refresh',
-            awsCredentialExport: '/opt/company/aws-export',
-            env: {
-              CLAUDE_CODE_USE_BEDROCK: '1',
-              AWS_REGION: 'us-west-2'
-            },
-            hooks: {
-              Stop: [
-                {
-                  hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }]
-                },
-                {
-                  hooks: [
-                    {
-                      type: 'command',
-                      command: '/Users/old/.orca/agent-hooks/claude-hook.sh'
-                    }
-                  ]
-                }
-              ]
-            }
-          })
-        )
-
-        const status = new ClaudeHookService().install()
-        expect(status.state).toBe('installed')
-
-        const legacy = JSON.parse(readFileSync(legacyPath, 'utf-8'))
-        expect(legacy).toMatchObject({
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-hooks-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const legacyPath = join(tmpHome, '.claude', 'settings.json')
+      mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+      writeFileSync(
+        legacyPath,
+        JSON.stringify({
           apiKeyHelper: '/opt/company/claude-key-helper',
           awsAuthRefresh: '/opt/company/aws-refresh',
           awsCredentialExport: '/opt/company/aws-export',
           env: {
             CLAUDE_CODE_USE_BEDROCK: '1',
             AWS_REGION: 'us-west-2'
+          },
+          hooks: {
+            Stop: [
+              {
+                hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }]
+              },
+              {
+                hooks: [
+                  {
+                    type: 'command',
+                    command: '/Users/old/.orca/agent-hooks/claude-hook.sh'
+                  }
+                ]
+              }
+            ]
           }
         })
-        const legacyCommands = legacy.hooks.Stop.flatMap(
-          (definition: { hooks: { command: string }[] }) =>
-            definition.hooks.map((hook) => hook.command)
+      )
+
+      const status = new ClaudeHookService().install()
+      expect(status.state).toBe('installed')
+
+      const legacy = JSON.parse(readFileSync(legacyPath, 'utf-8'))
+      expect(legacy).toMatchObject({
+        apiKeyHelper: '/opt/company/claude-key-helper',
+        awsAuthRefresh: '/opt/company/aws-refresh',
+        awsCredentialExport: '/opt/company/aws-export',
+        env: {
+          CLAUDE_CODE_USE_BEDROCK: '1',
+          AWS_REGION: 'us-west-2'
+        }
+      })
+      const legacyCommands = legacy.hooks.Stop.flatMap(
+        (definition: { hooks: { command: string }[] }) =>
+          definition.hooks.map((hook) => hook.command)
+      )
+      expect(legacyCommands).toContain('/usr/local/bin/user-hook')
+      expect(
+        legacyCommands.some((command: string) => command.includes(CLAUDE_SCRIPT_FILE_NAME))
+      ).toBe(true)
+      expect(
+        legacyCommands.some((command: string) =>
+          command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
         )
-        expect(legacyCommands).toContain('/usr/local/bin/user-hook')
-        expect(legacyCommands.some((command: string) => command.includes('claude-hook.sh'))).toBe(
-          true
-        )
-        expect(
-          legacyCommands.some((command: string) =>
-            command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
-          )
-        ).toBe(false)
-        expect(legacy.hooks.StopFailure[0].hooks[0].command).toContain('claude-hook.sh')
-      } finally {
-        vi.unstubAllEnvs()
-        rmSync(tmpHome, { recursive: true, force: true })
-      }
-    })
+      ).toBe(false)
+      expect(legacy.hooks.StopFailure[0].hooks[0].command).toContain(CLAUDE_SCRIPT_FILE_NAME)
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
   })
 })
 
@@ -278,35 +264,34 @@ describe('OpenClaudeHookService-compatible install', () => {
     })
 
   it('installs managed hooks into OpenClaude settings without touching Claude settings', () => {
-    withPlatform('linux', () => {
-      const tmpHome = mkdtempSync(join(tmpdir(), 'orca-openclaude-hooks-'))
-      stubHomeForHomedir(tmpHome)
-      try {
-        const openClaudeSettings = join(tmpHome, '.openclaude', 'settings.json')
-        mkdirSync(join(tmpHome, '.openclaude'), { recursive: true })
-        writeFileSync(openClaudeSettings, JSON.stringify({ hooks: {} }))
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-openclaude-hooks-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const openClaudeSettings = join(tmpHome, '.openclaude', 'settings.json')
+      mkdirSync(join(tmpHome, '.openclaude'), { recursive: true })
+      writeFileSync(openClaudeSettings, JSON.stringify({ hooks: {} }))
 
-        const status = makeOpenClaudeService().install()
+      const status = makeOpenClaudeService().install()
 
-        expect(status).toMatchObject({
-          agent: 'openclaude',
-          state: 'installed',
-          configPath: openClaudeSettings
-        })
-        const parsed = JSON.parse(readFileSync(openClaudeSettings, 'utf-8'))
-        for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
-          const command = parsed.hooks[event][0].hooks[0].command as string
-          expect(command).toContain('openclaude-hook.sh')
-        }
-        expect(
-          readFileSync(join(tmpHome, '.orca', 'agent-hooks', 'openclaude-hook.sh'), 'utf-8')
-        ).toContain('/hook/claude')
-        expect(existsSync(join(tmpHome, '.claude', 'settings.json'))).toBe(false)
-      } finally {
-        vi.unstubAllEnvs()
-        rmSync(tmpHome, { recursive: true, force: true })
+      expect(status).toMatchObject({
+        agent: 'openclaude',
+        state: 'installed',
+        configPath: openClaudeSettings
+      })
+      const parsed = JSON.parse(readFileSync(openClaudeSettings, 'utf-8'))
+      for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
+        const command = parsed.hooks[event][0].hooks[0].command as string
+        expect(command).toContain(OPENCLAUDE_SCRIPT_FILE_NAME)
       }
-    })
+      expect(
+        readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
+      ).toContain('/hook/claude')
+      expect(existsSync(join(tmpHome, '.claude', 'settings.json'))).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
   })
 
   it('writes remote OpenClaude settings under .openclaude', async () => {

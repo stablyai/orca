@@ -38,9 +38,15 @@ import {
   parseGlabAuthStatusHosts,
   release,
   resolveIssueSource,
+  type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
 import type { IssueListState } from './issues'
+import {
+  hasHostedReviewLocalGitOptions,
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from '../source-control/hosted-review-git-options'
 
 // Why: glab REST API addresses projects by URL-encoded path. Centralized
 // so call sites don't forget the slash escapes for nested groups.
@@ -51,6 +57,14 @@ function encodedProject(projectPath: string): string {
 const GITLAB_RATE_LIMIT_CACHE_TTL_MS = 30_000
 const GITLAB_RATE_LIMIT_CACHE_MAX_ENTRIES = 64
 const gitLabRateLimitCache = new Map<string, GitLabRateLimitSnapshot>()
+
+type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
+
+function hostedReviewLocalGitOptionArgs(
+  options: HostedReviewExecutionOptions = {}
+): [] | [HostedReviewLocalGitOptions] {
+  return hasHostedReviewLocalGitOptions(options) ? [getHostedReviewLocalGitOptions(options)] : []
+}
 
 /**
  * Get the authenticated GitLab viewer. Mirrors getAuthenticatedViewer
@@ -228,10 +242,16 @@ export async function getRateLimit(options?: {
  */
 export async function getProjectSlug(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<ProjectRef | null> {
   const knownHosts = await getGlabKnownHosts()
-  return getProjectRef(repoPath, knownHosts, connectionId)
+  return getProjectRef(
+    repoPath,
+    knownHosts,
+    connectionId,
+    ...hostedReviewLocalGitOptionArgs(options)
+  )
 }
 
 /**
@@ -242,10 +262,13 @@ export async function getProjectSlug(
 export async function getMergeRequest(
   repoPath: string,
   iid: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<MRInfo | null> {
   const knownHosts = await getGlabKnownHosts()
-  const projectRef = await getProjectRef(repoPath, knownHosts, connectionId)
+  const localGitArgs = hostedReviewLocalGitOptionArgs(options)
+  const localGitOptions = localGitArgs[0] ?? {}
+  const projectRef = await getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
   await acquire()
   try {
     const args = projectRef
@@ -255,7 +278,10 @@ export async function getMergeRequest(
           `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`
         ]
       : ['mr', 'view', String(iid), '--output', 'json']
-    const { stdout } = await glabExecFileAsync(args, glabRepoExecOptions(repoPath, connectionId))
+    const { stdout } = await glabExecFileAsync(
+      args,
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+    )
     const data = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
       head_pipeline?: { status?: string } | null
       pipeline?: { status?: string } | null
@@ -283,14 +309,17 @@ export async function getMergeRequestForBranch(
   repoPath: string,
   branch: string,
   linkedMRIid?: number | null,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<MRInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedMRIid == null) {
     return null
   }
   const knownHosts = await getGlabKnownHosts()
-  const projectRef = await getProjectRef(repoPath, knownHosts, connectionId)
+  const localGitArgs = hostedReviewLocalGitOptionArgs(options)
+  const localGitOptions = localGitArgs[0] ?? {}
+  const projectRef = await getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
   if (!projectRef) {
     return null
   }
@@ -303,7 +332,7 @@ export async function getMergeRequestForBranch(
           ...glabHostnameArgs(projectRef, connectionId),
           `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1`
         ],
-        glabRepoExecOptions(repoPath, connectionId)
+        glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
       const data = JSON.parse(stdout) as (Parameters<typeof mapMRInfo>[0] & {
         head_pipeline?: { status?: string } | null
@@ -329,7 +358,7 @@ export async function getMergeRequestForBranch(
         ...glabHostnameArgs(projectRef, connectionId),
         `projects/${encodedProject(projectRef.path)}/merge_requests/${linkedMRIid}`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
       head_pipeline?: { status?: string } | null
@@ -368,7 +397,8 @@ export async function listMergeRequests(
   perPage = 20,
   preference?: IssueSourcePreference,
   query?: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListMergeRequestsResult> {
   const knownHosts = await getGlabKnownHosts()
   // Why: MRs sit on `origin` in the fork model (the user's fork is where
@@ -379,7 +409,8 @@ export async function listMergeRequests(
     repoPath,
     preference,
     knownHosts,
-    connectionId
+    connectionId,
+    localGitOptions
   )
   if (!projectRef) {
     if (connectionId) {
@@ -420,7 +451,7 @@ export async function listMergeRequests(
           'desc',
           ...stateFlag
         ],
-        glabRepoExecOptions(repoPath, connectionId)
+        glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
       const data = JSON.parse(stdout) as Parameters<typeof mapMRToWorkItem>[0][]
       return {
@@ -459,7 +490,7 @@ export async function listMergeRequests(
   try {
     const { body, headers } = await glabApiWithHeaders(
       [...glabHostnameArgs(projectRef, connectionId), path],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const data = JSON.parse(body) as Parameters<typeof mapMRToWorkItem>[0][]
     return {
@@ -507,7 +538,8 @@ export async function getWorkItemByProjectRef(
   projectRef: ProjectRef,
   iid: number,
   type: 'issue' | 'mr',
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabWorkItem | null> {
   await acquire()
   try {
@@ -520,7 +552,7 @@ export async function getWorkItemByProjectRef(
         ...(projectRef.host ? ['--hostname', projectRef.host] : []),
         `projects/${encodedProject(projectRef.path)}/${resource}/${iid}`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const data = JSON.parse(stdout)
     if (type === 'mr') {
@@ -557,7 +589,8 @@ export async function listWorkItems(
   perPage = 20,
   preference?: IssueSourcePreference,
   query?: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabPagedResult<GitLabWorkItem>> {
   const issueState = mrStateToIssueState(state)
   const knownHosts = await getGlabKnownHosts()
@@ -565,7 +598,8 @@ export async function listWorkItems(
     repoPath,
     preference,
     knownHosts,
-    connectionId
+    connectionId,
+    localGitOptions
   )
   if (!projectRef) {
     return {
@@ -591,13 +625,31 @@ export async function listWorkItems(
   // raw issues API directly and run mapIssueToWorkItem against the
   // raw payload instead.
   const [mrs, issues] = await Promise.all([
-    listMergeRequests(repoPath, state, page, perPage, preference, query, connectionId),
+    listMergeRequests(
+      repoPath,
+      state,
+      page,
+      perPage,
+      preference,
+      query,
+      connectionId,
+      localGitOptions
+    ),
     issueState === null
       ? Promise.resolve({
           items: [] as GitLabWorkItem[],
           error: undefined as ClassifiedError | undefined
         })
-      : fetchIssuesAsWorkItems(repoPath, projectRef, issueState, page, perPage, query, connectionId)
+      : fetchIssuesAsWorkItems(
+          repoPath,
+          projectRef,
+          issueState,
+          page,
+          perPage,
+          query,
+          connectionId,
+          localGitOptions
+        )
   ])
   const merged = [...mrs.items, ...issues.items].sort((a, b) =>
     (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
@@ -629,7 +681,8 @@ export async function fetchIssuesAsWorkItems(
   page: number,
   perPage: number,
   query?: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ items: GitLabWorkItem[]; error: ClassifiedError | undefined }> {
   await acquire()
   try {
@@ -641,7 +694,7 @@ export async function fetchIssuesAsWorkItems(
         ...glabHostnameArgs(projectRef, connectionId),
         `projects/${encodedProject(projectRef.path)}/issues?page=${page}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${searchParam}`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     const data = JSON.parse(stdout) as Parameters<typeof mapIssueToWorkItem>[0][]
     return {
@@ -671,9 +724,15 @@ export async function fetchIssuesAsWorkItems(
  */
 export async function listTodos(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabTodo[]> {
-  const projectRef = await getProjectRef(repoPath, await getGlabKnownHosts(), connectionId)
+  const projectRef = await getProjectRef(
+    repoPath,
+    await getGlabKnownHosts(),
+    connectionId,
+    localGitOptions
+  )
   if (connectionId && !projectRef) {
     return []
   }
@@ -688,7 +747,7 @@ export async function listTodos(
         ...(projectRef ? glabHostnameArgs(projectRef, connectionId) : []),
         'todos?state=pending&per_page=50'
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
     type RESTTodo = {
       id?: number
@@ -740,11 +799,20 @@ async function withProjectRef<T>(
   connectionId: string | null | undefined,
   explicitProjectRef: ProjectRef | null | undefined,
   fn: (projectRef: ProjectRef, repoFlag: string) => Promise<T>,
-  fallback: T
+  fallback: T,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<T> {
   const projectRef =
     explicitProjectRef ??
-    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(), connectionId)).source
+    (
+      await resolveIssueSource(
+        repoPath,
+        preference,
+        await getGlabKnownHosts(),
+        connectionId,
+        localGitOptions
+      )
+    ).source
   if (!projectRef) {
     return fallback
   }
@@ -756,7 +824,8 @@ export async function closeMR(
   iid: number,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRef?: ProjectRef | null
+  projectRef?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withProjectRef<{ ok: true } | { ok: false; error: string }>(
     repoPath,
@@ -775,7 +844,7 @@ export async function closeMR(
             repoFlag,
             ...glabHostnameArgs(projectRef, connectionId)
           ],
-          glabRepoExecOptions(repoPath, connectionId)
+          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
         return { ok: true }
       } catch (err) {
@@ -791,7 +860,8 @@ export async function closeMR(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    localGitOptions
   )
 }
 
@@ -800,7 +870,8 @@ export async function reopenMR(
   iid: number,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRef?: ProjectRef | null
+  projectRef?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withProjectRef<{ ok: true } | { ok: false; error: string }>(
     repoPath,
@@ -819,7 +890,7 @@ export async function reopenMR(
             repoFlag,
             ...glabHostnameArgs(projectRef, connectionId)
           ],
-          glabRepoExecOptions(repoPath, connectionId)
+          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
         return { ok: true }
       } catch (err) {
@@ -832,7 +903,8 @@ export async function reopenMR(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    localGitOptions
   )
 }
 
@@ -842,7 +914,8 @@ export async function mergeMR(
   method: 'merge' | 'squash' | 'rebase' = 'merge',
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRef?: ProjectRef | null
+  projectRef?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withProjectRef<{ ok: true } | { ok: false; error: string }>(
     repoPath,
@@ -868,7 +941,7 @@ export async function mergeMR(
             ...methodFlag,
             ...glabHostnameArgs(projectRef, connectionId)
           ],
-          glabRepoExecOptions(repoPath, connectionId)
+          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
         return { ok: true }
       } catch (err) {
@@ -877,7 +950,8 @@ export async function mergeMR(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    localGitOptions
   )
 }
 
@@ -887,7 +961,8 @@ export async function addMRComment(
   body: string,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRef?: ProjectRef | null
+  projectRef?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true; comment: MRComment } | { ok: false; error: string }> {
   return withProjectRef<{ ok: true; comment: MRComment } | { ok: false; error: string }>(
     repoPath,
@@ -907,7 +982,7 @@ export async function addMRComment(
             '-f',
             `body=${body}`
           ],
-          glabRepoExecOptions(repoPath, connectionId)
+          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
         const data = JSON.parse(stdout) as {
           id?: number
@@ -933,7 +1008,8 @@ export async function addMRComment(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    localGitOptions
   )
 }
 
@@ -943,7 +1019,8 @@ export async function addMRInlineComment(
   input: GitLabMRInlineCommentInput,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRef?: ProjectRef | null
+  projectRef?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true; comment: MRComment } | { ok: false; error: string }> {
   return withProjectRef<{ ok: true; comment: MRComment } | { ok: false; error: string }>(
     repoPath,
@@ -982,7 +1059,7 @@ export async function addMRInlineComment(
             '-f',
             `position[new_line]=${input.line}`
           ],
-          glabRepoExecOptions(repoPath, connectionId)
+          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
         const data = JSON.parse(stdout) as {
           id?: string
@@ -1018,7 +1095,8 @@ export async function addMRInlineComment(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    localGitOptions
   )
 }
 
@@ -1029,7 +1107,8 @@ export async function resolveMRDiscussion(
   resolved: boolean,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRef?: ProjectRef | null
+  projectRef?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabDiscussionResolveResult> {
   return withProjectRef<GitLabDiscussionResolveResult>(
     repoPath,
@@ -1055,7 +1134,7 @@ export async function resolveMRDiscussion(
             '-f',
             `resolved=${resolved ? 'true' : 'false'}`
           ],
-          glabRepoExecOptions(repoPath, connectionId)
+          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
         return { ok: true }
       } catch (err) {
@@ -1065,7 +1144,8 @@ export async function resolveMRDiscussion(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    localGitOptions
   )
 }
 
@@ -1117,7 +1197,8 @@ export async function updateMRReviewers(
   reviewerIds: number[],
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRef?: ProjectRef | null
+  projectRef?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabMRReviewersUpdateResult> {
   return withProjectRef<GitLabMRReviewersUpdateResult>(
     repoPath,
@@ -1140,7 +1221,7 @@ export async function updateMRReviewers(
             `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`,
             ...fields
           ],
-          glabRepoExecOptions(repoPath, connectionId)
+          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
         const data = JSON.parse(stdout) as { reviewers?: Parameters<typeof mapGitLabReviewer>[0][] }
         return {
@@ -1156,7 +1237,8 @@ export async function updateMRReviewers(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    localGitOptions
   )
 }
 
@@ -1165,7 +1247,8 @@ export async function getJobTrace(
   jobId: number,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRef?: ProjectRef | null
+  projectRef?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabJobTraceResult> {
   return withProjectRef<GitLabJobTraceResult>(
     repoPath,
@@ -1181,7 +1264,7 @@ export async function getJobTrace(
             ...glabHostnameArgs(projectRef, connectionId),
             `projects/${encodedProject(projectRef.path)}/jobs/${jobId}/trace`
           ],
-          glabRepoExecOptions(repoPath, connectionId)
+          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
         return { ok: true, trace: stdout }
       } catch (err) {
@@ -1191,7 +1274,8 @@ export async function getJobTrace(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    localGitOptions
   )
 }
 
@@ -1200,7 +1284,8 @@ export async function retryJob(
   jobId: number,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRef?: ProjectRef | null
+  projectRef?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabRetryJobResult> {
   return withProjectRef<GitLabRetryJobResult>(
     repoPath,
@@ -1218,7 +1303,7 @@ export async function retryJob(
             'POST',
             `projects/${encodedProject(projectRef.path)}/jobs/${jobId}/retry`
           ],
-          glabRepoExecOptions(repoPath, connectionId)
+          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
         const trimmed = stdout.trim()
         return {
@@ -1232,7 +1317,8 @@ export async function retryJob(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    localGitOptions
   )
 }
 
@@ -1247,7 +1333,8 @@ export async function updateMR(
   },
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRef?: ProjectRef | null
+  projectRef?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withProjectRef<{ ok: true } | { ok: false; error: string }>(
     repoPath,
@@ -1289,7 +1376,7 @@ export async function updateMR(
             `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`,
             ...fields.flatMap((field) => ['-f', field])
           ],
-          glabRepoExecOptions(repoPath, connectionId)
+          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
         return { ok: true }
       } catch (err) {
@@ -1299,7 +1386,8 @@ export async function updateMR(
         release()
       }
     },
-    { ok: false, error: 'Could not resolve GitLab project for this repository' }
+    { ok: false, error: 'Could not resolve GitLab project for this repository' },
+    localGitOptions
   )
 }
 

@@ -33,7 +33,8 @@ function createMockProcess(pid = 1234): ChildProcessWithoutNullStreams {
     pid,
     stdout: new EventEmitter(),
     stderr: new EventEmitter(),
-    kill: vi.fn()
+    kill: vi.fn(),
+    unref: vi.fn()
   })
   return proc
 }
@@ -55,30 +56,29 @@ describe('notebook IPC', () => {
   })
 
   it('kills the Python process group when a cell times out', async () => {
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     const proc = createMockProcess(4321)
-    try {
-      spawnMock.mockReturnValue(proc)
-      registerNotebookHandlers({} as never)
+    const killerProc = createMockProcess(4322)
+    spawnMock.mockReturnValueOnce(proc).mockReturnValue(killerProc)
+    registerNotebookHandlers({} as never)
 
-      const handler = handlers.get('notebook:runPythonCell')
-      expect(handler).toBeDefined()
-      const resultPromise = handler?.(null, {
-        filePath: '/repo/notebook.ipynb',
-        code: 'while True: pass'
-      }) as Promise<unknown>
+    const handler = handlers.get('notebook:runPythonCell')
+    expect(handler).toBeDefined()
+    const resultPromise = handler?.(null, {
+      filePath: '/repo/notebook.ipynb',
+      code: 'while True: pass'
+    }) as Promise<unknown>
 
-      await vi.advanceTimersByTimeAsync(60_000)
-      await expect(resultPromise).resolves.toMatchObject({
-        exitCode: null,
-        error: 'Python cell timed out.'
-      })
-      expect(proc.stdout.listenerCount('data')).toBe(0)
-      expect(proc.stderr.listenerCount('data')).toBe(0)
-      expect(proc.listenerCount('error')).toBe(0)
-      expect(proc.listenerCount('close')).toBe(0)
+    await vi.advanceTimersByTimeAsync(60_000)
+    await expect(resultPromise).resolves.toMatchObject({
+      exitCode: null,
+      error: 'Python cell timed out.'
+    })
+    expect(proc.stdout.listenerCount('data')).toBe(0)
+    expect(proc.stderr.listenerCount('data')).toBe(0)
+    expect(proc.listenerCount('error')).toBe(0)
+    expect(proc.listenerCount('close')).toBe(0)
 
+    if (process.platform !== 'win32') {
       expect(spawnMock).toHaveBeenCalledWith(
         'python3',
         expect.any(Array),
@@ -87,8 +87,6 @@ describe('notebook IPC', () => {
       expect(processKillSpy).toHaveBeenCalledWith(-4321, 'SIGTERM')
       await vi.advanceTimersByTimeAsync(2000)
       expect(processKillSpy).toHaveBeenCalledWith(-4321, 'SIGKILL')
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
 })

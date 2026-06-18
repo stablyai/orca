@@ -680,6 +680,8 @@ describe('OrchestrationDb', () => {
     let tempDir: string
 
     afterEach(() => {
+      // Why: Windows keeps the SQLite file locked until the DB handle closes,
+      // so migration temp directories must close before recursive cleanup.
       db?.close()
       db = undefined
       if (tempDir) {

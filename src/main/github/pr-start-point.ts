@@ -11,12 +11,19 @@ type ResolveGitHubPrStartPointArgs = {
   baseRefName?: string
   isCrossRepository?: boolean
   connectionId?: string | null
+  localGitOptions?: { wslDistro?: string }
   gitExec: GitExec
   fetchRemoteTrackingRef: (remote: string, branch: string) => Promise<void>
   resolveRemote: () => Promise<string>
 }
 
 type ResolveGitHubPrStartPointResult = GitHubPrStartPoint | { error: string }
+
+function localGitOptionArgs(
+  options: { wslDistro?: string } | undefined
+): [] | [{ wslDistro?: string }] {
+  return options && Object.keys(options).length > 0 ? [options] : []
+}
 
 export async function resolveGitHubPrStartPoint(
   args: ResolveGitHubPrStartPointArgs
@@ -35,7 +42,8 @@ export async function resolveGitHubPrStartPoint(
       const resolved = await getPullRequestPushTarget(
         args.repoPath,
         args.prNumber,
-        args.connectionId ?? null
+        args.connectionId ?? null,
+        ...localGitOptionArgs(args.localGitOptions)
       )
       pushTarget = resolved?.pushTarget
       maintainerCanModify = resolved?.maintainerCanModify
@@ -47,7 +55,13 @@ export async function resolveGitHubPrStartPoint(
   }
 
   if (!headRefName) {
-    const item = await getWorkItem(args.repoPath, args.prNumber, 'pr', args.connectionId ?? null)
+    const item = await getWorkItem(
+      args.repoPath,
+      args.prNumber,
+      'pr',
+      args.connectionId ?? null,
+      ...localGitOptionArgs(args.localGitOptions)
+    )
     if (!item || item.type !== 'pr') {
       return { error: `PR #${args.prNumber} not found.` }
     }

@@ -219,6 +219,69 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 
+  it('uses WSL launch quoting when reopening a Windows-path WSL project agent', () => {
+    const worktree = {
+      ...makeWorktree(),
+      path: 'C:\\Users\\jinwo\\repo\\feature'
+    }
+
+    useAppStore.setState({
+      projects: [
+        {
+          id: 'repo-1',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          sourceRepoIds: ['repo-1'],
+          createdAt: 0,
+          updatedAt: 0,
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        }
+      ],
+      repos: [
+        {
+          id: 'repo-1',
+          path: 'C:\\Users\\jinwo\\repo',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      activeRepoId: 'repo-1',
+      activeView: 'terminal',
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      activeFileIdByWorktree: {},
+      activeBrowserTabIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      activeTabIdByWorktree: {},
+      tabBarOrderByWorktree: {},
+      pendingStartupByTabId: {},
+      settings: {
+        agentCmdOverrides: {},
+        agentDefaultArgs: { codex: '--profile "don\'t"' },
+        setupScriptLaunchMode: 'new-tab'
+      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn(),
+      revealWorktreeInSidebar: vi.fn()
+    })
+
+    const result = activateAndRevealWorktree(worktree.id)
+    const state = useAppStore.getState()
+    const reopenedTab = state.tabsByWorktree[worktree.id]?.[0]
+
+    expect(result).toEqual({ primaryTabId: reopenedTab?.id })
+    expect(state.pendingStartupByTabId[reopenedTab!.id]?.command).toContain("'don'\\''t'")
+    expect(state.pendingStartupByTabId[reopenedTab!.id]?.command).not.toContain("'don''t'")
+  })
+
   it('automatically resumes sleeping agent sessions when activating a slept worktree', () => {
     const worktree = makeWorktree()
     const revealWorktreeInSidebar = vi.fn()

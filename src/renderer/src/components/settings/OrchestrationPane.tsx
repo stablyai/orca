@@ -11,11 +11,17 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
 import { getOrchestrationPaneSearchEntries } from './orchestration-search'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import {
+  buildSkillInstallCommandForRuntime,
+  ensureWslCliAvailableForAgentSkillTerminal,
+  getWslCliDistroRequest
+} from './CliSkillRuntimeSetup'
 import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCoverage'
 import { OrchestrationExampleDialog } from './OrchestrationExamplesDialog'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
@@ -34,6 +40,14 @@ export function OrchestrationPane(): React.JSX.Element {
   const showOrchestration = matchesSettingsSearch(searchQuery, getOrchestrationPaneSearchEntries())
   const [selectedExampleId, setSelectedExampleId] = useState<string | null>(null)
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const orchestrationInstallCommand =
+    activeSkillRuntime.agentRuntime && !activeSkillRuntime.installDisabledReason
+      ? buildSkillInstallCommandForRuntime(
+          ORCHESTRATION_SKILL_INSTALL_COMMAND,
+          activeSkillRuntime.agentRuntime
+        )
+      : ORCHESTRATION_SKILL_INSTALL_COMMAND
 
   const {
     installed: orchestrationSkillDetected,
@@ -42,6 +56,7 @@ export function OrchestrationPane(): React.JSX.Element {
     skills: discoveredSkills,
     refresh: refreshOrchestrationSkill
   } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
@@ -71,36 +86,49 @@ export function OrchestrationPane(): React.JSX.Element {
           'auto.components.settings.OrchestrationPane.9bedd2a6e5',
           'Enables agents to hand off context and coordinate work through Orca.'
         )}
-        command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
+        command={orchestrationInstallCommand}
         terminalTitle="Orchestration setup"
         terminalAriaLabel="Orchestration skill install terminal"
         terminalWorktreeId="settings-orchestration-skill-terminal"
+        terminalShellOverride={activeSkillRuntime.terminalShellOverride}
         installed={orchestrationSkillDetected}
         loading={orchestrationSkillLoading}
-        error={orchestrationSkillError}
+        error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}
+        installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
         icon={<Workflow className="size-5" />}
         preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+        getPrerequisiteStatus={() =>
+          activeSkillRuntime.agentRuntime?.runtime === 'wsl'
+            ? window.api.cli.getWslInstallStatus(
+                getWslCliDistroRequest(activeSkillRuntime.agentRuntime)
+              )
+            : window.api.cli.getInstallStatus()
+        }
         onBeforeOpenTerminal={async () => {
           useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
-          await ensureOrcaCliAvailableForAgentSkillTerminal()
+          await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
+            ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
+            : ensureOrcaCliAvailableForAgentSkillTerminal())
         }}
         actionHint={
-          <p className="text-[12px] leading-snug text-muted-foreground">
-            {translate(
-              'auto.components.settings.OrchestrationPane.832f1f3ee6',
-              'Prefer your own terminal?'
-            )}{' '}
-            <button
-              type="button"
-              className="font-medium text-foreground underline-offset-2 hover:underline"
-              onClick={() => setSkillPromptOpen(true)}
-            >
+          activeSkillRuntime.installDisabledReason ? null : (
+            <p className="text-[12px] leading-snug text-muted-foreground">
               {translate(
-                'auto.components.settings.OrchestrationPane.7bc082f4de',
-                'Copy install command'
-              )}
-            </button>
-          </p>
+                'auto.components.settings.OrchestrationPane.832f1f3ee6',
+                'Prefer your own terminal?'
+              )}{' '}
+              <button
+                type="button"
+                className="font-medium text-foreground underline-offset-2 hover:underline"
+                onClick={() => setSkillPromptOpen(true)}
+              >
+                {translate(
+                  'auto.components.settings.OrchestrationPane.7bc082f4de',
+                  'Copy install command'
+                )}
+              </button>
+            </p>
+          )
         }
         footer={
           <OrchestrationSkillAgentCoverage
@@ -113,7 +141,7 @@ export function OrchestrationPane(): React.JSX.Element {
       />
 
       <OrchestrationSkillPromptDialog
-        command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
+        command={orchestrationInstallCommand}
         open={skillPromptOpen}
         onOpenChange={setSkillPromptOpen}
       />

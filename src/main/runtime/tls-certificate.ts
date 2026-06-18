@@ -9,18 +9,6 @@ import { join } from 'path'
 
 const TLS_CERT_FILENAME = 'orca-tls-cert.pem'
 const TLS_KEY_FILENAME = 'orca-tls-key.pem'
-const WINDOWS_OPENSSL_CANDIDATES = [
-  'C:\\Program Files\\Git\\usr\\bin\\openssl.exe',
-  'C:\\Program Files\\Git\\mingw64\\bin\\openssl.exe',
-  'C:\\Program Files (x86)\\Git\\usr\\bin\\openssl.exe',
-  'C:\\Program Files (x86)\\Git\\mingw64\\bin\\openssl.exe'
-]
-const WINDOWS_OPENSSL_CONFIG_CANDIDATES = [
-  'C:\\Program Files\\Git\\usr\\ssl\\openssl.cnf',
-  'C:\\Program Files\\Git\\mingw64\\etc\\ssl\\openssl.cnf',
-  'C:\\Program Files (x86)\\Git\\usr\\ssl\\openssl.cnf',
-  'C:\\Program Files (x86)\\Git\\mingw64\\etc\\ssl\\openssl.cnf'
-]
 
 export type TlsCertificate = {
   cert: string
@@ -45,33 +33,35 @@ export function loadOrCreateTlsCertificate(userDataPath: string): TlsCertificate
 
   const keyPath_ = join(userDataPath, TLS_KEY_FILENAME)
   const certPath_ = join(userDataPath, TLS_CERT_FILENAME)
-  const openSslConfig = resolveOpenSslConfig()
-  const openSslArgs = [
-    'req',
-    '-new',
-    '-x509',
-    '-newkey',
-    'ec',
-    '-pkeyopt',
-    'ec_paramgen_curve:prime256v1',
-    '-nodes',
-    '-days',
-    '3650',
-    '-subj',
-    '/CN=Orca Runtime',
-    '-keyout',
-    keyPath_,
-    '-out',
-    certPath_
-  ]
-  if (openSslConfig) {
-    openSslArgs.push('-config', openSslConfig)
-  }
-  const { OPENSSL_CONF: _ignoredOpenSslConf, ...openSslEnv } = process.env
 
-  // Why: openssl is available on macOS/Linux by PATH and on Windows via Git.
-  // Resolve Git's copy/config explicitly; inherited OPENSSL_CONF may be stale.
-  execFileSync(resolveOpenSslCommand(), openSslArgs, { stdio: 'ignore', env: openSslEnv })
+  // Why: argv-based spawning avoids shell redirection/quoting differences for
+  // Windows temp paths while keeping OpenSSL as the certificate generator.
+  const openSslConfigPath = resolveOpenSslConfigPath()
+  execFileSync(
+    resolveOpenSslExecutable(),
+    [
+      'req',
+      '-new',
+      '-x509',
+      '-newkey',
+      'ec',
+      '-pkeyopt',
+      'ec_paramgen_curve:prime256v1',
+      '-nodes',
+      '-days',
+      '3650',
+      '-subj',
+      '/CN=Orca Runtime',
+      '-keyout',
+      keyPath_,
+      '-out',
+      certPath_
+    ],
+    {
+      env: openSslConfigPath ? { ...process.env, OPENSSL_CONF: openSslConfigPath } : process.env,
+      stdio: 'ignore'
+    }
+  )
 
   chmodSync(keyPath_, 0o600)
   chmodSync(certPath_, 0o600)
@@ -81,23 +71,36 @@ export function loadOrCreateTlsCertificate(userDataPath: string): TlsCertificate
   return { cert, key, fingerprint: computeFingerprint(cert)! }
 }
 
-function resolveOpenSslCommand(): string {
+function resolveOpenSslExecutable(): string {
   if (process.platform !== 'win32') {
     return 'openssl'
   }
-  for (const candidate of WINDOWS_OPENSSL_CANDIDATES) {
-    if (existsSync(candidate)) {
-      return candidate
-    }
-  }
-  return 'openssl'
+
+  const windowsCandidates = [
+    'C:\\Program Files\\Git\\usr\\bin\\openssl.exe',
+    'C:\\Program Files\\Git\\mingw64\\bin\\openssl.exe',
+    'C:\\Program Files (x86)\\Git\\usr\\bin\\openssl.exe',
+    'C:\\Program Files (x86)\\Git\\mingw64\\bin\\openssl.exe'
+  ]
+  return windowsCandidates.find((candidate) => existsSync(candidate)) ?? 'openssl'
 }
 
-function resolveOpenSslConfig(): string | undefined {
-  if (process.platform !== 'win32') {
-    return undefined
+function resolveOpenSslConfigPath(): string | null {
+  if (process.env.OPENSSL_CONF && existsSync(process.env.OPENSSL_CONF)) {
+    return null
   }
-  return WINDOWS_OPENSSL_CONFIG_CANDIDATES.find((candidate) => existsSync(candidate))
+
+  if (process.platform !== 'win32') {
+    return null
+  }
+
+  const windowsConfigCandidates = [
+    'C:\\Program Files\\Git\\mingw64\\etc\\ssl\\openssl.cnf',
+    'C:\\Program Files\\Git\\usr\\ssl\\openssl.cnf',
+    'C:\\Program Files (x86)\\Git\\mingw64\\etc\\ssl\\openssl.cnf',
+    'C:\\Program Files (x86)\\Git\\usr\\ssl\\openssl.cnf'
+  ]
+  return windowsConfigCandidates.find((candidate) => existsSync(candidate)) ?? null
 }
 
 function computeFingerprint(certPem: string): string | null {

@@ -57,9 +57,15 @@ import {
   ghRepoExecOptions,
   githubRepoContext,
   getRemoteUrlForRepo,
+  type LocalGitExecOptions,
   type OwnerRepo
 } from './gh-utils'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import {
+  hasHostedReviewLocalGitOptions,
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from '../source-control/hosted-review-git-options'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -87,6 +93,7 @@ import {
 } from './rate-limit'
 
 type GhExecOptions = ReturnType<typeof ghRepoExecOptions>
+type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
 
 const ORCA_REPO = 'stablyai/orca'
 const PR_CHECK_LOG_TAIL_LINES = 200
@@ -96,6 +103,12 @@ const PR_CHECK_LOG_TAIL_JOB_LIMIT = 5
 // session reviewing many failing checks can't grow it without limit.
 const PR_CHECK_LOG_TAIL_CACHE_MAX_ENTRIES = 128
 const prCheckLogTailCache = new Map<string, string | null>()
+
+function hostedReviewLocalGitOptionArgs(
+  options: HostedReviewExecutionOptions = {}
+): [] | [HostedReviewLocalGitOptions] {
+  return hasHostedReviewLocalGitOptions(options) ? [getHostedReviewLocalGitOptions(options)] : []
+}
 
 function setPrCheckLogTailCache(cacheKey: string, logTail: string | null): void {
   prCheckLogTailCache.set(cacheKey, logTail)
@@ -273,11 +286,16 @@ export type PullRequestPushTarget = {
 export async function getPullRequestPushTarget(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<PullRequestPushTarget | null> {
-  const context = githubRepoContext(repoPath, connectionId)
+  const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(context)
-  const { candidates } = await resolvePRRepositoryCandidates(repoPath, connectionId)
+  const { candidates } = await resolvePRRepositoryCandidates(
+    repoPath,
+    connectionId,
+    localGitOptions
+  )
   if (candidates.length === 0) {
     return null
   }
@@ -308,7 +326,7 @@ export async function getPullRequestPushTarget(
     if (!prStdout) {
       return null
     }
-    const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId)
+    const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
     const pr = JSON.parse(prStdout) as {
       maintainer_can_modify?: boolean
       head?: {
@@ -346,9 +364,7 @@ export async function getPullRequestPushTarget(
 
     let originUrl: string | null = null
     try {
-      const rawOriginUrl = connectionId
-        ? await getRemoteUrlForRepo(context, 'origin')
-        : (await gitExecFileAsync(['remote', 'get-url', 'origin'], { cwd: repoPath })).stdout
+      const rawOriginUrl = await getRemoteUrlForRepo(context, 'origin')
       originUrl = rawOriginUrl?.trim() || null
     } catch {
       originUrl = null
@@ -788,9 +804,10 @@ async function fetchIssueWorkItem(
   repoPath: string,
   ownerRepo: OwnerRepo | null,
   number: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<MainWorkItem | null> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   if (ownerRepo) {
     const { stdout } = await ghExecFileAsync(
       ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${number}`],
@@ -814,9 +831,10 @@ async function fetchPullRequestWorkItem(
   repoPath: string,
   ownerRepo: OwnerRepo | null,
   number: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<MainWorkItem> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   if (ownerRepo) {
     try {
       const { stdout } = await ghExecFileAsync(
@@ -960,11 +978,12 @@ type ResolvedPrWorkItemSource = {
 async function resolvePrWorkItemSource(
   repoPath: string,
   preference: IssueSourcePreference | undefined,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<ResolvedPrWorkItemSource> {
   const [originCandidate, upstreamCandidate] = await Promise.all([
-    getOwnerRepo(repoPath, connectionId),
-    getOwnerRepoForRemote(repoPath, 'upstream', connectionId)
+    getOwnerRepo(repoPath, connectionId, localGitOptions),
+    getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
   ])
   const source =
     preference === 'upstream' ? (upstreamCandidate ?? originCandidate) : originCandidate
@@ -977,9 +996,10 @@ async function listRecentWorkItems(
   prOwnerRepo: OwnerRepo | null,
   limit: number,
   connectionId?: string | null,
-  noCache?: boolean
+  noCache?: boolean,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   const requiresExplicitRepo = Boolean(connectionId)
   const restCacheArgs = noCache ? [] : ['--cache', '120s']
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
@@ -1142,9 +1162,10 @@ async function listQueriedWorkItems(
   query: ParsedTaskQuery,
   limit: number,
   before?: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   const requiresExplicitRepo = Boolean(connectionId)
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
   const hasPrOnlyFilter =
@@ -1227,11 +1248,12 @@ export async function listWorkItems(
   before?: string,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  noCache?: boolean
+  noCache?: boolean,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListWorkItemsResult<MainWorkItem>> {
   const [issueResolved, prResolved] = await Promise.all([
-    resolveIssueSource(repoPath, preference, connectionId),
-    resolvePrWorkItemSource(repoPath, preference, connectionId)
+    resolveIssueSource(repoPath, preference, connectionId, localGitOptions),
+    resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
   ])
   const issueOwnerRepo = issueResolved.source
   const prOwnerRepo = prResolved.source
@@ -1249,7 +1271,8 @@ export async function listWorkItems(
           prOwnerRepo,
           limit,
           connectionId,
-          noCache
+          noCache,
+          localGitOptions
         )
       : await listQueriedWorkItems(
           repoPath,
@@ -1258,7 +1281,8 @@ export async function listWorkItems(
           parseTaskQuery(trimmedQuery),
           limit,
           before,
-          connectionId
+          connectionId,
+          localGitOptions
         )
 
     const errors = partial.issuesError ? { issues: partial.issuesError } : undefined
@@ -1332,10 +1356,11 @@ async function countWorkItemsForQuery(
   repoPath: string,
   ownerRepo: OwnerRepo,
   query: ParsedTaskQuery,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<number> {
   const searchQ = buildSearchQueryString(ownerRepo, query)
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   const { stdout } = await ghExecFileAsync(
     [
       'api',
@@ -1381,11 +1406,12 @@ export async function countWorkItems(
   repoPath: string,
   query?: string,
   preference?: IssueSourcePreference,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<number> {
   const [issueResolved, prResolved] = await Promise.all([
-    resolveIssueSource(repoPath, preference, connectionId),
-    resolvePrWorkItemSource(repoPath, preference, connectionId)
+    resolveIssueSource(repoPath, preference, connectionId, localGitOptions),
+    resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
   ])
   const issueOwnerRepo = issueResolved.source
   const prOwnerRepo = prResolved.source
@@ -1401,7 +1427,13 @@ export async function countWorkItems(
   await acquire()
   try {
     if (sameOwnerRepo(issueOwnerRepo, prOwnerRepo)) {
-      return await countWorkItemsForQuery(repoPath, ownerRepo, effectiveQuery, connectionId)
+      return await countWorkItemsForQuery(
+        repoPath,
+        ownerRepo,
+        effectiveQuery,
+        connectionId,
+        localGitOptions
+      )
     }
 
     const counts: Promise<number>[] = []
@@ -1423,7 +1455,8 @@ export async function countWorkItems(
           repoPath,
           issueOwnerRepo,
           { ...effectiveQuery, scope: 'issue' },
-          connectionId
+          connectionId,
+          localGitOptions
         )
       )
     }
@@ -1433,7 +1466,8 @@ export async function countWorkItems(
           repoPath,
           prOwnerRepo,
           { ...effectiveQuery, scope: 'pr' },
-          connectionId
+          connectionId,
+          localGitOptions
         )
       )
     }
@@ -1460,9 +1494,10 @@ export async function countWorkItems(
 
 export async function getRepoSlug(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<{ owner: string; repo: string } | null> {
-  return getOwnerRepo(repoPath, connectionId)
+  return getOwnerRepo(repoPath, connectionId, ...hostedReviewLocalGitOptionArgs(options))
 }
 
 /**
@@ -1475,13 +1510,21 @@ export async function getRepoSlug(
  */
 export async function getRepoUpstream(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<OwnerRepo | null> {
-  const origin = await getOwnerRepo(repoPath, connectionId)
+  const localGitArgs = hostedReviewLocalGitOptionArgs(options)
+  const localGitOptions = localGitArgs[0] ?? {}
+  const origin = await getOwnerRepo(repoPath, connectionId, ...localGitArgs)
   if (!origin) {
     return null
   }
-  const upstreamRemote = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId)
+  const upstreamRemote = await getOwnerRepoForRemote(
+    repoPath,
+    'upstream',
+    connectionId,
+    ...localGitArgs
+  )
   if (upstreamRemote && !sameOwnerRepo(upstreamRemote, origin)) {
     return upstreamRemote
   }
@@ -1491,7 +1534,10 @@ export async function getRepoUpstream(
       ['repo', 'view', `${origin.owner}/${origin.repo}`, '--json', 'isFork,parent'],
       // Why: best-effort fork lookup runs at add-time; cap latency so a stalled
       // gh process can't hold up repo creation.
-      { ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId)), timeout: 10_000 }
+      {
+        ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
+        timeout: 10_000
+      }
     )
     const data = JSON.parse(stdout) as {
       isFork?: boolean
@@ -1585,6 +1631,7 @@ async function findOpenPRByHeadBase(args: {
   head: string
   base: string
   connectionId?: string | null
+  options?: HostedReviewExecutionOptions
 }): Promise<{ number: number; url: string } | null> {
   const context = githubRepoContext(args.repoPath, args.connectionId)
   const { stdout } = await ghExecFileAsync(
@@ -1604,7 +1651,10 @@ async function findOpenPRByHeadBase(args: {
       '--json',
       'number,url'
     ],
-    ghRepoExecOptions(context)
+    {
+      ...ghRepoExecOptions(context),
+      ...(args.connectionId ? {} : getHostedReviewLocalGitOptions(args.options))
+    }
   )
   const list = JSON.parse(stdout) as { number?: number; url?: string }[]
   if (list.length !== 1 || !list[0]?.number || !list[0]?.url) {
@@ -1651,7 +1701,8 @@ async function readPullRequestTemplate(
 export async function createGitHubPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
-  connectionId?: string | null
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult> {
   if (input.provider !== 'github') {
     return {
@@ -1661,7 +1712,11 @@ export async function createGitHubPullRequest(
     }
   }
 
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ownerRepo = await getOwnerRepo(
+    repoPath,
+    connectionId,
+    ...hostedReviewLocalGitOptionArgs(options)
+  )
   if (!ownerRepo) {
     return {
       ok: false,
@@ -1719,6 +1774,7 @@ export async function createGitHubPullRequest(
       const context = githubRepoContext(repoPath, connectionId)
       const { stdout } = await ghExecFileAsync(createArgs, {
         ...ghRepoExecOptions(context),
+        ...(connectionId ? {} : getHostedReviewLocalGitOptions(options)),
         timeout: 60_000,
         idempotent: false
       })
@@ -1727,9 +1783,14 @@ export async function createGitHubPullRequest(
         return { ok: true, ...created }
       }
       const found = head
-        ? await findOpenPRByHeadBase({ repoPath, ownerRepo, head, base, connectionId }).catch(
-            () => null
-          )
+        ? await findOpenPRByHeadBase({
+            repoPath,
+            ownerRepo,
+            head,
+            base,
+            connectionId,
+            options
+          }).catch(() => null)
         : null
       if (found) {
         return { ok: true, ...found }
@@ -1751,7 +1812,8 @@ export async function createGitHubPullRequest(
           ownerRepo,
           head,
           base,
-          connectionId
+          connectionId,
+          options
         }).catch(() => null)
         if (existing) {
           return {
@@ -1774,33 +1836,37 @@ export async function getWorkItem(
   repoPath: string,
   number: number,
   type?: 'issue' | 'pr',
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<MainWorkItem | null> {
   await acquire()
   try {
     if (type === 'issue') {
       return await fetchIssueWorkItem(
         repoPath,
-        await getIssueOwnerRepo(repoPath, connectionId),
+        await getIssueOwnerRepo(repoPath, connectionId, localGitOptions),
         number,
-        connectionId
+        connectionId,
+        localGitOptions
       )
     }
     if (type === 'pr') {
       return await fetchPullRequestWorkItem(
         repoPath,
-        await getOwnerRepo(repoPath, connectionId),
+        await getOwnerRepo(repoPath, connectionId, localGitOptions),
         number,
-        connectionId
+        connectionId,
+        localGitOptions
       )
     }
 
     try {
       const issue = await fetchIssueWorkItem(
         repoPath,
-        await getIssueOwnerRepo(repoPath, connectionId),
+        await getIssueOwnerRepo(repoPath, connectionId, localGitOptions),
         number,
-        connectionId
+        connectionId,
+        localGitOptions
       )
       if (issue) {
         return issue
@@ -1819,9 +1885,10 @@ export async function getWorkItem(
     }
     return await fetchPullRequestWorkItem(
       repoPath,
-      await getOwnerRepo(repoPath, connectionId),
+      await getOwnerRepo(repoPath, connectionId, localGitOptions),
       number,
-      connectionId
+      connectionId,
+      localGitOptions
     )
   } catch {
     return null
@@ -1835,14 +1902,21 @@ export async function getWorkItemByOwnerRepo(
   ownerRepo: OwnerRepo,
   number: number,
   type: 'issue' | 'pr',
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<MainWorkItem | null> {
   await acquire()
   try {
     if (type === 'issue') {
-      return await fetchIssueWorkItem(repoPath, ownerRepo, number, connectionId)
+      return await fetchIssueWorkItem(repoPath, ownerRepo, number, connectionId, localGitOptions)
     }
-    return await fetchPullRequestWorkItem(repoPath, ownerRepo, number, connectionId)
+    return await fetchPullRequestWorkItem(
+      repoPath,
+      ownerRepo,
+      number,
+      connectionId,
+      localGitOptions
+    )
   } catch {
     return null
   } finally {
@@ -2154,14 +2228,18 @@ function parseTrackedUpstreamBranch(
 async function getTrackedUpstreamBranch(
   repoPath: string,
   branchName: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: { wslDistro?: string } = {}
 ): Promise<TrackedUpstreamBranch | null> {
   const args = ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branchName}@{upstream}`]
   try {
     const provider = connectionId ? getSshGitProvider(connectionId) : null
     const result = provider
       ? await provider.exec(args, repoPath)
-      : await gitExecFileAsync(args, { cwd: repoPath })
+      : await gitExecFileAsync(args, {
+          cwd: repoPath,
+          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+        })
     return parseTrackedUpstreamBranch(result.stdout, branchName)
   } catch {
     return null
@@ -2353,14 +2431,16 @@ export async function getPRForBranch(
   branch: string,
   linkedPRNumber?: number | null,
   connectionId?: string | null,
-  fallbackPRNumber?: number | null
+  fallbackPRNumber?: number | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<PRInfo | null> {
   const outcome = await getPRForBranchOutcome(
     repoPath,
     branch,
     linkedPRNumber,
     connectionId,
-    fallbackPRNumber
+    fallbackPRNumber,
+    options
   )
   return outcome.kind === 'found' ? outcome.pr : null
 }
@@ -2370,7 +2450,8 @@ export async function getPRForBranchOutcome(
   branch: string,
   linkedPRNumber?: number | null,
   connectionId?: string | null,
-  fallbackPRNumber?: number | null
+  fallbackPRNumber?: number | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<PRRefreshOutcome> {
   // Strip refs/heads/ prefix if present
   const branchName = branch.replace(/^refs\/heads\//, '')
@@ -2379,12 +2460,18 @@ export async function getPRForBranchOutcome(
   if (!branchName && typeof linkedPRNumber !== 'number' && typeof fallbackPRNumber !== 'number') {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }
-  const context = githubRepoContext(repoPath, connectionId)
+  const localGitArgs = hostedReviewLocalGitOptionArgs(options)
+  const localGitOptions = localGitArgs[0] ?? {}
+  const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(context)
 
   await acquire()
   try {
-    const { candidates, headRepo } = await resolvePRRepositoryCandidates(repoPath, connectionId)
+    const { candidates, headRepo } = await resolvePRRepositoryCandidates(
+      repoPath,
+      connectionId,
+      ...localGitArgs
+    )
     let data: PullRequestLookupData | null = null
     let dataRepo: OwnerRepo | null = null
     let dataHeadRepo: OwnerRepo | null = headRepo
@@ -2411,11 +2498,20 @@ export async function getPRForBranchOutcome(
       if (!data) {
         // Why: worktrees can have a short local branch tracking a differently
         // named remote PR head; after the local miss, try that configured head.
-        const upstreamBranch = await getTrackedUpstreamBranch(repoPath, branchName, connectionId)
+        const upstreamBranch = await getTrackedUpstreamBranch(
+          repoPath,
+          branchName,
+          connectionId,
+          localGitOptions
+        )
         if (upstreamBranch) {
           const upstreamHeadRepo =
-            (await getOwnerRepoForRemote(repoPath, upstreamBranch.remoteName, connectionId)) ??
-            headRepo
+            (await getOwnerRepoForRemote(
+              repoPath,
+              upstreamBranch.remoteName,
+              connectionId,
+              ...localGitArgs
+            )) ?? headRepo
           const upstreamLookup = await lookupPRByBranchName({
             candidates,
             headRepo: upstreamHeadRepo,
@@ -2458,7 +2554,13 @@ export async function getPRForBranchOutcome(
       data.baseRefName &&
       data.baseRefOid &&
       data.headRefOid
-        ? await getPRConflictSummary(repoPath, data.baseRefName, data.baseRefOid, data.headRefOid)
+        ? await getPRConflictSummary(
+            repoPath,
+            data.baseRefName,
+            data.baseRefOid,
+            data.headRefOid,
+            localGitOptions
+          )
         : undefined
 
     return {
@@ -2507,10 +2609,11 @@ export async function getPRChecks(
   headSha?: string,
   prRepo?: OwnerRepo | null,
   options?: { noCache?: boolean },
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   const fallbackToPRChecks = async (): Promise<PRCheckDetail[]> => {
     // Why: the REST check-runs path spends core only. Guard GraphQL only when
     // we actually fall back to `gh pr checks`, so a low GraphQL bucket does not
@@ -2745,10 +2848,11 @@ export async function getPRCheckDetails(
     url?: string | null
     prRepo?: OwnerRepo | null
   },
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckRunDetails | null> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = args.prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = args.prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   if (!ownerRepo) {
     return null
   }
@@ -2837,10 +2941,11 @@ export async function rerunPRChecks(
   repoPath: string,
   prNumber: number,
   options: { headSha?: string; failedOnly?: boolean } = {},
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubRerunPRChecksResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(repoPath, connectionId, localGitOptions)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -2851,7 +2956,8 @@ export async function rerunPRChecks(
     options.headSha,
     ownerRepo,
     { noCache: true },
-    connectionId
+    connectionId,
+    localGitOptions
   )
   const candidates = options.failedOnly
     ? checks.filter((check) =>
@@ -2975,10 +3081,11 @@ export async function getPRComments(
   repoPath: string,
   prNumber: number,
   options?: { noCache?: boolean; prRepo?: OwnerRepo | null },
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRComment[]> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = options?.prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = options?.prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   if (ownerRepo) {
     await assertRateLimitBudget('core')
   }
@@ -3215,11 +3322,14 @@ export async function getPRComments(
 export async function setPRFileViewed(args: {
   repoPath: string
   connectionId?: string | null
+  localGitOptions?: LocalGitExecOptions
   pullRequestId: string
   path: string
   viewed: boolean
 }): Promise<boolean> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(args.repoPath, args.connectionId))
+  const ghOptions = ghRepoExecOptions(
+    githubRepoContext(args.repoPath, args.connectionId, args.localGitOptions)
+  )
   const mutation = args.viewed ? 'markFileAsViewed' : 'unmarkFileAsViewed'
   const query = `mutation($pullRequestId: ID!, $path: String!) {
     ${mutation}(input: { pullRequestId: $pullRequestId, path: $path }) {
@@ -3257,11 +3367,12 @@ export async function resolveReviewThread(
   repoPath: string,
   threadId: string,
   resolve: boolean,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<boolean> {
   const mutation = resolve ? 'resolveReviewThread' : 'unresolveReviewThread'
   const query = `mutation($threadId: ID!) { ${mutation}(input: { threadId: $threadId }) { thread { isResolved } } }`
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   const guard = rateLimitGuard('graphql')
   if (guard.blocked) {
     console.warn(
@@ -3325,10 +3436,11 @@ export async function addPRReviewCommentReply(
   path?: string,
   line?: number,
   connectionId?: string | null,
-  prRepo?: OwnerRepo | null
+  prRepo?: OwnerRepo | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubCommentResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -3362,10 +3474,15 @@ export async function addPRReviewCommentReply(
 }
 
 export async function addPRReviewComment(
-  args: GitHubPRReviewCommentInput & { connectionId?: string | null }
+  args: GitHubPRReviewCommentInput & {
+    connectionId?: string | null
+    localGitOptions?: LocalGitExecOptions
+  }
 ): Promise<GitHubCommentResult> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(args.repoPath, args.connectionId))
-  const ownerRepo = await getOwnerRepo(args.repoPath, args.connectionId)
+  const ghOptions = ghRepoExecOptions(
+    githubRepoContext(args.repoPath, args.connectionId, args.localGitOptions)
+  )
+  const ownerRepo = await getOwnerRepo(args.repoPath, args.connectionId, args.localGitOptions)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -3423,10 +3540,11 @@ export async function mergePR(
   prNumber: number,
   method: 'merge' | 'squash' | 'rebase' = 'squash',
   connectionId?: string | null,
-  prRepo?: OwnerRepo | null
+  prRepo?: OwnerRepo | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   await acquire()
   try {
     const mergeBlocker = await getPRMergeBlocker(
@@ -3434,7 +3552,8 @@ export async function mergePR(
       prNumber,
       ownerRepo,
       ghOptions,
-      connectionId
+      connectionId,
+      localGitOptions
     )
     if (mergeBlocker) {
       return { ok: false, error: mergeBlocker }
@@ -3467,10 +3586,11 @@ export async function setPRAutoMerge(
   enabled: boolean,
   method: GitHubPRMergeMethod = 'squash',
   connectionId?: string | null,
-  prRepo?: OwnerRepo | null
+  prRepo?: OwnerRepo | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   await acquire()
   try {
     const args = ['pr', 'merge', String(prNumber), enabled ? '--auto' : '--disable-auto']
@@ -3499,7 +3619,8 @@ async function getPRMergeBlocker(
   prNumber: number,
   ownerRepo: OwnerRepo | null,
   ghOptions: GhExecOptions,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<string | null> {
   if (!ownerRepo) {
     return null
@@ -3535,7 +3656,8 @@ async function getPRMergeBlocker(
       repoPath,
       pr.baseRefName,
       pr.baseRefOid,
-      pr.headRefOid
+      pr.headRefOid,
+      localGitOptions
     )
     return formatMergeConflictBlocker(pr.baseRefName, summary)
   } catch {
@@ -3563,11 +3685,12 @@ export async function updatePRState(
   repoPath: string,
   prNumber: number,
   updates: GitHubPullRequestStateUpdate,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const context = githubRepoContext(repoPath, connectionId)
+  const context = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(context)
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ownerRepo = await getOwnerRepo(repoPath, connectionId, localGitOptions)
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -3597,14 +3720,15 @@ export async function requestPRReviewers(
   repoPath: string,
   prNumber: number,
   reviewers: string[],
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const logins = reviewers.map((reviewer) => reviewer.trim()).filter(Boolean)
   if (logins.length === 0) {
     return { ok: false, error: 'Enter at least one reviewer' }
   }
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(repoPath, connectionId, localGitOptions)
   await acquire()
   try {
     const args = ['pr', 'edit', String(prNumber), '--add-reviewer', logins.join(',')]
@@ -3629,14 +3753,15 @@ export async function removePRReviewers(
   repoPath: string,
   prNumber: number,
   reviewers: string[],
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const logins = reviewers.map((reviewer) => reviewer.trim()).filter(Boolean)
   if (logins.length === 0) {
     return { ok: false, error: 'Enter at least one reviewer' }
   }
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(repoPath, connectionId, localGitOptions)
   await acquire()
   try {
     const args = ['pr', 'edit', String(prNumber), '--remove-reviewer', logins.join(',')]
@@ -3665,10 +3790,11 @@ export async function updatePRTitle(
   prNumber: number,
   title: string,
   connectionId?: string | null,
-  prRepo?: OwnerRepo | null
+  prRepo?: OwnerRepo | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<boolean> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   await acquire()
   try {
     const args = ['pr', 'edit', String(prNumber), '--title', title]
@@ -3692,10 +3818,11 @@ export async function updatePRDetails(
   prNumber: number,
   updates: { title?: string; body?: string },
   connectionId?: string | null,
-  prRepo?: OwnerRepo | null
+  prRepo?: OwnerRepo | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId))
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = prRepo ?? (await getOwnerRepo(repoPath, connectionId, localGitOptions))
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }

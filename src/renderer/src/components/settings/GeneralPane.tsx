@@ -20,10 +20,12 @@ import {
   getGeneralUpdateSearchEntries,
   getGeneralWorkspaceSearchEntries
 } from './general-search'
+import { getGeneralProjectRuntimeSearchEntries } from './general-project-runtime-search'
 import { RecentTabOrderControl } from './RecentTabOrderControl'
 import { matchesSettingsSearch } from './settings-search'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { DefaultWindowsProjectRuntimeSetting } from './DefaultWindowsProjectRuntimeSetting'
 
 export {
   createAutoSaveDelayDraftState,
@@ -53,11 +55,14 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
 
 export { getGeneralPaneSearchEntries }
 
+const EMPTY_WSL_DISTROS: string[] = []
+
 type GeneralPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
+  wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
 }
 
@@ -66,9 +71,13 @@ export function GeneralPane({
   updateSettings,
   wslSupportedPlatform,
   wslAvailable,
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading
 }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const projectRuntimeSearchEntries = wslSupportedPlatform
+    ? getGeneralProjectRuntimeSearchEntries()
+    : []
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, getGeneralNavigationSearchEntries()) ? (
@@ -94,6 +103,28 @@ export function GeneralPane({
         updateSettings={updateSettings}
       />
     ) : null,
+    matchesSettingsSearch(searchQuery, projectRuntimeSearchEntries) ? (
+      <section key="project-runtime" className="space-y-4">
+        <SettingsSubsectionHeader
+          title={translate(
+            'auto.components.settings.GeneralPane.projectRuntime',
+            'Project Runtime'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.projectRuntimeDescription',
+            'Default runtime for local Windows projects that do not override it.'
+          )}
+        />
+        <DefaultWindowsProjectRuntimeSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          wslSupportedPlatform={Boolean(wslSupportedPlatform)}
+          wslAvailable={Boolean(wslAvailable)}
+          wslDistros={wslDistros}
+          wslCapabilitiesLoading={Boolean(wslCapabilitiesLoading)}
+        />
+      </section>
+    ) : null,
     matchesSettingsSearch(searchQuery, getGeneralNetworkSearchEntries()) ? (
       <GeneralNetworkSettingsSection
         key="network"
@@ -113,7 +144,6 @@ export function GeneralPane({
         key="cli"
         currentPlatform={getDesktopPlatformFromUserAgent(navigator.userAgent)}
         settings={settings}
-        updateSettings={updateSettings}
         wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}
         wslCapabilitiesLoading={wslCapabilitiesLoading}

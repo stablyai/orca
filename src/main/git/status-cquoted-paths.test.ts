@@ -26,9 +26,9 @@ afterEach(async () => {
 })
 
 describe('git status C-quoted paths', () => {
-  it('returns the real path for untracked files whose names Git C-quotes', async () => {
+  it('returns the real path for untracked UTF-8 filenames', async () => {
     const repo = await createRepo()
-    const filePath = '日本語 file.txt'
+    const filePath = '日本語-file.txt'
     await writeFile(path.join(repo, filePath), 'new file\n')
 
     const status = await getStatus(repo)

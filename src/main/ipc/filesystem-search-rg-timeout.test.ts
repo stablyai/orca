@@ -2,13 +2,21 @@ import { EventEmitter } from 'events'
 import type { ChildProcess } from 'child_process'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, resolveAuthorizedPathMock, checkRgAvailableMock, wslAwareSpawnMock } =
-  vi.hoisted(() => ({
-    handleMock: vi.fn(),
-    resolveAuthorizedPathMock: vi.fn(),
-    checkRgAvailableMock: vi.fn(),
-    wslAwareSpawnMock: vi.fn()
-  }))
+const {
+  handleMock,
+  resolveAuthorizedPathMock,
+  checkRgAvailableMock,
+  getLocalGitOptionsForRegisteredWorktreeMock,
+  wslAwareSpawnMock,
+  toWindowsWslPathMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  resolveAuthorizedPathMock: vi.fn(),
+  checkRgAvailableMock: vi.fn(),
+  getLocalGitOptionsForRegisteredWorktreeMock: vi.fn(),
+  wslAwareSpawnMock: vi.fn(),
+  toWindowsWslPathMock: vi.fn((value: string) => value)
+}))
 
 const handlers = new Map<string, (event: unknown, args: unknown) => Promise<unknown> | unknown>()
 
@@ -28,7 +36,7 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('../wsl', () => ({
   parseWslPath: vi.fn(() => null),
-  toWindowsWslPath: vi.fn((value: string) => value)
+  toWindowsWslPath: toWindowsWslPathMock
 }))
 
 vi.mock('./filesystem-auth', () => ({
@@ -49,6 +57,10 @@ vi.mock('./filesystem-mutations', () => ({
 
 vi.mock('./filesystem-search-git', () => ({
   searchWithGitGrep: vi.fn()
+}))
+
+vi.mock('./local-worktree-runtime-options', () => ({
+  getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
 }))
 
 vi.mock('./markdown-documents', () => ({
@@ -84,6 +96,7 @@ describe('filesystem rg search timeout', () => {
     })
     resolveAuthorizedPathMock.mockImplementation(async (value: string) => value)
     checkRgAvailableMock.mockResolvedValue(true)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
   })
 
   it('settles and detaches when rg ignores the timeout kill', async () => {
@@ -115,5 +128,80 @@ describe('filesystem rg search timeout', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('routes rg through the registered WSL project runtime for Windows-path worktrees', async () => {
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    registerFilesystemHandlers({} as never)
+
+    const promise = handlers.get('fs:search')!(
+      { sender: { id: 7 } },
+      { rootPath: 'C:\\repo', query: 'ok' }
+    ) as Promise<unknown>
+
+    setTimeout(() => {
+      child.emit('close')
+    }, 10)
+
+    await promise
+
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      'rg',
+      expect.any(Array),
+      expect.objectContaining({
+        cwd: 'C:\\repo',
+        wslDistro: 'Ubuntu'
+      })
+    )
+  })
+
+  it('translates WSL rg output for Windows-path project search results', async () => {
+    const child = createMockProcess()
+    wslAwareSpawnMock.mockReturnValue(child)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    toWindowsWslPathMock.mockImplementation((value: string) =>
+      value.replace('/mnt/c/repo', 'C:\\repo').replace(/\//g, '\\')
+    )
+    registerFilesystemHandlers({} as never)
+
+    const promise = handlers.get('fs:search')!(
+      { sender: { id: 7 } },
+      { rootPath: 'C:\\repo', query: 'hello' }
+    ) as Promise<{
+      files: { filePath: string; relativePath: string; matchCount: number }[]
+    }>
+
+    setTimeout(() => {
+      if (!child.stdout) {
+        throw new Error('mock child stdout missing')
+      }
+      child.stdout.emit(
+        'data',
+        `${JSON.stringify({
+          type: 'match',
+          data: {
+            path: { text: '/mnt/c/repo/src/index.ts' },
+            lines: { text: 'hello world\n' },
+            line_number: 3,
+            submatches: [{ start: 0, end: 5 }]
+          }
+        })}\n`
+      )
+      child.emit('close')
+    }, 10)
+
+    const result = await promise
+
+    expect(result.files).toEqual([
+      expect.objectContaining({
+        filePath: 'C:\\repo\\src\\index.ts',
+        relativePath: 'src/index.ts',
+        matchCount: 1
+      })
+    ])
+    expect(toWindowsWslPathMock).toHaveBeenCalledWith('/mnt/c/repo/src/index.ts', 'Ubuntu')
   })
 })

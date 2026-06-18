@@ -35,11 +35,12 @@ const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
 const NUDGE_POLL_INTERVAL_MS = 30 * 60 * 1000
 const NUDGE_ACTIVATION_COOLDOWN_MS = 5 * 60 * 1000
 const QUIT_AND_INSTALL_DELAY_MS = 100
+const PRE_QUIT_CLEANUP_TIMEOUT_MS = 2_500
 
 let mainWindowRef: BrowserWindow | null = null
 let currentStatus: UpdateStatus = { state: 'idle' }
 let userInitiatedCheck = false
-let onBeforeQuitCleanup: (() => void) | null = null
+let onBeforeQuitCleanup: (() => void | Promise<void>) | null = null
 let autoUpdaterInitialized = false
 // Why: Shift-clicking "Check for Updates" opts the user into the RC release
 // channel for the rest of this process. The generic feed still gets pinned to
@@ -52,6 +53,7 @@ let pendingCheckFailurePromise: Promise<void> | null = null
 let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
 let nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
 let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
+let quitAndInstallInProgress = false
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
 let backgroundCheckLaunchPending = false
@@ -283,7 +285,12 @@ function clearPrereleaseFallbackContextIfSettled(): void {
   }
 }
 
-function performQuitAndInstall(): void {
+async function performQuitAndInstall(): Promise<void> {
+  if (quitAndInstallInProgress) {
+    return
+  }
+  quitAndInstallInProgress = true
+
   if (pendingQuitAndInstallTimer) {
     clearTimeout(pendingQuitAndInstallTimer)
     pendingQuitAndInstallTimer = null
@@ -299,14 +306,45 @@ function performQuitAndInstall(): void {
   // either can't replace it or the user ends up on the old version.
   quittingForUpdate = true
 
+  await runBeforeUpdateQuitCleanup()
   killAllPty()
-  onBeforeQuitCleanup?.()
 
   for (const win of BrowserWindow.getAllWindows()) {
     win.removeAllListeners('close')
   }
 
   getAutoUpdater().quitAndInstall(false, true)
+}
+
+async function runBeforeUpdateQuitCleanup(): Promise<void> {
+  if (!onBeforeQuitCleanup) {
+    return
+  }
+
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  const cleanup = Promise.resolve()
+    .then(() => onBeforeQuitCleanup?.())
+    .catch((error) => {
+      console.warn(
+        '[updater] Pre-quit cleanup failed; continuing update install:',
+        error instanceof Error ? error.name : typeof error
+      )
+    })
+  const timeoutResult = new Promise<'timeout'>((resolve) => {
+    timeout = setTimeout(() => resolve('timeout'), PRE_QUIT_CLEANUP_TIMEOUT_MS)
+  })
+
+  const result = await Promise.race([cleanup.then(() => 'done' as const), timeoutResult])
+  if (result === 'timeout') {
+    console.warn(
+      `[updater] Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; continuing update install`
+    )
+    return
+  }
+
+  if (timeout) {
+    clearTimeout(timeout)
+  }
 }
 
 async function sendCheckFailureStatus(
@@ -742,7 +780,7 @@ export function isQuittingForUpdate(): boolean {
 }
 
 export function quitAndInstall(): void {
-  if (pendingQuitAndInstallTimer) {
+  if (pendingQuitAndInstallTimer || quitAndInstallInProgress) {
     return
   }
 
@@ -762,7 +800,7 @@ export function quitAndInstall(): void {
   // a moment to flush dismissals/state updates before windows start closing,
   // and centralizing it avoids drift between the toast flow and settings UI.
   pendingQuitAndInstallTimer = setTimeout(() => {
-    performQuitAndInstall()
+    void performQuitAndInstall()
   }, QUIT_AND_INSTALL_DELAY_MS)
 }
 
@@ -835,7 +873,7 @@ export function setupAutoUpdater(
   mainWindow: BrowserWindow,
   opts?: {
     getLastUpdateCheckAt?: () => number | null
-    onBeforeQuit?: () => void
+    onBeforeQuit?: () => void | Promise<void>
     setLastUpdateCheckAt?: (timestamp: number) => void
     getPendingUpdateNudgeId?: () => string | null
     getDismissedUpdateNudgeId?: () => string | null

@@ -35,11 +35,17 @@ const {
   rateLimitGuardMock: vi.fn<() => RateLimitGuardResult>(() => ({ blocked: false })),
   noteRateLimitSpendMock: vi.fn(),
   ghRepoExecOptionsMock: vi.fn((context) =>
-    context.connectionId ? {} : { cwd: context.repoPath }
+    context.connectionId
+      ? {}
+      : {
+          cwd: context.repoPath,
+          ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+        }
   ),
-  githubRepoContextMock: vi.fn((repoPath, connectionId) => ({
+  githubRepoContextMock: vi.fn((repoPath, connectionId, localGitOptions) => ({
     repoPath,
-    connectionId: connectionId ?? null
+    connectionId: connectionId ?? null,
+    ...localGitOptions
   })),
   getSshGitProviderMock: vi.fn(),
   acquireMock: vi.fn(),
@@ -1218,6 +1224,73 @@ describe('getPRForBranch', () => {
     })
   })
 
+  it('routes local WSL branch status and conflict summary git probes through the selected distro', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 42,
+          title: 'Fix PR discovery',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/42',
+          updated_at: '2026-06-16T00:00:00Z',
+          draft: false,
+          mergeable_state: 'dirty',
+          base: { ref: 'main', sha: 'base-oid' },
+          head: { ref: 'feature/test', sha: 'head-oid' }
+        }
+      ])
+    })
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '' })
+      .mockResolvedValueOnce({ stdout: 'latest-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
+      .mockResolvedValueOnce({ stdout: '2\n' })
+      .mockResolvedValueOnce({ stdout: 'result-tree-oid\u0000src/conflict.ts\u0000' })
+
+    const pr = await getPRForBranch('/repo-root', 'feature/test', null, null, null, {
+      localGitExecOptions: { wslDistro: 'Ubuntu' }
+    })
+
+    expect(pr?.conflictSummary?.files).toEqual(['src/conflict.ts'])
+    expect(resolvePRRepositoryCandidatesMock).toHaveBeenCalledWith('/repo-root', null, {
+      wslDistro: 'Ubuntu'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        cwd: '/repo-root',
+        wslDistro: 'Ubuntu'
+      })
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
+      1,
+      ['fetch', '--quiet', 'origin', 'main'],
+      {
+        cwd: '/repo-root',
+        timeout: 10_000,
+        wslDistro: 'Ubuntu'
+      }
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      [
+        'merge-tree',
+        '--write-tree',
+        '--name-only',
+        '-z',
+        '--no-messages',
+        '--merge-base',
+        'merge-base-oid',
+        'head-oid',
+        'latest-base-oid'
+      ],
+      {
+        cwd: '/repo-root',
+        wslDistro: 'Ubuntu'
+      }
+    )
+  })
+
   it('treats GitHub DIRTY merge state as conflicting when mergeable is still unknown', async () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
@@ -1575,10 +1648,7 @@ describe('getPRForBranch', () => {
         }
       })
     })
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@github.com:stablyai/orca.git\n',
-      stderr: ''
-    })
+    getRemoteUrlForRepoMock.mockResolvedValueOnce('git@github.com:stablyai/orca.git')
 
     const target = await getPullRequestPushTarget('/repo-root', 1738)
 
@@ -1612,10 +1682,7 @@ describe('getPRForBranch', () => {
         }
       })
     })
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout: 'git@github.com:stablyai/orca.git\n',
-      stderr: ''
-    })
+    getRemoteUrlForRepoMock.mockResolvedValueOnce('git@github.com:stablyai/orca.git')
 
     await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
       pushTarget: {

@@ -497,10 +497,15 @@ export class LocalPtyProvider implements IPtyProvider {
     const historyEnabled = worktreeId && (this.opts.isHistoryEnabled?.() ?? true)
     // Resolve the effective shell kind for history injection. For WSL, the
     // outer executable is wsl.exe but the inner login shell is bash.
-    const effectiveShellPath = wslInfo ? 'bash' : shellPath
+    const isWslTerminal =
+      Boolean(wslInfo || worktreeWslContext || preferredWslContext) ||
+      pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
+    const effectiveShellPath = isWslTerminal ? 'bash' : shellPath
     let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
     if (historyEnabled) {
-      historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd)
+      historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd, {
+        wslDistro: preferredWslContext?.distro ?? worktreeWslContext?.distro ?? null
+      })
       logHistoryInjection(worktreeId, historyResult)
     }
 

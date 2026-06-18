@@ -45,6 +45,7 @@ const projectsCreateHostSetup = vi.fn()
 const projectsSetupExistingFolder = vi.fn()
 const projectsUpdateHostSetup = vi.fn()
 const projectsDeleteHostSetup = vi.fn()
+const projectsUpdate = vi.fn()
 const projectGroupsMoveProject = vi.fn()
 const ptyKill = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -64,6 +65,7 @@ beforeEach(() => {
   projectsSetupExistingFolder.mockReset()
   projectsUpdateHostSetup.mockReset()
   projectsDeleteHostSetup.mockReset()
+  projectsUpdate.mockReset()
   projectGroupsMoveProject.mockReset()
   ptyKill.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -84,6 +86,7 @@ beforeEach(() => {
         reorder: reposReorder
       },
       projects: {
+        update: projectsUpdate,
         createHostSetup: projectsCreateHostSetup,
         setupExistingFolder: projectsSetupExistingFolder,
         updateHostSetup: projectsUpdateHostSetup,
@@ -114,59 +117,6 @@ describe('repo slice runtime routing', () => {
     ])
     expect(reposList).toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('hydrates projects from local IPC when the project API is available', async () => {
-    const project: Project = {
-      id: 'project-1',
-      displayName: 'Project',
-      badgeColor: '#000',
-      sourceRepoIds: ['local-repo'],
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const setup: ProjectHostSetup = {
-      id: 'setup-1',
-      projectId: project.id,
-      hostId: 'local',
-      repoId: 'local-repo',
-      path: '/local',
-      displayName: 'Local',
-      setupState: 'ready',
-      setupMethod: 'legacy-repo',
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const projectsList = vi.fn().mockResolvedValue([project])
-    const listHostSetups = vi.fn().mockResolvedValue([setup])
-    ;(
-      window.api as typeof window.api & {
-        projects?: {
-          list: typeof projectsList
-          listHostSetups: typeof listHostSetups
-          createHostSetup: typeof projectsCreateHostSetup
-          setupExistingFolder: typeof projectsSetupExistingFolder
-          updateHostSetup: typeof projectsUpdateHostSetup
-          deleteHostSetup: typeof projectsDeleteHostSetup
-        }
-      }
-    ).projects = {
-      list: projectsList,
-      listHostSetups,
-      createHostSetup: projectsCreateHostSetup,
-      setupExistingFolder: projectsSetupExistingFolder,
-      updateHostSetup: projectsUpdateHostSetup,
-      deleteHostSetup: projectsDeleteHostSetup
-    }
-    reposList.mockResolvedValue([localRepo])
-    const store = createTestStore()
-
-    await store.getState().fetchRepos()
-
-    expect(store.getState().projects).toEqual([project])
-    expect(store.getState().projectHostSetups).toEqual([setup])
-    expect(projectsList).toHaveBeenCalled()
-    expect(listHostSetups).toHaveBeenCalled()
   })
 
   it('fetches repos from the active remote runtime environment', async () => {

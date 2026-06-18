@@ -295,6 +295,61 @@ describe('createHostedReview', () => {
     expect(createGitHubPullRequestMock).toHaveBeenCalledOnce()
   })
 
+  it('routes local WSL git and GitHub review creation through the selected runtime', async () => {
+    await expect(
+      createHostedReview(
+        '/repo',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature',
+          title: 'Feature'
+        },
+        null,
+        { localGitExecOptions: { wslDistro: 'Ubuntu' } }
+      )
+    ).resolves.toEqual({
+      ok: true,
+      number: 12,
+      url: 'https://github.com/acme/orca/pull/12'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['status', '--porcelain'],
+      expect.objectContaining({ cwd: '/repo', wslDistro: 'Ubuntu' })
+    )
+    expect(getUpstreamStatusMock).toHaveBeenCalledWith('/repo', undefined, {
+      wslDistro: 'Ubuntu'
+    })
+    expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', null, {
+      localGitExecOptions: { wslDistro: 'Ubuntu' }
+    })
+    expect(getRepoSlugMock).toHaveBeenCalledWith('/repo', null, {
+      localGitExecOptions: { wslDistro: 'Ubuntu' }
+    })
+    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: '/repo',
+        branch: 'feature',
+        localGitExecOptions: { wslDistro: 'Ubuntu' }
+      })
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['auth', 'status', '--hostname', 'github.com'],
+      { cwd: '/repo', wslDistro: 'Ubuntu' }
+    )
+    expect(createGitHubPullRequestMock).toHaveBeenCalledWith(
+      '/repo',
+      expect.objectContaining({ provider: 'github', head: 'feature' }),
+      null,
+      { localGitExecOptions: { wslDistro: 'Ubuntu' } }
+    )
+  })
+
   it('creates a GitLab merge request after fresh main-process validation passes', async () => {
     mockGitLabProvider()
 

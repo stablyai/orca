@@ -348,12 +348,12 @@ describe('RemoteRuntimeSharedControlConnection', () => {
   it('refreshes pending request timeouts when keepalive frames show server progress', async () => {
     const server = await createServer({
       sendKeepaliveBeforeResponse: true,
-      keepaliveDelayMs: 25,
-      responseDelayMs: 60
+      keepaliveDelayMs: 100,
+      responseDelayMs: 550
     })
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
 
-    await expect(connection.request('worktree.ps', undefined, 50)).resolves.toMatchObject({
+    await expect(connection.request('worktree.ps', undefined, 500)).resolves.toMatchObject({
       ok: true,
       result: { method: 'worktree.ps' }
     })

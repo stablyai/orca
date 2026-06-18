@@ -9,10 +9,12 @@ import { z } from 'zod'
 import type { Store } from '../persistence'
 import type {
   BaseRefSearchResult,
+  Project,
   Repo,
   ProjectGroup,
   FolderWorkspace,
   ProjectGroupImportResult,
+  ProjectUpdateArgs,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
   ProjectHostSetupDeleteArgs,
@@ -679,6 +681,19 @@ const ProjectHostSetupExistingFolderIpcArgs = z.object({
   setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional()
 })
 
+const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('inherit-global') }),
+  z.object({ kind: z.literal('windows-host') }),
+  z.object({ kind: z.literal('wsl'), distro: z.string().min(1) })
+])
+
+const ProjectUpdateIpcArgs = z.object({
+  projectId: z.string().min(1),
+  updates: z.object({
+    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional()
+  })
+})
+
 const ProjectHostSetupCreateIpcArgs = z.object({
   projectId: z.string().min(1),
   hostId: z
@@ -1082,6 +1097,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('projects:list')
+  ipcMain.removeHandler('projects:update')
   ipcMain.removeHandler('projectHostSetups:list')
   ipcMain.removeHandler('projectHostSetups:create')
   ipcMain.removeHandler('projectHostSetups:setupExistingFolder')
@@ -1124,6 +1140,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   ipcMain.handle('projects:list', () => store.getProjects())
+
+  ipcMain.handle('projects:update', (_event, rawArgs: ProjectUpdateArgs): Project | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectUpdateIpcArgs,
+      rawArgs,
+      'project_update_invalid_args'
+    )
+    return store.updateProject(args.projectId, args.updates)
+  })
 
   ipcMain.handle('projectHostSetups:list', () => store.getProjectHostSetups())
 

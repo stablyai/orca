@@ -38,6 +38,10 @@ import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
 import type { ForkSyncMode } from './git-fork-sync'
 import type { AgentSessionForkPoint } from './agent-session-fork'
+import type {
+  GlobalWindowsRuntimeDefault,
+  LocalWindowsRuntimePreference
+} from './project-execution-runtime'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -108,9 +112,16 @@ export type Project = {
   repoIcon?: RepoIcon | null
   kind?: RepoKind
   providerIdentity?: ProjectProviderIdentity
+  /** Local Windows projects inherit the global runtime default unless this override is set. */
+  localWindowsRuntimePreference?: LocalWindowsRuntimePreference
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number
+}
+
+export type ProjectUpdateArgs = {
+  projectId: string
+  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>>
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'
@@ -1123,6 +1134,7 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedChecksStatus?: CheckStatus | null
   cachedMergeable?: PRMergeableState | null
   cachedMergeStateStatus?: string | null
+  localGitOptions?: { wslDistro?: string }
 }
 
 export type GitHubPRRefreshSkippedReason =
@@ -2420,6 +2432,8 @@ export type GlobalSettings = {
    *  changing the default terminal shell. */
   localAgentRuntime?: 'host' | 'wsl'
   localAgentWslDistro?: string | null
+  /** Why: global is only the default policy; project-level runtime preference wins. */
+  localWindowsRuntimeDefault: GlobalWindowsRuntimeDefault
   /** Why: "PowerShell" is the product-facing shell family. Auto resolves to
    *  PowerShell 7+ when present and falls back to inbox Windows PowerShell. */
   terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
@@ -2560,6 +2574,10 @@ export type GlobalSettings = {
    *  separate from worktree deletion so skipping one destructive confirmation
    *  does not silently skip the other. */
   skipDeleteAutomationConfirm: boolean
+  /** Why: Codex rate-limit resets consume a scarce reset credit and immediately
+   *  affect the signed-in account, so keep the skip preference explicit and
+   *  separate from local destructive-action confirmations. */
+  skipCodexRateLimitResetConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
   /** Why: persists the user's last-used task source so the Tasks page

@@ -408,6 +408,62 @@ describe('Store', () => {
     expect(persisted.projectHostSetups).toContainEqual(independentSetup)
   })
 
+  it('updates and persists a project Windows runtime preference', async () => {
+    const project = makeProject({
+      id: 'project-1',
+      sourceRepoIds: ['r1'],
+      localWindowsRuntimePreference: { kind: 'inherit-global' }
+    })
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      projects: [project],
+      projectHostSetups: [
+        makeProjectHostSetup({
+          id: 'setup-1',
+          projectId: project.id,
+          repoId: ''
+        })
+      ]
+    })
+    const store = await createStore()
+
+    const updated = store.updateProject('project-1', {
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+
+    expect(updated?.localWindowsRuntimePreference).toEqual({ kind: 'wsl', distro: 'Ubuntu' })
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getProjects()[0]?.localWindowsRuntimePreference).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu'
+    })
+  })
+
+  it('migrates legacy WSL agent settings into the global Windows runtime default', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Ubuntu'
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().localWindowsRuntimeDefault).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu'
+    })
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.localWindowsRuntimeDefault).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu'
+    })
+  })
+
   it('returns default settings when no data file exists', async () => {
     const store = await createStore()
     const settings = store.getSettings()

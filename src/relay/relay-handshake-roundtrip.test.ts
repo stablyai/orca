@@ -17,6 +17,7 @@ import {
   type DecodedFrame,
   MessageType
 } from './protocol'
+import { relayTestSocketPath } from './relay-test-socket-path'
 
 function normalizeTestSocketPath(socketPath: string): string {
   if (process.platform !== 'win32') {
@@ -47,7 +48,7 @@ describe('handshake round-trip over a real Socket pair', () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-handshake-test-'))
-    sockPath = join(tmpDir, 'relay.sock')
+    sockPath = relayTestSocketPath(tmpDir)
     exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new ExitCalled(code ?? 0)
     }) as never)

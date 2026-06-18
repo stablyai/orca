@@ -19,7 +19,7 @@
  * large repos. Centralizing the policy prevents future drift. Both call
  * sites must use this module; see filesystem.ts and relay/fs-handler.ts.
  */
-import { join, relative } from 'path'
+import { posix, win32 } from 'path'
 import { normalizeSearchResult } from './search-match-count'
 import { escapeRegex } from './string-utils'
 import type { SearchFileResult, SearchMatch, SearchOptions, SearchResult } from './types'
@@ -43,6 +43,21 @@ function acceptMatch(fileResult: SearchFileResult): void {
 // `join(rootPath, relPath)` in callers).
 export function normalizeRelativePath(path: string): string {
   return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
+}
+
+function pathFlavor(rootPath: string): typeof posix | typeof win32 {
+  if (/^[a-zA-Z]:[\\/]/.test(rootPath) || rootPath.startsWith('\\\\')) {
+    return win32
+  }
+  return posix
+}
+
+function relativeToSearchRoot(rootPath: string, absPath: string): string {
+  return pathFlavor(rootPath).relative(rootPath, absPath)
+}
+
+function joinSearchRoot(rootPath: string, relPath: string): string {
+  return pathFlavor(rootPath).join(rootPath, relPath)
 }
 
 // ─── Constants shared by both callers ────────────────────────────────
@@ -188,7 +203,7 @@ export function splitSearchGlobPatterns(patterns: string): string[] {
  * target to a WSL-native path on the local side. On Windows/WSL, only the
  * rg *invocation* is routed through `wslAwareSpawn`; the target string keeps
  * its original shape, and rg's output paths are translated back to Windows
- * UNC via the `transformAbsPath` callback in `ingestRgJsonLine`.
+ * paths via the `transformAbsPath` callback in `ingestRgJsonLine`.
  */
 export function buildRgArgs(query: string, target: string, opts: SearchOptionsLike): string[] {
   const args: string[] = [
@@ -273,7 +288,7 @@ export function ingestRgJsonLine(
     return 'continue'
   }
   const absPath = transformAbsPath ? transformAbsPath(rawPath) : rawPath
-  const relPath = normalizeRelativePath(relative(rootPath, absPath))
+  const relPath = normalizeRelativePath(relativeToSearchRoot(rootPath, absPath))
   const lineContent = (data.lines?.text ?? '').replace(/\n$/, '')
   const lineNumber = data.line_number ?? 0
   let submatches = data.submatches ?? []
@@ -434,7 +449,7 @@ export function ingestGitGrepLine(
   }
   const lineNum = Number(lineNumberText)
 
-  const absPath = join(rootPath, relPath)
+  const absPath = joinSearchRoot(rootPath, relPath)
   const getFileResult = (): SearchFileResult => {
     let fileResult = acc.fileMap.get(absPath)
     if (!fileResult) {

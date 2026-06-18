@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GlUtils from './gl-utils'
 
-const { glabExecFileAsyncMock, getGlabKnownHostsMock, acquireMock, releaseMock } = vi.hoisted(
-  () => ({
-    glabExecFileAsyncMock: vi.fn(),
-    getGlabKnownHostsMock: vi.fn(),
-    acquireMock: vi.fn(),
-    releaseMock: vi.fn()
-  })
-)
+const {
+  glabExecFileAsyncMock,
+  getGlabKnownHostsMock,
+  getProjectRefMock,
+  acquireMock,
+  releaseMock
+} = vi.hoisted(() => ({
+  glabExecFileAsyncMock: vi.fn(),
+  getGlabKnownHostsMock: vi.fn(),
+  getProjectRefMock: vi.fn(),
+  acquireMock: vi.fn(),
+  releaseMock: vi.fn()
+}))
 
 vi.mock('./gl-utils', async () => {
   const actual = await vi.importActual<typeof GlUtils>('./gl-utils')
@@ -16,6 +21,7 @@ vi.mock('./gl-utils', async () => {
     ...actual,
     glabExecFileAsync: glabExecFileAsyncMock,
     getGlabKnownHosts: getGlabKnownHostsMock,
+    getProjectRef: getProjectRefMock,
     acquire: acquireMock,
     release: releaseMock
   }
@@ -27,10 +33,12 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
   beforeEach(() => {
     glabExecFileAsyncMock.mockReset()
     getGlabKnownHostsMock.mockReset()
+    getProjectRefMock.mockReset()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
     getGlabKnownHostsMock.mockResolvedValue(['gitlab.com'])
+    getProjectRefMock.mockResolvedValue(null)
   })
 
   describe('getAuthenticatedViewer', () => {
@@ -135,6 +143,36 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
       )
     })
 
+    it('routes local WSL pasted-project lookup through glab execution options', async () => {
+      const localGitOptions = { wslDistro: 'Ubuntu' }
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          id: 201,
+          iid: 9,
+          title: 'WSL bug',
+          state: 'opened',
+          web_url: 'https://gitlab.com/g/p/-/issues/9'
+        })
+      })
+
+      await getWorkItemByProjectRef(
+        '/repo',
+        { host: 'gitlab.com', path: 'g/p' },
+        9,
+        'issue',
+        null,
+        localGitOptions
+      )
+
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', '--hostname', 'gitlab.com', 'projects/g%2Fp/issues/9'],
+        {
+          cwd: '/repo',
+          wslDistro: 'Ubuntu'
+        }
+      )
+    })
+
     it('returns null when the API errors', async () => {
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('not found'))
       const item = await getWorkItemByProjectRef(
@@ -187,6 +225,20 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         ['api', 'todos?state=pending&per_page=50'],
         { cwd: '/repo' }
+      )
+    })
+
+    it('routes local WSL todos through project resolution and glab execution options', async () => {
+      const localGitOptions = { wslDistro: 'Ubuntu' }
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+      await expect(listTodos('/repo', null, localGitOptions)).resolves.toEqual([])
+
+      expect(getProjectRefMock).toHaveBeenCalledWith('/repo', ['gitlab.com'], null, localGitOptions)
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        ['api', 'todos?state=pending&per_page=50'],
+        { cwd: '/repo', wslDistro: 'Ubuntu' }
       )
     })
 

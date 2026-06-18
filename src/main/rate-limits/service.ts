@@ -2,14 +2,16 @@
 handling, account-switch fetch semantics, and renderer push coordination so the
 fetch ordering rules stay in one place. */
 import type { BrowserWindow } from 'electron'
+import { randomUUID } from 'node:crypto'
 import type {
+  CodexRateLimitResetResult,
   RateLimitState,
   ProviderRateLimits,
   InactiveAccountUsage
 } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
-import { fetchCodexRateLimits } from './codex-fetcher'
+import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import {
   normalizeClaudeAccountSelectionTarget,
@@ -274,6 +276,29 @@ export class RateLimitService {
     })
     await this.fetchCodexOnly({ force: true })
     return this.getState()
+  }
+
+  async consumeCodexRateLimitResetCredit(): Promise<CodexRateLimitResetResult> {
+    const codexTarget = this.codexFetchTarget
+    const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
+    const missingWslCodexHome = codexHomePath
+      ? null
+      : this.getMissingWslCodexHomeResult(codexTarget)
+    if (missingWslCodexHome) {
+      await this.fetchCodexOnly({ force: true })
+      throw new Error(missingWslCodexHome.error ?? 'Codex home unavailable')
+    }
+    try {
+      const outcome = await consumeCodexRateLimitResetCredit({
+        codexHomePath,
+        idempotencyKey: randomUUID()
+      })
+      await this.fetchCodexOnly({ force: true })
+      return { outcome, state: this.getState() }
+    } catch (error) {
+      await this.fetchCodexOnly({ force: true })
+      throw error
+    }
   }
 
   async refreshForClaudeAccountChange(

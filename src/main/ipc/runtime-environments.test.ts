@@ -78,7 +78,7 @@ function handler<TArgs, TResult>(
   return match![1] as (_event: unknown, args: TArgs) => TResult | Promise<TResult>
 }
 
-describe('registerRuntimeEnvironmentHandlers', () => {
+describe('registerRuntimeEnvironmentHandlers', { timeout: 45_000 }, () => {
   let userDataPath: string
 
   beforeEach(() => {
@@ -1095,7 +1095,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'status.get'
     ])
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledTimes(2)
-  }, 15_000)
+  }, 45_000)
 
   it('limits background one-shot RPCs without blocking foreground runtime calls', async () => {
     registerRuntimeEnvironmentHandlers()

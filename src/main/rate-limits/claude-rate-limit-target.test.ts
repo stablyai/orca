@@ -41,13 +41,31 @@ describe('getInitialClaudeRateLimitTarget', () => {
     ).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
   })
 
-  it('uses the configured WSL agent runtime and distro', () => {
+  it('ignores stale terminal WSL distro when account runtime is WSL default', () => {
+    expect(
+      getInitialClaudeRateLimitTarget(
+        {
+          ...getDefaultSettings('/tmp'),
+          localAccountRuntime: 'wsl',
+          localAccountWslDistro: null,
+          terminalWindowsWslDistro: 'Debian',
+          activeClaudeManagedAccountIdsByRuntime: {
+            host: 'host-account-1',
+            wsl: {}
+          }
+        },
+        'win32'
+      )
+    ).toEqual({ runtime: 'wsl', wslDistro: null })
+  })
+
+  it('uses the global WSL project runtime default when account runtime is unset', () => {
     expect(
       getInitialClaudeRateLimitTarget(
         legacySettingsWithoutAccountRuntime({
           ...getDefaultSettings('/tmp'),
-          localAgentRuntime: 'wsl',
-          localAgentWslDistro: 'Ubuntu',
+          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
+          localAgentRuntime: 'host',
           terminalWindowsWslDistro: 'Debian'
         }),
         'win32'
@@ -55,17 +73,20 @@ describe('getInitialClaudeRateLimitTarget', () => {
     ).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
   })
 
-  it('uses the Windows WSL terminal setting when agent runtime is implicit', () => {
+  it('ignores stale legacy WSL agent and terminal settings when the project default is host', () => {
     expect(
       getInitialClaudeRateLimitTarget(
         legacySettingsWithoutAccountRuntime({
           ...getDefaultSettings('/tmp'),
+          localWindowsRuntimeDefault: { kind: 'windows-host' },
+          localAgentRuntime: 'wsl',
+          localAgentWslDistro: 'Ubuntu',
           terminalWindowsShell: 'wsl.exe',
-          terminalWindowsWslDistro: 'Ubuntu'
+          terminalWindowsWslDistro: 'Debian'
         }),
         'win32'
       )
-    ).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    ).toEqual({ runtime: 'host' })
   })
 
   it('uses a single WSL-only active account after restart', () => {

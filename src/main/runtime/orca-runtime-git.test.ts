@@ -112,7 +112,7 @@ describe('RuntimeGitCommands', () => {
 
     await expect(commands.abortRuntimeGitMerge('id:wt-1')).resolves.toEqual({ ok: true })
 
-    expect(mocks.abortMerge).toHaveBeenCalledWith(worktreePath)
+    expect(mocks.abortMerge).toHaveBeenCalledWith(worktreePath, {})
   })
 
   it('aborts a remote merge through the SSH git provider', async () => {
@@ -140,7 +140,7 @@ describe('RuntimeGitCommands', () => {
 
     await expect(commands.abortRuntimeGitRebase('id:wt-1')).resolves.toEqual({ ok: true })
 
-    expect(mocks.abortRebase).toHaveBeenCalledWith(worktreePath)
+    expect(mocks.abortRebase).toHaveBeenCalledWith(worktreePath, {})
   })
 
   it('aborts a remote rebase through the SSH git provider', async () => {
@@ -171,7 +171,7 @@ describe('RuntimeGitCommands', () => {
       branch: 'feature/x'
     })
 
-    expect(mocks.checkoutBranch).toHaveBeenCalledWith(worktreePath, 'feature/x')
+    expect(mocks.checkoutBranch).toHaveBeenCalledWith(worktreePath, 'feature/x', {})
   })
 
   it('checks out a remote branch through the SSH git provider', async () => {
@@ -205,7 +205,7 @@ describe('RuntimeGitCommands', () => {
       branches: ['main', 'feature/x']
     })
 
-    expect(mocks.listLocalBranches).toHaveBeenCalledWith(worktreePath)
+    expect(mocks.listLocalBranches).toHaveBeenCalledWith(worktreePath, {})
   })
 
   it('lists remote local branches through the SSH git provider', async () => {
@@ -291,6 +291,62 @@ describe('RuntimeGitCommands', () => {
         kind: 'local',
         cwd: worktreePath,
         env: expect.objectContaining({ CODEX_HOME: '/managed/codex-home' })
+      })
+    )
+  })
+
+  it('routes local WSL project runtime commit-message generation through the runtime target', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const context = {
+      branch: 'main',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini', thinkingLevel: 'low' }
+    const prepareForCodexLaunch = vi.fn(() => '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.codex')
+    mocks.resolveCommitMessageSettings.mockReturnValue({ ok: true, params })
+    mocks.getStagedCommitContext.mockResolvedValue(context)
+    mocks.generateCommitMessageFromContext.mockResolvedValue({
+      success: true,
+      message: 'docs: update readme'
+    })
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({
+        worktree: makeWorktree(worktreePath),
+        localGitOptions: { wslDistro: 'Ubuntu' }
+      }),
+      getRuntimeSettings: () =>
+        ({
+          commitMessageAi: { enabled: true, agentId: 'codex' },
+          agentCmdOverrides: {},
+          enableGitHubAttribution: false
+        }) as GlobalSettings,
+      getCommitMessageAgentEnvironment: () => ({
+        prepareForCodexLaunch
+      })
+    })
+
+    await expect(commands.generateRuntimeCommitMessage('id:wt-1')).resolves.toEqual({
+      success: true,
+      message: 'docs: update readme'
+    })
+
+    expect(mocks.getStagedCommitContext).toHaveBeenCalledWith(worktreePath, {
+      wslDistro: 'Ubuntu'
+    })
+    expect(prepareForCodexLaunch).toHaveBeenCalledWith({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+    expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
+      context,
+      params,
+      expect.objectContaining({
+        kind: 'local',
+        cwd: worktreePath,
+        wslDistro: 'Ubuntu',
+        env: expect.objectContaining({ CODEX_HOME: '/home/tester/.codex' })
       })
     )
   })
