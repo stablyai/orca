@@ -2248,11 +2248,18 @@
           },
           "MobileDriverOverlay": {
             "c6460cf584": "Devolver",
-            "c44659e09f": "conducción móvil",
+            "c8f2e1a4b9": "Recuperar este terminal",
+            "c44659e09f": "Teléfono al mando",
             "7cffad954c": "Colapsar",
             "3eed73394f": "Tu teclado está en pausa",
-            "faa367dc74": "Este terminal tiene el tamaño adecuado para tu aplicación móvil",
-            "54f7d6f69d": "Cambiar tamaño de todas las terminales"
+            "faa367dc74": "Tu teléfono dejó esto en tamaño móvil",
+            "54f7d6f69d": "Recuperar todos los terminales",
+            "b3d8e1f42a": "Restaurar este terminal",
+            "e8c4f2a91b": "Restaurar todos los terminales",
+            "f2a8b9c1d3": "Desde tu teléfono",
+            "c7e4a2b8f1": "Tu teléfono está al mando",
+            "d9f3c6e2a4": "El teclado del escritorio está en pausa. Recupera este terminal para escribir aquí, recupera todos los terminales que controla tu teléfono, o colapsa para seguir mirando.",
+            "a6b1d8f3e2": "La sesión del teléfono terminó. Restaura el tamaño de escritorio para este terminal o para todos los terminales que tu teléfono dejó en tamaño móvil."
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copiar contexto",
@@ -4760,9 +4767,9 @@
           "dac08ec03e": "Laboral..."
         },
         "ExperimentalPane": {
-          "9762364929": "Permite enlaces simbólicos automáticos de ciertas carpetas o archivos que deben conectarse a los árboles de trabajo creados.",
-          "24416f42cd": "Enlaces simbólicos en árboles de trabajo",
-          "fb82ea1d7a": "Vincula automáticamente archivos o carpetas configurados en árboles de trabajo recién creados.",
+          "9762364929": "Usa APFS clone-copy en macOS cuando es posible; de lo contrario, crea enlaces simbólicos de las carpetas o archivos configurados en los árboles de trabajo creados.",
+          "24416f42cd": "Rutas compartidas en árboles de trabajo",
+          "fb82ea1d7a": "Materializa automáticamente archivos o carpetas configurados en árboles de trabajo recién creados.",
           "a20d5ea365": "Mantiene visible un resaltado a nivel de panel después de que suena la terminal o los eventos de finalización del agente hasta que interactúa con ese panel. Experimental mientras sintonizamos la señal.",
           "ec897e8d89": "Atención terminal",
           "88b7613afb": "Resaltado de panel persistente para eventos de finalización de agente y timbre de terminal.",
@@ -5183,7 +5190,7 @@
         },
         "MobilePane": {
           "dd3cd78d04": "Escanear con Orca Móvil",
-          "35100bca5d": "Mientras usas un terminal en tu teléfono, Orca lo reduce para que se ajuste a la pantalla de tu teléfono. Cuando cierra la aplicación o la abandona, esto controla si permanece en el tamaño del teléfono (para que las herramientas CLI interactivas no vuelvan a fluir) o cambia de tamaño a su escritorio. Siempre puedes hacer clic en Restaurar en el banner del terminal para cambiar su tamaño manualmente.",
+          "35100bca5d": "Mientras usas un terminal en tu teléfono, Orca lo reduce para que se ajuste a la pantalla de tu teléfono. Cuando cierra la aplicación o la abandona, esto controla si permanece en el tamaño del teléfono (para que las herramientas CLI interactivas no vuelvan a fluir) o cambia de tamaño a su escritorio. Siempre puedes usar Restaurar este terminal o Restaurar todos los terminales en el banner para cambiar el tamaño manualmente.",
           "ee56f1c7e4": "Cuando sales de la aplicación móvil",
           "3939fd062c": "Revocar un dispositivo lo desconecta inmediatamente.",
           "254a6d09e4": "emparejado",
@@ -6294,15 +6301,15 @@
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
           "b814c618e2": "Caminos vinculados",
-          "31ebab5403": "No hay rutas de enlaces simbólicos configuradas para este repositorio.",
+          "31ebab5403": "No hay rutas compartidas configuradas para este repositorio.",
           "ea06227efa": "agregado",
           "b2429aeb31": "Agregar",
           "ab40b8a5f1": "Sin coincidencias. Sigue escribiendo para agregar una ruta personalizada.",
           "4cd2a4c077": "Escriba una ruta (por ejemplo, .env o node_modules)…",
           "241325302c": "Agregar ruta",
-          "7ff265071d": "Cuando se crea un nuevo árbol de trabajo, cada ruta enumerada aquí tendrá un enlace simbólico desde el pago principal.",
-          "4755f120b6": "Enlaces simbólicos del árbol de trabajo",
-          "b07ef5a8b6": "Rutas para vincular simbólicamente desde el pago principal a árboles de trabajo recién creados.",
+          "7ff265071d": "Cuando se crea un nuevo árbol de trabajo, cada ruta enumerada aquí se copia con APFS clone-copy en macOS cuando es posible; de lo contrario, se enlaza simbólicamente desde el checkout principal.",
+          "4755f120b6": "Rutas compartidas del árbol de trabajo",
+          "b07ef5a8b6": "Rutas para materializar desde el checkout principal en árboles de trabajo recién creados.",
           "d72ba8dc68": "{{value0}} caminos",
           "9ea912d811": "1 camino"
         },
@@ -6814,8 +6821,8 @@
             "10b52f79c1": "árboles de trabajo",
             "d23ae13990": "árbol de trabajo",
             "0d24759f14": "experimental",
-            "603d29ed74": "Vincula automáticamente archivos o carpetas configurados en árboles de trabajo recién creados para que el estado compartido (envs, cachés, instalaciones) permanezca conectado.",
-            "78c2a8dc74": "Enlaces simbólicos en árboles de trabajo",
+            "603d29ed74": "Materializa automáticamente archivos o carpetas configurados en árboles de trabajo recién creados usando APFS clone-copy en macOS cuando es posible; de lo contrario, usa enlaces simbólicos.",
+            "78c2a8dc74": "Rutas compartidas en árboles de trabajo",
             "7b79081695": "no leído",
             "f10d307468": "terminación",
             "5f067ba0f9": "agent",
@@ -7434,8 +7441,8 @@
             "f1c53f2820": "árbol de trabajo",
             "7e228fc439": "enlaces simbólicos",
             "c06adcf136": "enlace simbólico",
-            "ed885e589f": "Rutas para vincular simbólicamente desde el pago principal a árboles de trabajo recién creados.",
-            "01b3377ebc": "Enlaces simbólicos del árbol de trabajo",
+            "ed885e589f": "Rutas para materializar desde el checkout principal en árboles de trabajo recién creados.",
+            "01b3377ebc": "Rutas compartidas del árbol de trabajo",
             "fff8834983": "inmediato",
             "fa3131f223": "modelo",
             "130d76dc16": "rebautizar",
@@ -7494,7 +7501,10 @@
             "keepForkUpToDate": "Mantener el fork actualizado",
             "keepForkUpToDateDescription": "Avanza este fork de forma segura desde upstream con fast-forward.",
             "projectRuntime": "Project Runtime",
-            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
+            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
+            "copy": "copy",
+            "clone": "clone",
+            "apfs": "apfs"
           }
         },
         "runtime": {

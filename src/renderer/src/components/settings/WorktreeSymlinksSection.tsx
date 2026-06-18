@@ -98,14 +98,17 @@ export function WorktreeSymlinksSection({
     <SearchableSetting
       title={translate(
         'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
-        'Worktree Symlinks'
+        'Worktree Shared Paths'
       )}
       description={translate(
         'auto.components.settings.WorktreeSymlinksSection.b07ef5a8b6',
-        'Paths to symlink from the primary checkout into newly created worktrees.'
+        'Paths to materialize from the primary checkout into newly created worktrees.'
       )}
       keywords={[
         repo.displayName,
+        'apfs',
+        'clone',
+        'copy',
         'symlink',
         'symlinks',
         'worktree',
@@ -121,13 +124,13 @@ export function WorktreeSymlinksSection({
           <h3 className="text-sm font-semibold">
             {translate(
               'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
-              'Worktree Symlinks'
+              'Worktree Shared Paths'
             )}
           </h3>
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.WorktreeSymlinksSection.7ff265071d',
-              'When a new worktree is created, each path listed here will be symlinked from the primary checkout.'
+              'When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.'
             )}
           </p>
         </div>
@@ -211,7 +214,7 @@ export function WorktreeSymlinksSection({
         <div className="rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
           {translate(
             'auto.components.settings.WorktreeSymlinksSection.31ebab5403',
-            'No symlink paths configured for this repository.'
+            'No shared paths configured for this repository.'
           )}
         </div>
       ) : (

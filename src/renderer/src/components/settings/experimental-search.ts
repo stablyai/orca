@@ -189,11 +189,11 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     {
       title: translate(
         'auto.components.settings.experimental.search.78c2a8dc74',
-        'Symlinks on worktrees'
+        'Shared paths on worktrees'
       ),
       description: translate(
         'auto.components.settings.experimental.search.603d29ed74',
-        'Automatically symlink configured files or folders into newly created worktrees so shared state (envs, caches, installs) stays connected.'
+        'Automatically materialize configured files or folders into newly created worktrees using APFS clone-copy on macOS when possible, otherwise symlinks.'
       ),
       keywords: [
         ...translateSearchKeyword(
@@ -271,7 +271,10 @@ export function getExperimentalSearchEntry() {
       )
     ),
     symlinksOnWorktrees: findEntry(
-      translate('auto.components.settings.experimental.search.78c2a8dc74', 'Symlinks on worktrees')
+      translate(
+        'auto.components.settings.experimental.search.78c2a8dc74',
+        'Shared paths on worktrees'
+      )
     )
   } as const
 }
