@@ -1,5 +1,5 @@
 import React from 'react'
-import { PlayCircle, Workflow } from 'lucide-react'
+import { CalendarClock, PlayCircle } from 'lucide-react'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { AutomationWorkspaceProvenance } from '../../../../shared/types'
 import {
@@ -77,7 +77,7 @@ export function WorktreeCardAutomationDetailSection({
   return (
     <WorktreeCardDetailSection>
       <DetailHeader
-        icon={<Workflow className="size-3 text-muted-foreground" />}
+        icon={<CalendarClock className="size-3 text-muted-foreground" />}
         label={translate('auto.components.sidebar.WorktreeCardMeta.automationHeader', 'Automation')}
         actions={
           <>
@@ -89,7 +89,7 @@ export function WorktreeCardAutomationDetailSection({
                 )}
                 onClick={onOpenAutomation}
               >
-                <Workflow className="size-3" />
+                <CalendarClock className="size-3" />
               </MetadataActionIcon>
             )}
             {onOpenAutomationRun && canOpenAutomationRun && (

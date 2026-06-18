@@ -335,7 +335,7 @@ describe('WorktreeCard linked PR display', () => {
     expect(markup).not.toContain('Reviewer handoff note')
   })
 
-  it('shows automation-created workspaces as a visible card property badge', async () => {
+  it('shows automation-created workspaces as a metadata icon property', async () => {
     worktreeCardProperties = ['status', 'automation']
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
@@ -362,7 +362,7 @@ describe('WorktreeCard linked PR display', () => {
     )
 
     expect(markup).toContain('Created by automation')
-    expect(markup).toContain('>Automation</span>')
+    expect(markup).not.toContain('>Automation</span>')
   })
 
   it('hides automation-created card surfaces when the Automation property is disabled', async () => {

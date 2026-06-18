@@ -1,7 +1,7 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import { CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote, Workflow } from 'lucide-react'
+import { CalendarClock, CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -88,7 +88,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
             'Created by automation'
           )}
         >
-          <Workflow className="text-muted-foreground" />
+          <CalendarClock className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {issue && (
