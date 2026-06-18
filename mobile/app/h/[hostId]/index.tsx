@@ -49,7 +49,7 @@ import { WorktreeListRow } from '../../../src/components/WorktreeListRow'
 import { useNow } from '../../../src/hooks/use-now'
 import { useActiveWorktreeScroll } from '../../../src/hooks/use-active-worktree-scroll'
 import type { RepoIcon } from '../../../../src/shared/repo-icon'
-import { PickerModal, type PickerOption } from '../../../src/components/PickerModal'
+import { PickerModal } from '../../../src/components/PickerModal'
 import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
@@ -83,43 +83,17 @@ import {
   type FilterState,
   type Worktree
 } from '../../../src/worktree/workspace-list-sections'
-
-// Why: locally-typed subset of the desktop's RuntimeStatus we read from
-// `status.get`. Only the version fields matter to mobile today; everything
-// else is opaque. Both fields are optional since pre-PR desktops won't
-// return them — the compat evaluator handles undefined gracefully.
-type DesktopStatus = {
-  protocolVersion?: number
-  minCompatibleMobileVersion?: number
-}
-
-// repo.list response item — captures id (desktop filter key) plus the visual
-// metadata keyed by displayName the section headers/rows already use.
-type RepoSummary = {
-  id: string
-  displayName: string
-  badgeColor?: string
-  repoIcon?: RepoIcon | null
-}
+import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
+import { repoColor } from '../../../src/worktree/repo-color'
+import {
+  WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
+  WORKSPACE_SORT_OPTIONS as SORT_OPTIONS
+} from '../../../src/worktree/workspace-list-picker-options'
+import type { DesktopStatus, RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
 }
-
-const SORT_OPTIONS: PickerOption<MobileSortMode>[] = [
-  { value: 'smart', label: 'Smart', subtitle: 'Unread and active first' },
-  { value: 'name', label: 'Name', subtitle: 'Alphabetical by name' },
-  { value: 'recent', label: 'Recent', subtitle: 'Most recent output first' },
-  { value: 'repo', label: 'Repo', subtitle: 'Repository, then workspace name' },
-  { value: 'manual', label: 'Manual', subtitle: 'Server order' }
-]
-
-const GROUP_OPTIONS: PickerOption<MobileGroupMode>[] = [
-  { value: 'none', label: 'No Grouping' },
-  { value: 'workspaceStatus', label: 'Status' },
-  { value: 'repo', label: 'Repository' },
-  { value: 'prStatus', label: 'PR Status' }
-]
 
 const REPO_METADATA_REFRESH_MS = 60_000
 
@@ -167,6 +141,7 @@ export function HostScreen({
   const fetchRepoMetadataInFlightRef = useRef(false)
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
+  const newWorktreeModalVisibleRef = useRef(false)
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
@@ -278,6 +253,15 @@ export function HostScreen({
     },
     [client, applyViewState]
   )
+
+  const openNewWorktreeModal = useCallback(() => {
+    const modal = newWorktreeModalRef.current
+    if (!modal) {
+      return
+    }
+    newWorktreeModalVisibleRef.current = true
+    modal.open()
+  }, [])
 
   const resolvedRouteActionState = resolveHostRouteActionState(routeActionState, action)
   // Why: `action=newWorktree` is a route-derived open edge. Resolve it before
@@ -429,77 +413,93 @@ export function HostScreen({
     [client, connState, hostId]
   )
 
-  const fetchWorktrees = useCallback(async () => {
-    if (!client || connState !== 'connected') {
-      return
-    }
-    // The embedded sidebar polls for the whole split-view session; keep slow
-    // remote hosts from stacking overlapping expensive list requests.
-    if (fetchWorktreesInFlightRef.current) {
-      return
-    }
-    fetchWorktreesInFlightRef.current = true
-    const requestClient = client
-    const requestHostId = hostId
-
-    try {
-      // Why: worktree.ps defaults to 200 and silently truncates; match the
-      // desktop's high cap so large hosts don't drop workspaces on mobile.
-      const response = await requestClient.sendRequest('worktree.ps', { limit: 10000 })
-      if (clientRef.current !== requestClient || hostId !== requestHostId) {
+  const fetchWorktrees = useCallback(
+    async (options: { allowDuringModal?: boolean } = {}) => {
+      if (!client || connState !== 'connected') {
         return
       }
-      if (response.ok) {
-        const result = (response as RpcSuccess).result as { worktrees: Worktree[] }
-        setWorktrees(result.worktrees)
-        setLastKnownWorktrees(result.worktrees)
-        setWorktreesLoaded(true)
-        // Drop the optimistic active override once the host confirms it (the
-        // activate RPC has landed and worktree.ps now reports it active), so we
-        // stop overriding and respect any later desktop-driven change.
-        setOptimisticActiveWorktreeId((pending) =>
-          pending && result.worktrees.some((w) => w.worktreeId === pending && w.isActive)
-            ? null
-            : pending
-        )
-
-        // Clear optimistic sleep overrides once the server confirms the
-        // worktree is actually inactive (liveTerminalCount dropped to 0).
-        setSleptIds((prev) => {
-          if (prev.size === 0) {
-            return prev
-          }
-          const still = new Set<string>()
-          for (const id of prev) {
-            const wt = result.worktrees.find((w) => w.worktreeId === id)
-            if (wt && wt.liveTerminalCount > 0) {
-              still.add(id)
-            }
-          }
-          return still.size === prev.size ? prev : still
-        })
-
-        // Sync local pin state from server so desktop-initiated pins/unpins
-        // are reflected without relying on stale AsyncStorage.
-        const serverPinned = new Set(
-          result.worktrees.filter((w) => w.isPinned).map((w) => w.worktreeId)
-        )
-        setPinnedIds((prev) => {
-          if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
-            return prev
-          }
-          if (hostId) {
-            void savePinnedIds(hostId, serverPinned)
-          }
-          return serverPinned
-        })
+      if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
+        return
       }
-    } catch {
-      // Will retry on reconnect
-    } finally {
-      fetchWorktreesInFlightRef.current = false
-    }
-  }, [client, connState, hostId])
+      // The embedded sidebar polls for the whole split-view session; keep slow
+      // remote hosts from stacking overlapping expensive list requests.
+      if (fetchWorktreesInFlightRef.current) {
+        return
+      }
+      fetchWorktreesInFlightRef.current = true
+      const requestClient = client
+      const requestHostId = hostId
+
+      try {
+        // Why: worktree.ps defaults to 200 and silently truncates; match the
+        // desktop's high cap so large hosts don't drop workspaces on mobile.
+        const response = await requestClient.sendRequest('worktree.ps', { limit: 10000 })
+        if (clientRef.current !== requestClient || hostId !== requestHostId) {
+          return
+        }
+        if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
+          return
+        }
+        if (response.ok) {
+          const result = (response as RpcSuccess).result as { worktrees: Worktree[] }
+          // Why: large hosts can return identical worktree.ps snapshots every
+          // poll. Preserving the existing array keeps SectionList/sort rebuilds
+          // off the JS tap path unless something actually changed.
+          setWorktrees((current) =>
+            areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
+          )
+          setLastKnownWorktrees((current) =>
+            areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
+          )
+          setWorktreesLoaded(true)
+          // Drop the optimistic active override once the host confirms it (the
+          // activate RPC has landed and worktree.ps now reports it active), so we
+          // stop overriding and respect any later desktop-driven change.
+          setOptimisticActiveWorktreeId((pending) =>
+            pending && result.worktrees.some((w) => w.worktreeId === pending && w.isActive)
+              ? null
+              : pending
+          )
+
+          // Clear optimistic sleep overrides once the server confirms the
+          // worktree is actually inactive (liveTerminalCount dropped to 0).
+          setSleptIds((prev) => {
+            if (prev.size === 0) {
+              return prev
+            }
+            const still = new Set<string>()
+            for (const id of prev) {
+              const wt = result.worktrees.find((w) => w.worktreeId === id)
+              if (wt && wt.liveTerminalCount > 0) {
+                still.add(id)
+              }
+            }
+            return still.size === prev.size ? prev : still
+          })
+
+          // Sync local pin state from server so desktop-initiated pins/unpins
+          // are reflected without relying on stale AsyncStorage.
+          const serverPinned = new Set(
+            result.worktrees.filter((w) => w.isPinned).map((w) => w.worktreeId)
+          )
+          setPinnedIds((prev) => {
+            if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
+              return prev
+            }
+            if (hostId) {
+              void savePinnedIds(hostId, serverPinned)
+            }
+            return serverPinned
+          })
+        }
+      } catch {
+        // Will retry on reconnect
+      } finally {
+        fetchWorktreesInFlightRef.current = false
+      }
+    },
+    [client, connState, hostId]
+  )
 
   // Why: read desktop's protocol version from status.get on every connect
   // and re-evaluate compatibility. If the desktop declares this mobile
@@ -829,6 +829,7 @@ export function HostScreen({
       })),
     [rawSections, collapsedGroups]
   )
+  const existingWorktreePaths = useMemo(() => worktrees.map((w) => w.path), [worktrees])
 
   const { sectionListRef, onScrollToIndexFailed } = useActiveWorktreeScroll(sections)
 
@@ -1011,7 +1012,7 @@ export function HostScreen({
                   styles.embeddedToolbarIconButton,
                   connState !== 'connected' && styles.toolbarIconDisabled
                 ]}
-                onPress={() => newWorktreeModalRef.current?.open()}
+                onPress={openNewWorktreeModal}
                 disabled={connState !== 'connected'}
                 accessibilityRole="button"
                 accessibilityLabel="New workspace"
@@ -1102,7 +1103,7 @@ export function HostScreen({
 
             <Pressable
               style={styles.newButton}
-              onPress={() => newWorktreeModalRef.current?.open()}
+              onPress={openNewWorktreeModal}
               disabled={connState !== 'connected'}
             >
               <Plus
@@ -1430,9 +1431,12 @@ export function HostScreen({
         routeVisible={showNewWorktree}
         client={client}
         hostId={hostId}
-        existingWorktreePaths={worktrees.map((w) => w.path)}
+        existingWorktreePaths={existingWorktreePaths}
+        onVisibleChange={(visible) => {
+          newWorktreeModalVisibleRef.current = visible
+        }}
         onCreated={(worktreeId, worktreeName) => {
-          void fetchWorktrees()
+          void fetchWorktrees({ allowDuringModal: true })
           const params = new URLSearchParams({ name: worktreeName, created: '1' })
           navigateFromHostList(
             `/h/${hostId}/session/${encodeURIComponent(worktreeId)}?${params.toString()}`
@@ -1458,15 +1462,6 @@ export default function HostWorktreeRoute() {
 
 function ListSeparator() {
   return <View style={styles.separator} />
-}
-
-function repoColor(name: string): string {
-  const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
-  let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = (hash * 31 + name.charCodeAt(i)) | 0
-  }
-  return palette[Math.abs(hash) % palette.length]!
 }
 
 const styles = StyleSheet.create({

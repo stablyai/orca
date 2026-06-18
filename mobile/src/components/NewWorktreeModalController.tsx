@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useImperativeHandle, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react'
 
 import type { RpcClient } from '../transport/rpc-client'
 import { NewWorktreeModal } from './NewWorktreeModal'
@@ -12,13 +12,22 @@ type Props = {
   client: RpcClient | null
   hostId?: string
   existingWorktreePaths?: readonly string[]
+  onVisibleChange?: (visible: boolean) => void
   onRouteVisibleChange: (visible: boolean) => void
   onCreated: (worktreeId: string, name: string) => void
 }
 
 export const NewWorktreeModalController = forwardRef<NewWorktreeModalControllerHandle, Props>(
   function NewWorktreeModalController(
-    { routeVisible, client, hostId, existingWorktreePaths, onRouteVisibleChange, onCreated },
+    {
+      routeVisible,
+      client,
+      hostId,
+      existingWorktreePaths,
+      onVisibleChange,
+      onRouteVisibleChange,
+      onCreated
+    },
     ref
   ) {
     const [manualVisible, setManualVisible] = useState(false)
@@ -38,6 +47,10 @@ export const NewWorktreeModalController = forwardRef<NewWorktreeModalControllerH
         onRouteVisibleChange(false)
       }
     }, [onRouteVisibleChange, routeVisible])
+
+    useEffect(() => {
+      onVisibleChange?.(visible)
+    }, [onVisibleChange, visible])
 
     return (
       <NewWorktreeModal

@@ -11,7 +11,8 @@
     "lint": "oxlint",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "mock-server": "npx tsx scripts/mock-server.ts"
+    "mock-server": "npx tsx scripts/mock-server.ts",
+    "repro:workspace-picker-lag": "npx tsx scripts/repro-workspace-picker-lag.ts"
   },
   "dependencies": {
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
