@@ -4,6 +4,7 @@ import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { LaunchSource } from '../../../shared/telemetry-events'
+import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -12,7 +13,12 @@ export function buildDirectWorkItemStartupOpts(
   plan: AgentStartupPlan | null,
   launchSource: LaunchSource
 ): {
-  startup?: { command: string; env?: Record<string, string>; telemetry?: AgentStartedTelemetry }
+  startup?: {
+    command: string
+    env?: Record<string, string>
+    startupCommandDelivery?: StartupCommandDelivery
+    telemetry?: AgentStartedTelemetry
+  }
 } {
   if (!plan) {
     return {}
@@ -25,6 +31,9 @@ export function buildDirectWorkItemStartupOpts(
     startup: {
       command: plan.launchCommand,
       ...(plan.env ? { env: plan.env } : {}),
+      ...(plan.startupCommandDelivery
+        ? { startupCommandDelivery: plan.startupCommandDelivery }
+        : {}),
       ...(telemetry ? { telemetry } : {})
     }
   }

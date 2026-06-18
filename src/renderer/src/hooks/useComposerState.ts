@@ -2892,6 +2892,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           ? {
               command: startupPlan.launchCommand,
               ...(startupPlan.env ? { env: startupPlan.env } : {}),
+              ...(startupPlan.startupCommandDelivery
+                ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+                : {}),
               telemetry: composerTelemetry
             }
           : undefined
@@ -2954,6 +2957,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               startup: {
                 command: startupPlan.launchCommand,
                 ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                ...(startupPlan.startupCommandDelivery
+                  ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+                  : {}),
                 ...(tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
                   ? {
                       initialAgentStatus: {
@@ -3195,6 +3201,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             launchCommand: draftLaunchPlan.launchCommand,
             expectedProcess: draftLaunchPlan.expectedProcess,
             followupPrompt: null,
+            ...(draftLaunchPlan.startupCommandDelivery
+              ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
+              : {}),
             ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
           }
         } else if (agent !== null) {
@@ -3226,6 +3235,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? {
                 command: startupPlan.launchCommand,
                 ...(startupPlan.env ? { env: startupPlan.env } : {}),
+                ...(startupPlan.startupCommandDelivery
+                  ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+                  : {}),
                 ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
               }
             : undefined

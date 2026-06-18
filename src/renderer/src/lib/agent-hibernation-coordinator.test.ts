@@ -180,6 +180,7 @@ describe('agent hibernation coordinator', () => {
     await vi.advanceTimersByTimeAsync(1000)
     expect(shutdown).toHaveBeenCalledWith('wt-bg', {
       keepIdentifiers: true,
+      shutdownReason: 'auto-hibernate-completed-agent',
       sleepingPaneKeys: [`tab-1:${LEAF}`]
     })
   })
@@ -318,6 +319,7 @@ describe('agent hibernation coordinator', () => {
 
     expect(shutdown).toHaveBeenCalledWith('wt-bg', {
       keepIdentifiers: true,
+      shutdownReason: 'auto-hibernate-completed-agent',
       sleepingPaneKeys: [`tab-1:${LEAF}`],
       expectedRuntimePtyIds: ['pty-1']
     })

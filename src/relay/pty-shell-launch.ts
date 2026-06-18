@@ -4,11 +4,13 @@ import { dirname, join } from 'path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
   getZshFinalZdotdirRestoreBlock,
+  getZshShellReadyMarkerRegistrationBlock,
   getZshStartupFileSourceBlock
 } from '../main/shell-templates'
 
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
+const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
 
 export type RelayShellLaunchConfig = {
   args: string[]
@@ -116,6 +118,7 @@ ${getZshStartupFileSourceBlock({
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
 ${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')}
+${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
 `
   const bashRc = `# Orca relay bash overlay wrapper
 [[ -f /etc/profile ]] && source /etc/profile
@@ -186,6 +189,14 @@ __orca_append_prompt_command() {
   fi
 }
 __orca_prepend_prompt_command
+# Why: SSH startup commands are renderer-delivered; emit the same internal
+# readiness marker as local shells only when that delivery mode asks for it.
+if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
+  __orca_prompt_mark() {
+    printf "${SHELL_READY_MARKER_ESCAPED}"
+  }
+  __orca_append_prompt_command "__orca_prompt_mark"
+fi
 __orca_append_prompt_command "__orca_osc133_prompt_done"
 __orca_debug_trap_spec="$(trap -p DEBUG)"
 if [[ -n "$__orca_debug_trap_spec" ]]; then
@@ -229,9 +240,11 @@ trap '__orca_osc133_preexec' DEBUG
 export function getRelayShellLaunchConfig(
   shellPath: string,
   env: Record<string, string>,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  options: { emitReadyMarker?: boolean } = {}
 ): RelayShellLaunchConfig {
   const shellName = shellBasename(shellPath)
+  const emitReadyMarker = options.emitReadyMarker === true
   if (platform === 'win32') {
     // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
     // only apply when the relay itself is running on native Windows.
@@ -241,7 +254,9 @@ export function getRelayShellLaunchConfig(
   if (shellName !== 'zsh' && shellName !== 'bash') {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }
-  if (shellName === 'zsh' && !hasOverlayRestoreEnv(env)) {
+  // Why: preserve plain zsh startup fast path; only force wrappers when
+  // shell-ready or overlay env restoration is requested.
+  if (shellName === 'zsh' && !hasOverlayRestoreEnv(env) && !emitReadyMarker) {
     return { args: POSIX_LOGIN_ARGS, env: {} }
   }
 
@@ -253,13 +268,14 @@ export function getRelayShellLaunchConfig(
       args: POSIX_LOGIN_ARGS,
       env: {
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(env),
-        ZDOTDIR: join(root, 'zsh')
+        ZDOTDIR: join(root, 'zsh'),
+        ...(emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {})
       }
     }
   }
 
   return {
     args: ['--rcfile', join(root, 'bash', 'rcfile')],
-    env: {}
+    env: emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {}
   }
 }

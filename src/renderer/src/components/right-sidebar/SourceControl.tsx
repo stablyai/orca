@@ -83,6 +83,10 @@ import {
   type SourceControlTreeNode
 } from './source-control-tree'
 import {
+  buildActiveOpenFileSignature,
+  buildActiveOpenRowKeys
+} from './source-control-active-open-file-keys'
+import {
   SourceControlDiscardDialog,
   type PendingDiscardConfirmation
 } from './source-control-discard-dialog'
@@ -3879,6 +3883,43 @@ function SourceControlInner(): React.JSX.Element {
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
   )
 
+  // Why: a stable string signature keeps this selector referentially stable so
+  // the panel only re-renders when the active editor file (or its diff source)
+  // actually changes. Gated on the visible tab being an editor so the highlight
+  // clears when the user switches to a terminal or browser surface.
+  const activeOpenFileSignature = useAppStore((s) => {
+    if (!activeWorktreeId) {
+      return null
+    }
+    if (s.activeTabTypeByWorktree?.[activeWorktreeId] !== 'editor') {
+      return null
+    }
+    const activeFileId = s.activeFileIdByWorktree?.[activeWorktreeId]
+    if (!activeFileId) {
+      return null
+    }
+    const activeFile = s.openFiles?.find(
+      (file) => file.id === activeFileId && file.worktreeId === activeWorktreeId
+    )
+    if (!activeFile) {
+      return null
+    }
+    return buildActiveOpenFileSignature(activeFile.diffSource, activeFile.relativePath)
+  })
+
+  const activeOpenAvailableRowKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const entry of visibleSelectionEntries) {
+      keys.add(entry.key)
+    }
+    return keys
+  }, [visibleSelectionEntries])
+
+  const activeOpenRowKeys = useMemo(
+    () => buildActiveOpenRowKeys(activeOpenFileSignature, activeOpenAvailableRowKeys),
+    [activeOpenAvailableRowKeys, activeOpenFileSignature]
+  )
+
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => {
       if (!activeWorktreeId || !worktreePath) {
@@ -5526,6 +5567,7 @@ function SourceControlInner(): React.JSX.Element {
                                 worktreePath={worktreePath}
                                 depth={node.depth}
                                 selected={selectedKeySet.has(node.key)}
+                                isOpenFile={activeOpenRowKeys.has(node.key)}
                                 onSelect={handleSelect}
                                 onContextMenu={handleContextMenu}
                                 onRevealInExplorer={revealInExplorer}
@@ -5548,6 +5590,7 @@ function SourceControlInner(): React.JSX.Element {
                                 currentWorktreeId={currentWorktreeId}
                                 worktreePath={worktreePath}
                                 selected={selectedKeySet.has(key)}
+                                isOpenFile={activeOpenRowKeys.has(key)}
                                 onSelect={handleSelect}
                                 onContextMenu={handleContextMenu}
                                 onRevealInExplorer={revealInExplorer}
@@ -7436,6 +7479,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   worktreePath,
   depth = 0,
   selected,
+  isOpenFile = false,
   onSelect,
   onContextMenu,
   onRevealInExplorer,
@@ -7452,6 +7496,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   worktreePath: string
   depth?: number
   selected?: boolean
+  isOpenFile?: boolean
   onSelect?: (e: React.MouseEvent, key: string, entry: GitStatusEntry) => void
   onContextMenu?: (key: string) => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
@@ -7506,9 +7551,14 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         data-testid="source-control-entry"
         data-source-control-path={entry.path}
         data-source-control-area={entry.area}
+        // Why: the currently open file gets the strongest "current row" accent
+        // (full `bg-accent` + `data-current`) per the styleguide, outranking the
+        // lighter bulk-selection tint so the open file always reads as active.
+        data-current={isOpenFile ? 'true' : undefined}
         className={cn(
-          'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors hover:bg-accent/40',
-          selected && 'bg-accent/60'
+          'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
+          isOpenFile ? 'bg-accent hover:bg-accent' : 'hover:bg-accent/40',
+          !isOpenFile && selected && 'bg-accent/60'
         )}
         style={{
           paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`

@@ -118,6 +118,7 @@ export const WorktreeCreate = z
     // terminal pane launches the selected agent instead of an idle shell.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),
+    startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
     // Why: CLI clients should not hardcode agent launch quoting because SSH
     // workspaces execute in a different shell than the client process.
     startupAgent: OptionalTuiAgent,

@@ -3,7 +3,6 @@ import { useAppStore } from '@/store'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
-  type AgentDraftLaunchPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -27,8 +26,6 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
-
-const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -86,23 +83,6 @@ function seedCommandCodeSubmittedPromptStatus(tabId: string, prompt: string): vo
   } catch {
     // Best-effort UI seed. Real hooks still own refinement/completion.
   }
-}
-
-function canUseInlineDraftLaunchPlan(
-  plan: AgentDraftLaunchPlan,
-  platform: NodeJS.Platform
-): boolean {
-  if (platform !== 'win32') {
-    return true
-  }
-  const envChars = Object.entries(plan.env ?? {}).reduce(
-    (total, [key, value]) => total + key.length + value.length,
-    0
-  )
-  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
-  // generated drafts should use the existing post-ready paste path instead of
-  // failing the PTY spawn before the agent starts.
-  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
 }
 
 /**
@@ -195,12 +175,15 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agentArgs: effectiveAgentArgs,
       agentEnv
     })
-    if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, resolvedLaunchPlatform)) {
+    if (draftLaunchPlan) {
       startupPlan = {
         agent: draftLaunchPlan.agent,
         launchCommand: draftLaunchPlan.launchCommand,
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
+        ...(draftLaunchPlan.startupCommandDelivery
+          ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
+          : {}),
         ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
       }
     } else {
@@ -253,7 +236,14 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       environmentId: runtimeEnvironmentId,
       targetGroupId: groupId,
       activate: true,
-      ...(hasPrompt ? { command: startupPlan.launchCommand } : { agent })
+      ...(hasPrompt
+        ? {
+            command: startupPlan.launchCommand,
+            ...(startupPlan.startupCommandDelivery
+              ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+              : {})
+          }
+        : { agent })
     }).then((created) => {
       // Why: created means the host accepted the launch, not that a local tab
       // exists; keep pruning stale local rows until the snapshot mirrors.
@@ -296,6 +286,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
     ...(agent === 'command-code' && hasPrompt && promptDelivery === 'auto-submit'
       ? { initialAgentStatus: { agent, prompt: trimmedPrompt } }
       : {}),

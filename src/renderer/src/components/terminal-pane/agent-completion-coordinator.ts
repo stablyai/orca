@@ -22,7 +22,7 @@ import {
 } from './title-agent-identity'
 
 type CompletionSource = 'hook' | 'title' | 'process-exit'
-type CompletionIdentitySource = 'hook' | 'title'
+type CompletionIdentitySource = 'hook' | 'title' | 'process-exit'
 
 type LastCompletionIdentity = {
   source: CompletionIdentitySource
@@ -68,6 +68,7 @@ export function createAgentCompletionCoordinator(
   let pendingHookDoneTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTitle: string | null = null
   let pendingHookDonePayload: AgentCompletionStatusSnapshot | null = null
+  let pendingProcessExitAgent: RecognizedAgentProcess | null = null
   let pendingTitleSequence = 0
   let pendingTitle: {
     id: number
@@ -116,6 +117,7 @@ export function createAgentCompletionCoordinator(
     agentIdentityEstablished = false
     hasAgentRunEvidence = false
     workingStatusObserved = false
+    pendingProcessExitAgent = null
     dropPendingTitle()
   }
 
@@ -348,9 +350,16 @@ export function createAgentCompletionCoordinator(
   }
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
+    pendingProcessExitAgent = null
     if (lastForegroundAgent?.agent !== process.agent) {
       if (lastForegroundAgent && hasAgentRunEvidence) {
-        dispatchCompletion('process-exit', lastForegroundAgent.processName)
+        dispatchCompletion('process-exit', lastForegroundAgent.processName, {
+          completionIdentity: {
+            source: 'process-exit',
+            identity: `${lastForegroundAgent.agent}:${lastForegroundAgent.processName}`,
+            agentIdentity: lastForegroundAgent.agent
+          }
+        })
       }
       processSession += 1
     }
@@ -366,8 +375,33 @@ export function createAgentCompletionCoordinator(
       return true
     }
     if (lastForegroundAgent && hasAgentRunEvidence) {
+      if (result.hasChildProcesses) {
+        // Why: Codex can briefly report a shell/null foreground while its TUI or
+        // child work is still alive; do not announce completion from that blip.
+        pendingProcessExitAgent = null
+        scheduleNextPoll()
+        return false
+      }
+      if (
+        !pendingProcessExitAgent ||
+        pendingProcessExitAgent.agent !== lastForegroundAgent.agent ||
+        pendingProcessExitAgent.processName !== lastForegroundAgent.processName
+      ) {
+        // Why: macOS process inspection can transiently report no foreground
+        // child during prompt handoff; require the idle sample to repeat.
+        pendingProcessExitAgent = lastForegroundAgent
+        scheduleNextPoll()
+        return false
+      }
       const exited = lastForegroundAgent
-      dispatchCompletion('process-exit', exited.processName)
+      pendingProcessExitAgent = null
+      dispatchCompletion('process-exit', exited.processName, {
+        completionIdentity: {
+          source: 'process-exit',
+          identity: `${exited.agent}:${exited.processName}`,
+          agentIdentity: exited.agent
+        }
+      })
       lastForegroundAgent = null
       clearAgentRunEvidence()
     } else {

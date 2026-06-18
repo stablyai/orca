@@ -3126,6 +3126,140 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
   })
 
+  it('commits pre-stop retained evidence when exact-stop clears live status during hibernation', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
+      if (args.method === 'terminal.stopExact') {
+        store.getState().removeAgentStatus('tab-1:live')
+        return Promise.resolve({
+          id: 'rpc-default',
+          ok: true,
+          result: { stoppedPtyIds: ['pty-1'], livePtyIds: ['pty-1'], postStopVerified: true },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result: {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    })
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'resume live',
+        agentType: 'codex',
+        lastAssistantMessage: 'done'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+
+    await store.getState().shutdownWorktreeTerminals(wt, {
+      keepIdentifiers: true,
+      shutdownReason: 'auto-hibernate-completed-agent',
+      sleepingPaneKeys: ['tab-1:live'],
+      expectedRuntimePtyIds: ['pty-1']
+    })
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
+    expect(store.getState().retainedAgentsByPaneKey['tab-1:live']).toMatchObject({
+      worktreeId: wt,
+      entry: {
+        prompt: 'resume live',
+        lastAssistantMessage: 'done',
+        providerSession: { key: 'session_id', id: 'live-session' }
+      }
+    })
+  })
+
+  it('does not commit stale pre-stop evidence when exact-stop changes live status', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
+      if (args.method === 'terminal.stopExact') {
+        store.getState().setAgentStatus(
+          'tab-1:live',
+          {
+            state: 'working',
+            prompt: 'still active',
+            agentType: 'codex'
+          },
+          'Codex',
+          { updatedAt: 1500, stateStartedAt: 1500 },
+          { tabId: 'tab-1', worktreeId: wt },
+          { providerSession: { key: 'session_id', id: 'live-session' } }
+        )
+        return Promise.resolve({
+          id: 'rpc-default',
+          ok: true,
+          result: { stoppedPtyIds: ['pty-1'], livePtyIds: ['pty-1'], postStopVerified: true },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve(
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+          id: 'rpc-default',
+          ok: true,
+          result: {},
+          _meta: { runtimeId: 'remote-runtime' }
+        }
+      )
+    })
+
+    seedStore(store, {
+      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': [] }
+    })
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'stale done',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1000, stateStartedAt: 1000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+
+    await store.getState().shutdownWorktreeTerminals(wt, {
+      keepIdentifiers: true,
+      shutdownReason: 'auto-hibernate-completed-agent',
+      sleepingPaneKeys: ['tab-1:live'],
+      expectedRuntimePtyIds: ['pty-1']
+    })
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
+    expect(store.getState().retainedAgentsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(store.getState().retentionSuppressedPaneKeys['tab-1:live']).toBe(true)
+  })
+
   it('does not commit sleep state when exact runtime stop fails', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -3357,6 +3491,203 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       providerSession: { key: 'session_id', id: 'live-session' }
     })
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained']).toBeUndefined()
+  })
+
+  it('retains only clean slept completions during automatic hibernation', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const otherWt = 'repo1::/path/wt2'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: otherWt, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })],
+        [otherWt]: [makeTab({ id: 'tab-2', worktreeId: otherWt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'], 'tab-2': ['pty-2'] }
+    })
+
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'working',
+        prompt: 'new retained prompt',
+        agentType: 'codex'
+      },
+      'Codex',
+      { updatedAt: 1800, stateStartedAt: 1800 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+    store.getState().setAgentStatus(
+      'tab-1:live',
+      {
+        state: 'done',
+        prompt: 'new retained prompt',
+        agentType: 'codex',
+        lastAssistantMessage: 'new final message',
+        interrupted: false
+      },
+      'Codex',
+      { updatedAt: 2000, stateStartedAt: 2000 },
+      { tabId: 'tab-1', worktreeId: wt },
+      { providerSession: { key: 'session_id', id: 'live-session' } }
+    )
+    store.getState().retainAgents([
+      {
+        entry: {
+          paneKey: 'tab-1:live',
+          state: 'done',
+          stateStartedAt: 1000,
+          updatedAt: 1000,
+          stateHistory: [],
+          prompt: 'stale same-pane prompt',
+          agentType: 'codex',
+          providerSession: { key: 'session_id', id: 'old-session' }
+        },
+        worktreeId: wt,
+        tab: makeTab({ id: 'tab-1', worktreeId: wt, title: 'Old Codex' }),
+        agentType: 'codex',
+        startedAt: 1000
+      },
+      {
+        entry: {
+          paneKey: 'tab-1:retained',
+          state: 'done',
+          stateStartedAt: 1500,
+          updatedAt: 1500,
+          stateHistory: [],
+          prompt: 'unslept retained prompt',
+          agentType: 'codex'
+        },
+        worktreeId: wt,
+        tab: makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' }),
+        agentType: 'codex',
+        startedAt: 1500
+      },
+      {
+        entry: {
+          paneKey: 'tab-2:retained',
+          state: 'done',
+          stateStartedAt: 1600,
+          updatedAt: 1600,
+          stateHistory: [],
+          prompt: 'other retained prompt',
+          agentType: 'codex'
+        },
+        worktreeId: otherWt,
+        tab: makeTab({ id: 'tab-2', worktreeId: otherWt, title: 'Codex' }),
+        agentType: 'codex',
+        startedAt: 1600
+      }
+    ])
+    store.getState().acknowledgeAgents(['tab-1:live', 'tab-1:retained', 'tab-2:retained'])
+    const liveAck = store.getState().acknowledgedAgentsByPaneKey['tab-1:live']
+    store.getState().setMigrationUnsupportedPty({
+      ptyId: 'pty-legacy',
+      worktreeId: wt,
+      paneKey: 'tab-1:legacy',
+      reason: 'legacy-numeric-pane-key',
+      source: 'local',
+      updatedAt: 1700
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, {
+      keepIdentifiers: true,
+      shutdownReason: 'auto-hibernate-completed-agent',
+      sleepingPaneKeys: ['tab-1:live']
+    })
+
+    const state = store.getState()
+    expect(state.agentStatusByPaneKey['tab-1:live']).toBeUndefined()
+    expect(state.retainedAgentsByPaneKey['tab-1:live']).toMatchObject({
+      worktreeId: wt,
+      startedAt: 1800,
+      entry: {
+        prompt: 'new retained prompt',
+        lastAssistantMessage: 'new final message',
+        providerSession: { key: 'session_id', id: 'live-session' }
+      }
+    })
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      paneKey: 'tab-1:live',
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
+    expect(state.retainedAgentsByPaneKey['tab-1:retained']).toBeUndefined()
+    expect(state.retainedAgentsByPaneKey['tab-2:retained']).toBeDefined()
+    expect(state.acknowledgedAgentsByPaneKey['tab-1:live']).toBe(liveAck)
+    expect(state.acknowledgedAgentsByPaneKey['tab-1:retained']).toBeUndefined()
+    expect(state.acknowledgedAgentsByPaneKey['tab-2:retained']).toBeGreaterThan(0)
+    expect(state.migrationUnsupportedByPtyId['pty-legacy']).toBeUndefined()
+    expect(state.retentionSuppressedPaneKeys['tab-1:live']).toBeUndefined()
+  })
+
+  it('does not retain interrupted, non-done, or retained-only rows on automatic hibernation', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    })
+
+    store.getState().setAgentStatus('tab-1:interrupted', {
+      state: 'done',
+      prompt: 'cancelled',
+      agentType: 'codex',
+      interrupted: true
+    })
+    store.getState().setAgentStatus('tab-1:working', {
+      state: 'working',
+      prompt: 'still working',
+      agentType: 'codex'
+    })
+    store.getState().retainAgents([
+      {
+        entry: {
+          paneKey: 'tab-1:retained-only',
+          state: 'done',
+          stateStartedAt: 1000,
+          updatedAt: 1000,
+          stateHistory: [],
+          prompt: 'retained only',
+          agentType: 'codex'
+        },
+        worktreeId: wt,
+        tab: makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' }),
+        agentType: 'codex',
+        startedAt: 1000
+      }
+    ])
+    store
+      .getState()
+      .acknowledgeAgents(['tab-1:interrupted', 'tab-1:working', 'tab-1:retained-only'])
+
+    await store.getState().shutdownWorktreeTerminals(wt, {
+      keepIdentifiers: true,
+      shutdownReason: 'auto-hibernate-completed-agent',
+      sleepingPaneKeys: ['tab-1:interrupted', 'tab-1:working', 'tab-1:retained-only']
+    })
+
+    const state = store.getState()
+    expect(state.retainedAgentsByPaneKey['tab-1:interrupted']).toBeUndefined()
+    expect(state.retainedAgentsByPaneKey['tab-1:working']).toBeUndefined()
+    expect(state.retainedAgentsByPaneKey['tab-1:retained-only']).toBeUndefined()
+    expect(state.acknowledgedAgentsByPaneKey['tab-1:interrupted']).toBeUndefined()
+    expect(state.acknowledgedAgentsByPaneKey['tab-1:working']).toBeUndefined()
+    expect(state.acknowledgedAgentsByPaneKey['tab-1:retained-only']).toBeUndefined()
+    expect(state.retentionSuppressedPaneKeys['tab-1:interrupted']).toBe(true)
+    expect(state.retentionSuppressedPaneKeys['tab-1:working']).toBe(true)
   })
 
   it('does not preserve provider session metadata when a pane switches agent type', async () => {

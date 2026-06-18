@@ -297,6 +297,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         launchCommand: draftLaunchPlan.launchCommand,
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
+        ...(draftLaunchPlan.startupCommandDelivery
+          ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
+          : {}),
         ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
       }
       draftLaunchedNatively = true

@@ -8,6 +8,7 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
@@ -353,6 +354,7 @@ export type IpcPtyTransportOptions = {
   cwd?: string
   env?: Record<string, string>
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   /** Orca worktree identity for scoped shell history. */
   worktreeId?: string

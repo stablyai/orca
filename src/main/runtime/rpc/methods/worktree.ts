@@ -89,7 +89,10 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         startup: params.startupCommand
           ? {
               command: params.startupCommand,
-              ...(params.startupEnv ? { env: params.startupEnv } : {})
+              ...(params.startupEnv ? { env: params.startupEnv } : {}),
+              ...(params.startupCommandDelivery
+                ? { startupCommandDelivery: params.startupCommandDelivery }
+                : {})
             }
           : undefined,
         ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),

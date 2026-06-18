@@ -1491,7 +1491,12 @@ export function useIpcEvents(): void {
             store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
           }
           if (data.command) {
-            store.queueTabStartupCommand(tab.id, { command: data.command })
+            store.queueTabStartupCommand(tab.id, {
+              command: data.command,
+              ...(data.startupCommandDelivery
+                ? { startupCommandDelivery: data.startupCommandDelivery }
+                : {})
+            })
           }
           window.api.ui.replyTerminalCreate({
             requestId: data.requestId,

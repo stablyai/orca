@@ -8,7 +8,11 @@ import { join, dirname } from 'path'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'fs'
 import type * as pty from 'node-pty'
 import type * as LocalPtyShellReadyModule from './local-pty-shell-ready'
-import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready'
+import {
+  createShellReadyScanState,
+  scanForShellReady,
+  writeStartupCommandWhenShellReady
+} from './local-pty-shell-ready'
 
 const { getUserDataPathMock } = vi.hoisted(() => ({
   getUserDataPathMock: vi.fn<() => string>()
@@ -125,6 +129,21 @@ describe('writeStartupCommandWhenShellReady', () => {
     await Promise.resolve()
 
     expect(proc._writes).toEqual(['claude\n'])
+  })
+})
+
+describe('scanForShellReady', () => {
+  it('flushes marker-like output when the full marker is not BEL-terminated', () => {
+    const state = createShellReadyScanState()
+
+    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-readyx')).toEqual({
+      output: 'before \x1b]777;orca-shell-readyx',
+      matched: false
+    })
+    expect(scanForShellReady(state, ' after')).toEqual({
+      output: ' after',
+      matched: false
+    })
   })
 })
 

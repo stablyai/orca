@@ -245,6 +245,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
     const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
       command: startup.command,
       env: startup.env,
+      startupCommandDelivery: startup.startupCommandDelivery,
       telemetry: startup.telemetry,
       activate: true
     })

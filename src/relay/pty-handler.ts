@@ -12,6 +12,7 @@ import {
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 
 // Why: node-pty is a native addon that may not be installed on the remote.
 // Dynamic import keeps the require() lazy so loadPty() returns null gracefully
@@ -433,7 +434,15 @@ export class PtyHandler {
     const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
-    const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv)
+    // Why: only explicit shell-ready hints are trusted here; native Codex
+    // prefill detection still auto-enables readiness through the predicate.
+    const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
+      emitReadyMarker: shouldUseShellReadyStartupDelivery({
+        command,
+        startupCommandDelivery:
+          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
+      })
+    })
 
     // Why: SSH exec channels give the relay a minimal environment without
     // .zprofile/.bash_profile sourced. Spawning a login shell ensures PATH
