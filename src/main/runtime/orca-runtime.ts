@@ -474,6 +474,7 @@ import {
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
   isForEachRefExcludeUnsupportedError,
+  mergeBaseRefSearchResultGroups,
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
@@ -7724,25 +7725,47 @@ export class OrcaRuntimeService {
     }
     const normalizedQuery = normalizeRefSearchQuery(query)
     try {
-      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      let result: { stdout: string }
-      try {
-        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
-      } catch (err) {
-        if (!isForEachRefExcludeUnsupportedError(err)) {
-          throw err
-        }
-        result = await provider.exec(
-          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
-          repo.path
-        )
-      }
-      const remotesResult = await remotesPromise
+      const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
       const remotes = remotesResult.stdout
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
-      return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
+      const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
+        try {
+          return (
+            await provider.exec(
+              buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                remoteNames: remotes,
+                patternGroup
+              }),
+              repo.path
+            )
+          ).stdout
+        } catch (err) {
+          if (!isForEachRefExcludeUnsupportedError(err)) {
+            throw err
+          }
+          return (
+            await provider.exec(
+              buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                excludeRemoteHead: false,
+                remoteNames: remotes,
+                patternGroup
+              }),
+              repo.path
+            )
+          ).stdout
+        }
+      }
+      const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
+      if (searchTokens.length > 1) {
+        const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
+        return mergeBaseRefSearchResultGroups(
+          results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
+          limit
+        )
+      }
+      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
     } catch (err) {
       console.warn('[runtime:repo.searchRefs] SSH for-each-ref failed', {
         path: repo.path,
