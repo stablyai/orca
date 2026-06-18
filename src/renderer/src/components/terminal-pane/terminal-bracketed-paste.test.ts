@@ -241,4 +241,41 @@ describe('terminal bracketed paste policy', () => {
     expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
     expect(splitCallCount).toBe(0)
   })
+
+  it('chunks long ordinary paste and yields between chunks', async () => {
+    const terminal = createTerminal(true)
+    const yieldCalls: number[] = []
+
+    await pasteTerminalText(terminal, 'a'.repeat(1025), {
+      yieldAfterChunk: () => {
+        yieldCalls.push(terminal.paste.mock.calls.length)
+        return Promise.resolve()
+      }
+    })
+
+    expect(terminal.paste.mock.calls.map(([chunk]) => chunk)).toEqual([
+      'a'.repeat(512),
+      'a'.repeat(512),
+      'a'
+    ])
+    expect(yieldCalls).toEqual([1, 2])
+  })
+
+  it('chunks long forced bracketed paste without breaking wrappers', async () => {
+    const terminal = createTerminal(false)
+
+    await pasteTerminalText(terminal, 'b'.repeat(1025), {
+      forceBracketedPaste: true,
+      yieldAfterChunk: () => Promise.resolve()
+    })
+
+    expect(terminal.input.mock.calls.map(([chunk]) => chunk)).toEqual([
+      '\x1b[200~',
+      'b'.repeat(512),
+      'b'.repeat(512),
+      'b',
+      '\x1b[201~'
+    ])
+    expect(terminal.paste).not.toHaveBeenCalled()
+  })
 })
