@@ -811,6 +811,8 @@ export type UISlice = {
   setWorkspaceBoardOpacity: (opacity: number) => void
   workspaceBoardColumnWidth: number
   setWorkspaceBoardColumnWidth: (width: number) => void
+  syncTaskStatusFromWorkspaceBoard: boolean
+  setSyncTaskStatusFromWorkspaceBoard: (enabled: boolean) => void
   statusBarItems: StatusBarItem[]
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
@@ -1995,6 +1997,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceBoardColumnWidth: clamped })
   },
 
+  syncTaskStatusFromWorkspaceBoard: false,
+  setSyncTaskStatusFromWorkspaceBoard: (enabled) => {
+    window.api.ui.set({ syncTaskStatusFromWorkspaceBoard: enabled }).catch(console.error)
+    set({ syncTaskStatusFromWorkspaceBoard: enabled })
+  },
+
   statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
   toggleStatusBarItem: (item) =>
     set((s) => {
@@ -2222,6 +2230,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
         workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
         workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
+        syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
         statusBarItems,
         statusBarVisible: ui.statusBarVisible ?? true,
         // Why: absent → true so existing users see the pet the first time

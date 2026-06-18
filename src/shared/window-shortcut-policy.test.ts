@@ -763,4 +763,21 @@ describe('resolveWindowShortcutAction', () => {
       false
     )
   })
+
+  it('resolves an allowlisted action from a synthetic double-tap input', () => {
+    // (a) A synthetic DoubleTap+Shift input resolves the overridden action.
+    const overrides: KeybindingOverrides = { 'worktree.quickOpen': ['DoubleTap+Shift'] }
+    expect(
+      resolveWindowShortcutAction({ doubleTapModifier: 'Shift' }, 'darwin', overrides)
+    ).toEqual({ type: 'openQuickOpen' })
+
+    // (b) A different modifier does not resolve it.
+    expect(
+      resolveWindowShortcutAction({ doubleTapModifier: 'Alt' }, 'darwin', overrides)
+    ).toBeNull()
+
+    // (c) Implicit numeric shortcuts are guarded on input.key, which a double-tap
+    // input never has, so they cannot accidentally match a double-tap event.
+    expect(resolveWindowShortcutAction({ doubleTapModifier: 'Cmd' }, 'darwin')).toBeNull()
+  })
 })

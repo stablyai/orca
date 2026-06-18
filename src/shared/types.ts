@@ -2623,6 +2623,10 @@ export type GlobalSettings = {
   /** Why: generated tab titles are semantic but subjective, so they stay opt-in
    *  and manual renames remain the stronger user intent. */
   tabAutoGenerateTitle: boolean
+  /** Why: pinned tabs can still be closed via the keyboard/native-menu close
+   *  path, so this gates that close behind a confirmation prompt to prevent
+   *  accidental loss. Defaults on. */
+  confirmClosePinnedTab: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Why: macOS terminals must choose between letting Option compose layout
@@ -3035,6 +3039,7 @@ export type PersistedUIState = {
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardColumnWidth?: number
+  syncTaskStatusFromWorkspaceBoard?: boolean
   /** One-shot migration flag for a short-lived build that persisted the
    *  default workspace statuses in reverse workflow order. Once stamped,
    *  user-authored status ordering is never inferred from IDs/labels again. */

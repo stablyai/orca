@@ -5,6 +5,7 @@ import {
   createHttpProxyUrlDraftState,
   getDesktopPlatformFromUserAgent,
   getGeneralPaneSearchEntries,
+  getTabOrderControlSearchKeywords,
   setHttpProxyUrlDraftErrorState,
   shouldCommitOpenInApplicationsDraft,
   updateAutoSaveDelayDraftState,
@@ -130,6 +131,18 @@ describe('GeneralPane desktop platform detection', () => {
       'darwin'
     )
     expect(getDesktopPlatformFromUserAgent('Mozilla/5.0 (X11; Linux x86_64)')).toBe('other')
+  })
+})
+
+describe('GeneralPane navigation search keywords', () => {
+  it('keeps pinned-tab keywords out of the Tab Order control', () => {
+    const keywords = getTabOrderControlSearchKeywords()
+
+    expect(keywords).toContain('Tab Order')
+    expect(keywords).toContain('recent')
+    expect(keywords).not.toContain('pinned')
+    expect(keywords).not.toContain('confirm')
+    expect(keywords).not.toContain('close')
   })
 })
 

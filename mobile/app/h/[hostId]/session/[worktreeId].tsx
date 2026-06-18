@@ -127,6 +127,11 @@ import {
   terminalRecordsEqual
 } from '../../../../src/session/mobile-terminal-records'
 import {
+  activateOpenedMobileSessionTab,
+  refreshOpenedMobileSessionTabs,
+  shouldActivateOpenedMobileSessionTab
+} from '../../../../src/session/opened-mobile-session-tab'
+import {
   buildMobileNewTabAgentOptions,
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
@@ -190,6 +195,15 @@ import type {
   TerminalGestureInputBucket,
   TerminalGestureInputQueue
 } from './mobile-session-route-types'
+
+type PendingBrowserFocus = {
+  pageId: string
+  shouldFocus?: () => boolean
+}
+
+type CreateBrowserOptions = {
+  shouldFocus?: () => boolean
+}
 
 function getActiveTabIdForHandle(
   tabs: MobileSessionTab[],
@@ -922,7 +936,7 @@ export default function SessionScreen() {
   // the app-level active tab). We remember the page id and, once its session tab
   // syncs, activate it through the normal switchSessionTab path (which also makes
   // switching back to the terminal work). A ref breaks the callback dep cycle.
-  const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
+  const pendingBrowserFocusRef = useRef<PendingBrowserFocus | null>(null)
   const switchSessionTabRef = useRef<((tab: MobileSessionTab) => void) | null>(null)
   const initialEmptySessionAutoCreateRef = useRef<string | null>(null)
   const markdownSaveSeqRef = useRef<Map<string, number>>(new Map())
@@ -931,6 +945,7 @@ export default function SessionScreen() {
   // Why: post-RPC refresh timers capture this screen and must not survive
   // route reuse or unmount.
   const delayedActionTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set())
+  const terminalFileTapActivationSeqRef = useRef(0)
   // Why: server-side layout state machine emits a monotonic seq on every
   // applyLayout. Track the highest seq we've observed per handle and drop
   // any scrollback/resized event with a strictly older seq — these are
@@ -2145,43 +2160,64 @@ export default function SessionScreen() {
     [client, markdownDocs, showToast, worktreeId]
   )
 
-  const fetchSessionTabsInFlightRef = useRef(false)
+  // Why: activation callers need the fresh tab snapshot; await an existing
+  // refresh instead of reading stale refs while another list request is running.
+  const fetchSessionTabsInFlightRef = useRef<Promise<void> | null>(null)
 
   const fetchSessionTabs = useCallback(async () => {
     if (!client) {
       return
     }
     if (fetchSessionTabsInFlightRef.current) {
+      await fetchSessionTabsInFlightRef.current
       return
     }
-    fetchSessionTabsInFlightRef.current = true
-    try {
-      const response = await client.sendRequest('session.tabs.list', {
-        worktree: `id:${worktreeId}`
-      })
-      if (!response.ok) {
-        return
-      }
-      const result = (response as RpcSuccess).result as SessionTabsResult
-      applySessionTabs(result)
-      // Focus a just-opened browser tab once it appears in the snapshot, via the
-      // normal activate path so it sticks and the user can still switch away.
-      const pendingPageId = pendingBrowserFocusPageIdRef.current
-      if (pendingPageId) {
-        const browserTab = result.tabs.find(
-          (tab) => tab.type === 'browser' && tab.browserPageId === pendingPageId
-        )
-        if (browserTab) {
-          pendingBrowserFocusPageIdRef.current = null
-          switchSessionTabRef.current?.(browserTab)
+    const request = (async () => {
+      try {
+        const response = await client.sendRequest('session.tabs.list', {
+          worktree: `id:${worktreeId}`
+        })
+        if (!response.ok) {
+          return
         }
+        const result = (response as RpcSuccess).result as SessionTabsResult
+        applySessionTabs(result)
+        // Focus a just-opened browser tab once it appears in the snapshot, via the
+        // normal activate path so it sticks and the user can still switch away.
+        const pendingBrowserFocus = pendingBrowserFocusRef.current
+        if (pendingBrowserFocus?.shouldFocus && !pendingBrowserFocus.shouldFocus()) {
+          pendingBrowserFocusRef.current = null
+        } else if (pendingBrowserFocus) {
+          const browserTab = result.tabs.find(
+            (tab) => tab.type === 'browser' && tab.browserPageId === pendingBrowserFocus.pageId
+          )
+          if (browserTab) {
+            pendingBrowserFocusRef.current = null
+            switchSessionTabRef.current?.(browserTab)
+          }
+        }
+      } catch {
+        // Keep the last tab snapshot visible during reconnect/backoff.
       }
-    } catch {
-      // Keep the last tab snapshot visible during reconnect/backoff.
+    })()
+    fetchSessionTabsInFlightRef.current = request
+    try {
+      await request
     } finally {
-      fetchSessionTabsInFlightRef.current = false
+      if (fetchSessionTabsInFlightRef.current === request) {
+        fetchSessionTabsInFlightRef.current = null
+      }
     }
   }, [applySessionTabs, client, worktreeId])
+
+  const refreshOpenedTabs = useCallback(
+    async () =>
+      refreshOpenedMobileSessionTabs({
+        getCurrentRefresh: () => fetchSessionTabsInFlightRef.current,
+        refreshSessionTabs: fetchSessionTabs
+      }),
+    [fetchSessionTabs]
+  )
 
   useEffect(() => {
     if (connState === 'connected') {
@@ -2376,7 +2412,7 @@ export default function SessionScreen() {
     activeSessionTabTypeRef.current = null
     pendingActiveSessionTabIdRef.current = null
     pendingActiveTerminalHandleRef.current = null
-    pendingBrowserFocusPageIdRef.current = null
+    pendingBrowserFocusRef.current = null
     initialEmptySessionAutoCreateRef.current = null
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
@@ -2868,6 +2904,19 @@ export default function SessionScreen() {
       if (handle !== activeHandleRef.current || !client) {
         return
       }
+      const activationSeq = terminalFileTapActivationSeqRef.current + 1
+      terminalFileTapActivationSeqRef.current = activationSeq
+      const sourceTerminalHandle = handle
+      let activated = false
+      const shouldActivate = (): boolean =>
+        shouldActivateOpenedMobileSessionTab({
+          activated,
+          activationSeq,
+          latestActivationSeq: terminalFileTapActivationSeqRef.current,
+          sourceTerminalHandle,
+          activeTerminalHandle: activeHandleRef.current,
+          activeTabType: activeSessionTabTypeRef.current
+        })
       void (async () => {
         try {
           const worktree = `id:${worktreeId}`
@@ -2883,12 +2932,17 @@ export default function SessionScreen() {
           if (!resolved.exists || resolved.isDirectory || !resolved.relativePath) {
             return
           }
+          if (!shouldActivate()) {
+            return
+          }
           // Confirm the tap landed on something openable before giving feedback.
           triggerSelection()
           // Why: HTML opens in a browser pane (streamed from the desktop),
           // matching desktop's terminal-click behavior, instead of a file view.
           if (classifyMobileArtifact(resolved.relativePath) === 'html' && resolved.absolutePath) {
-            void handleCreateBrowser('file://' + resolved.absolutePath)
+            void handleCreateBrowser('file://' + resolved.absolutePath, {
+              shouldFocus: shouldActivate
+            })
             return
           }
           const openResponse = await client.sendRequest(
@@ -2899,18 +2953,48 @@ export default function SessionScreen() {
           if (!openResponse.ok) {
             return
           }
-          // Why: the desktop creates the file tab asynchronously; a single poll
-          // can race it, so refresh a few times to reliably pick it up and
-          // switch to it (the file browser gets this for free via router.back).
-          scheduleDelayedAction(() => void fetchSessionTabs(), 300)
-          scheduleDelayedAction(() => void fetchSessionTabs(), 900)
-          scheduleDelayedAction(() => void fetchSessionTabs(), 1800)
+          // Why: the host creates the file tab asynchronously, and from a terminal
+          // the active tab stays on the terminal — so we must explicitly switch to
+          // the new file tab once it syncs in (the file browser gets this for free
+          // by popping back to an already-active tab). Poll a few times since the
+          // tab may take a moment to appear.
+          const openedPath = resolved.relativePath
+          const activateOpenedFile = async (): Promise<void> => {
+            const didActivate = await activateOpenedMobileSessionTab({
+              relativePath: openedPath,
+              fetchSessionTabs: refreshOpenedTabs,
+              getTabs: () => sessionTabsRef.current,
+              getActiveTabId: () => activeSessionTabIdRef.current,
+              getActivationState: () => ({
+                activated,
+                activationSeq,
+                latestActivationSeq: terminalFileTapActivationSeqRef.current,
+                sourceTerminalHandle,
+                activeTerminalHandle: activeHandleRef.current,
+                activeTabType: activeSessionTabTypeRef.current
+              }),
+              switchSessionTab: (opened) => {
+                const switchSessionTab = switchSessionTabRef.current
+                if (!switchSessionTab) {
+                  return false
+                }
+                switchSessionTab(opened)
+                return true
+              }
+            })
+            if (didActivate) {
+              activated = true
+            }
+          }
+          scheduleDelayedAction(() => void activateOpenedFile(), 300)
+          scheduleDelayedAction(() => void activateOpenedFile(), 900)
+          scheduleDelayedAction(() => void activateOpenedFile(), 1800)
         } catch {
           // Resolution/open is best-effort; a failed tap silently no-ops.
         }
       })()
     },
-    [client, worktreeId, scheduleDelayedAction, fetchSessionTabs]
+    [client, worktreeId, scheduleDelayedAction, refreshOpenedTabs]
   )
 
   const handleTerminalOpenUrl = useCallback(
@@ -3685,7 +3769,10 @@ export default function SessionScreen() {
     }
   }
 
-  async function handleCreateBrowser(rawUrl = 'about:blank'): Promise<boolean> {
+  async function handleCreateBrowser(
+    rawUrl = 'about:blank',
+    options?: CreateBrowserOptions
+  ): Promise<boolean> {
     if (!client || creatingBrowser) {
       return false
     }
@@ -3702,33 +3789,41 @@ export default function SessionScreen() {
       showToast(message, 1400)
       return false
     }
+    if (options?.shouldFocus && !options.shouldFocus()) {
+      return false
+    }
 
     setCreatingBrowser(true)
     setCreateError('')
+    const hasFocusGuard = options?.shouldFocus != null
     try {
       const response = await client.sendRequest(
         'browser.tabCreate',
         {
           worktree: `id:${worktreeId}`,
           url,
-          // The user opened this tab (tapped HTML / address bar) → focus it.
-          activate: true
+          // Why: terminal HTML taps may become stale while browser creation is
+          // in flight. Defer activation until the guarded mobile focus path runs.
+          activate: !hasFocusGuard
         },
         { timeoutMs: 30_000 }
       )
       if (!response.ok) {
         throw new Error((response as RpcFailure).error.message)
       }
-      // Focus the new browser tab once it syncs (fetchSessionTabs activates it
+      // Focus the new browser tab once it syncs (refreshOpenedTabs activates it
       // via the normal path). Refresh a few times since the desktop registers
       // the tab asynchronously.
       const created = (response as RpcSuccess).result as { browserPageId?: string }
-      if (created.browserPageId) {
-        pendingBrowserFocusPageIdRef.current = created.browserPageId
+      if (created.browserPageId && (!options?.shouldFocus || options.shouldFocus())) {
+        pendingBrowserFocusRef.current = {
+          pageId: created.browserPageId,
+          shouldFocus: options?.shouldFocus
+        }
       }
-      void fetchSessionTabs()
-      scheduleDelayedAction(() => void fetchSessionTabs(), 400)
-      scheduleDelayedAction(() => void fetchSessionTabs(), 1200)
+      void refreshOpenedTabs()
+      scheduleDelayedAction(() => void refreshOpenedTabs(), 400)
+      scheduleDelayedAction(() => void refreshOpenedTabs(), 1200)
       return true
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create browser'

@@ -79,6 +79,7 @@ import {
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
 
 export function recordRuntimeCreatedTerminalPaneSplit(
@@ -1270,7 +1271,10 @@ export function useTerminalPaneLifecycle({
         return
       }
       if (mgr.getPanes().length <= 1) {
-        useAppStore.getState().closeTab(tabId)
+        // Why: route through closeTerminalTab (not the raw store closeTab) so a
+        // pinned tab hits the confirmation guard. Closing the last pane here was
+        // the one path that silently dropped pinned tabs.
+        closeTerminalTab(tabId)
       } else {
         mgr.closePane(detail.paneRuntimeId)
         scheduleRuntimeGraphSync()

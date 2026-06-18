@@ -43,6 +43,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').uiLanguage).toBe('system')
   })
 
+  it('confirms before closing pinned tabs by default', () => {
+    expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
+  })
+
   it('enables Source Control AI by default without pinning a separate agent', () => {
     expect(getDefaultSettings('/tmp').commitMessageAi).toMatchObject({
       enabled: true,

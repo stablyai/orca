@@ -6,6 +6,7 @@ import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import type { Components } from 'react-markdown'
 import { cn } from '@/lib/utils'
+import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
 
 type MarkdownPlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
 type UrlTransform = NonNullable<React.ComponentProps<typeof Markdown>['urlTransform']>
@@ -139,12 +140,14 @@ const compactComponents: Components = {
   // the pill background/padding when code is inside a <pre>. This is
   // more reliable than checking `className` — which is only set when
   // the fenced block specifies a language (```js), not for bare ```.
+  // Why: compact comment previews live in dense cards; keep diagram fences as
+  // bounded source blocks so async SVG renders do not reshape sidebar lists.
   code: ({ children }) => (
     <code className="rounded bg-accent px-1 py-px text-[10px] font-mono [overflow-wrap:anywhere]">
       {children}
     </code>
   ),
-  // Compact pre blocks — no syntax highlighting needed for short comments
+  // Compact pre blocks — no syntax highlighting needed for short comments.
   pre: ({ children }) => (
     <pre className="my-1 max-h-32 max-w-full overflow-x-auto rounded bg-accent p-1.5 text-[10px] font-mono">
       {children}
@@ -242,16 +245,26 @@ const documentComponents: Components = {
         {children}
       </a>
     ),
-  code: ({ children }) => (
-    <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
-      {children}
-    </code>
-  ),
-  pre: ({ children }) => (
-    <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
-      {children}
-    </pre>
-  ),
+  code: ({ className, children }) =>
+    isMermaidFence(className) ? (
+      renderMermaidFence(
+        children,
+        'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
+      )
+    ) : (
+      <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">
+        {children}
+      </code>
+    ),
+  // Mermaid fences render a <div>, which is invalid inside <pre>, so unwrap them.
+  pre: ({ children }) =>
+    isMermaidPre(children) ? (
+      <>{children}</>
+    ) : (
+      <pre className="my-3 max-h-80 max-w-full overflow-x-auto rounded-md bg-accent p-3 font-mono text-[12px]">
+        {children}
+      </pre>
+    ),
   ul: ({ children }) => <ul className="my-2 ml-5 list-disc space-y-1">{children}</ul>,
   ol: ({ children }) => <ol className="my-2 ml-5 list-decimal space-y-1">{children}</ol>,
   li: ({ children }) => (

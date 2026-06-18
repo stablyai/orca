@@ -527,6 +527,7 @@
       },
       "useIpcEvents": {
         "0e3cf53060": "브라우저 탭 {{value0}}을(를) 찾을 수 없습니다",
+        "2f6637fe6c": "브라우저 탭 {{value0}}이(가) 고정되어 있습니다",
         "a8d2bf8e9e": "닫을 활성 브라우저 탭이 없습니다.",
         "291c8ed902": "원격 런타임이 활성화된 동안에는 브라우저 탭을 사용할 수 없습니다.",
         "f45fa2b03c": "원격 런타임이 활성화된 동안에는 브라우저 프로필을 사용할 수 없습니다.",
@@ -2386,6 +2387,13 @@
                 }
               }
             }
+          },
+          "PinnedTabCloseDialog": {
+            "6c190f295a": "고정된 탭을 닫을까요?",
+            "0d1963f4a6": "이 탭은 고정되어 있습니다. 정말 닫으시겠어요?",
+            "dont_ask_again": "고정된 탭에 대해 다시 묻지 않기",
+            "0b38ee2f86": "취소",
+            "c337c9d75c": "닫기"
           }
         }
       },
@@ -3690,7 +3698,9 @@
           "8ce44af9a8": "{{value0}} 이름 바꾸기",
           "395e541d5d": "상태",
           "34f03eb0de": "보드 설정",
-          "26cbc92150": "워크스페이스 보드 설정"
+          "26cbc92150": "워크스페이스 보드 설정",
+          "87d24a0c2f": "보드와 이슈 상태 동기화",
+          "4c2eaa78cc": "연결된 워크스페이스를 이동하면 일치하는 워크플로 상태가 있을 때 Linear 이슈 상태가 업데이트됩니다."
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "비어 있는",
@@ -4189,6 +4199,19 @@
           "removing": "Removing",
           "remove": "Remove",
           "close": "Close"
+        },
+        "WorkspaceKanbanDrawer": {
+          "1975a4e480": "작업 상태 동기화 실패",
+          "e02b0d92ff": "작업 상태 동기화 건너뜀",
+          "c1d2e3f4a5": "Linear 이슈 {{value0}}을(를) 읽을 수 없습니다.",
+          "d2e3f4a5b6": "{{value0}}에 일치하는 Linear 워크플로 상태가 없습니다.",
+          "e3f4a5b6c7": "{{value0}}에 일치하는 Linear 워크플로 상태가 여러 개입니다.",
+          "f4a5b6c7d8": "Linear 이슈 {{value0}}을(를) 업데이트할 수 없습니다.",
+          "a5b6c7d8e9": "Linear 이슈 {{value0}}을(를) 동기화할 수 없습니다.",
+          "b6c7d8e9f0": "작업 상태 동기화를 완료할 수 없습니다.",
+          "c7d8e9f0a1": "{{value0}}개 업데이트됨",
+          "d8e9f0a1b2": "{{value0}}개 건너뜀",
+          "e9f0a1b2c3": "{{value0}}개 실패"
         }
       },
       "shared": {
@@ -4814,6 +4837,8 @@
         },
         "GeneralPane": {
           "d58fccfd84": "항해",
+          "5cb5475664": "고정된 탭을 닫기 전에 확인",
+          "36b2a5dc6d": "고정된 탭을 닫기 전에 확인 대화상자를 표시합니다.",
           "projectRuntime": "Project Runtime",
           "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
         },
@@ -5784,7 +5809,8 @@
           "97dccee14e": "수정됨",
           "3b11ef3a43": "{{value0}} 바로가기",
           "f6579be67b": "바로가기 변경",
-          "6a7848fdac": "단축키 입력 대기 중"
+          "6a7848fdac": "단축키 입력 대기 중",
+          "a98d551407": "단축키를 누르거나 보조 키를 두 번 탭하세요(예: {{value0}}). Esc로 취소합니다."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "상태",
@@ -6983,6 +7009,8 @@
             "7baf524b04": "워크스페이스",
             "d0bc793689": "워크스페이스 폴더가 생성되는 루트 디렉터리입니다.",
             "4c95d08fa2": "워크스페이스 디렉토리",
+            "161a86a9da": "고정된 탭을 닫기 전에 확인",
+            "8e593f04fc": "고정된 탭을 닫기 전에 확인 대화상자를 표시합니다.",
             "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
           }
@@ -11501,6 +11529,9 @@
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
         "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+      },
+      "ShortcutKeyCombo": {
+        "07eb4985a1": "Double-tap {{value0}}"
       }
     },
     "i18n": {

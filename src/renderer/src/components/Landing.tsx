@@ -4,14 +4,14 @@ import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { ShortcutKeyCombo } from './ShortcutKeyCombo'
-import { useShortcutKeys } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
 
 type ShortcutItem = {
   id: string
-  keys: string[]
+  shortcut: ShortcutKeyComboDetails
   action: string
 }
 
@@ -285,20 +285,20 @@ export default function Landing(): React.JSX.Element {
     }
   }, [preflightIssues.length])
 
-  const createWorktreeKeys = useShortcutKeys('workspace.create')
-  const previousWorktreeKeys = useShortcutKeys('worktree.navigateUp')
-  const nextWorktreeKeys = useShortcutKeys('worktree.navigateDown')
+  const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')
+  const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')
+  const nextWorktreeShortcut = useShortcutKeyDetails('worktree.navigateDown')
   const shortcuts = useMemo<ShortcutItem[]>(() => {
     return [
       {
         id: 'create',
-        keys: createWorktreeKeys,
+        shortcut: createWorktreeShortcut,
         action: `Create ${createTargetLabel.toLowerCase()}`
       },
-      { id: 'up', keys: previousWorktreeKeys, action: 'Move up workspace' },
-      { id: 'down', keys: nextWorktreeKeys, action: 'Move down workspace' }
+      { id: 'up', shortcut: previousWorktreeShortcut, action: 'Move up workspace' },
+      { id: 'down', shortcut: nextWorktreeShortcut, action: 'Move down workspace' }
     ]
-  }, [createTargetLabel, createWorktreeKeys, nextWorktreeKeys, previousWorktreeKeys])
+  }, [createTargetLabel, createWorktreeShortcut, nextWorktreeShortcut, previousWorktreeShortcut])
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
@@ -359,7 +359,8 @@ export default function Landing(): React.JSX.Element {
               <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
                 <span className="text-sm text-muted-foreground">{shortcut.action}</span>
                 <ShortcutKeyCombo
-                  keys={shortcut.keys}
+                  keys={shortcut.shortcut.keys}
+                  doubleTap={shortcut.shortcut.doubleTap}
                   separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
                 />
               </div>

@@ -527,6 +527,7 @@
       },
       "useIpcEvents": {
         "0e3cf53060": "未找到浏览器选项卡 {{value0}}",
+        "2f6637fe6c": "浏览器选项卡 {{value0}} 已固定",
         "a8d2bf8e9e": "没有可关闭的活动浏览器选项卡",
         "291c8ed902": "当远程运行时处于活动状态时，浏览器选项卡不可用",
         "f45fa2b03c": "当远程运行时处于活动状态时，浏览器配置文件不可用",
@@ -2386,6 +2387,13 @@
                 }
               }
             }
+          },
+          "PinnedTabCloseDialog": {
+            "6c190f295a": "关闭固定的标签页？",
+            "0d1963f4a6": "此标签页已固定。确定要关闭它吗？",
+            "dont_ask_again": "固定标签页不再询问",
+            "0b38ee2f86": "取消",
+            "c337c9d75c": "关闭"
           }
         }
       },
@@ -3690,7 +3698,9 @@
           "8ce44af9a8": "重命名 {{value0}}",
           "395e541d5d": "状态",
           "34f03eb0de": "董事会设置",
-          "26cbc92150": "工作区板设置"
+          "26cbc92150": "工作区板设置",
+          "87d24a0c2f": "同步看板和议题状态",
+          "4c2eaa78cc": "移动已关联的工作区时，如果存在匹配的工作流状态，将更新其 Linear 议题状态。"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空的",
@@ -4189,6 +4199,19 @@
           "removing": "Removing",
           "remove": "Remove",
           "close": "Close"
+        },
+        "WorkspaceKanbanDrawer": {
+          "1975a4e480": "任务状态同步失败",
+          "e02b0d92ff": "任务状态同步已跳过",
+          "c1d2e3f4a5": "无法读取 Linear 议题 {{value0}}。",
+          "d2e3f4a5b6": "没有与 {{value0}} 匹配的 Linear 工作流状态。",
+          "e3f4a5b6c7": "有多个 Linear 工作流状态与 {{value0}} 匹配。",
+          "f4a5b6c7d8": "无法更新 Linear 议题 {{value0}}。",
+          "a5b6c7d8e9": "无法同步 Linear 议题 {{value0}}。",
+          "b6c7d8e9f0": "无法完成任务状态同步。",
+          "c7d8e9f0a1": "已更新 {{value0}} 个",
+          "d8e9f0a1b2": "已跳过 {{value0}} 个",
+          "e9f0a1b2c3": "失败 {{value0}} 个"
         }
       },
       "shared": {
@@ -4814,6 +4837,8 @@
         },
         "GeneralPane": {
           "d58fccfd84": "导航",
+          "5cb5475664": "关闭固定标签页前确认",
+          "36b2a5dc6d": "关闭固定标签页前显示确认对话框。",
           "projectRuntime": "Project Runtime",
           "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
         },
@@ -5784,7 +5809,8 @@
           "97dccee14e": "修改的",
           "3b11ef3a43": "{{value0}} 快捷方式",
           "f6579be67b": "更改快捷方式",
-          "6a7848fdac": "正在录制快捷键"
+          "6a7848fdac": "正在录制快捷键",
+          "a98d551407": "按下快捷键，或双击一个修饰键（例如 {{value0}}）。按 Esc 取消。"
         },
         "ShortcutFilterRail": {
           "28b63545bf": "状态",
@@ -6983,6 +7009,8 @@
             "7baf524b04": "工作区",
             "d0bc793689": "创建工作区文件夹的根目录。",
             "4c95d08fa2": "工作区目录",
+            "161a86a9da": "关闭固定标签页前确认",
+            "8e593f04fc": "关闭固定标签页前显示确认对话框。",
             "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
           }
@@ -11501,6 +11529,9 @@
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
         "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+      },
+      "ShortcutKeyCombo": {
+        "07eb4985a1": "Double-tap {{value0}}"
       }
     },
     "i18n": {

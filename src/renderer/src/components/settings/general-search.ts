@@ -148,6 +148,23 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.f8f0ac213a', 'sequential'),
       ...translateSearchKeyword('auto.components.settings.general.search.fb84767421', 'switch')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.general.search.161a86a9da',
+      'Confirm before closing pinned tabs'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.8e593f04fc',
+      'Show a confirmation dialog before a pinned tab is closed.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.867dddea41', 'pinned'),
+      ...translateSearchKeyword('auto.components.settings.general.search.5250cf0e48', 'pin'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
+      ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
+      ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close')
+    ]
   }
 ])
 

@@ -665,6 +665,100 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalled()
   })
 
+  it('only intercepts double-tap dictation when enabled toggle mode can handle it', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    const voice: { enabled: boolean; sttModel: string; dictationMode: 'toggle' | 'hold' } = {
+      enabled: false,
+      sttModel: '',
+      dictationMode: 'toggle'
+    }
+    createMainWindow(
+      {
+        getUI: () => ({}),
+        getSettings: () => ({ windowBackgroundBlur: false, voice }) as never,
+        updateUI: vi.fn()
+      } as never,
+      {
+        getKeybindings: () => ({ 'voice.dictation': ['DoubleTap+Shift'] })
+      }
+    )
+
+    const triggerDoubleTapShift = (): ReturnType<typeof vi.fn> => {
+      const modifierInput = {
+        code: 'ShiftLeft',
+        key: 'Shift',
+        shift: true,
+        meta: false,
+        control: false,
+        alt: false
+      }
+      windowHandlers['before-input-event'](
+        { preventDefault: vi.fn() } as never,
+        { ...modifierInput, type: 'keyDown' } as never
+      )
+      windowHandlers['before-input-event'](
+        { preventDefault: vi.fn() } as never,
+        { ...modifierInput, type: 'keyUp' } as never
+      )
+      const preventDefault = vi.fn()
+      windowHandlers['before-input-event'](
+        { preventDefault } as never,
+        { ...modifierInput, type: 'keyDown' } as never
+      )
+      windowHandlers['before-input-event'](
+        { preventDefault: vi.fn() } as never,
+        { ...modifierInput, type: 'keyUp' } as never
+      )
+      return preventDefault
+    }
+
+    const disabledPreventDefault = triggerDoubleTapShift()
+    expect(disabledPreventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
+
+    voice.enabled = true
+    voice.sttModel = 'test-model'
+    voice.dictationMode = 'hold'
+    const holdPreventDefault = triggerDoubleTapShift()
+    expect(holdPreventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
+
+    voice.dictationMode = 'toggle'
+    const togglePreventDefault = triggerDoubleTapShift()
+    expect(togglePreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
+  })
+
   it('forwards ctrl/cmd+j to the worktree palette toggle event', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -792,6 +886,85 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalled()
   })
 
+  it('allows double-tap shortcuts while terminal input is focused with Terminal-first policy', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(
+      {
+        getUI: () => ({}),
+        getSettings: () => ({ terminalShortcutPolicy: 'terminal-first' })
+      } as never,
+      {
+        getKeybindings: () => ({ 'worktree.quickOpen': ['DoubleTap+Shift'] })
+      }
+    )
+
+    const setFocusedListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+    expect(setFocusedListener).toBeTypeOf('function')
+    setFocusedListener?.({ sender: webContents } as never, true)
+
+    const modifierInput = {
+      code: 'ShiftLeft',
+      key: 'Shift',
+      shift: true,
+      meta: false,
+      control: false,
+      alt: false
+    }
+    const firstDownPreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: firstDownPreventDefault } as never,
+      { ...modifierInput, type: 'keyDown' } as never
+    )
+    const firstUpPreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: firstUpPreventDefault } as never,
+      { ...modifierInput, type: 'keyUp' } as never
+    )
+    const secondDownPreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: secondDownPreventDefault } as never,
+      { ...modifierInput, type: 'keyDown' } as never
+    )
+
+    expect(firstDownPreventDefault).not.toHaveBeenCalled()
+    expect(firstUpPreventDefault).not.toHaveBeenCalled()
+    expect(secondDownPreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:openQuickOpen')
+  })
+
   it('notifies before Orca-first captures a risky terminal-focused shortcut', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -855,6 +1028,83 @@ describe('createMainWindow', () => {
       actionId: 'worktree.palette'
     })
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:toggleWorktreePalette')
+  })
+
+  it('notifies before Orca-first captures a terminal-focused double-tap shortcut', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn()
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    createMainWindow(
+      {
+        getUI: () => ({}),
+        getSettings: () => ({ terminalShortcutPolicy: 'orca-first' })
+      } as never,
+      {
+        getKeybindings: () => ({ 'worktree.quickOpen': ['DoubleTap+Shift'] })
+      }
+    )
+
+    const setFocusedListener = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+    expect(setFocusedListener).toBeTypeOf('function')
+    setFocusedListener?.({ sender: webContents } as never, true)
+
+    const modifierInput = {
+      code: 'ShiftLeft',
+      key: 'Shift',
+      shift: true,
+      meta: false,
+      control: false,
+      alt: false
+    }
+    windowHandlers['before-input-event'](
+      { preventDefault: vi.fn() } as never,
+      { ...modifierInput, type: 'keyDown' } as never
+    )
+    windowHandlers['before-input-event'](
+      { preventDefault: vi.fn() } as never,
+      { ...modifierInput, type: 'keyUp' } as never
+    )
+    const preventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault } as never,
+      { ...modifierInput, type: 'keyDown' } as never
+    )
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:terminalShortcutCaptured', {
+      actionId: 'worktree.quickOpen'
+    })
+    expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:openQuickOpen')
   })
 
   it('forwards the configured workspace delete shortcut while terminal input is focused', () => {

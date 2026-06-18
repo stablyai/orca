@@ -527,6 +527,7 @@
       },
       "useIpcEvents": {
         "0e3cf53060": "ブラウザタブ {{value0}} が見つかりません",
+        "2f6637fe6c": "ブラウザタブ {{value0}} はピン留めされています",
         "a8d2bf8e9e": "閉じるためのアクティブなブラウザ タブがありません",
         "291c8ed902": "リモート ランタイムがアクティブな間はブラウザ タブは使用できません",
         "f45fa2b03c": "リモート ランタイムがアクティブな間はブラウザ プロファイルを使用できません",
@@ -2386,6 +2387,13 @@
                 }
               }
             }
+          },
+          "PinnedTabCloseDialog": {
+            "6c190f295a": "ピン留めしたタブを閉じますか？",
+            "0d1963f4a6": "このタブはピン留めされています。本当に閉じますか？",
+            "dont_ask_again": "ピン留めしたタブについて今後確認しない",
+            "0b38ee2f86": "キャンセル",
+            "c337c9d75c": "閉じる"
           }
         }
       },
@@ -3690,7 +3698,9 @@
           "8ce44af9a8": "{{value0}} の名前を変更",
           "395e541d5d": "ステータス",
           "34f03eb0de": "ボードの設定",
-          "26cbc92150": "ワークスペースボードの設定"
+          "26cbc92150": "ワークスペースボードの設定",
+          "87d24a0c2f": "ボードとイシューのステータスを同期",
+          "4c2eaa78cc": "リンク済みワークスペースを移動すると、一致するワークフロー状態がある場合に Linear イシューのステータスが更新されます。"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空の",
@@ -4189,6 +4199,19 @@
           "removing": "Removing",
           "remove": "Remove",
           "close": "Close"
+        },
+        "WorkspaceKanbanDrawer": {
+          "1975a4e480": "タスクステータスの同期に失敗しました",
+          "e02b0d92ff": "タスクステータスの同期をスキップしました",
+          "c1d2e3f4a5": "Linear イシュー {{value0}} を読み取れませんでした。",
+          "d2e3f4a5b6": "{{value0}} に一致する Linear ワークフロー状態がありません。",
+          "e3f4a5b6c7": "{{value0}} に一致する Linear ワークフロー状態が複数あります。",
+          "f4a5b6c7d8": "Linear イシュー {{value0}} を更新できませんでした。",
+          "a5b6c7d8e9": "Linear イシュー {{value0}} を同期できませんでした。",
+          "b6c7d8e9f0": "タスクステータスの同期を完了できませんでした。",
+          "c7d8e9f0a1": "{{value0}} 件更新",
+          "d8e9f0a1b2": "{{value0}} 件スキップ",
+          "e9f0a1b2c3": "{{value0}} 件失敗"
         }
       },
       "shared": {
@@ -4814,6 +4837,8 @@
         },
         "GeneralPane": {
           "d58fccfd84": "ナビゲーション",
+          "5cb5475664": "ピン留めしたタブを閉じる前に確認",
+          "36b2a5dc6d": "ピン留めしたタブを閉じる前に確認ダイアログを表示します。",
           "projectRuntime": "Project Runtime",
           "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
         },
@@ -5821,7 +5846,8 @@
           "97dccee14e": "修正済み",
           "3b11ef3a43": "{{value0}} ショートカット",
           "f6579be67b": "ショートカットを変更する",
-          "6a7848fdac": "ショートカットを記録中"
+          "6a7848fdac": "ショートカットを記録中",
+          "a98d551407": "ショートカットを押すか、修飾キーをダブルタップしてください（例: {{value0}}）。Esc でキャンセルします。"
         },
         "ShortcutFilterRail": {
           "28b63545bf": "状態",
@@ -7020,6 +7046,8 @@
             "7baf524b04": "ワークスペース",
             "d0bc793689": "ワークスペースフォルダーが作成されるルートディレクトリ。",
             "4c95d08fa2": "ワークスペースディレクトリ",
+            "161a86a9da": "ピン留めしたタブを閉じる前に確認",
+            "8e593f04fc": "ピン留めしたタブを閉じる前に確認ダイアログを表示します。",
             "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects."
           }
@@ -11501,6 +11529,9 @@
         "sourceUnavailable": "{{value0}} source unavailable: {{value1}}",
         "someSourceHostsUnavailable": "Some {{value0}} source hosts unavailable: {{value1}}",
         "reconnectOrUpdateTitle": "Reconnect or update {{value0}} to load this source."
+      },
+      "ShortcutKeyCombo": {
+        "07eb4985a1": "Double-tap {{value0}}"
       }
     },
     "i18n": {

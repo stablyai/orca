@@ -11,6 +11,7 @@ import {
 } from '@/runtime/web-runtime-session'
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
 
 const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
   'editor',
@@ -141,7 +142,7 @@ export function createNewTerminalTab(
   state.setTabBarOrder(activeWorktreeId, order)
 }
 
-export function closeTerminalTab(tabId: string): void {
+export function closeTerminalTab(tabId: string, options?: { force?: boolean }): void {
   const state = useAppStore.getState()
   const target = resolveCloseTerminalTabTarget(state, tabId)
   if (!target) {
@@ -149,7 +150,14 @@ export function closeTerminalTab(tabId: string): void {
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
 
-  if (isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)) {
+  // Why: a pinned tab routes through the confirmation guard instead of closing
+  // outright. `force` is the post-confirmation re-entry, which skips the guard.
+  if (!options?.force && isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)) {
+    guardPinnedTabClose({
+      isPinned: true,
+      tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
+      onClose: () => closeTerminalTab(tabId, { force: true })
+    })
     return
   }
 

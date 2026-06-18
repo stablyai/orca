@@ -6133,10 +6133,10 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/repo',
       '/workspace/feature-wt',
       false,
-      {
+      expect.objectContaining({
         knownRemovedWorktree: expect.objectContaining({ path: '/workspace/feature-wt' }),
         wslDistro: 'Ubuntu'
-      }
+      })
     )
   })
 

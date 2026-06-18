@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'path'
 
+const ORIGINAL_PLATFORM = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', {
+    configurable: true,
+    value: platform
+  })
+}
+
 const {
   handleMock,
   createHostedReviewMock,
@@ -75,6 +84,7 @@ describe('registerHostedReviewHandlers', () => {
   }
 
   beforeEach(() => {
+    setPlatform(ORIGINAL_PLATFORM)
     handleMock.mockReset()
     createHostedReviewMock.mockReset()
     getHostedReviewCreationEligibilityMock.mockReset()
@@ -101,6 +111,7 @@ describe('registerHostedReviewHandlers', () => {
   })
 
   it('routes local WSL project review creation through main-process runtime options', async () => {
+    setPlatform('win32')
     const localRepo = {
       id: 'repo-local',
       path: '/workspace/repo',
@@ -158,6 +169,7 @@ describe('registerHostedReviewHandlers', () => {
   })
 
   it('routes local WSL project review status through main-process runtime options', async () => {
+    setPlatform('win32')
     const localRepo = {
       id: 'repo-local',
       path: '/workspace/repo',
