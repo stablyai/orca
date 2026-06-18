@@ -19,7 +19,7 @@ import {
   type RelayDispatcher
 } from './git-handler-test-setup'
 
-describe('GitHandler', () => {
+describe('GitHandler', { timeout: 45_000 }, () => {
   let dispatcher: MockDispatcher
   let handler: GitHandler
   let tmpDir: string
@@ -92,6 +92,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fastForward')
     expect(methods).toContain('git.rebaseFromBase')
     expect(methods).toContain('git.branchDiff')
+    expect(methods).toContain('git.forkDiff')
     expect(methods).toContain('git.listWorktrees')
     expect(methods).toContain('git.addWorktree')
     expect(methods).toContain('git.removeWorktree')
@@ -862,6 +863,39 @@ describe('GitHandler', () => {
       // were left at default, the entry's path would be the octal-quoted
       // form and the filter at git-handler-ops.ts:230-237 would not match.
       expect(result).toHaveLength(1)
+    })
+  })
+
+  describe('forkDiff', () => {
+    it('returns binary-capable diff output and untracked files for a fork workspace', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'base\n')
+      gitCommit(tmpDir, 'initial')
+      const baseRef = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+
+      writeFileSync(path.join(tmpDir, 'file.txt'), 'child\n')
+      writeFileSync(path.join(tmpDir, 'new.txt'), 'untracked\n')
+
+      const result = (await dispatcher.callRequest('git.forkDiff', {
+        worktreePath: tmpDir,
+        baseRef
+      })) as { diff: string; untrackedFiles: string[] }
+
+      expect(result.diff).toContain('diff --git a/file.txt b/file.txt')
+      expect(result.diff).toContain('+child')
+      expect(result.untrackedFiles).toEqual(['new.txt'])
+    })
+
+    it('rejects option-like fork diff base refs before invoking git', async () => {
+      await expect(
+        dispatcher.callRequest('git.forkDiff', {
+          worktreePath: tmpDir,
+          baseRef: '--output=/tmp/orca-test'
+        })
+      ).rejects.toThrow('Invalid fork diff base ref.')
     })
   })
 

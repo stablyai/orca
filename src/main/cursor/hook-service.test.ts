@@ -17,6 +17,8 @@ vi.mock('os', async () => {
 
 import { CursorHookService } from './hook-service'
 
+const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 const CURSOR_EVENTS = [
   'beforeSubmitPrompt',
   'stop',
@@ -28,17 +30,23 @@ const CURSOR_EVENTS = [
   'afterAgentResponse'
 ]
 
-const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
+function getCursorScriptFileName(): string {
+  return process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
+}
 
 describe('CursorHookService', () => {
   let homeDir: string
 
   beforeEach(() => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     homeDir = mkdtempSync(join(tmpdir(), 'orca-cursor-home-'))
     homedirMock.mockReturnValue(homeDir)
   })
 
   afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
     vi.clearAllMocks()
     rmSync(homeDir, { recursive: true, force: true })
   })
@@ -64,7 +72,7 @@ describe('CursorHookService', () => {
     }
 
     const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME),
+      join(homeDir, '.orca', 'agent-hooks', getCursorScriptFileName()),
       'utf8'
     )
     expect(script).toContain('/hook/cursor')
@@ -107,7 +115,7 @@ describe('CursorHookService', () => {
     const promptCommands = config.hooks.beforeSubmitPrompt.map((definition) => definition.command)
     expect(promptCommands).toContain('/usr/local/bin/user-hook')
     expect(
-      promptCommands.filter((command) => command?.includes(CURSOR_SCRIPT_FILE_NAME))
+      promptCommands.filter((command) => command?.includes(getCursorScriptFileName()))
     ).toHaveLength(1)
     expect(config.hooks.retiredEvent.map((definition) => definition.command)).toEqual([
       '/usr/local/bin/retired-user-hook'

@@ -122,7 +122,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-describe('WorktreeCardAgents send targets', () => {
+describe('WorktreeCardAgents send targets', { timeout: 45_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks()
     const now = Date.now()

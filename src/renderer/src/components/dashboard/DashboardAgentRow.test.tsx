@@ -157,7 +157,7 @@ describe('DashboardAgentRow', () => {
     expect(tokens).toContain('worktree-agent-send-target-button')
     expect(tokens).toContain('absolute')
     expect(tokens).toContain('h-5')
-    expect(tokens).toContain('w-12')
+    expect(tokens).toContain('w-16')
     expect(markup).toContain('lucide-send')
     expect(markup).not.toContain('aria-label="Dismiss agent"')
   })

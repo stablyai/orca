@@ -1,6 +1,7 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentType,
@@ -22,23 +23,11 @@ import {
   buildTitleDerivedAgentRows,
   resolveAgentTypeFromTerminalTitle
 } from './worktree-title-derived-agent-rows'
-
-function tabFromAttributedStatusEntry(entry: AgentStatusEntry): TerminalTab | null {
-  const parsed = parsePaneKey(entry.paneKey)
-  if (!parsed || !entry.worktreeId) {
-    return null
-  }
-  return {
-    id: parsed.tabId,
-    ptyId: null,
-    worktreeId: entry.worktreeId,
-    title: entry.terminalTitle ?? 'Agent',
-    customTitle: null,
-    color: null,
-    sortOrder: Number.MAX_SAFE_INTEGER,
-    createdAt: entry.stateStartedAt
-  }
-}
+import {
+  sleepingRecordToAgentStatusEntry,
+  tabFromAttributedStatusEntry,
+  tabFromSleepingAgentSession
+} from './worktree-agent-row-record-conversion'
 
 function resolveRowAgentType(entry: AgentStatusEntry, tab?: TerminalTab | null): AgentType {
   if (entry.agentType && entry.agentType !== 'unknown') {
@@ -208,6 +197,7 @@ export function buildWorktreeAgentRows(args: {
   tabs: TerminalTab[]
   entries: AgentStatusEntry[]
   retained: RetainedAgentEntry[]
+  sleeping?: SleepingAgentSessionRecord[]
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
   ptyIdsByTabId?: Record<string, string[]>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
@@ -317,6 +307,25 @@ export function buildWorktreeAgentRows(args: {
       state: 'done',
       startedAt: ra.startedAt
     })
+  }
+
+  for (const sleeping of args.sleeping ?? []) {
+    if (seenPaneKeys.has(sleeping.paneKey)) {
+      continue
+    }
+    const rowEntry = sleepingRecordToAgentStatusEntry(sleeping)
+    const tab = tabFromSleepingAgentSession(sleeping)
+    rows.push({
+      paneKey: rowEntry.paneKey,
+      entry: rowEntry,
+      tab,
+      agentType: resolveRowAgentType(rowEntry, tab),
+      // Why: sleeping records are restorable context, not proof that the
+      // provider process is still actively working.
+      state: 'idle',
+      startedAt: sleeping.updatedAt
+    })
+    seenPaneKeys.add(sleeping.paneKey)
   }
 
   rows.sort((a, b) => a.startedAt - b.startedAt)

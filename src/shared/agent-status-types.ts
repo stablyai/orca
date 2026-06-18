@@ -5,7 +5,10 @@
 // agent misses its own cancellation hook. We still do not infer status from
 // terminal titles anywhere in the data flow.
 
-import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import {
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from './agent-session-resume'
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
@@ -50,11 +53,20 @@ export type AgentStateHistoryEntry = {
   prompt: string
   /** When this state was first reported. */
   startedAt: number
+  /** Stable per-turn key when a structured hook source exposes one. */
+  promptInteractionKey?: string
   /** True when this `done` was a cancellation. May come from an agent hook
    *  (for example Claude Code `is_interrupt`) or Orca's guarded interrupt
    *  fallback. Always falsy for non-`done` states, so retention logic can
    *  preserve this signal. */
   interrupted?: boolean
+}
+
+export type AgentStatusPromptInteraction = {
+  id: string
+  prompt: string
+  observedAt: number
+  agentType?: AgentType
 }
 
 /** Maximum number of history entries kept per agent to bound memory. */
@@ -106,6 +118,14 @@ export type AgentStatusEntry = {
   toolInput?: string
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
+  /** Stable per-turn key from structured hook sources. This is not derived
+   *  from terminal text and is the only kind of id safe to use as a future
+   *  message/checkpoint fork point. */
+  promptInteractionKey?: string
+  /** Bounded structured turn history from hook sources. Kept only when ids
+   *  are provider/hook-owned so archived message forks never target inferred
+   *  terminal text. */
+  promptInteractions?: AgentStatusPromptInteraction[]
   /** True when the current `done` state was reached via an interrupt rather
    *  than a normal turn completion. May be reported by the agent itself or
    *  inferred by Orca's guarded interrupt fallback.
@@ -147,6 +167,7 @@ export type AgentStatusPayload = {
   toolInput?: string
   lastAssistantMessage?: string
   interrupted?: boolean
+  providerSession?: AgentProviderSessionMetadata
 }
 
 /**
@@ -178,6 +199,10 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   receivedAt: number
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
+  /** Stable per-turn key when a structured hook source exposes one. */
+  promptInteractionKey?: string
+  /** Bounded structured turn history for future message/checkpoint fork points. */
+  promptInteractions?: AgentStatusPromptInteraction[]
   orchestration?: AgentStatusOrchestrationContext
   providerSession?: AgentProviderSessionMetadata
 }
@@ -196,6 +221,10 @@ export const AGENT_STATUS_TOOL_INPUT_MAX_LENGTH = 160
  *  second line of defense against a buggy/malicious agent spamming huge
  *  strings into the cache (which lives per pane with bounded history). */
 export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
+/** Maximum character length for a structured per-turn id. */
+export const AGENT_STATUS_PROMPT_INTERACTION_KEY_MAX_LENGTH = 256
+/** Maximum number of structured turn ids kept per pane. */
+export const AGENT_STATUS_PROMPT_INTERACTION_HISTORY_MAX = 50
 /**
  * Freshness threshold for explicit agent status. Retained past this point so
  * WorktreeCard's sidebar dot can decay "working" back to "active" when the
@@ -286,6 +315,47 @@ function normalizeOptionalMultilineField(value: unknown, maxLength: number): str
   return normalized.length > 0 ? normalized : undefined
 }
 
+export function normalizePromptInteractionKey(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  const normalized = normalizeField(value, AGENT_STATUS_PROMPT_INTERACTION_KEY_MAX_LENGTH)
+  return normalized.length > 0 ? normalized : undefined
+}
+
+export function normalizePromptInteractionHistory(
+  value: unknown
+): AgentStatusPromptInteraction[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+  const interactions: AgentStatusPromptInteraction[] = []
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) {
+      continue
+    }
+    const record = item as Record<string, unknown>
+    const id = normalizePromptInteractionKey(record.id)
+    const observedAt = record.observedAt
+    if (!id || typeof observedAt !== 'number' || !Number.isFinite(observedAt) || observedAt <= 0) {
+      continue
+    }
+    const normalized = normalizeAgentStatusPayload({
+      state: 'working',
+      prompt: record.prompt,
+      agentType: record.agentType
+    })
+    interactions.push({
+      id,
+      prompt: normalized?.prompt ?? '',
+      observedAt,
+      ...(normalized?.agentType ? { agentType: normalized.agentType } : {})
+    })
+  }
+  const capped = interactions.slice(-AGENT_STATUS_PROMPT_INTERACTION_HISTORY_MAX)
+  return capped.length > 0 ? capped : undefined
+}
+
 /**
  * Normalize and validate an already-parsed agent status object. Shared by the
  * JSON string entry point (`parseAgentStatusPayload`) and the object entry
@@ -325,7 +395,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     ),
     // Why: only meaningful on `done`. Coerce to undefined on other states so
     // the field doesn't leak stale truth through state transitions.
-    interrupted: obj.interrupted === true && state === 'done' ? true : undefined
+    interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
+    providerSession: normalizeAgentProviderSession(obj.providerSession) ?? undefined
   }
 }
 

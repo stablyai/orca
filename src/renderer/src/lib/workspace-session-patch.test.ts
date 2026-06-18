@@ -313,4 +313,14 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(Object.hasOwn(patch, 'sleepingAgentSessionsByPaneKey')).toBe(true)
     expect(patch.sleepingAgentSessionsByPaneKey).toBeUndefined()
   })
+
+  it('keeps archived forkable agent session clearing keys in patches', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({ archivedForkableAgentSessionsByPaneKey: {} }),
+      ['archivedForkableAgentSessionsByPaneKey']
+    )
+
+    expect(Object.hasOwn(patch, 'archivedForkableAgentSessionsByPaneKey')).toBe(true)
+    expect(patch.archivedForkableAgentSessionsByPaneKey).toBeUndefined()
+  })
 })

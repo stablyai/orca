@@ -826,13 +826,8 @@ describe('registerFilesystemHandlers', () => {
       filePath: './src/../src/file.ts'
     })
 
-    // Why: validateGitRelativeFilePath uses path.relative() which produces
-    // platform-specific separators (backslashes on Windows).
-    expect(stageFileMock).toHaveBeenCalledWith(
-      WORKTREE_FEATURE_PATH,
-      path.join('src', 'file.ts'),
-      {}
-    )
+    // Why: git command APIs consume POSIX repo-relative paths even on Windows.
+    expect(stageFileMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, 'src/file.ts', {})
   })
 
   it('uses worktree roots seeded by worktrees:list without rebuilding the cache', async () => {
@@ -910,12 +905,10 @@ describe('registerFilesystemHandlers', () => {
 
     expect(checkIgnoredPathsMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
-      [path.join('dist', 'bundle.js'), path.join('src', 'index.ts')],
+      ['dist/bundle.js', 'src/index.ts'],
       {}
     )
-    expect(sshProvider.checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', [
-      path.join('build', 'output.js')
-    ])
+    expect(sshProvider.checkIgnoredPaths).toHaveBeenCalledWith('/remote/repo', ['build/output.js'])
   })
 
   it('routes abort merge through local and SSH git providers', async () => {
@@ -997,7 +990,7 @@ describe('registerFilesystemHandlers', () => {
 
     expect(bulkStageFilesMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
-      [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
+      ['src/file.ts', 'nested/child.ts'],
       {}
     )
   })
@@ -1014,7 +1007,7 @@ describe('registerFilesystemHandlers', () => {
 
     expect(bulkDiscardChangesMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
-      [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
+      ['src/file.ts', 'nested/child.ts'],
       {}
     )
   })
@@ -2046,15 +2039,14 @@ describe('registerFilesystemHandlers', () => {
       oldPath: 'src/old-file.ts'
     })
 
-    // Why: validateGitRelativeFilePath uses path.relative() which produces
-    // platform-specific separators (backslashes on Windows).
+    // Why: git command APIs consume POSIX repo-relative paths even on Windows.
     expect(getBranchDiffMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
       {
         headOid: 'head-oid',
         mergeBase: 'merge-base-oid',
-        filePath: path.join('src', 'file.ts'),
-        oldPath: path.join('src', 'old-file.ts')
+        filePath: 'src/file.ts',
+        oldPath: 'src/old-file.ts'
       },
       {}
     )

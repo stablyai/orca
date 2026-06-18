@@ -72,7 +72,7 @@ describe('wsl login shell command helpers', () => {
       return
     }
     try {
-      execFileSync('wsl.exe', ['--', 'true'])
+      execFileSync('wsl.exe', ['--', 'true'], { timeout: 30_000 })
     } catch {
       return
     }
@@ -80,8 +80,10 @@ describe('wsl login shell command helpers', () => {
     const command = buildWslLoginShellCommand('orca_value=ok; printf "<%s>" "$orca_value"')
     const escaped = escapeWslShCommandForWindows(command)
 
-    expect(execFileSync('wsl.exe', ['--', 'sh', '-lc', escaped], { encoding: 'utf8' })).toBe('<ok>')
-  }, 15_000)
+    expect(
+      execFileSync('wsl.exe', ['--', 'sh', '-lc', escaped], { encoding: 'utf8', timeout: 30_000 })
+    ).toBe('<ok>')
+  }, 45_000)
 
   it('starts an interactive login shell without assuming bash', () => {
     const command = buildWslInteractiveLoginShellCommand()

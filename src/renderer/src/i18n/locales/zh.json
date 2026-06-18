@@ -2268,7 +2268,36 @@
             "619b5a35d2": "创建一个顶级工作区分支并使用捕获的上下文启动一个新的 Agent 选项卡。",
             "64e292e8e3": "分叉 Agent 会话",
             "9d25de2920": "创建分叉",
-            "2b10412cfc": "创建中..."
+            "2b10412cfc": "创建中...",
+            "targetModeLabel": "Target",
+            "targetModeAriaLabel": "Fork target",
+            "childWorkspaceOption": "Child workspace",
+            "currentWorkspaceOption": "Current workspace",
+            "currentWorkspaceTitle": "Current workspace fork",
+            "currentWorkspaceDescription": "No files are copied. The new agent opens in the source workspace with the same captured context.",
+            "nameLabel": "Workspace name",
+            "namePlaceholder": "Auto-generate from source workspace",
+            "nameDisabledForCurrentWorkspace": "Current workspace forks do not create a new workspace to name.",
+            "openAfterCreateLabel": "Open after creating",
+            "openAfterCreateDescription": "When off, Orca creates the fork without switching to the target workspace or terminal.",
+            "runtimeContextDelivery": "Orca will request a provider-native fork when the source agent supports it. Otherwise it uses a transcript fallback from this terminal.",
+            "transcriptOnlyContextDelivery": "A runtime terminal handle is not available, so this fork uses the captured transcript fallback.",
+            "preflightLoading": "Checking context delivery...",
+            "preflightError": "Could not check context delivery. Orca will re-check when creating the fork.",
+            "preflightNativeProvider": "Provider-native fork available for {{agent}}.",
+            "preflightStructuredMessageFallback": "Message fork planned at {{message}} with {{count}} structured {{promptLabel}}. Native fork unavailable: {{reason}}.",
+            "preflightTranscriptTruncated": ", truncated to the newest output",
+            "preflightTranscriptFallback": "Transcript fallback planned: {{count}} terminal {{lineLabel}}{{truncation}}. Native fork unavailable: {{reason}}.",
+            "preflightUnknownError": "Preflight failed",
+            "preflightReasonMetadataUnavailable": "provider session metadata is unavailable",
+            "preflightReasonUnsupported": "the source agent does not support native forking",
+            "preflightReasonPlanUnavailable": "a native fork startup plan could not be built",
+            "preflightReasonMessageForkPoint": "a message fork point was selected",
+            "promptUnavailable": "Prompt text unavailable",
+            "messageForkPointOption": "Message {{index}}: {{prompt}}",
+            "forkPointLabel": "Fork point",
+            "currentForkPointOption": "Current end",
+            "preflightStructuredHistoryFallback": "Structured history fallback planned with {{count}} recorded {{promptLabel}}. Native fork unavailable: {{reason}}."
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "清晰的屏幕",
@@ -2337,7 +2366,11 @@
                   "38e41edc6e": "该工作区无法分叉为 git 工作树。",
                   "f867385bb5": "找不到此分支的源工作区。",
                   "046e8d853c": "没有要 fork 的 terminal 上下文",
-                  "c00421d320": "已复制分叉上下文。启动 Agent 并粘贴它以启动分叉。"
+                  "c00421d320": "已复制分叉上下文。启动 Agent 并粘贴它以启动分叉。",
+                  "5e69cf039a": "Session fork opened in this workspace",
+                  "537d126b34": "Native session fork opened",
+                  "6b108da085": "Failed to fork agent session.",
+                  "3ac98a9c04": "This workspace cannot be forked."
                 }
               }
             },
@@ -3709,7 +3742,11 @@
           "021538e1d1": "SSH 已断开连接"
         },
         "WorktreeCardAgents": {
-          "1b0a156717": "Agents"
+          "1b0a156717": "Agents",
+          "forkMissingTerminal": "This agent row cannot be forked because session context is unavailable.",
+          "nativeForkCreated": "Native session fork opened in a child workspace",
+          "transcriptForkCreated": "Session fork opened in a child workspace",
+          "forkFailed": "Failed to fork agent session."
         },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}"
@@ -3776,7 +3813,15 @@
           "8dacff1fe0": "马克·里德",
           "3baa7d6507": "别针",
           "697d0f6e1b": "取消固定",
-          "250de158fd": "移除工作区"
+          "250de158fd": "移除工作区",
+          "forkChildren": "Child Workspaces",
+          "manageForks": "Manage Forks",
+          "previousAgentSessions": "Previous Agent Sessions",
+          "forkingSession": "Forking...",
+          "archivedForkCreated": "Previous agent session fork opened in a child workspace",
+          "archivedForkFailed": "Failed to fork previous agent session.",
+          "archivedForkPointMessage": "Message {{value0}}: {{value1}}",
+          "archivedForkPointCurrentEnd": "Current end"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
@@ -4003,7 +4048,8 @@
               "agents": {
                 "a128d7006b": "{{value0}} {{value1}} 儿童 {{value2}}",
                 "289a1d2ca7": "展开{{value0}}。 {{value1}}",
-                "0c1debfe84": "折叠 {{value0}}"
+                "0c1debfe84": "折叠 {{value0}}",
+                "forkSession": "Fork agent session"
               }
             }
           },
@@ -4146,6 +4192,20 @@
           "2d3e4f5a6b": "检查连接",
           "3c4d5e6f7a": "Manage host…",
           "6e7f8a9b0c": "删除主机..."
+        },
+        "WorktreeForkManagementDialog": {
+          "unknownTime": "Unknown",
+          "removeTitle": "Remove Fork",
+          "removeDescription": "Orca will ask the runtime to remove this child workspace. Dirty worktrees are not removed.",
+          "removeConfirm": "Remove",
+          "removeSuccess": "Fork removed",
+          "removeFailed": "Failed to remove fork.",
+          "title": "Manage Forks",
+          "empty": "No forks found.",
+          "open": "Open",
+          "removing": "Removing",
+          "remove": "Remove",
+          "close": "Close"
         },
         "WorkspaceKanbanDrawer": {
           "1975a4e480": "任务状态同步失败",
@@ -10727,11 +10787,16 @@
           "b06e13fcf7": "关闭 agent",
           "0272969e28": "发送给该 Agent",
           "92a7017987": "发送",
-          "019b74d93a": "有资格的"
+          "019b74d93a": "有资格的",
+          "forkSession": "Fork agent session"
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "被打断",
           "1ec01cef03": "被用户中断"
+        },
+        "AgentSessionForkPointMenu": {
+          "message": "Message {{value0}}: {{value1}}",
+          "currentEnd": "Current end"
         }
       },
       "crash": {

@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -13,11 +14,13 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { toast } from 'sonner'
 import {
   Copy,
   Bell,
   BellOff,
   CircleX,
+  GitFork,
   Moon,
   Pencil,
   Pin,
@@ -32,7 +35,10 @@ import {
 import { useAppStore } from '@/store'
 import { useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { ArchivedForkableAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import type { RuntimeAgentSessionForkCreateResult } from '../../../../shared/runtime-types'
+import type { AgentStatusPromptInteraction } from '../../../../shared/agent-status-types'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -42,8 +48,12 @@ import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
+import WorktreeForkManagementDialog from './WorktreeForkManagementDialog'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import { formatAgentTypeLabel } from '@/lib/agent-status'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -57,6 +67,12 @@ type Props = {
   selectedWorktrees?: readonly Worktree[]
   onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
   onOpenChange?: (open: boolean) => void
+}
+
+export type ContextMenuChildWorkspaceRecord = {
+  worktree: Worktree
+  lineage: WorktreeLineage
+  createdAt: number
 }
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -125,6 +141,70 @@ function isContextWorktreeDeletable(
   repo: Pick<Repo, 'kind'> | null | undefined
 ): boolean {
   return repo != null && !worktree.isMainWorktree
+}
+
+function getContextMenuChildWorkspaceRecords(
+  parent: Pick<Worktree, 'id' | 'instanceId'>,
+  lineageById: Record<string, WorktreeLineage>,
+  worktreeMap: Map<string, Worktree>
+): ContextMenuChildWorkspaceRecord[] {
+  const children: ContextMenuChildWorkspaceRecord[] = []
+  for (const [childId, lineage] of Object.entries(lineageById)) {
+    if (
+      lineage.parentWorktreeId !== parent.id ||
+      lineage.parentWorktreeInstanceId !== parent.instanceId
+    ) {
+      continue
+    }
+    const child = worktreeMap.get(childId)
+    if (!child || child.instanceId !== lineage.worktreeInstanceId) {
+      continue
+    }
+    children.push({ worktree: child, lineage, createdAt: lineage.createdAt })
+  }
+  return children.sort(
+    (a, b) => b.createdAt - a.createdAt || a.worktree.id.localeCompare(b.worktree.id)
+  )
+}
+
+function getContextMenuChildWorkspaces(
+  parent: Pick<Worktree, 'id' | 'instanceId'>,
+  lineageById: Record<string, WorktreeLineage>,
+  worktreeMap: Map<string, Worktree>
+): Worktree[] {
+  return getContextMenuChildWorkspaceRecords(parent, lineageById, worktreeMap).map(
+    (child) => child.worktree
+  )
+}
+
+function getChildWorkspaceMenuLabel(worktree: Worktree): string {
+  return worktree.displayName || worktree.branch || worktree.path || worktree.id
+}
+
+function getContextMenuArchivedForkSessions(
+  worktreeId: string,
+  recordsByPaneKey: Record<string, ArchivedForkableAgentSessionRecord>
+): ArchivedForkableAgentSessionRecord[] {
+  return Object.values(recordsByPaneKey)
+    .filter((record) => record.worktreeId === worktreeId)
+    .sort((a, b) => b.archivedAt - a.archivedAt || a.paneKey.localeCompare(b.paneKey))
+}
+
+function getArchivedForkSessionMenuLabel(record: ArchivedForkableAgentSessionRecord): string {
+  const detail = record.prompt.trim() || record.terminalTitle?.trim() || record.providerSession.id
+  return `${formatAgentTypeLabel(record.agent)}: ${detail}`
+}
+
+function getArchivedForkInteractionMenuLabel(
+  interaction: AgentStatusPromptInteraction,
+  index: number
+): string {
+  const detail = interaction.prompt.trim() || interaction.id
+  return translate(
+    'auto.components.sidebar.WorktreeContextMenu.archivedForkPointMessage',
+    'Message {{value0}}: {{value1}}',
+    { value0: String(index + 1), value1: detail }
+  )
 }
 
 function findSidebarVirtualRowByKey(sidebar: Element, rowKey: string): HTMLElement | null {
@@ -233,6 +313,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     effectiveSelectedWorktrees
   )
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
+  const [forkManagementOpen, setForkManagementOpen] = useState(false)
   const isDeleting = deleteState?.isDeleting ?? false
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
@@ -243,8 +324,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
+  const archivedForkableAgentSessionsByPaneKey = useAppStore(
+    (s) => s.archivedForkableAgentSessionsByPaneKey
+  )
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
+  const [forkingArchivedPaneKey, setForkingArchivedPaneKey] = useState<string | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
   const isMultiContext = activeContextWorktrees.length > 1
   const workspaceScope = parseWorkspaceKey(worktree.id)
@@ -297,6 +382,18 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     [worktree, worktreeLineageById, worktreeMap]
   )
   const validParentWorktreeId = lineageInfo.state === 'valid' ? lineageInfo.parent.id : null
+  const childWorkspaceRecords = useMemo(
+    () => getContextMenuChildWorkspaceRecords(worktree, worktreeLineageById, worktreeMap),
+    [worktree, worktreeLineageById, worktreeMap]
+  )
+  const childWorkspaces = useMemo(
+    () => childWorkspaceRecords.map((child) => child.worktree),
+    [childWorkspaceRecords]
+  )
+  const archivedForkSessions = useMemo(
+    () => getContextMenuArchivedForkSessions(worktree.id, archivedForkableAgentSessionsByPaneKey),
+    [archivedForkableAgentSessionsByPaneKey, worktree.id]
+  )
   const hasAnyContextLineage = activeContextWorktrees.some(
     (item) =>
       worktreeLineageById[item.id] || workspaceLineageByChildKey[worktreeWorkspaceKey(item.id)]
@@ -457,6 +554,69 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       activateAndRevealWorktree(validParentWorktreeId)
     }
   }, [validParentWorktreeId])
+
+  const handleOpenChildWorkspace = useCallback((worktreeId: string) => {
+    activateAndRevealWorktree(worktreeId)
+  }, [])
+
+  const handleOpenForkManagement = useCallback(() => {
+    setForkManagementOpen(true)
+  }, [])
+
+  const handleForkArchivedAgentSession = useCallback(
+    (record: ArchivedForkableAgentSessionRecord, messageId?: string) => {
+      if (forkingArchivedPaneKey) {
+        return
+      }
+      setForkingArchivedPaneKey(record.paneKey)
+      void (async () => {
+        try {
+          const state = useAppStore.getState()
+          const runtimeTarget = getActiveRuntimeTarget(
+            getSettingsForWorktreeRuntimeOwner(state, record.worktreeId)
+          )
+          const result = await callRuntimeRpc<RuntimeAgentSessionForkCreateResult>(
+            runtimeTarget,
+            'fork.create',
+            {
+              worktree: `id:${record.worktreeId}`,
+              agent: record.agent,
+              providerSession: record.providerSession,
+              ...(record.promptInteractions
+                ? { promptInteractions: record.promptInteractions }
+                : {}),
+              ...(messageId ? { message: messageId } : {}),
+              activate: true
+            },
+            { timeoutMs: 10 * 60_000 }
+          )
+          await useAppStore
+            .getState()
+            .fetchWorktrees(result.worktree.repoId)
+            .catch(() => undefined)
+          activateAndRevealWorktree(result.fork.targetWorktreeId, { sidebarRevealBehavior: 'auto' })
+          toast.success(
+            translate(
+              'auto.components.sidebar.WorktreeContextMenu.archivedForkCreated',
+              'Previous agent session fork opened in a child workspace'
+            )
+          )
+        } catch (error) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.sidebar.WorktreeContextMenu.archivedForkFailed',
+                  'Failed to fork previous agent session.'
+                )
+          )
+        } finally {
+          setForkingArchivedPaneKey((current) => (current === record.paneKey ? null : current))
+        }
+      })()
+    },
+    [forkingArchivedPaneKey]
+  )
 
   const handleRemoveParentLink = useCallback(() => {
     void Promise.all(
@@ -640,6 +800,114 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   <DropdownMenuSeparator />
                 </>
               )}
+              {childWorkspaces.length > 0 && (
+                <>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger disabled={isDeleting}>
+                      <GitFork className="size-3.5" />
+                      {translate(
+                        'auto.components.sidebar.WorktreeContextMenu.forkChildren',
+                        'Child Workspaces'
+                      )}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-56">
+                      {childWorkspaces.map((child) => (
+                        <DropdownMenuItem
+                          key={child.id}
+                          onSelect={() => handleOpenChildWorkspace(child.id)}
+                          disabled={isDeleting}
+                        >
+                          <span className="max-w-48 truncate">
+                            {getChildWorkspaceMenuLabel(child)}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuItem onSelect={handleOpenForkManagement} disabled={isDeleting}>
+                    <GitFork className="size-3.5" />
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.manageForks',
+                      'Manage Forks'
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
+              {archivedForkSessions.length > 0 && (
+                <>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger disabled={isDeleting}>
+                      <GitFork className="size-3.5" />
+                      {translate(
+                        'auto.components.sidebar.WorktreeContextMenu.previousAgentSessions',
+                        'Previous Agent Sessions'
+                      )}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="w-64">
+                      {archivedForkSessions.map((record) => {
+                        const disabled = isDeleting || forkingArchivedPaneKey === record.paneKey
+                        const label =
+                          forkingArchivedPaneKey === record.paneKey
+                            ? translate(
+                                'auto.components.sidebar.WorktreeContextMenu.forkingSession',
+                                'Forking...'
+                              )
+                            : getArchivedForkSessionMenuLabel(record)
+                        if (record.promptInteractions && record.promptInteractions.length > 0) {
+                          return (
+                            <DropdownMenuSub key={record.paneKey}>
+                              <DropdownMenuSubTrigger disabled={disabled}>
+                                <span className="max-w-56 truncate">{label}</span>
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent className="w-72">
+                                <DropdownMenuGroup>
+                                  <DropdownMenuItem
+                                    onSelect={() => handleForkArchivedAgentSession(record)}
+                                    disabled={disabled}
+                                  >
+                                    <GitFork className="size-3.5" />
+                                    <span className="max-w-64 truncate">
+                                      {translate(
+                                        'auto.components.sidebar.WorktreeContextMenu.archivedForkPointCurrentEnd',
+                                        'Current end'
+                                      )}
+                                    </span>
+                                  </DropdownMenuItem>
+                                  {record.promptInteractions.map((interaction, index) => (
+                                    <DropdownMenuItem
+                                      key={interaction.id}
+                                      onSelect={() =>
+                                        handleForkArchivedAgentSession(record, interaction.id)
+                                      }
+                                      disabled={disabled}
+                                    >
+                                      <GitFork className="size-3.5" />
+                                      <span className="max-w-64 truncate">
+                                        {getArchivedForkInteractionMenuLabel(interaction, index)}
+                                      </span>
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuGroup>
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                          )
+                        }
+                        return (
+                          <DropdownMenuItem
+                            key={record.paneKey}
+                            onSelect={() => handleForkArchivedAgentSession(record)}
+                            disabled={disabled}
+                          >
+                            <span className="max-w-56 truncate">{label}</span>
+                          </DropdownMenuItem>
+                        )
+                      })}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSeparator />
+                </>
+              )}
             </>
           )}
           {isMultiContext && (
@@ -771,6 +1039,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         onOpenChange={setCreateGroupDialogOpen}
         onSubmit={handleSubmitNewProjectGroup}
       />
+      <WorktreeForkManagementDialog
+        open={forkManagementOpen}
+        parentWorktree={worktree}
+        forks={childWorkspaceRecords}
+        onOpenChange={setForkManagementOpen}
+      />
     </div>
   )
 })
@@ -781,7 +1055,10 @@ export {
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
   hasSleepableWorkspaceActivity,
+  getContextMenuChildWorkspaceRecords,
   isContextWorktreeDeletable,
+  getContextMenuChildWorkspaces,
+  getContextMenuArchivedForkSessions,
   shouldRemoveProjectFromContextMenu,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,

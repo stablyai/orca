@@ -128,8 +128,9 @@ describe('ModifierDoubleTapDetector', () => {
       })
     ).toMatchObject({ modifier: 'Shift', isModifierOnly: false })
 
-    expect(
-      toModifierDoubleTapEvent({ type: 'keyDown', code: 'KeyA', key: 'a' })
-    ).toMatchObject({ modifier: null, isModifierOnly: false })
+    expect(toModifierDoubleTapEvent({ type: 'keyDown', code: 'KeyA', key: 'a' })).toMatchObject({
+      modifier: null,
+      isModifierOnly: false
+    })
   })
 })

@@ -872,6 +872,116 @@ describe('agent status stateStartedAt', () => {
     expect(entry.prompt).toBe('fresh')
     expect(entry.updatedAt).toBe(2_000)
   })
+
+  it('preserves a structured turn id across same-turn pings and clears it on an unkeyed prompt change', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p1', agentType: 'opencode' },
+        'opencode',
+        undefined,
+        undefined,
+        { promptInteractionKey: '  opencode-message-1\nretry  ' }
+      )
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].promptInteractionKey).toBe(
+      'opencode-message-1 retry'
+    )
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p1', agentType: 'opencode', toolName: 'Bash' },
+        'opencode'
+      )
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].promptInteractionKey).toBe(
+      'opencode-message-1 retry'
+    )
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p2', agentType: 'opencode' },
+        'opencode'
+      )
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].promptInteractionKey).toBeUndefined()
+  })
+
+  it('carries structured turn ids into state history on transitions', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p1', agentType: 'opencode' },
+        'opencode',
+        undefined,
+        undefined,
+        { promptInteractionKey: 'opencode-message-1' }
+      )
+
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'opencode' }, 'opencode')
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry.promptInteractionKey).toBe('opencode-message-1')
+    expect(entry.stateHistory[0]).toMatchObject({
+      state: 'working',
+      prompt: 'p1',
+      promptInteractionKey: 'opencode-message-1'
+    })
+  })
+
+  it('preserves structured prompt history across same-agent status updates', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'p1', agentType: 'opencode' },
+        'opencode',
+        undefined,
+        undefined,
+        {
+          promptInteractions: [
+            {
+              id: ' opencode-message-1\nretry ',
+              prompt: 'p1\nline two',
+              observedAt: 1_000,
+              agentType: 'opencode'
+            },
+            { id: '', prompt: 'ignore me', observedAt: 1_001 }
+          ]
+        }
+      )
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].promptInteractions).toEqual([
+      {
+        id: 'opencode-message-1 retry',
+        prompt: 'p1 line two',
+        observedAt: 1_000,
+        agentType: 'opencode'
+      }
+    ])
+
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'opencode' }, 'opencode')
+    expect(store.getState().agentStatusByPaneKey['tab-1:1'].promptInteractions).toEqual([
+      {
+        id: 'opencode-message-1 retry',
+        prompt: 'p1 line two',
+        observedAt: 1_000,
+        agentType: 'opencode'
+      }
+    ])
+  })
 })
 
 describe('agent status retention + prefix sweep', () => {

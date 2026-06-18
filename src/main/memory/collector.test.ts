@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MemorySnapshotStore } from './collector'
 
 type AppMetricFixture = {
@@ -190,11 +190,16 @@ describe('collectSubtree', () => {
 
 describe('collectMemorySnapshot', () => {
   beforeEach(() => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     appMetricsMock.mockReset()
     appMetricsMock.mockReturnValue([])
     execMock.mockReset()
     listRegisteredPtysMock.mockReset()
     listRegisteredPtysMock.mockReturnValue([])
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   function mockPsResponse(stdout: string) {

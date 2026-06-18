@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { FORK_COMMAND_SPECS } from './fork-command-specs'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -185,6 +186,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca worktree ps [--limit <n>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'limit']
   },
+  ...FORK_COMMAND_SPECS,
   {
     path: ['terminal', 'list'],
     summary: 'List live Orca-managed terminals',

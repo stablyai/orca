@@ -198,7 +198,7 @@ describe('splitWorkspaceSessionByHost', () => {
     expect(slices[LOCAL_EXECUTION_HOST_ID]?.activeWorktreeIdsOnShutdown).toEqual(['local-wt'])
   })
 
-  it('routes sleeping agent records via their worktreeId', () => {
+  it('routes persisted agent session records via their worktreeId', () => {
     const state: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       sleepingAgentSessionsByPaneKey: {
@@ -212,12 +212,26 @@ describe('splitWorkspaceSessionByHost', () => {
           capturedAt: 1,
           updatedAt: 2
         }
+      },
+      archivedForkableAgentSessionsByPaneKey: {
+        'archive-a': {
+          paneKey: 'archive-a',
+          worktreeId: 'a-wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'archived-x' },
+          prompt: 'p',
+          state: 'done',
+          archivedAt: 3,
+          updatedAt: 2,
+          archiveReason: 'retained-dismissed'
+        }
       }
     }
 
     const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
 
     expect(slices[RUNTIME_A]?.sleepingAgentSessionsByPaneKey).toHaveProperty('pane-a')
+    expect(slices[RUNTIME_A]?.archivedForkableAgentSessionsByPaneKey).toHaveProperty('archive-a')
   })
 })
 
@@ -281,6 +295,19 @@ describe('split → merge round trip', () => {
       activeWorktreeIdsOnShutdown: ['a-wt', 'b-wt'],
       lastVisitedAtByWorktreeId: { 'a-wt': 10, 'local-wt': 5 },
       defaultTerminalTabsAppliedByWorktreeId: { 'a-wt': true },
+      archivedForkableAgentSessionsByPaneKey: {
+        'archive-a': {
+          paneKey: 'archive-a',
+          worktreeId: 'a-wt',
+          agent: 'droid',
+          providerSession: { key: 'session_id', id: 'droid-session' },
+          prompt: 'p',
+          state: 'done',
+          archivedAt: 3,
+          updatedAt: 2,
+          archiveReason: 'retained-dismissed'
+        }
+      },
       browserTabsByWorktree: {},
       browserPagesByWorkspace: {},
       browserUrlHistory: [

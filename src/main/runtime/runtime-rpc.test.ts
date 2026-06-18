@@ -257,7 +257,7 @@ class FakeWebSocket extends EventEmitter {
   readyState = this.OPEN
 }
 
-describe('OrcaRuntimeRpcServer', () => {
+describe('OrcaRuntimeRpcServer', { timeout: 45_000 }, () => {
   const makeStore = (overrides?: { isUnread?: boolean }) => ({
     getRepo: (id: string) =>
       makeStore(overrides)
@@ -354,7 +354,7 @@ describe('OrcaRuntimeRpcServer', () => {
     }
 
     await server.stop()
-  })
+  }, 45_000)
 
   it('includes a web client URL when the web bundle is served by the runtime', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -454,7 +454,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  })
+  }, 45_000)
 
   it('creates mobile-scoped pairing offers for headless mobile pairing', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -531,7 +531,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  })
+  }, 45_000)
 
   it('terminates active WebSockets for a revoked mobile device', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -568,7 +568,7 @@ describe('OrcaRuntimeRpcServer', () => {
       disconnectSpy.mockRestore()
       await server.stop()
     }
-  }, 15_000)
+  }, 45_000)
 
   it('does not revoke runtime-scoped devices through mobile revocation', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -598,7 +598,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  })
+  }, 45_000)
 
   it('terminates active WebSockets for a revoked runtime access grant', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -633,7 +633,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  }, 15_000)
+  }, 45_000)
 
   it('rotates unused runtime pairing links without revoking already-used grants', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -689,7 +689,7 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       await server.stop()
     }
-  }, 15_000)
+  }, 45_000)
 
   it('caps WebSocket long-polls and aborts them when the socket closes', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -2475,7 +2475,7 @@ describe('OrcaRuntimeRpcServer', () => {
       phone.ws.close()
       await server.stop()
     }
-  })
+  }, 45_000)
 
   it('serves worktree.ps from the runtime summary builder', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))

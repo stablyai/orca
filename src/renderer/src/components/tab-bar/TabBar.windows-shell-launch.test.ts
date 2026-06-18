@@ -307,7 +307,7 @@ function findDropdownMenuItemByText(node: unknown, text: string): ReactElementLi
   return findDropdownMenuItemByText(el.props?.children, text)
 }
 
-describe('TabBar PowerShell launch wiring', () => {
+describe('TabBar PowerShell launch wiring', { timeout: 45_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()

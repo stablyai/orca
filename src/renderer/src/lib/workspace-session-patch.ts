@@ -13,6 +13,7 @@ import {
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
+import { buildArchivedForkableAgentSessionData } from './workspace-session-archived-fork-sessions'
 
 type SessionRelevantField = keyof WorkspaceSessionSnapshot
 
@@ -136,6 +137,10 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('sleepingAgentSessionsByPaneKey')) {
     patch.sleepingAgentSessionsByPaneKey =
       buildSleepingAgentSessionData(snapshot).sleepingAgentSessionsByPaneKey
+  }
+  if (changed.has('archivedForkableAgentSessionsByPaneKey')) {
+    patch.archivedForkableAgentSessionsByPaneKey =
+      buildArchivedForkableAgentSessionData(snapshot).archivedForkableAgentSessionsByPaneKey
   }
 
   return patch

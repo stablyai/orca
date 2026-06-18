@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
+import type { AgentSessionForkPointOption } from '@/components/dashboard/AgentSessionForkPointMenu'
 import { useNow } from '@/components/dashboard/useNow'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
@@ -23,6 +24,12 @@ import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-linea
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { translate } from '@/i18n/i18n'
+import { toast } from 'sonner'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import type { RuntimeAgentSessionForkCreateResult } from '../../../../shared/runtime-types'
+import { getAgentForkArgv, isForkableTuiAgent } from '../../../../shared/agent-session-resume'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -38,6 +45,33 @@ function revealCompactAgentCard(agentListRoot: HTMLElement | null): void {
     return
   }
   revealElementInScrollContainer(sidebarElement, worktreeOptionElement, 'auto')
+}
+
+function canForkAgentSession(agent: DashboardAgentRowData): boolean {
+  const providerSession = agent.entry.providerSession
+  return (
+    Boolean(agent.entry.terminalHandle) ||
+    Boolean(
+      providerSession &&
+      isTuiAgent(agent.agentType) &&
+      ((isForkableTuiAgent(agent.agentType) &&
+        getAgentForkArgv(agent.agentType, providerSession)) ||
+        agent.entry.promptInteractions?.length)
+    )
+  )
+}
+
+function getAgentForkPointOptions(
+  agent: DashboardAgentRowData
+): AgentSessionForkPointOption[] | undefined {
+  const promptInteractions = agent.entry.promptInteractions ?? []
+  if (promptInteractions.length === 0) {
+    return undefined
+  }
+  return promptInteractions.map((interaction) => ({
+    id: interaction.id,
+    prompt: interaction.prompt
+  }))
 }
 
 type Props = {
@@ -112,8 +146,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
 
   const handleDismissAgent = useCallback(
     (paneKey: string) => {
-      dropAgentStatus(paneKey)
       dismissRetainedAgent(paneKey)
+      dropAgentStatus(paneKey)
     },
     [dropAgentStatus, dismissRetainedAgent]
   )
@@ -222,6 +256,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     () => new Set()
   )
   const [compactRootListExpanded, setCompactRootListExpanded] = useState(false)
+  const [forkingPaneKey, setForkingPaneKey] = useState<string | null>(null)
 
   useLayoutEffect(() => {
     if (compactRootListExpanded && agentActivityDisplayMode === 'compact') {
@@ -253,6 +288,88 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const stopBubble = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
   }, [])
+
+  const handleForkAgentSession = useCallback(
+    (paneKey: string, messageId?: string) => {
+      if (forkingPaneKey) {
+        return
+      }
+      const sourceAgent = agents.find((agent) => agent.paneKey === paneKey)
+      const terminalHandle = sourceAgent?.entry.terminalHandle
+      const providerSession = sourceAgent?.entry.providerSession
+      const promptInteractions = sourceAgent?.entry.promptInteractions
+      const providerSessionForkParams =
+        sourceAgent &&
+        providerSession &&
+        isTuiAgent(sourceAgent.agentType) &&
+        (isForkableTuiAgent(sourceAgent.agentType) ||
+          (promptInteractions && promptInteractions.length > 0))
+          ? {
+              worktree: `id:${worktreeId}`,
+              agent: sourceAgent.agentType,
+              providerSession,
+              ...(promptInteractions ? { promptInteractions } : {}),
+              ...(messageId ? { message: messageId } : {}),
+              activate: true
+            }
+          : null
+      if (!terminalHandle && !providerSessionForkParams) {
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeCardAgents.forkMissingTerminal',
+            'This agent row cannot be forked because session context is unavailable.'
+          )
+        )
+        return
+      }
+      const forkCreateParams = terminalHandle
+        ? { terminal: terminalHandle, ...(messageId ? { message: messageId } : {}), activate: true }
+        : providerSessionForkParams
+      setForkingPaneKey(paneKey)
+      void (async () => {
+        try {
+          const state = useAppStore.getState()
+          const runtimeTarget = getActiveRuntimeTarget(
+            getSettingsForWorktreeRuntimeOwner(state, worktreeId)
+          )
+          const result = await callRuntimeRpc<RuntimeAgentSessionForkCreateResult>(
+            runtimeTarget,
+            'fork.create',
+            forkCreateParams,
+            { timeoutMs: 10 * 60_000 }
+          )
+          await useAppStore
+            .getState()
+            .fetchWorktrees(result.worktree.repoId)
+            .catch(() => undefined)
+          activateAndRevealWorktree(result.fork.targetWorktreeId, { sidebarRevealBehavior: 'auto' })
+          toast.success(
+            result.fork.contextDelivery.mode === 'native-provider'
+              ? translate(
+                  'auto.components.sidebar.WorktreeCardAgents.nativeForkCreated',
+                  'Native session fork opened in a child workspace'
+                )
+              : translate(
+                  'auto.components.sidebar.WorktreeCardAgents.transcriptForkCreated',
+                  'Session fork opened in a child workspace'
+                )
+          )
+        } catch (error) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.sidebar.WorktreeCardAgents.forkFailed',
+                  'Failed to fork agent session.'
+                )
+          )
+        } finally {
+          setForkingPaneKey((current) => (current === paneKey ? null : current))
+        }
+      })()
+    },
+    [agents, forkingPaneKey, worktreeId]
+  )
 
   // Why: when any root row has a disclosure chevron, root leaf siblings reserve
   // a matching leading spacer so the state-dot column stays aligned across the
@@ -321,6 +438,9 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
+          forkSessionPending={forkingPaneKey === agent.paneKey}
+          forkPointOptions={getAgentForkPointOptions(agent)}
+          onForkSession={canForkAgentSession(agent) ? handleForkAgentSession : undefined}
           // Why: the disclosure variant uses chevron + indentation to show
           // hierarchy. The legacy L-connector / vertical-trunk decorations
           // are pinned to a fixed left offset that doesn't match the
@@ -364,6 +484,9 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           }
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
+          forkSessionPending={forkingPaneKey === agent.paneKey}
+          forkPointOptions={getAgentForkPointOptions(agent)}
+          onForkSession={canForkAgentSession(agent) ? handleForkAgentSession : undefined}
         />
         {hasChildAgents ? (
           <CompactAgentExpansion expanded={expanded}>

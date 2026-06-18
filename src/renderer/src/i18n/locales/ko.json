@@ -2268,7 +2268,36 @@
             "619b5a35d2": "최상위 워크스페이스 포크를 만들고 캡처된 컨텍스트로 새 agent 탭을 시작합니다.",
             "64e292e8e3": "포크 Agent 세션",
             "9d25de2920": "포크 만들기",
-            "2b10412cfc": "만드는 중..."
+            "2b10412cfc": "만드는 중...",
+            "targetModeLabel": "Target",
+            "targetModeAriaLabel": "Fork target",
+            "childWorkspaceOption": "Child workspace",
+            "currentWorkspaceOption": "Current workspace",
+            "currentWorkspaceTitle": "Current workspace fork",
+            "currentWorkspaceDescription": "No files are copied. The new agent opens in the source workspace with the same captured context.",
+            "nameLabel": "Workspace name",
+            "namePlaceholder": "Auto-generate from source workspace",
+            "nameDisabledForCurrentWorkspace": "Current workspace forks do not create a new workspace to name.",
+            "openAfterCreateLabel": "Open after creating",
+            "openAfterCreateDescription": "When off, Orca creates the fork without switching to the target workspace or terminal.",
+            "runtimeContextDelivery": "Orca will request a provider-native fork when the source agent supports it. Otherwise it uses a transcript fallback from this terminal.",
+            "transcriptOnlyContextDelivery": "A runtime terminal handle is not available, so this fork uses the captured transcript fallback.",
+            "preflightLoading": "Checking context delivery...",
+            "preflightError": "Could not check context delivery. Orca will re-check when creating the fork.",
+            "preflightNativeProvider": "Provider-native fork available for {{agent}}.",
+            "preflightStructuredMessageFallback": "Message fork planned at {{message}} with {{count}} structured {{promptLabel}}. Native fork unavailable: {{reason}}.",
+            "preflightTranscriptTruncated": ", truncated to the newest output",
+            "preflightTranscriptFallback": "Transcript fallback planned: {{count}} terminal {{lineLabel}}{{truncation}}. Native fork unavailable: {{reason}}.",
+            "preflightUnknownError": "Preflight failed",
+            "preflightReasonMetadataUnavailable": "provider session metadata is unavailable",
+            "preflightReasonUnsupported": "the source agent does not support native forking",
+            "preflightReasonPlanUnavailable": "a native fork startup plan could not be built",
+            "preflightReasonMessageForkPoint": "a message fork point was selected",
+            "promptUnavailable": "Prompt text unavailable",
+            "messageForkPointOption": "Message {{index}}: {{prompt}}",
+            "forkPointLabel": "Fork point",
+            "currentForkPointOption": "Current end",
+            "preflightStructuredHistoryFallback": "Structured history fallback planned with {{count}} recorded {{promptLabel}}. Native fork unavailable: {{reason}}."
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "화면 지우기",
@@ -2337,7 +2366,11 @@
                   "38e41edc6e": "이 워크스페이스는 git 작업 트리로 포크할 수 없습니다.",
                   "f867385bb5": "이 포크의 소스 워크스페이스를 찾을 수 없습니다.",
                   "046e8d853c": "포크할 terminal 컨텍스트가 없습니다.",
-                  "c00421d320": "포크 컨텍스트가 복사되었습니다. agent를 실행하고 붙여넣어 포크를 시작합니다."
+                  "c00421d320": "포크 컨텍스트가 복사되었습니다. agent를 실행하고 붙여넣어 포크를 시작합니다.",
+                  "5e69cf039a": "Session fork opened in this workspace",
+                  "537d126b34": "Native session fork opened",
+                  "6b108da085": "Failed to fork agent session.",
+                  "3ac98a9c04": "This workspace cannot be forked."
                 }
               }
             },
@@ -3709,7 +3742,11 @@
           "021538e1d1": "SSH 연결이 끊어졌습니다."
         },
         "WorktreeCardAgents": {
-          "1b0a156717": "Agents"
+          "1b0a156717": "Agents",
+          "forkMissingTerminal": "This agent row cannot be forked because session context is unavailable.",
+          "nativeForkCreated": "Native session fork opened in a child workspace",
+          "transcriptForkCreated": "Session fork opened in a child workspace",
+          "forkFailed": "Failed to fork agent session."
         },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}"
@@ -3776,7 +3813,15 @@
           "8dacff1fe0": "마크 리드",
           "3baa7d6507": "핀",
           "697d0f6e1b": "고정 해제",
-          "250de158fd": "Remove Workspace"
+          "250de158fd": "Remove Workspace",
+          "forkChildren": "Child Workspaces",
+          "manageForks": "Manage Forks",
+          "previousAgentSessions": "Previous Agent Sessions",
+          "forkingSession": "Forking...",
+          "archivedForkCreated": "Previous agent session fork opened in a child workspace",
+          "archivedForkFailed": "Failed to fork previous agent session.",
+          "archivedForkPointMessage": "Message {{value0}}: {{value1}}",
+          "archivedForkPointCurrentEnd": "Current end"
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -4003,7 +4048,8 @@
               "agents": {
                 "a128d7006b": "{{value0}} {{value1}} 하위 {{value2}}",
                 "289a1d2ca7": "{{value0}}을 확장합니다. {{value1}}",
-                "0c1debfe84": "{{value0}} 접기"
+                "0c1debfe84": "{{value0}} 접기",
+                "forkSession": "Fork agent session"
               }
             }
           },
@@ -4146,6 +4192,20 @@
           "2d3e4f5a6b": "Check connection",
           "3c4d5e6f7a": "Manage host…",
           "6e7f8a9b0c": "Remove host…"
+        },
+        "WorktreeForkManagementDialog": {
+          "unknownTime": "Unknown",
+          "removeTitle": "Remove Fork",
+          "removeDescription": "Orca will ask the runtime to remove this child workspace. Dirty worktrees are not removed.",
+          "removeConfirm": "Remove",
+          "removeSuccess": "Fork removed",
+          "removeFailed": "Failed to remove fork.",
+          "title": "Manage Forks",
+          "empty": "No forks found.",
+          "open": "Open",
+          "removing": "Removing",
+          "remove": "Remove",
+          "close": "Close"
         },
         "WorkspaceKanbanDrawer": {
           "1975a4e480": "작업 상태 동기화 실패",
@@ -10727,11 +10787,16 @@
           "b06e13fcf7": "agent 닫기",
           "0272969e28": "이 agent에게 보내기",
           "92a7017987": "전송 중",
-          "019b74d93a": "전송 가능"
+          "019b74d93a": "전송 가능",
+          "forkSession": "Fork agent session"
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "중단된",
           "1ec01cef03": "사용자에 의해 중단됨"
+        },
+        "AgentSessionForkPointMenu": {
+          "message": "Message {{value0}}: {{value1}}",
+          "currentEnd": "Current end"
         }
       },
       "crash": {

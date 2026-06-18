@@ -7,6 +7,7 @@ import { encodeNdjson, createNdjsonParser } from './ndjson'
 import { PROTOCOL_VERSION, NOTIFY_PREFIX, DaemonProtocolError } from './types'
 import type { HelloMessage, HelloResponse, RpcResponse, DaemonEvent } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
+import { normalizeDaemonSocketPath } from './daemon-socket-path'
 
 const CONNECT_TIMEOUT_MS = 5000
 const REQUEST_TIMEOUT_MS = 30000
@@ -50,7 +51,7 @@ export class DaemonClient {
   private cleanupSocketListeners: (() => void) | null = null
 
   constructor(opts: DaemonClientOptions) {
-    this.socketPath = opts.socketPath
+    this.socketPath = normalizeDaemonSocketPath(opts.socketPath)
     this.tokenPath = opts.tokenPath
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
   }

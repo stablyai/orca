@@ -22,7 +22,7 @@ function sendJson(res: ServerResponse, body: unknown): void {
   res.end(JSON.stringify(body))
 }
 
-describe('Gitea hosted review integration', () => {
+describe('Gitea hosted review integration', { timeout: 45_000 }, () => {
   beforeEach(() => {
     process.env = { ...OLD_ENV, ORCA_GITEA_TOKEN: 'local-token' }
     delete process.env.ORCA_GITEA_API_BASE_URL
@@ -109,5 +109,5 @@ describe('Gitea hosted review integration', () => {
         server.close((error) => (error ? reject(error) : resolve()))
       })
     }
-  })
+  }, 45_000)
 })

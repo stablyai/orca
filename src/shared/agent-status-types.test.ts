@@ -6,7 +6,8 @@ import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
   AGENT_STATUS_STATES,
-  AGENT_TYPE_MAX_LENGTH
+  AGENT_TYPE_MAX_LENGTH,
+  normalizePromptInteractionKey
 } from './agent-status-types'
 
 describe('parseAgentStatusPayload', () => {
@@ -322,5 +323,18 @@ describe('parseAgentStatusPayload', () => {
     if (last >= 0xdc00 && last <= 0xdfff) {
       expect(secondLast >= 0xd800 && secondLast <= 0xdbff).toBe(true)
     }
+  })
+})
+
+describe('normalizePromptInteractionKey', () => {
+  it('normalizes structured turn ids to bounded single-line values', () => {
+    const result = normalizePromptInteractionKey(`  ${'x'.repeat(300)}\nnext  `)
+    expect(result).toHaveLength(256)
+    expect(result).not.toContain('\n')
+  })
+
+  it('drops non-string and empty structured turn ids', () => {
+    expect(normalizePromptInteractionKey(123)).toBeUndefined()
+    expect(normalizePromptInteractionKey('   ')).toBeUndefined()
   })
 })

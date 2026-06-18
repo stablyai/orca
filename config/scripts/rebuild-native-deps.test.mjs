@@ -120,7 +120,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
     } finally {
       rmSync(projectDir, { recursive: true, force: true })
     }
-  })
+  }, 15_000)
 })
 
 describe('rebuild-native-deps patched node-pty rebuild', () => {

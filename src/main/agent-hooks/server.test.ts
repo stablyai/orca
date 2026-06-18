@@ -5306,7 +5306,7 @@ describe('Last-status persistence', () => {
     }
   })
 
-  it('does not write prompt interaction keys to last-status.json', async () => {
+  it('writes prompt interaction keys to last-status.json', async () => {
     const server = new AgentHookServer()
     await server.start({
       env: 'production',
@@ -5326,7 +5326,17 @@ describe('Last-status persistence', () => {
       server.flushStatusPersistSync()
       const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(file.entries[PANE].payload.prompt).toBe('persist status only')
-      expect(file.entries[PANE].promptInteractionKey).toBeUndefined()
+      expect(file.entries[PANE].promptInteractionKey).toBe(
+        'opencode-message-opencode-local-message-id'
+      )
+      expect(file.entries[PANE].promptInteractions).toEqual([
+        expect.objectContaining({
+          id: 'opencode-message-opencode-local-message-id',
+          prompt: 'persist status only',
+          agentType: 'opencode',
+          observedAt: expect.any(Number)
+        })
+      ])
     } finally {
       server.stop()
     }
@@ -5350,7 +5360,16 @@ describe('Last-status persistence', () => {
             state: 'done',
             prompt: 'survived restart',
             agentType: 'claude'
-          }
+          },
+          promptInteractionKey: 'command-code-transcript-user-1',
+          promptInteractions: [
+            {
+              id: 'command-code-transcript-user-1',
+              prompt: 'survived restart',
+              agentType: 'claude',
+              observedAt: receivedAt
+            }
+          ]
         }
       }
     }
@@ -5372,6 +5391,15 @@ describe('Last-status persistence', () => {
           worktreeId: 'wt-1',
           receivedAt,
           stateStartedAt,
+          promptInteractionKey: 'command-code-transcript-user-1',
+          promptInteractions: [
+            {
+              id: 'command-code-transcript-user-1',
+              prompt: 'survived restart',
+              agentType: 'claude',
+              observedAt: receivedAt
+            }
+          ],
           payload: expect.objectContaining({
             state: 'done',
             prompt: 'survived restart',
@@ -5386,6 +5414,15 @@ describe('Last-status persistence', () => {
           worktreeId: 'wt-1',
           receivedAt,
           stateStartedAt,
+          promptInteractionKey: 'command-code-transcript-user-1',
+          promptInteractions: [
+            {
+              id: 'command-code-transcript-user-1',
+              prompt: 'survived restart',
+              agentType: 'claude',
+              observedAt: receivedAt
+            }
+          ],
           state: 'done',
           prompt: 'survived restart',
           agentType: 'claude'

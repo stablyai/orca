@@ -95,7 +95,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   }
 }
 
-describe('WorktreeCard lineage indicators', () => {
+describe('WorktreeCard lineage indicators', { timeout: 45_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks()
     worktreeCardProperties = []

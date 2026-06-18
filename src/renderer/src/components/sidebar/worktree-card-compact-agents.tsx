@@ -1,11 +1,15 @@
 import React, { useCallback, useRef } from 'react'
-import { ChevronRight } from 'lucide-react'
-import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { ChevronRight, GitFork } from 'lucide-react'
+import { AgentStateDot } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from './CommentMarkdown'
+import {
+  AgentSessionForkPointMenu,
+  type AgentSessionForkPointOption
+} from '@/components/dashboard/AgentSessionForkPointMenu'
 import {
   buildSummaryAgentGroups,
   getAgentDotState,
@@ -13,69 +17,13 @@ import {
   summarizeAgentIdentities,
   summarizeAgents
 } from './worktree-card-agent-summary'
+import {
+  getCompactAgentPrimary,
+  getCompactAgentSecondary,
+  getCompactAgentTime,
+  MARKDOWN_IMAGE_PATTERN
+} from './worktree-compact-agent-row-format'
 import { translate } from '@/i18n/i18n'
-
-const MARKDOWN_IMAGE_PATTERN = /!\[[^\]\n]*\]\([^)]+\)/
-
-function formatShortTimeAgo(ts: number, now: number): string {
-  const delta = now - ts
-  if (delta < 60_000) {
-    return 'now'
-  }
-  const minutes = Math.floor(delta / 60_000)
-  if (minutes < 60) {
-    return `${minutes}m`
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) {
-    return `${hours}h`
-  }
-  return `${Math.floor(hours / 24)}d`
-}
-
-function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
-  const entry = agent.entry
-  if (entry.state === 'done') {
-    return entry.stateStartedAt
-  }
-  for (let i = (entry.stateHistory?.length ?? 0) - 1; i >= 0; i--) {
-    if (entry.stateHistory[i].state === 'done') {
-      return entry.stateHistory[i].startedAt
-    }
-  }
-  return null
-}
-
-function getCompactAgentPrimary(agent: DashboardAgentRowData): string {
-  const prompt = agent.entry.prompt?.trim() ?? ''
-  return prompt || agentStateLabel(getAgentDotState(agent))
-}
-
-function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
-  if (agent.entry.interrupted === true) {
-    return 'Interrupted by user'
-  }
-  if (agent.state === 'working') {
-    const toolName = agent.entry.toolName?.trim() ?? ''
-    const toolInput = agent.entry.toolInput?.trim() ?? ''
-    if (toolName && toolInput) {
-      return `${toolName}: ${toolInput}`
-    }
-    if (toolName) {
-      return toolName
-    }
-  }
-  return agent.entry.lastAssistantMessage?.trim() || formatAgentTypeLabel(agent.agentType)
-}
-
-function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string | null {
-  const doneAt = lastEnteredDoneAt(agent)
-  if (doneAt !== null) {
-    return formatShortTimeAgo(doneAt, now)
-  }
-  const startedAt = agent.startedAt > 0 ? agent.startedAt : agent.entry.stateStartedAt
-  return startedAt > 0 ? formatShortTimeAgo(startedAt, now) : null
-}
 
 function stopActivationKeyPropagation(e: React.KeyboardEvent): void {
   // Why: the surrounding worktree list handles Enter/Space as row activation.
@@ -259,6 +207,9 @@ type CompactAgentRowProps = {
   reserveDisclosureGutter?: boolean
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
+  forkSessionPending?: boolean
+  forkPointOptions?: AgentSessionForkPointOption[]
+  onForkSession?: (paneKey: string, messageId?: string) => void
 }
 
 export const CompactAgentRow = React.memo(function CompactAgentRow({
@@ -270,7 +221,10 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   onToggleChildAgents,
   reserveDisclosureGutter = false,
   isFocusedPane = false,
-  hideIdentityIcon = false
+  hideIdentityIcon = false,
+  forkSessionPending = false,
+  forkPointOptions,
+  onForkSession
 }: CompactAgentRowProps) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -301,6 +255,40 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     },
     [onToggleChildAgents]
   )
+  const handleForkSession = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault()
+      e.stopPropagation()
+      onForkSession?.(agent.paneKey)
+    },
+    [agent.paneKey, onForkSession]
+  )
+  const stopForkMenuTriggerClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation()
+  }, [])
+  const forkButton = onForkSession ? (
+    <button
+      type="button"
+      className={cn(
+        'inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/70 hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
+        'can-hover:opacity-0 transition-opacity duration-150 group-hover/compact-agent-row:opacity-100 focus-visible:opacity-100',
+        forkSessionPending && 'cursor-progress opacity-75'
+      )}
+      disabled={forkSessionPending}
+      aria-label={translate(
+        'auto.components.sidebar.worktree.card.compact.agents.forkSession',
+        'Fork agent session'
+      )}
+      title={translate(
+        'auto.components.sidebar.worktree.card.compact.agents.forkSession',
+        'Fork agent session'
+      )}
+      onClick={forkPointOptions?.length ? stopForkMenuTriggerClick : handleForkSession}
+      onKeyDown={stopActivationKeyPropagation}
+    >
+      <GitFork className="size-3" />
+    </button>
+  ) : null
 
   const rowBody = (
     <>
@@ -369,6 +357,17 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         >
           {shortTime}
         </span>
+      )}
+      {forkButton && forkPointOptions?.length && onForkSession ? (
+        <AgentSessionForkPointMenu
+          paneKey={agent.paneKey}
+          forkPointOptions={forkPointOptions}
+          onForkSession={onForkSession}
+        >
+          {forkButton}
+        </AgentSessionForkPointMenu>
+      ) : (
+        forkButton
       )}
     </>
   )

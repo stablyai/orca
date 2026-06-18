@@ -21,6 +21,7 @@ import type {
   LocalBaseRefUpdateSuggestion,
   Repo,
   Worktree,
+  WorktreeLineage,
   WorktreeMeta
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
@@ -162,12 +163,97 @@ function validateWorkspaceLineageParentBeforeCreate(
   }
 }
 
-function recordWorkspaceLineageForCreatedWorktree(
+function getCreateParentWorktreeId(
+  store: Store,
+  parentWorktree: CreateWorktreeArgs['parentWorktree']
+): string | null {
+  const raw = parentWorktree?.trim()
+  if (!raw) {
+    return null
+  }
+  const selector = raw.startsWith('id:') ? raw.slice('id:'.length) : raw
+  const parsedWorkspace = parseWorkspaceKey(selector)
+  const worktreeId = parsedWorkspace?.type === 'worktree' ? parsedWorkspace.worktreeId : selector
+  return store.getWorktreeMeta(worktreeId) ? worktreeId : null
+}
+
+function validateWorktreeLineageParentBeforeCreate(
+  store: Store,
+  parentWorktree: CreateWorktreeArgs['parentWorktree'],
+  childWorktreeId: string
+): void {
+  if (!parentWorktree) {
+    return
+  }
+  const parentWorktreeId = getCreateParentWorktreeId(store, parentWorktree)
+  if (!parentWorktreeId) {
+    throw new Error(`Parent worktree not found: ${parentWorktree}`)
+  }
+  if (parentWorktreeId === childWorktreeId) {
+    throw new Error('A worktree cannot be attached to itself.')
+  }
+}
+
+function validateCreateLineageArgs(args: CreateWorktreeArgs): void {
+  if (args.noParent === true && (args.parentWorkspace || args.parentWorktree)) {
+    throw new Error('Choose either a parent workspace flag or no parent, not both.')
+  }
+  if (args.parentWorkspace && args.parentWorktree) {
+    throw new Error('Choose either a parent workspace or a parent worktree, not both.')
+  }
+}
+
+function recordWorktreeLineageForCreatedWorktree(
   store: Store,
   args: CreateWorktreeArgs,
   worktree: Worktree,
   createdAt: number
+): CreateWorktreeResult['lineage'] {
+  if (!args.parentWorktree || !worktree.instanceId) {
+    return null
+  }
+  const parentWorktreeId = getCreateParentWorktreeId(store, args.parentWorktree)
+  const parentMeta = parentWorktreeId ? store.getWorktreeMeta(parentWorktreeId) : undefined
+  if (!parentWorktreeId || !parentMeta?.instanceId || parentWorktreeId === worktree.id) {
+    console.warn(`[worktree-create] ignoring invalid parent worktree ${args.parentWorktree}`)
+    return null
+  }
+  return store.setWorktreeLineage(worktree.id, {
+    worktreeId: worktree.id,
+    worktreeInstanceId: worktree.instanceId,
+    parentWorktreeId,
+    parentWorktreeInstanceId: parentMeta.instanceId,
+    origin: 'manual',
+    capture: {
+      source: args.callerTerminalHandle ? 'terminal-context' : 'manual-action',
+      confidence: 'explicit'
+    },
+    ...(args.callerTerminalHandle ? { createdByTerminalHandle: args.callerTerminalHandle } : {}),
+    createdAt
+  })
+}
+
+function recordWorkspaceLineageForCreatedWorktree(
+  store: Store,
+  args: CreateWorktreeArgs,
+  worktree: Worktree,
+  createdAt: number,
+  worktreeLineage?: WorktreeLineage | null
 ): CreateWorktreeResult['workspaceLineage'] {
+  if (!args.parentWorkspace && worktreeLineage && worktree.instanceId) {
+    return store.setWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+      childInstanceId: worktree.instanceId,
+      parentWorkspaceKey: worktreeWorkspaceKey(worktreeLineage.parentWorktreeId),
+      parentInstanceId: worktreeLineage.parentWorktreeInstanceId,
+      origin: worktreeLineage.origin,
+      capture: worktreeLineage.capture,
+      ...(worktreeLineage.createdByTerminalHandle
+        ? { createdByTerminalHandle: worktreeLineage.createdByTerminalHandle }
+        : {}),
+      createdAt
+    })
+  }
   if (!args.parentWorkspace || !worktree.instanceId) {
     return null
   }
@@ -1345,6 +1431,7 @@ export async function createRemoteWorktree(
   store: Store,
   mainWindow: BrowserWindow
 ): Promise<CreateWorktreeResult> {
+  validateCreateLineageArgs(args)
   const timing = createWorktreeCreateTimingRecorder()
   const provider = requireSshGitProvider(repo.connectionId!)
   const fsProvider = getSshFilesystemProvider(repo.connectionId!)
@@ -1441,6 +1528,7 @@ export async function createRemoteWorktree(
     args.parentWorkspace,
     worktreeWorkspaceKey(`${repo.id}::${remotePath}`)
   )
+  validateWorktreeLineageParentBeforeCreate(store, args.parentWorktree, `${repo.id}::${remotePath}`)
 
   const sparseDirectories = args.sparseCheckout
     ? normalizeSparseDirectories(args.sparseCheckout.directories)
@@ -1683,7 +1771,14 @@ export async function createRemoteWorktree(
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
-  const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  const lineage = recordWorktreeLineageForCreatedWorktree(store, args, worktree, now)
+  const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(
+    store,
+    args,
+    worktree,
+    now,
+    lineage
+  )
 
   // Why: `experimentalWorktreeSymlinks` is intentionally not wired up for
   // remote (SSH) worktrees. Creating symlinks on the remote host would
@@ -1737,7 +1832,14 @@ export async function createRemoteWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree: { ...worktree, workspaceLineage },
+    worktree: {
+      ...worktree,
+      parentWorktreeId: lineage?.parentWorktreeId ?? null,
+      childWorktreeIds: [],
+      lineage,
+      workspaceLineage
+    },
+    ...(lineage ? { lineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
@@ -1754,6 +1856,7 @@ export async function createLocalWorktree(
   mainWindow: BrowserWindow,
   runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
+  validateCreateLineageArgs(args)
   const timing = createWorktreeCreateTimingRecorder()
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(repo, settings)
@@ -2048,6 +2151,11 @@ export async function createLocalWorktree(
     args.parentWorkspace,
     worktreeWorkspaceKey(`${repo.id}::${worktreePath}`)
   )
+  validateWorktreeLineageParentBeforeCreate(
+    store,
+    args.parentWorktree,
+    `${repo.id}::${worktreePath}`
+  )
 
   if (remoteTrackingRefresh) {
     await timing.time('refresh_base_ref', async () => {
@@ -2279,7 +2387,14 @@ export async function createLocalWorktree(
     const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
-  const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  const lineage = recordWorktreeLineageForCreatedWorktree(store, args, worktree, now)
+  const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(
+    store,
+    args,
+    worktree,
+    now,
+    lineage
+  )
   // Why: creation already paid for `git worktree list`; seed the exact roots
   // now so the next file/git IPC does not lazily rescan and trip macOS privacy
   // prompts for the newly-created workspace.
@@ -2374,7 +2489,14 @@ export async function createLocalWorktree(
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
-    worktree: { ...worktree, workspaceLineage },
+    worktree: {
+      ...worktree,
+      parentWorktreeId: lineage?.parentWorktreeId ?? null,
+      childWorktreeIds: [],
+      lineage,
+      workspaceLineage
+    },
+    ...(lineage ? { lineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
     ...(setup && !stagedStartup.didSpawnSetup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),

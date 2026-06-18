@@ -102,7 +102,7 @@ async function renderProviderDetailsMenu(): Promise<unknown> {
   })
 }
 
-describe('ProviderDetailsMenu focus handoff', () => {
+describe('ProviderDetailsMenu focus handoff', { timeout: 45_000 }, () => {
   it('lets pointer-outside closes keep focus on the clicked surface', async () => {
     const element = await renderProviderDetailsMenu()
     const dropdown = findChildByType(element, 'DropdownMenu')

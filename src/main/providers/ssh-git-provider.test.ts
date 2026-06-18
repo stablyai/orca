@@ -812,6 +812,18 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(diffs)
   })
 
+  it('getForkDiff sends git.forkDiff request', async () => {
+    const diff = { diff: 'diff --git a/app.ts b/app.ts\n', untrackedFiles: ['scratch.txt'] }
+    mux.request.mockResolvedValue(diff)
+
+    const result = await provider.getForkDiff('/home/user/repo', 'abc123')
+    expect(mux.request).toHaveBeenCalledWith('git.forkDiff', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'abc123'
+    })
+    expect(result).toEqual(diff)
+  })
+
   it('listWorktrees sends git.listWorktrees request', async () => {
     const worktrees = [
       {

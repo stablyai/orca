@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { ipcMain } from 'electron'
@@ -2840,6 +2840,160 @@ describe('OrcaRuntimeService', () => {
         parentWorkspaceKey: TEST_FOLDER_WORKSPACE_KEY
       })
     )
+  })
+
+  it('copies folder-mode agent session forks without a live source terminal', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-fork-'))
+    const sourcePath = join(tempRoot, 'source')
+    const destinationPath = join(tempRoot, 'folder-child')
+    const folderRepo = {
+      id: 'folder-repo',
+      path: sourcePath,
+      displayName: 'Folder repo',
+      badgeColor: 'green',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const parentId = `${folderRepo.id}::${sourcePath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance', folderPath: sourcePath })
+    }
+    const setWorktreeLineage = vi.fn((_worktreeId: string, lineage: WorktreeLineage) => lineage)
+    const setWorkspaceLineage = vi.fn((lineage: WorkspaceLineage) => lineage)
+    try {
+      await mkdir(join(sourcePath, 'src'), { recursive: true })
+      await mkdir(join(sourcePath, 'node_modules', 'pkg'), { recursive: true })
+      await mkdir(join(sourcePath, 'tmp'), { recursive: true })
+      await writeFile(join(sourcePath, 'src', 'app.ts'), 'runtime source')
+      await writeFile(join(sourcePath, 'node_modules', 'pkg', 'index.js'), 'generated')
+      await writeFile(join(sourcePath, 'tmp', 'trace.log'), 'generated')
+      await writeFile(join(sourcePath, '.orcaignore'), 'tmp/\n')
+      computeWorktreePathMock.mockReturnValue(destinationPath)
+      const runtimeStore = {
+        ...store,
+        getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
+        getRepos: () => [folderRepo],
+        getSettings: () => ({
+          workspaceDir: tempRoot,
+          nestWorkspaces: false,
+          refreshLocalBaseRefOnWorktreeCreate: false,
+          branchPrefix: 'none',
+          branchPrefixCustom: ''
+        }),
+        getAllWorktreeMeta: () => metaById,
+        getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+        setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+          metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+          return metaById[worktreeId]
+        },
+        getWorktreeLineage: () => undefined,
+        setWorktreeLineage,
+        setWorkspaceLineage
+      }
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+      const result = await runtime.createManagedWorktree({
+        repoSelector: folderRepo.id,
+        name: 'folder-child',
+        lineage: {
+          parentWorktree: `id:${parentId}`,
+          agentSessionFork: true
+        }
+      })
+
+      expect(await readFile(join(destinationPath, 'src', 'app.ts'), 'utf8')).toBe('runtime source')
+      await expect(stat(join(destinationPath, 'node_modules'))).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
+      await expect(stat(join(destinationPath, 'tmp'))).rejects.toMatchObject({ code: 'ENOENT' })
+      expect(result.worktree.path).toBe(destinationPath)
+      expect(metaById[result.worktree.id]?.folderPath).toBe(destinationPath)
+      expect(setWorktreeLineage).toHaveBeenCalledWith(
+        result.worktree.id,
+        expect.objectContaining({
+          parentWorktreeId: parentId,
+          capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+          agentSessionFork: true
+        })
+      )
+      expect(setWorkspaceLineage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          childWorkspaceKey: `worktree:${result.worktree.id}`,
+          parentWorkspaceKey: `worktree:${parentId}`,
+          agentSessionFork: true
+        })
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('diffs folder-mode runtime forks against the copied parent folder', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-diff-'))
+    const parentPath = join(tempRoot, 'parent')
+    const childPath = join(tempRoot, 'child')
+    const folderRepo = {
+      id: 'folder-repo',
+      path: parentPath,
+      displayName: 'Folder repo',
+      badgeColor: 'green',
+      addedAt: 1,
+      kind: 'folder' as const
+    }
+    const parentId = `${folderRepo.id}::${parentPath}`
+    const childId = `${parentId + FOLDER_WORKSPACE_INSTANCE_SEPARATOR}22222222-2222-4222-8222-222222222222`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance', folderPath: parentPath }),
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance', folderPath: childPath })
+    }
+    const lineage: WorktreeLineage = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'manual',
+      capture: { source: 'terminal-context', confidence: 'explicit' },
+      agentSessionFork: true,
+      createdAt: 1_000
+    }
+    try {
+      await mkdir(join(parentPath, 'src'), { recursive: true })
+      await mkdir(join(childPath, 'src'), { recursive: true })
+      await writeFile(join(parentPath, '.orcaignore'), 'tmp/\n')
+      await writeFile(join(childPath, '.orcaignore'), 'tmp/\n')
+      await writeFile(join(parentPath, 'src', 'app.ts'), 'old\n')
+      await writeFile(join(childPath, 'src', 'app.ts'), 'new\n')
+      const runtimeStore = {
+        ...store,
+        getRepo: (id: string) => (id === folderRepo.id ? folderRepo : undefined),
+        getRepos: () => [folderRepo],
+        getAllWorktreeMeta: () => metaById,
+        getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+        setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+          metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+          return metaById[worktreeId]
+        },
+        getAllWorktreeLineage: () => ({ [childId]: lineage }),
+        getWorktreeLineage: (worktreeId: string) => (worktreeId === childId ? lineage : undefined)
+      }
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+      const result = await runtime.diffAgentSessionFork(childId)
+
+      expect(result).toMatchObject({
+        baseRef: parentPath,
+        targetRef: childPath,
+        includesWorkingTree: true,
+        untrackedFiles: []
+      })
+      expect(result.diff).toContain('diff --git a/src/app.ts b/src/app.ts')
+      expect(result.diff).toContain('-old')
+      expect(result.diff).toContain('+new')
+      expect(result.parentWorktree.id).toBe(parentId)
+      expect(result.fork.id).toBe(childId)
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
   })
 
   it('activates SSH worktrees created with startup agents', async () => {
@@ -15109,6 +15263,1120 @@ describe('OrcaRuntimeService', () => {
     expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
   })
 
+  it('uses provider-native fork startup when the source pane has forkable session metadata', async () => {
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ displayName: 'Source workspace' })
+    }
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        agentCmdOverrides: {}
+      }),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-native-fork-child' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-native-fork-child' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    syncSinglePty(runtime, 'pty-native-fork-source', { tabTitle: 'Codex' })
+    runtime.onPtyData(
+      'pty-native-fork-source',
+      '\x1b]9999;{"state":"done","prompt":"ship it","agentType":"codex","providerSession":{"key":"session_id","id":"codex-source-session"}}\x07',
+      321
+    )
+    const [sourceTerminal] = (await runtime.listTerminals()).terminals
+
+    const preflight = await runtime.preflightAgentSessionFork({
+      terminalHandle: sourceTerminal!.handle
+    })
+    expect(preflight).toEqual({
+      sourceTerminalHandle: sourceTerminal!.handle,
+      sourceWorktreeId: TEST_WORKTREE_ID,
+      workspaceMode: 'child-workspace',
+      contextDelivery: {
+        mode: 'native-provider',
+        promptDelivery: 'startup-agent',
+        providerSession: { key: 'session_id', id: 'codex-source-session' },
+        agent: 'codex'
+      }
+    })
+    expect(spawn).not.toHaveBeenCalled()
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-native-fork')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-native-fork')
+    vi.mocked(listWorktrees).mockResolvedValue([
+      ...MOCK_GIT_WORKTREES,
+      {
+        path: '/tmp/workspaces/runtime-native-fork',
+        head: 'def',
+        branch: 'runtime-native-fork',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createAgentSessionFork({
+      terminalHandle: sourceTerminal!.handle,
+      name: 'runtime-native-fork'
+    })
+
+    expect(result.fork.contextDelivery).toEqual({
+      mode: 'native-provider',
+      promptDelivery: 'startup-agent',
+      providerSession: { key: 'session_id', id: 'codex-source-session' },
+      agent: 'codex'
+    })
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/tmp/workspaces/runtime-native-fork',
+        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'fork' 'codex-source-session'",
+        worktreeId: result.worktree.id
+      })
+    )
+    expect(metaById[result.worktree.id]).toMatchObject({ createdWithAgent: 'codex' })
+  })
+
+  it('uses structured history fallback for explicit provider sessions without native fork support', async () => {
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ displayName: 'Gemini source workspace' })
+    }
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      },
+      getWorkspaceSession: () => ({
+        ...getDefaultWorkspaceSession(),
+        sleepingAgentSessionsByPaneKey: {
+          'tab-gemini:1': {
+            paneKey: 'tab-gemini:1',
+            tabId: 'tab-gemini',
+            worktreeId: TEST_WORKTREE_ID,
+            agent: 'gemini' as const,
+            providerSession: { key: 'session_id' as const, id: 'gemini-source-session' },
+            prompt: 'second retained prompt',
+            state: 'done' as const,
+            capturedAt: 2_500,
+            updatedAt: 2_000,
+            promptInteractions: [
+              {
+                id: 'gemini-message-1',
+                prompt: 'first retained prompt',
+                observedAt: 1_000,
+                agentType: 'gemini'
+              },
+              {
+                id: 'gemini-message-2',
+                prompt: 'second retained prompt',
+                observedAt: 2_000,
+                agentType: 'gemini'
+              }
+            ]
+          }
+        }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-structured-history-fork-child' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-structured-history-child' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    const preflight = await runtime.preflightAgentSessionFork({
+      worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+      agent: 'gemini',
+      providerSession: { key: 'session_id', id: 'gemini-source-session' }
+    })
+    expect(preflight).toMatchObject({
+      sourceWorktreeId: TEST_WORKTREE_ID,
+      contextDelivery: {
+        mode: 'structured-history-fallback',
+        promptDelivery: 'startup-agent',
+        includedPromptCount: 2,
+        nativeProviderReason: 'provider-native-fork-unsupported',
+        agent: 'gemini'
+      },
+      availableForkPoints: [
+        {
+          forkPoint: { kind: 'message', id: 'gemini-message-1' },
+          prompt: 'first retained prompt',
+          observedAt: 1_000,
+          agent: 'gemini'
+        },
+        {
+          forkPoint: { kind: 'message', id: 'gemini-message-2' },
+          prompt: 'second retained prompt',
+          observedAt: 2_000,
+          agent: 'gemini'
+        }
+      ]
+    })
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-structured-history-fork')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-structured-history-fork')
+    vi.mocked(listWorktrees).mockResolvedValue([
+      ...MOCK_GIT_WORKTREES,
+      {
+        path: '/tmp/workspaces/runtime-structured-history-fork',
+        head: 'def',
+        branch: 'runtime-structured-history-fork',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createAgentSessionFork({
+      worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+      agent: 'gemini',
+      providerSession: { key: 'session_id', id: 'gemini-source-session' },
+      name: 'runtime-structured-history-fork'
+    })
+
+    expect(result.fork.contextDelivery).toMatchObject({
+      mode: 'structured-history-fallback',
+      includedPromptCount: 2,
+      nativeProviderReason: 'provider-native-fork-unsupported',
+      agent: 'gemini'
+    })
+    expect(result.fork.forkPoint).toBeUndefined()
+
+    await expect(
+      runtime.preflightAgentSessionFork({
+        worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+        agent: 'gemini',
+        providerSession: { key: 'session_id', id: 'gemini-source-session' },
+        contextOptions: { fallbackContextSource: 'transcript' }
+      })
+    ).rejects.toThrow('A source terminal is required for transcript fallback.')
+
+    const command = String(spawn.mock.calls[0]?.[0]?.command)
+    expect(command).toContain('gemini')
+    expect(command).toContain('structured prompt history')
+    expect(command).toContain('first retained prompt')
+    expect(command).toContain('second retained prompt')
+  })
+
+  it('rejects explicit provider-session forks for unsupported agents without prompt history', async () => {
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(
+      runtime.preflightAgentSessionFork({
+        worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+        agent: 'gemini',
+        providerSession: { key: 'session_id', id: 'gemini-source-session' }
+      })
+    ).rejects.toThrow(
+      'This agent does not support native session forking, and no recorded structured prompt history is available for an Orca fallback.'
+    )
+  })
+
+  it('uses structured history fallback when native fork argv cannot be built', async () => {
+    const runtime = new OrcaRuntimeService(store as never)
+
+    const preflight = await runtime.preflightAgentSessionFork({
+      worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+      agent: 'claude',
+      providerSession: { key: 'conversation_id', id: 'claude-conversation' },
+      promptInteractions: [
+        {
+          id: 'claude-message-1',
+          prompt: 'first prompt',
+          observedAt: 1_000,
+          agentType: 'claude'
+        }
+      ]
+    })
+
+    expect(preflight.contextDelivery).toEqual({
+      mode: 'structured-history-fallback',
+      promptDelivery: 'startup-agent',
+      includedPromptCount: 1,
+      nativeProviderReason: 'provider-native-fork-plan-unavailable',
+      agent: 'claude'
+    })
+  })
+
+  it('rejects explicit provider-session forks when native argv and prompt history are unavailable', async () => {
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(
+      runtime.preflightAgentSessionFork({
+        worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+        agent: 'claude',
+        providerSession: { key: 'conversation_id', id: 'claude-conversation' }
+      })
+    ).rejects.toThrow(
+      'Provider-native fork startup could not be built for this session, and no recorded structured prompt history is available for an Orca fallback.'
+    )
+  })
+
+  it('uses structured history fallback when a terminal transcript is empty', async () => {
+    const paneKey = 'tab-1:1'
+    const runtime = new OrcaRuntimeService(store as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'done',
+          prompt: 'retained prompt',
+          agentType: 'gemini',
+          connectionId: null,
+          receivedAt: 2_000,
+          stateStartedAt: 1_900,
+          promptInteractions: [
+            {
+              id: 'gemini-message-1',
+              prompt: 'retained prompt',
+              observedAt: 1_000,
+              agentType: 'gemini'
+            }
+          ]
+        }
+      ]
+    })
+    syncSinglePty(runtime, 'pty-empty-transcript', { tabTitle: 'Gemini' })
+    const [sourceTerminal] = (await runtime.listTerminals()).terminals
+
+    const preflight = await runtime.preflightAgentSessionFork({
+      terminalHandle: sourceTerminal!.handle
+    })
+
+    expect(preflight.contextDelivery).toEqual({
+      mode: 'structured-history-fallback',
+      promptDelivery: 'startup-agent',
+      includedPromptCount: 1,
+      nativeProviderReason: 'provider-native-fork-unsupported',
+      agent: 'gemini'
+    })
+
+    await expect(
+      runtime.preflightAgentSessionFork({
+        terminalHandle: sourceTerminal!.handle,
+        contextOptions: { fallbackContextSource: 'transcript' }
+      })
+    ).rejects.toThrow('No terminal transcript was available for this fork.')
+  })
+
+  it('rejects terminal forks when transcript and structured history are unavailable', async () => {
+    const runtime = new OrcaRuntimeService(store as never)
+    syncSinglePty(runtime, 'pty-empty-transcript', { tabTitle: 'Gemini' })
+    const [sourceTerminal] = (await runtime.listTerminals()).terminals
+
+    await expect(
+      runtime.preflightAgentSessionFork({
+        terminalHandle: sourceTerminal!.handle
+      })
+    ).rejects.toThrow(
+      'No terminal transcript or recorded structured prompt history was available for this fork.'
+    )
+  })
+
+  it('rejects missing structured message fork points before transcript fallback', async () => {
+    const paneKey = 'tab-1:1'
+    const runtime = new OrcaRuntimeService(store as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'done',
+          prompt: 'first prompt',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: 2_000,
+          stateStartedAt: 1_900,
+          promptInteractions: [
+            {
+              id: 'codex-message-1',
+              prompt: 'first prompt',
+              observedAt: 1_000,
+              agentType: 'codex'
+            }
+          ]
+        }
+      ]
+    })
+    syncSinglePty(runtime, 'pty-message-fork-source', { tabTitle: 'Codex' })
+    runtime.onPtyData('pty-message-fork-source', 'Terminal transcript fallback\n', 999)
+    const [sourceTerminal] = (await runtime.listTerminals()).terminals
+
+    await expect(
+      runtime.preflightAgentSessionFork({
+        terminalHandle: sourceTerminal!.handle,
+        forkPoint: { kind: 'message', id: 'missing-message' }
+      })
+    ).rejects.toThrow(
+      'Message fork point was not found for this source. Message forks require recorded structured prompt history.'
+    )
+  })
+
+  it('creates structured message forks from recorded hook prompt interactions', async () => {
+    const paneKey = 'tab-1:1'
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({
+        displayName: 'Source workspace',
+        instanceId: 'message-fork-source-instance'
+      })
+    }
+    const lineageById: Record<string, WorktreeLineage> = {}
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
+      setWorktreeLineage: (worktreeId: string, lineage: WorktreeLineage) => {
+        lineageById[worktreeId] = lineage
+        return lineage
+      },
+      getWorkspaceSession: () => ({
+        ...getDefaultWorkspaceSession(),
+        archivedForkableAgentSessionsByPaneKey: {
+          'tab-archived:1': {
+            paneKey: 'tab-archived:1',
+            tabId: 'tab-archived',
+            worktreeId: TEST_WORKTREE_ID,
+            agent: 'claude',
+            providerSession: { key: 'session_id' as const, id: 'claude-archived-session' },
+            prompt: 'second prompt after fork point',
+            state: 'done' as const,
+            archivedAt: 2_500,
+            updatedAt: 2_000,
+            archiveReason: 'retained-dismissed' as const,
+            promptInteractions: [
+              {
+                id: 'opencode-message-1',
+                prompt: 'first prompt before fork',
+                observedAt: 1_000,
+                agentType: 'claude'
+              },
+              {
+                id: 'opencode-message-2',
+                prompt: 'second prompt after fork point',
+                observedAt: 2_000,
+                agentType: 'claude'
+              }
+            ]
+          }
+        }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          prompt: 'second prompt after fork point',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: 2_000,
+          stateStartedAt: 1_900,
+          promptInteractionKey: 'opencode-message-2',
+          promptInteractions: [
+            {
+              id: 'opencode-message-1',
+              prompt: 'first prompt before fork',
+              observedAt: 1_000,
+              agentType: 'codex'
+            },
+            {
+              id: 'opencode-message-2',
+              prompt: 'second prompt after fork point',
+              observedAt: 2_000,
+              agentType: 'codex'
+            }
+          ]
+        }
+      ]
+    })
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-message-fork-child' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-message-fork-child' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    syncSinglePty(runtime, 'pty-message-fork-source', { tabTitle: 'Codex' })
+    runtime.onPtyData('pty-message-fork-source', 'Terminal transcript fallback\n', 999)
+    const [sourceTerminal] = (await runtime.listTerminals()).terminals
+    const forkPoint = { kind: 'message' as const, id: 'opencode-message-1' }
+    const explicitPreflight = await runtime.preflightAgentSessionFork({
+      worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'claude-archived-session' },
+      promptInteractions: [
+        {
+          id: 'opencode-message-1',
+          prompt: 'first prompt before fork',
+          observedAt: 1_000,
+          agentType: 'claude'
+        },
+        {
+          id: 'opencode-message-2',
+          prompt: 'second prompt after fork point',
+          observedAt: 2_000,
+          agentType: 'claude'
+        }
+      ],
+      forkPoint
+    })
+    expect(explicitPreflight).toMatchObject({
+      sourceWorktreeId: TEST_WORKTREE_ID,
+      forkPoint,
+      availableForkPoints: [
+        {
+          forkPoint: { kind: 'message', id: 'opencode-message-1' },
+          prompt: 'first prompt before fork',
+          observedAt: 1_000,
+          agent: 'claude'
+        },
+        {
+          forkPoint: { kind: 'message', id: 'opencode-message-2' },
+          prompt: 'second prompt after fork point',
+          observedAt: 2_000,
+          agent: 'claude'
+        }
+      ],
+      contextDelivery: {
+        mode: 'structured-message-fallback',
+        forkPoint,
+        includedPromptCount: 1,
+        nativeProviderReason: 'message-fork-point-selected',
+        agent: 'claude'
+      }
+    })
+    expect(explicitPreflight.sourceTerminalHandle).toBeUndefined()
+
+    const archivedPreflight = await runtime.preflightAgentSessionFork({
+      worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'claude-archived-session' },
+      forkPoint
+    })
+    expect(archivedPreflight).toMatchObject({
+      sourceWorktreeId: TEST_WORKTREE_ID,
+      forkPoint,
+      availableForkPoints: [
+        {
+          forkPoint: { kind: 'message', id: 'opencode-message-1' },
+          prompt: 'first prompt before fork',
+          observedAt: 1_000,
+          agent: 'claude'
+        },
+        {
+          forkPoint: { kind: 'message', id: 'opencode-message-2' },
+          prompt: 'second prompt after fork point',
+          observedAt: 2_000,
+          agent: 'claude'
+        }
+      ],
+      contextDelivery: {
+        mode: 'structured-message-fallback',
+        forkPoint,
+        includedPromptCount: 1,
+        nativeProviderReason: 'message-fork-point-selected',
+        agent: 'claude'
+      }
+    })
+    expect(archivedPreflight.sourceTerminalHandle).toBeUndefined()
+
+    const initialPreflight = await runtime.preflightAgentSessionFork({
+      terminalHandle: sourceTerminal!.handle
+    })
+    expect(initialPreflight.availableForkPoints).toEqual([
+      {
+        forkPoint: { kind: 'message', id: 'opencode-message-1' },
+        prompt: 'first prompt before fork',
+        observedAt: 1_000,
+        agent: 'codex'
+      },
+      {
+        forkPoint: { kind: 'message', id: 'opencode-message-2' },
+        prompt: 'second prompt after fork point',
+        observedAt: 2_000,
+        agent: 'codex'
+      }
+    ])
+    expect(initialPreflight.contextDelivery.mode).toBe('transcript-fallback')
+
+    const structuredPreferredPreflight = await runtime.preflightAgentSessionFork({
+      terminalHandle: sourceTerminal!.handle,
+      contextOptions: { fallbackContextSource: 'structured' }
+    })
+    expect(structuredPreferredPreflight.contextDelivery).toEqual({
+      mode: 'structured-history-fallback',
+      promptDelivery: 'startup-agent',
+      includedPromptCount: 2,
+      nativeProviderReason: 'provider-session-metadata-unavailable',
+      agent: 'codex'
+    })
+
+    const preflight = await runtime.preflightAgentSessionFork({
+      terminalHandle: sourceTerminal!.handle,
+      forkPoint
+    })
+    expect(preflight).toMatchObject({
+      sourceTerminalHandle: sourceTerminal!.handle,
+      sourceWorktreeId: TEST_WORKTREE_ID,
+      forkPoint,
+      availableForkPoints: [
+        {
+          forkPoint: { kind: 'message', id: 'opencode-message-1' },
+          prompt: 'first prompt before fork',
+          observedAt: 1_000,
+          agent: 'codex'
+        },
+        {
+          forkPoint: { kind: 'message', id: 'opencode-message-2' },
+          prompt: 'second prompt after fork point',
+          observedAt: 2_000,
+          agent: 'codex'
+        }
+      ],
+      contextDelivery: {
+        mode: 'structured-message-fallback',
+        forkPoint,
+        includedPromptCount: 1,
+        nativeProviderReason: 'message-fork-point-selected',
+        agent: 'codex'
+      }
+    })
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-message-fork')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-message-fork')
+    vi.mocked(listWorktrees).mockResolvedValue([
+      ...MOCK_GIT_WORKTREES,
+      {
+        path: '/tmp/workspaces/runtime-message-fork',
+        head: 'def',
+        branch: 'runtime-message-fork',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createAgentSessionFork({
+      terminalHandle: sourceTerminal!.handle,
+      forkPoint,
+      name: 'runtime-message-fork'
+    })
+
+    expect(result.fork.forkPoint).toEqual(forkPoint)
+    expect(result.fork.contextDelivery).toMatchObject({
+      mode: 'structured-message-fallback',
+      forkPoint,
+      includedPromptCount: 1
+    })
+    expect(result.lineage?.agentSessionForkPoint).toEqual(forkPoint)
+    const command = String(spawn.mock.calls[0]?.[0]?.command)
+    expect(command).toContain('message-level fork')
+    expect(command).toContain('first prompt before fork')
+    expect(command).not.toContain('second prompt after fork point')
+  })
+
+  it('starts no-copy forks in the source workspace', async () => {
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        agentCmdOverrides: {}
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-native-fork-same-workspace' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const revealTerminalSession = vi
+      .fn()
+      .mockResolvedValue({ tabId: 'tab-native-fork-same-workspace' })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    syncSinglePty(runtime, 'pty-native-fork-source', { tabTitle: 'Claude' })
+    runtime.onPtyData(
+      'pty-native-fork-source',
+      '\x1b]9999;{"state":"done","prompt":"ship it","agentType":"claude","providerSession":{"key":"session_id","id":"claude-source-session"}}\x07',
+      321
+    )
+    const [sourceTerminal] = (await runtime.listTerminals()).terminals
+
+    const result = await runtime.createAgentSessionFork({
+      terminalHandle: sourceTerminal!.handle,
+      name: 'same-workspace-fork',
+      noCopyFiles: true,
+      activate: false
+    })
+
+    expect(result.worktree.id).toBe(TEST_WORKTREE_ID)
+    expect(result.fork).toMatchObject({
+      id: result.fork.terminalHandle,
+      sourceTerminalHandle: sourceTerminal!.handle,
+      sourceWorktreeId: TEST_WORKTREE_ID,
+      targetWorktreeId: TEST_WORKTREE_ID,
+      workspaceMode: 'same-workspace',
+      contextDelivery: {
+        mode: 'native-provider',
+        promptDelivery: 'startup-agent',
+        providerSession: { key: 'session_id', id: 'claude-source-session' },
+        agent: 'claude'
+      }
+    })
+    expect(result.fork.terminalTabId).toMatch(UUID_RE)
+    expect(result.fork.childWorktreeId).toBeUndefined()
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: TEST_WORKTREE_PATH,
+        command: "claude '--dangerously-skip-permissions' '--fork-session' 'claude-source-session'",
+        worktreeId: TEST_WORKTREE_ID
+      })
+    )
+    expect(revealTerminalSession).toHaveBeenCalledWith(
+      TEST_WORKTREE_ID,
+      expect.objectContaining({ activate: false })
+    )
+  })
+
+  it('lists shows and removes only marked agent session fork lineages', async () => {
+    const parentPath = '/tmp/worktree-parent'
+    const childPath = '/tmp/worktree-child'
+    const manualPath = '/tmp/worktree-manual'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const manualId = `${TEST_REPO_ID}::${manualPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance' }),
+      [manualId]: makeWorktreeMeta({ instanceId: 'manual-instance' })
+    }
+    const forkLineage: WorktreeLineage = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+      agentSessionFork: true,
+      createdAt: 2_000
+    }
+    const manualLineage: WorktreeLineage = {
+      worktreeId: manualId,
+      worktreeInstanceId: 'manual-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 3_000
+    }
+    const lineageById: Record<string, WorktreeLineage> = {
+      [childId]: forkLineage,
+      [manualId]: manualLineage
+    }
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: parentPath,
+        head: 'parent-sha',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: childPath,
+        head: 'child-sha',
+        branch: 'fork-child',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: manualPath,
+        head: 'manual-sha',
+        branch: 'manual-child',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getAllWorktreeLineage: () => lineageById,
+      getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId]
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const listed = await runtime.listAgentSessionForks({
+      worktreeSelector: `id:${parentId}`,
+      limit: 10
+    })
+    expect(listed).toMatchObject({ totalCount: 1, truncated: false })
+    expect(listed.forks.map((fork) => fork.id)).toEqual([childId])
+
+    await expect(runtime.showAgentSessionFork(manualId)).rejects.toThrow(
+      `Fork not found: ${manualId}`
+    )
+    const shown = await runtime.showAgentSessionFork(childId)
+    expect(shown.fork).toMatchObject({ id: childId, parentWorktreeId: parentId })
+
+    const removeManagedWorktree = vi
+      .spyOn(runtime, 'removeManagedWorktree')
+      .mockResolvedValue({ removed: true } as never)
+    const removed = await runtime.removeAgentSessionFork(childId, true, true)
+    expect(removeManagedWorktree).toHaveBeenCalledWith(`id:${childId}`, true, true)
+    expect(removed).toMatchObject({ forkId: childId, removed: true })
+
+    await expect(runtime.removeAgentSessionFork(manualId, true)).rejects.toThrow(
+      `Fork not found: ${manualId}`
+    )
+    expect(removeManagedWorktree).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses explicit Pi provider session path metadata to fork without a live source terminal', async () => {
+    const piSessionPath = '/home/dev/.pi/agent/sessions/--repo--/20260617_session.jsonl'
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({
+        displayName: 'Retained source workspace',
+        instanceId: 'retained-source-instance'
+      })
+    }
+    const lineageById: Record<string, WorktreeLineage> = {}
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        agentCmdOverrides: {}
+      }),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      },
+      getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
+      setWorktreeLineage: (worktreeId: string, lineage: WorktreeLineage) => {
+        lineageById[worktreeId] = lineage
+        return lineage
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-explicit-native-fork-child' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-explicit-native-fork-child' }),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-explicit-native-fork')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-explicit-native-fork')
+    vi.mocked(listWorktrees).mockResolvedValue([
+      ...MOCK_GIT_WORKTREES,
+      {
+        path: '/tmp/workspaces/runtime-explicit-native-fork',
+        head: 'def',
+        branch: 'runtime-explicit-native-fork',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const preflight = await runtime.preflightAgentSessionFork({
+      worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+      agent: 'pi',
+      providerSession: { key: 'session_path', id: piSessionPath }
+    })
+    expect(preflight).toEqual({
+      sourceWorktreeId: TEST_WORKTREE_ID,
+      workspaceMode: 'child-workspace',
+      contextDelivery: {
+        mode: 'native-provider',
+        promptDelivery: 'startup-agent',
+        providerSession: { key: 'session_path', id: piSessionPath },
+        agent: 'pi'
+      }
+    })
+    expect(spawn).not.toHaveBeenCalled()
+
+    const result = await runtime.createAgentSessionFork({
+      worktreeSelector: `id:${TEST_WORKTREE_ID}`,
+      agent: 'pi',
+      providerSession: { key: 'session_path', id: piSessionPath },
+      name: 'runtime-explicit-native-fork'
+    })
+
+    expect(result.fork).not.toHaveProperty('sourceTerminalHandle')
+    expect(result.fork.sourceWorktreeId).toBe(TEST_WORKTREE_ID)
+    expect(result.fork.contextDelivery).toEqual({
+      mode: 'native-provider',
+      promptDelivery: 'startup-agent',
+      providerSession: { key: 'session_path', id: piSessionPath },
+      agent: 'pi'
+    })
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/tmp/workspaces/runtime-explicit-native-fork',
+        command: "pi '--fork' '/home/dev/.pi/agent/sessions/--repo--/20260617_session.jsonl'",
+        worktreeId: result.worktree.id
+      })
+    )
+    expect(result.lineage).toMatchObject({ parentWorktreeId: TEST_WORKTREE_ID })
+    expect(result.lineage).not.toHaveProperty('callerTerminalHandle')
+  })
+
+  it('diffs local agent session forks against the recorded parent worktree head', async () => {
+    const parentPath = '/tmp/worktree-parent'
+    const childPath = '/tmp/worktree-child'
+    const parentId = `${TEST_REPO_ID}::${parentPath}`
+    const childId = `${TEST_REPO_ID}::${childPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
+    }
+    const lineage: WorktreeLineage = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'manual',
+      capture: { source: 'terminal-context', confidence: 'explicit' },
+      agentSessionFork: true,
+      createdAt: 1_000
+    }
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: parentPath,
+        head: 'parent-sha',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: false
+      },
+      {
+        path: childPath,
+        head: 'child-sha',
+        branch: 'fork-child',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'diff') {
+        return { stdout: 'diff --git a/app.ts b/app.ts\n+change\n', stderr: '' }
+      }
+      if (args[0] === 'ls-files') {
+        return { stdout: 'scratch.txt\0', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getAllWorktreeLineage: () => ({ [childId]: lineage }),
+      getWorktreeLineage: (worktreeId: string) => (worktreeId === childId ? lineage : undefined)
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    try {
+      const result = await runtime.diffAgentSessionFork(childId)
+
+      expect(result).toMatchObject({
+        baseRef: 'parent-sha',
+        targetRef: 'child-sha',
+        includesWorkingTree: true,
+        diff: 'diff --git a/app.ts b/app.ts\n+change\n',
+        untrackedFiles: ['scratch.txt']
+      })
+      expect(result.fork.id).toBe(childId)
+      expect(result.parentWorktree.id).toBe(parentId)
+      expect(gitSpy).toHaveBeenCalledWith(
+        ['diff', '--no-ext-diff', '--no-color', '--binary', 'parent-sha', '--'],
+        expect.objectContaining({ cwd: childPath, timeout: 60_000 })
+      )
+      expect(gitSpy).toHaveBeenCalledWith(
+        ['ls-files', '--others', '--exclude-standard', '-z'],
+        expect.objectContaining({ cwd: childPath, timeout: 60_000 })
+      )
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
+  it('diffs SSH agent session forks through the remote git provider', async () => {
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const parentPath = '/home/user/repo-parent'
+    const childPath = '/home/user/repo-child'
+    const parentId = `${remoteRepo.id}::${parentPath}`
+    const childId = `${remoteRepo.id}::${childPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
+      [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
+    }
+    const lineage: WorktreeLineage = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'manual',
+      capture: { source: 'terminal-context', confidence: 'explicit' },
+      agentSessionFork: true,
+      createdAt: 1_000
+    }
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: parentPath,
+          head: 'remote-parent-sha',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: false
+        },
+        {
+          path: childPath,
+          head: 'remote-child-sha',
+          branch: 'fork-child',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      getForkDiff: vi.fn().mockResolvedValue({
+        diff: 'diff --git a/remote.ts b/remote.ts\n+remote\n',
+        untrackedFiles: ['remote-new.ts']
+      })
+    }
+    registerSshGitProvider('ssh-1', provider as never)
+    const runtimeStore = {
+      ...store,
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getRepos: () => [remoteRepo],
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getAllWorktreeLineage: () => ({ [childId]: lineage }),
+      getWorktreeLineage: (worktreeId: string) => (worktreeId === childId ? lineage : undefined)
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const result = await runtime.diffAgentSessionFork(childId)
+
+    expect(result).toMatchObject({
+      baseRef: 'remote-parent-sha',
+      targetRef: 'remote-child-sha',
+      includesWorkingTree: true,
+      untrackedFiles: ['remote-new.ts']
+    })
+    expect(provider.listWorktrees).toHaveBeenCalledWith(remoteRepo.path)
+    expect(provider.getForkDiff).toHaveBeenCalledWith(childPath, 'remote-parent-sha')
+  })
+
   it('sends follow-up prompts for CLI-created stdin-after-start startup agents', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
     const runtimeStore = {
@@ -17451,6 +18719,7 @@ describe('OrcaRuntimeService', () => {
 
   it('force-removes a legacy Orca-created runtime orphaned worktree directory after Git tracking is gone', async () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-orphan-'))
+    const previousCwd = process.cwd()
     const repoPath = join(parentDir, 'repo')
     const orphanPath = join(parentDir, 'orphan')
     const adminWorktreePath = join(repoPath, '.git', 'worktrees', 'orphan')
@@ -17500,7 +18769,12 @@ describe('OrcaRuntimeService', () => {
       expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
       expect(notifier.worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
     } finally {
-      await rm(parentDir, { recursive: true, force: true })
+      process.chdir(tmpdir())
+      try {
+        await rm(parentDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+      } finally {
+        process.chdir(previousCwd)
+      }
     }
   })
 

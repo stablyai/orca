@@ -54,6 +54,13 @@ Worktrees:
   worktree rm               Remove a worktree from Orca and git
   worktree ps               Show a compact orchestration summary across worktrees
 
+Forks:
+  fork                      Fork an agent session from a terminal or provider session
+  fork list                 List session forks
+  fork show                 Show one session fork
+  fork diff                 Show a fork child workspace diff against its parent
+  fork rm                   Remove a session fork child workspace
+
 Files:
   file open                 Open a workspace file in the Orca editor
   file diff                 Open a workspace file diff in the Orca editor
@@ -200,6 +207,11 @@ Common Commands:
   orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
   orca worktree ps [--limit <n>] [--json]
+  orca fork [--terminal <handle>] [--message <id>] [--worktree <selector> --agent <id> --provider-session <id> [--provider-session-key session_id|conversation_id|session_path]] [--fallback-context auto|structured|transcript] [--context-chars <n>] [--context-lines <n>] [--name <label>] [--activate] [--no-copy-files] [--json]
+  orca fork list [--worktree <selector>] [--limit <n>] [--json]
+  orca fork show <fork-id> [--json]
+  orca fork diff <fork-id> [--json]
+  orca fork rm <fork-id> [--force] [--run-hooks] [--json]
   orca file open <path> [--worktree <selector>] [--json]
   orca file diff <path> [--staged] [--worktree <selector>] [--json]
   orca file open-changed [--mode edit|diff|both] [--worktree <selector>] [--json]
@@ -230,9 +242,11 @@ Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
   --worktree <selector>     Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
+  --message <id>            Structured hook message id recorded for the source session
   --parent-workspace <selector> Parent workspace selector such as folder:<id> or worktree:<id>
   --parent-worktree <selector> Parent worktree selector; create infers a child of the caller/current worktree by default
   --no-parent               Force no parent lineage for unrelated worktree creation/update
+  --no-copy-files           Start the fork in the source workspace without copying files
 
 Terminal Send Options:
   --text <text>             Text to send to the terminal
@@ -256,6 +270,7 @@ Behavior:
 
 Agent Sessions And Worktrees:
   \`worktree create --agent\` creates a new checkout/workspace with an agent.
+  \`fork\` creates a child workspace from provider-native, structured-history, or transcript context and records fork lineage.
   To start a fresh agent in the current worktree, use:
     orca terminal create --worktree active --command "codex"
 
@@ -448,6 +463,8 @@ export function formatFlagHelp(flag: string): string {
     'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
     command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',
+    'context-chars': '--context-chars <n>    Max fallback prompt context characters',
+    'context-lines': '--context-lines <n>    Max terminal lines for transcript fallback',
     cursor: '--cursor <n>           Line cursor from a previous read (returns only new output)',
     action: '--action <name>       Secondary accessibility action name',
     activate: '--activate             Reveal the new worktree in the Orca app',
@@ -460,7 +477,10 @@ export function formatFlagHelp(flag: string): string {
     enter: '--enter                Append Enter after sending text',
     force: '--force                Force worktree removal when supported',
     focus: '--focus                Reveal the created terminal session in Orca',
+    'fallback-context':
+      '--fallback-context <mode> auto, structured, or transcript fallback context',
     for: '--for exit|tui-idle    Wait condition to satisfy',
+    fork: '--fork <id>            Fork id, currently the child worktree id',
     'from-element-index': '--from-element-index <n> Source element index from get-app-state',
     'from-x': '--from-x <x>           Source window-local x coordinate',
     'from-y': '--from-y <y>           Source window-local y coordinate',
@@ -473,10 +493,12 @@ export function formatFlagHelp(flag: string): string {
     json: '--json                 Emit machine-readable JSON',
     key: '--key <key>            Key argument for this command',
     limit: '--limit <n>            Maximum number of rows to return',
+    message: '--message <id>          Structured hook message id recorded for source session',
     mode: '--mode <mode>          Mode such as edit, diff, or both',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
     name: '--name <name>          Name for the new worktree or automation',
     'no-parent': '--no-parent            Force no parent lineage for unrelated work',
+    'no-copy-files': '--no-copy-files        Start the fork in the source workspace',
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
     pages: '--pages <n>           Number of scroll pages',
     'parent-workspace':
@@ -485,6 +507,10 @@ export function formatFlagHelp(flag: string): string {
       '--parent-worktree <selector> Parent selector; create infers the caller/current worktree by default',
     path: '--path <path>          Path argument for the command',
     prompt: '--prompt <text>        Prompt text for agent-backed commands',
+    'provider-session':
+      '--provider-session <id> Provider-owned session id/path for native or Orca fallback fork',
+    'provider-session-key':
+      '--provider-session-key <key> session_id, conversation_id, or session_path',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',
     repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',

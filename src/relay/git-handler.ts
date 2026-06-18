@@ -51,6 +51,22 @@ const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
 const BULK_CHUNK_SIZE = 100
 
+function parseGitNullDelimitedPaths(stdout: string): string[] {
+  return stdout.split('\0').filter((entry) => entry.length > 0)
+}
+
+function validateForkDiffBaseRef(baseRef: unknown): string {
+  if (
+    typeof baseRef !== 'string' ||
+    !baseRef ||
+    baseRef.startsWith('-') ||
+    baseRef.includes('\0')
+  ) {
+    throw new Error('Invalid fork diff base ref.')
+  }
+  return baseRef
+}
+
 export class GitHandler {
   private dispatcher: RelayDispatcher
 
@@ -92,6 +108,7 @@ export class GitHandler {
     this.dispatcher.onRequest('git.fastForward', (p) => this.fastForward(p))
     this.dispatcher.onRequest('git.rebaseFromBase', (p) => this.rebaseFromBase(p))
     this.dispatcher.onRequest('git.branchDiff', (p) => this.branchDiff(p))
+    this.dispatcher.onRequest('git.forkDiff', (p) => this.forkDiff(p))
     this.dispatcher.onRequest('git.commitDiff', (p) => this.commitDiff(p))
     this.dispatcher.onRequest('git.listWorktrees', (p) => this.listWorktrees(p))
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
@@ -708,6 +725,19 @@ export class GitHandler {
       filePath: params.filePath as string,
       oldPath: params.oldPath as string | undefined
     })
+  }
+
+  private async forkDiff(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const baseRef = validateForkDiffBaseRef(params.baseRef)
+    const [diff, untracked] = await Promise.all([
+      this.git(['diff', '--no-ext-diff', '--no-color', '--binary', baseRef, '--'], worktreePath),
+      this.git(['ls-files', '--others', '--exclude-standard', '-z'], worktreePath)
+    ])
+    return {
+      diff: diff.stdout,
+      untrackedFiles: parseGitNullDelimitedPaths(untracked.stdout)
+    }
   }
 
   private async exec(params: Record<string, unknown>, context?: RequestContext) {

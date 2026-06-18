@@ -36,13 +36,15 @@ describe('readShellStartupEnvVar', () => {
   function mockStartupFiles(files: Record<string, string>) {
     const hasAbsoluteKeys = Object.keys(files).some((path) => path.startsWith('/'))
     existsSyncMock.mockImplementation((p: string) => {
-      const file = p.split('/').pop() ?? ''
-      return p in files || (!hasAbsoluteKeys && file in files)
+      const normalizedPath = p.replace(/\\/g, '/')
+      const file = normalizedPath.split('/').pop() ?? ''
+      return normalizedPath in files || (!hasAbsoluteKeys && file in files)
     })
     readFileSyncMock.mockImplementation((p: string) => {
-      const file = p.split('/').pop() ?? ''
-      if (p in files) {
-        return files[p]
+      const normalizedPath = p.replace(/\\/g, '/')
+      const file = normalizedPath.split('/').pop() ?? ''
+      if (normalizedPath in files) {
+        return files[normalizedPath]
       }
       if (!hasAbsoluteKeys && file in files) {
         return files[file]

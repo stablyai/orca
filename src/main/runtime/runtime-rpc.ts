@@ -6,7 +6,7 @@
 // live in `rpc/unix-socket-transport.ts` and `rpc/ws-transport.ts`.
 import { randomBytes } from 'crypto'
 import { readdirSync, rmSync } from 'fs'
-import { join } from 'path'
+import { join, posix as pathPosix } from 'path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { writeRuntimeMetadata } from './runtime-metadata'
@@ -1066,6 +1066,6 @@ export function createRuntimeTransportMetadata(
   }
   return {
     kind: 'unix',
-    endpoint: join(userDataPath, `o-${pid}-${endpointSuffix}.sock`)
+    endpoint: pathPosix.join(userDataPath, `o-${pid}-${endpointSuffix}.sock`)
   }
 }

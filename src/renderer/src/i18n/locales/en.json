@@ -2263,12 +2263,41 @@
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "Copy context",
-            "0c8a8629b1": "The fork appears as its own workspace, not as a nested child. The new agent receives a bounded transcript as an editable draft.",
-            "620461df22": "Top-level fork",
-            "619b5a35d2": "Create a top-level workspace fork and start a fresh agent tab with captured context.",
+            "0c8a8629b1": "The fork appears under the source workspace. The new agent receives a bounded transcript as an editable draft.",
+            "620461df22": "Child workspace fork",
+            "619b5a35d2": "Start a fresh agent tab with captured context. Choose whether to create a child workspace or stay in this workspace.",
             "64e292e8e3": "Fork Agent Session",
             "9d25de2920": "Create fork",
-            "2b10412cfc": "Creating..."
+            "2b10412cfc": "Creating...",
+            "targetModeLabel": "Target",
+            "targetModeAriaLabel": "Fork target",
+            "childWorkspaceOption": "Child workspace",
+            "currentWorkspaceOption": "Current workspace",
+            "currentWorkspaceTitle": "Current workspace fork",
+            "currentWorkspaceDescription": "No files are copied. The new agent opens in the source workspace with the same captured context.",
+            "nameLabel": "Workspace name",
+            "namePlaceholder": "Auto-generate from source workspace",
+            "nameDisabledForCurrentWorkspace": "Current workspace forks do not create a new workspace to name.",
+            "openAfterCreateLabel": "Open after creating",
+            "openAfterCreateDescription": "When off, Orca creates the fork without switching to the target workspace or terminal.",
+            "runtimeContextDelivery": "Orca will request a provider-native fork when the source agent supports it. Otherwise it uses a transcript fallback from this terminal.",
+            "transcriptOnlyContextDelivery": "A runtime terminal handle is not available, so this fork uses the captured transcript fallback.",
+            "preflightLoading": "Checking context delivery...",
+            "preflightError": "Could not check context delivery. Orca will re-check when creating the fork.",
+            "preflightNativeProvider": "Provider-native fork available for {{agent}}.",
+            "preflightStructuredMessageFallback": "Message fork planned at {{message}} with {{count}} structured {{promptLabel}}. Native fork unavailable: {{reason}}.",
+            "preflightTranscriptTruncated": ", truncated to the newest output",
+            "preflightTranscriptFallback": "Transcript fallback planned: {{count}} terminal {{lineLabel}}{{truncation}}. Native fork unavailable: {{reason}}.",
+            "preflightUnknownError": "Preflight failed",
+            "preflightReasonMetadataUnavailable": "provider session metadata is unavailable",
+            "preflightReasonUnsupported": "the source agent does not support native forking",
+            "preflightReasonPlanUnavailable": "a native fork startup plan could not be built",
+            "preflightReasonMessageForkPoint": "a message fork point was selected",
+            "promptUnavailable": "Prompt text unavailable",
+            "messageForkPointOption": "Message {{index}}: {{prompt}}",
+            "forkPointLabel": "Fork point",
+            "currentForkPointOption": "Current end",
+            "preflightStructuredHistoryFallback": "Structured history fallback planned with {{count}} recorded {{promptLabel}}. Native fork unavailable: {{reason}}."
           },
           "TerminalContextMenu": {
             "b4cdd9314e": "Clear Screen",
@@ -2332,8 +2361,12 @@
               "session": {
                 "fork": {
                   "2317900211": "Failed to copy fork context.",
-                  "88e34d00eb": "Top-level session fork opened in a new workspace",
+                  "88e34d00eb": "Session fork opened in a child workspace",
+                  "5e69cf039a": "Session fork opened in this workspace",
+                  "537d126b34": "Native session fork opened",
                   "fd3d12a1e1": "Failed to create fork workspace.",
+                  "6b108da085": "Failed to fork agent session.",
+                  "3ac98a9c04": "This workspace cannot be forked.",
                   "38e41edc6e": "This workspace cannot be forked into a git worktree.",
                   "f867385bb5": "Could not find the source workspace for this fork.",
                   "046e8d853c": "No terminal context to fork",
@@ -3742,7 +3775,11 @@
           "021538e1d1": "SSH disconnected"
         },
         "WorktreeCardAgents": {
-          "1b0a156717": "Agents"
+          "1b0a156717": "Agents",
+          "forkMissingTerminal": "This agent row cannot be forked because session context is unavailable.",
+          "nativeForkCreated": "Native session fork opened in a child workspace",
+          "transcriptForkCreated": "Session fork opened in a child workspace",
+          "forkFailed": "Failed to fork agent session."
         },
         "WorktreeCardReviewDetailSection": {
           "reviewHeader": "{{value0}} #{{value1}}"
@@ -3794,6 +3831,12 @@
           "439fa94d53": "Update",
           "579b1a8e61": "Remove from Parent",
           "8d9cd19d09": "Open Parent Workspace",
+          "forkChildren": "Child Workspaces",
+          "manageForks": "Manage Forks",
+          "previousAgentSessions": "Previous Agent Sessions",
+          "forkingSession": "Forking...",
+          "archivedForkCreated": "Previous agent session fork opened in a child workspace",
+          "archivedForkFailed": "Failed to fork previous agent session.",
           "d35dfeae58": "Remove from group",
           "76865d827f": "Move to group",
           "503ec0f8e6": "New group from project",
@@ -3809,7 +3852,23 @@
           "8dacff1fe0": "Mark Read",
           "3baa7d6507": "Pin",
           "697d0f6e1b": "Unpin",
-          "250de158fd": "Remove Workspace"
+          "250de158fd": "Remove Workspace",
+          "archivedForkPointMessage": "Message {{value0}}: {{value1}}",
+          "archivedForkPointCurrentEnd": "Current end"
+        },
+        "WorktreeForkManagementDialog": {
+          "unknownTime": "Unknown",
+          "removeTitle": "Remove Fork",
+          "removeDescription": "Orca will ask the runtime to remove this child workspace. Dirty worktrees are not removed.",
+          "removeConfirm": "Remove",
+          "removeSuccess": "Fork removed",
+          "removeFailed": "Failed to remove fork.",
+          "title": "Manage Forks",
+          "empty": "No forks found.",
+          "open": "Open",
+          "removing": "Removing",
+          "remove": "Remove",
+          "close": "Close"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -4036,7 +4095,8 @@
               "agents": {
                 "a128d7006b": "{{value0}} {{value1}} child {{value2}}",
                 "289a1d2ca7": "Expand {{value0}}. {{value1}}",
-                "0c1debfe84": "Collapse {{value0}}"
+                "0c1debfe84": "Collapse {{value0}}",
+                "forkSession": "Fork agent session"
               }
             }
           },
@@ -10727,11 +10787,16 @@
           "b06e13fcf7": "Dismiss agent",
           "0272969e28": "Send to this agent",
           "92a7017987": "sending",
-          "019b74d93a": "eligible"
+          "019b74d93a": "eligible",
+          "forkSession": "Fork agent session"
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "interrupted",
           "1ec01cef03": "Interrupted by user"
+        },
+        "AgentSessionForkPointMenu": {
+          "message": "Message {{value0}}: {{value1}}",
+          "currentEnd": "Current end"
         }
       },
       "crash": {

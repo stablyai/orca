@@ -107,6 +107,25 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
+  it('skips records explicitly captured only for fork', () => {
+    const record = makeRecord({
+      origin: 'worktree-sleep',
+      state: 'done',
+      resumeAvailable: false
+    })
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    } as never)
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    const state = useAppStore.getState()
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(0)
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
   it('uses WSL resume quoting for Windows-path projects forced to WSL', () => {
     const record = makeRecord({
       providerSession: { key: 'session_id', id: "sess-1's" },

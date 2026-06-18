@@ -1461,6 +1461,81 @@ describe('createWorktree base status merge', () => {
     })
   })
 
+  it('passes explicit parent worktree lineage through local create IPC', async () => {
+    const store = createTestStore()
+    const parentWorktreeId = 'repo1::/path/parent'
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      instanceId: 'child-instance'
+    })
+    const lineage = makeLineage({
+      worktreeId: wt.id,
+      parentWorktreeId,
+      capture: { source: 'terminal-context', confidence: 'explicit' },
+      createdByTerminalHandle: 'terminal-1'
+    })
+    const workspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(wt.id),
+      childInstanceId: lineage.worktreeInstanceId,
+      parentWorkspaceKey: worktreeWorkspaceKey(parentWorktreeId),
+      parentInstanceId: lineage.parentWorktreeInstanceId,
+      origin: lineage.origin,
+      capture: lineage.capture
+    })
+    store.setState({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1')
+    } as Partial<AppState>)
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt, lineage, workspaceLineage })
+
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature',
+        'origin/main',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { parentWorktreeId, callerTerminalHandle: 'terminal-1' }
+      )
+
+    const createPayload = mockApi.worktrees.create.mock.calls[0]?.[0]
+    expect(createPayload).toEqual(
+      expect.objectContaining({
+        repoId: 'repo1',
+        name: 'feature',
+        parentWorktree: `id:${parentWorktreeId}`,
+        callerTerminalHandle: 'terminal-1'
+      })
+    )
+    expect(createPayload).not.toHaveProperty('parentWorkspace')
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [workspaceLineage.childWorkspaceKey]: workspaceLineage
+    })
+  })
+
   it('merges create result metadata into a worktree inserted by the watcher race', async () => {
     const store = createTestStore()
     const watcherWorktree = makeWorktree({
@@ -2267,6 +2342,92 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
+  })
+
+  it('passes explicit parent worktree lineage through remote runtime creation', async () => {
+    const store = createTestStore()
+    const parentWorktreeId = 'repo1::/remote/parent'
+    const wt = makeWorktree({
+      id: 'repo1::/remote/feature',
+      repoId: 'repo1',
+      path: '/remote/feature',
+      instanceId: 'child-instance'
+    })
+    const lineage = makeLineage({
+      worktreeId: wt.id,
+      parentWorktreeId,
+      capture: { source: 'terminal-context', confidence: 'explicit' },
+      createdByTerminalHandle: 'terminal-remote'
+    })
+    const workspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(wt.id),
+      childInstanceId: lineage.worktreeInstanceId,
+      parentWorkspaceKey: worktreeWorkspaceKey(parentWorktreeId),
+      parentInstanceId: lineage.parentWorktreeInstanceId,
+      origin: lineage.origin,
+      capture: lineage.capture
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt, lineage, workspaceLineage },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'feature',
+        'origin/main',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { parentWorktreeId, callerTerminalHandle: 'terminal-remote' }
+      )
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'worktree.create',
+        params: expect.objectContaining({
+          repo: 'repo1',
+          name: 'feature',
+          parentWorktree: `id:${parentWorktreeId}`,
+          callerTerminalHandle: 'terminal-remote'
+        })
+      })
+    )
+    const createParams = runtimeEnvironmentCall.mock.calls[0]?.[0].params
+    expect(createParams).not.toHaveProperty('parentWorkspace')
+    expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
+    expect(store.getState().workspaceLineageByChildKey).toEqual({
+      [workspaceLineage.childWorkspaceKey]: workspaceLineage
+    })
   })
 
   it('passes startup commands through remote runtime worktree creation', async () => {
@@ -3671,6 +3832,52 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         'repoA::/a/wt1': ['dist/'],
         'repoA::/a/wt2': ['coverage/']
       },
+      sleepingAgentSessionsByPaneKey: {
+        'tab-1:leaf': {
+          paneKey: 'tab-1:leaf',
+          worktreeId: 'repoA::/a/wt1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'sleep-session' },
+          prompt: 'p',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        },
+        'tab-3:leaf': {
+          paneKey: 'tab-3:leaf',
+          worktreeId: 'repoA::/a/wt2',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'keep-session' },
+          prompt: 'p',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      },
+      archivedForkableAgentSessionsByPaneKey: {
+        'tab-1:archive': {
+          paneKey: 'tab-1:archive',
+          worktreeId: 'repoA::/a/wt1',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'archive-session' },
+          prompt: 'p',
+          state: 'done',
+          archivedAt: 1,
+          updatedAt: 1,
+          archiveReason: 'retained-dismissed'
+        },
+        'tab-3:archive': {
+          paneKey: 'tab-3:archive',
+          worktreeId: 'repoA::/a/wt2',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'keep-archive' },
+          prompt: 'p',
+          state: 'done',
+          archivedAt: 1,
+          updatedAt: 1,
+          archiveReason: 'retained-dismissed'
+        }
+      },
       rightSidebarTabByWorktree: {
         'repoA::/a/wt1': 'search' as never,
         'repoA::/a/wt2': 'checks'
@@ -3701,6 +3908,10 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
     expect(s.markdownFrontmatterVisible).toEqual({ 'file-99': true })
     expect(s.gitIgnoredPathsByWorktree).toEqual({ 'repoA::/a/wt2': ['coverage/'] })
+    expect(s.sleepingAgentSessionsByPaneKey).toHaveProperty('tab-3:leaf')
+    expect(s.sleepingAgentSessionsByPaneKey).not.toHaveProperty('tab-1:leaf')
+    expect(s.archivedForkableAgentSessionsByPaneKey).toHaveProperty('tab-3:archive')
+    expect(s.archivedForkableAgentSessionsByPaneKey).not.toHaveProperty('tab-1:archive')
     expect(s.rightSidebarTabByWorktree).toEqual({ 'repoA::/a/wt2': 'checks' })
     expect(s.activeWorktreeId).toBeNull()
     expect(s.activeFileId).toBeNull()
@@ -4111,6 +4322,20 @@ describe('migrateWorktreeIdentity', () => {
           updatedAt: 1
         }
       },
+      archivedForkableAgentSessionsByPaneKey: {
+        'tab1:archive': {
+          paneKey: 'tab1:archive',
+          tabId: 'tab1',
+          worktreeId: OLD,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'archive-1' },
+          prompt: 'Do work',
+          state: 'done',
+          archivedAt: 2,
+          updatedAt: 1,
+          archiveReason: 'retained-dismissed'
+        }
+      },
       // Tab-id-keyed: must NOT be re-keyed (the tab keeps its id across rename).
       terminalLayoutsByTabId: { tab1: { root: { type: 'leaf', leafId: '0' } } }
     } as unknown as Partial<AppState>)
@@ -4144,6 +4369,7 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.openFiles[0].worktreeId).toBe(NEW)
     expect(s.pendingReconnectWorktreeIds).toEqual([NEW])
     expect(s.sleepingAgentSessionsByPaneKey['tab1:leaf']?.worktreeId).toBe(NEW)
+    expect(s.archivedForkableAgentSessionsByPaneKey['tab1:archive']?.worktreeId).toBe(NEW)
     // Tab-id-keyed state is untouched — the tab survives with the same id.
     expect(s.terminalLayoutsByTabId.tab1).toBeDefined()
   })

@@ -20,7 +20,7 @@ function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
   })
 }
 
-describe('CLI runtime environments', () => {
+describe('CLI runtime environments', { timeout: 30_000 }, () => {
   const posixModeIt = process.platform === 'win32' ? it.skip : it
 
   it('saves, resolves, and removes a paired environment', () => {

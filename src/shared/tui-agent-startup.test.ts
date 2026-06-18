@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAgentDraftLaunchPlan,
+  buildAgentForkStartupPlan,
   buildAgentResumeStartupPlan,
   buildAgentStartupPlan,
   buildShellCommandFromArgv
@@ -145,6 +146,57 @@ describe('tui agent startup plans', () => {
     })
 
     expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
+  })
+
+  it('builds provider-native fork startup plans for verified agents', () => {
+    const plan = buildAgentForkStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--fork-session' 's1'")
+    expect(plan?.followupPrompt).toBeNull()
+  })
+
+  it('builds Codex provider-native fork startup plans', () => {
+    const plan = buildAgentForkStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("codex 'fork' 'codex-session'")
+    expect(plan?.followupPrompt).toBeNull()
+  })
+
+  it('honors command overrides when building provider-native fork plans', () => {
+    const plan = buildAgentForkStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session' },
+      cmdOverrides: { codex: 'codex --profile work' },
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("codex --profile work 'fork' 'codex-session'")
+  })
+
+  it('builds Pi provider-native fork plans from session paths', () => {
+    const plan = buildAgentForkStartupPlan({
+      agent: 'pi',
+      providerSession: {
+        key: 'session_path',
+        id: '/home/dev/.pi/agent/sessions/--repo--/20260617_session.jsonl'
+      },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "pi '--fork' '/home/dev/.pi/agent/sessions/--repo--/20260617_session.jsonl'"
+    )
   })
 
   it('appends shell-quoted CLI arguments before prompt delivery flags', () => {

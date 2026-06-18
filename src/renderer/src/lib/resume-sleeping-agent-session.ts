@@ -49,6 +49,15 @@ function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
 }
 
 function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean {
+  if (record.resumeAvailable === false) {
+    toast.error(
+      translate(
+        'auto.lib.resume.sleeping.agent.session.f235f604fd',
+        'This agent session cannot be resumed.'
+      )
+    )
+    return false
+  }
   const state = useAppStore.getState()
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
@@ -89,6 +98,7 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
 export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): number {
   const records = Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
+    .filter((record) => record.resumeAvailable !== false)
     // Why: pane-owned captures (#5232/#5626) cover panes that still exist in
     // the restored session. Those panes own their own recovery — warm reattach
     // when the daemon kept the agent alive, or pane-level cold-restore resume.

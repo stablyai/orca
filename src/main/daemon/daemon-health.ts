@@ -7,6 +7,7 @@ import { promisify } from 'util'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
 import { encodeNdjson } from './ndjson'
 import { getDaemonPidPath } from './daemon-spawner'
+import { normalizeDaemonSocketPath } from './daemon-socket-path'
 import {
   PROTOCOL_VERSION,
   type HelloMessage,
@@ -29,12 +30,13 @@ type ParsedDaemonPid = {
 }
 
 function canConnectSocket(socketPath: string): Promise<boolean> {
+  const endpointPath = normalizeDaemonSocketPath(socketPath)
   return new Promise((resolve) => {
     if (process.platform !== 'win32' && !existsSync(socketPath)) {
       resolve(false)
       return
     }
-    const sock = connect({ path: socketPath })
+    const sock = connect({ path: endpointPath })
     let settled = false
     const cleanup = (): void => {
       clearTimeout(timer)
@@ -82,6 +84,7 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
 
     let settled = false
     let sock: Socket | null = null
+    const endpointPath = normalizeDaemonSocketPath(socketPath)
     const settle = (result: boolean): void => {
       if (settled) {
         return
@@ -152,7 +155,7 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
     }
     const timer = setTimeout(() => settle(false), HEALTH_CHECK_TIMEOUT_MS)
 
-    sock = connect({ path: socketPath })
+    sock = connect({ path: endpointPath })
     sock.on('error', onError)
     sock.on('connect', onConnect)
 

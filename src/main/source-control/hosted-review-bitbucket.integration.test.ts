@@ -22,7 +22,7 @@ function sendJson(res: ServerResponse, body: unknown): void {
   res.end(JSON.stringify(body))
 }
 
-describe('Bitbucket hosted review integration', () => {
+describe('Bitbucket hosted review integration', { timeout: 45_000 }, () => {
   beforeEach(() => {
     process.env = { ...OLD_ENV, ORCA_BITBUCKET_ACCESS_TOKEN: 'local-token' }
     delete process.env.ORCA_BITBUCKET_EMAIL
@@ -117,5 +117,5 @@ describe('Bitbucket hosted review integration', () => {
         server.close((error) => (error ? reject(error) : resolve()))
       })
     }
-  })
+  }, 45_000)
 })

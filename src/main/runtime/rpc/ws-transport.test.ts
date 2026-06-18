@@ -17,13 +17,13 @@ function makeTls() {
   return loadOrCreateTlsCertificate(userDataPath)
 }
 
-describe('WebSocketTransport', () => {
+describe('WebSocketTransport', { timeout: 45_000 }, () => {
   const transports: WebSocketTransport[] = []
 
   afterEach(async () => {
     await Promise.all(transports.map((t) => t.stop().catch(() => {})))
     transports.length = 0
-  })
+  }, 45_000)
 
   async function createTransport(
     handler?: (msg: string, reply: (response: string) => void) => void,

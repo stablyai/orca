@@ -148,7 +148,11 @@ export type IFilesystemProvider = {
   createDirNoClobber(dirPath: string): Promise<void>
   rename(oldPath: string, newPath: string): Promise<void>
   renameNoClobber(oldPath: string, newPath: string): Promise<void>
-  copy(source: string, destination: string): Promise<void>
+  copy(
+    source: string,
+    destination: string,
+    options?: { ignorePatterns?: readonly string[] }
+  ): Promise<void>
   realpath(filePath: string): Promise<string>
   search(opts: SearchOptions): Promise<SearchResult>
   listFiles(rootPath: string, options?: { excludePaths?: string[] }): Promise<string[]>
@@ -160,6 +164,11 @@ export type IFilesystemProvider = {
 }
 
 // ─── Git Provider ───────────────────────────────────────────────────
+
+export type GitForkDiffResult = {
+  diff: string
+  untrackedFiles: string[]
+}
 
 export type IGitProvider = {
   getStatus(worktreePath: string, options?: { includeIgnored?: boolean }): Promise<GitStatusResult>
@@ -206,6 +215,7 @@ export type IGitProvider = {
     baseRef: string,
     options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
   ): Promise<GitDiffResult[]>
+  getForkDiff(worktreePath: string, baseRef: string): Promise<GitForkDiffResult>
   getCommitDiff(
     worktreePath: string,
     args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }

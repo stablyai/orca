@@ -214,6 +214,9 @@ function areLineageRecordsEqual(
     a.taskId === b.taskId &&
     a.coordinatorHandle === b.coordinatorHandle &&
     a.createdByTerminalHandle === b.createdByTerminalHandle &&
+    a.agentSessionFork === b.agentSessionFork &&
+    a.agentSessionForkPoint?.kind === b.agentSessionForkPoint?.kind &&
+    a.agentSessionForkPoint?.id === b.agentSessionForkPoint?.id &&
     a.createdAt === b.createdAt
   )
 }
@@ -725,6 +728,10 @@ function projectWorktreeLineageToWorkspaceLineage(
     ...(lineage.createdByTerminalHandle
       ? { createdByTerminalHandle: lineage.createdByTerminalHandle }
       : {}),
+    ...(lineage.agentSessionFork ? { agentSessionFork: true } : {}),
+    ...(lineage.agentSessionForkPoint
+      ? { agentSessionForkPoint: lineage.agentSessionForkPoint }
+      : {}),
     createdAt: lineage.createdAt
   }
   return next
@@ -988,6 +995,18 @@ function buildWorktreeRenameState(
         ])
       )
     : s.sleepingAgentSessionsByPaneKey
+  const currentArchivedForkableAgentSessionsByPaneKey =
+    s.archivedForkableAgentSessionsByPaneKey ?? {}
+  const archivedForkableAgentSessionsByPaneKey = Object.values(
+    currentArchivedForkableAgentSessionsByPaneKey
+  ).some((record) => record.worktreeId === oldWorktreeId)
+    ? Object.fromEntries(
+        Object.entries(currentArchivedForkableAgentSessionsByPaneKey).map(([paneKey, record]) => [
+          paneKey,
+          record.worktreeId === oldWorktreeId ? { ...record, worktreeId: newWorktreeId } : record
+        ])
+      )
+    : s.archivedForkableAgentSessionsByPaneKey
 
   return {
     ...(renamed as Partial<AppState>),
@@ -1004,6 +1023,9 @@ function buildWorktreeRenameState(
       : {}),
     ...(sleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
       ? { sleepingAgentSessionsByPaneKey }
+      : {}),
+    ...(archivedForkableAgentSessionsByPaneKey !== s.archivedForkableAgentSessionsByPaneKey
+      ? { archivedForkableAgentSessionsByPaneKey }
       : {}),
     ...(s.activeWorktreeId === oldWorktreeId ? { activeWorktreeId: newWorktreeId } : {}),
     // The active workspace key derives from the worktree id, so keep it in sync when the active worktree is renamed.
@@ -1118,6 +1140,17 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return changed ? out : obj
   }
+  const omitByRecordWorktree = <T extends { worktreeId: string }>(obj: Record<string, T>) => {
+    let changed = false
+    const out = { ...obj }
+    for (const [key, value] of Object.entries(obj)) {
+      if (worktreeIdSet.has(value.worktreeId)) {
+        delete out[key]
+        changed = true
+      }
+    }
+    return changed ? out : obj
+  }
 
   const nextOpenFiles = s.openFiles.some((f) => worktreeIdSet.has(f.worktreeId))
     ? s.openFiles.filter((f) => !worktreeIdSet.has(f.worktreeId))
@@ -1170,6 +1203,10 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     activeTabIdByWorktree: omitByWorktree(s.activeTabIdByWorktree),
     tabBarOrderByWorktree: omitByWorktree(s.tabBarOrderByWorktree),
     pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
+    sleepingAgentSessionsByPaneKey: omitByRecordWorktree(s.sleepingAgentSessionsByPaneKey ?? {}),
+    archivedForkableAgentSessionsByPaneKey: omitByRecordWorktree(
+      s.archivedForkableAgentSessionsByPaneKey ?? {}
+    ),
     rightSidebarTabByWorktree: pruneRightSidebarTabByWorktree(),
     rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree ?? {}),
     // Split-tab / unified tab state
@@ -1584,7 +1621,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedBitbucketPR,
     linkedAzureDevOpsPR,
     linkedGiteaPR,
-    compareBaseRef
+    compareBaseRef,
+    lineage
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -1611,8 +1649,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           // deliberately at the top instead of relying on sortOrder fallback.
           const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
           const activeScope = parseWorkspaceKey(get().activeWorkspaceKey ?? '')
+          const parentWorktree = lineage?.parentWorktreeId
+            ? toRuntimeWorktreeSelector(lineage.parentWorktreeId)
+            : undefined
           const parentWorkspace =
-            activeScope?.type === 'folder'
+            !parentWorktree && lineage?.noParent !== true && activeScope?.type === 'folder'
               ? folderWorkspaceKey(activeScope.folderWorkspaceId)
               : undefined
           const createArgs = {
@@ -1646,7 +1687,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedAzureDevOpsPR !== undefined ? { linkedAzureDevOpsPR } : {}),
             ...(linkedGiteaPR !== undefined ? { linkedGiteaPR } : {}),
             ...(startup ? { startup } : {}),
-            ...(creationId ? { creationId } : {})
+            ...(creationId ? { creationId } : {}),
+            ...(parentWorktree ? { parentWorktree } : {}),
+            ...(lineage?.callerTerminalHandle
+              ? { callerTerminalHandle: lineage.callerTerminalHandle }
+              : {}),
+            ...(lineage?.noParent === true ? { noParent: true } : {})
           }
           const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
           const result =
@@ -1693,7 +1739,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                           ...(startup.env ? { startupEnv: startup.env } : {}),
                           activate: true
                         }
-                      : {})
+                      : {}),
+                    ...(parentWorktree ? { parentWorktree } : {}),
+                    ...(lineage?.callerTerminalHandle
+                      ? { callerTerminalHandle: lineage.callerTerminalHandle }
+                      : {}),
+                    ...(lineage?.noParent === true ? { noParent: true } : {})
                   },
                   { timeoutMs: 10 * 60_000 }
                 )
@@ -1722,6 +1773,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     workspaceLineageByChildKey: {
                       ...s.workspaceLineageByChildKey,
                       [result.workspaceLineage.childWorkspaceKey]: result.workspaceLineage
+                    }
+                  }
+                : {}),
+              ...(result.lineage
+                ? {
+                    worktreeLineageById: {
+                      ...s.worktreeLineageById,
+                      [result.lineage.worktreeId]: result.lineage
                     }
                   }
                 : {}),

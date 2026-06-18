@@ -4,17 +4,23 @@ import type { AppState } from '../types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   AGENT_STATE_HISTORY_MAX,
+  normalizePromptInteractionHistory,
+  normalizePromptInteractionKey,
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext,
+  type AgentStatusPromptInteraction,
   type AgentType,
   type MigrationUnsupportedPtyEntry,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
 import {
+  getAgentForkArgv,
   getAgentResumeArgv,
+  isForkableTuiAgent,
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
+  type ArchivedForkableAgentSessionRecord,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import {
@@ -22,6 +28,7 @@ import {
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import type { TerminalTab } from '../../../../shared/types'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
@@ -60,9 +67,12 @@ export type AgentStatusSlice = {
    *  agent-status hover so the two surfaces display identical rows. */
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
 
-  /** Durable agent sessions captured when a workspace sleeps. These are not
-   *  live status rows; they power the one-click CLI resume action on wake. */
+  /** Durable agent sessions captured when a workspace sleeps or the app quits.
+   *  These are not live status rows; they power resume and fork affordances. */
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
+  /** Fork-only provider sessions for completed retained rows the user dismissed.
+   *  These are not rendered as activity rows and are never resumed. */
+  archivedForkableAgentSessionsByPaneKey: Record<string, ArchivedForkableAgentSessionRecord>
 
   /** Pane keys explicitly torn down (pane close, tab close, PTY exit, manual
    *  dismissal) and therefore forbidden from being re-retained on their next
@@ -76,7 +86,11 @@ export type AgentStatusSlice = {
     terminalTitle?: string,
     timing?: { updatedAt?: number; stateStartedAt?: number },
     routing?: { tabId?: string; worktreeId?: string; terminalHandle?: string },
-    metadata?: { providerSession?: AgentProviderSessionMetadata }
+    metadata?: {
+      providerSession?: AgentProviderSessionMetadata
+      promptInteractionKey?: string
+      promptInteractions?: AgentStatusPromptInteraction[]
+    }
   ) => void
 
   setRuntimeAgentOrchestrationByPaneKey: (
@@ -193,6 +207,7 @@ function sleepingRecordFromEntry(args: {
   tab?: TerminalTab
   capturedAt: number
   origin?: SleepingAgentSessionRecord['origin']
+  resumeAvailable?: boolean
 }): SleepingAgentSessionRecord | null {
   const agent = args.entry.agentType
   if (!isResumableTuiAgent(agent) || !args.entry.providerSession) {
@@ -218,8 +233,79 @@ function sleepingRecordFromEntry(args: {
     ...(args.entry.lastAssistantMessage
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
+    ...(args.entry.promptInteractions ? { promptInteractions: args.entry.promptInteractions } : {}),
+    ...(args.resumeAvailable === false ? { resumeAvailable: false } : {}),
     ...(args.origin ? { origin: args.origin } : {})
   }
+}
+
+function canForkProviderSession(entry: AgentStatusEntry): boolean {
+  const agent = entry.agentType
+  const providerSession = entry.providerSession
+  if (!isTuiAgent(agent) || !providerSession) {
+    return false
+  }
+  if (isForkableTuiAgent(agent) && getAgentForkArgv(agent, providerSession)) {
+    return true
+  }
+  return Boolean(normalizePromptInteractionHistory(entry.promptInteractions))
+}
+
+function archivedForkableRecordFromEntry(args: {
+  entry: AgentStatusEntry
+  worktreeId: string
+  tab?: TerminalTab
+  archivedAt: number
+  archiveReason: ArchivedForkableAgentSessionRecord['archiveReason']
+}): ArchivedForkableAgentSessionRecord | null {
+  const agent = args.entry.agentType
+  const providerSession = args.entry.providerSession
+  if (
+    args.entry.state !== 'done' ||
+    !isTuiAgent(agent) ||
+    !providerSession ||
+    !canForkProviderSession(args.entry)
+  ) {
+    return null
+  }
+  const tabId = args.entry.tabId ?? args.tab?.id
+  return {
+    paneKey: args.entry.paneKey,
+    ...(tabId ? { tabId } : {}),
+    worktreeId: args.worktreeId,
+    agent,
+    providerSession,
+    prompt: args.entry.prompt,
+    state: args.entry.state,
+    archivedAt: args.archivedAt,
+    updatedAt: args.entry.updatedAt,
+    ...((args.entry.terminalTitle ?? args.tab?.title)
+      ? { terminalTitle: (args.entry.terminalTitle ?? args.tab?.title)! }
+      : {}),
+    ...(args.entry.lastAssistantMessage
+      ? { lastAssistantMessage: args.entry.lastAssistantMessage }
+      : {}),
+    ...(args.entry.promptInteractions ? { promptInteractions: args.entry.promptInteractions } : {}),
+    archiveReason: args.archiveReason
+  }
+}
+
+function archivedForkableRecordFromRetained(
+  retained: RetainedAgentEntry,
+  archivedAt: number
+): ArchivedForkableAgentSessionRecord | null {
+  const agent = retained.entry.agentType
+  const providerSession = retained.entry.providerSession
+  if (!isTuiAgent(agent) || !providerSession || !canForkProviderSession(retained.entry)) {
+    return null
+  }
+  return archivedForkableRecordFromEntry({
+    entry: retained.entry,
+    worktreeId: retained.worktreeId,
+    tab: retained.tab,
+    archivedAt,
+    archiveReason: 'retained-dismissed'
+  })
 }
 
 export function collectSleepingAgentSessionRecordsForWorktree(
@@ -380,6 +466,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     agentStatusEpoch: 0,
     retainedAgentsByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
+    archivedForkableAgentSessionsByPaneKey: {},
     retentionSuppressedPaneKeys: {},
 
     setRuntimeAgentOrchestrationByPaneKey: (entries) => {
@@ -477,6 +564,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
               // recent within-state ping (tool/prompt updates refresh
               // updatedAt but not stateStartedAt).
               startedAt: existing.stateStartedAt,
+              ...(existing.promptInteractionKey
+                ? { promptInteractionKey: existing.promptInteractionKey }
+                : {}),
               // Why: preserve the interrupt flag on the historical `done` entry
               // so activity-block views can render past cancellations as such.
               interrupted: existing.interrupted
@@ -539,6 +629,24 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const providerSession =
           metadata?.providerSession ??
           (existing?.agentType === identity.agentType ? existing.providerSession : undefined)
+        const incomingPromptInteractionKey = normalizePromptInteractionKey(
+          metadata?.promptInteractionKey
+        )
+        // Why: a structured turn id identifies a specific prompt interaction.
+        // Preserve it across same-turn pings, but drop it when an unkeyed event
+        // changes the prompt so future fork-point work never uses a stale id.
+        const promptChanged = existing !== undefined && existing.prompt !== payload.prompt
+        const promptInteractionKey =
+          incomingPromptInteractionKey ??
+          (existing?.agentType === identity.agentType && !promptChanged
+            ? existing.promptInteractionKey
+            : undefined)
+        const incomingPromptInteractions = normalizePromptInteractionHistory(
+          metadata?.promptInteractions
+        )
+        const promptInteractions =
+          incomingPromptInteractions ??
+          (existing?.agentType === identity.agentType ? existing.promptInteractions : undefined)
         const entry: AgentStatusEntry = {
           state: payload.state,
           prompt: payload.prompt,
@@ -558,6 +666,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           toolName: payload.toolName,
           toolInput: payload.toolInput,
           lastAssistantMessage: payload.lastAssistantMessage,
+          ...(promptInteractionKey ? { promptInteractionKey } : {}),
+          ...(promptInteractions ? { promptInteractions } : {}),
           // Why: reused panes may start non-orchestrated work after runtime
           // metadata expires. Only final done rows keep the previous lineage
           // fallback so completed children stay grouped.
@@ -607,6 +717,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry.toolName !== existing.toolName ||
             entry.toolInput !== existing.toolInput ||
             entry.lastAssistantMessage !== existing.lastAssistantMessage ||
+            entry.promptInteractionKey !== existing.promptInteractionKey ||
+            entry.promptInteractions !== existing.promptInteractions ||
             entry.orchestration !== existing.orchestration ||
             entry.providerSession !== existing.providerSession ||
             entry.interrupted !== existing.interrupted)
@@ -1123,23 +1235,54 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     },
 
     captureAllSleepingAgentSessions: () => {
-      // Why: the quit flush must persist provider session ids for every live
-      // agent pane — otherwise agents whose daemon PTYs die while the app is
-      // closed have nothing to `--resume` from (#5232). Only live entries are
-      // captured: retained rows belong to panes the user already closed, and
-      // `done` sessions have nothing to resume.
+      // Why: quit flush persists live provider sessions for resume and
+      // completed fork-capable sessions for native fork. Completed sessions are
+      // explicitly non-resumable so cold restore does not reopen finished work.
       set((s) => {
         const capturedAt = Date.now()
         const next: Record<string, SleepingAgentSessionRecord> = {
           ...s.sleepingAgentSessionsByPaneKey
         }
+        const nextArchived: Record<string, ArchivedForkableAgentSessionRecord> = {
+          ...s.archivedForkableAgentSessionsByPaneKey
+        }
         let changed = false
-        for (const entry of Object.values(s.agentStatusByPaneKey)) {
-          if (entry.state === 'done') {
+        let archivedChanged = false
+        for (const retained of Object.values(s.retainedAgentsByPaneKey)) {
+          if (retained.entry.state !== 'done' || !canForkProviderSession(retained.entry)) {
             continue
           }
+          const archived = archivedForkableRecordFromEntry({
+            entry: retained.entry,
+            worktreeId: retained.worktreeId,
+            tab: retained.tab,
+            archivedAt: capturedAt,
+            archiveReason: 'quit'
+          })
+          if (archived && nextArchived[archived.paneKey] !== archived) {
+            nextArchived[archived.paneKey] = archived
+            archivedChanged = true
+          }
+        }
+        for (const entry of Object.values(s.agentStatusByPaneKey)) {
+          const resumeAvailable = entry.state !== 'done'
           const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)
           if (!worktreeId) {
+            continue
+          }
+          if (!resumeAvailable) {
+            if (canForkProviderSession(entry)) {
+              const archived = archivedForkableRecordFromEntry({
+                entry,
+                worktreeId,
+                archivedAt: capturedAt,
+                archiveReason: 'quit'
+              })
+              if (archived && nextArchived[archived.paneKey] !== archived) {
+                nextArchived[archived.paneKey] = archived
+                archivedChanged = true
+              }
+            }
             continue
           }
           const record = sleepingRecordFromEntry({
@@ -1147,14 +1290,21 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             entry,
             worktreeId,
             capturedAt,
-            origin: 'quit'
+            origin: 'quit',
+            resumeAvailable
           })
           if (record && next[record.paneKey] !== record) {
             next[record.paneKey] = record
             changed = true
           }
         }
-        return changed ? { sleepingAgentSessionsByPaneKey: next } : s
+        if (!changed && !archivedChanged) {
+          return s
+        }
+        return {
+          ...(changed ? { sleepingAgentSessionsByPaneKey: next } : {}),
+          ...(archivedChanged ? { archivedForkableAgentSessionsByPaneKey: nextArchived } : {})
+        }
       })
     },
 
@@ -1258,11 +1408,21 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       // directly. Bumping epochs would force sidebar re-sorts and selector
       // recomputations for a change that cannot affect either result.
       set((s) => {
-        if (!(paneKey in s.retainedAgentsByPaneKey)) {
+        const retained = s.retainedAgentsByPaneKey[paneKey]
+        if (!retained) {
           return s
         }
         const next = { ...s.retainedAgentsByPaneKey }
         delete next[paneKey]
+        const archived = archivedForkableRecordFromRetained(retained, Date.now())
+        const archivePatch = archived
+          ? {
+              archivedForkableAgentSessionsByPaneKey: {
+                ...s.archivedForkableAgentSessionsByPaneKey,
+                [paneKey]: archived
+              }
+            }
+          : {}
         // Why: mirror dropAgentStatus's hasLive-gated suppressor. If the same
         // paneKey has BOTH a retained entry AND a concurrent live entry, simply
         // removing the retained row leaves the live entry free to vanish
@@ -1278,10 +1438,11 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // would leak indefinitely (same rationale as dropAgentStatus).
         const hasLive = paneKey in s.agentStatusByPaneKey
         if (!hasLive || paneKey in s.retentionSuppressedPaneKeys) {
-          return { retainedAgentsByPaneKey: next }
+          return { retainedAgentsByPaneKey: next, ...archivePatch }
         }
         return {
           retainedAgentsByPaneKey: next,
+          ...archivePatch,
           retentionSuppressedPaneKeys: {
             ...s.retentionSuppressedPaneKeys,
             [paneKey]: true
@@ -1301,6 +1462,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       set((s) => {
         let changed = false
         const next: Record<string, RetainedAgentEntry> = {}
+        const archivedAt = Date.now()
+        let nextArchived = s.archivedForkableAgentSessionsByPaneKey
         // Why: mirror dismissRetainedAgent's hasLive-gated suppressor logic.
         // When a dismissed paneKey ALSO has a concurrent live entry in
         // agentStatusByPaneKey, removing the retained row alone lets the next
@@ -1317,6 +1480,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           if (ra.worktreeId === worktreeId) {
             changed = true
             dismissedPaneKeys.push(key)
+            const archived = archivedForkableRecordFromRetained(ra, archivedAt)
+            if (archived) {
+              if (nextArchived === s.archivedForkableAgentSessionsByPaneKey) {
+                nextArchived = { ...s.archivedForkableAgentSessionsByPaneKey }
+              }
+              nextArchived[key] = archived
+            }
             if (key in s.agentStatusByPaneKey && !(key in s.retentionSuppressedPaneKeys)) {
               toSuppress.push(key)
             }
@@ -1327,8 +1497,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         if (!changed) {
           return s
         }
+        const archiveChanged = nextArchived !== s.archivedForkableAgentSessionsByPaneKey
+        const archivePatch = archiveChanged
+          ? { archivedForkableAgentSessionsByPaneKey: nextArchived }
+          : {}
         if (toSuppress.length === 0) {
-          return { retainedAgentsByPaneKey: next }
+          return { retainedAgentsByPaneKey: next, ...archivePatch }
         }
         const nextSuppressed = { ...s.retentionSuppressedPaneKeys }
         for (const key of toSuppress) {
@@ -1336,6 +1510,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         }
         return {
           retainedAgentsByPaneKey: next,
+          ...archivePatch,
           retentionSuppressedPaneKeys: nextSuppressed
         }
       })

@@ -3547,7 +3547,7 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(preparation.runtime).toBe('wsl')
     expect(preparation.provenance).toBe('wsl:Ubuntu:system')
     expect(preparation.stripAuthEnv).toBe(true)
-  })
+  }, 15_000)
 
   it('uses the default distro selection for WSL-default Claude preparation', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')

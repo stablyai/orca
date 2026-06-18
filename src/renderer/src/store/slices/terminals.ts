@@ -2299,6 +2299,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           validWorktreeIds.has(record.worktreeId)
         )
       )
+      const archivedForkableAgentSessionsByPaneKey = Object.fromEntries(
+        Object.entries(session.archivedForkableAgentSessionsByPaneKey ?? {}).filter(([, record]) =>
+          validWorktreeIds.has(record.worktreeId)
+        )
+      )
       const activeWorktreeId =
         session.activeWorktreeId && validWorktreeIds.has(session.activeWorktreeId)
           ? session.activeWorktreeId
@@ -2476,6 +2481,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         defaultTerminalTabsAppliedByWorktreeId:
           session.defaultTerminalTabsAppliedByWorktreeId ?? {},
         sleepingAgentSessionsByPaneKey,
+        archivedForkableAgentSessionsByPaneKey,
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,

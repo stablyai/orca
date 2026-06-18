@@ -1,5 +1,5 @@
 import type { AgentHookSource } from './agent-hook-relay'
-import type { AgentStatusState } from './agent-status-types'
+import type { AgentStatusPromptInteraction, AgentStatusState } from './agent-status-types'
 import type { TuiAgent } from './types'
 
 export const RESUMABLE_TUI_AGENTS = [
@@ -14,7 +14,16 @@ export const RESUMABLE_TUI_AGENTS = [
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
 
-export type AgentProviderSessionKey = 'session_id' | 'conversation_id'
+export const FORKABLE_TUI_AGENTS = [
+  'claude',
+  'codex',
+  'droid',
+  'pi'
+] as const satisfies readonly TuiAgent[]
+
+export type ForkableTuiAgent = (typeof FORKABLE_TUI_AGENTS)[number]
+
+export type AgentProviderSessionKey = 'session_id' | 'conversation_id' | 'session_path'
 
 export type AgentProviderSessionMetadata = {
   key: AgentProviderSessionKey
@@ -33,7 +42,10 @@ export type SleepingAgentSessionRecord = {
   updatedAt: number
   terminalTitle?: string
   lastAssistantMessage?: string
+  promptInteractions?: AgentStatusPromptInteraction[]
   connectionId?: string | null
+  /** Absent means true for records persisted before this capability existed. */
+  resumeAvailable?: boolean
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
    *  Quit/live records describe panes that still exist in the restored session,
@@ -42,8 +54,27 @@ export type SleepingAgentSessionRecord = {
   origin?: 'worktree-sleep' | 'quit' | 'live'
 }
 
+export type ArchivedForkableAgentSessionRecord = {
+  paneKey: string
+  tabId?: string
+  worktreeId: string
+  agent: TuiAgent
+  providerSession: AgentProviderSessionMetadata
+  prompt: string
+  state: 'done'
+  archivedAt: number
+  updatedAt: number
+  terminalTitle?: string
+  lastAssistantMessage?: string
+  promptInteractions?: AgentStatusPromptInteraction[]
+  archiveReason: 'retained-dismissed' | 'quit'
+}
+
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
-const PROVIDER_SESSION_ID_MAX_LENGTH = 512
+const FORKABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(FORKABLE_TUI_AGENTS)
+// Why: Pi native fork metadata is a session file path, which can be much
+// longer than provider-owned UUID-like ids on remote hosts.
+export const PROVIDER_SESSION_VALUE_MAX_LENGTH = 4096
 
 export function hasUnsafeProviderSessionIdChars(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
@@ -62,7 +93,7 @@ function normalizeSessionId(value: unknown): string | null {
   const trimmed = value.trim()
   if (
     trimmed.length === 0 ||
-    trimmed.length > PROVIDER_SESSION_ID_MAX_LENGTH ||
+    trimmed.length > PROVIDER_SESSION_VALUE_MAX_LENGTH ||
     trimmed.startsWith('-') ||
     hasUnsafeProviderSessionIdChars(trimmed)
   ) {
@@ -85,13 +116,17 @@ export function isResumableTuiAgent(value: unknown): value is ResumableTuiAgent 
   return typeof value === 'string' && RESUMABLE_TUI_AGENT_SET.has(value)
 }
 
+export function isForkableTuiAgent(value: unknown): value is ForkableTuiAgent {
+  return typeof value === 'string' && FORKABLE_TUI_AGENT_SET.has(value)
+}
+
 export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessionMetadata | null {
   if (typeof raw !== 'object' || raw === null) {
     return null
   }
   const record = raw as Record<string, unknown>
   const key = record.key
-  if (key !== 'session_id' && key !== 'conversation_id') {
+  if (key !== 'session_id' && key !== 'conversation_id' && key !== 'session_path') {
     return null
   }
   const id = normalizeSessionId(record.id)
@@ -122,9 +157,17 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['sessionId', 'session_id'])
       return id ? { key: 'session_id', id } : null
     }
+    case 'pi': {
+      const id = readSessionId(payload, [
+        'session_path',
+        'sessionPath',
+        'session_file',
+        'sessionFile'
+      ])
+      return id ? { key: 'session_path', id } : null
+    }
     case 'amp':
     case 'cursor':
-    case 'pi':
     case 'omp':
     case 'command-code':
     case 'copilot':
@@ -153,5 +196,22 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['droid', '--resume', id] : null
     case 'grok':
       return providerSession.key === 'session_id' ? ['grok', '--resume', id] : null
+  }
+}
+
+export function getAgentForkArgv(
+  agent: ForkableTuiAgent,
+  providerSession: AgentProviderSessionMetadata
+): string[] | null {
+  const id = providerSession.id
+  switch (agent) {
+    case 'claude':
+      return providerSession.key === 'session_id' ? ['claude', '--fork-session', id] : null
+    case 'codex':
+      return providerSession.key === 'session_id' ? ['codex', 'fork', id] : null
+    case 'droid':
+      return providerSession.key === 'session_id' ? ['droid', '--fork', id] : null
+    case 'pi':
+      return providerSession.key === 'session_path' ? ['pi', '--fork', id] : null
   }
 }

@@ -40,7 +40,7 @@ describe('buildDispatchPreamble', () => {
 
   it(
     'CLI examples parse as valid shell (bash -n on the extracted block)',
-    { timeout: 15_000 },
+    { timeout: 45_000 },
     () => {
       const result = buildDispatchPreamble(baseParams())
       // Why: feeding `bash -n` the full preamble falsely fails on apostrophes

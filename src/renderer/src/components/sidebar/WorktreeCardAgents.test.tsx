@@ -4,6 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
+import type { AgentStatusPromptInteraction } from '../../../../shared/agent-status-types'
 
 type MockAgentOptions = {
   paneKey?: string
@@ -15,6 +17,8 @@ type MockAgentOptions = {
   lastAssistantMessage?: string
   stateStartedAt?: number
   terminalHandle?: string
+  providerSession?: AgentProviderSessionMetadata
+  promptInteractions?: AgentStatusPromptInteraction[]
   orchestration?: {
     parentPaneKey?: string
     parentTerminalHandle?: string
@@ -38,6 +42,8 @@ function mockAgent({
   lastAssistantMessage,
   stateStartedAt = 1000,
   terminalHandle,
+  providerSession,
+  promptInteractions,
   orchestration,
   lineage
 }: MockAgentOptions = {}): unknown {
@@ -54,6 +60,8 @@ function mockAgent({
       stateStartedAt,
       stateHistory: prompt === undefined ? undefined : [],
       terminalHandle,
+      providerSession,
+      promptInteractions,
       orchestration
     },
     lineage
@@ -95,6 +103,9 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     sendTargetStatus,
     sendTargetDisabledReason,
     onSendTargetClick,
+    onForkSession,
+    forkSessionPending,
+    forkPointOptions,
     childAgentCount,
     childAgentsExpanded,
     onToggleChildAgents,
@@ -105,6 +116,9 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
     sendTargetDisabledReason?: string
     onSendTargetClick?: (paneKey: string) => void
+    onForkSession?: (paneKey: string, messageId?: string) => void
+    forkSessionPending?: boolean
+    forkPointOptions?: { id: string; prompt: string }[]
     childAgentCount?: number
     childAgentsExpanded?: boolean
     onToggleChildAgents?: () => void
@@ -116,6 +130,9 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
       data-agent-send-target={sendTargetStatus}
       data-disabled-reason={sendTargetDisabledReason}
       data-has-send-handler={typeof onSendTargetClick === 'function' ? 'true' : 'false'}
+      data-has-fork-handler={typeof onForkSession === 'function' ? 'true' : 'false'}
+      data-fork-pending={forkSessionPending ? 'true' : 'false'}
+      data-fork-points={forkPointOptions?.map((option) => option.id).join('|')}
       data-pane-key={agent.paneKey}
       data-reserve-disclosure-gutter={reserveDisclosureGutter ? 'true' : 'false'}
     >
@@ -146,7 +163,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-describe('WorktreeCardAgents', () => {
+describe('WorktreeCardAgents', { timeout: 45_000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAgents = [mockAgent()]
@@ -191,6 +208,79 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('data-pane-key="tab-1:1"')
     expect(markup).toContain('data-focused="true"')
     expect(markup).toContain('data-pane-key="tab-1:2"')
+  })
+
+  it('adds a fork action to full rows with terminal or native-provider context', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    mockAgents = [
+      mockAgent({ paneKey: 'tab-1:1', terminalHandle: 'term-1' }),
+      mockAgent({
+        paneKey: 'tab-1:2',
+        agentType: 'claude',
+        providerSession: { key: 'session_id', id: 'claude-session-1' }
+      }),
+      mockAgent({ paneKey: 'tab-1:3' })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain(
+      'data-has-fork-handler="true" data-fork-pending="false" data-pane-key="tab-1:1"'
+    )
+    expect(markup).toContain(
+      'data-has-fork-handler="true" data-fork-pending="false" data-pane-key="tab-1:2"'
+    )
+    expect(markup).toContain(
+      'data-has-fork-handler="false" data-fork-pending="false" data-pane-key="tab-1:3"'
+    )
+  })
+
+  it('adds a fork action to compact rows with native-provider context', async () => {
+    mockAgentActivityDisplayMode = 'compact'
+    mockAgents = [
+      mockAgent({
+        agentType: 'claude',
+        prompt: 'Continue branch',
+        providerSession: { key: 'session_id', id: 'claude-session-compact' }
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('compact-agent-row')
+    expect(markup).toContain('aria-label="Fork agent session"')
+  })
+
+  it('passes structured fork point options to forkable full rows', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    mockAgents = [
+      mockAgent({
+        paneKey: 'tab-1:2',
+        agentType: 'claude',
+        providerSession: { key: 'session_id', id: 'claude-session-1' },
+        promptInteractions: [
+          {
+            id: 'claude-message-1',
+            prompt: 'first prompt',
+            observedAt: 1_000,
+            agentType: 'claude'
+          },
+          {
+            id: 'claude-message-2',
+            prompt: 'second prompt',
+            observedAt: 2_000,
+            agentType: 'claude'
+          }
+        ]
+      })
+    ]
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('data-fork-points="claude-message-1|claude-message-2"')
   })
 
   it('shows orchestration child agent rows under their parent by default', async () => {

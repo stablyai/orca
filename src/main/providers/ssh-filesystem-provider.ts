@@ -263,8 +263,16 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     }
   }
 
-  async copy(source: string, destination: string): Promise<void> {
-    await this.mux.request('fs.copy', { source, destination })
+  async copy(
+    source: string,
+    destination: string,
+    options?: { ignorePatterns?: readonly string[] }
+  ): Promise<void> {
+    await this.mux.request('fs.copy', {
+      source,
+      destination,
+      ...(options?.ignorePatterns?.length ? { ignorePatterns: [...options.ignorePatterns] } : {})
+    })
   }
 
   async realpath(filePath: string): Promise<string> {

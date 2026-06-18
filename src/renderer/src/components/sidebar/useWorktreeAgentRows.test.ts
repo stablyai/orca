@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
@@ -69,6 +70,27 @@ function makeRetained(
   }
 }
 
+function makeSleeping(
+  paneKey: string,
+  worktreeId: string,
+  updatedAt: number,
+  overrides?: Partial<SleepingAgentSessionRecord>
+): SleepingAgentSessionRecord {
+  return {
+    paneKey,
+    tabId: paneKey.slice(0, paneKey.indexOf(':')),
+    worktreeId,
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: 'claude-sleeping-session' },
+    prompt: 'sleeping prompt',
+    state: 'done',
+    capturedAt: updatedAt + 100,
+    updatedAt,
+    terminalTitle: 'Claude',
+    ...overrides
+  }
+}
+
 function makeSinglePaneLayout(leafId: string): TerminalLayoutSnapshot {
   return {
     root: { type: 'leaf', leafId },
@@ -104,6 +126,41 @@ describe('buildWorktreeAgentRows', () => {
 
     expect(rows.map((row) => row.paneKey)).toEqual([ORPHAN_PANE_KEY])
     expect(rows[0].state).toBe('done')
+  })
+
+  it('includes sleeping provider-session rows as idle forkable snapshots', () => {
+    const sleeping = makeSleeping(ORPHAN_PANE_KEY, 'wt-1', 1000)
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [],
+      retained: [],
+      sleeping: [sleeping],
+      now: 2000
+    })
+
+    expect(rows.map((row) => row.paneKey)).toEqual([ORPHAN_PANE_KEY])
+    expect(rows[0].state).toBe('idle')
+    expect(rows[0].agentType).toBe('claude')
+    expect(rows[0].entry.providerSession).toEqual({
+      key: 'session_id',
+      id: 'claude-sleeping-session'
+    })
+    expect(rows[0].tab.worktreeId).toBe('wt-1')
+  })
+
+  it('prefers live rows over sleeping snapshots with the same paneKey', () => {
+    const liveEntry = makeEntry(PANE_KEY_1, 2000, { state: 'working' })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [liveEntry],
+      retained: [],
+      sleeping: [makeSleeping(PANE_KEY_1, 'wt-1', 1000)],
+      now: 3000
+    })
+
+    expect(rows).toHaveLength(1)
+    expect(rows[0].entry).toBe(liveEntry)
+    expect(rows[0].state).toBe('working')
   })
 
   it('resolves retained unknown Claude rows from their terminal title', () => {

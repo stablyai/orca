@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 const COMPONENT_ROOT = __dirname
 
 function componentSource(relativePath: string): string {
-  return readFileSync(join(COMPONENT_ROOT, relativePath), 'utf8')
+  return readFileSync(join(COMPONENT_ROOT, relativePath), 'utf8').replace(/\r\n/g, '\n')
 }
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {

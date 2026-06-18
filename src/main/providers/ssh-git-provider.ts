@@ -3,7 +3,7 @@
    indirection — every method is a 1:1 forwarder to a relay RPC plus a
    small amount of param plumbing. */
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type { IGitProvider } from './types'
+import type { GitForkDiffResult, IGitProvider } from './types'
 import type {
   GitStatusResult,
   GitDiffResult,
@@ -479,6 +479,13 @@ export class SshGitProvider implements IGitProvider {
       baseRef,
       ...options
     })) as GitDiffResult[]
+  }
+
+  async getForkDiff(worktreePath: string, baseRef: string): Promise<GitForkDiffResult> {
+    return (await this.mux.request('git.forkDiff', {
+      worktreePath,
+      baseRef
+    })) as GitForkDiffResult
   }
 
   async getCommitDiff(
