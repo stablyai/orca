@@ -5,14 +5,58 @@ import {
   statSync,
   lstatSync,
   readlinkSync,
+  readFileSync,
   rmSync,
   symlinkSync,
-  existsSync
+  existsSync,
+  chmodSync
 } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createWorktreeSymlinks, removeWorktreeSymlinks } from './worktree-symlinks'
+import {
+  createWorktreeLinkedPaths,
+  createWorktreeSymlinks,
+  removeWorktreeLinkedPaths,
+  removeWorktreeSymlinks
+} from './worktree-symlinks'
+
+type WorktreeLinkedPathOptionsForTest = NonNullable<Parameters<typeof createWorktreeLinkedPaths>[3]>
+type ApfsCloneDepsForTest = NonNullable<WorktreeLinkedPathOptionsForTest['apfsCloneDeps']>
+const posixIt = process.platform === 'win32' ? it.skip : it
+
+function createApfsCloneDeps(options: {
+  uuid?: string
+  onCp?: (args: readonly string[]) => void
+  onDiskutil?: () => void
+}): ApfsCloneDepsForTest {
+  const execFileAsync = vi.fn<ApfsCloneDepsForTest['execFileAsync']>(async (file, args) => {
+    if (file === '/bin/df') {
+      return {
+        stdout: `Filesystem 512-blocks Used Available Capacity Mounted on
+/dev/disk3s1 100 50 50 50% /
+`,
+        stderr: ''
+      }
+    }
+    if (file === '/usr/sbin/diskutil') {
+      options.onDiskutil?.()
+      return {
+        stdout: `<plist><dict><key>FilesystemName</key><string>APFS</string></dict></plist>`,
+        stderr: ''
+      }
+    }
+    if (file === '/bin/cp') {
+      options.onCp?.(args)
+      return { stdout: '', stderr: '' }
+    }
+    throw new Error(`Unexpected execFile command: ${file}`)
+  })
+  return {
+    execFileAsync,
+    randomUUID: () => options.uuid ?? 'test'
+  }
+}
 
 describe('createWorktreeSymlinks', () => {
   let root: string
@@ -160,6 +204,188 @@ describe('createWorktreeSymlinks', () => {
     expect(warn).not.toHaveBeenCalled()
     expect(error).not.toHaveBeenCalled()
   })
+
+  it('uses APFS clone-copy for configured paths on macOS', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
+      writeFileSync(target, 'SECRET=1\n')
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+      platform: 'darwin',
+      cloneWorktreePath
+    })
+
+    expect(cloneWorktreePath).toHaveBeenCalledWith(
+      join(primary, '.env'),
+      join(worktree, '.env'),
+      false
+    )
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
+    expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
+  })
+
+  it('does not overwrite a file target that appears before APFS clone-copy is published', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const target = join(worktree, '.env')
+    const deps = createApfsCloneDeps({
+      uuid: 'file-race',
+      onCp: (args) => {
+        const tempTarget = args.at(-1)
+        if (!tempTarget) {
+          throw new Error('Missing APFS clone temp target')
+        }
+        writeFileSync(tempTarget, 'SECRET=1\n')
+        writeFileSync(target, 'RACE=1\n')
+      }
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+      platform: 'darwin',
+      apfsCloneDeps: deps
+    })
+
+    expect(readFileSync(target, 'utf8')).toBe('RACE=1\n')
+    expect(existsSync(join(worktree, '.orca-apfs-clone-file-race'))).toBe(false)
+    expect(warn).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+  })
+
+  it('does not replace a directory target that appears before APFS clone-copy reserves it', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    writeFileSync(join(primary, 'node_modules', 'primary-marker'), 'PRIMARY\n')
+    const target = join(worktree, 'node_modules')
+    let createdRacedTarget = false
+    const deps = createApfsCloneDeps({
+      onDiskutil: () => {
+        if (!createdRacedTarget) {
+          createdRacedTarget = true
+          mkdirSync(target)
+          writeFileSync(join(target, 'user-marker'), 'USER\n')
+        }
+      },
+      onCp: () => {
+        throw new Error('APFS clone-copy should not run after the target appears')
+      }
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['node_modules'], {
+      platform: 'darwin',
+      apfsCloneDeps: deps
+    })
+
+    expect(readFileSync(join(target, 'user-marker'), 'utf8')).toBe('USER\n')
+    expect(existsSync(join(target, 'primary-marker'))).toBe(false)
+    expect(deps.execFileAsync).not.toHaveBeenCalledWith('/bin/cp', expect.anything())
+    expect(warn).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+  })
+
+  it('does not overwrite or remove a nested target after APFS clone-copy hits a conflict', async () => {
+    const source = join(primary, 'node_modules')
+    mkdirSync(source)
+    writeFileSync(join(primary, 'node_modules', 'primary-marker'), 'PRIMARY\n')
+    const target = join(worktree, 'node_modules')
+    let cpArgs: readonly string[] | undefined
+    const deps = createApfsCloneDeps({
+      onCp: (args) => {
+        cpArgs = args
+        writeFileSync(join(target, 'primary-marker'), 'USER\n')
+        throw new Error('clone-copy skipped an existing nested target')
+      }
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['node_modules'], {
+      platform: 'darwin',
+      apfsCloneDeps: deps
+    })
+
+    expect(cpArgs).toEqual(['-n', '-c', '-R', source, worktree])
+    expect(readFileSync(join(target, 'primary-marker'), 'utf8')).toBe('USER\n')
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('[worktree-symlinks] APFS clone-copy unavailable'),
+      expect.any(Error)
+    )
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('[worktree-symlinks] Failed to link "node_modules"'),
+      expect.any(Error)
+    )
+  })
+
+  posixIt('preserves the source directory mode after APFS clone-copy reserves it', async () => {
+    const source = join(primary, 'node_modules')
+    mkdirSync(source)
+    chmodSync(source, 0o700)
+    const target = join(worktree, 'node_modules')
+    const deps = createApfsCloneDeps({
+      onCp: () => {
+        writeFileSync(join(target, 'marker'), 'CLONED\n')
+      }
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['node_modules'], {
+      platform: 'darwin',
+      apfsCloneDeps: deps
+    })
+
+    expect(statSync(target).mode & 0o777).toBe(0o700)
+    expect(readFileSync(join(target, 'marker'), 'utf8')).toBe('CLONED\n')
+  })
+
+  it('falls back to symlink when macOS clone-copy is unavailable', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const cloneWorktreePath = vi.fn(async () => {
+      throw new Error('clonefile unsupported')
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+      platform: 'darwin',
+      cloneWorktreePath
+    })
+
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
+    expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('[worktree-symlinks] APFS clone-copy unavailable'),
+      expect.any(Error)
+    )
+  })
+
+  it('does not delete a target that appears while APFS clone-copy is failing', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
+      writeFileSync(target, 'RACE=1\n')
+      throw new Error('clonefile failed after target appeared')
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+      platform: 'darwin',
+      cloneWorktreePath
+    })
+
+    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('RACE=1\n')
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('[worktree-symlinks] Failed to link ".env"'),
+      expect.any(Error)
+    )
+  })
+
+  it('keeps symlink sources as symlinks instead of APFS clone-copying their targets', async () => {
+    writeFileSync(join(primary, '.env.real'), 'SECRET=1\n')
+    symlinkSync(join(primary, '.env.real'), join(primary, '.env'), 'file')
+    const cloneWorktreePath = vi.fn(async () => {
+      throw new Error('clone should not be called for symlink sources')
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+      platform: 'darwin',
+      cloneWorktreePath
+    })
+
+    expect(cloneWorktreePath).not.toHaveBeenCalled()
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
+    expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
+  })
 })
 
 describe('removeWorktreeSymlinks', () => {
@@ -206,6 +432,14 @@ describe('removeWorktreeSymlinks', () => {
 
     expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
     expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
+  })
+
+  it('leaves APFS clone-copied regular files for git removal to judge', async () => {
+    writeFileSync(join(worktree, '.env'), 'CLONED=1\n')
+
+    await removeWorktreeLinkedPaths(worktree, ['.env'])
+
+    expect(existsSync(join(worktree, '.env'))).toBe(true)
   })
 
   it('ignores missing entries', async () => {

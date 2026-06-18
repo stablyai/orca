@@ -42,6 +42,7 @@ import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
 import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
 import { AgentSessionHistoryIcon } from './agent-session-history-icon'
+import { resolveRightSidebarEffectiveTab } from './right-sidebar-effective-tab'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
@@ -56,6 +57,7 @@ function RightSidebarInner(): React.JSX.Element {
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const rightSidebarRouteRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
@@ -142,6 +144,7 @@ function RightSidebarInner(): React.JSX.Element {
   )
 
   const rememberedFolderTabByWorkspaceKeyRef = useRef<Record<string, ActiveRightSidebarTab>>({})
+  const lastRightSidebarRouteRequestIdRef = useRef(rightSidebarRouteRequestId)
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null
 
   // If the active tab is hidden (e.g. switched from a folder workspace to a git
@@ -152,14 +155,21 @@ function RightSidebarInner(): React.JSX.Element {
   const rememberedFolderTab = activeFolderWorkspaceKey
     ? rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey]
     : null
-  const visibleNormalizedTab = visibleItems.some((item) => item.id === normalizedActiveTab)
-  const visibleRememberedFolderTab =
-    rememberedFolderTab && visibleItems.some((item) => item.id === rememberedFolderTab)
-      ? rememberedFolderTab
+  const requestedFolderTab =
+    activeFolderWorkspaceKey &&
+    rightSidebarRouteRequestId !== lastRightSidebarRouteRequestIdRef.current
+      ? normalizedActiveTab
       : null
-  const effectiveTab = visibleNormalizedTab
-    ? normalizedActiveTab
-    : (visibleRememberedFolderTab ?? visibleItems[0].id)
+  const effectiveTab = resolveRightSidebarEffectiveTab({
+    normalizedActiveTab,
+    visibleItems,
+    activeFolderWorkspaceKey,
+    rememberedFolderTab: requestedFolderTab ?? rememberedFolderTab
+  })
+
+  useEffect(() => {
+    lastRightSidebarRouteRequestIdRef.current = rightSidebarRouteRequestId
+  }, [rightSidebarRouteRequestId])
 
   useEffect(() => {
     if (!activeFolderWorkspaceKey || !visibleItems.some((item) => item.id === effectiveTab)) {
@@ -167,7 +177,10 @@ function RightSidebarInner(): React.JSX.Element {
     }
     rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = effectiveTab
   }, [activeFolderWorkspaceKey, effectiveTab, visibleItems])
-  const selectActivityTab = (tab: typeof effectiveTab): void => {
+  const selectActivityTab = (tab: ActiveRightSidebarTab): void => {
+    if (activeFolderWorkspaceKey) {
+      rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = tab
+    }
     if (tab === 'explorer') {
       showRightSidebarFiles()
       return

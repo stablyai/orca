@@ -365,6 +365,7 @@ export type EditorSlice = {
   rightSidebarWidth: number
   rightSidebarTab: ActiveRightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
+  rightSidebarRouteRequestId: number
   rightSidebarTabByWorktree: Record<string, ActiveRightSidebarTab>
   rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
   activityBarPosition: ActivityBarPosition
@@ -1522,6 +1523,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   rightSidebarWidth: 280,
   rightSidebarTab: 'explorer',
   rightSidebarExplorerView: 'files',
+  rightSidebarRouteRequestId: 0,
   rightSidebarTabByWorktree: {},
   rightSidebarExplorerViewByWorktree: {},
   activityBarPosition: 'top',
@@ -1529,13 +1531,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
   setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
   setRightSidebarTab: (tab) =>
-    set({
+    set((s) => ({
       rightSidebarTab: tab,
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       ...(tab === 'explorer' ? { rightSidebarExplorerView: 'files' as const } : {})
-    }),
+    })),
   setRightSidebarExplorerView: (view) =>
     set((s) => ({
       rightSidebarExplorerView: view,
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       ...(s.activeWorktreeId
         ? {
             rightSidebarExplorerViewByWorktree: {
@@ -1550,6 +1554,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       rightSidebarOpen: true,
       rightSidebarTab: 'explorer',
       rightSidebarExplorerView: 'files',
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       ...(s.activeWorktreeId
         ? {
             rightSidebarExplorerViewByWorktree: {
@@ -1565,6 +1570,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         rightSidebarOpen: true,
         rightSidebarTab: 'explorer' as const,
         rightSidebarExplorerView: 'search' as const,
+        rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
         ...(s.activeWorktreeId
           ? {
               rightSidebarExplorerViewByWorktree: {
@@ -1654,6 +1660,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       rightSidebarOpen: true,
       rightSidebarTab: 'explorer',
       rightSidebarExplorerView: 'files',
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       rightSidebarExplorerViewByWorktree: {
         ...s.rightSidebarExplorerViewByWorktree,
         [worktreeId]: 'files'

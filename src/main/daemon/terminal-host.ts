@@ -27,6 +27,7 @@ export type CreateOrAttachOptions = {
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
+  shellReadyTimeoutMs?: number
   streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
 }
 
@@ -122,7 +123,10 @@ export class TerminalHost {
       cols: size.cols,
       rows: size.rows,
       subprocess,
-      shellReadySupported: opts.shellReadySupported ?? false
+      shellReadySupported: opts.shellReadySupported ?? false,
+      ...(opts.shellReadyTimeoutMs !== undefined
+        ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
+        : {})
     })
 
     this.sessions.set(opts.sessionId, session)

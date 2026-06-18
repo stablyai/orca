@@ -3,6 +3,7 @@ import { resolve } from 'path'
 
 const ORIGINAL_PLATFORM = process.platform
 
+// Why: WSL git-routing tests need deterministic Windows-only runtime branches.
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
     configurable: true,

@@ -83,7 +83,7 @@ import {
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
 import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
-import { createWorktreeSymlinks } from './worktree-symlinks'
+import { createWorktreeLinkedPaths } from './worktree-symlinks'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
@@ -2288,15 +2288,15 @@ export async function createLocalWorktree(
     ...gitWorktrees.map((worktree) => worktree.path)
   ])
 
-  // Why: create user-configured symlinks from the primary checkout into the
+  // Why: materialize user-configured paths from the primary checkout into the
   // new worktree before any setup script runs, so scripts that reuse shared
-  // state (e.g. `node_modules`, `.env`) see the links already in place.
+  // state (e.g. `node_modules`, `.env`) see those paths already in place.
   // Gated on the experimental flag so disabling the feature globally skips
   // the work even when a repo still has paths configured.
   const symlinkPaths = repo.symlinkPaths ?? []
   if (settings.experimentalWorktreeSymlinks && symlinkPaths.length > 0) {
     await timing.time('create_symlinks', async () => {
-      await createWorktreeSymlinks(repo.path, created.path, symlinkPaths)
+      await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
     })
   }
 

@@ -120,6 +120,24 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarTabByWorktree).toEqual({})
   })
 
+  it('increments the right sidebar route request id for explicit route actions', () => {
+    const store = createEditorStore()
+
+    expect(store.getState().rightSidebarRouteRequestId).toBe(0)
+
+    store.getState().setRightSidebarTab('checks')
+    expect(store.getState().rightSidebarRouteRequestId).toBe(1)
+
+    store.getState().setRightSidebarExplorerView('files')
+    expect(store.getState().rightSidebarRouteRequestId).toBe(2)
+
+    store.getState().showRightSidebarFiles()
+    expect(store.getState().rightSidebarRouteRequestId).toBe(3)
+
+    store.getState().showRightSidebarSearch()
+    expect(store.getState().rightSidebarRouteRequestId).toBe(4)
+  })
+
   it('setRightSidebarTab with no active worktree does not mutate the worktree map', () => {
     const store = createEditorStore()
     const remembered = { 'wt-1': 'checks' as const }
@@ -224,6 +242,7 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarOpen).toBe(true)
     expect(store.getState().rightSidebarTab).toBe('explorer')
     expect(store.getState().rightSidebarExplorerView).toBe('files')
+    expect(store.getState().rightSidebarRouteRequestId).toBe(1)
     expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ 'wt-2': 'files' })
     expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
     expect(store.getState().pendingExplorerReveal).toMatchObject({

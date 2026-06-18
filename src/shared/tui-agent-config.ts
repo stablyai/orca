@@ -315,11 +315,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'devin',
     launchCmd: 'devin',
     expectedProcess: 'devin',
-    // Why: `devin -- <prompt>` auto-submits the prompt (the issue's claim
-    // that it pre-fills without submitting is incorrect per the official
-    // docs at docs.devin.ai/cli/reference/commands). `stdin-after-start`
-    // launches the REPL first, then pastes via bracketed paste so the
-    // user can review before submitting — same as aider, goose, amp, etc.
+    // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli).
+    // `stdin-after-start` starts the REPL with no argv prompt; Orca then sends
+    // `followupPrompt` to the PTY as plain input + Enter after startup (not
+    // bracketed paste). Use `draftPrompt` / agent-paste-draft for review-before-send.
     promptInjectionMode: 'stdin-after-start'
   }
 }

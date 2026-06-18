@@ -3,9 +3,9 @@
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 14
+export const PROTOCOL_VERSION = 15
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
 ] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
@@ -101,6 +101,7 @@ export type CreateOrAttachRequest = {
      *  PTY path resolves the same effective executable as LocalPtyProvider. */
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
+    shellReadyTimeoutMs?: number
   }
 }
 

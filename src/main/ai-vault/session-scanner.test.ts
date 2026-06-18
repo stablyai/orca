@@ -21,6 +21,7 @@ function isolatedScanRoots(root: string) {
     cursorProjectsDir: join(root, 'cursor-projects'),
     opencodeStorageDir: join(root, 'opencode-storage'),
     grokSessionsDir: join(root, 'grok-sessions'),
+    devinTranscriptsDir: join(root, 'devin-transcripts'),
     hermesSessionsDir: join(root, 'hermes-sessions'),
     rovoSessionsDir: join(root, 'rovo-sessions'),
     openclawStateDir: join(root, 'openclaw-state'),
@@ -526,6 +527,26 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
+    await mkdir(roots.devinTranscriptsDir, { recursive: true })
+    await writeFile(
+      join(roots.devinTranscriptsDir, 'devin-session.json'),
+      JSON.stringify({
+        session_id: 'devin-session',
+        working_directory: '/tmp/devin',
+        agent: { model_name: 'swe-1-6-fast' },
+        steps: [
+          {
+            metadata: {
+              created_at: '2026-05-01T10:10:00.000Z',
+              is_user_input: true,
+              metrics: { input_tokens: 1, output_tokens: 2 }
+            },
+            text: 'Devin vault title'
+          }
+        ]
+      })
+    )
+
     await mkdir(roots.droidSessionsDir, { recursive: true })
     await writeFile(
       join(roots.droidSessionsDir, 'droid-session.jsonl'),
@@ -592,6 +613,9 @@ describe('scanAiVaultSessions', () => {
       "cd '/tmp/openclaw' && openclaw --resume 'openclaw-session'"
     )
     expect(commandByAgent.get('pi')).toBe("cd '/tmp/pi' && pi --session 'pi-session'")
+    expect(commandByAgent.get('devin')).toBe(
+      "cd '/tmp/devin' && devin --resume 'devin-session'"
+    )
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
   })
 })

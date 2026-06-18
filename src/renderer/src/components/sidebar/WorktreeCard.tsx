@@ -428,8 +428,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const cardTitleDisplay = getWorktreeCardTitleDisplay({
     storedDisplayName: worktree.displayName,
     branchName: branch,
-    path: worktree.path,
-    repositoryName: repo?.displayName,
     linearIssueTitle: linearIssueDisplay?.title,
     issueTitle: issueDisplay?.title,
     reviewTitle: prDisplay?.title
@@ -1018,7 +1016,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     }) ||
       workspacePorts.length > 0 ||
       showBranchIdentityHover)
-  // Why: the whole card now owns metadata hover; avoid stacking the title's
+  // Why: the parent row owns metadata hover; avoid stacking the title's
   // truncation tooltip on top of the richer details popover.
   const titleWrapper = newCardStyle
     ? hasHoverDetails
@@ -1062,13 +1060,20 @@ const WorktreeCard = React.memo(function WorktreeCard({
       : undefined
   // Why: sidebar rows need a small surface inset, while their content remains
   // aligned with the pre-inset layout and the repo header hierarchy.
-  const cardStyle = flushSurface
-    ? {
-        paddingLeft: getFlushWorktreeCardPaddingLeft(contentIndent)
-      }
+  const cardPaddingLeft = flushSurface
+    ? getFlushWorktreeCardPaddingLeft(contentIndent)
     : contentIndent > 0
-      ? { paddingLeft: `calc(0.125rem + ${contentIndent}px)` }
-      : undefined
+      ? `calc(0.125rem + ${contentIndent}px)`
+      : null
+  const cardStyle = cardPaddingLeft ? { paddingLeft: cardPaddingLeft } : undefined
+  const lineageChildrenStyle = newCardStyle
+    ? {
+        // Why: nested child surfaces should start in the parent's title/chip
+        // column while remaining inside the parent card surface.
+        marginLeft: '0.5rem',
+        width: 'calc(100% - 0.5rem)'
+      }
+    : undefined
 
   const detailsAndPortsContent =
     hasDetails || hasPorts ? (
@@ -1117,55 +1122,24 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const titleRowIndicators = showTitleRowIndicators ? (
     <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">{detailsAndPorts}</div>
   ) : null
+  const hasSecondaryCardContent =
+    hasMetaRow || !!remoteBranchConflict || showInlineAgentList || showLineageChildChip
+  const titleOnlyCard = !hasSecondaryCardContent
 
-  const cardBody = (
+  const parentCardContent = (
     <div
       className={cn(
-        'group relative flex items-start pr-1.5 pt-1.5 pb-2 cursor-pointer transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
-        'gap-0.5 pl-0',
-        flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
-        'rounded-lg',
-        isActiveSurface
-          ? activeSurfaceIsSecondary
-            ? 'border border-sidebar-ring/25 bg-sidebar-accent/45 shadow-none ring-1 ring-sidebar-ring/15'
-            : 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-          : isMultiSelected
-            ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
-            : 'border border-transparent worktree-sidebar-card-hover',
-        isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
-        revealHighlight && [
-          'scroll-to-current-workspace-reveal-highlight',
-          revealHighlightTone === 'ai' && 'scroll-to-current-workspace-reveal-highlight--ai'
-        ],
-        titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
-        isDeleting && 'opacity-50 grayscale cursor-not-allowed',
-        isSshDisconnected && !isDeleting && 'opacity-60'
+        'flex w-full min-w-0 gap-0.5 pl-0',
+        titleOnlyCard ? 'items-center' : 'items-start'
       )}
-      data-worktree-card-surface="true"
-      data-worktree-card-active={isActiveSurface ? activeSurfaceVariant : undefined}
-      onClick={handleClick}
-      onDoubleClick={affiliateListMode ? undefined : handleDoubleClick}
-      draggable={!affiliateListMode && nativeDragEnabled && !isDeleting && !titleRenaming}
-      onDragStart={!affiliateListMode && nativeDragEnabled ? handleDragStart : undefined}
-      onDragEnd={!affiliateListMode && nativeDragEnabled ? handleDragEnd : undefined}
-      aria-busy={isDeleting}
-      style={cardStyle}
+      data-worktree-card-parent-content=""
     >
-      {isDeleting && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
-            <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
-            {translate('auto.components.sidebar.WorktreeCard.691ccfd622', 'Deleting…')}
-          </div>
-        </div>
-      )}
-
       {showCombinedStatusSlot ? (
         <div
           className={cn(
             'flex shrink-0 justify-center',
-            newCardStyle && 'mr-1',
-            compactCards && newCardStyle ? 'items-start pt-px' : 'items-start pt-[2px]',
+            newCardStyle ? 'mr-1 w-5 items-center' : 'items-start pt-[2px]',
+            compactCards && newCardStyle && 'items-center pt-0',
             affiliateListMode && 'px-1'
           )}
           data-worktree-card-status-slot=""
@@ -1190,17 +1164,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
           'flex min-w-0 flex-1 flex-col gap-1.5',
           // Why: inline agent rows intentionally outdent into the card gutter;
           // title/meta truncation is handled by their own inner elements.
-          newCardStyle
-            ? showInlineAgentList
-              ? 'overflow-visible'
-              : 'overflow-hidden'
-            : lineageChildren || showInlineAgentList
-              ? 'overflow-visible'
-              : 'overflow-hidden'
+          showInlineAgentList || (!newCardStyle && lineageChildren)
+            ? 'overflow-visible'
+            : 'overflow-hidden'
         )}
       >
         {/* Header row: Title */}
-        <div className="flex items-center justify-between min-w-0 gap-2">
+        <div className="flex min-w-0 items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {showPinnedRepoIcon && (
               <RepoIdentityChip repo={repo}>
@@ -1251,7 +1221,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
               displayName={visibleCardTitle}
               disabled={isDeleting || affiliateListMode}
               showUnreadEmphasis={showUnreadEmphasis}
-              className={compactCards && newCardStyle ? 'text-[13px] leading-5' : 'text-[12px]'}
+              className="text-[13px] leading-5"
               editingClassName="flex-1"
               titleWrapper={titleWrapper}
               onEditingChange={affiliateListMode ? undefined : setTitleRenaming}
@@ -1392,7 +1362,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                       onClick={handleWorkspaceQuickAction}
                       className={cn(
                         'inline-flex size-4 items-center justify-center rounded bg-transparent opacity-0 transition-colors transition-opacity',
-                        'group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
+                        'group-hover/worktree-card:opacity-100 group-focus-within/worktree-card:opacity-100 focus-visible:opacity-100',
                         'text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive'
                       )}
                       aria-label={translate(
@@ -1561,17 +1531,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
     </div>
   )
 
-  const lineageChildrenBlock =
-    newCardStyle && lineageChildren ? (
-      // Why: child cards have their own metadata hover; keeping them outside the
-      // parent's hover trigger prevents hovering one child from opening every
-      // ancestor card popover.
-      <div className="mt-1.5 space-y-1" data-worktree-lineage-children="">
-        {lineageChildren}
-      </div>
-    ) : null
+  const parentHoverTriggerBody = (
+    <div className="group/worktree-card w-full min-w-0" data-worktree-card-hover-trigger="">
+      {parentCardContent}
+    </div>
+  )
 
-  const cardBodyWithHoverDetails =
+  const parentCardBodyWithHoverDetails =
     hasHoverDetails && !titleRenaming ? (
       <WorktreeCardDetailsHover
         issue={hoverIssue}
@@ -1602,30 +1568,79 @@ const WorktreeCard = React.memo(function WorktreeCard({
           !affiliateListMode && hasExplicitLinkedReview ? handleUnlinkReview : undefined
         }
       >
-        {cardBody}
+        {parentHoverTriggerBody}
       </WorktreeCardDetailsHover>
     ) : (
-      cardBody
+      parentHoverTriggerBody
     )
+
+  const cardBody = (
+    <div
+      className={cn(
+        'relative flex cursor-pointer flex-col pr-1.5 transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
+        titleOnlyCard ? 'py-2' : 'pt-1.5 pb-2',
+        flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
+        'rounded-lg',
+        isActiveSurface
+          ? activeSurfaceIsSecondary
+            ? 'border border-sidebar-ring/25 bg-sidebar-accent/45 shadow-none ring-1 ring-sidebar-ring/15'
+            : 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
+          : isMultiSelected
+            ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
+            : 'border border-transparent worktree-sidebar-card-hover',
+        isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
+        revealHighlight && [
+          'scroll-to-current-workspace-reveal-highlight',
+          revealHighlightTone === 'ai' && 'scroll-to-current-workspace-reveal-highlight--ai'
+        ],
+        titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
+        isDeleting && 'opacity-50 grayscale cursor-not-allowed',
+        isSshDisconnected && !isDeleting && 'opacity-60'
+      )}
+      data-worktree-card-surface="true"
+      data-worktree-card-active={isActiveSurface ? activeSurfaceVariant : undefined}
+      onClick={handleClick}
+      onDoubleClick={affiliateListMode ? undefined : handleDoubleClick}
+      draggable={!affiliateListMode && nativeDragEnabled && !isDeleting && !titleRenaming}
+      onDragStart={!affiliateListMode && nativeDragEnabled ? handleDragStart : undefined}
+      onDragEnd={!affiliateListMode && nativeDragEnabled ? handleDragEnd : undefined}
+      aria-busy={isDeleting}
+      style={cardStyle}
+    >
+      {isDeleting && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
+            <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
+            {translate('auto.components.sidebar.WorktreeCard.691ccfd622', 'Deleting…')}
+          </div>
+        </div>
+      )}
+      {parentCardBodyWithHoverDetails}
+
+      {newCardStyle && lineageChildren ? (
+        <div
+          className="mt-1.5 space-y-1"
+          data-worktree-lineage-children=""
+          style={lineageChildrenStyle}
+        >
+          {lineageChildren}
+        </div>
+      ) : null}
+    </div>
+  )
 
   return (
     <>
       {affiliateListMode ? (
-        <>
-          {cardBodyWithHoverDetails}
-          {lineageChildrenBlock}
-        </>
+        cardBody
       ) : (
-        <>
-          <WorktreeContextMenu
-            worktree={worktree}
-            selectedWorktrees={selectedWorktrees}
-            onContextMenuSelect={handleContextMenuSelect}
-          >
-            {cardBodyWithHoverDetails}
-          </WorktreeContextMenu>
-          {lineageChildrenBlock}
-        </>
+        <WorktreeContextMenu
+          worktree={worktree}
+          selectedWorktrees={selectedWorktrees}
+          onContextMenuSelect={handleContextMenuSelect}
+        >
+          {cardBody}
+        </WorktreeContextMenu>
       )}
 
       {repo?.connectionId && (

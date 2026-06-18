@@ -2160,6 +2160,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
       | 'grok'
       | 'copilot'
       | 'hermes'
+      | 'devin'
   ) =>
     Promise.resolve({
       agent,
@@ -2180,7 +2181,8 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     commandCodeStatus: () => status('command-code'),
     grokStatus: () => status('grok'),
     copilotStatus: () => status('copilot'),
-    hermesStatus: () => status('hermes')
+    hermesStatus: () => status('hermes'),
+    devinStatus: () => status('devin')
   }
 }
 

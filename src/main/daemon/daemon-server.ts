@@ -278,6 +278,9 @@ export class DaemonServer {
           terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
           shellReadySupported: p.shellReadySupported,
+          ...(p.shellReadyTimeoutMs !== undefined
+            ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
+            : {}),
           streamClient: {
             onData: (data) => {
               const lastInputAt = this.lastInputAtBySessionId.get(p.sessionId)

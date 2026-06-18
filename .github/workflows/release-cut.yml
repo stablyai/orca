@@ -493,6 +493,19 @@ jobs:
             git push origin "$TAG"
           fi
 
+      - name: Release E2E signal summary
+        if: always()
+        run: |
+          {
+            echo "## Release E2E Signal"
+            echo ""
+            echo "- Terminal rendering golden is release-blocking."
+            echo "- Full E2E is diagnostic/non-blocking release evidence."
+            echo "- Terminal rendering release evidence is diagnostic/non-blocking."
+            echo ""
+            echo "Publishing behavior is controlled by the existing job dependencies; this summary does not change release gating."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   create-release:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'

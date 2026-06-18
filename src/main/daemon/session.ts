@@ -11,6 +11,9 @@ import type {
 } from './types'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
+// Why: Codex startup skips marker-gated command delivery; this only bounds
+// older daemon/local paths that still report shell-ready support for Codex.
+export const CODEX_SHELL_READY_TIMEOUT_MS = 300
 const KILL_TIMEOUT_MS = 5_000
 const SHELL_READY_MARKER = '\x1b]777;orca-shell-ready\x07'
 // Why: pending records exist so the 5s checkpoint can persist increments
@@ -47,6 +50,7 @@ export type SessionOptions = {
   rows: number
   subprocess: SubprocessHandle
   shellReadySupported: boolean
+  shellReadyTimeoutMs?: number
   scrollback?: number
 }
 
@@ -94,7 +98,7 @@ export class Session {
       this._shellState = 'pending'
       this.shellReadyTimer = setTimeout(() => {
         this.onShellReadyTimeout()
-      }, SHELL_READY_TIMEOUT_MS)
+      }, opts.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS)
     } else {
       this._shellState = 'unsupported'
     }

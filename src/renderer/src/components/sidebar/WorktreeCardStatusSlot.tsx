@@ -2,7 +2,7 @@ import React from 'react'
 import { Bell } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { getWorktreeStatusLabel } from '@/lib/worktree-status'
+import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 import { FilledBellIcon } from './WorktreeCardHelpers'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
@@ -21,6 +21,8 @@ type WorktreeCardStatusSlotProps = {
   newCardStyle?: boolean
   className?: string
 }
+
+const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'done', 'inactive'])
 
 function getReviewStatusTooltip(review: WorktreeCardPrDisplay): string {
   const label = getReviewLabel(review)
@@ -60,12 +62,13 @@ export function WorktreeCardStatusSlot({
   const status = useWorktreeActivityStatus(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
   const canShowReviewStatus =
-    newCardStyle && showStatus && prDisplay !== null && (status === 'active' || status === 'done')
+    newCardStyle &&
+    showStatus &&
+    prDisplay !== null &&
+    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const passiveStatusLabel =
     canShowReviewStatus && prDisplay ? getReviewStatusTooltip(prDisplay) : statusLabel
-  // Why: the PR/MR glyph has more visual weight below its center than the dot
-  // status indicator, so its status-lane instance needs a tiny optical lift.
-  const reviewStatusIconClassName = 'size-4 -translate-y-px'
+  const reviewStatusIconClassName = 'size-4'
   const passiveStatus =
     canShowReviewStatus && prDisplay ? (
       <Tooltip>
@@ -79,6 +82,13 @@ export function WorktreeCardStatusSlot({
           <span>{passiveStatusLabel}</span>
         </TooltipContent>
       </Tooltip>
+    ) : newCardStyle && showStatus ? (
+      <>
+        <span className={cn('inline-flex size-5 items-center justify-center', className)}>
+          <StatusIndicator status={status} aria-hidden="true" />
+        </span>
+        <span className="sr-only">{statusLabel}</span>
+      </>
     ) : (
       <>
         <StatusIndicator status={status} aria-hidden="true" className={className} />
@@ -111,7 +121,7 @@ export function WorktreeCardStatusSlot({
             onClick={onToggleUnread}
             className={cn(
               'group/unread relative flex cursor-pointer items-center justify-center rounded transition-all',
-              canShowReviewStatus && prDisplay ? 'size-5' : 'size-4',
+              newCardStyle && showStatus ? 'size-5' : 'size-4',
               'hover:bg-accent/80 active:scale-95',
               'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
               className

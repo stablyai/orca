@@ -4780,7 +4780,41 @@ describe('registerPtyHandlers', () => {
     }
   )
 
-  posixOnlyIt('falls back to a max wait when the shell emits no readiness output', async () => {
+  posixOnlyIt(
+    'uses the no-marker wrapper and writes quickly for Codex startup commands',
+    async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          command: 'codex'
+        })
+
+        const [, , options] = spawnMock.mock.calls[0]!
+        expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+
+        await Promise.resolve()
+        vi.advanceTimersByTime(49)
+        await Promise.resolve()
+        expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+        vi.advanceTimersByTime(1)
+        await Promise.resolve()
+        vi.runAllTimers()
+        expect(mockProc.proc.write).toHaveBeenCalledWith('codex\n')
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  posixOnlyIt('keeps the conservative max wait for non-agent startup commands', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -4791,13 +4825,17 @@ describe('registerPtyHandlers', () => {
         cols: 80,
         rows: 24,
         cwd: '/tmp',
-        command: 'codex'
+        command: 'printf "hello"'
       })
 
-      vi.advanceTimersByTime(1500)
+      vi.advanceTimersByTime(1499)
+      await Promise.resolve()
+      expect(mockProc.proc.write).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
       await Promise.resolve()
       vi.runAllTimers()
-      expect(mockProc.proc.write).toHaveBeenCalledWith('codex\n')
+      expect(mockProc.proc.write).toHaveBeenCalledWith('printf "hello"\n')
     } finally {
       vi.useRealTimers()
     }

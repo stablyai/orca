@@ -85,7 +85,7 @@ import { closeLocalWatcherForWorktreePath } from './filesystem-watcher'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { clearProviderPtyState, getLocalPtyProvider } from './pty'
-import { removeWorktreeSymlinks } from './worktree-symlinks'
+import { removeWorktreeLinkedPaths } from './worktree-symlinks'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
@@ -1396,12 +1396,11 @@ export function registerWorktreeHandlers(
         }
 
         // Why: `git worktree remove` (non-force) refuses to delete a worktree
-        // that has untracked files, and a symlink pointing into the primary
-        // checkout looks untracked to git. Unlink the user-configured symlinks
-        // first so the normal delete path keeps working — otherwise every
-        // deletion would require the Force Delete toast once the feature is on.
+        // that has untracked files. User-configured symlinks look untracked,
+        // so unlink them before the clean check; regular APFS clone-copied
+        // files are left for git to judge so we never delete user edits.
         if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
-          await removeWorktreeSymlinks(canonicalWorktreePath, repo.symlinkPaths)
+          await removeWorktreeLinkedPaths(canonicalWorktreePath, repo.symlinkPaths)
         }
 
         try {

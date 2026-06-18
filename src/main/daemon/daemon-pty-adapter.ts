@@ -9,6 +9,7 @@ import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
+import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
   PROTOCOL_VERSION,
   type CreateOrAttachResult,
@@ -20,6 +21,7 @@ import {
 } from './types'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isShellProcess } from '../../shared/agent-detection'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 
 export type DaemonPtyAdapterOptions = {
   socketPath: string
@@ -133,6 +135,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     await this.ensureConnected()
 
+    const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+    const shellReadyTimeoutMs =
+      shellReadySupported && recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
+        ? CODEX_SHELL_READY_TIMEOUT_MS
+        : undefined
+
     const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
       sessionId,
       cols: effectiveCols,
@@ -149,7 +157,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
-      shellReadySupported: opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+      shellReadySupported,
+      ...(shellReadyTimeoutMs !== undefined ? { shellReadyTimeoutMs } : {})
     })
 
     if (effectiveCwd) {

@@ -899,6 +899,7 @@ describe('agent completion coordinator', () => {
     'omp',
     'droid',
     'grok',
+    'devin',
     'copilot',
     'hermes'
   ])('recognizes %s hook agent ids even when the binary name differs', (agentType) => {

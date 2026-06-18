@@ -22,6 +22,7 @@ type DiffSectionBodyProps = {
     startLine?: number
     top: number
     left?: number
+    lineHeight: number
   } | null
   addLineCommentPlaceholder?: string
   addLineCommentLabel?: string
@@ -80,6 +81,7 @@ export function DiffSectionBody({
           startLine={popover.startLine}
           top={popover.top}
           left={popover.left}
+          lineHeight={popover.lineHeight}
           placeholder={addLineCommentPlaceholder}
           submitLabel={addLineCommentLabel}
           submittingLabel="Posting…"

@@ -155,11 +155,16 @@ function makeHostedReview(overrides: Partial<HostedReviewInfo> = {}): HostedRevi
   }
 }
 
-function expectCardSurfaceIsHoverTrigger(markup: string): void {
+function expectParentBodyIsHoverTrigger(markup: string): void {
   const surfaceTag = markup.match(/<div[^>]*data-worktree-card-surface="true"[^>]*>/)?.[0]
+  const triggerTag = markup.match(/<div[^>]*data-worktree-card-hover-trigger=""[^>]*>/)?.[0]
 
   expect(surfaceTag).toBeDefined()
-  expect(surfaceTag).toContain('data-hover-card-trigger=""')
+  expect(surfaceTag).not.toContain('data-hover-card-trigger=""')
+  expect(surfaceTag).not.toContain('group/worktree-card')
+  expect(triggerTag).toBeDefined()
+  expect(triggerTag).toContain('data-hover-card-trigger=""')
+  expect(triggerTag).toContain('group/worktree-card')
 }
 
 describe('WorktreeCard compact hover details', () => {
@@ -213,7 +218,7 @@ describe('WorktreeCard compact hover details', () => {
     )
 
     expect(markup).toContain('data-worktree-title-inline-rename=""')
-    expectCardSurfaceIsHoverTrigger(markup)
+    expectParentBodyIsHoverTrigger(markup)
     expect(markup).toContain('data-hover-open-delay="100"')
     expect(markup).toContain('PR #456')
     expect(markup).toContain('Fix stale GH PR')
@@ -265,7 +270,7 @@ describe('WorktreeCard compact hover details', () => {
     )
 
     expect(markup).toContain('data-hover-open-delay="100"')
-    expectCardSurfaceIsHoverTrigger(markup)
+    expectParentBodyIsHoverTrigger(markup)
     expect(markup).toContain('Issue #123')
     expect(markup).toContain('Linear ENG-123')
     expect(markup).toContain('Reviewer handoff note')
@@ -361,7 +366,7 @@ describe('WorktreeCard compact hover details', () => {
     )
 
     expect(markup).toContain('data-worktree-card-meta-row=""')
-    expectCardSurfaceIsHoverTrigger(markup)
+    expectParentBodyIsHoverTrigger(markup)
     expect(markup.match(/data-hover-open-delay="100"/g)).toHaveLength(1)
     expect(markup).toContain('Reviewer handoff note')
   })
@@ -439,13 +444,36 @@ describe('WorktreeCard compact hover details', () => {
         lineageChildren={<div data-lineage-child-card="">Child card</div>}
       />
     )
+    const surfaceIndex = markup.indexOf('data-worktree-card-surface="true"')
+    const triggerIndex = markup.indexOf('data-worktree-card-hover-trigger=""')
     const hoverContentIndex = markup.indexOf('data-hover-card-content=""')
     const childIndex = markup.indexOf('data-lineage-child-card=""')
 
-    expectCardSurfaceIsHoverTrigger(markup)
+    expectParentBodyIsHoverTrigger(markup)
     expect(markup).toContain('data-worktree-lineage-children=""')
+    expect(markup).toContain('group/worktree-card')
+    expect(markup).not.toContain('group relative flex cursor-pointer')
+    expect(markup).not.toContain('group/worktree-card relative flex cursor-pointer')
+    expect(surfaceIndex).toBeGreaterThanOrEqual(0)
+    expect(triggerIndex).toBeGreaterThan(surfaceIndex)
     expect(hoverContentIndex).toBeGreaterThanOrEqual(0)
     expect(childIndex).toBeGreaterThan(hoverContentIndex)
+  })
+
+  it('uses a centered parent row and raised title size when no meta row is visible', async () => {
+    settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+    worktreeCardProperties = ['status']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} hideRepoBadge />
+    )
+
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('data-worktree-card-parent-content=""')
+    expect(markup).toContain('items-center')
+    expect(markup).toContain('w-5 items-center')
+    expect(markup).toContain('text-[13px] leading-5')
   })
 
   it('shows the branch row for migrated Default cards with branch enabled', async () => {

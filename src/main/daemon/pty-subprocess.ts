@@ -387,6 +387,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let shellPath =
     cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
+  const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
+  const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
   const requestedCwd = opts.cwd || getDefaultCwd()
   let spawnCwd = requestedCwd
   let validationCwd = spawnCwd
@@ -500,16 +502,24 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
     // Why: any Orca-injected overlay env that user rc files can clobber
     // needs the wrapper so the post-rc restore line runs.
-    const shellLaunch = opts.command
-      ? getShellReadyLaunchConfig(shellPath)
-      : env.ORCA_ATTRIBUTION_SHIM_DIR ||
-          env.ORCA_OPENCODE_CONFIG_DIR ||
-          env.ORCA_PI_CODING_AGENT_DIR ||
-          env.ORCA_OMP_CODING_AGENT_DIR ||
-          env.ORCA_CODEX_HOME ||
-          env.ORCA_AGENT_TEAMS_SHIM_DIR
-        ? getAttributionShellLaunchConfig(shellPath)
-        : null
+    let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
+    if (opts.command && isCodexStartupCommand) {
+      // Why: Codex needs the env-restoring wrapper, but waiting for a shell
+      // marker delays the first useful TUI frame.
+      shellLaunch = getAttributionShellLaunchConfig(shellPath)
+    } else if (opts.command) {
+      shellLaunch = getShellReadyLaunchConfig(shellPath)
+    } else {
+      shellLaunch =
+        env.ORCA_ATTRIBUTION_SHIM_DIR ||
+        env.ORCA_OPENCODE_CONFIG_DIR ||
+        env.ORCA_PI_CODING_AGENT_DIR ||
+        env.ORCA_OMP_CODING_AGENT_DIR ||
+        env.ORCA_CODEX_HOME ||
+        env.ORCA_AGENT_TEAMS_SHIM_DIR
+          ? getAttributionShellLaunchConfig(shellPath)
+          : null
+    }
     if (shellLaunch) {
       Object.assign(env, shellLaunch.env)
     }
@@ -562,7 +572,6 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     cwd: opts.cwd,
     worktreeId: parsePtySessionId(opts.sessionId).worktreeId
   })
-  const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   let startupAgentForeground: { processName: string; expiresAt: number } | null =
     startupAgentRecognition
       ? {

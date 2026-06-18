@@ -41,6 +41,7 @@ import {
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcess } from './agent-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
@@ -472,16 +473,23 @@ export class LocalPtyProvider implements IPtyProvider {
         finalEnv.ORCA_OMP_CODING_AGENT_DIR ||
         finalEnv.ORCA_CODEX_HOME ||
         finalEnv.ORCA_AGENT_TEAMS_SHIM_DIR
-      getFallbackShellReadyConfig = args.command
-        ? (shell) => getShellReadyLaunchConfig(shell)
-        : needsNoMarkerWrapper
-          ? (shell) => getAttributionShellLaunchConfig(shell)
-          : undefined
-      const shellLaunch = args.command
-        ? getShellReadyLaunchConfig(shellPath)
-        : needsNoMarkerWrapper
-          ? getAttributionShellLaunchConfig(shellPath)
-          : null
+      const isCodexStartupCommand =
+        recognizeAgentProcessFromCommandLine(args.command)?.agent === 'codex'
+      let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
+      if (args.command && isCodexStartupCommand) {
+        // Why: Codex needs the env-restoring wrapper, but waiting for a shell
+        // marker delays the first useful TUI frame.
+        getFallbackShellReadyConfig = (shell) => getAttributionShellLaunchConfig(shell)
+        shellLaunch = getAttributionShellLaunchConfig(shellPath)
+      } else if (args.command) {
+        getFallbackShellReadyConfig = (shell) => getShellReadyLaunchConfig(shell)
+        shellLaunch = getShellReadyLaunchConfig(shellPath)
+      } else if (needsNoMarkerWrapper) {
+        getFallbackShellReadyConfig = (shell) => getAttributionShellLaunchConfig(shell)
+        shellLaunch = getAttributionShellLaunchConfig(shellPath)
+      } else {
+        getFallbackShellReadyConfig = undefined
+      }
       if (shellLaunch) {
         Object.assign(finalEnv, shellLaunch.env)
         shellArgs = shellLaunch.args ?? shellArgs

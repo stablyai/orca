@@ -169,6 +169,9 @@ describe('ClaudeHookService.install', () => {
         )
       ).toBe(false)
       expect(legacy.hooks.StopFailure[0].hooks[0].command).toContain(CLAUDE_SCRIPT_FILE_NAME)
+      expect(
+        readFileSync(join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME), 'utf-8')
+      ).toContain('DEVIN_PROJECT_DIR')
     } finally {
       vi.unstubAllEnvs()
       rmSync(tmpHome, { recursive: true, force: true })
@@ -206,7 +209,9 @@ describe('ClaudeHookService.installRemote', () => {
       expect(cmd).toMatch(/^if \[ -x /)
     }
     // Managed script body
-    expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')).toContain('#!/bin/sh')
+    const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
+    expect(script).toContain('#!/bin/sh')
+    expect(script).toContain('DEVIN_PROJECT_DIR')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
   })
 
@@ -287,6 +292,9 @@ describe('OpenClaudeHookService-compatible install', () => {
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('/hook/claude')
+      expect(
+        readFileSync(join(tmpHome, '.orca', 'agent-hooks', 'openclaude-hook.sh'), 'utf-8')
+      ).not.toContain('DEVIN_PROJECT_DIR')
       expect(existsSync(join(tmpHome, '.claude', 'settings.json'))).toBe(false)
     } finally {
       vi.unstubAllEnvs()

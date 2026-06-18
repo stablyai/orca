@@ -1917,7 +1917,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       ) {
         delete updates.forkSyncMode
       }
-      // Why: `symlinkPaths` is consumed by `createWorktreeSymlinks` which
+      // Why: `symlinkPaths` is consumed by worktree path materialization, which
       // calls `.trim()` on each entry. A renderer bug or preload-version skew
       // that persists a non-`string[]` value (e.g. `[42, null]`, a bare
       // string) would throw inside the worktree-create path with no UI

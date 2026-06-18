@@ -546,7 +546,7 @@ import {
 } from '../hooks'
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultVoiceSettings } from '../../shared/constants'
 import { listRepoWorktrees } from '../repo-worktrees'
-import { createWorktreeSymlinks } from '../ipc/worktree-symlinks'
+import { createWorktreeLinkedPaths, removeWorktreeLinkedPaths } from '../ipc/worktree-symlinks'
 import { deleteWorktreeHistoryDir } from '../terminal-history'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -10826,7 +10826,7 @@ export class OrcaRuntimeService {
       repo.symlinkPaths &&
       repo.symlinkPaths.length > 0
     ) {
-      await createWorktreeSymlinks(repo.path, created.path, repo.symlinkPaths)
+      await createWorktreeLinkedPaths(repo.path, created.path, repo.symlinkPaths)
     }
 
     let setup: CreateWorktreeResult['setup']
@@ -12532,6 +12532,9 @@ export class OrcaRuntimeService {
       }
 
       let shouldTearDownPtys = true
+      if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
+        await removeWorktreeLinkedPaths(canonicalWorktreePath, repo.symlinkPaths)
+      }
       try {
         await (hasLocalWorktreeGitOptions
           ? assertWorktreeCleanForRemoval(canonicalWorktreePath, force, localWorktreeGitOptions)
