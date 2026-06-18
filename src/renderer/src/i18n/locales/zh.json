@@ -3636,7 +3636,8 @@
           "8d62c68b35": "笔记",
           "2d74665a56": "端口",
           "65a9820bd1": "Agent 状态",
-          "219ebf1961": "分支名称"
+          "219ebf1961": "分支名称",
+          "automation": "Automation"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",

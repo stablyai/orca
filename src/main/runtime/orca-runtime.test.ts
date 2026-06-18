@@ -1113,22 +1113,27 @@ computeWorktreePathMock.mockImplementation(
 ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
 
 describe('OrcaRuntimeService', () => {
-  it('projects experimentalNewWorktreeCardStyle to paired client settings', () => {
+  it('projects worktree card display settings to paired clients', () => {
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
         ...store.getSettings(),
-        experimentalNewWorktreeCardStyle: true
+        experimentalNewWorktreeCardStyle: true,
+        compactWorktreeCards: true
       })
     } as never)
 
-    expect(runtime.getClientSettings()).toMatchObject({ experimentalNewWorktreeCardStyle: true })
+    expect(runtime.getClientSettings()).toMatchObject({
+      experimentalNewWorktreeCardStyle: true,
+      compactWorktreeCards: true
+    })
   })
 
-  it('accepts experimentalNewWorktreeCardStyle updates from paired clients', () => {
+  it('accepts worktree card display setting updates from paired clients', () => {
     let settings = {
       ...store.getSettings(),
-      experimentalNewWorktreeCardStyle: false
+      experimentalNewWorktreeCardStyle: false,
+      compactWorktreeCards: false
     }
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
@@ -1140,14 +1145,23 @@ describe('OrcaRuntimeService', () => {
       updateSettings
     } as never)
 
-    expect(runtime.updateClientSettings({ experimentalNewWorktreeCardStyle: true })).toMatchObject({
-      experimentalNewWorktreeCardStyle: true
+    expect(
+      runtime.updateClientSettings({
+        experimentalNewWorktreeCardStyle: true,
+        compactWorktreeCards: true
+      })
+    ).toMatchObject({
+      experimentalNewWorktreeCardStyle: true,
+      compactWorktreeCards: true
     })
     expect(updateSettings).toHaveBeenCalledWith(
-      { experimentalNewWorktreeCardStyle: true },
+      { experimentalNewWorktreeCardStyle: true, compactWorktreeCards: true },
       { notifyListeners: true }
     )
-    expect(runtime.getClientSettings()).toMatchObject({ experimentalNewWorktreeCardStyle: true })
+    expect(runtime.getClientSettings()).toMatchObject({
+      experimentalNewWorktreeCardStyle: true,
+      compactWorktreeCards: true
+    })
   })
 
   it('rejects relative paths for runtime nested repo scan/import', async () => {

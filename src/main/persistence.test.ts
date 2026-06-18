@@ -5210,7 +5210,7 @@ describe('Store', () => {
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
   })
 
-  it('uses the default preset when card properties are missing', async () => {
+  it('uses the compact preset when card properties are missing in compact mode', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -5223,18 +5223,36 @@ describe('Store', () => {
     const store = await createStore()
 
     expect(store.getSettings().compactWorktreeCards).toBe(true)
-    expect(store.getUI().worktreeCardProperties).toEqual([
-      'status',
-      'unread',
-      'issue',
-      'linear-issue',
-      'pr',
-      'automation',
-      'comment',
-      'ports',
-      'inline-agents'
-    ])
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread'])
+    expect(store.getUI().worktreeCardProperties).not.toContain('automation')
   })
+
+  it.each([
+    ['raw', ['status', 'automation']],
+    ['normalized', ['status', 'unread', 'automation']]
+  ] as const)(
+    'migrates the old %s defaulted compact preset without automation',
+    async (_, props) => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: { compactWorktreeCards: true },
+        ui: {
+          worktreeCardProperties: [...props],
+          _worktreeCardModeDefaulted: true
+        },
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+      const store = await createStore()
+
+      expect(store.getSettings().compactWorktreeCards).toBe(true)
+      expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread'])
+      expect(store.getUI().worktreeCardProperties).not.toContain('automation')
+      expect(store.getUI()._worktreeCardModeDefaulted).toBe(true)
+    }
+  )
 
   // ── GitHub Cache ───────────────────────────────────────────────────
 

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree-card-properties'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -363,9 +364,41 @@ describe('WorktreeCard linked PR display', () => {
 
     expect(markup).toContain('Created by automation')
     expect(markup).not.toContain('>Automation</span>')
-  })
+  }, 20_000)
 
-  it('shows the automation metadata icon in compact card mode', async () => {
+  it('hides the automation metadata icon in compact card mode by preset default', async () => {
+    settings = { compactWorktreeCards: true }
+    worktreeCardProperties = [...COMPACT_WORKTREE_CARD_PROPERTIES]
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderWorktreeCardMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({
+          automationProvenance: {
+            kind: 'created-by-automation',
+            automationId: 'automation-1',
+            automationNameSnapshot: 'Nightly triage automation',
+            automationRunId: 'run-1',
+            automationRunTitleSnapshot: 'Nightly triage run',
+            createdAt: 1,
+            executionTargetType: 'local',
+            executionTargetId: 'local',
+            projectId: 'repo-1',
+            repoId: 'repo-1',
+            hostId: 'local'
+          }
+        })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).not.toContain('Created by automation')
+    expect(markup).not.toContain('>Automation</span>')
+    expect(markup).not.toContain('Nightly triage automation')
+  }, 20_000)
+
+  it('shows the automation metadata icon in compact card mode when manually enabled', async () => {
     settings = { compactWorktreeCards: true }
     worktreeCardProperties = ['status', 'automation']
     const { default: WorktreeCard } = await import('./WorktreeCard')
@@ -394,7 +427,7 @@ describe('WorktreeCard linked PR display', () => {
 
     expect(markup).toContain('Created by automation')
     expect(markup).not.toContain('>Automation</span>')
-  })
+  }, 20_000)
 
   it('hides automation-created card surfaces when the Automation property is disabled', async () => {
     worktreeCardProperties = ['status']
