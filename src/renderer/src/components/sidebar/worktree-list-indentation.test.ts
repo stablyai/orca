@@ -68,8 +68,8 @@ describe('worktree list indentation', () => {
     expect(getFlushWorktreeCardPaddingLeft(0)).toBe('2px')
   })
 
-  it('derives the lineage parent-child step from the sidebar tree indent and flush pullback', () => {
-    expect(LINEAGE_IMMEDIATE_PARENT_STEP).toBe(14)
+  it('derives the lineage parent-child step from the pre-refactor grouped-card anchor', () => {
+    expect(LINEAGE_IMMEDIATE_PARENT_STEP).toBe(20)
     expect(LINEAGE_CHILDREN_INLINE_OFFSET).toBe(
       LINEAGE_IMMEDIATE_PARENT_STEP - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
     )
@@ -126,8 +126,8 @@ describe('worktree list indentation', () => {
 
   it('expresses lineage child wrapper width from the resolved inline offset', () => {
     expect(getLineageChildrenInlineStyle(LINEAGE_CHILDREN_INLINE_OFFSET)).toEqual({
-      marginLeft: '8px',
-      width: 'calc(100% - 8px)'
+      marginLeft: '14px',
+      width: 'calc(100% - 14px)'
     })
   })
 })

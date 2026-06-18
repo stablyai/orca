@@ -10,7 +10,10 @@ export const FLUSH_CARD_CONTENT_PULLBACK = 4
 // surface never sits hard against the sidebar edge.
 export const FLUSH_CARD_MIN_CONTENT_INSET = 2
 export const WORKTREE_CARD_SURFACE_MARGIN = 4
-export const LINEAGE_IMMEDIATE_PARENT_STEP = SIDEBAR_TREE_INDENT - FLUSH_CARD_CONTENT_PULLBACK
+// Why: pre-refactor level-1 lineage used the grouped card content step; keep
+// that anchor while nested levels advance evenly instead of accumulating depth.
+export const LINEAGE_IMMEDIATE_PARENT_STEP =
+  SIDEBAR_TREE_INDENT + PROJECT_WORKTREE_CARD_EXTRA_INDENT
 export const LINEAGE_NESTED_ROW_SURFACE_INSET = 0
 export const LINEAGE_CHILDREN_INLINE_OFFSET =
   LINEAGE_IMMEDIATE_PARENT_STEP - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
