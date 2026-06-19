@@ -328,9 +328,27 @@ describe('AgentsPane', () => {
       agentDefaultArgs: { claude: '--plugin-dir {worktreePath}/plugins' }
     })
 
+    expect(markup).toContain('value="--plugin-dir {worktreePath}/plugins"')
     expect(markup).toContain('{repoPath}')
     expect(markup).toContain('{worktreePath}')
     expect(markup).toContain('Available in command, arguments, and environment values.')
+  })
+
+  it('keeps raw path variables in profile launch argument inputs', () => {
+    const markup = renderPane({
+      ...getDefaultSettings(tmpdir()),
+      agentProfiles: [
+        {
+          id: 'agent-profile:claude-work',
+          baseAgent: 'claude',
+          label: 'Claude Work',
+          defaultArgs: '--plugin-dir {worktreePath}/plugins'
+        }
+      ]
+    })
+
+    expect(markup).toContain('Claude Work')
+    expect(markup).toContain('value="--plugin-dir {worktreePath}/plugins"')
   })
 
   it('only toggles agent availability when the segmented value changes', () => {

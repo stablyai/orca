@@ -40,10 +40,7 @@ import {
 import { isBuiltInTuiAgent } from '../../../../shared/tui-agent-config'
 import {
   getTuiAgentDefaultArgs,
-  getTuiAgentDefaultEnv,
-  resolveTuiAgentLaunchCommandOverride,
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
+  getTuiAgentDefaultEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 import {
   createTuiAgentProfileId,
@@ -847,6 +844,22 @@ function updateAgentProfile(
   )
 }
 
+function getRawAgentArgsOverride(
+  agent: TuiAgent,
+  configuredArgs: Partial<Record<TuiAgent, string>>,
+  defaultArgs: string
+): string {
+  return typeof configuredArgs[agent] === 'string' ? (configuredArgs[agent] ?? '') : defaultArgs
+}
+
+function getRawAgentEnvOverride(
+  agent: TuiAgent,
+  configuredEnv: Partial<Record<TuiAgent, Record<string, string>>>,
+  defaultEnv: Record<string, string>
+): Record<string, string> {
+  return configuredEnv[agent] ?? defaultEnv
+}
+
 export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React.JSX.Element {
   const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
   // Why: refresh re-spawns the user's login shell to re-capture PATH
@@ -940,8 +953,8 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
         baseAgent: entry.id,
         label,
         ...(cmdOverrides[id] ? { cmdOverride: cmdOverrides[id] } : {}),
-        defaultArgs: resolveTuiAgentLaunchArgs(id, agentDefaultArgs),
-        defaultEnv: resolveTuiAgentLaunchEnv(id, agentDefaultEnv)
+        defaultArgs: getRawAgentArgsOverride(id, agentDefaultArgs, getTuiAgentDefaultArgs(id)),
+        defaultEnv: getRawAgentEnvOverride(id, agentDefaultEnv, getTuiAgentDefaultEnv(id))
       }
     ])
   }
@@ -1102,6 +1115,8 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
             {detectedAgentEntries.map((agent) => {
               const profile = profileById.get(agent.id)
               if (!profile) {
+                const defaultArgs = getTuiAgentDefaultArgs(agent.id)
+                const defaultEnv = getTuiAgentDefaultEnv(agent.id)
                 return (
                   <AgentRow
                     key={agent.id}
@@ -1110,14 +1125,14 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                     label={agent.label}
                     homepageUrl={agent.homepageUrl}
                     defaultCmd={agent.cmd}
-                    defaultArgs={getTuiAgentDefaultArgs(agent.id)}
-                    defaultEnv={getTuiAgentDefaultEnv(agent.id)}
+                    defaultArgs={defaultArgs}
+                    defaultEnv={defaultEnv}
                     isDetected
                     isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
                     isDefault={defaultAgent === agent.id}
                     cmdOverride={cmdOverrides[agent.id]}
-                    argsOverride={resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs)}
-                    envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv)}
+                    argsOverride={getRawAgentArgsOverride(agent.id, agentDefaultArgs, defaultArgs)}
+                    envOverride={getRawAgentEnvOverride(agent.id, agentDefaultEnv, defaultEnv)}
                     onSetDefault={() => setDefault(agent.id)}
                     onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                     onDuplicate={() => duplicateAgent(agent.id)}
@@ -1128,6 +1143,8 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                 )
               }
               const baseEntry = baseCatalogById.get(profile.baseAgent)
+              const defaultArgs = getTuiAgentDefaultArgs(profile.baseAgent)
+              const defaultEnv = getTuiAgentDefaultEnv(profile.baseAgent)
               return (
                 <AgentRow
                   key={agent.id}
@@ -1136,23 +1153,15 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                   label={agent.label}
                   homepageUrl={agent.homepageUrl}
                   defaultCmd={baseEntry?.cmd ?? profile.baseAgent}
-                  defaultArgs={getTuiAgentDefaultArgs(profile.baseAgent)}
-                  defaultEnv={getTuiAgentDefaultEnv(profile.baseAgent)}
+                  defaultArgs={defaultArgs}
+                  defaultEnv={defaultEnv}
                   isProfile
                   isDetected
                   isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
                   isDefault={defaultAgent === agent.id}
-                  cmdOverride={resolveTuiAgentLaunchCommandOverride(
-                    agent.id,
-                    cmdOverrides,
-                    agentProfiles
-                  )}
-                  argsOverride={resolveTuiAgentLaunchArgs(
-                    agent.id,
-                    agentDefaultArgs,
-                    agentProfiles
-                  )}
-                  envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv, agentProfiles)}
+                  cmdOverride={profile.cmdOverride}
+                  argsOverride={profile.defaultArgs ?? defaultArgs}
+                  envOverride={profile.defaultEnv ?? defaultEnv}
                   onSetDefault={() => setDefault(agent.id)}
                   onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                   onDelete={() => deleteAgentProfile(agent.id)}
@@ -1185,29 +1194,33 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
           />
 
           <div className="divide-y divide-border/40">
-            {undetectedAgents.map((agent) => (
-              <AgentRow
-                key={agent.id}
-                agentId={agent.id}
-                iconAgent={agent.id}
-                label={agent.label}
-                homepageUrl={agent.homepageUrl}
-                defaultCmd={agent.cmd}
-                defaultArgs={getTuiAgentDefaultArgs(agent.id)}
-                defaultEnv={getTuiAgentDefaultEnv(agent.id)}
-                isDetected={false}
-                isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
-                isDefault={false}
-                cmdOverride={undefined}
-                argsOverride={resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs)}
-                envOverride={resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv)}
-                onSetDefault={() => {}}
-                onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
-                onSaveOverride={() => {}}
-                onSaveArgs={(v) => saveAgentArgs(agent.id, v)}
-                onSaveEnv={(v) => saveAgentEnv(agent.id, v)}
-              />
-            ))}
+            {undetectedAgents.map((agent) => {
+              const defaultArgs = getTuiAgentDefaultArgs(agent.id)
+              const defaultEnv = getTuiAgentDefaultEnv(agent.id)
+              return (
+                <AgentRow
+                  key={agent.id}
+                  agentId={agent.id}
+                  iconAgent={agent.id}
+                  label={agent.label}
+                  homepageUrl={agent.homepageUrl}
+                  defaultCmd={agent.cmd}
+                  defaultArgs={defaultArgs}
+                  defaultEnv={defaultEnv}
+                  isDetected={false}
+                  isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
+                  isDefault={false}
+                  cmdOverride={undefined}
+                  argsOverride={getRawAgentArgsOverride(agent.id, agentDefaultArgs, defaultArgs)}
+                  envOverride={getRawAgentEnvOverride(agent.id, agentDefaultEnv, defaultEnv)}
+                  onSetDefault={() => {}}
+                  onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
+                  onSaveOverride={() => {}}
+                  onSaveArgs={(v) => saveAgentArgs(agent.id, v)}
+                  onSaveEnv={(v) => saveAgentEnv(agent.id, v)}
+                />
+              )
+            })}
           </div>
         </section>
       )}
