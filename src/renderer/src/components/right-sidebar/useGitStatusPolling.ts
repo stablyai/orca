@@ -11,7 +11,12 @@ import { installWindowVisibilityInterval } from '@/lib/window-visibility-interva
 import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
-const POLL_INTERVAL_MS = 3000
+const ACTIVE_GIT_STATUS_POLL_INTERVAL_MS = 10000
+const ACTIVE_GIT_STATUS_INITIAL_DELAY_MS = 5000
+const ACTIVE_GIT_STATUS_TRAILING_DELAY_MS = 5000
+const CONFLICT_OPERATION_POLL_INTERVAL_MS = 15000
+const CONFLICT_OPERATION_INITIAL_DELAY_MS = 10000
+const CONFLICT_OPERATION_TRAILING_DELAY_MS = 5000
 
 export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const enabled = options.enabled ?? true
@@ -31,9 +36,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const openFiles = useAppStore((s) => s.openFiles)
   const repoMap = useRepoMap()
-  const statusPollInFlightRef = useRef(false)
-  const statusPollRerunRef = useRef(false)
-  const fetchStatusRef = useRef<() => void>(() => {})
+  const fetchStatusRunnerRef = useRef<ReturnType<typeof createCoalescedPollRunner> | null>(null)
 
   const worktreePath = activeWorktree?.path ?? null
   const activePushTarget = activeWorktree?.pushTarget
@@ -93,7 +96,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       return
     }
     // Why: once a repo's status was truncated at the entry limit, re-running git
-    // status every 3s just re-does expensive work and re-truncates. Pause the
+    // status on a timer just re-does expensive work and re-truncates. Pause the
     // automatic poll while huge (a manual refresh still goes through its own
     // path); resolving the changes (e.g. .gitignoring the huge folder) clears
     // the flag and polling resumes. Mirrors a "huge repo" disabling auto status.
@@ -137,33 +140,35 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     updateWorktreeGitIdentity
   ])
 
-  const fetchStatus = useCallback(() => {
-    if (statusPollInFlightRef.current) {
-      statusPollRerunRef.current = true
-      return
-    }
-    statusPollInFlightRef.current = true
-    // Why: git status can exceed the 3s poll interval on large repos. Keep at
-    // most one subprocess chain in flight, then run one trailing refresh if a
-    // tick was skipped so the UI catches up without process pileups.
-    void runFetchStatus().finally(() => {
-      statusPollInFlightRef.current = false
-      if (statusPollRerunRef.current) {
-        statusPollRerunRef.current = false
-        fetchStatusRef.current()
-      }
+  useEffect(() => {
+    const previousRunner = fetchStatusRunnerRef.current
+    const nextRunner = createCoalescedPollRunner(runFetchStatus, {
+      trailingDelayMs: ACTIVE_GIT_STATUS_TRAILING_DELAY_MS
     })
+    fetchStatusRunnerRef.current = nextRunner
+    previousRunner?.dispose()
+    return () => {
+      if (fetchStatusRunnerRef.current === nextRunner) {
+        fetchStatusRunnerRef.current = null
+      }
+      nextRunner.dispose()
+    }
   }, [runFetchStatus])
-  fetchStatusRef.current = fetchStatus
 
   useEffect(() => {
     if (!enabled) {
       return
     }
-    // Why: this root-level poll should pause while hidden, but visible
-    // unfocused windows still need fresh status for second-display workflows.
-    return installWindowVisibilityInterval({ run: fetchStatus, intervalMs: POLL_INTERVAL_MS })
-  }, [enabled, fetchStatus])
+    // Why: git status is one of the highest-cost visible-window pollers. Delay
+    // the first automatic pass so startup hydration and terminal restore finish
+    // before the app starts shelling out in the background.
+    return installWindowVisibilityInterval({
+      run: () => fetchStatusRunnerRef.current?.run(),
+      intervalMs: ACTIVE_GIT_STATUS_POLL_INTERVAL_MS,
+      runImmediately: false,
+      initialDelayMs: ACTIVE_GIT_STATUS_INITIAL_DELAY_MS
+    })
+  }, [enabled])
 
   // Why: poll conflict operation for non-active worktrees that have a stale
   // non-unknown operation. This is a lightweight fs-only check (no git status)
@@ -198,15 +203,19 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       }
     }
 
-    // Why: remote conflict probes can exceed the 3s interval. Keep one poll in
-    // flight and coalesce skipped ticks into one trailing pass so stale badges
-    // catch up without stacking SSH/RPC work.
-    const pollRunner = createCoalescedPollRunner(pollStale)
-    // Why: conflict badges are visible sidebar state; keep them fresh in
-    // visible unfocused windows, but do not poll disconnected hidden windows.
+    // Why: remote conflict probes can exceed their interval. Keep one poll in
+    // flight and coalesce skipped ticks into one delayed trailing pass so stale
+    // badges catch up without stacking SSH/RPC work.
+    const pollRunner = createCoalescedPollRunner(pollStale, {
+      trailingDelayMs: CONFLICT_OPERATION_TRAILING_DELAY_MS
+    })
+    // Why: conflict badges are visible sidebar state; keep them fresh in visible
+    // unfocused windows, but do not poll disconnected hidden windows.
     const stopVisiblePoll = installWindowVisibilityInterval({
       run: () => pollRunner.run(),
-      intervalMs: POLL_INTERVAL_MS
+      intervalMs: CONFLICT_OPERATION_POLL_INTERVAL_MS,
+      runImmediately: false,
+      initialDelayMs: CONFLICT_OPERATION_INITIAL_DELAY_MS
     })
     return () => {
       pollRunner.dispose()
