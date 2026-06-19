@@ -1540,11 +1540,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   variant="outline"
                   className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 gap-1 text-muted-foreground border-border/60 bg-muted/30 leading-none"
                   title={translate(
-                    'auto.components.sidebar.WorktreeCard.createdByAutomation',
+                    'auto.components.sidebar.WorktreeCard.automationCreated',
                     'Created by automation'
                   )}
                   aria-label={translate(
-                    'auto.components.sidebar.WorktreeCard.createdByAutomation',
+                    'auto.components.sidebar.WorktreeCard.automationCreated',
                     'Created by automation'
                   )}
                 >
