@@ -3680,8 +3680,7 @@
           "automation": "Automation",
           "2d74665a56": "Puertos",
           "65a9820bd1": "Estados del agente",
-          "219ebf1961": "Nombre de rama",
-          "automation": "Automation"
+          "219ebf1961": "Nombre de rama"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -3754,7 +3753,8 @@
           "93aebe4529": "Carpeta",
           "0d224eff10": "árbol de trabajo primario",
           "ca74db7550": "Proyecto remoto vía SSH",
-          "021538e1d1": "SSH desconectado"
+          "021538e1d1": "SSH desconectado",
+          "createdByAutomation": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -3779,7 +3779,14 @@
           "3ea2702e62": "Vinculado {{value0}} #{{value1}}",
           "b105fd3057": "Linear vinculado {{value0}}",
           "3f2649eeb8": "Problema vinculado #{{value0}}",
-          "fe075cb851": "Notas del espacio de trabajo"
+          "fe075cb851": "Notas del espacio de trabajo",
+          "automationHeader": "Automation",
+          "openAutomation": "Open automation",
+          "openAutomationRun": "Open run",
+          "checkingAutomationAvailability": "Checking automation availability...",
+          "automationMissing": "Automation no longer available.",
+          "automationRunMissing": "Run history no longer available.",
+          "automationAvailabilityUnavailable": "Automation availability could not be checked."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "Estado: Abierto",
@@ -11417,7 +11424,15 @@
           "openReviewExternally": "Abrir {{value0}} externamente",
           "summary": "{{value0}} adjuntos · {{value1}} con PR/MR · {{value2}} requieren atención · {{value3}} pendientes · {{value4}} correctos · {{value5}} sin PR · {{value6}} desconocidos",
           "showDetails": "Mostrar detalles de comprobaciones de PR de {{value0}}",
-          "hideDetails": "Ocultar detalles de comprobaciones de PR de {{value0}}"
+          "hideDetails": "Ocultar detalles de comprobaciones de PR de {{value0}}",
+          "reviewChecks": "Review checks",
+          "allChecksPassing": "all checks passing",
+          "oneWorktree": "1 worktree",
+          "worktreeCount": "{{value0}} worktrees",
+          "oneFailing": "1 failing",
+          "failingCount": "{{value0}} failing",
+          "onePending": "1 pending",
+          "pendingCount": "{{value0}} pending"
         },
         "parentPrChecks": {
           "rowSummary": {

@@ -3734,7 +3734,8 @@
           "93aebe4529": "文件夹",
           "0d224eff10": "主要工作树",
           "ca74db7550": "通过 SSH 远程项目",
-          "021538e1d1": "SSH 已断开连接"
+          "021538e1d1": "SSH 已断开连接",
+          "createdByAutomation": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -3759,7 +3760,14 @@
           "3ea2702e62": "已链接 {{value0}} #{{value1}}",
           "b105fd3057": "链接 Linear {{value0}}",
           "3f2649eeb8": "链接议题#{{value0}}",
-          "fe075cb851": "工作区笔记"
+          "fe075cb851": "工作区笔记",
+          "automationHeader": "Automation",
+          "openAutomation": "Open automation",
+          "openAutomationRun": "Open run",
+          "checkingAutomationAvailability": "Checking automation availability...",
+          "automationMissing": "Automation no longer available.",
+          "automationRunMissing": "Run history no longer available.",
+          "automationAvailabilityUnavailable": "Automation availability could not be checked."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状态：开放",
@@ -11416,7 +11424,15 @@
           "openReviewExternally": "在外部打开 {{value0}}",
           "summary": "已附加 {{value0}} 个 · 有 PR/MR {{value1}} 个 · 需注意 {{value2}} 个 · 等待中 {{value3}} 个 · 通过 {{value4}} 个 · 无 PR {{value5}} 个 · 未知 {{value6}} 个",
           "showDetails": "显示 {{value0}} 的 PR 检查详情",
-          "hideDetails": "隐藏 {{value0}} 的 PR 检查详情"
+          "hideDetails": "隐藏 {{value0}} 的 PR 检查详情",
+          "reviewChecks": "Review checks",
+          "allChecksPassing": "all checks passing",
+          "oneWorktree": "1 worktree",
+          "worktreeCount": "{{value0}} worktrees",
+          "oneFailing": "1 failing",
+          "failingCount": "{{value0}} failing",
+          "onePending": "1 pending",
+          "pendingCount": "{{value0}} pending"
         },
         "parentPrChecks": {
           "rowSummary": {

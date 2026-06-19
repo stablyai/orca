@@ -127,7 +127,7 @@ describe('attributePortToWorkspace', () => {
   })
 
   it('falls back to command-line path evidence', () => {
-    const commandPath = path.resolve('/repo/worktrees/feature/node_modules/vite/bin/vite.js')
+    const commandPath = path.posix.resolve('/repo/worktrees/feature/node_modules/vite/bin/vite.js')
     const owner = attributePortToWorkspace({ commandLine: `node ${commandPath}` }, worktrees)
 
     expect(owner).toMatchObject({
@@ -138,7 +138,7 @@ describe('attributePortToWorkspace', () => {
 
   it('requires command-line path boundary evidence', () => {
     const owner = attributePortToWorkspace(
-      { commandLine: `node ${path.resolve('/repo/worktrees/feature-other/server.js')}` },
+      { commandLine: `node ${path.posix.resolve('/repo/worktrees/feature-other/server.js')}` },
       [worktrees[1]]
     )
 

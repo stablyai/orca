@@ -115,6 +115,12 @@ vi.mock('@/components/tab-bar/QuickLaunchButton', () => ({
   }
 }))
 
+vi.mock('./ReviewNotesSendMenuContent', () => ({
+  ReviewNotesSendMenuContent: function ReviewNotesSendMenuContent(props: Record<string, unknown>) {
+    return { type: 'ReviewNotesSendMenuContent', props }
+  }
+}))
+
 vi.mock('@/lib/active-agent-note-send', () => ({
   activeAgentNotesSendFailureMessage: (status: string) => status,
   sendNotesToActiveAgentSession: vi.fn(),
@@ -309,11 +315,10 @@ describe('NotesSendMenu', () => {
     )
   })
 
-  it('offers the active session action alongside new agent launchers', () => {
+  it('passes the default scope to review note send content', () => {
     const tree = renderMenu()
 
-    expect(findByType(tree, 'DropdownMenuItem').props.disabled).toBe(true)
-    expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
+    expect(findByType(tree, 'ReviewNotesSendMenuContent').props).toMatchObject({
       worktreeId: 'wt-1',
       groupId: 'group-1',
       prompt: 'prompt-all',

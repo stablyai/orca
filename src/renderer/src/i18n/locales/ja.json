@@ -3734,7 +3734,8 @@
           "93aebe4529": "フォルダ",
           "0d224eff10": "プライマリワークツリー",
           "ca74db7550": "SSH 経由のリモートプロジェクト",
-          "021538e1d1": "SSH が切断されました"
+          "021538e1d1": "SSH が切断されました",
+          "createdByAutomation": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -3759,7 +3760,14 @@
           "3ea2702e62": "リンク済み {{value0}} #{{value1}}",
           "b105fd3057": "リンク Linear {{value0}}",
           "3f2649eeb8": "リンクされた Issue #{{value0}}",
-          "fe075cb851": "ワークスペースのメモ"
+          "fe075cb851": "ワークスペースのメモ",
+          "automationHeader": "Automation",
+          "openAutomation": "Open automation",
+          "openAutomationRun": "Open run",
+          "checkingAutomationAvailability": "Checking automation availability...",
+          "automationMissing": "Automation no longer available.",
+          "automationRunMissing": "Run history no longer available.",
+          "automationAvailabilityUnavailable": "Automation availability could not be checked."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状態: オープン",
@@ -11416,7 +11424,15 @@
           "openReviewExternally": "{{value0}} を外部で開く",
           "summary": "{{value0}} 件添付 · PR/MR あり {{value1}} 件 · 要対応 {{value2}} 件 · 保留中 {{value3}} 件 · 成功 {{value4}} 件 · PR なし {{value5}} 件 · 不明 {{value6}} 件",
           "showDetails": "{{value0}} の PR チェック詳細を表示",
-          "hideDetails": "{{value0}} の PR チェック詳細を非表示"
+          "hideDetails": "{{value0}} の PR チェック詳細を非表示",
+          "reviewChecks": "Review checks",
+          "allChecksPassing": "all checks passing",
+          "oneWorktree": "1 worktree",
+          "worktreeCount": "{{value0}} worktrees",
+          "oneFailing": "1 failing",
+          "failingCount": "{{value0}} failing",
+          "onePending": "1 pending",
+          "pendingCount": "{{value0}} pending"
         },
         "parentPrChecks": {
           "rowSummary": {

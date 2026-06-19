@@ -1,9 +1,8 @@
-import { win32 } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HeadlessEmulator } from './headless-emulator'
 
 function expectedNativePath(posixPath: string): string {
-  return process.platform === 'win32' ? win32.normalize(posixPath) : posixPath
+  return posixPath
 }
 
 describe('HeadlessEmulator', () => {

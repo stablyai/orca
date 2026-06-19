@@ -3692,7 +3692,6 @@
           "1a0eec0d35": "Status",
           "b5536d5a88": "Tasks",
           "8d62c68b35": "Notes",
-          "automation": "Automation",
           "2d74665a56": "Ports",
           "65a9820bd1": "Agent statuses",
           "219ebf1961": "Branch name"
@@ -3768,7 +3767,8 @@
           "93aebe4529": "Folder",
           "0d224eff10": "Primary worktree",
           "ca74db7550": "Project on SSH host",
-          "021538e1d1": "SSH disconnected"
+          "021538e1d1": "SSH disconnected",
+          "createdByAutomation": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -3793,7 +3793,14 @@
           "3ea2702e62": "Linked {{value0}} #{{value1}}",
           "b105fd3057": "Linked Linear {{value0}}",
           "3f2649eeb8": "Linked issue #{{value0}}",
-          "fe075cb851": "Workspace notes"
+          "fe075cb851": "Workspace notes",
+          "automationHeader": "Automation",
+          "openAutomation": "Open automation",
+          "openAutomationRun": "Open run",
+          "checkingAutomationAvailability": "Checking automation availability...",
+          "automationMissing": "Automation no longer available.",
+          "automationRunMissing": "Run history no longer available.",
+          "automationAvailabilityUnavailable": "Automation availability could not be checked."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",
@@ -11417,7 +11424,15 @@
           "openReviewExternally": "Open {{value0}} externally",
           "summary": "{{value0}} attached · {{value1}} with PR/MR · {{value2}} attention · {{value3}} pending · {{value4}} passing · {{value5}} no PR · {{value6}} unknown",
           "showDetails": "Show {{value0}} PR check details",
-          "hideDetails": "Hide {{value0}} PR check details"
+          "hideDetails": "Hide {{value0}} PR check details",
+          "reviewChecks": "Review checks",
+          "allChecksPassing": "all checks passing",
+          "oneWorktree": "1 worktree",
+          "worktreeCount": "{{value0}} worktrees",
+          "oneFailing": "1 failing",
+          "failingCount": "{{value0}} failing",
+          "onePending": "1 pending",
+          "pendingCount": "{{value0}} pending"
         },
         "parentPrChecks": {
           "rowSummary": {

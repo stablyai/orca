@@ -3734,7 +3734,8 @@
           "93aebe4529": "접는 사람",
           "0d224eff10": "기본 작업 트리",
           "ca74db7550": "SSH를 통한 원격 프로젝트",
-          "021538e1d1": "SSH 연결이 끊어졌습니다."
+          "021538e1d1": "SSH 연결이 끊어졌습니다.",
+          "createdByAutomation": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -3759,7 +3760,14 @@
           "3ea2702e62": "연결됨 {{value0}} #{{value1}}",
           "b105fd3057": "연결된 Linear {{value0}}",
           "3f2649eeb8": "연결된 이슈 #{{value0}}",
-          "fe075cb851": "워크스페이스 메모"
+          "fe075cb851": "워크스페이스 메모",
+          "automationHeader": "Automation",
+          "openAutomation": "Open automation",
+          "openAutomationRun": "Open run",
+          "checkingAutomationAvailability": "Checking automation availability...",
+          "automationMissing": "Automation no longer available.",
+          "automationRunMissing": "Run history no longer available.",
+          "automationAvailabilityUnavailable": "Automation availability could not be checked."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",
@@ -11416,7 +11424,15 @@
           "openReviewExternally": "{{value0}} 외부에서 열기",
           "summary": "{{value0}}개 연결됨 · PR/MR 있음 {{value1}}개 · 주의 필요 {{value2}}개 · 대기 중 {{value3}}개 · 통과 {{value4}}개 · PR 없음 {{value5}}개 · 알 수 없음 {{value6}}개",
           "showDetails": "{{value0}} PR 검사 세부 정보 표시",
-          "hideDetails": "{{value0}} PR 검사 세부 정보 숨기기"
+          "hideDetails": "{{value0}} PR 검사 세부 정보 숨기기",
+          "reviewChecks": "Review checks",
+          "allChecksPassing": "all checks passing",
+          "oneWorktree": "1 worktree",
+          "worktreeCount": "{{value0}} worktrees",
+          "oneFailing": "1 failing",
+          "failingCount": "{{value0}} failing",
+          "onePending": "1 pending",
+          "pendingCount": "{{value0}} pending"
         },
         "parentPrChecks": {
           "rowSummary": {

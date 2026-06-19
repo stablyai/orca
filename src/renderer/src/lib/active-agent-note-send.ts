@@ -2,7 +2,11 @@ import type { RuntimeTerminalSend, RuntimeTerminalWait } from '../../../shared/r
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
-import { findActiveRuntimeTerminal, getActiveTerminalNoteTarget } from './active-agent-note-target'
+import {
+  findActiveRuntimeTerminal,
+  getActiveTerminalNoteTarget,
+  type ActiveTerminalNoteTarget
+} from './active-agent-note-target'
 
 export {
   getActiveAgentNoteTarget,
@@ -31,10 +35,12 @@ export type ActiveAgentNotesSendResult = {
 export async function sendNotesToActiveAgentSession({
   worktreeId,
   prompt,
+  noteTarget,
   timeoutMs = ACTIVE_AGENT_SEND_TIMEOUT_MS
 }: {
   worktreeId: string
   prompt: string
+  noteTarget?: ActiveTerminalNoteTarget
   timeoutMs?: number
 }): Promise<ActiveAgentNotesSendResult> {
   const trimmedPrompt = prompt.trim()
@@ -43,8 +49,8 @@ export async function sendNotesToActiveAgentSession({
   }
 
   const state = useAppStore.getState()
-  const noteTarget = getActiveTerminalNoteTarget(state, worktreeId)
-  if (!noteTarget) {
+  const resolvedNoteTarget = noteTarget ?? getActiveTerminalNoteTarget(state, worktreeId)
+  if (!resolvedNoteTarget) {
     return { status: 'no-active-terminal' }
   }
 
@@ -56,7 +62,7 @@ export async function sendNotesToActiveAgentSession({
   const terminal = await findActiveRuntimeTerminal(
     runtimeTarget,
     worktreeId,
-    noteTarget,
+    resolvedNoteTarget,
     ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS
   )
   if (!terminal) {
