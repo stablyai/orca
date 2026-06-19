@@ -1,14 +1,17 @@
 /**
  * Memory-leak regression: prRefreshStates must stay bounded.
  *
- * `prRefreshStates` is a Record keyed by PR cache key (repo/branch/execution
- * host) — the SAME unbounded, ephemeral key space the sibling `prRefreshSequences`
- * is already capped against. `applyGitHubPRRefreshEvent` writes a status entry on
- * every status-only refresh event (paused/skipped/in-flight) and re-adds an entry
- * for upstream-error outcomes, but no prune path ever removes them, so the map grew
+ * `prRefreshStates` is a Record keyed by PR cache key (repo/branch/execution host)
+ * — the SAME unbounded, ephemeral key space the sibling `prRefreshSequences` is
+ * already capped against. `applyGitHubPRRefreshEvent` writes a status entry on every
+ * status-only refresh event (paused/skipped/in-flight) and re-adds one for
+ * upstream-error outcomes, but no prune path ever removed them, so the map grew
  * monotonically with the number of distinct (host, repo, branch) tuples observed.
- * The fix caps it to MAX_CACHE_ENTRIES by insertion order (the writer moves each
- * touched key to the most-recent position), exactly like prRefreshSequences.
+ *
+ * The fix bounds it to MAX_PR_REFRESH_STATE_ENTRIES, but because this map backs
+ * visible status pills it uses status-aware eviction: settled statuses (error/
+ * skipped) are evicted first so an in-progress (in-flight/queued/paused) indicator
+ * is never dropped except as a last-resort hard bound.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { create } from 'zustand'
@@ -17,11 +20,24 @@ import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
 import type { GitHubPRRefreshEvent, GitHubPRRefreshReason } from '../../../../shared/types'
 
-// MAX_CACHE_ENTRIES is module-private; mirror its value here.
-const MAX_CACHE_ENTRIES = 500
+// MAX_PR_REFRESH_STATE_ENTRIES is module-private; mirror its value here.
+const MAX_ENTRIES = 2000
 
-// A prRefreshStates entry shape (the module's PRRefreshState type is not exported).
-type SeededRefreshState = { status: 'in-flight'; reason: GitHubPRRefreshReason; updatedAt: number }
+// prRefreshStates entry shapes (the module's PRRefreshState type is not exported).
+type SeedState = {
+  status: 'in-flight' | 'error'
+  reason: GitHubPRRefreshReason
+  updatedAt: number
+  message?: string
+}
+
+function inFlightState(): SeedState {
+  return { status: 'in-flight', reason: 'visible', updatedAt: 0 }
+}
+
+function errorState(): SeedState {
+  return { status: 'error', reason: 'visible', updatedAt: 0, message: 'boom' }
+}
 
 const mockApi = {
   gh: {
@@ -71,39 +87,40 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
     const store = createTestStore()
 
     // Each distinct branch produces a distinct cache key — an unbounded key space.
-    const total = MAX_CACHE_ENTRIES + 150
+    const total = MAX_ENTRIES + 150
     for (let i = 0; i < total; i++) {
       store.getState().applyGitHubPRRefreshEvent(statusEvent(`branch-${i}`, 1))
     }
 
     const states = store.getState().prRefreshStates
     // Bounded — not `total`.
-    expect(Object.keys(states)).toHaveLength(MAX_CACHE_ENTRIES)
-    // The most-recently-written key survives.
+    expect(Object.keys(states)).toHaveLength(MAX_ENTRIES)
+    // The most-recently-written key survives; the oldest is evicted.
     expect(states[`branch-${total - 1}`]).toBeDefined()
-    // The oldest key has been evicted.
     expect(states['branch-0']).toBeUndefined()
   })
 
-  it('caps prRefreshStates and keeps the most recently touched key', () => {
+  it('evicts settled (error/skipped) statuses before active ones', () => {
     const store = createTestStore()
 
-    // Seed more state entries than the cap allows.
-    const seeded: Record<string, SeededRefreshState> = {}
-    const seedCount = MAX_CACHE_ENTRIES + 100
-    for (let i = 0; i < seedCount; i++) {
-      seeded[`seed-${i}`] = { status: 'in-flight', reason: 'visible', updatedAt: 0 }
+    // Oldest entry is a settled error; the rest are active in-flight refreshes,
+    // filling the map exactly to the cap.
+    const seeded: Record<string, SeedState> = { 'stale-error': errorState() }
+    for (let i = 0; i < MAX_ENTRIES - 1; i++) {
+      seeded[`active-${i}`] = inFlightState()
     }
     store.setState({ prRefreshStates: seeded })
 
-    // One more status event for a brand-new PR cache key pushes over the cap.
-    store.getState().applyGitHubPRRefreshEvent(statusEvent('key-new', 1))
+    // One more active refresh pushes over the cap by one.
+    store.getState().applyGitHubPRRefreshEvent(statusEvent('fresh', 1))
 
     const states = store.getState().prRefreshStates
-    expect(Object.keys(states)).toHaveLength(MAX_CACHE_ENTRIES)
-    // The just-touched key survives; the oldest seeded key is evicted.
-    expect(states['key-new']).toBeDefined()
-    expect(states['seed-0']).toBeUndefined()
+    expect(Object.keys(states)).toHaveLength(MAX_ENTRIES)
+    // The settled error is evicted first; every active entry survives.
+    expect(states['stale-error']).toBeUndefined()
+    expect(states['fresh']).toBeDefined()
+    expect(states['active-0']).toBeDefined()
+    expect(states['active-500']).toBeDefined()
   })
 
   it('does not evict anything while under the cap', () => {
@@ -115,22 +132,22 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
 
   it('keeps a refreshed older key by moving it to most-recent before capping', () => {
     const store = createTestStore()
-    const seeded: Record<string, SeededRefreshState> = {}
-    const seedCount = MAX_CACHE_ENTRIES + 100
-    for (let i = 0; i < seedCount; i++) {
-      seeded[`seed-${i}`] = { status: 'in-flight', reason: 'visible', updatedAt: 0 }
+    // Fill exactly to the cap with active entries (no settled ones to evict first).
+    const seeded: Record<string, SeedState> = {}
+    for (let i = 0; i < MAX_ENTRIES; i++) {
+      seeded[`seed-${i}`] = inFlightState()
     }
     store.setState({ prRefreshStates: seeded })
 
-    // Refresh the OLDEST key. The writer moves it to most-recent (delete+set),
-    // so capping must evict the next-oldest keys, not this freshly-touched one.
+    // Refresh the OLDEST key (move-to-end), then add a brand-new key to force a
+    // last-resort eviction: the just-refreshed key must survive, the next-oldest not.
     store.getState().applyGitHubPRRefreshEvent(statusEvent('seed-0', 9))
+    store.getState().applyGitHubPRRefreshEvent(statusEvent('newcomer', 1))
 
     const states = store.getState().prRefreshStates
-    expect(Object.keys(states)).toHaveLength(MAX_CACHE_ENTRIES)
-    // Survives — without move-to-end it would be evicted.
+    expect(Object.keys(states)).toHaveLength(MAX_ENTRIES)
     expect(states['seed-0']).toBeDefined()
-    // The next-oldest key is the one evicted instead.
     expect(states['seed-1']).toBeUndefined()
+    expect(states['newcomer']).toBeDefined()
   })
 })
