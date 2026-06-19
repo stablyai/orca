@@ -7,6 +7,8 @@
  */
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
@@ -70,6 +72,13 @@ const ptyExitSidecars = new Map<string, Set<(code: number) => void>>()
 export const ptyTeardownHandlers = new Map<string, () => void>()
 let ptyDispatcherAttached = false
 
+export type PtyDataHandlerShutdownSnapshot = {
+  ptyId: string
+  dataHandler?: (data: string, meta?: PtyDataMeta) => void
+  replayHandler?: (data: string) => void
+  teardownHandler?: () => void
+}
+
 /**
  * Remove data and status handlers for the given PTY IDs so that any final
  * data flushed by the main process during PTY teardown cannot trigger
@@ -80,12 +89,36 @@ let ptyDispatcherAttached = false
  * Exit handlers are intentionally kept alive so the normal exit-cleanup
  * path (unregister, clear stale timers, update store) still runs.
  */
-export function unregisterPtyDataHandlers(ptyIds: string[]): void {
+export function unregisterPtyDataHandlers(ptyIds: string[]): PtyDataHandlerShutdownSnapshot[] {
+  const snapshots: PtyDataHandlerShutdownSnapshot[] = []
   for (const id of ptyIds) {
+    snapshots.push({
+      ptyId: id,
+      dataHandler: ptyDataHandlers.get(id),
+      replayHandler: ptyReplayHandlers.get(id),
+      teardownHandler: ptyTeardownHandlers.get(id)
+    })
     ptyDataHandlers.delete(id)
     ptyReplayHandlers.delete(id)
     ptyTeardownHandlers.get(id)?.()
     ptyTeardownHandlers.delete(id)
+  }
+  return snapshots
+}
+
+export function restorePtyDataHandlersAfterFailedShutdown(
+  snapshots: readonly PtyDataHandlerShutdownSnapshot[]
+): void {
+  for (const snapshot of snapshots) {
+    if (snapshot.dataHandler) {
+      ptyDataHandlers.set(snapshot.ptyId, snapshot.dataHandler)
+    }
+    if (snapshot.replayHandler) {
+      ptyReplayHandlers.set(snapshot.ptyId, snapshot.replayHandler)
+    }
+    if (snapshot.teardownHandler) {
+      ptyTeardownHandlers.set(snapshot.ptyId, snapshot.teardownHandler)
+    }
   }
 }
 
@@ -352,6 +385,7 @@ export type IpcPtyTransportOptions = {
   cwd?: string
   env?: Record<string, string>
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   /** Orca worktree identity for scoped shell history. */
   worktreeId?: string
@@ -365,6 +399,7 @@ export type IpcPtyTransportOptions = {
   activate?: boolean
   /** Why: mirrors PtySpawnOptions.shellOverride — see types.ts for rationale. */
   shellOverride?: string
+  projectRuntime?: ProjectExecutionRuntimeResolution
   /** Telemetry metadata for the `agent_started` event. Forwarded verbatim
    *  to `pty:spawn` so main can fire the event after confirmed launch. The
    *  IPC handler re-validates the schema; this type is the renderer-side

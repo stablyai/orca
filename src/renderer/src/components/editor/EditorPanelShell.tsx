@@ -94,7 +94,7 @@ export function EditorPanelShell({
 }: EditorPanelShellProps): JSX.Element {
   return (
     <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
-      {!model.isCombinedDiff && (
+      {!model.isCombinedDiff && activeFile.mode !== 'check-details' && (
         <EditorPanelHeader
           activeFile={activeFile}
           copiedPathVisible={copiedPathVisible}
@@ -106,12 +106,12 @@ export function EditorPanelShell({
           hasEditorToggle={model.hasEditorToggle}
           availableEditorToggleModes={model.availableEditorToggleModes}
           effectiveToggleValue={model.effectiveToggleValue}
-          mdViewMode={model.mdViewMode}
-          hasViewModeToggle={model.hasViewModeToggle}
           canOpenPreviewToSide={model.canOpenPreviewToSide}
           canShowMarkdownPreview={model.canShowMarkdownPreview}
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
+          shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
+          canExportMarkdownToPdf={model.canExportMarkdownToPdf}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
           canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
           markdownFrontmatterVisible={markdownFrontmatterVisible}

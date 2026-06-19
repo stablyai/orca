@@ -199,6 +199,107 @@ describe('Jira issue operations', () => {
     })
   })
 
+  it('maps Jira ADF descriptions into Markdown blocks and lists', async () => {
+    const { mapJiraIssue } = await import('./issues')
+
+    const issue = mapJiraIssue(makeEntry().site, {
+      id: 'issue-33',
+      key: 'PM-33',
+      fields: {
+        summary: 'BE - Tests E2E/Cleanup',
+        description: {
+          type: 'doc',
+          version: 1,
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'História' },
+                { type: 'hardBreak' },
+                { type: 'text', text: 'Coverage ownership' }
+              ]
+            },
+            {
+              type: 'bulletList',
+              content: [
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'admin - JOAO' }]
+                    }
+                  ]
+                },
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'attachment batch - JOAO' }]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              type: 'orderedList',
+              content: [
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'API module' }]
+                    }
+                  ]
+                },
+                {
+                  type: 'listItem',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [{ type: 'text', text: 'UI module' }]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: 'Done' }]
+            }
+          ]
+        },
+        project: { id: '10000', key: 'PM', name: 'Project Management' },
+        issuetype: { id: '10001', name: 'Task' },
+        status: {
+          id: '1',
+          name: 'To Do',
+          statusCategory: { key: 'new', name: 'To Do' }
+        },
+        labels: [],
+        created: '2026-06-18T00:00:00.000Z',
+        updated: '2026-06-18T00:00:00.000Z'
+      }
+    })
+
+    expect(issue.description).toBe(
+      [
+        'História',
+        'Coverage ownership',
+        '',
+        '- admin - JOAO',
+        '- attachment batch - JOAO',
+        '',
+        '1. API module',
+        '2. UI module',
+        '',
+        'Done'
+      ].join('\n')
+    )
+  })
+
   it('maps comments from the Jira comments page key', async () => {
     jiraRequestMock.mockResolvedValueOnce({
       comments: [

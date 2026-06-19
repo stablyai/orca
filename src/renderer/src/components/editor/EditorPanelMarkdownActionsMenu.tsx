@@ -1,6 +1,5 @@
 import type React from 'react'
 import { MoreHorizontal } from 'lucide-react'
-import type { MarkdownViewMode } from '@/store/slices/editor'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,8 +11,8 @@ import { translate } from '@/i18n/i18n'
 
 type EditorPanelMarkdownActionsMenuProps = {
   isMarkdown: boolean
-  hasViewModeToggle: boolean
-  mdViewMode: MarkdownViewMode
+  shouldShowMarkdownExportAction: boolean
+  canExportMarkdownToPdf: boolean
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
   onToggleMarkdownFrontmatter: () => void
@@ -22,14 +21,14 @@ type EditorPanelMarkdownActionsMenuProps = {
 
 export function EditorPanelMarkdownActionsMenu({
   isMarkdown,
-  hasViewModeToggle,
-  mdViewMode,
+  shouldShowMarkdownExportAction,
+  canExportMarkdownToPdf,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelMarkdownActionsMenuProps): React.JSX.Element | null {
-  if (!isMarkdown || (!hasViewModeToggle && !canShowMarkdownFrontmatterToggle)) {
+  if (!isMarkdown || (!shouldShowMarkdownExportAction && !canShowMarkdownFrontmatterToggle)) {
     return null
   }
 
@@ -70,15 +69,13 @@ export function EditorPanelMarkdownActionsMenu({
                     'Show front matter'
                   )}
             </DropdownMenuItem>
-            {hasViewModeToggle ? <DropdownMenuSeparator /> : null}
+            {shouldShowMarkdownExportAction ? <DropdownMenuSeparator /> : null}
           </>
         ) : null}
-        {hasViewModeToggle ? (
+        {shouldShowMarkdownExportAction ? (
           <DropdownMenuItem
-            // Why: source/Monaco mode has no document DOM. Avoid polling the
-            // portal-mounted menu; exportActiveMarkdownToPdf is a safe no-op
-            // when no rendered markdown subtree is found.
-            disabled={mdViewMode === 'source'}
+            // Why: source/Monaco fallbacks have no rendered document DOM to export.
+            disabled={!canExportMarkdownToPdf}
             onSelect={onExportMarkdownToPdf}
           >
             {translate(

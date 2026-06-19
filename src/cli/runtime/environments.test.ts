@@ -21,6 +21,8 @@ function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
 }
 
 describe('CLI runtime environments', () => {
+  const posixModeIt = process.platform === 'win32' ? it.skip : it
+
   it('saves, resolves, and removes a paired environment', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
     const saved = addEnvironmentFromPairingCode(userDataPath, {
@@ -37,11 +39,25 @@ describe('CLI runtime environments', () => {
     expect(resolveEnvironmentPairingOffer(userDataPath, saved.id)).toMatchObject({
       endpoint: 'ws://127.0.0.1:6768'
     })
-    expect((statSync(getEnvironmentStorePath(userDataPath)).mode & 0o777).toString(8)).toBe('600')
+    expect(statSync(getEnvironmentStorePath(userDataPath)).isFile()).toBe(true)
 
     const removed = removeEnvironment(userDataPath, 'workstation')
     expect(removed.id).toBe(saved.id)
     expect(listEnvironments(userDataPath)).toEqual([])
+  })
+
+  posixModeIt('stores paired environments with owner-only POSIX permissions', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+
+    addEnvironmentFromPairingCode(userDataPath, {
+      name: 'workstation',
+      pairingCode: pairingCode(),
+      now: 100
+    })
+
+    // Why: NTFS mode bits do not prove Windows ACL hardening; shared secure-file
+    // tests cover that path, while POSIX hosts must keep the token store at 0600.
+    expect((statSync(getEnvironmentStorePath(userDataPath)).mode & 0o777).toString(8)).toBe('600')
   })
 
   it('rejects an environment with the same name', () => {

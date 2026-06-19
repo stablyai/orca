@@ -28,6 +28,14 @@ function fetchCallCount(): number {
   ).length
 }
 
+function exactBaseRefreshOptions(cwd: string): {
+  cwd: string
+  timeout: number
+  useConfiguredSshCommandForNetwork: boolean
+} {
+  return { cwd, timeout: 60_000, useConfiguredSshCommandForNetwork: true }
+}
+
 function mockFetchResults(results: (Promise<unknown> | unknown)[]): void {
   let fetchIndex = 0
   gitExecFileAsyncMock.mockImplementation((argv: string[]) => {
@@ -175,7 +183,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-      { cwd: '/repo/f' }
+      exactBaseRefreshOptions('/repo/f')
     )
   })
 
@@ -289,7 +297,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     expect(fetchCalls).toEqual([
       [
         ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-        { cwd: '/repo/h' }
+        exactBaseRefreshOptions('/repo/h')
       ],
       [['fetch', 'origin'], { cwd: '/repo/h' }]
     ])
@@ -336,7 +344,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       [['fetch', 'origin'], { cwd: '/repo/i' }],
       [
         ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-        { cwd: '/repo/i' }
+        exactBaseRefreshOptions('/repo/i')
       ]
     ])
   })
@@ -382,7 +390,7 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
       [['fetch', 'origin'], { cwd: '/repo/i-fail' }],
       [
         ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
-        { cwd: '/repo/i-fail' }
+        exactBaseRefreshOptions('/repo/i-fail')
       ]
     ])
   })

@@ -21,6 +21,11 @@ import { StringDecoder } from 'string_decoder'
 import { withGitSpan } from '../observability/instrumentation'
 import { getDefaultWslDistro, parseWslPath, toWindowsWslPath, type WslPathInfo } from '../wsl'
 import { getSpawnArgsForWindows, isWindowsBatchScript, resolveWindowsCommand } from '../win32-utils'
+import {
+  buildWslLoginShellCommand,
+  escapeWslShCommandForWindows,
+  quotePosixShell
+} from '../../shared/wsl-login-shell-command'
 
 // ─── Core resolution ────────────────────────────────────────────────
 
@@ -43,23 +48,25 @@ type ResolvedCommand = {
  * (C:\Users\...) are converted to /mnt/c/Users/...
  */
 function translateArgsForWsl(args: string[]): string[] {
-  return args.map((arg) => {
-    // WSL UNC path → native linux path
-    const wslInfo = parseWslPath(arg)
-    if (wslInfo) {
-      return wslInfo.linuxPath
-    }
+  return args.map(translateArgForWsl)
+}
 
-    // Windows drive path (e.g. C:\Users\...) → /mnt/c/Users/...
-    const driveMatch = arg.match(/^([A-Za-z]):[/\\](.*)$/)
-    if (driveMatch) {
-      const driveLetter = driveMatch[1].toLowerCase()
-      const rest = driveMatch[2].replace(/\\/g, '/')
-      return `/mnt/${driveLetter}/${rest}`
-    }
+function translateArgForWsl(arg: string): string {
+  // WSL UNC path → native linux path
+  const wslInfo = parseWslPath(arg)
+  if (wslInfo) {
+    return wslInfo.linuxPath
+  }
 
-    return arg
-  })
+  // Windows drive path (e.g. C:\Users\...) → /mnt/c/Users/...
+  const driveMatch = arg.match(/^([A-Za-z]):[/\\](.*)$/)
+  if (driveMatch) {
+    const driveLetter = driveMatch[1].toLowerCase()
+    const rest = driveMatch[2].replace(/\\/g, '/')
+    return `/mnt/${driveLetter}/${rest}`
+  }
+
+  return arg
 }
 
 function hasExplicitRepoArg(args: string[]): boolean {
@@ -161,7 +168,8 @@ function resolveCommand(
   command: string,
   args: string[],
   cwd: string | undefined,
-  wslDistroOverride?: string
+  wslDistroOverride?: string,
+  options: { useWslLoginShell?: boolean } = {}
 ): ResolvedCommand {
   if (process.platform !== 'win32') {
     return { binary: command, args, cwd, wsl: null }
@@ -185,18 +193,36 @@ function resolveCommand(
   }
 
   const translatedArgs = translateArgsForWsl(args)
+  const escapedCommand = quotePosixShell(command)
   // Why: shell-escape each argument to prevent word splitting / glob expansion
   // inside the bash -c string. Single quotes are safe for all chars except
   // single quotes themselves, which we escape as '\'' (end quote, escaped
   // literal, reopen quote).
-  const escapedArgs = translatedArgs.map((a) => `'${a.replace(/'/g, "'\\''")}'`)
+  const escapedArgs = translatedArgs.map(quotePosixShell)
   // Why: when cwd is supplied as a WSL UNC path, prepend `cd <linuxPath> &&`
   // so the command runs in the expected directory. When the caller only
   // supplied a distro override (no cwd), skip the cd entirely — the gh CLI
   // doesn't need a particular cwd for global calls like `api rate_limit`.
-  const shellCmd = cwdWsl
-    ? `cd '${cwdWsl.linuxPath.replace(/'/g, "'\\''")}' && ${command} ${escapedArgs.join(' ')}`
-    : `${command} ${escapedArgs.join(' ')}`
+  const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
+  const shellCmd = linuxCwd
+    ? `cd ${quotePosixShell(linuxCwd)} && ${escapedCommand} ${escapedArgs.join(' ')}`
+    : `${escapedCommand} ${escapedArgs.join(' ')}`
+
+  if (options.useWslLoginShell) {
+    return {
+      binary: 'wsl.exe',
+      args: [
+        '-d',
+        wsl.distro,
+        '--',
+        'sh',
+        '-lc',
+        escapeWslShCommandForWindows(buildWslLoginShellCommand(shellCmd))
+      ],
+      cwd: undefined,
+      wsl
+    }
+  }
 
   return {
     binary: 'wsl.exe',
@@ -225,6 +251,9 @@ type GitExecOptions = {
   maxBuffer?: number
   timeout?: number
   env?: NodeJS.ProcessEnv
+  signal?: AbortSignal
+  wslDistro?: string
+  useConfiguredSshCommandForNetwork?: boolean
 }
 
 type CommandExecOptions = {
@@ -489,6 +518,15 @@ export function gitOptionalLocksDisabledEnv(
   }
 }
 
+function promptGuardGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_ASKPASS: env.GIT_ASKPASS ?? '',
+    SSH_ASKPASS: env.SSH_ASKPASS ?? ''
+  }
+}
+
 /**
  * Force git to be non-interactive so it fails fast instead of blocking forever
  * on a prompt. Without this, a git read-path call (status, worktree list, …)
@@ -505,16 +543,173 @@ export function gitOptionalLocksDisabledEnv(
  *   caller hasn't set its own GIT_SSH_COMMAND.
  */
 export function nonInteractiveGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const next: NodeJS.ProcessEnv = {
-    ...env,
-    GIT_TERMINAL_PROMPT: '0',
-    GIT_ASKPASS: env.GIT_ASKPASS ?? '',
-    SSH_ASKPASS: env.SSH_ASKPASS ?? ''
-  }
+  const next = promptGuardGitEnv(env)
   if (!next.GIT_SSH_COMMAND) {
     next.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
   }
   return next
+}
+
+type GitSshPolicyMode =
+  | 'default'
+  | 'explicit-env'
+  | 'fallback'
+  | 'configured-openssh'
+  | 'configured-wrapper-passthrough'
+
+const CORE_SSH_COMMAND_PROBE_TIMEOUT_MS = 2500
+
+function commandBasename(command: string): string {
+  const pieces = command.split(/[\\/]+/)
+  return pieces.at(-1)?.toLowerCase() ?? command.toLowerCase()
+}
+
+function isMergeableOpenSshCommand(command: string): boolean {
+  const basename = commandBasename(command)
+  return basename === 'ssh' || basename === 'ssh.exe'
+}
+
+function shellTokenize(command: string): string[] | null {
+  const tokens: string[] = []
+  let current = ''
+  let quote: "'" | '"' | null = null
+  let escaped = false
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i]
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+    if (char === '\\') {
+      const next = command[i + 1]
+      if (next && /[\s'"\\]/.test(next)) {
+        escaped = true
+      } else {
+        current += char
+      }
+      continue
+    }
+    if (quote) {
+      if (char === quote) {
+        quote = null
+      } else {
+        current += char
+      }
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      continue
+    }
+    if (/\s/.test(char)) {
+      if (current) {
+        tokens.push(current)
+        current = ''
+      }
+      continue
+    }
+    if (';&|<>()`'.includes(char)) {
+      return null
+    }
+    current += char
+  }
+
+  if (escaped || quote) {
+    return null
+  }
+  if (current) {
+    tokens.push(current)
+  }
+  return tokens
+}
+
+function shellQuoteToken(token: string): string {
+  return /^[A-Za-z0-9_@%+=:,./~-]+$/.test(token) ? token : quotePosixShell(token)
+}
+
+function containsShellExpansionSyntax(command: string): boolean {
+  return command.includes('$')
+}
+
+function withoutBatchModeOptions(tokens: string[]): string[] {
+  const next: string[] = []
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]
+    const lower = token.toLowerCase()
+    if (lower === '-o') {
+      const option = tokens[i + 1]?.toLowerCase()
+      if (option?.startsWith('batchmode')) {
+        i += 1
+        continue
+      }
+    }
+    if (lower.startsWith('-obatchmode')) {
+      continue
+    }
+    next.push(token)
+  }
+  return next
+}
+
+function buildOpenSshBatchModeCommand(configuredCommand: string): string | null {
+  if (containsShellExpansionSyntax(configuredCommand)) {
+    return null
+  }
+  const tokens = shellTokenize(configuredCommand)
+  if (!tokens || tokens.length === 0 || !isMergeableOpenSshCommand(tokens[0])) {
+    return null
+  }
+  return [...withoutBatchModeOptions(tokens), '-o', 'BatchMode=yes'].map(shellQuoteToken).join(' ')
+}
+
+async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
+  env: NodeJS.ProcessEnv
+  mode: GitSshPolicyMode
+}> {
+  const promptEnv = promptGuardGitEnv(options.env)
+  if (promptEnv.GIT_SSH_COMMAND) {
+    return { env: promptEnv, mode: 'explicit-env' }
+  }
+
+  const resolved = resolveCommand(
+    'git',
+    ['config', '--get', 'core.sshCommand'],
+    options.cwd,
+    options.wslDistro,
+    { useWslLoginShell: Boolean(options.wslDistro) }
+  )
+  let configuredCommand = ''
+  try {
+    const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
+      cwd: resolved.cwd,
+      encoding: 'utf-8',
+      maxBuffer: DEFAULT_GIT_MAX_BUFFER,
+      timeout: CORE_SSH_COMMAND_PROBE_TIMEOUT_MS,
+      env: promptEnv,
+      signal: options.signal
+    })
+    configuredCommand = String(stdout).trim()
+  } catch {
+    configuredCommand = ''
+  }
+
+  if (!configuredCommand) {
+    return { env: { ...promptEnv, GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }, mode: 'fallback' }
+  }
+
+  const batchModeCommand = buildOpenSshBatchModeCommand(configuredCommand)
+  if (!batchModeCommand) {
+    // Why: custom wrappers are executable user policy; rewriting their argv is
+    // riskier than relying on prompt guards plus the caller's target timeout.
+    return { env: promptEnv, mode: 'configured-wrapper-passthrough' }
+  }
+
+  return {
+    env: { ...promptEnv, GIT_SSH_COMMAND: batchModeCommand },
+    mode: 'configured-openssh'
+  }
 }
 
 /**
@@ -532,16 +727,31 @@ export async function gitExecFileAsync(
   return withGitSpan(
     { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
     async () => {
-      const resolved = resolveCommand('git', args, options.cwd)
-      const { stdout, stderr } = await execFileCapture(resolved.binary, resolved.args, {
-        cwd: resolved.cwd,
-        encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
-        maxBuffer: options.maxBuffer,
-        timeout: options.timeout,
-        // Why: never let a git read-path call block on an interactive prompt
-        // (issue #5308) — fail fast instead of hanging the runtime.
-        env: nonInteractiveGitEnv(options.env)
+      const resolved = resolveCommand('git', args, options.cwd, options.wslDistro, {
+        useWslLoginShell: Boolean(options.wslDistro)
       })
+      const policy = options.useConfiguredSshCommandForNetwork
+        ? await buildNetworkSshPolicyEnv(options)
+        : { env: nonInteractiveGitEnv(options.env), mode: 'default' as const }
+      let result: { stdout: string | Buffer; stderr: string | Buffer }
+      try {
+        result = await execFileCapture(resolved.binary, resolved.args, {
+          cwd: resolved.cwd,
+          encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+          maxBuffer: options.maxBuffer,
+          timeout: options.timeout,
+          // Why: never let a git read-path call block on an interactive prompt
+          // (issue #5308) — fail fast instead of hanging the runtime.
+          env: policy.env,
+          signal: options.signal
+        })
+      } catch (error) {
+        if (options.useConfiguredSshCommandForNetwork && error && typeof error === 'object') {
+          Object.assign(error, { gitSshPolicyMode: policy.mode })
+        }
+        throw error
+      }
+      const { stdout, stderr } = result
       return { stdout: stdout as string, stderr: stderr as string }
     }
   )
@@ -596,9 +806,11 @@ export async function commandExecFileAsync(
  */
 export async function gitExecFileAsyncBuffer(
   args: string[],
-  options: { cwd: string; maxBuffer?: number }
+  options: { cwd: string; maxBuffer?: number; wslDistro?: string }
 ): Promise<{ stdout: Buffer }> {
-  const resolved = resolveCommand('git', args, options.cwd)
+  const resolved = resolveCommand('git', args, options.cwd, options.wslDistro, {
+    useWslLoginShell: Boolean(options.wslDistro)
+  })
   const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
     encoding: 'buffer',
@@ -614,6 +826,7 @@ export type GitStreamResult = { stoppedEarly: boolean }
 type GitStreamOptions = {
   cwd: string
   env?: NodeJS.ProcessEnv
+  wslDistro?: string
   /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
   maxBuffer?: number
   /**
@@ -645,6 +858,7 @@ export async function gitStreamStdout(
         cwd: options.cwd,
         env: nonInteractiveGitEnv(options.env),
         stdio: ['ignore', 'pipe', 'pipe'],
+        wslDistro: options.wslDistro,
         windowsHide: true
       })
 
@@ -765,10 +979,16 @@ export function gitExecFileSync(
  * Spawn a git child process. Drop-in replacement for
  * `spawn('git', args, { cwd, stdio, ... })`.
  */
-export function gitSpawn(args: string[], options: SpawnOptions & { cwd: string }): ChildProcess {
-  const resolved = resolveCommand('git', args, options.cwd)
+export function gitSpawn(
+  args: string[],
+  options: SpawnOptions & { cwd: string; wslDistro?: string }
+): ChildProcess {
+  const { wslDistro, ...spawnOptions } = options
+  const resolved = resolveCommand('git', args, options.cwd, wslDistro, {
+    useWslLoginShell: Boolean(wslDistro)
+  })
   return spawn(resolved.binary, resolved.args, {
-    ...options,
+    ...spawnOptions,
     cwd: resolved.cwd
   })
 }
@@ -993,9 +1213,26 @@ const GH_RETRY_DELAYS_MS = [250, 1000] as const
 // at 30s so a single transient gh call can never block the IPC main thread
 // for longer than the user's patience budget for an interactive action.
 const GH_RETRY_AFTER_MAX_MS = 30_000
+const DEFAULT_GH_EXEC_TIMEOUT_MS = 30_000
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function defaultGhExecTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.ORCA_GH_EXEC_TIMEOUT_MS
+  if (!raw) {
+    return DEFAULT_GH_EXEC_TIMEOUT_MS
+  }
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_GH_EXEC_TIMEOUT_MS
+}
+
+function nonInteractiveGhEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    GH_PROMPT_DISABLED: env.GH_PROMPT_DISABLED ?? '1'
+  }
 }
 
 /**
@@ -1020,8 +1257,10 @@ export async function ghExecFileAsync(
         cwd: resolved.cwd,
         encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
         maxBuffer: options.maxBuffer,
-        timeout: options.timeout,
-        env: options.env
+        // Why: GitHub detail IPC powers PR cards, Tasks, and URL worktree
+        // creation; one stuck gh child must fail visibly, not wedge every lane.
+        timeout: options.timeout ?? defaultGhExecTimeoutMs(options.env),
+        env: nonInteractiveGhEnv(options.env)
       })
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
@@ -1170,11 +1409,14 @@ export async function glabExecFileAsync(
 export function wslAwareSpawn(
   command: string,
   args: string[],
-  options: SpawnOptions & { cwd?: string }
+  options: SpawnOptions & { cwd?: string; wslDistro?: string; useWslLoginShell?: boolean }
 ): ChildProcess {
-  const resolved = resolveCommand(command, args, options.cwd)
+  const { wslDistro, useWslLoginShell, ...spawnOptions } = options
+  const resolved = resolveCommand(command, args, options.cwd, wslDistro, {
+    useWslLoginShell
+  })
   return spawn(resolved.binary, resolved.args, {
-    ...options,
+    ...spawnOptions,
     cwd: resolved.cwd
   })
 }
@@ -1188,16 +1430,21 @@ export function wslAwareSpawn(
  * are Linux-native (/home/user/repo). The rest of Orca needs Windows UNC
  * paths (\\wsl.localhost\Ubuntu\home\user\repo) to read files via Node fs.
  */
-export function translateWslOutputPaths(output: string, originalCwd: string): string {
+export function translateWslOutputPaths(
+  output: string,
+  originalCwd: string,
+  options: { wslDistro?: string } = {}
+): string {
   const wsl = parseWslPath(originalCwd)
-  if (!wsl) {
+  const distro = wsl?.distro ?? options.wslDistro
+  if (!distro) {
     return output
   }
 
   // Replace absolute Linux paths that start with / and look like filesystem
   // paths in structured git output (e.g. "worktree /home/user/repo/feature")
   return output.replace(/(?<=worktree )(\/.+)$/gm, (_match, linuxPath: string) =>
-    toWindowsWslPath(linuxPath, wsl.distro)
+    toWindowsWslPath(linuxPath, distro)
   )
 }
 

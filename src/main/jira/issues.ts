@@ -29,6 +29,7 @@ import {
   release,
   type JiraClientForSite
 } from './client'
+import { adfToMarkdownText, textToAdf } from './adf-markdown'
 
 const ISSUE_FIELDS = [
   'summary',
@@ -264,67 +265,6 @@ function mapStatus(value: unknown): JiraStatus {
   }
 }
 
-function textNode(text: string): JiraRecord {
-  return text ? { type: 'text', text } : { type: 'hardBreak' }
-}
-
-function textToAdf(text: string): JiraRecord {
-  const lines = text.split(/\r?\n/)
-  return {
-    type: 'doc',
-    version: 1,
-    content: lines.map((line) => ({
-      type: 'paragraph',
-      content: line ? [textNode(line)] : []
-    }))
-  }
-}
-
-function adfToPlainText(value: unknown): string {
-  const chunks: string[] = []
-
-  const walk = (node: unknown): void => {
-    if (!node) {
-      return
-    }
-    if (typeof node === 'string') {
-      chunks.push(node)
-      return
-    }
-    if (Array.isArray(node)) {
-      node.forEach(walk)
-      return
-    }
-    if (typeof node !== 'object') {
-      return
-    }
-    const record = node as JiraRecord
-    if (typeof record.text === 'string') {
-      chunks.push(record.text)
-    }
-    if (record.type === 'hardBreak') {
-      chunks.push('\n')
-    }
-    walk(record.content)
-    if (
-      record.type === 'paragraph' ||
-      record.type === 'heading' ||
-      record.type === 'listItem' ||
-      record.type === 'bulletList' ||
-      record.type === 'orderedList'
-    ) {
-      chunks.push('\n')
-    }
-  }
-
-  walk(value)
-  return chunks
-    .join('')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
 function issueUrl(site: JiraSite, key: string): string {
   return `${site.siteUrl}/browse/${encodeURIComponent(key)}`
 }
@@ -338,7 +278,7 @@ export function mapJiraIssue(site: JiraSite, raw: JiraRecord): JiraIssue {
     siteId: site.id,
     siteName: site.displayName,
     title: asString(fields.summary, key || 'Untitled issue'),
-    description: adfToPlainText(fields.description),
+    description: adfToMarkdownText(fields.description),
     url: issueUrl(site, key),
     project: mapProject(fields.project, site),
     issueType: mapIssueType(fields.issuetype),
@@ -592,7 +532,7 @@ export async function addIssueComment(
 function mapComment(raw: JiraRecord): JiraComment {
   return {
     id: asString(raw.id),
-    body: adfToPlainText(raw.body),
+    body: adfToMarkdownText(raw.body),
     createdAt: asString(raw.created, new Date().toISOString()),
     updatedAt: asString(raw.updated) || undefined,
     user: mapUser(raw.author)

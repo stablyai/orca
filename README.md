@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/stablyai/orca/stargazers"><img src="https://badgen.net/github/stars/stablyai/orca?label=%E2%98%85" alt="GitHub stars" /></a>
-  <a href="https://github.com/stablyai/orca/releases"><img src="https://img.shields.io/github/downloads/stablyai/orca/total?label=downloads" alt="Total downloads across all releases" /></a>
+  <a href="https://github.com/stablyai/orca/releases"><img src="docs/assets/readme-downloads.svg" alt="Total downloads across all releases" /></a>
   <img src="https://badgen.net/github/license/stablyai/orca" alt="License" />
   <a href="https://discord.gg/fzjDKHxv8Q"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Join the Orca Discord" /></a>
   <img src="https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-4493F8?style=flat-square" alt="Supported platforms: macOS, Windows, and Linux" />
@@ -16,7 +16,7 @@
 
 <p align="center">
   <strong>The AI Orchestrator for 100x builders.</strong><br/>
-  Run Claude Code, OpenClaude, Codex, or OpenCode side-by-side — each in its own worktree, tracked in one place.
+  Run Codex, ClaudeCode, OpenCode or Pi side-by-side — each in its own worktree, tracked in one place.
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>Download Orca</ins></a></h3>
@@ -35,7 +35,7 @@
 
 Monitor and steer your agents from your phone — get notified when an agent finishes and send follow-ups from anywhere.
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.13/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.14/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -228,7 +228,7 @@ yay -S stably-orca-bin
 Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **iOS:** [Download on the App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Download the APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.13/app-release.apk)
+- **Android:** [Download the APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.14/app-release.apk)
 
 ---
 

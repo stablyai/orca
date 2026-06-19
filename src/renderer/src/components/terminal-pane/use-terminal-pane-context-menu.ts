@@ -26,6 +26,7 @@ import {
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -173,6 +174,9 @@ export function useTerminalPaneContextMenu({
       forceBracketedMultilineTextPaste,
       pasteText: (text, options) => {
         pasteTerminalText(pane.terminal, text, options)
+        if (text) {
+          recordTerminalUserInputForLeaf(tabId, pane.leafId)
+        }
         if (options?.recoverImagePasteWebglAtlas) {
           scheduleImagePasteWebglAtlasRecovery()
         }
@@ -293,6 +297,7 @@ export function useTerminalPaneContextMenu({
     sendTerminalQuickCommandToPane({
       command,
       pane,
+      tabId,
       transport: paneTransportsRef.current.get(pane.id)
     })
   }

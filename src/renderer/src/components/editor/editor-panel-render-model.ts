@@ -12,12 +12,16 @@ import { getEditorHeaderOpenFileState } from './editor-header'
 import type { EditorToggleValue } from './EditorViewToggle'
 import type { FileContent } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
+import { getMarkdownRenderMode } from './markdown-render-mode'
+import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 
 type EditorPanelRenderModelParams = {
   activeFile: OpenFile
   fileContents: Record<string, FileContent>
+  editorDrafts: StoreState['editorDrafts']
   gitStatusByWorktree: StoreState['gitStatusByWorktree']
   gitBranchChangesByWorktree: StoreState['gitBranchChangesByWorktree']
   markdownViewMode: StoreState['markdownViewMode']
@@ -27,6 +31,7 @@ type EditorPanelRenderModelParams = {
 export function getEditorPanelRenderModel({
   activeFile,
   fileContents,
+  editorDrafts,
   gitStatusByWorktree,
   gitBranchChangesByWorktree,
   markdownViewMode,
@@ -98,6 +103,36 @@ export function getEditorPanelRenderModel({
     : hasViewModeToggle
       ? mdViewMode
       : 'edit'
+  const inlineMarkdownContent =
+    activeFile.mode === 'edit'
+      ? (editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null)
+      : null
+  const shouldShowMarkdownExportAction =
+    resolvedLanguage === 'markdown' &&
+    (activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview')
+  const inlineMarkdownRenderMode =
+    activeFile.mode === 'edit' && inlineMarkdownContent !== null
+      ? getMarkdownRenderMode({
+          exceedsRichModeSizeLimit: exceedsMarkdownRichModeSizeLimit(inlineMarkdownContent),
+          hasRichModeUnsupportedContent:
+            getMarkdownRichModeUnsupportedMessage(inlineMarkdownContent) !== null,
+          viewMode: mdViewMode
+        })
+      : null
+  const canExportMarkdownToPdf =
+    shouldShowMarkdownExportAction &&
+    ((activeFile.mode === 'markdown-preview' &&
+      fileContents[activeFile.id] !== undefined &&
+      fileContents[activeFile.id]?.isBinary !== true &&
+      !fileContents[activeFile.id]?.loadError) ||
+      (activeFile.mode === 'edit' &&
+        fileContents[activeFile.id] !== undefined &&
+        !isChangesMode &&
+        inlineMarkdownRenderMode !== null &&
+        inlineMarkdownRenderMode !== 'source' &&
+        fileContents[activeFile.id]?.isBinary !== true &&
+        !fileContents[activeFile.id]?.loadError &&
+        activeFile.conflict?.conflictStatus !== 'unresolved'))
   return {
     isSingleDiff,
     isDiffSurface: isSingleDiff || isChangesMode,
@@ -120,6 +155,8 @@ export function getEditorPanelRenderModel({
     hasEditorToggle: availableEditorToggleModes.length > 1,
     effectiveToggleValue,
     isMarkdownTableOfContentsDisabled: hasViewModeToggle && mdViewMode === 'source',
+    shouldShowMarkdownExportAction,
+    canExportMarkdownToPdf,
     canShowMarkdownTableOfContents:
       resolvedLanguage === 'markdown' &&
       (hasViewModeToggle || activeFile.mode === 'markdown-preview'),

@@ -41,7 +41,11 @@ describe('Cmd+J lifted creation actions', () => {
     delete pairedWebFlag.__ORCA_WEB_CLIENT__
   })
 
-  it('opens a local browser tab when paired-web browser creation fails', async () => {
+  it('does not fall back to a local browser tab when paired-web creation fails', async () => {
+    // Why: a remote-owned workspace must stay remote-owned. If the remote host
+    // cannot create the page, we must NOT silently open a local desktop tab —
+    // that produces confusing split ownership (issue #5321). Mirrors the
+    // terminal no-fallback contract below.
     createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
     const store = createTestStore()
     seedActiveWorkspace(store)
@@ -54,10 +58,10 @@ describe('Cmd+J lifted creation actions', () => {
       url: 'about:blank',
       targetGroupId: 'group-1'
     })
-    expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toHaveLength(1)
+    expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 
-  it('creates browser tabs on the explicit owner runtime when another runtime is focused', async () => {
+  it('routes browser tab creation to the explicit owner runtime when another runtime is focused', async () => {
     createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
     const store = createTestStore()
     seedActiveWorkspace(store)
@@ -74,7 +78,8 @@ describe('Cmd+J lifted creation actions', () => {
       url: 'about:blank',
       targetGroupId: 'group-1'
     })
-    expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toHaveLength(1)
+    // Remote-owned: no local fallback even when the remote create fails.
+    expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 
   it('creates a local browser tab for explicitly local workspaces while a runtime is focused', async () => {

@@ -21,6 +21,11 @@ import {
 } from './ssh-relay-versioned-install'
 import { shellEscape } from './ssh-connection-utils'
 import {
+  probeBuildToolchain,
+  formatMissingToolchainError,
+  shouldProbeBuildToolchainAfterNativeDepsFailure
+} from './ssh-relay-build-toolchain'
+import {
   commandWithNodePath,
   makeRemoteDirectoryCommand,
   makeRemoteExecutableCommand,
@@ -451,6 +456,16 @@ async function installNativeDeps(
     console.warn(
       `[ssh-relay][NATIVE-DEPS-INSTALL-FAIL] npm install native deps failed at ${remoteDir} (${platform}): ${msg}`
     )
+    // Why: on Linux node-pty has no prebuild and must compile, so a missing
+    // C/C++ toolchain is the dominant first-connect failure (#1693). Probe the
+    // remote and replace node-gyp's opaque `not found: make` with an actionable
+    // install hint instead of leaking the raw npm output to the user.
+    if (platform.startsWith('linux') && shouldProbeBuildToolchainAfterNativeDepsFailure(msg)) {
+      const toolchain = await probeBuildToolchain(conn, hostPlatform)
+      if (toolchain?.toolchainMissing) {
+        throw new Error(formatMissingToolchainError(toolchain, msg))
+      }
+    }
     throw err
   }
 

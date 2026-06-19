@@ -14,6 +14,18 @@ describe('git blob readers', () => {
     expect(result.content).toBe('head-content')
   })
 
+  it('marks OID blobs that overflow maxBuffer as binary', async () => {
+    const gitBuffer = vi
+      .fn<GitBufferExec>()
+      .mockRejectedValue(
+        Object.assign(new Error('stdout maxBuffer length exceeded'), { code: 'ENOBUFS' })
+      )
+
+    const result = await readBlobAtOid(gitBuffer, '/repo', 'HEAD', 'large.log')
+
+    expect(result).toEqual({ content: '', isBinary: true })
+  })
+
   it('normalizes Windows separators before reading index blobs', async () => {
     const gitBuffer = vi.fn<GitBufferExec>().mockResolvedValue(Buffer.from('index-content'))
 
@@ -21,5 +33,17 @@ describe('git blob readers', () => {
 
     expect(gitBuffer).toHaveBeenCalledWith(['show', '--end-of-options', ':src/file.ts'], '/repo')
     expect(result.content).toBe('index-content')
+  })
+
+  it('marks index blobs that overflow maxBuffer as binary', async () => {
+    const gitBuffer = vi
+      .fn<GitBufferExec>()
+      .mockRejectedValue(
+        Object.assign(new Error('git stdout exceeded maxBuffer.'), { code: 'ENOBUFS' })
+      )
+
+    const result = await readBlobAtIndex(gitBuffer, '/repo', 'large.log')
+
+    expect(result).toEqual({ content: '', isBinary: true })
   })
 })

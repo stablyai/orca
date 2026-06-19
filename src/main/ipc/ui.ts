@@ -1,9 +1,20 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
 
 export function registerUIHandlers(store: Store): void {
+  // Why: UI view-state is shared between the desktop renderer and mobile (ui.set
+  // RPC). Broadcast every change so the desktop re-hydrates when mobile (or
+  // another window) updates it — bi-directional sync, mirroring settings:changed.
+  store.onUIChanged((ui) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('ui:stateChanged', ui)
+      }
+    }
+  })
+
   ipcMain.handle('ui:get', () => {
     return store.getUI()
   })

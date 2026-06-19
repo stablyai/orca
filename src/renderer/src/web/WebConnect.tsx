@@ -71,7 +71,7 @@ export default function WebConnect({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-6 text-foreground">
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-6 text-foreground">
       <div className="flex w-full max-w-[520px] flex-col gap-5 rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted">

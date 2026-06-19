@@ -13,11 +13,13 @@ const WORKSPACE_BOARD_MOVED_HINT_DURATION_MS = 12000
 
 type SidebarToolbarProps = {
   workspaceBoardOpen: boolean
+  workspaceBoardDragPreviewOpen?: boolean
   onWorkspaceBoardToggle: () => void
 }
 
 const SidebarToolbar = React.memo(function SidebarToolbar({
   workspaceBoardOpen,
+  workspaceBoardDragPreviewOpen = false,
   onWorkspaceBoardToggle
 }: SidebarToolbarProps) {
   const [workspaceBoardMovedHintOpen, setWorkspaceBoardMovedHintOpen] = React.useState(false)
@@ -64,12 +66,16 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
     <div className="mt-auto shrink-0">
       <div className="flex items-center justify-between border-t border-worktree-sidebar-border px-2 py-1.5">
         <SidebarSettingsHelpMenu />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <ScrollToCurrentWorkspaceToolbarButton />
           <Tooltip open={workspaceBoardMovedHintOpen ? true : undefined}>
             <TooltipTrigger asChild>
               <Button
-                variant={workspaceBoardOpen ? 'secondary' : 'ghost'}
+                // Why: previewing the board from a card drag lights up the
+                // trigger so it's clear the drag is another way to open it.
+                variant={
+                  workspaceBoardOpen || workspaceBoardDragPreviewOpen ? 'secondary' : 'ghost'
+                }
                 size="icon-xs"
                 type="button"
                 aria-label={translate(
@@ -78,6 +84,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
                 )}
                 aria-pressed={workspaceBoardOpen}
                 data-workspace-board-trigger=""
+                data-workspace-board-preview={workspaceBoardDragPreviewOpen ? 'true' : undefined}
                 onClick={handleWorkspaceBoardClick}
                 className="text-muted-foreground"
               >

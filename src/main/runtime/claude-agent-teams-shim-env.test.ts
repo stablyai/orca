@@ -50,12 +50,21 @@ describe('claude agent teams shim env', () => {
       }
     })
 
-    expect(plan).toMatchObject({
-      command: "claude --teammate-mode auto 'hello'",
-      env: expect.objectContaining({ TMUX_PANE: '%1' }),
-      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
-    })
-    expect(capturedShimBin).toBe(cliPath)
+    if (process.platform === 'win32') {
+      expect(plan).toMatchObject({
+        command: "claude --teammate-mode in-process 'hello'",
+        env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+      })
+      expect(plan?.envToDelete).toBeUndefined()
+      expect(capturedShimBin).toBe('')
+    } else {
+      expect(plan).toMatchObject({
+        command: "claude --teammate-mode auto 'hello'",
+        env: expect.objectContaining({ TMUX_PANE: '%1' }),
+        envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      })
+      expect(capturedShimBin).toBe(cliPath)
+    }
 
     await expect(
       buildClaudeAgentTeamsLaunchPlan({

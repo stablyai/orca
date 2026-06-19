@@ -8,6 +8,10 @@ type FsState = {
   present: Set<string>
 }
 
+function fsKey(pathValue: string): string {
+  return pathValue.replaceAll('\\', '/')
+}
+
 function createFsState(): FsState {
   return { files: new Map(), present: new Set() }
 }
@@ -57,42 +61,48 @@ function installModuleMocks(
 
   vi.doMock('node:fs', () => ({
     copyFileSync: vi.fn((src: string, dst: string) => {
-      if (copyFailures.has(src)) {
+      const sourceKey = fsKey(src)
+      const destinationKey = fsKey(dst)
+      if (copyFailures.has(sourceKey)) {
         throw new Error(`copy fail for ${src}`)
       }
-      fsState.present.add(dst)
-      const value = fsState.files.get(src)
+      fsState.present.add(destinationKey)
+      const value = fsState.files.get(sourceKey)
       if (value !== undefined) {
-        fsState.files.set(dst, value)
+        fsState.files.set(destinationKey, value)
       }
     }),
-    existsSync: vi.fn((p: string) => fsState.present.has(p)),
+    existsSync: vi.fn((p: string) => fsState.present.has(fsKey(p))),
     mkdirSync: vi.fn(),
     readFileSync: vi.fn((p: string) => {
-      const v = fsState.files.get(p)
+      const v = fsState.files.get(fsKey(p))
       if (v === undefined) {
         throw new Error('ENOENT')
       }
       return v
     }),
     renameSync: vi.fn((from: string, to: string) => {
-      const v = fsState.files.get(from)
+      const sourceKey = fsKey(from)
+      const destinationKey = fsKey(to)
+      const v = fsState.files.get(sourceKey)
       if (v === undefined) {
         throw new Error('ENOENT')
       }
-      fsState.files.set(to, v)
-      fsState.present.add(to)
-      fsState.files.delete(from)
-      fsState.present.delete(from)
+      fsState.files.set(destinationKey, v)
+      fsState.present.add(destinationKey)
+      fsState.files.delete(sourceKey)
+      fsState.present.delete(sourceKey)
     }),
     unlinkSync: vi.fn((p: string) => {
-      fsState.present.delete(p)
-      fsState.files.delete(p)
+      const key = fsKey(p)
+      fsState.present.delete(key)
+      fsState.files.delete(key)
     }),
     writeFileSync: vi.fn((p: string, data: string | Uint8Array) => {
       const value = typeof data === 'string' ? data : Buffer.from(data).toString('utf-8')
-      fsState.files.set(p, value)
-      fsState.present.add(p)
+      const key = fsKey(p)
+      fsState.files.set(key, value)
+      fsState.present.add(key)
     })
   }))
 

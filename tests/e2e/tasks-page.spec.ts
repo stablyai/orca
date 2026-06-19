@@ -2,17 +2,51 @@
  * E2E tests for the Tasks page.
  *
  * Verifies that opening the tasks view renders correctly and that the
- * repo selector, mode tabs, and close affordance are all present.
+ * source controls and close affordance are present.
  */
 
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree, getStoreState } from './helpers/store'
 
+type RenderedTaskSource = {
+  source: string
+  active: boolean
+}
+
+const TASK_SOURCE_BY_LABEL: Record<string, string> = {
+  GitHub: 'github',
+  GitLab: 'gitlab',
+  Linear: 'linear',
+  Jira: 'jira'
+}
+
 async function openTasksPage(page: Parameters<typeof getStoreState>[0]): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
-    store?.getState().openTaskPage()
+    if (!store) {
+      throw new Error('window.__store is not available')
+    }
+    store.getState().openTaskPage()
   })
+}
+
+async function getRenderedTaskSources(
+  page: Parameters<typeof getStoreState>[0]
+): Promise<RenderedTaskSource[]> {
+  return page
+    .locator('[data-contextual-tour-target="tasks-source-filters"] button')
+    .evaluateAll((buttons, sourceByLabel) => {
+      return buttons.flatMap((button) => {
+        const source =
+          button.getAttribute('data-task-source') ??
+          sourceByLabel[button.getAttribute('aria-label')?.trim() ?? '']
+        if (!source) {
+          return []
+        }
+        const active = button.getAttribute('aria-pressed') === 'true'
+        return [{ source, active }]
+      })
+    }, TASK_SOURCE_BY_LABEL)
 }
 
 test.describe('Tasks page', () => {
@@ -28,17 +62,44 @@ test.describe('Tasks page', () => {
       .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
       .toBe('tasks')
 
-    // Titlebar label, close button, and mode tabs should all render.
     await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toBeVisible({
       timeout: 10_000
     })
-    await expect(orcaPage.getByRole('button', { name: 'GitHub', exact: true })).toBeVisible()
-    await expect(orcaPage.getByRole('button', { name: 'Issues', exact: true })).toBeVisible()
-    await expect(orcaPage.getByRole('button', { name: 'PRs', exact: true })).toBeVisible()
-    await expect(orcaPage.getByRole('button', { name: 'Projects', exact: true })).toBeVisible()
-    await expect(
-      orcaPage.getByRole('textbox', { name: /Search GitHub (issues|PRs)/i })
-    ).toBeVisible()
+
+    // Why: source buttons are provider-availability aware in CI; assert the
+    // stable Tasks chrome instead of a GitHub-only tab set.
+    let renderedSources: RenderedTaskSource[] = []
+    await expect
+      .poll(
+        async () => {
+          renderedSources = await getRenderedTaskSources(orcaPage)
+          return renderedSources.length
+        },
+        {
+          timeout: 10_000,
+          message: 'Tasks source controls did not render'
+        }
+      )
+      .toBeGreaterThan(1)
+
+    await expect
+      .poll(
+        async () => {
+          renderedSources = await getRenderedTaskSources(orcaPage)
+          return renderedSources.some((source) => source.active)
+        },
+        {
+          timeout: 5_000,
+          message: 'Active task source did not render'
+        }
+      )
+      .toBe(true)
+    if (renderedSources.some((source) => source.source === 'github' && source.active)) {
+      await expect(orcaPage.getByRole('button', { name: 'Issues', exact: true })).toBeVisible()
+      await expect(orcaPage.getByRole('button', { name: 'PRs', exact: true })).toBeVisible()
+      await expect(orcaPage.getByRole('button', { name: 'Projects', exact: true })).toBeVisible()
+      await expect(orcaPage.getByPlaceholder(/Search GitHub (issues|PRs)/i)).toBeVisible()
+    }
   })
 
   test('closing the tasks page returns to the previous view', async ({ orcaPage }) => {

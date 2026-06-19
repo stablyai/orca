@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getAutomationSourceDisplay } from './automation-source-display'
 
@@ -41,10 +42,11 @@ describe('automation source display', () => {
       }
     }
 
+    const localHostLabel = getLocalExecutionHostLabel()
+
     expect(getAutomationSourceDisplay(sourceContext)).toEqual({
-      label: 'Linear · Local Mac · Saved Linear workspace',
-      title:
-        'Linear source · Host: Local Mac · Account: Linear API key · Source: Saved Linear workspace'
+      label: `Linear \u00b7 ${localHostLabel} \u00b7 Saved Linear workspace`,
+      title: `Linear source \u00b7 Host: ${localHostLabel} \u00b7 Account: Linear API key \u00b7 Source: Saved Linear workspace`
     })
   })
 

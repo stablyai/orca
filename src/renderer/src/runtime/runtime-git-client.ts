@@ -6,6 +6,8 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitStatusResult,
   GitUpstreamStatus,
@@ -15,6 +17,7 @@ import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../../../shared/commit-message-agent-spec'
+import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
@@ -34,6 +37,15 @@ export type RuntimeGeneratePullRequestFieldsResult =
       branchChangedByPreparation?: boolean
     }
   | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
+
+export type RuntimePullRequestGenerationInput = {
+  base: string
+  title: string
+  body: string
+  draft: boolean
+  provider?: HostedReviewProvider
+  useTemplate?: boolean
+}
 
 type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
   Partial<
@@ -332,6 +344,29 @@ export async function fetchRuntimeGit(
   )
 }
 
+export async function syncRuntimeGitForkDefaultBranch(
+  context: RuntimeGitContext,
+  expectedUpstream: GitForkSyncExpectedUpstream
+): Promise<GitForkSyncResult> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.syncFork({
+      worktreePath: context.worktreePath,
+      connectionId: context.connectionId,
+      expectedUpstream
+    })
+  }
+  return callRuntimeRpc<GitForkSyncResult>(
+    target,
+    'git.forkSync',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      expectedUpstream
+    },
+    { timeoutMs: 60_000 }
+  )
+}
+
 export async function pullRuntimeGit(
   context: RuntimeGitContext,
   pushTarget?: GitPushTarget
@@ -583,7 +618,7 @@ export async function cancelRuntimeGenerateCommitMessage(
 
 export async function generateRuntimePullRequestFields(
   context: RuntimeGitContext,
-  input: { base: string; title: string; body: string; draft: boolean },
+  input: RuntimePullRequestGenerationInput,
   overrides?: RuntimeGeneratePullRequestFieldsOverrides
 ): Promise<RuntimeGeneratePullRequestFieldsResult> {
   const target = getActiveRuntimeTarget(context.settings)
@@ -782,6 +817,29 @@ export async function getRuntimeGitRemoteFileUrl(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       relativePath: args.relativePath,
       line: args.line
+    },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitRemoteCommitUrl(
+  context: RuntimeGitContext,
+  args: { sha: string }
+): Promise<string | null> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.remoteCommitUrl({
+      worktreePath: context.worktreePath,
+      sha: args.sha,
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<string | null>(
+    target,
+    'git.remoteCommitUrl',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      sha: args.sha
     },
     { timeoutMs: 15_000 }
   )

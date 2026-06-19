@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://github.com/stablyai/orca/stargazers"><img src="https://badgen.net/github/stars/stablyai/orca?label=%E2%98%85" alt="Estrellas en GitHub" /></a>
-  <a href="https://github.com/stablyai/orca/releases"><img src="https://img.shields.io/github/downloads/stablyai/orca/total?label=downloads" alt="Descargas totales en todas las versiones" /></a>
+  <a href="https://github.com/stablyai/orca/releases"><img src="../assets/readme-downloads.svg" alt="Descargas totales en todas las versiones" /></a>
   <img src="https://badgen.net/github/license/stablyai/orca" alt="Licencia" />
   <a href="https://discord.gg/fzjDKHxv8Q"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Únete al Discord de Orca" /></a>
   <img src="https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-4493F8?style=flat-square" alt="Plataformas compatibles: macOS, Windows y Linux" />
@@ -35,7 +35,7 @@
 
 Supervisa y dirige a tus agentes desde el teléfono — recibe una notificación cuando un agente termine y envía instrucciones de seguimiento desde cualquier lugar.
 
-[App Store de iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [APK para Android](https://github.com/stablyai/orca/releases/download/mobile-v0.0.13/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+[App Store de iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [APK para Android](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.14/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -227,7 +227,7 @@ yay -S stably-orca-bin
 Vincúlala con tu app de escritorio para supervisar y dirigir a tus agentes desde el teléfono.
 
 - **iOS:** [Descargar desde App Store](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [Descargar el APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.13/app-release.apk)
+- **Android:** [Descargar el APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.14/app-release.apk)
 
 ---
 

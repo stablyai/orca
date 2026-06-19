@@ -150,6 +150,12 @@ type ProjectIssueConnectionResponse = {
   } | null
 }
 
+type ProjectTeamsResponse = {
+  project?: {
+    teams?: LinearConnection<{ id: string; name?: string | null; key?: string | null }> | null
+  } | null
+}
+
 type CustomViewConnectionResponse = {
   customViews?: LinearConnection<LinearCustomViewNode> | null
   customView?:
@@ -316,13 +322,14 @@ const PROJECTS_QUERY = `
 `
 
 const SEARCH_PROJECTS_QUERY = `
-  query OrcaLinearProjectSearch($term: String!, $first: Int) {
-    searchProjects(term: $term, first: $first) {
+  query OrcaLinearProjectSearch($term: String!, $first: Int, $after: String) {
+    searchProjects(term: $term, first: $first, after: $after) {
       nodes {
         ${ORCA_PROJECT_FIELDS}
       }
       pageInfo {
         hasNextPage
+        endCursor
       }
     }
   }
@@ -358,6 +365,24 @@ const PROJECT_ISSUES_QUERY = `
       issues(first: $first, after: $after, orderBy: $orderBy) {
         nodes {
           ${ORCA_ISSUE_FIELDS}
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+`
+
+const PROJECT_TEAMS_QUERY = `
+  query OrcaLinearProjectTeams($id: String!, $first: Int, $after: String) {
+    project(id: $id) {
+      teams(first: $first, after: $after) {
+        nodes {
+          id
+          name
+          key
         }
         pageInfo {
           hasNextPage
@@ -482,9 +507,10 @@ const CUSTOM_VIEW_PROJECTS_QUERY = `
 `
 
 const inFlight = new Map<string, Promise<unknown>>()
+const LINEAR_PROJECT_API_PAGE_SIZE_MAX = 50
 
 function clampLimit(limit = 20): number {
-  return Math.min(Math.max(1, Math.floor(limit)), 50)
+  return Math.min(Math.max(1, Math.floor(limit)), LINEAR_PROJECT_API_PAGE_SIZE_MAX)
 }
 
 function coalesce<T>(key: string, load: () => Promise<T>, force = false): Promise<T> {
@@ -855,6 +881,70 @@ export async function listProjects(
   )
 }
 
+export async function listProjectsByExactName(
+  name: string,
+  workspaceId: LinearConcreteWorkspaceId,
+  force = false
+): Promise<LinearProjectSummary[]> {
+  const projectName = name.trim()
+  if (!projectName) {
+    throw new Error('Project name is required')
+  }
+  const normalized = projectName.toLowerCase()
+  const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
+  const key = `listProjectsByExactName:${concreteWorkspaceId}:${normalized}`
+  return coalesce(
+    key,
+    async () => {
+      const entries = getClients(concreteWorkspaceId)
+      const entry = entries[0]
+      if (!entry) {
+        return []
+      }
+      await acquire()
+      try {
+        const matches: LinearProjectSummary[] = []
+        let after: string | undefined
+        while (true) {
+          const result = await entry.client.client.rawRequest<
+            ProjectConnectionResponse,
+            LinearRawVariables
+          >(SEARCH_PROJECTS_QUERY, {
+            term: projectName,
+            first: LINEAR_PROJECT_API_PAGE_SIZE_MAX,
+            ...(after ? { after } : {})
+          })
+          const connection = result.data?.searchProjects
+          for (const project of connection?.nodes ?? []) {
+            if (project.name.trim().toLowerCase() === normalized) {
+              matches.push(mapProjectForWorkspace(entry, project))
+            }
+          }
+          const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+          if (
+            connection?.pageInfo?.hasNextPage !== true ||
+            !nextCursor ||
+            nextCursor === after ||
+            (connection.nodes ?? []).length === 0
+          ) {
+            break
+          }
+          after = nextCursor
+        }
+        return matches
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+        }
+        throw error
+      } finally {
+        release()
+      }
+    },
+    force
+  )
+}
+
 export async function getProject(
   id: string,
   workspaceId: LinearConcreteWorkspaceId,
@@ -956,6 +1046,75 @@ export async function listProjectIssues(
         }
         return project.issues
       })
+    },
+    force
+  )
+}
+
+export async function listProjectTeams(
+  projectId: string,
+  workspaceId: LinearConcreteWorkspaceId,
+  force = false
+): Promise<NonNullable<LinearProjectSummary['teams']>> {
+  const id = projectId.trim()
+  if (!id) {
+    throw new Error('Project ID is required')
+  }
+  const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
+  const key = `listProjectTeams:${concreteWorkspaceId}:${id}`
+  return coalesce(
+    key,
+    async () => {
+      const entry = getClients(concreteWorkspaceId)[0]
+      if (!entry) {
+        return []
+      }
+      const teams: NonNullable<LinearProjectSummary['teams']> = []
+      let after: string | undefined
+      await acquire()
+      try {
+        while (true) {
+          const result = await entry.client.client.rawRequest<
+            ProjectTeamsResponse,
+            LinearRawVariables
+          >(PROJECT_TEAMS_QUERY, {
+            id,
+            first: 50,
+            ...(after ? { after } : {})
+          })
+          const project = result.data?.project
+          if (!project) {
+            throw new Error('Project was not found')
+          }
+          const connection = project.teams
+          const nodes = connection?.nodes ?? []
+          teams.push(
+            ...nodes.map((team) => ({
+              id: team.id,
+              name: team.name ?? '',
+              key: team.key ?? undefined
+            }))
+          )
+          const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+          if (
+            !connection?.pageInfo?.hasNextPage ||
+            !nextCursor ||
+            nextCursor === after ||
+            nodes.length === 0
+          ) {
+            break
+          }
+          after = nextCursor
+        }
+        return teams
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+        }
+        throw error
+      } finally {
+        release()
+      }
     },
     force
   )

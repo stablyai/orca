@@ -84,7 +84,8 @@ function makeDispatchRequest(): AutomationDispatchRequest {
       startedAt: null,
       dispatchedAt: null,
       createdAt: 3
-    }
+    },
+    dispatchToken: 'dispatch-token-1'
   }
 }
 
@@ -130,6 +131,12 @@ async function useImportedAutomationDispatchEvents(): Promise<void> {
       capturedAt: 123,
       truncated: false
     })
+  }))
+  vi.doMock('@/i18n/i18n', () => ({
+    translate: (_key: string, fallback: string) => fallback
+  }))
+  vi.doMock('@/lib/browser-uuid', () => ({
+    createBrowserUuid: () => 'test-uuid'
   }))
 
   const { useAutomationDispatchEvents } = await import('./useAutomationDispatchEvents')

@@ -12,6 +12,7 @@ import {
   LINEAR_WRITE_BODY_CAP,
   clampLinearIssueDepth
 } from '../shared/linear-agent-access'
+import { isLinearUuid } from '../shared/linear-uuid'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
@@ -21,7 +22,6 @@ import {
 } from './flags'
 import { RuntimeClientError } from './runtime-client'
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const LINEAR_PRIORITY_VALUES = new Map([
   ['none', 0],
   ['urgent', 1],
@@ -202,7 +202,7 @@ export function getOptionalWriteId(flags: Map<string, string | boolean>): string
     return undefined
   }
   const writeId = getRequiredStringFlag(flags, 'write-id')
-  if (!UUID_PATTERN.test(writeId)) {
+  if (!isLinearUuid(writeId)) {
     throw new RuntimeClientError('linear_invalid_write_id', '--write-id must be a UUID')
   }
   return writeId

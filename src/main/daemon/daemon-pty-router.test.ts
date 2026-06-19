@@ -145,6 +145,15 @@ describe('DaemonPtyRouter', () => {
     expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
   })
 
+  it('fails listProcesses closed when any routed adapter cannot list sessions', async () => {
+    const current = createAdapter('current', ['current-session'])
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    vi.mocked(legacy.listProcesses).mockRejectedValueOnce(new Error('legacy unavailable'))
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.listProcesses()).rejects.toThrow('legacy unavailable')
+  })
+
   it('merges startup reconciliation and updates route mappings', async () => {
     const current = createAdapter('current', [], {
       alive: ['current-alive'],

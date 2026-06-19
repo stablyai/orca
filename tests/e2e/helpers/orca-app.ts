@@ -43,6 +43,10 @@ type OrcaTestFixtures = {
   // Why: most E2E specs need a ready project before assertions start. Golden
   // first-run specs opt out so they can prove the zero-project onboarding path.
   seedTestRepo: boolean
+  // Why: a few IPC repro specs need to launch the Electron app with a scoped
+  // PATH/token environment. Keep this fixture-owned so tests never mutate the
+  // developer's shell or already-running Orca instance.
+  launchEnv: NodeJS.ProcessEnv
 }
 
 type OrcaWorkerFixtures = {
@@ -188,7 +192,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   ],
 
   // Test-scoped: one Electron app per test
-  electronApp: async ({ dismissOnboarding }, provideFixture, testInfo) => {
+  electronApp: async ({ dismissOnboarding, launchEnv }, provideFixture, testInfo) => {
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
 
@@ -242,6 +246,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       // so pass the repo-root relay path explicitly for this opt-in suite.
       env: {
         ...cleanEnv,
+        ...launchEnv,
         NODE_ENV: 'development',
         ORCA_E2E_USER_DATA_DIR: userDataDir,
         ...((process.env.ORCA_E2E_SSH_LOCALHOST === '1' ||
@@ -264,6 +269,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   // Default: dismiss the onboarding overlay so it doesn't intercept clicks.
   dismissOnboarding: [true, { option: true }],
   seedTestRepo: [true, { option: true }],
+  launchEnv: [{}, { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.

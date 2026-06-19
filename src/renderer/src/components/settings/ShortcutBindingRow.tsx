@@ -2,10 +2,17 @@ import React, { useEffect, useRef } from 'react'
 import { Ban, Plus, RotateCcw, Terminal } from 'lucide-react'
 import {
   formatKeybinding,
+  isDigitIndexActionId,
+  isDoubleTapBinding,
   type KeybindingActionId,
   type KeybindingDefinition,
   type KeybindingInput
 } from '../../../../shared/keybindings'
+import {
+  ModifierDoubleTapDetector,
+  modifierFromKeyEvent,
+  toModifierDoubleTapEvent
+} from '../../../../shared/modifier-double-tap-detector'
 import { cn } from '../../lib/utils'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { Badge } from '../ui/badge'
@@ -37,6 +44,16 @@ export type ShortcutTerminalStatus = {
   description: string
 }
 
+// Why: digit-index rows store one representative chord (e.g. ⌘1) but fire for
+// 1-9, so the trailing number cap renders the whole range.
+function toDigitRangeKeys(keys: string[]): string[] {
+  const last = keys.at(-1)
+  if (last === undefined || !/^[1-9]$/.test(last)) {
+    return keys
+  }
+  return [...keys.slice(0, -1), `${last}–9`]
+}
+
 export function ShortcutBindingRow({
   item,
   groupTitle,
@@ -55,17 +72,31 @@ export function ShortcutBindingRow({
   onReset
 }: ShortcutBindingRowProps): React.JSX.Element {
   const recordButtonRef = useRef<HTMLButtonElement | null>(null)
+  const doubleTapDetectorRef = useRef<ModifierDoubleTapDetector | null>(null)
+  if (!doubleTapDetectorRef.current) {
+    doubleTapDetectorRef.current = new ModifierDoubleTapDetector()
+  }
 
   useEffect(() => {
     if (recording) {
       recordButtonRef.current?.focus()
+    } else {
+      // Stale taps mustn't survive into the next recording session.
+      doubleTapDetectorRef.current?.reset()
     }
     window.api.ui.setShortcutRecorderFocused(recording)
     return () => window.api.ui.setShortcutRecorderFocused(false)
   }, [recording])
 
   const statusMessage = error ?? (warnings.length > 0 ? warnings.join(' ') : '')
-  const recordingMessage = recording ? 'Listening for shortcut. Esc cancels recording.' : ''
+  const doubleTapHint = platform === 'darwin' ? '⇧⇧' : 'Shift Shift'
+  const recordingMessage = recording
+    ? translate(
+        'auto.components.settings.ShortcutBindingRow.a98d551407',
+        'Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',
+        { value0: doubleTapHint }
+      )
+    : ''
   const helperMessage = statusMessage || recordingMessage
   const hasBinding = effective.length > 0
 
@@ -82,11 +113,37 @@ export function ShortcutBindingRow({
     event.stopPropagation()
 
     if (event.key === 'Escape') {
+      doubleTapDetectorRef.current?.reset()
       onClearError(item.id)
       onCancelRecording()
       return
     }
 
+    // A modifier press never captures on its own — the detector decides whether
+    // it completes a double-tap, leaving normal chords to capture on their key.
+    if (modifierFromKeyEvent(event.code, event.key) !== null) {
+      const detected = doubleTapDetectorRef.current?.process(
+        toModifierDoubleTapEvent({
+          type: 'keyDown',
+          code: event.code,
+          key: event.key,
+          shift: event.shiftKey,
+          control: event.ctrlKey,
+          alt: event.altKey,
+          meta: event.metaKey,
+          isAutoRepeat: event.repeat
+        }),
+        Date.now()
+      )
+      if (detected) {
+        onClearError(item.id)
+        onCapture(item.id, { doubleTapModifier: detected.modifier })
+        doubleTapDetectorRef.current?.reset()
+      }
+      return
+    }
+
+    doubleTapDetectorRef.current?.reset()
     onClearError(item.id)
     onCapture(item.id, {
       key: event.key,
@@ -98,6 +155,26 @@ export function ShortcutBindingRow({
     })
   }
 
+  const handleRecordKeyUp = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+    if (!recording) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    doubleTapDetectorRef.current?.process(
+      toModifierDoubleTapEvent({
+        type: 'keyUp',
+        code: event.code,
+        key: event.key,
+        shift: event.shiftKey,
+        control: event.ctrlKey,
+        alt: event.altKey,
+        meta: event.metaKey
+      }),
+      Date.now()
+    )
+  }
+
   // Why: the recorder is the row's primary control — clicking the keys (or the
   // "Add shortcut" placeholder) records a new binding in place, so the whole
   // affordance lives inline rather than in a detached popover.
@@ -106,6 +183,8 @@ export function ShortcutBindingRow({
     : hasBinding
       ? `Change shortcut for ${item.title}`
       : `Add shortcut for ${item.title}`
+
+  const isDigitIndex = isDigitIndexActionId(item.id)
 
   return (
     <SearchableSetting
@@ -160,7 +239,7 @@ export function ShortcutBindingRow({
         {/* Reset/Disable reveal on hover or keyboard focus to keep the row calm;
             they stay reachable via focus-within for keyboard users. */}
         {hasBinding ? (
-          <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/shortcut:opacity-100 group-focus-within/shortcut:opacity-100">
+          <div className="flex items-center gap-0.5 can-hover:opacity-0 transition-opacity group-hover/shortcut:opacity-100 group-focus-within/shortcut:opacity-100">
             {modified ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -230,6 +309,7 @@ export function ShortcutBindingRow({
                 }
               }}
               onKeyDown={handleRecordKeyDown}
+              onKeyUp={handleRecordKeyUp}
               className={cn(
                 'flex min-h-7 min-w-[5.5rem] items-center justify-center gap-1.5 rounded-md border px-2 py-1 text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
                 recording
@@ -248,9 +328,16 @@ export function ShortcutBindingRow({
                 </span>
               ) : hasBinding ? (
                 <span className="flex flex-wrap items-center justify-end gap-1.5">
-                  {effective.map((binding) => (
-                    <ShortcutKeyCombo key={binding} keys={formatKeybinding(binding, platform)} />
-                  ))}
+                  {effective.map((binding) => {
+                    const keys = formatKeybinding(binding, platform)
+                    return (
+                      <ShortcutKeyCombo
+                        key={binding}
+                        keys={isDigitIndex ? toDigitRangeKeys(keys) : keys}
+                        doubleTap={isDoubleTapBinding(binding)}
+                      />
+                    )
+                  })}
                 </span>
               ) : (
                 <span className="flex items-center gap-1">

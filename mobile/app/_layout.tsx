@@ -145,8 +145,12 @@ export default function RootLayout() {
             headerTintColor: colors.textPrimary,
             headerTitleStyle: { fontSize: 16, fontWeight: '600' },
             contentStyle: { backgroundColor: colors.bgBase },
-            headerShadowVisible: false,
-            orientation: 'all'
+            headerShadowVisible: false
+            // Why: deliberately no `orientation` screenOption. react-native-screens
+            // has no value that respects the device rotation lock — even 'default'
+            // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
+            // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
+            // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
           }}
         >
           <Stack.Screen
@@ -161,6 +165,8 @@ export default function RootLayout() {
           <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
           <Stack.Screen name="about" options={{ headerShown: false }} />

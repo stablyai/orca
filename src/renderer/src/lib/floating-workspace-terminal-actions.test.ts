@@ -282,6 +282,17 @@ describe('isFloatingWorkspacePanelShortcut', () => {
     ).toBe(false)
   })
 
+  it('claims customized double-tap shortcuts for the floating panel surface', () => {
+    const event = shortcutSurfaceEvent({}) as KeyboardEvent & { doubleTapModifier: 'Shift' }
+    event.doubleTapModifier = 'Shift'
+
+    expect(
+      isFloatingWorkspacePanelShortcut(event, 'linux', null, {
+        'tab.newTerminal': ['DoubleTap+Shift']
+      })
+    ).toBe(true)
+  })
+
   it('does not claim shortcuts with Alt or the wrong platform modifier', () => {
     expect(
       isFloatingWorkspacePanelShortcut(shortcutSurfaceEvent({ key: 't', metaKey: true }), false)

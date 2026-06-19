@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
 import type { SshRemotePtyLease, SshTarget } from './ssh-types'
-import type { Automation, AutomationRun } from './automations-types'
+import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
 import type { GitHubProjectSettings } from './github-project-types'
 import type {
@@ -11,6 +11,7 @@ import type {
 } from './agent-status-types'
 import type { VoiceSettings } from './speech-types'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
+import type { LargeDiffRenderLimit } from './large-diff-render-limit'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
@@ -27,11 +28,17 @@ import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
 } from './source-control-ai-types'
+import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
+import type { ForkSyncMode } from './git-fork-sync'
+import type {
+  GlobalWindowsRuntimeDefault,
+  LocalWindowsRuntimePreference
+} from './project-execution-runtime'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -86,6 +93,7 @@ export type RepoKind = 'git' | 'folder'
  * - `'origin'`: explicit origin. Same precedence.
  */
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
+export type { ForkSyncMode, GitForkSyncExpectedUpstream, GitForkSyncResult } from './git-fork-sync'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 
 export type ProjectProviderIdentity = {
@@ -101,9 +109,16 @@ export type Project = {
   repoIcon?: RepoIcon | null
   kind?: RepoKind
   providerIdentity?: ProjectProviderIdentity
+  /** Local Windows projects inherit the global runtime default unless this override is set. */
+  localWindowsRuntimePreference?: LocalWindowsRuntimePreference
   sourceRepoIds: string[]
   createdAt: number
   updatedAt: number
+}
+
+export type ProjectUpdateArgs = {
+  projectId: string
+  updates: Partial<Pick<Project, 'localWindowsRuntimePreference'>>
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'
@@ -238,6 +253,8 @@ export type Repo = {
    *  identically to `'auto'`; writers leave it undefined on creation so
    *  existing persisted records stay forward-compatible. */
   issueSourcePreference?: IssueSourcePreference
+  /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
+  forkSyncMode?: ForkSyncMode
   /** Controls whether worktrees Orca did not create appear in the sidebar. */
   externalWorktreeVisibility?: ExternalWorktreeVisibility
   /** True when the repo predates hidden-by-default external worktrees. */
@@ -268,6 +285,8 @@ export type ProjectGroup = {
   parentPath: string | null
   /** SSH target ID for folder-backed groups imported from a remote root. */
   connectionId?: string | null
+  /** Renderer-owned host stamp for groups fetched from a runtime environment. */
+  executionHostId?: string | null
   parentGroupId: string | null
   createdFrom: ProjectGroupCreatedFrom
   tabOrder: number
@@ -477,7 +496,29 @@ export type Worktree = {
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
   mobileDiffReview?: MobileDiffReviewState
+  automationProvenance?: AutomationWorkspaceProvenance
 } & GitWorktreeInfo
+
+export type AutomationWorkspaceProvenance = {
+  kind: 'created-by-automation'
+  automationId: string
+  automationNameSnapshot: string
+  automationRunId: string
+  automationRunTitleSnapshot: string
+  createdAt: number
+  executionTargetType: AutomationExecutionTargetType
+  executionTargetId: string
+  projectId: string
+  repoId?: string
+  hostId?: ExecutionHostId
+}
+
+export type AutomationWorkspaceProvenanceRequest = {
+  automationId: string
+  automationRunId: string
+  dispatchToken: string
+  createRequestId: string
+}
 
 export type GitPushTarget = {
   remoteName: string
@@ -489,6 +530,8 @@ export type GitPushTarget = {
 
 export type GitHubPrStartPoint = {
   baseBranch: string
+  /** Review target branch to use for Source Control compare after creating from a PR head SHA. */
+  compareBaseRef?: string
   pushTarget?: GitPushTarget
   /** Verified PR head commit. Present when checkout can be tied to a stable SHA. */
   headSha?: string
@@ -557,7 +600,14 @@ export type WorktreeMeta = {
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
+  /** Path-derived worktree ids this worktree had before its folder was renamed
+   *  on disk (the id embeds the path). Lets the daemon's session GC and registry
+   *  hydration recognize sessions minted under an old id instead of reaping
+   *  them. Self-prunes when the worktree is deleted. */
+  priorWorktreeIds?: string[]
   mobileDiffReview?: MobileDiffReviewState
+  /** System-owned provenance for workspaces created by automation new-per-run dispatches. */
+  automationProvenance?: AutomationWorkspaceProvenance
 }
 
 export type WorktreeOwnership = 'orca-managed' | 'external' | 'unknown-legacy'
@@ -581,9 +631,11 @@ export type WorktreeLineageOrigin = 'orchestration' | 'cli' | 'manual'
 export type WorktreeLineageCaptureConfidence = 'explicit' | 'inferred'
 export type WorktreeLineageCaptureSource =
   | 'explicit-cli-flag'
+  | 'env-workspace'
   | 'cwd-context'
   | 'terminal-context'
   | 'orchestration-context'
+  | 'active-workspace'
   | 'manual-action'
 
 export type WorktreeLineageCapture = {
@@ -600,6 +652,20 @@ export type WorktreeLineage = {
   capture: WorktreeLineageCapture
   orchestrationRunId?: string
   taskId?: string
+  coordinatorHandle?: string
+  createdByTerminalHandle?: string
+  createdAt: number
+}
+
+export type WorkspaceLineage = {
+  childWorkspaceKey: WorkspaceKey
+  childInstanceId?: string | null
+  parentWorkspaceKey: WorkspaceKey
+  parentInstanceId?: string | null
+  origin: WorktreeLineageOrigin
+  capture: WorktreeLineageCapture
+  taskId?: string
+  orchestrationRunId?: string
   coordinatorHandle?: string
   createdByTerminalHandle?: string
   createdAt: number
@@ -685,6 +751,7 @@ export type TabContentType =
   | 'editor'
   | 'diff'
   | 'conflict-review'
+  | 'check-details'
   | 'browser'
   | 'simulator'
 
@@ -738,6 +805,8 @@ export type TerminalTab = {
   quickCommandLabel?: string | null
   customTitle: string | null
   color: string | null
+  /** Pinned tabs survive "close others"; host-persisted for remote servers. */
+  isPinned?: boolean
   sortOrder: number
   createdAt: number
   /** Bumped on shutdown so TerminalPane remounts with a fresh PTY. */
@@ -1019,6 +1088,7 @@ export type PRInfo = {
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null
   autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
@@ -1026,6 +1096,8 @@ export type PRInfo = {
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
   // correct commit without re-querying GitHub or guessing from local branch refs.
   headSha?: string
+  /** Target branch name for PR-created worktree compare-base repair. */
+  baseRefName?: string
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary
@@ -1077,6 +1149,7 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedChecksStatus?: CheckStatus | null
   cachedMergeable?: PRMergeableState | null
   cachedMergeStateStatus?: string | null
+  localGitOptions?: { wslDistro?: string }
 }
 
 export type GitHubPRRefreshSkippedReason =
@@ -1292,6 +1365,7 @@ export type GitHubWorkItem = {
   checksSummary?: GitHubPRCheckSummary
   mergeable?: PRMergeableState
   autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
@@ -1326,6 +1400,8 @@ export type GitHubPRFileContents = {
   modified: string
   originalIsBinary: boolean
   modifiedIsBinary: boolean
+  originalTooLarge?: boolean
+  modifiedTooLarge?: boolean
 }
 
 export type GitHubPRReviewCommentInput = {
@@ -1816,6 +1892,7 @@ export type WorktreeSetupLaunch = {
 export type WorktreeStartupLaunch = {
   command: string
   env?: Record<string, string>
+  startupCommandDelivery?: StartupCommandDelivery
   telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
 }
 
@@ -1863,6 +1940,8 @@ export type CreateWorktreeArgs = {
    *  Linear artifact whose title should remain readable in the sidebar. */
   displayName?: string
   baseBranch?: string
+  /** Source Control compare target when it differs from the checkout start point. */
+  compareBaseRef?: string
   /** Optional git branch to create, separate from the filesystem-safe worktree
    *  name. Used when creating from an existing branch whose local branch name
    *  legitimately contains `/` while the worktree directory must not. */
@@ -1882,6 +1961,8 @@ export type CreateWorktreeArgs = {
   pushTarget?: GitPushTarget
   workspaceStatus?: WorkspaceStatus
   manualOrder?: number
+  /** Parent workspace for in-app creates launched from a folder workspace. */
+  parentWorkspace?: WorkspaceKey
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
   /** Set when the renderer knows this auto-generated branch should be renamed
@@ -1903,6 +1984,8 @@ export type CreateWorktreeArgs = {
    *  creation in the renderer, so concurrent background creates each drive
    *  their own status surface. Omitted by synchronous callers. */
   creationId?: string
+  /** Authorizes the host to mint system-owned automation provenance. */
+  automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
 }
 
 export type CreateWorktreeResult = {
@@ -1910,9 +1993,11 @@ export type CreateWorktreeResult = {
     parentWorktreeId?: string | null
     childWorktreeIds?: string[]
     lineage?: WorktreeLineage | null
+    workspaceLineage?: WorkspaceLineage | null
     git?: GitWorktreeInfo
   }
   lineage?: WorktreeLineage | null
+  workspaceLineage?: WorkspaceLineage | null
   warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
   defaultTabs?: WorktreeDefaultTabsLaunch
@@ -2151,6 +2236,7 @@ export type TuiAgent =
   | 'copilot' // GitHub Copilot CLI
   | 'grok' // xAI Grok CLI
   | 'devin' // Devin CLI
+  | 'ante' // Ante (Antigma Labs)
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 
@@ -2335,6 +2421,10 @@ export type GlobalSettings = {
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
   windowBackgroundBlur?: boolean
+  /** Why: Windows-only. When on, the close (X) button hides the window to the
+   *  system tray instead of quitting Orca; off keeps the default quit-on-close.
+   *  The tray icon itself is always present on Windows regardless of this flag. */
+  minimizeToTrayOnClose?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture.
    *  The setting stays Windows-only so macOS/Linux keep their existing context
    *  menu behavior and users can still reach the menu with Ctrl+right-click. */
@@ -2358,6 +2448,8 @@ export type GlobalSettings = {
    *  changing the default terminal shell. */
   localAgentRuntime?: 'host' | 'wsl'
   localAgentWslDistro?: string | null
+  /** Why: global is only the default policy; project-level runtime preference wins. */
+  localWindowsRuntimeDefault: GlobalWindowsRuntimeDefault
   /** Why: "PowerShell" is the product-facing shell family. Auto resolves to
    *  PowerShell 7+ when present and falls back to inbox Windows PowerShell. */
   terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
@@ -2490,10 +2582,18 @@ export type GlobalSettings = {
    *  again" checkbox inside it or from the General settings pane. We keep this
    *  defaulted to false so first-time behavior stays safe. */
   skipDeleteWorktreeConfirm: boolean
+  /** Why: closing a terminal with child processes kills foreground work. Keep
+   *  this separate from other destructive confirmations so power users can speed
+   *  up terminal cleanup without weakening workspace or automation safeguards. */
+  skipCloseTerminalWithRunningProcessConfirm: boolean
   /** Why: deleting an automation also deletes its run history. Keep this
    *  separate from worktree deletion so skipping one destructive confirmation
    *  does not silently skip the other. */
   skipDeleteAutomationConfirm: boolean
+  /** Why: Codex rate-limit resets consume a scarce reset credit and immediately
+   *  affect the signed-in account, so keep the skip preference explicit and
+   *  separate from local destructive-action confirmations. */
+  skipCodexRateLimitResetConfirm: boolean
   /** Default preset in the new-workspace GitHub task view. */
   defaultTaskViewPreset: TaskViewPresetId
   /** Why: persists the user's last-used task source so the Tasks page
@@ -2539,6 +2639,10 @@ export type GlobalSettings = {
   /** Why: generated tab titles are semantic but subjective, so they stay opt-in
    *  and manual renames remain the stronger user intent. */
   tabAutoGenerateTitle: boolean
+  /** Why: pinned tabs can still be closed via the keyboard/native-menu close
+   *  path, so this gates that close behind a confirmation prompt to prevent
+   *  accidental loss. Defaults on. */
+  confirmClosePinnedTab: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
   /** Why: macOS terminals must choose between letting Option compose layout
@@ -2596,6 +2700,12 @@ export type GlobalSettings = {
    *  and agent-completion events. Opt-in while the signal/noise balance is
    *  being tested. */
   experimentalTerminalAttention: boolean
+  /** Experimental: automatically sleep completed, resumable background agent terminals. */
+  experimentalAgentHibernation?: boolean
+  /** Milliseconds a completed agent must stay idle before hibernation can be considered. */
+  agentHibernationIdleMs?: number
+  /** Experimental: opt-in preview of the updated worktree-card layout and metadata behavior. */
+  experimentalNewWorktreeCardStyle?: boolean
   /** Compact worktree cards by hiding a redundant metadata row when the title
    *  and branch already say the same thing. */
   compactWorktreeCards: boolean
@@ -2826,20 +2936,24 @@ export type WorktreeCardProperty =
   | 'unread'
   // Legacy persisted preference. CI status is now represented by linked PR metadata.
   | 'ci'
-  // GitHub issue metadata shown on workspace cards.
+  // Internal migration-only property for legacy detailed cards that showed
+  // branch identity as a visible row.
+  | 'branch'
+  // Task metadata shown on workspace cards. Kept as provider-specific
+  // persisted values so older profiles and provider-specific fetch paths work.
   | 'issue'
-  // Linear issue metadata shown on workspace cards.
   | 'linear-issue'
   | 'pr'
+  | 'automation'
   | 'comment'
   | 'ports'
   // Why: inline list of agent activity rendered directly inside each
   // workspace card when the experimental agent-activity feature is on. On by
   // default (see DEFAULT_WORKTREE_CARD_PROPERTIES in shared/constants.ts) —
   // live agent activity is the primary reason users opt into the feature.
-  // Users who prefer a compact sidebar can uncheck it from the Workspaces
-  // view options.
   | 'inline-agents'
+
+export type WorktreeCardMode = 'Default' | 'Compact'
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
@@ -2876,6 +2990,8 @@ export type RightSidebarTab =
   | 'explorer'
   | 'search'
   | 'vault'
+  | 'workspaces'
+  | 'pr-checks'
   | 'source-control'
   | 'checks'
   | 'ports'
@@ -2895,6 +3011,7 @@ export type PersistedUIState = {
   rightSidebarTab: RightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarWidth: number
+  markdownTocPanelWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   /** Project header ordering in `groupBy: 'repo'`, independent of workspace
@@ -2925,6 +3042,8 @@ export type PersistedUIState = {
    *  the predicate in visible-worktrees.ts excludes worktrees with an empty
    *  branch. */
   hideDefaultBranchWorkspace: boolean
+  /** Hide workspaces created by automation new-per-run dispatches. */
+  hideAutomationGeneratedWorkspaces?: boolean
   /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
   showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]
@@ -2932,10 +3051,14 @@ export type PersistedUIState = {
   uiZoomLevel: number
   editorFontZoomLevel: number
   worktreeCardProperties: WorktreeCardProperty[]
+  /** One-shot migration flag for deriving card properties from the two
+   *  user-facing worktree card modes. */
+  _worktreeCardModeDefaulted?: boolean
   agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardColumnWidth?: number
+  syncTaskStatusFromWorkspaceBoard?: boolean
   /** One-shot migration flag for a short-lived build that persisted the
    *  default workspace statuses in reverse workflow order. Once stamped,
    *  user-authored status ordering is never inferred from IDs/labels again. */
@@ -2985,6 +3108,14 @@ export type PersistedUIState = {
   /** User-dismissed browser import hint in the browser toolbar. Import remains
    *  available from Settings > Browser and the toolbar overflow menu. */
   browserImportHintHidden?: boolean
+  /** Why: Windows-only. Set once after the window first hides to the system
+   *  tray, so the "Orca is still running" notification shows only on first use. */
+  trayMinimizeNoticeShown?: boolean
+  /** User dismissed the first-run Mobile Emulator intro (Keep, Hide, or close).
+   *  Reversible only by re-enabling the feature in Settings. */
+  mobileEmulatorTabIntroDismissed?: boolean
+  /** User deferred the in-pane Mobile Emulator CLI + skill setup guide. */
+  mobileEmulatorAgentSetupDismissed?: boolean
   /** One-shot rollout notice for manual project ordering becoming the default.
    *  Absent or true means the sidebar callout stays hidden. */
   projectOrderManualDefaultNoticeDismissed?: boolean
@@ -3048,6 +3179,12 @@ export type PersistedUIState = {
   /** Once the user has starred Orca (from any entry point) we permanently
    *  suppress the nag — no further thresholds, no notifications. */
   starNagCompleted?: boolean
+  /** Timestamp until which nonterminal dismissals suppress threshold prompts.
+   *  Force-show bypasses this for dev/testing. */
+  starNagDeferredUntil?: number | null
+  /** App version that already consumed the first successful-agent value-moment ask.
+   *  Main-owned so remote/web clients cannot spoof the once-per-version cap. */
+  starNagAgentValueMomentAppVersion?: string | null
   trustedOrcaHooks?: PersistedTrustedOrcaHooks
   setupScriptPromptDismissedRepoIds?: string[]
   /** Whether the experimental pet overlay is currently visible. Separate
@@ -3177,6 +3314,7 @@ export type PersistedState = {
   sparsePresetsByRepo: Record<string, SparsePreset[]>
   worktreeMeta: Record<string, WorktreeMeta>
   worktreeLineageById: Record<string, WorktreeLineage>
+  workspaceLineageByChildKey: Record<WorkspaceKey, WorkspaceLineage>
   settings: GlobalSettings
   ui: PersistedUIState
   githubCache: {
@@ -3279,6 +3417,7 @@ export type GitDiffTextResult = {
   modifiedContent: string
   originalIsBinary: false
   modifiedIsBinary: false
+  largeDiffRenderLimit?: LargeDiffRenderLimit
 }
 
 export type GitDiffBinaryResult = {

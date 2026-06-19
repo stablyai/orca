@@ -48,6 +48,7 @@ import {
   WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR
 } from '../win32-utils'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
+import { wslAwareSpawn } from '../git/runner'
 
 const GENERATION_TIMEOUT_MS = 60_000
 const MAX_AGENT_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -88,7 +89,7 @@ export type RemoteCommitMessageExecResult = {
 export type TextGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
 
 export type CommitMessageGenerationTarget =
-  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv }
+  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
   | {
       kind: 'remote'
       cwd: string
@@ -108,6 +109,11 @@ type ResolveCommitMessageSettingsResult =
 type InternalTextGenerationResult =
   | { success: true; rawOutput: string; agentLabel?: string }
   | { success: false; error: string; canceled?: boolean }
+
+export type CommitMessageModelDiscoveryLocalOptions = {
+  cwd?: string
+  wslDistro?: string
+}
 
 export function trimGeneratedCommitMessage(message: string): string {
   return message.replace(/\s+$/, '')
@@ -264,7 +270,8 @@ function planModelDiscovery(
 export async function discoverCommitMessageModelsLocal(
   agentId: TuiAgent,
   env: NodeJS.ProcessEnv | undefined,
-  agentCommandOverride?: string
+  agentCommandOverride?: string,
+  options: CommitMessageModelDiscoveryLocalOptions = {}
 ): Promise<DiscoverCommitMessageModelsResult> {
   const spec = getCommitMessageAgentSpec(agentId)
   if (!spec) {
@@ -284,18 +291,29 @@ export async function discoverCommitMessageModelsLocal(
         resolve({ success: false, error: planned.error })
         return
       }
-      const resolvedBinary =
-        process.platform === 'win32'
-          ? resolveCliCommand(planned.plan.binary, {
-              pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null
-            })
-          : planned.plan.binary
-      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, planned.plan.args)
-      child = spawn(spawnCmd, spawnArgs, {
-        env: spawnEnv,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true
-      })
+      if (process.platform === 'win32' && options.wslDistro) {
+        child = wslAwareSpawn(planned.plan.binary, planned.plan.args, {
+          cwd: options.cwd,
+          env: buildWslLauncherEnv(env),
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+          wslDistro: options.wslDistro,
+          useWslLoginShell: true
+        })
+      } else {
+        const resolvedBinary =
+          process.platform === 'win32'
+            ? resolveCliCommand(planned.plan.binary, {
+                pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null
+              })
+            : planned.plan.binary
+        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, planned.plan.args)
+        child = spawn(spawnCmd, spawnArgs, {
+          env: spawnEnv,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true
+        })
+      }
     } catch (error) {
       console.error('[commit-message] Failed to spawn model discovery:', error)
       resolve({
@@ -467,6 +485,17 @@ function killProcessTree(child: ChildProcess): void {
 // Keying by operation plus `local:${cwd}` keeps local cancellation independent
 // from SSH worktrees and from other generation features in the same worktree.
 const cancelTokensByLane = new Map<string, () => void>()
+const WSL_LAUNCHER_ENV_KEYS = [
+  'ComSpec',
+  'COMSPEC',
+  'Path',
+  'PATH',
+  'PATHEXT',
+  'SystemRoot',
+  'TEMP',
+  'TMP',
+  'WINDIR'
+] as const
 
 function localLaneKey(operation: TextGenerationOperation, cwd: string): string {
   return `${operation}:local:${cwd}`
@@ -476,29 +505,57 @@ export function cancelGenerateCommitMessageLocal(cwd: string): void {
   cancelTokensByLane.get(localLaneKey('commit-message', cwd))?.()
 }
 
+function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const key of WSL_LAUNCHER_ENV_KEYS) {
+    const value = process.env[key]
+    if (value !== undefined) {
+      env[key] = value
+    }
+  }
+  for (const [key, value] of Object.entries(explicitEnv ?? {})) {
+    if (value !== undefined && value !== process.env[key]) {
+      env[key] = value
+    }
+  }
+  return env
+}
+
 async function runLocalPlan(
   plan: CommitMessagePlan,
   cwd: string,
   env: NodeJS.ProcessEnv | undefined,
   emptyResultName = 'message',
-  operation: TextGenerationOperation = 'commit-message'
+  operation: TextGenerationOperation = 'commit-message',
+  wslDistro?: string
 ): Promise<InternalTextGenerationResult> {
   const { binary, args, stdinPayload, label } = plan
   return new Promise((resolve) => {
     let child: ChildProcess
     try {
       const spawnEnv = env ?? process.env
-      const resolvedBinary =
-        process.platform === 'win32'
-          ? resolveCliCommand(binary, { pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null })
-          : binary
-      const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, args)
-      child = spawn(spawnCmd, spawnArgs, {
-        cwd,
-        env: spawnEnv,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true
-      })
+      if (process.platform === 'win32' && wslDistro) {
+        child = wslAwareSpawn(binary, args, {
+          cwd,
+          env: buildWslLauncherEnv(env),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true,
+          wslDistro,
+          useWslLoginShell: true
+        })
+      } else {
+        const resolvedBinary =
+          process.platform === 'win32'
+            ? resolveCliCommand(binary, { pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null })
+            : binary
+        const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, args)
+        child = spawn(spawnCmd, spawnArgs, {
+          cwd,
+          env: spawnEnv,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true
+        })
+      }
     } catch (error) {
       if (error instanceof UnsafeWindowsBatchArgumentsError) {
         resolve({
@@ -776,7 +833,14 @@ export async function generateCommitMessageFromContext(
   const internalResult =
     target.kind === 'remote'
       ? await runRemotePlan(planned.plan, target)
-      : await runLocalPlan(planned.plan, target.cwd, target.env)
+      : await runLocalPlan(
+          planned.plan,
+          target.cwd,
+          target.env,
+          'message',
+          'commit-message',
+          target.wslDistro
+        )
   return formatCommitMessageGenerationResult(internalResult)
 }
 
@@ -841,7 +905,14 @@ export async function generatePullRequestFieldsFromContext(
   const internalResult =
     target.kind === 'remote'
       ? await runRemotePlan(planned.plan, target, 'details', 'pull-request-fields')
-      : await runLocalPlan(planned.plan, target.cwd, target.env, 'details', 'pull-request-fields')
+      : await runLocalPlan(
+          planned.plan,
+          target.cwd,
+          target.env,
+          'details',
+          'pull-request-fields',
+          target.wslDistro
+        )
   return formatPullRequestFieldsGenerationResult(internalResult, context)
 }
 
@@ -876,7 +947,14 @@ export async function generateBranchNameFromContext(
   const internalResult =
     target.kind === 'remote'
       ? await runRemotePlan(planned.plan, target, 'branch name', 'branch-name')
-      : await runLocalPlan(planned.plan, target.cwd, target.env, 'branch name', 'branch-name')
+      : await runLocalPlan(
+          planned.plan,
+          target.cwd,
+          target.env,
+          'branch name',
+          'branch-name',
+          target.wslDistro
+        )
   if (!internalResult.success) {
     return internalResult
   }

@@ -28,6 +28,7 @@ import type {
 } from '../../../../shared/types'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
@@ -79,6 +80,8 @@ import {
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -115,10 +118,16 @@ type UseTerminalPaneLifecycleDeps = {
   cwd?: string
   startup?: {
     command: string
+    /** Renderer-delivered startup input for callers that need xterm paste
+     *  semantics before the submit Enter. */
+    delivery?: 'terminal-paste'
+    startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
     /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
      *  so main fires the event only after the spawn succeeds. */
     telemetry?: EventProps<'agent_started'>
+    /** Show the restored-session banner when this startup command mounts. */
+    showSessionRestoredBanner?: boolean
   } | null
   /** When present, the initial pane boots clean and a split pane is created
    *  (vertical or horizontal per the user setting) to run the setup command —
@@ -174,6 +183,7 @@ type UseTerminalPaneLifecycleDeps = {
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
+  onShowSessionRestoredBanner: (paneId: number) => void
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
     terminalTitle?: string
@@ -356,6 +366,7 @@ export function useTerminalPaneLifecycle({
   clearWorktreeUnread,
   clearTerminalTabUnread,
   clearTerminalPaneUnread,
+  onShowSessionRestoredBanner,
   dispatchNotification,
   setCacheTimerStartedAt,
   syncPanePtyLayoutBinding,
@@ -523,6 +534,8 @@ export function useTerminalPaneLifecycle({
       cwd,
       startup,
       paneTransportsRef,
+      paneMode2031Ref,
+      paneLastThemeModeRef,
       replayingPanesRef,
       isActiveRef,
       isVisibleRef,
@@ -540,6 +553,7 @@ export function useTerminalPaneLifecycle({
       clearWorktreeUnread,
       clearTerminalTabUnread,
       clearTerminalPaneUnread,
+      onShowSessionRestoredBanner,
       dispatchNotification,
       setCacheTimerStartedAt,
       syncPanePtyLayoutBinding,
@@ -706,6 +720,7 @@ export function useTerminalPaneLifecycle({
           requestOpenLinksInAppPreference
         })
         httpLinkClickFallbackDisposables.set(pane.id, httpLinkClickFallbackDisposable)
+        seedStartupSessionRestoredBanner(ptyDeps.startup, pane.id, onShowSessionRestoredBanner)
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
@@ -1258,7 +1273,10 @@ export function useTerminalPaneLifecycle({
         return
       }
       if (mgr.getPanes().length <= 1) {
-        useAppStore.getState().closeTab(tabId)
+        // Why: route through closeTerminalTab (not the raw store closeTab) so a
+        // pinned tab hits the confirmation guard. Closing the last pane here was
+        // the one path that silently dropped pinned tabs.
+        closeTerminalTab(tabId)
       } else {
         mgr.closePane(detail.paneRuntimeId)
         scheduleRuntimeGraphSync()

@@ -390,4 +390,16 @@ describe('createJiraSlice credential errors', () => {
       expect(store.getState().jiraStatus.credentialError).toBeUndefined()
     })
   })
+
+  it('keeps Jira connected when an issue read hits endpoint-level forbidden access', async () => {
+    const store = createTestStore()
+    store.setState({
+      jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' }
+    })
+    jiraListIssues.mockRejectedValueOnce(new Error('Forbidden'))
+
+    await expect(store.getState().listJiraIssues('assigned', 30)).resolves.toEqual([])
+
+    expect(store.getState().jiraStatus.connected).toBe(true)
+  })
 })

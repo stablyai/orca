@@ -455,6 +455,55 @@ describe('AgentBrowserBridge', () => {
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 10, y: 20 })
   })
 
+  it('passes mobile click modifiers through to CDP mouse events', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Runtime.evaluate') {
+        return { result: { value: { x: 10, y: 20, adjusted: false, handled: false } } }
+      }
+      return {}
+    })
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.mouseClick(10, 20, 'left', undefined, 'tab-1', 18, ['cmd', 'shift'])
+
+    const mouseCalls = wc.debugger.sendCommand.mock.calls.filter(
+      (call) => call[0] === 'Input.dispatchMouseEvent'
+    )
+    expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', modifiers: 12 })
+    expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', modifiers: 12 })
+  })
+
+  it('keeps adjusted mobile tap coordinates but uses CDP for modifier clicks', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockImplementation(async (method: string) => {
+      if (method === 'Runtime.evaluate') {
+        return { result: { value: { x: 12, y: 34, adjusted: true, handled: false } } }
+      }
+      return {}
+    })
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(
+      bridge.mouseClick(10, 20, 'left', undefined, 'tab-1', 18, ['cmd'])
+    ).resolves.toEqual({
+      clicked: { x: 12, y: 34, button: 'left', adjusted: true, handled: false }
+    })
+
+    const evaluateCall = wc.debugger.sendCommand.mock.calls.find(
+      (call) => call[0] === 'Runtime.evaluate'
+    )
+    expect((evaluateCall?.[1] as { expression?: string } | undefined)?.expression).toContain(
+      'const allowDomActivation = false'
+    )
+    const mouseCalls = wc.debugger.sendCommand.mock.calls.filter(
+      (call) => call[0] === 'Input.dispatchMouseEvent'
+    )
+    expect(mouseCalls).toHaveLength(2)
+    expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 12, y: 34, modifiers: 4 })
+    expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 12, y: 34, modifiers: 4 })
+  })
+
   it('drops empty command queues after direct CDP commands finish', async () => {
     const wc = mockWebContents(100)
     wc.debugger.sendCommand.mockResolvedValue({})

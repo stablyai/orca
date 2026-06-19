@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem, GitPushTarget } from '../../../shared/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
 import { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
@@ -24,6 +24,10 @@ export type SmartGitHubSubmitResolution = {
   linkedWorkItem: LinkedWorkItemSummary
   linkedIssueNumber: number | null
   linkedPR: number | null
+  baseBranch?: string
+  compareBaseRef?: string
+  pushTarget?: GitPushTarget
+  branchNameOverride?: string
 }
 
 export type SmartGitHubSubmitLookup = {

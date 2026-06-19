@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   projectHostSetupProjectionFromRepos,
   getProjectHostSetupsForProject,
-  getProjectHostSetupWorktreeMeta
+  getProjectHostSetupWorktreeMeta,
+  isGitHubBackedRepo
 } from './project-host-setup-projection'
 import type { Repo } from './types'
 
@@ -196,5 +197,46 @@ describe('project host setup projection', () => {
       hostId: 'ssh:openclaw%202',
       projectHostSetupId: 'remote-repo'
     })
+  })
+})
+
+describe('isGitHubBackedRepo', () => {
+  it('is true when an explicit upstream owner/repo is present', () => {
+    const target = repo({
+      id: 'r',
+      path: '/r',
+      displayName: 'r',
+      upstream: { owner: 'stablyai', repo: 'orca' }
+    })
+    expect(isGitHubBackedRepo(target)).toBe(true)
+  })
+
+  it('is true when a GitHub-sourced avatar icon encodes the slug', () => {
+    const target = repo({
+      id: 'r',
+      path: '/r',
+      displayName: 'r',
+      repoIcon: {
+        type: 'image',
+        src: 'https://github.com/stablyai.png?size=64',
+        source: 'github',
+        label: 'stablyai/orca'
+      }
+    })
+    expect(isGitHubBackedRepo(target)).toBe(true)
+  })
+
+  it('is false for a non-GitHub icon and no upstream (GitLab/folder)', () => {
+    const target = repo({
+      id: 'r',
+      path: '/r',
+      displayName: 'r',
+      repoIcon: { type: 'lucide', name: 'gitlab' }
+    })
+    expect(isGitHubBackedRepo(target)).toBe(false)
+  })
+
+  it('is false for a plain local repo with no provider signal', () => {
+    expect(isGitHubBackedRepo(repo({ id: 'r', path: '/r', displayName: 'r' }))).toBe(false)
   })
 })

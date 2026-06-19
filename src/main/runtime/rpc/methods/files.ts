@@ -26,6 +26,18 @@ const FileOpen = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing relative path'))
 })
 
+const ResolveTerminalPath = WorktreeSelector.extend({
+  pathText: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing path text')),
+  cwd: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' && v.length > 0 ? v : null))
+    .nullable()
+    .optional()
+})
+
 const FileOpenDiff = FileOpen.extend({
   staged: z.boolean().optional()
 })
@@ -150,6 +162,12 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: FileOpen,
     handler: async (params, { runtime }) =>
       runtime.readMobileFile(params.worktree, params.relativePath)
+  }),
+  defineMethod({
+    name: 'files.resolveTerminalPath',
+    params: ResolveTerminalPath,
+    handler: async (params, { runtime }) =>
+      runtime.resolveTerminalPath(params.worktree, params.pathText, params.cwd ?? null)
   }),
   defineMethod({
     name: 'files.readPreview',

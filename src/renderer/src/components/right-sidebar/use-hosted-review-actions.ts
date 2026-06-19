@@ -14,7 +14,11 @@ export type HostedReviewActionInfo = Pick<
   Partial<
     Pick<
       HostedReviewInfo,
-      'reviewDecision' | 'autoMergeEnabled' | 'mergeQueueRequired' | 'mergeStateStatus'
+      | 'reviewDecision'
+      | 'autoMergeEnabled'
+      | 'autoMergeAllowed'
+      | 'mergeQueueRequired'
+      | 'mergeStateStatus'
     >
   >
 
@@ -106,6 +110,7 @@ export function useHostedReviewActions({
         repoId: repo.id,
         prNumber: review.number,
         enabled,
+        method: enabled ? defaultMergeMethod : undefined,
         prRepo: githubPR?.prRepo ?? null
       })
       if (!result.ok) {
@@ -122,6 +127,7 @@ export function useHostedReviewActions({
     githubPR?.prRepo,
     isGitLab,
     autoMergeAction,
+    defaultMergeMethod,
     onRefreshReview,
     repo.id,
     repo.path,

@@ -17,6 +17,8 @@ vi.mock('os', async () => {
 
 import { GrokHookService } from './hook-service'
 
+const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
+
 describe('GrokHookService', () => {
   let homeDir: string
 
@@ -60,9 +62,16 @@ describe('GrokHookService', () => {
     expect(config.hooks.PreToolUse[0].hooks[0].command).toContain('grok-hook')
     expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
 
-    const script = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'grok-hook.sh'), 'utf8')
+    const script = readFileSync(
+      join(homeDir, '.orca', 'agent-hooks', GROK_SCRIPT_FILE_NAME),
+      'utf8'
+    )
     expect(script).toContain('/hook/grok')
-    expect(script).toContain('payload=$(cat)')
+    if (process.platform === 'win32') {
+      expect(script).toContain('powershell -NoProfile')
+    } else {
+      expect(script).toContain('payload=$(cat)')
+    }
   })
 
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
@@ -90,6 +99,6 @@ describe('GrokHookService', () => {
       definition.hooks.map((hook) => hook.command)
     )
     expect(commands).toContain('/usr/local/bin/user-hook')
-    expect(commands.some((command) => command.includes('grok-hook.sh'))).toBe(true)
+    expect(commands.some((command) => command.includes(GROK_SCRIPT_FILE_NAME))).toBe(true)
   })
 })

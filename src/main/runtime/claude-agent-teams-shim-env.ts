@@ -8,6 +8,7 @@ import {
   isDirectClaudeCommand,
   type ClaudeAgentTeamsMode
 } from '../../shared/claude-agent-teams-tmux-compat'
+import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
 
 export type ClaudeAgentTeamsLaunchPlan = {
   command: string
@@ -62,8 +63,8 @@ export function resolveClaudeAgentTeamsShimBin(
   }
   return (
     findExecutableOnPath(process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev', env.PATH) ??
-    findExecutableOnPath(platformCliCommandName(), env.PATH) ??
-    platformCliCommandName()
+    findExecutableOnPath(getOrcaCliCommandNameForPlatform(process.platform), env.PATH) ??
+    getOrcaCliCommandNameForPlatform(process.platform)
   )
 }
 
@@ -85,16 +86,6 @@ function bundledLauncherPath(): string | null {
     return join(process.resourcesPath, 'bin', 'orca.cmd')
   }
   return null
-}
-
-function platformCliCommandName(): string {
-  if (process.platform === 'linux') {
-    return 'orca-ide'
-  }
-  if (process.platform === 'win32') {
-    return 'orca.cmd'
-  }
-  return 'orca'
 }
 
 function findExecutableOnPath(command: string, pathValue: string | undefined): string | null {
@@ -126,7 +117,7 @@ function unixShimScript(): string {
   return [
     '#!/usr/bin/env sh',
     'set -eu',
-    'exec "${ORCA_AGENT_TEAMS_SHIM_BIN:-orca}" agent-teams-tmux "$@"',
+    `exec "\${ORCA_AGENT_TEAMS_SHIM_BIN:-${getOrcaCliCommandNameForPlatform(process.platform)}}" agent-teams-tmux "$@"`,
     ''
   ].join('\n')
 }
@@ -136,7 +127,7 @@ function windowsShimScript(): string {
     '@echo off',
     'setlocal',
     'if "%ORCA_AGENT_TEAMS_SHIM_BIN%"=="" (',
-    '  set "ORCA_AGENT_TEAMS_SHIM_BIN=orca"',
+    `  set "ORCA_AGENT_TEAMS_SHIM_BIN=${getOrcaCliCommandNameForPlatform(process.platform)}"`,
     ')',
     '"%ORCA_AGENT_TEAMS_SHIM_BIN%" agent-teams-tmux %*',
     ''

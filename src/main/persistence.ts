@@ -37,6 +37,7 @@ import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
 import type {
   PersistedState,
   Project,
+  ProjectUpdateArgs,
   ProjectHostSetup,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
@@ -51,6 +52,8 @@ import type {
   SparsePreset,
   WorktreeMeta,
   WorktreeLineage,
+  WorkspaceLineage,
+  WorkspaceKey,
   GlobalSettings,
   OrcaWorkspaceLayout,
   NotificationSettings,
@@ -64,6 +67,10 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+import {
+  deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
+  normalizeProjectRuntimePreference
+} from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import {
   buildTaskSourceContextFromRepo,
@@ -82,6 +89,8 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  getWorktreeCardModeProperties,
+  isLegacyDefaultedCompactWorktreeCardProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION,
@@ -138,6 +147,7 @@ import {
   normalizePersistedWorkspaceStatuses,
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
+import { clampMarkdownTocPanelWidth } from '../shared/markdown-toc-panel-width'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
@@ -157,6 +167,10 @@ import {
   projectSourceControlAiToLegacyCommitMessageAi,
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
+import {
+  DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
+  SOURCE_CONTROL_TEXT_ACTION_IDS
+} from '../shared/source-control-ai-actions'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
 import {
   DEFAULT_TUI_AGENT_ARGS,
@@ -168,11 +182,17 @@ import {
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
+import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
 import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
 } from '../shared/folder-workspaces'
-import { folderWorkspaceKey } from '../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  isWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../shared/workspace-scope'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
@@ -217,6 +237,47 @@ function encryptOptionalSecret(value: string | null | undefined): string | null 
 
 function decryptOptionalSecret(value: string | null | undefined): string | null {
   return value ? decrypt(value) : null
+}
+
+function retireLegacyInstructionsForClearedTextActionRecipes(
+  sourceControlAi: GlobalSettings['sourceControlAi'],
+  previousSettings: GlobalSettings
+): GlobalSettings['sourceControlAi'] {
+  if (!sourceControlAi?.actions) {
+    return sourceControlAi
+  }
+
+  const previousSourceControlAi = normalizeSourceControlAiSettings(
+    previousSettings.sourceControlAi,
+    previousSettings.commitMessageAi
+  )
+  let instructionsByOperation = sourceControlAi.instructionsByOperation
+  let changed = false
+  for (const actionId of SOURCE_CONTROL_TEXT_ACTION_IDS) {
+    if (
+      sourceControlAi.actions[actionId]?.commandInputTemplate !==
+      DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
+    ) {
+      continue
+    }
+    if (
+      previousSourceControlAi.actions?.[actionId]?.commandInputTemplate ===
+        DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId] ||
+      instructionsByOperation?.[actionId] !==
+        previousSourceControlAi.instructionsByOperation[actionId]
+    ) {
+      continue
+    }
+    if (instructionsByOperation?.[actionId] === '') {
+      continue
+    }
+    // Why: `{basePrompt}` is the explicit clear state; an empty instruction
+    // shadows rollback `commitMessageAi.customPrompt` during normalize/project.
+    instructionsByOperation = { ...instructionsByOperation, [actionId]: '' }
+    changed = true
+  }
+
+  return changed ? { ...sourceControlAi, instructionsByOperation } : sourceControlAi
 }
 
 // Why: the data-file path must not be a module-level constant. Module-level
@@ -491,6 +552,7 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
     tab === 'explorer' ||
     tab === 'search' ||
     tab === 'vault' ||
+    tab === 'workspaces' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
@@ -498,6 +560,51 @@ function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSide
     return tab
   }
   return getDefaultUIState().rightSidebarTab
+}
+
+function normalizeWorkspaceLineageByChildKey(
+  value: unknown
+): Record<WorkspaceKey, WorkspaceLineage> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {}
+  }
+  const normalized: Record<WorkspaceKey, WorkspaceLineage> = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (!isWorkspaceKey(key) || !entry || typeof entry !== 'object') {
+      continue
+    }
+    const lineage = entry as Partial<WorkspaceLineage>
+    const childWorkspaceKey =
+      typeof lineage.childWorkspaceKey === 'string' && isWorkspaceKey(lineage.childWorkspaceKey)
+        ? lineage.childWorkspaceKey
+        : key
+    const parentWorkspaceKey = lineage.parentWorkspaceKey
+    if (
+      !isWorkspaceKey(childWorkspaceKey) ||
+      typeof parentWorkspaceKey !== 'string' ||
+      !isWorkspaceKey(parentWorkspaceKey) ||
+      childWorkspaceKey !== key ||
+      childWorkspaceKey === parentWorkspaceKey
+    ) {
+      continue
+    }
+    normalized[childWorkspaceKey] = {
+      childWorkspaceKey,
+      childInstanceId: lineage.childInstanceId ?? null,
+      parentWorkspaceKey,
+      parentInstanceId: lineage.parentInstanceId ?? null,
+      origin: lineage.origin ?? 'cli',
+      capture: lineage.capture ?? { source: 'manual-action', confidence: 'inferred' },
+      ...(lineage.taskId ? { taskId: lineage.taskId } : {}),
+      ...(lineage.orchestrationRunId ? { orchestrationRunId: lineage.orchestrationRunId } : {}),
+      ...(lineage.coordinatorHandle ? { coordinatorHandle: lineage.coordinatorHandle } : {}),
+      ...(lineage.createdByTerminalHandle
+        ? { createdByTerminalHandle: lineage.createdByTerminalHandle }
+        : {}),
+      createdAt: Number.isFinite(lineage.createdAt) ? Number(lineage.createdAt) : Date.now()
+    }
+  }
+  return normalized
 }
 
 function normalizeRightSidebarExplorerView(
@@ -778,8 +885,14 @@ function remapLegacyOnboardingLastCompletedStep(
   lastCompletedStep: number,
   raw: Record<string, unknown>
 ): number {
-  if (raw.outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
+  if (raw.outcome === 'completed' && lastCompletedStep >= 4) {
     return ONBOARDING_FINAL_STEP
+  }
+  // Why: v3 was the four-step flow before the Windows terminal preference
+  // page. Step 4 already meant notifications, so open progress should resume
+  // there rather than treating it as the newly inserted Windows step.
+  if (raw.flowVersion === 3) {
+    return Math.min(4, lastCompletedStep)
   }
   // Why: v2 was the five-step flow; missing/older versions were seven-step
   // data where step 4 was removed agent setup, not completed integrations.
@@ -934,11 +1047,8 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   return onboarding.closedAt !== null || persistedDismissed === true
 }
 
-// Why: read a settings field that was removed from the GlobalSettings type
-// but still round-trips on disk via the ...parsed.settings spread. One-shot
-// use only — for the inline-agents default-on migration's Case B discriminator.
-// Delete with the migration in the cleanup release (2+ stable releases after
-// _inlineAgentsDefaultedForAllUsers ships).
+// Why: read a settings field that was removed from GlobalSettings but can
+// still exist on disk. One-shot use for the inline-agents migration.
 function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
   return (
     (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
@@ -972,11 +1082,20 @@ function sanitizeRepoProjectHostSetupMethod(
   return value === 'imported-existing-folder' || value === 'cloned' ? value : undefined
 }
 
+function sanitizeForkSyncMode(value: unknown): Repo['forkSyncMode'] | undefined {
+  return value === 'ask' || value === 'safe-auto' || value === 'off' ? value : undefined
+}
+
 function sanitizeRepoUpdatesForPersistence<
   T extends Partial<
     Pick<
       Repo,
-      'badgeColor' | 'repoIcon' | 'upstream' | 'worktreeBasePath' | 'projectHostSetupMethod'
+      | 'badgeColor'
+      | 'repoIcon'
+      | 'upstream'
+      | 'worktreeBasePath'
+      | 'projectHostSetupMethod'
+      | 'forkSyncMode'
     >
   >
 >(updates: T): T {
@@ -1019,6 +1138,14 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.projectHostSetupMethod
     } else {
       sanitized.projectHostSetupMethod = setupMethod
+    }
+  }
+  if ('forkSyncMode' in sanitized) {
+    const forkSyncMode = sanitizeForkSyncMode(sanitized.forkSyncMode)
+    if (forkSyncMode === undefined) {
+      delete sanitized.forkSyncMode
+    } else {
+      sanitized.forkSyncMode = forkSyncMode
     }
   }
   return sanitized
@@ -1835,6 +1962,9 @@ function mergeProjectHostSetupCompatibilityState(
   repos: readonly Repo[]
 ): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
   const projection = projectHostSetupProjectionFromRepos(repos)
+  const existingProjectsById = new Map(
+    (state.projects ?? []).map((project) => [project.id, project])
+  )
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
@@ -1855,8 +1985,18 @@ function mergeProjectHostSetupCompatibilityState(
       ...project,
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
+  const projectedProjects = projection.projects.map((project) => {
+    const existingProject = existingProjectsById.get(project.id)
+    return existingProject?.localWindowsRuntimePreference
+      ? {
+          ...project,
+          localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
+          updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
+        }
+      : project
+  })
   return {
-    projects: [...projection.projects, ...independentProjects],
+    projects: [...projectedProjects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
   }
 }
@@ -2096,6 +2236,7 @@ export class Store {
       originWebContentsId?: number
     ) => void
   >()
+  private uiChangeListeners = new Set<(ui: PersistedState['ui']) => void>()
 
   constructor() {
     const loaded = this.load()
@@ -2491,6 +2632,16 @@ export class Store {
         ) {
           migratedDisabledTuiAgents.push('claude-agent-teams')
         }
+        const migratedWindowsRuntimeDefault =
+          parsed.settings?.localWindowsRuntimeDefault === undefined
+            ? deriveGlobalWindowsRuntimeDefaultFromLegacySettings(parsed.settings).defaultRuntime
+            : parsed.settings.localWindowsRuntimeDefault
+        if (
+          parsed.settings?.localWindowsRuntimeDefault === undefined &&
+          migratedWindowsRuntimeDefault.kind === 'wsl'
+        ) {
+          this.loadNeedsSave = true
+        }
         if (!autoRenameBranchFromWorkDefaultedOn) {
           this.loadNeedsSave = true
         }
@@ -2502,6 +2653,10 @@ export class Store {
           this.loadNeedsSave = true
         }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
+        const loadedCompactWorktreeCards =
+          parsed.settings?.compactWorktreeCards ??
+          parsed.settings?.experimentalCompactWorktreeCards ??
+          defaults.settings.compactWorktreeCards
         result = {
           ...defaults,
           ...parsed,
@@ -2514,6 +2669,9 @@ export class Store {
             normalizedProjectGroups
           ),
           worktreeLineageById: parsed.worktreeLineageById ?? {},
+          workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
+            parsed.workspaceLineageByChildKey
+          ),
           settings: {
             ...defaults.settings,
             ...parsed.settings,
@@ -2539,13 +2697,11 @@ export class Store {
             experimentalActivityDefaultedOffForAllUsers: true,
             // Why: compact worktree cards graduated from Experimental; preserve
             // the old opt-in for profiles written during the rollout.
-            compactWorktreeCards:
-              parsed.settings?.compactWorktreeCards ??
-              parsed.settings?.experimentalCompactWorktreeCards ??
-              defaults.settings.compactWorktreeCards,
+            compactWorktreeCards: loadedCompactWorktreeCards,
             experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
+            localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
             floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -2558,6 +2714,9 @@ export class Store {
               parsed.settings?.terminalCustomThemes
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            // Why: persisted settings can be user-edited or written by older
+            // builds; keep tray-minimize false unless the stored value is true.
+            minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
@@ -2630,33 +2789,6 @@ export class Store {
             ) {
               this.loadNeedsSave = true
             }
-            // Why: the 'inline-agents' card property was added after the
-            // feature shipped behind an experimental toggle. Now that the
-            // feature is default-on for everyone, every existing user needs
-            // 'inline-agents' appended to their persisted
-            // worktreeCardProperties on first load after upgrade so the
-            // inline agent rows render without further opt-in. A flag
-            // prevents re-firing so a deliberate uncheck from the Workspaces
-            // view options menu sticks across restarts.
-            //
-            // TRAP — do not key this on `_inlineAgentsDefaultedForExperiment`.
-            // That legacy flag was stamped unconditionally on every successful
-            // load() in prior builds, regardless of whether the experiment was
-            // toggled on. Every prior-RC user therefore already has it set to
-            // true on disk, including the opt-out cohort this widened
-            // migration was specifically written to reach. Gating on the
-            // legacy flag would silently skip exactly those users. The
-            // dedicated `_inlineAgentsDefaultedForAllUsers` flag exists so
-            // the new default-on migration can distinguish "already migrated
-            // under the new rules" from "happened to launch a prior build".
-            //
-            // Case B preservation: a user who turned the experiment on and then
-            // deliberately unchecked 'inline-agents' from the sidebar options
-            // menu has the same on-disk shape as a never-touched user. The
-            // discriminator below reads the deprecated `experimentalAgentDashboard`
-            // value as a one-shot signal. Both branches of the migration stamp
-            // `_inlineAgentsDefaultedForAllUsers`, so subsequent launches don't
-            // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
             const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
             const expandedCardPropsMigrated =
@@ -2671,9 +2803,16 @@ export class Store {
               !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
+            const needsLegacyDefaultedCompactMigration =
+              loadedCompactWorktreeCards &&
+              parsed.ui?._worktreeCardModeDefaulted === true &&
+              isLegacyDefaultedCompactWorktreeCardProperties(rawCardProps)
             const migratedCardProps = (() => {
               if (!Array.isArray(rawCardProps)) {
                 return undefined
+              }
+              if (needsLegacyDefaultedCompactMigration) {
+                return getWorktreeCardModeProperties('Compact')
               }
               const candidate = needsInlineAgentsMigration
                 ? [...rawCardProps, 'inline-agents' as const]
@@ -2719,6 +2858,11 @@ export class Store {
             }
             return {
               ...defaults.ui,
+              // Why: missing card properties should follow the persisted card
+              // layout mode; explicit property choices are preserved below.
+              worktreeCardProperties: getWorktreeCardModeProperties(
+                loadedCompactWorktreeCards ? 'Compact' : 'Default'
+              ),
               ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
               // Why: migrate once from the retired Appearance setting only
               // when no explicit persisted chrome preference exists yet.
@@ -3080,6 +3224,25 @@ export class Store {
     return [...this.state.projects]
   }
 
+  updateProject(id: string, updates: ProjectUpdateArgs['updates']): Project | null {
+    const project = this.state.projects.find((entry) => entry.id === id)
+    if (!project) {
+      return null
+    }
+    if ('localWindowsRuntimePreference' in updates) {
+      if (updates.localWindowsRuntimePreference === undefined) {
+        delete project.localWindowsRuntimePreference
+      } else {
+        project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
+          updates.localWindowsRuntimePreference
+        )
+      }
+    }
+    project.updatedAt = Date.now()
+    this.scheduleSave()
+    return { ...project }
+  }
+
   getProjectHostSetups(): ProjectHostSetup[] {
     return [...this.state.projectHostSetups]
   }
@@ -3260,6 +3423,7 @@ export class Store {
           this.state.workspaceSession,
           folderWorkspaceKey(workspace.id)
         )!
+        this.removeWorkspaceLineageForFolderParent(workspace.id)
       }
     }
     this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
@@ -3413,6 +3577,7 @@ export class Store {
       this.state.workspaceSession,
       folderWorkspaceKey(id)
     )!
+    this.removeWorkspaceLineageForFolderParent(id)
     this.scheduleSave()
     return true
   }
@@ -3493,6 +3658,17 @@ export class Store {
         delete this.state.worktreeLineageById[childId]
       }
     }
+    for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
+      const childScope = parseWorkspaceKey(childKey)
+      const parentScope = parseWorkspaceKey(lineage.parentWorkspaceKey)
+      if (childScope?.type === 'worktree' && childScope.worktreeId.startsWith(prefix)) {
+        delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+        continue
+      }
+      if (parentScope?.type === 'worktree' && parentScope.worktreeId.startsWith(prefix)) {
+        delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+      }
+    }
     this.scheduleSave()
   }
 
@@ -3511,6 +3687,7 @@ export class Store {
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
+        | 'forkSyncMode'
         | 'externalWorktreeVisibility'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'projectGroupId'
@@ -3681,12 +3858,14 @@ export class Store {
       upstream: rawUpstream,
       sourceControlAi: rawSourceControlAi,
       projectHostSetupMethod: rawProjectHostSetupMethod,
+      forkSyncMode: rawForkSyncMode,
       ...repoWithoutIcon
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
     const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
+    const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -3702,6 +3881,7 @@ export class Store {
       ...(upstream !== undefined ? { upstream } : {}),
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
+      ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {
@@ -4028,6 +4208,7 @@ export class Store {
   removeWorktreeMeta(worktreeId: string): void {
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
+    delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
     this.scheduleSave()
   }
 
@@ -4048,6 +4229,222 @@ export class Store {
   removeWorktreeLineage(worktreeId: string): void {
     delete this.state.worktreeLineageById[worktreeId]
     this.scheduleSave()
+  }
+
+  /**
+   * Move every worktreeId-keyed record from `oldWorktreeId` to `newWorktreeId`
+   * after the worktree's folder (and thus its `${repoId}::${path}` id) was
+   * renamed on disk, so a post-move refresh re-binds the worktree's state under
+   * the new id instead of orphaning it. Records the old id on the new meta's
+   * `priorWorktreeIds` so the session GC/hydration can still recognize PTY
+   * sessions minted under the old (path-derived) id. No-op when the ids match.
+   *
+   * Renderer counterpart: `buildWorktreeRenameState` in store/slices/worktrees.ts
+   * re-keys the renderer's own worktree-scoped maps for the same id change.
+   */
+  migrateWorktreeIdentity(oldWorktreeId: string, newWorktreeId: string): void {
+    if (oldWorktreeId === newWorktreeId) {
+      return
+    }
+    const oldWorkspaceKey = worktreeWorkspaceKey(oldWorktreeId)
+    const newWorkspaceKey = worktreeWorkspaceKey(newWorktreeId)
+    const moveKey = <T>(
+      record: Record<string, T>,
+      mapValue: (value: T) => T = (value) => value
+    ): boolean => {
+      if (!(oldWorktreeId in record)) {
+        return false
+      }
+      record[newWorktreeId] = mapValue(record[oldWorktreeId])
+      delete record[oldWorktreeId]
+      return true
+    }
+    const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
+      value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
+    const migrateSession = (session: WorkspaceSessionState | undefined): boolean => {
+      if (!session) {
+        return false
+      }
+      let sessionChanged = false
+      const moveSessionKey = <T>(
+        record: Record<string, T> | undefined,
+        mapValue: (value: T) => T = (value) => value
+      ): boolean => {
+        if (!record) {
+          return false
+        }
+        let moved = false
+        const pairs: [string, string][] = [
+          [oldWorktreeId, newWorktreeId],
+          [oldWorkspaceKey, newWorkspaceKey]
+        ]
+        for (const [oldKey, newKey] of pairs) {
+          if (!(oldKey in record)) {
+            continue
+          }
+          record[newKey] = mapValue(record[oldKey])
+          delete record[oldKey]
+          moved = true
+        }
+        return moved
+      }
+
+      sessionChanged =
+        moveSessionKey(session.tabsByWorktree, (tabs) => tabs.map(withNewWorktreeId)) ||
+        sessionChanged
+      sessionChanged =
+        moveSessionKey(session.openFilesByWorktree, (files) => files.map(withNewWorktreeId)) ||
+        sessionChanged
+      sessionChanged = moveSessionKey(session.activeFileIdByWorktree) || sessionChanged
+      sessionChanged =
+        moveSessionKey(session.browserTabsByWorktree, (workspaces) =>
+          workspaces.map(withNewWorktreeId)
+        ) || sessionChanged
+      if (session.browserPagesByWorkspace) {
+        let pagesChanged = false
+        const nextPagesByWorkspace = { ...session.browserPagesByWorkspace }
+        for (const [workspaceId, pages] of Object.entries(nextPagesByWorkspace)) {
+          if (!pages.some((page) => page.worktreeId === oldWorktreeId)) {
+            continue
+          }
+          nextPagesByWorkspace[workspaceId] = pages.map(withNewWorktreeId)
+          pagesChanged = true
+        }
+        if (pagesChanged) {
+          session.browserPagesByWorkspace = nextPagesByWorkspace
+          sessionChanged = true
+        }
+      }
+      sessionChanged = moveSessionKey(session.activeBrowserTabIdByWorktree) || sessionChanged
+      sessionChanged = moveSessionKey(session.activeTabTypeByWorktree) || sessionChanged
+      sessionChanged = moveSessionKey(session.activeTabIdByWorktree) || sessionChanged
+      sessionChanged =
+        moveSessionKey(session.unifiedTabs, (tabs) => tabs.map(withNewWorktreeId)) || sessionChanged
+      sessionChanged =
+        moveSessionKey(session.tabGroups, (groups) => groups.map(withNewWorktreeId)) ||
+        sessionChanged
+      sessionChanged = moveSessionKey(session.tabGroupLayouts) || sessionChanged
+      sessionChanged = moveSessionKey(session.activeGroupIdByWorktree) || sessionChanged
+      sessionChanged = moveSessionKey(session.lastVisitedAtByWorktreeId) || sessionChanged
+      sessionChanged =
+        moveSessionKey(session.defaultTerminalTabsAppliedByWorktreeId) || sessionChanged
+      if (session.activeWorktreeIdsOnShutdown?.includes(oldWorktreeId)) {
+        session.activeWorktreeIdsOnShutdown = session.activeWorktreeIdsOnShutdown.map((id) =>
+          id === oldWorktreeId ? newWorktreeId : id
+        )
+        sessionChanged = true
+      }
+      if (session.activeWorktreeId === oldWorktreeId) {
+        session.activeWorktreeId = newWorktreeId
+        sessionChanged = true
+      }
+      if (session.activeWorkspaceKey === oldWorkspaceKey) {
+        session.activeWorkspaceKey = newWorkspaceKey
+        sessionChanged = true
+      }
+      if (session.sleepingAgentSessionsByPaneKey) {
+        let sleepingChanged = false
+        const nextSleeping = { ...session.sleepingAgentSessionsByPaneKey }
+        for (const [paneKey, record] of Object.entries(nextSleeping)) {
+          if (record.worktreeId !== oldWorktreeId) {
+            continue
+          }
+          nextSleeping[paneKey] = { ...record, worktreeId: newWorktreeId }
+          sleepingChanged = true
+        }
+        if (sleepingChanged) {
+          session.sleepingAgentSessionsByPaneKey = nextSleeping
+          sessionChanged = true
+        }
+      }
+      return sessionChanged
+    }
+
+    let changed = moveKey(this.state.worktreeMeta)
+    // Record the prior id so a session minted under it isn't reaped as an orphan.
+    const newMeta = this.state.worktreeMeta[newWorktreeId]
+    if (newMeta) {
+      const prior = newMeta.priorWorktreeIds ?? []
+      if (!prior.includes(oldWorktreeId)) {
+        newMeta.priorWorktreeIds = [...prior, oldWorktreeId]
+        changed = true
+      }
+    }
+
+    changed = moveKey(this.state.worktreeLineageById) || changed
+    const movedLineage = this.state.worktreeLineageById[newWorktreeId]
+    if (movedLineage && movedLineage.worktreeId === oldWorktreeId) {
+      movedLineage.worktreeId = newWorktreeId
+    }
+    // Why: other worktrees created from this one carry it as parentWorktreeId;
+    // the stable parentWorktreeInstanceId is unaffected, but keep the denormalized
+    // path-derived id consistent too.
+    for (const lineage of Object.values(this.state.worktreeLineageById)) {
+      if (lineage.parentWorktreeId === oldWorktreeId) {
+        lineage.parentWorktreeId = newWorktreeId
+        changed = true
+      }
+    }
+
+    if (oldWorkspaceKey in this.state.workspaceLineageByChildKey) {
+      const lineage = this.state.workspaceLineageByChildKey[oldWorkspaceKey]
+      this.state.workspaceLineageByChildKey[newWorkspaceKey] = {
+        ...lineage,
+        childWorkspaceKey: newWorkspaceKey
+      }
+      delete this.state.workspaceLineageByChildKey[oldWorkspaceKey]
+      changed = true
+    }
+    for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
+      if (lineage.parentWorkspaceKey === oldWorkspaceKey) {
+        this.state.workspaceLineageByChildKey[childKey as WorkspaceKey] = {
+          ...lineage,
+          parentWorkspaceKey: newWorkspaceKey
+        }
+        changed = true
+      }
+    }
+
+    changed = migrateSession(this.state.workspaceSession) || changed
+    for (const session of Object.values(this.state.workspaceSessionsByHostId ?? {})) {
+      changed = migrateSession(session) || changed
+    }
+    const showDotfiles = this.state.ui?.showDotfilesByWorktree
+    if (showDotfiles) {
+      changed = moveKey(showDotfiles) || changed
+    }
+
+    if (changed) {
+      this.scheduleSave()
+    }
+  }
+
+  getWorkspaceLineage(childWorkspaceKey: WorkspaceKey): WorkspaceLineage | undefined {
+    return this.state.workspaceLineageByChildKey[childWorkspaceKey]
+  }
+
+  getAllWorkspaceLineage(): Record<WorkspaceKey, WorkspaceLineage> {
+    return this.state.workspaceLineageByChildKey
+  }
+
+  setWorkspaceLineage(lineage: WorkspaceLineage): WorkspaceLineage {
+    this.state.workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
+    this.scheduleSave()
+    return lineage
+  }
+
+  removeWorkspaceLineage(childWorkspaceKey: WorkspaceKey): void {
+    delete this.state.workspaceLineageByChildKey[childWorkspaceKey]
+    this.scheduleSave()
+  }
+
+  private removeWorkspaceLineageForFolderParent(folderWorkspaceId: string): void {
+    const parentKey = folderWorkspaceKey(folderWorkspaceId)
+    for (const [childKey, lineage] of Object.entries(this.state.workspaceLineageByChildKey)) {
+      if (lineage.parentWorkspaceKey === parentKey) {
+        delete this.state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+      }
+    }
   }
 
   // ── Settings ───────────────────────────────────────────────────────
@@ -4078,11 +4475,38 @@ export class Store {
     }
   }
 
+  // Why: UI view-state (group/sort/filters etc.) is written from both the
+  // desktop renderer and mobile (via the ui.set RPC) into one shared store.
+  // Without this, a mobile change persisted but the desktop renderer — which
+  // hydrates UI state once — never learned of it, breaking bi-directional sync.
+  onUIChanged(listener: (ui: PersistedState['ui']) => void): () => void {
+    this.uiChangeListeners.add(listener)
+    return () => {
+      this.uiChangeListeners.delete(listener)
+    }
+  }
+
+  private notifyUIChanged(): void {
+    if (this.uiChangeListeners.size === 0) {
+      return
+    }
+    const ui = this.getUI()
+    for (const listener of this.uiChangeListeners) {
+      listener(ui)
+    }
+  }
+
   updateSettings(
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     const sanitizedUpdates = { ...updates }
+    // Why: coerce strictly to boolean here (not at the IPC edge) so every write
+    // path is covered and a non-bool renderer payload can never persist a
+    // truthy non-bool that later reads as "tray-minimize on".
+    if ('minimizeToTrayOnClose' in updates) {
+      sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
+    }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
@@ -4156,6 +4580,10 @@ export class Store {
         ? { ...this.state.settings.telemetry, ...sanitizedUpdates.telemetry }
         : this.state.settings.telemetry
     if ('sourceControlAi' in sanitizedUpdates) {
+      sanitizedUpdates.sourceControlAi = retireLegacyInstructionsForClearedTextActionRecipes(
+        sanitizedUpdates.sourceControlAi,
+        this.state.settings
+      )
       const normalizedSourceControlAi = normalizeSourceControlAiSettings(
         sanitizedUpdates.sourceControlAi,
         this.state.settings.commitMessageAi
@@ -4220,6 +4648,11 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
       ),
+      syncTaskStatusFromWorkspaceBoard: this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      // Why: strict boolean coercion so a missing/legacy value reads as false
+      // (first-run notice still fires) rather than leaking a non-bool through.
+      trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
+      markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds
       ),
@@ -4238,6 +4671,7 @@ export class Store {
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
     const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
+    const previousUI = this.getUI()
     const currentUI = {
       ...getDefaultUIState(),
       ...stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
@@ -4258,7 +4692,7 @@ export class Store {
               this.state.ui?.rightSidebarExplorerView,
               nextRightSidebarTab
             )
-    this.state.ui = {
+    const nextUI = {
       ...currentUI,
       ...sanitizedUpdates,
       groupBy: sanitizedUpdates.groupBy
@@ -4289,6 +4723,13 @@ export class Store {
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         sanitizedUpdates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
+      ),
+      syncTaskStatusFromWorkspaceBoard:
+        sanitizedUpdates.syncTaskStatusFromWorkspaceBoard !== undefined
+          ? sanitizedUpdates.syncTaskStatusFromWorkspaceBoard === true
+          : this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      markdownTocPanelWidth: clampMarkdownTocPanelWidth(
+        sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
       ),
       visibleWorkspaceHostIds:
         updates.visibleWorkspaceHostIds !== undefined
@@ -4329,7 +4770,12 @@ export class Store {
             )
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
+    if (persistedUIValuesEqual(previousUI, nextUI)) {
+      return
+    }
+    this.state.ui = nextUI
     this.scheduleSave()
+    this.notifyUIChanged()
   }
 
   recordFeatureInteraction(id: FeatureInteractionId): PersistedState['ui'] {

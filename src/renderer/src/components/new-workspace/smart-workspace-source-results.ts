@@ -120,7 +120,7 @@ export function buildSmartWorkspaceSourceRows({
     nextRows.push(
       ...githubItems.map((item) => ({
         kind: 'github' as const,
-        value: `github-${item.type}-${item.number}`,
+        value: `github-${item.repoId}-${item.type}-${item.number}`,
         item
       }))
     )
@@ -129,7 +129,7 @@ export function buildSmartWorkspaceSourceRows({
     nextRows.push(
       ...gitlabItems.map((item) => ({
         kind: 'gitlab' as const,
-        value: `gitlab-${item.type}-${item.number}`,
+        value: `gitlab-${item.repoId}-${item.type}-${item.number}`,
         item
       }))
     )

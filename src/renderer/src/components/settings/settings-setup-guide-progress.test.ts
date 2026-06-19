@@ -22,7 +22,7 @@ describe('settings setup guide progress', () => {
       ready: true,
       doneCount: 0,
       total: FEATURE_WALL_SETUP_STEPS.length,
-      firstIncompleteStepId: 'split-terminal'
+      firstIncompleteStepId: 'notifications'
     })
   })
 
@@ -39,7 +39,7 @@ describe('settings setup guide progress', () => {
       ready: true,
       doneCount: 5,
       total: FEATURE_WALL_SETUP_STEPS.length,
-      firstIncompleteStepId: 'browser'
+      firstIncompleteStepId: 'agent-capabilities'
     })
   })
 

@@ -81,6 +81,8 @@ type ResolvedBrowserCommandTarget = {
   webContentsId: number
 }
 
+export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
+
 type AgentBrowserExecOptions = {
   envOverrides?: NodeJS.ProcessEnv
   timeoutMs?: number
@@ -233,6 +235,25 @@ function cdpMouseButtonMask(button: CdpMouseButton): number {
   return 1
 }
 
+function cdpMouseModifierMask(modifiers: BrowserMouseModifier[] | undefined): number {
+  if (!modifiers || modifiers.length === 0) {
+    return 0
+  }
+  let mask = 0
+  for (const modifier of modifiers) {
+    if (modifier === 'alt') {
+      mask |= 1
+    } else if (modifier === 'ctrl') {
+      mask |= 2
+    } else if (modifier === 'cmd') {
+      mask |= 4
+    } else if (modifier === 'shift') {
+      mask |= 8
+    }
+  }
+  return mask
+}
+
 function readClickPoint(value: unknown, fallback: BrowserClickPoint): BrowserClickPoint {
   const point = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
   const x = point?.x
@@ -248,11 +269,17 @@ function readClickPoint(value: unknown, fallback: BrowserClickPoint): BrowserCli
   return { x, y, adjusted: point?.adjusted === true, handled: point?.handled === true }
 }
 
-function mobileTouchClickExpression(x: number, y: number, radius: number): string {
+function mobileTouchClickExpression(
+  x: number,
+  y: number,
+  radius: number,
+  allowDomActivation: boolean
+): string {
   return `(() => {
     const inputX = ${JSON.stringify(x)};
     const inputY = ${JSON.stringify(y)};
     const radius = ${JSON.stringify(radius)};
+    const allowDomActivation = ${JSON.stringify(allowDomActivation)};
     const selector = [
       'a[href]',
       'button',
@@ -343,8 +370,11 @@ function mobileTouchClickExpression(x: number, y: number, radius: number): strin
         break;
       }
     }
-    if (best && dispatchClick(best.target, best.x, best.y)) {
+    if (best && allowDomActivation && dispatchClick(best.target, best.x, best.y)) {
       return { x: best.x, y: best.y, adjusted: true, handled: true };
+    }
+    if (best) {
+      return { x: best.x, y: best.y, adjusted: true, handled: false };
     }
     return { x: inputX, y: inputY, adjusted: false, handled: false };
   })()`
@@ -354,7 +384,8 @@ async function resolveMobileTouchClickPoint(
   dbg: WebContents['debugger'],
   x: number,
   y: number,
-  radius?: number
+  radius: number | undefined,
+  allowDomActivation: boolean
 ): Promise<BrowserClickPoint> {
   const fallback = { x, y, adjusted: false, handled: false }
   if (typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) {
@@ -362,7 +393,7 @@ async function resolveMobileTouchClickPoint(
   }
   try {
     const result = await dbg.sendCommand('Runtime.evaluate', {
-      expression: mobileTouchClickExpression(x, y, radius),
+      expression: mobileTouchClickExpression(x, y, radius, allowDomActivation),
       returnByValue: true,
       silent: true
     })
@@ -839,7 +870,8 @@ export class AgentBrowserBridge {
     button?: string,
     worktreeId?: string,
     browserPageId?: string,
-    radius?: number
+    radius?: number,
+    modifiers?: BrowserMouseModifier[]
   ): Promise<unknown> {
     return this.enqueueTargetedCommand(
       worktreeId,
@@ -854,12 +886,15 @@ export class AgentBrowserBridge {
         }
         const cdpButton = normalizeCdpMouseButton(button)
         const buttons = cdpMouseButtonMask(cdpButton)
+        const cdpModifiers = cdpMouseModifierMask(modifiers)
         const lease = acquireElectronDebugger(wc)
         try {
           wc.focus()
           const point =
             cdpButton === 'left'
-              ? await resolveMobileTouchClickPoint(wc.debugger, x, y, radius)
+              ? // Why: DOM activation cannot carry Cmd/Ctrl/Alt/Shift, so modifier
+                // clicks use only the adjusted point and let CDP dispatch the event.
+                await resolveMobileTouchClickPoint(wc.debugger, x, y, radius, cdpModifiers === 0)
               : { x, y, adjusted: false, handled: false }
           // Why: mobile taps should land as one atomic input operation. Sending
           // move/down/up through separate CLI calls visibly hovers targets and can
@@ -873,6 +908,7 @@ export class AgentBrowserBridge {
               y: point.y,
               button: cdpButton,
               buttons,
+              modifiers: cdpModifiers,
               clickCount: 1
             })
             await wc.debugger.sendCommand('Input.dispatchMouseEvent', {
@@ -881,6 +917,7 @@ export class AgentBrowserBridge {
               y: point.y,
               button: cdpButton,
               buttons: 0,
+              modifiers: cdpModifiers,
               clickCount: 1
             })
           }

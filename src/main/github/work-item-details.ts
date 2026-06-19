@@ -18,16 +18,26 @@ import {
   getOwnerRepo,
   getIssueOwnerRepo,
   ghRepoExecOptions,
-  githubRepoContext
+  githubRepoContext,
+  type LocalGitExecOptions
 } from './gh-utils'
 import { getWorkItem, getPRChecks, getPRComments } from './client'
 import { noteRateLimitSpend, rateLimitGuard } from './rate-limit'
 import { getPRReviewCommentLineNumbersFromPatch } from './pr-review-comment-lines'
+import { isMaxBufferOverflowError } from '../git/max-buffer-overflow'
 
 // Why: a PR "changed file" listing returned by the REST endpoint is paginated
 // at 100 per page; we cap at a reasonable total so a massive PR cannot starve
 // the gh semaphore while we fetch file listings.
 const MAX_PR_FILES = 300
+// Why: hosted PR files must exceed the renderer's large-diff threshold before
+// we give up on the raw fetch; otherwise the UI sees an empty diff instead of
+// the safety fallback.
+const GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES = 8 * 1024 * 1024
+
+function localGitOptionArgs(options: LocalGitExecOptions = {}): [] | [LocalGitExecOptions] {
+  return Object.keys(options).length > 0 ? [options] : []
+}
 
 const PR_FILE_VIEWED_STATES_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $after: String) {
   repository(owner: $owner, name: $repo) {
@@ -119,15 +129,20 @@ type GraphQLIssueDetailsResponse = {
 async function getIssueDetailsViaGraphQL(
   repoPath: string,
   issueNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{
   body: string
   comments: PRComment[]
   assignees: string[]
   participants: GitHubAssignableUser[]
 } | null> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getIssueOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   if (!ownerRepo) {
     return null
   }
@@ -269,10 +284,15 @@ function isBinaryHint(file: RESTPRFile): boolean {
 async function getPRHeadBaseSha(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ headSha: string; baseSha: string } | null> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   try {
     if (ownerRepo) {
       const { stdout } = await ghExecFileAsync(
@@ -292,7 +312,10 @@ async function getPRHeadBaseSha(
       ['pr', 'view', String(prNumber), '--json', 'headRefOid,baseRefOid'],
       ghOptions
     )
-    const data = JSON.parse(stdout) as { headRefOid?: string; baseRefOid?: string }
+    const data = JSON.parse(stdout) as {
+      headRefOid?: string
+      baseRefOid?: string
+    }
     if (data.headRefOid && data.baseRefOid) {
       return { headSha: data.headRefOid, baseSha: data.baseRefOid }
     }
@@ -305,10 +328,15 @@ async function getPRHeadBaseSha(
 async function getPRFiles(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubPRFile[]> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   if (!ownerRepo) {
     return []
   }
@@ -345,10 +373,15 @@ type PRFileViewedStatesResult = {
 async function getPRFileViewedStates(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRFileViewedStatesResult | null> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   if (!ownerRepo) {
     return null
   }
@@ -436,10 +469,15 @@ function mergePRFileViewedStates(
 async function getIssueBodyAndComments(
   repoPath: string,
   issueNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ body: string; comments: PRComment[]; assignees: string[] }> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getIssueOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getIssueOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   try {
     if (ownerRepo) {
       const [issueResult, commentsResult] = await Promise.all([
@@ -522,10 +560,15 @@ async function getIssueBodyAndComments(
 async function getPRBody(
   repoPath: string,
   prNumber: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<string> {
-  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
-  const ownerRepo = await getOwnerRepo(repoPath, connectionId)
+  const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+  const ownerRepo = await getOwnerRepo(
+    repoPath,
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
+  )
   try {
     if (ownerRepo) {
       const { stdout } = await ghExecFileAsync(
@@ -549,15 +592,16 @@ async function getPRBody(
 async function getWorkItemParticipants(
   repoPath: string,
   item: Pick<GitHubWorkItem, 'number' | 'type'>,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
   // Why: issues in a fork live on the upstream remote, so participants must be
   // resolved via getIssueOwnerRepo to stay consistent with getIssueBodyAndComments.
   // PRs remain tied to origin via getOwnerRepo.
   const ownerRepo =
     item.type === 'issue'
-      ? await getIssueOwnerRepo(repoPath, connectionId)
-      : await getOwnerRepo(repoPath, connectionId)
+      ? await getIssueOwnerRepo(repoPath, connectionId, ...localGitOptionArgs(localGitOptions))
+      : await getOwnerRepo(repoPath, connectionId, ...localGitOptionArgs(localGitOptions))
   if (!ownerRepo) {
     return []
   }
@@ -581,7 +625,7 @@ async function getWorkItemParticipants(
         '-F',
         `isPr=${item.type === 'pr'}`
       ],
-      ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+      ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
     )
     const data = JSON.parse(stdout) as {
       data?: {
@@ -614,7 +658,8 @@ async function getWorkItemParticipants(
 async function getGitHubUsersByLogin(
   repoPath: string,
   logins: string[],
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
   const uniqueLogins = Array.from(
     new Set(logins.filter((login) => login && login !== 'ghost').map((login) => login.trim()))
@@ -635,17 +680,27 @@ async function getGitHubUsersByLogin(
     noteRateLimitSpend('graphql')
     const { stdout } = await ghExecFileAsync(
       ['api', 'graphql', '-f', `query=query { ${fields} }`],
-      ghRepoExecOptions(githubRepoContext(repoPath, connectionId))
+      ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
     )
     const data = JSON.parse(stdout) as {
       data?: Record<
         string,
-        { login?: string; name?: string | null; avatarUrl?: string | null } | null
+        {
+          login?: string
+          name?: string | null
+          avatarUrl?: string | null
+        } | null
       >
     }
     return Object.values(data.data ?? {})
-      .filter((user): user is { login: string; name?: string | null; avatarUrl?: string | null } =>
-        Boolean(user?.login)
+      .filter(
+        (
+          user
+        ): user is {
+          login: string
+          name?: string | null
+          avatarUrl?: string | null
+        } => Boolean(user?.login)
       )
       .map((user) => ({
         login: user.login,
@@ -662,14 +717,20 @@ async function getMentionParticipants(
   item: Pick<GitHubWorkItem, 'author' | 'number' | 'type'>,
   comments: PRComment[],
   participants: GitHubAssignableUser[],
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubAssignableUser[]> {
   const visibleLogins = [item.author ?? '', ...comments.map((comment) => comment.author)]
   // Why: one aliased GraphQL query returns login/name/avatarUrl for every
   // mentioned author in a single round-trip. The previous REST fan-out
   // (/users/<login>) returned the same fields but cost one rate-limit point
   // per user.
-  const graphQlUsers = await getGitHubUsersByLogin(repoPath, visibleLogins, connectionId)
+  const graphQlUsers = await getGitHubUsersByLogin(
+    repoPath,
+    visibleLogins,
+    connectionId,
+    localGitOptions
+  )
   return mergeGitHubUsers([...participants, ...graphQlUsers])
 }
 
@@ -677,10 +738,19 @@ async function getPRChecksForDetails(
   repoPath: string,
   prNumber: number,
   headSha: string | undefined,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
   try {
-    return await getPRChecks(repoPath, prNumber, headSha, null, undefined, connectionId)
+    return await getPRChecks(
+      repoPath,
+      prNumber,
+      headSha,
+      null,
+      undefined,
+      connectionId,
+      ...localGitOptionArgs(localGitOptions)
+    )
   } catch (err) {
     // Why: checks are auxiliary PR metadata; a gh CLI edge case must not block
     // the user from opening the PR review drawer and reading the files/comments.
@@ -693,7 +763,8 @@ export async function getWorkItemDetails(
   repoPath: string,
   number: number,
   type?: 'issue' | 'pr',
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubWorkItemDetails | null> {
   // Why: getWorkItem already handles acquire/release. We call it first (outside
   // our semaphore) so the known-cheap lookup doesn't compete with the richer
@@ -702,7 +773,8 @@ export async function getWorkItemDetails(
     repoPath,
     number,
     type,
-    connectionId
+    connectionId,
+    ...localGitOptionArgs(localGitOptions)
   )
   if (!item) {
     return null
@@ -718,7 +790,12 @@ export async function getWorkItemDetails(
       // is preserved. The GraphQL `participants` connection includes every
       // commenter, so we skip the extra `getMentionParticipants` aliased
       // user-hydration trip when the collapsed path succeeds.
-      const collapsed = await getIssueDetailsViaGraphQL(repoPath, item.number, connectionId)
+      const collapsed = await getIssueDetailsViaGraphQL(
+        repoPath,
+        item.number,
+        connectionId,
+        localGitOptions
+      )
       if (collapsed) {
         return {
           item,
@@ -731,35 +808,48 @@ export async function getWorkItemDetails(
       // Why: fall back to body/comments and GraphQL participants in parallel;
       // the mention-participant merge is a cheap local operation afterward.
       const [{ body, comments, assignees }, participants] = await Promise.all([
-        getIssueBodyAndComments(repoPath, item.number, connectionId),
-        getWorkItemParticipants(repoPath, item, connectionId)
+        getIssueBodyAndComments(repoPath, item.number, connectionId, localGitOptions),
+        getWorkItemParticipants(repoPath, item, connectionId, localGitOptions)
       ])
       const mentionParticipants = await getMentionParticipants(
         repoPath,
         item,
         comments,
         participants,
-        connectionId
+        connectionId,
+        localGitOptions
       )
-      return { item, body, comments, assignees, participants: mentionParticipants }
+      return {
+        item,
+        body,
+        comments,
+        assignees,
+        participants: mentionParticipants
+      }
     }
 
     // PR: fetch body + comments + checks + files + head/base SHAs in parallel.
     const [body, comments, shas, files, viewedStates, participants] = await Promise.all([
-      getPRBody(repoPath, item.number, connectionId),
-      getPRComments(repoPath, item.number, undefined, connectionId),
-      getPRHeadBaseSha(repoPath, item.number, connectionId),
-      getPRFiles(repoPath, item.number, connectionId),
-      getPRFileViewedStates(repoPath, item.number, connectionId),
-      getWorkItemParticipants(repoPath, item, connectionId)
+      getPRBody(repoPath, item.number, connectionId, localGitOptions),
+      getPRComments(
+        repoPath,
+        item.number,
+        undefined,
+        connectionId,
+        ...localGitOptionArgs(localGitOptions)
+      ),
+      getPRHeadBaseSha(repoPath, item.number, connectionId, localGitOptions),
+      getPRFiles(repoPath, item.number, connectionId, localGitOptions),
+      getPRFileViewedStates(repoPath, item.number, connectionId, localGitOptions),
+      getWorkItemParticipants(repoPath, item, connectionId, localGitOptions)
     ])
 
     // Why: run the mention-author GraphQL lookup in parallel with the final
     // checks fetch instead of serially — both depend only on data from the
     // Promise.all above, so there's no ordering requirement between them.
     const [mentionParticipants, checks] = await Promise.all([
-      getMentionParticipants(repoPath, item, comments, participants, connectionId),
-      getPRChecksForDetails(repoPath, item.number, shas?.headSha, connectionId)
+      getMentionParticipants(repoPath, item, comments, participants, connectionId, localGitOptions),
+      getPRChecksForDetails(repoPath, item.number, shas?.headSha, connectionId, localGitOptions)
     ])
 
     return {
@@ -785,11 +875,12 @@ export async function getWorkItemDetails(
 async function fetchContentAtRef(args: {
   repoPath: string
   connectionId?: string | null
+  localGitOptions?: LocalGitExecOptions
   owner: string
   repo: string
   path: string
   ref: string
-}): Promise<{ content: string; isBinary: boolean }> {
+}): Promise<{ content: string; isBinary: boolean; tooLarge?: boolean }> {
   try {
     const { stdout } = await ghExecFileAsync(
       [
@@ -800,7 +891,12 @@ async function fetchContentAtRef(args: {
         'Accept: application/vnd.github.raw',
         `repos/${args.owner}/${args.repo}/contents/${encodeURI(args.path)}?ref=${encodeURIComponent(args.ref)}`
       ],
-      ghRepoExecOptions(githubRepoContext(args.repoPath, args.connectionId))
+      {
+        ...ghRepoExecOptions(
+          githubRepoContext(args.repoPath, args.connectionId, args.localGitOptions)
+        ),
+        maxBuffer: GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES
+      }
     )
     // Raw content response: Electron's execFile returns string in utf-8. If the
     // file is binary, the string will contain replacement characters — we treat
@@ -810,7 +906,10 @@ async function fetchContentAtRef(args: {
       return { content: '', isBinary: true }
     }
     return { content: stdout, isBinary: false }
-  } catch {
+  } catch (error) {
+    if (isMaxBufferOverflowError(error)) {
+      return { content: '', isBinary: false, tooLarge: true }
+    }
     return { content: '', isBinary: false }
   }
 }
@@ -818,6 +917,7 @@ async function fetchContentAtRef(args: {
 export async function getPRFileContents(args: {
   repoPath: string
   connectionId?: string | null
+  localGitOptions?: LocalGitExecOptions
   prNumber: number
   path: string
   oldPath?: string
@@ -825,7 +925,11 @@ export async function getPRFileContents(args: {
   headSha: string
   baseSha: string
 }): Promise<GitHubPRFileContents> {
-  const ownerRepo = await getOwnerRepo(args.repoPath, args.connectionId)
+  const ownerRepo = await getOwnerRepo(
+    args.repoPath,
+    args.connectionId,
+    ...localGitOptionArgs(args.localGitOptions)
+  )
   if (!ownerRepo) {
     return {
       original: '',
@@ -850,29 +954,39 @@ export async function getPRFileContents(args: {
         ? fetchContentAtRef({
             repoPath: args.repoPath,
             connectionId: args.connectionId,
+            localGitOptions: args.localGitOptions,
             owner: ownerRepo.owner,
             repo: ownerRepo.repo,
             path: originalPath,
             ref: originalRef
           })
-        : Promise.resolve({ content: '', isBinary: false }),
+        : Promise.resolve<{ content: string; isBinary: boolean; tooLarge?: boolean }>({
+            content: '',
+            isBinary: false
+          }),
       needsModified
         ? fetchContentAtRef({
             repoPath: args.repoPath,
             connectionId: args.connectionId,
+            localGitOptions: args.localGitOptions,
             owner: ownerRepo.owner,
             repo: ownerRepo.repo,
             path: args.path,
             ref: args.headSha
           })
-        : Promise.resolve({ content: '', isBinary: false })
+        : Promise.resolve<{ content: string; isBinary: boolean; tooLarge?: boolean }>({
+            content: '',
+            isBinary: false
+          })
     ])
 
     return {
       original: original.content,
       modified: modified.content,
       originalIsBinary: original.isBinary,
-      modifiedIsBinary: modified.isBinary
+      modifiedIsBinary: modified.isBinary,
+      originalTooLarge: original.tooLarge,
+      modifiedTooLarge: modified.tooLarge
     }
   } finally {
     release()

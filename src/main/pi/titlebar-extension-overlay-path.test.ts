@@ -1,7 +1,6 @@
-import { createHash } from 'crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { basename, join, sep } from 'path'
+import { join, sep } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const userDataDir = mkdtempSync(join(tmpdir(), 'orca-pi-overlay-path-userdata-'))
@@ -29,33 +28,28 @@ const PATH_SHAPED_PTY_ID = [
   'feature@@a1b2c3d4'
 ].join(sep)
 
-function overlayPath(kind: 'pi' | 'omp', ptyId: string): string {
-  const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
-  const safeName = createHash('sha256').update(ptyId).digest('hex').slice(0, 32)
-  return join(userDataDir, rootDir, safeName)
-}
-
 function legacyOverlayPath(kind: 'pi' | 'omp', ptyId: string): string {
   const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
   return join(userDataDir, rootDir, ptyId)
 }
 
-describe('PiTitlebarExtensionService overlay paths', () => {
+describe('PiTitlebarExtensionService legacy overlay paths', () => {
   afterEach(() => {
     rmSync(join(userDataDir, 'pi-agent-overlays'), { recursive: true, force: true })
     rmSync(join(userDataDir, 'omp-agent-overlays'), { recursive: true, force: true })
   })
 
-  it('hashes daemon-shaped pty ids into bounded overlay directory names', () => {
+  it('does not redirect path-shaped PTY ids into active Pi homes', () => {
     const piHome = mkdtempSync(join(tmpdir(), 'orca-pi-overlay-path-home-'))
     const svc = new PiTitlebarExtensionService()
 
     try {
       const env = svc.buildPtyEnv(PATH_SHAPED_PTY_ID, piHome, 'pi')
 
-      expect(env.PI_CODING_AGENT_DIR).toBe(overlayPath('pi', PATH_SHAPED_PTY_ID))
-      expect(basename(env.PI_CODING_AGENT_DIR!)).toMatch(/^[a-f0-9]{32}$/)
-      expect(readdirSync(join(env.PI_CODING_AGENT_DIR!, 'extensions')).sort()).toEqual([
+      expect(env.PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe(piHome)
+      expect(existsSync(join(userDataDir, 'pi-agent-overlays'))).toBe(false)
+      expect(readdirSync(join(piHome, 'extensions')).sort()).toEqual([
         'orca-agent-status.ts',
         'orca-prefill.ts',
         'orca-titlebar-spinner.ts'

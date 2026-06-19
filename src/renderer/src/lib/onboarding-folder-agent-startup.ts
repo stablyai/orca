@@ -6,11 +6,13 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
+import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { GlobalSettings, OnboardingState } from '../../../shared/types'
 
 export type OnboardingFolderAgentStartup = {
   command: string
   env?: Record<string, string>
+  startupCommandDelivery?: StartupCommandDelivery
   telemetry: AgentStartedTelemetry
 }
 
@@ -50,6 +52,9 @@ export function buildOnboardingFolderAgentStartup(
   return {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: 'onboarding',

@@ -35,6 +35,7 @@ export {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle,
   registerEagerPtyBuffer,
+  restorePtyDataHandlersAfterFailedShutdown,
   subscribeToPtyExit,
   unregisterPtyDataHandlers
 } from './pty-dispatcher'
@@ -421,11 +422,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     cwd,
     env,
     command,
+    startupCommandDelivery,
     connectionId,
     worktreeId,
     tabId,
     leafId,
     shellOverride,
+    projectRuntime,
     telemetry,
     onPtyExit,
     onTitleChange,
@@ -542,12 +545,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           cwd,
           env,
           command,
+          ...(startupCommandDelivery ? { startupCommandDelivery } : {}),
           ...(connectionId ? { connectionId } : {}),
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
           worktreeId,
           ...(tabId ? { tabId } : {}),
           ...(leafId ? { leafId } : {}),
           ...(shellOverride ? { shellOverride } : {}),
+          ...(projectRuntime ? { projectRuntime } : {}),
           ...(telemetry ? { telemetry } : {})
         })
         const spawnResult = result as PtyConnectResult & { isReattach?: boolean }

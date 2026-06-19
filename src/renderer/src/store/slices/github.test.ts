@@ -2942,7 +2942,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
           }
         ]
       },
-      worktreeCardProperties: ['pr'],
+      worktreeCardProperties: ['status', 'pr'],
       prCache: {
         [`repo-1::${branch}`]: {
           data: makePR({ state: 'open' }),
@@ -2991,7 +2991,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
           }
         ]
       },
-      worktreeCardProperties: ['pr'],
+      worktreeCardProperties: ['status', 'pr'],
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
           data: {
@@ -3239,7 +3239,7 @@ describe('createGitHubSlice.refreshGitHubForWorktreeIfStale', () => {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos: [{ id: 'repo-1', path: repoPath, name: 'repo', kind: 'git' }],
       groupBy: 'pr-status',
-      worktreeCardProperties: ['pr'],
+      worktreeCardProperties: ['status'],
       worktreesByRepo: {
         'repo-1': [
           {

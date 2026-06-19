@@ -1,4 +1,5 @@
 import { isTuiAgent } from './tui-agent-config'
+import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import type { TuiAgent } from './types'
 
 const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
@@ -6,35 +7,10 @@ const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> =
   kilo: ['--dangerously-skip-permissions']
 }
 
-export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
-  claude: '--dangerously-skip-permissions',
-  'claude-agent-teams': '--dangerously-skip-permissions',
-  openclaude: '--dangerously-skip-permissions',
-  codex: '--dangerously-bypass-approvals-and-sandbox',
-  gemini: '--yolo',
-  antigravity: '--dangerously-skip-permissions',
-  aider: '--yes-always',
-  amp: '--dangerously-allow-all',
-  kiro: '--trust-all-tools',
-  crush: '--yolo',
-  autohand: '--unrestricted',
-  cline: '--auto-approve true',
-  'command-code': '--yolo',
-  continue: '--allow "*"',
-  cursor: '--yolo',
-  kimi: '--yolo',
-  'mistral-vibe': '--agent auto-approve',
-  'qwen-code': '--approval-mode yolo',
-  rovo: '--yolo',
-  hermes: '--yolo',
-  copilot: '--yolo',
-  grok: '--permission-mode bypassPermissions',
-  devin: '--permission-mode bypass'
-}
+export const DEFAULT_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = YOLO_TUI_AGENT_ARGS
 
-export const DEFAULT_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
-  goose: { GOOSE_MODE: 'auto' }
-}
+export const DEFAULT_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> =
+  YOLO_TUI_AGENT_ENV
 
 function argPattern(arg: string): RegExp {
   return new RegExp(`(^|\\s)${arg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=\\s|$)`, 'g')

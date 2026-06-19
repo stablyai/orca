@@ -2,6 +2,7 @@ import { join } from 'path'
 import { readFileSync, existsSync, readdirSync } from 'fs'
 import type { SessionMeta } from './history-manager'
 import type { TerminalCheckpointFile, TerminalModes } from './types'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog } from './terminal-history-log'
 import { HeadlessEmulator } from './headless-emulator'
@@ -9,6 +10,7 @@ import { HeadlessEmulator } from './headless-emulator'
 export type ColdRestoreInfo = {
   snapshotAnsi: string
   scrollbackAnsi: string
+  oscLinks?: TerminalOscLinkRange[]
   rehydrateSequences: string
   cwd: string
   cols: number
@@ -136,6 +138,7 @@ export class HistoryReader {
         if (!emulator.writeSync(checkpoint.rehydrateSequences + checkpoint.snapshotAnsi)) {
           return null
         }
+        emulator.setRestoredOscLinks(checkpoint.oscLinks)
       }
       for (const batch of log.batches) {
         for (const record of batch.records) {
@@ -169,6 +172,7 @@ export class HistoryReader {
     snapshot: {
       snapshotAnsi: string
       scrollbackAnsi: string
+      oscLinks?: TerminalOscLinkRange[]
       rehydrateSequences: string
       cols: number
       rows: number
@@ -188,6 +192,7 @@ export class HistoryReader {
     return {
       snapshotAnsi: snapshot.snapshotAnsi,
       scrollbackAnsi,
+      oscLinks: snapshot.oscLinks,
       rehydrateSequences: snapshot.rehydrateSequences,
       cwd: cwd ?? meta.cwd,
       cols: snapshot.cols,

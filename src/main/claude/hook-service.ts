@@ -38,11 +38,21 @@ const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
   settings: CLAUDE_HOOK_SETTINGS
 }
 
-function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+function getManagedScript(
+  target: 'local' | 'posix' = 'local',
+  options: { skipWhenDevinImportsClaude?: boolean } = {}
+): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
       'setlocal',
+      ...(options.skipWhenDevinImportsClaude
+        ? [
+            // Why: Devin imports .claude hooks by default. Skip Orca's managed
+            // Claude hook there so status posts stay attributed to Devin.
+            'if not "%DEVIN_PROJECT_DIR%"=="" exit /b 0'
+          ]
+        : []),
       // Why: the endpoint file holds the *live* port/token for this Orca
       // install. A PTY that survived an Orca restart has stale PORT/TOKEN
       // baked into its env from the old instance — loading `endpoint.cmd`
@@ -61,6 +71,15 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
   return [
     '#!/bin/sh',
+    ...(options.skipWhenDevinImportsClaude
+      ? [
+          // Why: Devin imports .claude hooks by default. Skip Orca's managed
+          // Claude hook there so status posts stay attributed to Devin.
+          'if [ -n "$DEVIN_PROJECT_DIR" ]; then',
+          '  exit 0',
+          'fi'
+        ]
+      : []),
     // Why: the endpoint file holds the *live* port/token for this Orca
     // install. PTYs that survive an Orca restart have stale PORT/TOKEN
     // baked into their env from the old instance — sourcing the file here
@@ -181,7 +200,10 @@ export class ClaudeHookService {
       command,
       getManagedScriptFileName(this.options.settings)
     )
-    writeManagedScript(scriptPath, getManagedScript())
+    writeManagedScript(
+      scriptPath,
+      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+    )
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
   }
@@ -229,7 +251,11 @@ export class ClaudeHookService {
       // of broken settings.json.
       // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
       // running on Windows; never derive remote script syntax from local OS.
-      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
+      await writeManagedScriptRemote(
+        sftp,
+        remoteScriptPath,
+        getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+      )
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       return {

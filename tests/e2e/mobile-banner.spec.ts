@@ -37,13 +37,15 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
   await sendMobileSubscribeIpc(electronApp, { ptyId, cols: 45, rows: 20 })
 
   await expect(overlay).toBeVisible({ timeout: 15_000 })
-  await expect(overlay).toContainText(/mobile is driving this terminal/i)
-  await expect(overlay).toContainText(/your keyboard is paused/i)
+  await expect(overlay).toContainText(/from your phone/i)
+  await expect(overlay).toContainText(/your phone is in control/i)
   await expectExpandedOverlayLeavesPaneReadable(orcaPage, ptyId)
 
-  const takeBack = overlay.getByRole('button', { name: /take back/i })
+  const takeBackThisTerminal = overlay.getByRole('button', { name: /take back this terminal/i })
+  const takeBackAllTerminals = overlay.getByRole('button', { name: /take back all terminals/i })
   const collapse = overlay.getByRole('button', { name: /^collapse$/i })
-  await expect(takeBack).toBeVisible()
+  await expect(takeBackThisTerminal).toBeVisible()
+  await expect(takeBackAllTerminals).toBeVisible()
   await expect(collapse).toBeVisible()
 
   await captureAttachment(orcaPage, testInfo, 'overlay-loud.png')
@@ -52,19 +54,19 @@ test('mobile subscribe mounts overlay; collapse → chip; Take back dismisses', 
   // engaged. The user can keep watching live mobile output while the chip
   // remains a one-click escape hatch back to desktop control.
   await collapse.click()
-  await expect(overlay).toContainText(/mobile driving/i)
+  await expect(overlay).toContainText(/phone driving/i)
   await expect(overlay.getByRole('button', { name: /take back/i })).toBeVisible()
-  await expect(overlay).not.toContainText(/your keyboard is paused/i)
+  await expect(overlay).not.toContainText(/your phone is in control/i)
   await expectChipIsCompactInPane(orcaPage, ptyId)
 
   await captureAttachment(orcaPage, testInfo, 'overlay-collapsed.png')
 
-  await overlay.getByRole('button', { name: /mobile driving/i }).click()
-  await expect(overlay).toContainText(/your keyboard is paused/i)
+  await overlay.getByRole('button', { name: /phone driving/i }).click()
+  await expect(overlay).toContainText(/your phone is in control/i)
   await expectExpandedOverlayLeavesPaneReadable(orcaPage, ptyId)
 
   await collapse.click()
-  await expect(overlay).not.toContainText(/your keyboard is paused/i)
+  await expect(overlay).not.toContainText(/your phone is in control/i)
 
   // Take back from the chip dismisses the overlay. The button calls
   // runtime.restoreTerminalFit via IPC; main responds with desktop-fit + idle
@@ -96,16 +98,18 @@ test('held phone-fit state mounts restore overlay without collapse', async ({
   await sendHeldPhoneFitIpc(electronApp, { ptyId, cols: 45, rows: 20 })
 
   await expect(overlay).toBeVisible({ timeout: 15_000 })
-  await expect(overlay).toContainText(/held at phone size/i)
-  await expect(overlay).toContainText(/restore to use it on your desktop/i)
-  await expect(overlay.getByRole('button', { name: /restore desktop size/i })).toBeVisible()
+  await expect(overlay).toContainText(/from your phone/i)
+  await expect(overlay).toContainText(/your phone left this at phone size/i)
+  await expect(overlay).toContainText(/all terminals your phone left at phone size/i)
+  await expect(overlay.getByRole('button', { name: /restore this terminal/i })).toBeVisible()
+  await expect(overlay.getByRole('button', { name: /restore all terminals/i })).toBeVisible()
   await expect(overlay.getByRole('button', { name: /^collapse$/i })).toHaveCount(0)
   await expect(overlay.getByRole('button', { name: /take back/i })).toHaveCount(0)
   await expectExpandedOverlayLeavesPaneReadable(orcaPage, ptyId)
 
   await captureAttachment(orcaPage, testInfo, 'overlay-held-fit.png')
 
-  await overlay.getByRole('button', { name: /restore desktop size/i }).click()
+  await overlay.getByRole('button', { name: /restore this terminal/i }).click()
   await expectRestoreTerminalFitCalls(electronApp, [ptyId])
   await sendDesktopRestoreIpc(electronApp, { ptyId })
   await expect(overlay).toBeHidden({ timeout: 15_000 })

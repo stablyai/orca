@@ -42,6 +42,10 @@ import {
   lookupGitHubWorkItemForSource
 } from '@/lib/github-work-item-source-lookup'
 import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
+import {
+  listGitLabMRsForSource,
+  lookupGitLabWorkItemByPathForSource
+} from '@/lib/gitlab-work-item-source-lookup'
 import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
@@ -65,15 +69,21 @@ import type {
   LinearIssue
 } from '../../../../shared/types'
 import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
+import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
 import { translate } from '@/i18n/i18n'
 import {
   getMrStateFilters,
   getSmartWorkspaceNameModes,
   type MrStateFilter
 } from './smart-workspace-localized-options'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import {
+  buildTaskSourceContextFromRepo,
+  type TaskSourceContext
+} from '../../../../shared/task-source-context'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
+const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []
 
 type SmartWorkspaceNameFieldProps = {
   repos: RepoOption[]
@@ -89,12 +99,18 @@ type SmartWorkspaceNameFieldProps = {
   onLinearIssueSelect: (issue: LinearIssue) => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
+  githubSourceContext?: TaskSourceContext | null
   inputRef?: React.RefObject<HTMLInputElement | null>
   onPlainEnter?: () => void
   disabled?: boolean
   disabledPlaceholder?: string
   textOnly?: boolean
   branchesEnabled?: boolean
+  repoBackedSourcesDisabled?: boolean
+  repoBackedSearchRepos?: readonly RepoOption[]
+  allowCrossRepoProjectAdd?: boolean
+  crossRepoSwitchTarget?: 'project' | 'task-source'
+  onActiveSourceModeChange?: (mode: SmartNameMode) => void
 }
 
 export type SmartWorkspaceNameSelection = {
@@ -106,7 +122,36 @@ export type SmartWorkspaceNameSelection = {
 const SEARCH_DEBOUNCE_MS = 200
 const RESULT_LIMIT = 12
 
+export function canUseGitLabSmartSource({
+  localGitlabAvailable,
+  repoBackedSourcesDisabled,
+  sourceHostId
+}: {
+  localGitlabAvailable: boolean
+  repoBackedSourcesDisabled: boolean
+  sourceHostId: ExecutionHostId | null | undefined
+}): boolean {
+  if (repoBackedSourcesDisabled) {
+    return false
+  }
+  const parsedHost = parseExecutionHostId(sourceHostId)
+  return parsedHost?.kind === 'ssh' || parsedHost?.kind === 'runtime' || localGitlabAvailable
+}
+
 type RowEntry = SmartWorkspaceSourceRow
+
+const ROW_ITEM_CLASS_NAME = 'gap-2 px-3 py-2 text-xs'
+
+function isTypedTextSourceRow(row: RowEntry): boolean {
+  return row.kind === 'use-name' || row.kind === 'create-branch'
+}
+
+function getRowItemClassName(row: RowEntry, options?: { pinnedAction?: boolean }): string {
+  return cn(
+    ROW_ITEM_CLASS_NAME,
+    options?.pinnedAction && isTypedTextSourceRow(row) && 'bg-muted/35'
+  )
+}
 
 export default function SmartWorkspaceNameField({
   repos,
@@ -120,12 +165,18 @@ export default function SmartWorkspaceNameField({
   onLinearIssueSelect,
   selectedSource,
   onClearSelectedSource,
+  githubSourceContext: githubSourceContextOverride,
   inputRef,
   onPlainEnter,
   disabled = false,
   disabledPlaceholder,
   textOnly = false,
-  branchesEnabled = true
+  branchesEnabled = true,
+  repoBackedSourcesDisabled = false,
+  repoBackedSearchRepos = EMPTY_REPO_SEARCH_REPOS,
+  allowCrossRepoProjectAdd = true,
+  crossRepoSwitchTarget = 'project',
+  onActiveSourceModeChange
 }: SmartWorkspaceNameFieldProps): React.JSX.Element {
   // Why: tab/filter labels use the lightweight translate() helper; subscribing
   // here makes them refresh even when language changes don't remount the field.
@@ -134,6 +185,7 @@ export default function SmartWorkspaceNameField({
     addRepo,
     checkLinearConnection,
     fetchWorkItems,
+    fetchWorkItemsAcrossRepos,
     getCachedWorkItems,
     linearStatus,
     linearStatusChecked,
@@ -150,6 +202,7 @@ export default function SmartWorkspaceNameField({
       addRepo: s.addRepo,
       checkLinearConnection: s.checkLinearConnection,
       fetchWorkItems: s.fetchWorkItems,
+      fetchWorkItemsAcrossRepos: s.fetchWorkItemsAcrossRepos,
       getCachedWorkItems: s.getCachedWorkItems,
       linearStatus: s.linearStatus,
       linearStatusChecked: s.linearStatusChecked,
@@ -171,17 +224,18 @@ export default function SmartWorkspaceNameField({
     () => getRepoOwnerRoutedSettings(settings, selectedRepo),
     [selectedRepo, settings]
   )
-  const githubSourceContext = useMemo(
-    () =>
-      selectedRepo
-        ? buildTaskSourceContextFromRepo({
-            provider: 'github',
-            projectId: selectedRepo.id,
-            repo: selectedRepo
-          })
-        : null,
-    [selectedRepo]
-  )
+  const githubSourceContext = useMemo(() => {
+    if (githubSourceContextOverride?.provider === 'github') {
+      return githubSourceContextOverride
+    }
+    return selectedRepo
+      ? buildTaskSourceContextFromRepo({
+          provider: 'github',
+          projectId: selectedRepo.id,
+          repo: selectedRepo
+        })
+      : null
+  }, [githubSourceContextOverride, selectedRepo])
   const gitlabSourceContext = useMemo(
     () =>
       selectedRepo
@@ -192,6 +246,34 @@ export default function SmartWorkspaceNameField({
           })
         : null,
     [selectedRepo]
+  )
+  const repoBackedSearchTargets = useMemo(
+    () =>
+      (repoBackedSearchRepos.length > 0
+        ? repoBackedSearchRepos
+        : selectedRepo
+          ? [selectedRepo]
+          : []
+      ).map((repo) => ({
+        repo,
+        githubSourceContext:
+          repo.id === selectedRepo?.id && githubSourceContext?.provider === 'github'
+            ? githubSourceContext
+            : buildTaskSourceContextFromRepo({
+                provider: 'github',
+                projectId: repo.id,
+                repo
+              }),
+        gitlabSourceContext:
+          repo.id === selectedRepo?.id && gitlabSourceContext?.provider === 'gitlab'
+            ? gitlabSourceContext
+            : buildTaskSourceContextFromRepo({
+                provider: 'gitlab',
+                projectId: repo.id,
+                repo
+              })
+      })),
+    [githubSourceContext, gitlabSourceContext, repoBackedSearchRepos, selectedRepo]
   )
   const linearSourceContext = useMemo(
     () =>
@@ -227,37 +309,76 @@ export default function SmartWorkspaceNameField({
   const repoSlugCacheRef = useRef<Map<string, RepoSlug | null>>(new Map())
   const handledCrossRepoUrlRef = useRef<string | null>(null)
   const localInputFocusFrameRef = useRef<number | null>(null)
+  // Why: dialog autofocus and other programmatic .focus() calls can look
+  // user-initiated in Electron, so gate the source popover until the user
+  // actually interacts with this field or tabs from another composer control.
+  const deferSourcePopoverUntilInteractionRef = useRef(true)
   const [crossRepoPrompt, setCrossRepoPrompt] = useState<{
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
     matchingRepo: RepoOption | null
   } | null>(null)
+
+  useEffect(() => {
+    onActiveSourceModeChange?.(mode)
+  }, [mode, onActiveSourceModeChange])
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
+  const localGitlabAvailable = preflightStatusCurrent && preflightStatus?.glab?.installed === true
+  const gitlabSourceAvailable = repoBackedSearchTargets.some((target) =>
+    canUseGitLabSmartSource({
+      localGitlabAvailable,
+      repoBackedSourcesDisabled,
+      sourceHostId: target.gitlabSourceContext?.hostId
+    })
+  )
   const availableTaskProviders = useMemo(
     () =>
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
-        gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
+        gitlabInstalled: gitlabSourceAvailable,
         linearConnected: linearStatus.connected === true
       }),
-    [linearStatus.connected, preflightStatus?.glab?.installed, preflightStatusCurrent]
+    [gitlabSourceAvailable, linearStatus.connected]
   )
-  const gitlabAvailable = availableTaskProviders.includes('gitlab')
   const linearAvailable = availableTaskProviders.includes('linear')
   const availableModes = getSmartWorkspaceNameModes().filter((item) => {
     if (textOnly) {
       return item.id === 'text'
     }
+    if (item.id === 'github') {
+      return !repoBackedSourcesDisabled
+    }
     if (item.id === 'gitlab') {
-      return gitlabAvailable
+      return gitlabSourceAvailable
     }
     if (item.id === 'linear') {
       return linearAvailable
     }
     if (item.id === 'branches') {
-      return branchesEnabled
+      return branchesEnabled && !repoBackedSourcesDisabled
     }
     return true
   })
   const mrStateFilters = getMrStateFilters()
+
+  useEffect(() => {
+    if (availableModes.some((item) => item.id === mode)) {
+      return
+    }
+    setMode(availableModes[0]?.id ?? 'text')
+  }, [availableModes, mode])
+
+  useEffect(() => {
+    if (!repoBackedSourcesDisabled) {
+      return
+    }
+    setGithubItems([])
+    setGitlabItems([])
+    setBranches([])
+    setGithubLoading(false)
+    setGitlabLoading(false)
+    setBranchesLoading(false)
+    setBranchResultsSource(null)
+    setCrossRepoPrompt(null)
+  }, [repoBackedSourcesDisabled])
 
   const selectedSourceFocusKey = selectedSource
     ? `${selectedSource.kind}:${selectedSource.label}:${selectedSource.url ?? ''}`
@@ -289,6 +410,31 @@ export default function SmartWorkspaceNameField({
     cancelAnimationFrame(localInputFocusFrameRef.current)
     localInputFocusFrameRef.current = null
   }, [])
+
+  const markSourcePopoverUserEngaged = useCallback((): void => {
+    deferSourcePopoverUntilInteractionRef.current = false
+  }, [])
+
+  const tryOpenSourcePopover = useCallback((): void => {
+    if (disabled || mode === 'text' || deferSourcePopoverUntilInteractionRef.current) {
+      return
+    }
+    setOpen(true)
+  }, [disabled, mode])
+
+  const handleSourcePopoverOpenChange = useCallback(
+    (next: boolean): void => {
+      if (disabled || selectedSource) {
+        setOpen(false)
+        return
+      }
+      if (next && deferSourcePopoverUntilInteractionRef.current) {
+        return
+      }
+      setOpen(next)
+    },
+    [disabled, selectedSource]
+  )
 
   const setInputNode = useCallback(
     (node: HTMLInputElement | null) => {
@@ -331,7 +477,7 @@ export default function SmartWorkspaceNameField({
       setOpen(false)
       return
     }
-    if ((mode === 'gitlab' && gitlabAvailable) || (mode === 'linear' && linearAvailable)) {
+    if ((mode === 'gitlab' && gitlabSourceAvailable) || (mode === 'linear' && linearAvailable)) {
       return
     }
     if (mode !== 'gitlab' && mode !== 'linear') {
@@ -343,7 +489,7 @@ export default function SmartWorkspaceNameField({
     setGitlabLoading(false)
     setLinearLoading(false)
     setCommandValue('')
-  }, [gitlabAvailable, linearAvailable, mode, textOnly])
+  }, [gitlabSourceAvailable, linearAvailable, mode, textOnly])
 
   useEffect(() => {
     if (!disabled) {
@@ -373,11 +519,15 @@ export default function SmartWorkspaceNameField({
     [debouncedQuery]
   )
   const parsedGhLink = useMemo(() => parseGitHubIssueOrPRLink(debouncedQuery), [debouncedQuery])
-  const shouldQueryGithub = !textOnly && (mode === 'smart' || mode === 'github')
+  const shouldQueryGithub =
+    !repoBackedSourcesDisabled &&
+    !textOnly &&
+    repoBackedSearchTargets.length > 0 &&
+    (mode === 'smart' || mode === 'github')
   const shouldQueryLinear = !textOnly && linearAvailable && (mode === 'smart' || mode === 'linear')
 
   useEffect(() => {
-    if (disabled || !shouldQueryGithub || !selectedRepo?.path) {
+    if (disabled || !shouldQueryGithub) {
       setGithubItems([])
       setGithubLoading(false)
       return
@@ -385,43 +535,92 @@ export default function SmartWorkspaceNameField({
     let stale = false
     const directNumber = normalizedGhQuery.directNumber
     const directLink = parsedGhLink
+    const searchTargetForRepo = (repo: RepoOption) =>
+      repoBackedSearchTargets.find((target) => target.repo.id === repo.id) ?? {
+        repo,
+        githubSourceContext: buildTaskSourceContextFromRepo({
+          provider: 'github' as const,
+          projectId: repo.id,
+          repo
+        })
+      }
     if (directLink !== null && handledCrossRepoUrlRef.current !== debouncedQuery.trim()) {
       setGithubLoading(true)
-      void getRepoSlugCached(selectedRepo, repoSlugCacheRef.current)
-        .then(async (selectedSlug) => {
-          if (stale) {
-            return
-          }
-          if (!selectedSlug || sameSlug(selectedSlug, directLink.slug)) {
-            handledCrossRepoUrlRef.current = debouncedQuery.trim()
-            const item = await lookupSmartGitHubSubmitItem({
-              repoPath: selectedRepo.path,
-              repoId: selectedRepo.id,
-              sourceContext: githubSourceContext,
-              intent: {
-                kind: 'link',
-                owner: directLink.slug.owner,
-                repo: directLink.slug.repo,
-                number: directLink.number,
-                type: directLink.type
-              },
-              workItem: lookupGitHubWorkItemForSource,
-              workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
-            })
-            if (!stale) {
-              setGithubItems(item ? [item] : [])
-            }
-            return
-          }
+      const directLookup = async (): Promise<{
+        items: GitHubWorkItem[]
+        prompt: {
+          link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
+          matchingRepo: RepoOption | null
+        } | null
+      }> => {
+        if (crossRepoSwitchTarget === 'task-source') {
           const matchingRepo = await findMatchingRepoForSlug(
-            repos,
+            repoBackedSearchTargets.map((target) => target.repo),
             directLink.slug,
             repoSlugCacheRef.current
           )
+          handledCrossRepoUrlRef.current = debouncedQuery.trim()
+          if (!matchingRepo) {
+            return { items: [], prompt: null }
+          }
+          const target = searchTargetForRepo(matchingRepo)
+          const item = await lookupGitHubWorkItemByOwnerRepoForSource({
+            repoPath: target.repo.path,
+            repoId: target.repo.id,
+            sourceContext: target.githubSourceContext,
+            owner: directLink.slug.owner,
+            repo: directLink.slug.repo,
+            number: directLink.number,
+            type: directLink.type
+          })
+          return {
+            items: item ? [{ ...item, repoId: target.repo.id } as GitHubWorkItem] : [],
+            prompt: null
+          }
+        }
+        if (!selectedRepo?.path) {
+          return { items: [], prompt: null }
+        }
+        const selectedSlug = await getRepoSlugCached(selectedRepo, repoSlugCacheRef.current)
+        if (!selectedSlug || sameSlug(selectedSlug, directLink.slug)) {
+          handledCrossRepoUrlRef.current = debouncedQuery.trim()
+          const item = await lookupSmartGitHubSubmitItem({
+            repoPath: selectedRepo.path,
+            repoId: selectedRepo.id,
+            sourceContext: githubSourceContext,
+            intent: {
+              kind: 'link',
+              owner: directLink.slug.owner,
+              repo: directLink.slug.repo,
+              number: directLink.number,
+              type: directLink.type
+            },
+            workItem: lookupGitHubWorkItemForSource,
+            workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
+          })
+          return { items: item ? [item] : [], prompt: null }
+        }
+        const matchingRepo = await findMatchingRepoForSlug(
+          repos,
+          directLink.slug,
+          repoSlugCacheRef.current
+        )
+        return { items: [], prompt: { link: directLink, matchingRepo } }
+      }
+      void directLookup()
+        .then((result) => {
+          if (stale) {
+            return
+          }
+          setGithubItems(result.items)
+          if (result.prompt) {
+            setOpen(false)
+            setCrossRepoPrompt(result.prompt)
+          }
+        })
+        .catch(() => {
           if (!stale) {
             setGithubItems([])
-            setOpen(false)
-            setCrossRepoPrompt({ link: directLink, matchingRepo })
           }
         })
         .finally(() => {
@@ -445,18 +644,27 @@ export default function SmartWorkspaceNameField({
               type: directLink.type
             }
           : { kind: 'hash-number' as const, number: directNumber }
-      const request = lookupSmartGitHubSubmitItem({
-        repoPath: selectedRepo.path,
-        repoId: selectedRepo.id,
-        sourceContext: githubSourceContext,
-        intent,
-        workItem: lookupGitHubWorkItemForSource,
-        workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
-      })
+      const request = Promise.all(
+        repoBackedSearchTargets.map((target) =>
+          lookupSmartGitHubSubmitItem({
+            repoPath: target.repo.path,
+            repoId: target.repo.id,
+            sourceContext: target.githubSourceContext,
+            intent,
+            workItem: lookupGitHubWorkItemForSource,
+            workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
+          }).catch(() => null)
+        )
+      ).then((items) =>
+        items
+          .filter((item): item is GitHubWorkItem => item !== null)
+          .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+          .slice(0, RESULT_LIMIT)
+      )
       void request
-        .then((item) => {
+        .then((items) => {
           if (!stale) {
-            setGithubItems(item ? [item] : [])
+            setGithubItems(items)
           }
         })
         .catch(() => {
@@ -476,37 +684,68 @@ export default function SmartWorkspaceNameField({
 
     const trimmed = normalizedGhQuery.query.trim()
     const query = trimmed ? normalizedGhQuery.query : ''
-    const cached = getCachedWorkItems(
-      selectedRepo.id,
-      RESULT_LIMIT,
-      query,
-      selectedRepo.path,
-      githubSourceContext
-    )
-    if (cached) {
-      setGithubItems(cached.slice(0, RESULT_LIMIT))
-      setGithubLoading(false)
+    if (repoBackedSearchTargets.length === 1) {
+      const target = repoBackedSearchTargets[0]
+      const cached = getCachedWorkItems(
+        target.repo.id,
+        RESULT_LIMIT,
+        query,
+        target.repo.path,
+        target.githubSourceContext
+      )
+      if (cached) {
+        setGithubItems(cached.slice(0, RESULT_LIMIT))
+        setGithubLoading(false)
+      } else {
+        setGithubLoading(true)
+      }
+      void fetchWorkItems(target.repo.id, target.repo.path, RESULT_LIMIT, query, {
+        sourceContext: target.githubSourceContext
+      })
+        .then((items) => {
+          if (!stale) {
+            setGithubItems(items.slice(0, RESULT_LIMIT))
+          }
+        })
+        .catch(() => {
+          if (!stale) {
+            setGithubItems([])
+          }
+        })
+        .finally(() => {
+          if (!stale) {
+            setGithubLoading(false)
+          }
+        })
     } else {
       setGithubLoading(true)
+      void fetchWorkItemsAcrossRepos(
+        repoBackedSearchTargets.map((target) => ({
+          repoId: target.repo.id,
+          path: target.repo.path,
+          executionHostId: target.repo.executionHostId,
+          sourceContext: target.githubSourceContext
+        })),
+        RESULT_LIMIT,
+        RESULT_LIMIT,
+        query
+      )
+        .then((result) => {
+          if (!stale) {
+            setGithubItems(result.items)
+          }
+        })
+        .catch(() => {
+          if (!stale) {
+            setGithubItems([])
+          }
+        })
+        .finally(() => {
+          if (!stale) {
+            setGithubLoading(false)
+          }
+        })
     }
-    void fetchWorkItems(selectedRepo.id, selectedRepo.path, RESULT_LIMIT, query, {
-      sourceContext: githubSourceContext
-    })
-      .then((items) => {
-        if (!stale) {
-          setGithubItems(items.slice(0, RESULT_LIMIT))
-        }
-      })
-      .catch(() => {
-        if (!stale) {
-          setGithubItems([])
-        }
-      })
-      .finally(() => {
-        if (!stale) {
-          setGithubLoading(false)
-        }
-      })
     return () => {
       stale = true
     }
@@ -514,12 +753,15 @@ export default function SmartWorkspaceNameField({
     debouncedQuery,
     disabled,
     fetchWorkItems,
+    fetchWorkItemsAcrossRepos,
     getCachedWorkItems,
     normalizedGhQuery,
     parsedGhLink,
     repos,
-    selectedRepo,
+    repoBackedSearchTargets,
     githubSourceContext,
+    selectedRepo,
+    crossRepoSwitchTarget,
     shouldQueryGithub
   ])
 
@@ -527,14 +769,22 @@ export default function SmartWorkspaceNameField({
     () =>
       getBranchSearchRequest({
         disabled,
-        branchesEnabled,
+        branchesEnabled: branchesEnabled && !repoBackedSourcesDisabled,
         textOnly,
         mode,
         selectedRepoId: selectedRepo?.id ?? null,
         query: debouncedQuery,
         limit: RESULT_LIMIT
       }),
-    [branchesEnabled, debouncedQuery, disabled, mode, selectedRepo?.id, textOnly]
+    [
+      branchesEnabled,
+      debouncedQuery,
+      disabled,
+      mode,
+      repoBackedSourcesDisabled,
+      selectedRepo?.id,
+      textOnly
+    ]
   )
 
   useEffect(() => {
@@ -623,15 +873,14 @@ export default function SmartWorkspaceNameField({
   // GitLabWorkItem via the IPC. Skipped silently when the host hook
   // hasn't supplied an onGitLabItemSelect handler.
   const parsedGlLink = useMemo(() => parseGitLabIssueOrMRLink(debouncedQuery), [debouncedQuery])
-  const shouldQueryGitlab = !textOnly && gitlabAvailable && (mode === 'smart' || mode === 'gitlab')
+  const shouldQueryGitlab =
+    !repoBackedSourcesDisabled &&
+    !textOnly &&
+    gitlabSourceAvailable &&
+    repoBackedSearchTargets.length > 0 &&
+    (mode === 'smart' || mode === 'gitlab')
   useEffect(() => {
-    if (
-      !shouldQueryGitlab ||
-      disabled ||
-      !onGitLabItemSelect ||
-      !selectedRepo?.path ||
-      selectedRepo.connectionId
-    ) {
+    if (!shouldQueryGitlab || disabled || !onGitLabItemSelect) {
       // Why: don't clobber list-mode items here — the listMRs effect below
       // is the sole writer when the user is in 'gitlab' mode without a URL.
       if (!shouldQueryGitlab || (parsedGlLink === null && mode !== 'gitlab')) {
@@ -650,26 +899,26 @@ export default function SmartWorkspaceNameField({
     }
     let stale = false
     setGitlabLoading(true)
-    void window.api.gl
-      .workItemByPath({
-        repoPath: selectedRepo.path,
-        repoId: selectedRepo.id,
-        sourceContext: gitlabSourceContext,
-        // Why: parseGitLabIssueOrMRLink doesn't carry the host (the URL
-        // pattern is host-agnostic on purpose so self-hosted instances
-        // work). Use 'gitlab.com' as the IPC arg — the main process maps
-        // by project path internally and the host param is currently
-        // informational; revisit when the picker grows multi-host UX.
-        host: 'gitlab.com',
-        path: parsedGlLink.slug.path,
-        iid: parsedGlLink.number,
-        type: parsedGlLink.type
-      })
-      .then((item) => {
+    void Promise.all(
+      repoBackedSearchTargets.map((target) =>
+        lookupGitLabWorkItemByPathForSource({
+          repoPath: target.repo.path,
+          repoId: target.repo.id,
+          sourceContext: target.gitlabSourceContext,
+          // Why: self-hosted GitLab URLs must resolve against their pasted
+          // hostname; gitlab.com is only one possible GitLab instance.
+          host: parsedGlLink.slug.host,
+          path: parsedGlLink.slug.path,
+          iid: parsedGlLink.number,
+          type: parsedGlLink.type
+        }).catch(() => null)
+      )
+    )
+      .then((items) => {
         if (stale) {
           return
         }
-        setGitlabItems(item ? [{ ...item, repoId: selectedRepo.id } as GitLabWorkItem] : [])
+        setGitlabItems(items.filter((item): item is GitLabWorkItem => item !== null))
       })
       .catch(() => {
         if (!stale) {
@@ -684,15 +933,7 @@ export default function SmartWorkspaceNameField({
     return () => {
       stale = true
     }
-  }, [
-    disabled,
-    gitlabSourceContext,
-    mode,
-    onGitLabItemSelect,
-    parsedGlLink,
-    selectedRepo,
-    shouldQueryGitlab
-  ])
+  }, [disabled, mode, onGitLabItemSelect, parsedGlLink, repoBackedSearchTargets, shouldQueryGitlab])
 
   // Why: when the user is on the GitLab tab (or in 'smart' mix) and
   // hasn't pasted a URL, surface the project's MRs filtered by the
@@ -707,7 +948,7 @@ export default function SmartWorkspaceNameField({
       }
       return
     }
-    if (!selectedRepo?.path || selectedRepo.connectionId) {
+    if (repoBackedSearchTargets.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
       return
@@ -718,27 +959,28 @@ export default function SmartWorkspaceNameField({
     }
     let stale = false
     setGitlabLoading(true)
-    void window.api.gl
-      .listMRs({
-        repoPath: selectedRepo.path,
-        repoId: selectedRepo.id,
-        sourceContext: gitlabSourceContext,
-        state: mrStateFilter,
-        page: 1,
-        perPage: RESULT_LIMIT
-      })
-      .then((result) => {
+    void Promise.all(
+      repoBackedSearchTargets.map((target) =>
+        listGitLabMRsForSource({
+          repoPath: target.repo.path,
+          repoId: target.repo.id,
+          sourceContext: target.gitlabSourceContext,
+          state: mrStateFilter,
+          page: 1,
+          perPage: RESULT_LIMIT
+        }).catch(() => ({ items: [], hasMore: false }))
+      )
+    )
+      .then((results) => {
         if (stale) {
           return
         }
-        // Why: listMRs returns ListMergeRequestsResult { items, ... };
-        // each item is already a GitLabWorkItem. Stamp repoId on the
-        // way through so the picker can attribute rows.
-        const items = (result as { items: GitLabWorkItem[] }).items.map((item) => ({
-          ...item,
-          repoId: selectedRepo.id
-        }))
-        setGitlabItems(items)
+        setGitlabItems(
+          results
+            .flatMap((result) => result.items)
+            .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+            .slice(0, RESULT_LIMIT)
+        )
       })
       .catch(() => {
         if (!stale) {
@@ -759,8 +1001,7 @@ export default function SmartWorkspaceNameField({
     mrStateFilter,
     onGitLabItemSelect,
     parsedGlLink,
-    selectedRepo,
-    gitlabSourceContext,
+    repoBackedSearchTargets,
     shouldQueryGitlab
   ])
 
@@ -776,7 +1017,7 @@ export default function SmartWorkspaceNameField({
           value
         }),
         githubItems,
-        gitlabAvailable,
+        gitlabAvailable: gitlabSourceAvailable,
         gitlabItems,
         linearAvailable,
         linearIssues,
@@ -788,7 +1029,7 @@ export default function SmartWorkspaceNameField({
       branches,
       branchResultsSource,
       githubItems,
-      gitlabAvailable,
+      gitlabSourceAvailable,
       gitlabItems,
       linearAvailable,
       linearIssues,
@@ -797,6 +1038,13 @@ export default function SmartWorkspaceNameField({
       value
     ]
   )
+  const { typedTextActionRow, searchResultRows } = useMemo(() => {
+    const typedTextRow = rows.find(isTypedTextSourceRow) ?? null
+    return {
+      typedTextActionRow: typedTextRow,
+      searchResultRows: typedTextRow ? rows.filter((row) => row !== typedTextRow) : rows
+    }
+  }, [rows])
 
   // Why: source rows (GitHub/branches/Linear) are driven by debouncedQuery,
   // so they're stale until the user pauses typing for SEARCH_DEBOUNCE_MS.
@@ -816,13 +1064,16 @@ export default function SmartWorkspaceNameField({
   // specific source rather than naming a workspace. Once a matching row
   // appears in the results, snap the highlight onto it so Enter picks it
   // instead of the typed-text fallback.
-  const sourceIntent = useMemo<'github' | 'linear' | null>(() => {
+  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | null>(() => {
     const trimmed = value.trim()
     if (!trimmed) {
       return null
     }
     if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
       return 'github'
+    }
+    if (parseGitLabIssueOrMRLink(trimmed) !== null) {
+      return 'gitlab'
     }
     if (linearAvailable && /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(trimmed)) {
       return 'linear'
@@ -908,7 +1159,7 @@ export default function SmartWorkspaceNameField({
   }, [acceptGitHubLink, selectedRepo])
 
   const handleAddMatchingRepo = useCallback(async (): Promise<void> => {
-    if (!crossRepoPrompt) {
+    if (!crossRepoPrompt || !allowCrossRepoProjectAdd) {
       return
     }
     const added = await addRepo()
@@ -920,90 +1171,168 @@ export default function SmartWorkspaceNameField({
     if (slug && sameSlug(slug, crossRepoPrompt.link.slug)) {
       await acceptGitHubLink(added)
     }
-  }, [acceptGitHubLink, addRepo, crossRepoPrompt])
+  }, [acceptGitHubLink, addRepo, allowCrossRepoProjectAdd, crossRepoPrompt])
 
   const dismissCrossRepoPrompt = useCallback((): void => {
     handledCrossRepoUrlRef.current = debouncedQuery.trim()
     setCrossRepoPrompt(null)
   }, [debouncedQuery])
 
+  const smartPlaceholder = repoBackedSourcesDisabled
+    ? linearAvailable
+      ? translate(
+          'auto.components.new.workspace.SmartWorkspaceNameField.placeholderNameOrLinearUrl',
+          'Type a name or Linear URL'
+        )
+      : translate(
+          'auto.components.new.workspace.SmartWorkspaceNameField.placeholderWorkspaceName',
+          'Type a workspace name'
+        )
+    : linearAvailable
+      ? branchesEnabled
+        ? translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartWithBranchGitLabLinear',
+            'Type a name, #1234, branch, GitHub/GitLab or Linear URL'
+          )
+        : translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartGitLabLinear',
+            'Type a name, #1234, GitHub/GitLab or Linear URL'
+          )
+      : branchesEnabled
+        ? translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartWithBranchGitLab',
+            'Type a name, #1234, branch, GitHub or GitLab URL'
+          )
+        : translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartGitLab',
+            'Type a name, #1234, GitHub or GitLab URL'
+          )
+  const crossRepoSwitchIsTaskSource = crossRepoSwitchTarget === 'task-source'
+  const crossRepoSwitchTitle = crossRepoSwitchIsTaskSource
+    ? translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.switchTaskSourceTitle',
+        'Switch task source?'
+      )
+    : translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.4bd98f1091',
+        'Switch project?'
+      )
+  const crossRepoSwitchDescriptionSuffix = crossRepoSwitchIsTaskSource
+    ? translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.differentTaskSource',
+        ', which is different from the selected task source.'
+      )
+    : translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.9ef1a7c4b0',
+        ', which is different from the selected project.'
+      )
+  const crossRepoSwitchFallbackLabel = crossRepoSwitchIsTaskSource
+    ? translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.currentTaskSource',
+        'current task source'
+      )
+    : translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.fda67f0b61',
+        'current project'
+      )
+
   const placeholder = disabled
-    ? (disabledPlaceholder ?? 'Unavailable')
+    ? (disabledPlaceholder ??
+      translate('auto.components.new.workspace.SmartWorkspaceNameField.unavailable', 'Unavailable'))
     : mode === 'smart'
-      ? linearAvailable
-        ? branchesEnabled
-          ? 'Type a name, #1234, branch, GitHub or Linear URL'
-          : 'Type a name, #1234, GitHub or Linear URL'
-        : branchesEnabled
-          ? 'Type a name, #1234, branch, or GitHub URL'
-          : 'Type a name, #1234, or GitHub URL'
+      ? smartPlaceholder
       : mode === 'github'
-        ? 'Search GitHub PRs and issues'
-        : mode === 'branches'
-          ? 'Search branches'
-          : mode === 'linear'
-            ? 'Search Linear issues'
-            : 'Workspace name'
+        ? translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.searchGitHub',
+            'Search GitHub PRs and issues'
+          )
+        : mode === 'gitlab'
+          ? translate(
+              'auto.components.new.workspace.SmartWorkspaceNameField.searchGitLab',
+              'Search GitLab MRs and issues'
+            )
+          : mode === 'branches'
+            ? translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.searchBranches',
+                'Search branches'
+              )
+            : mode === 'linear'
+              ? translate(
+                  'auto.components.new.workspace.SmartWorkspaceNameField.searchLinear',
+                  'Search Linear issues'
+                )
+              : translate(
+                  'auto.components.new.workspace.SmartWorkspaceNameField.workspaceName',
+                  'Workspace name'
+                )
 
   return (
     <div className="min-w-0 space-y-1.5">
-      <Tabs
-        value={mode}
-        onValueChange={(next) => {
-          const nextMode = next as SmartNameMode
-          setMode(nextMode)
-          setOpen(!disabled && nextMode !== 'text' && selectedSource === null)
-          cancelLocalInputFocusFrame()
-          localInputFocusFrameRef.current = requestAnimationFrame(() => {
-            localInputFocusFrameRef.current = null
-            localInputRef.current?.focus({ preventScroll: true })
-          })
-        }}
-        className="gap-0"
-      >
-        {textOnly ? null : (
-          <TabsList
-            ref={tabsListRef}
-            variant="line"
-            className="h-7 w-full justify-start gap-4 border-b border-border/40 px-0"
-            onFocusCapture={(event) => {
-              // Why: Radix Tabs uses roving focus and re-applies tabindex=0 to
-              // the active trigger on every render, so we can't keep it out of
-              // the natural Tab order via props or a MutationObserver (race
-              // with React commits). Instead, intercept focus on entry into
-              // the tabs list so forward Tab goes straight to the input.
-              const previous = event.relatedTarget as HTMLElement | null
-              const list = tabsListRef.current
-              const input = localInputRef.current
-              if (!list || !input) {
-                return
+      {textOnly ? null : (
+        <div className="flex min-w-0 items-center gap-2 border-b border-border/40">
+          <Tabs
+            value={mode}
+            onValueChange={(next) => {
+              const nextMode = next as SmartNameMode
+              onActiveSourceModeChange?.(nextMode)
+              setMode(nextMode)
+              if (!disabled && nextMode !== 'text' && selectedSource === null) {
+                markSourcePopoverUserEngaged()
+                setOpen(true)
+              } else {
+                setOpen(false)
               }
-              if (!previous || previous === input || list.contains(previous)) {
-                return
-              }
-              event.stopPropagation()
-              input.focus({ preventScroll: true })
+              cancelLocalInputFocusFrame()
+              localInputFocusFrameRef.current = requestAnimationFrame(() => {
+                localInputFocusFrameRef.current = null
+                localInputRef.current?.focus({ preventScroll: true })
+              })
             }}
+            className="min-w-0 flex-1 gap-0"
           >
-            {availableModes.map(({ id, label, Icon }) => (
-              <TabsTrigger
-                key={id}
-                value={id}
-                tabIndex={-1}
-                data-smart-name-mode={id}
-                className="flex-none gap-1.5 px-0 text-xs"
-              >
-                <Icon className="size-3.5" />
-                <span>{label}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        )}
-      </Tabs>
+            <TabsList
+              ref={tabsListRef}
+              variant="line"
+              className="h-7 w-full justify-start gap-4 px-0"
+              onFocusCapture={(event) => {
+                // Why: Radix Tabs uses roving focus and re-applies tabindex=0 to
+                // the active trigger on every render, so we can't keep it out of
+                // the natural Tab order via props or a MutationObserver (race
+                // with React commits). Instead, intercept focus on entry into
+                // the tabs list so forward Tab goes straight to the input.
+                const previous = event.relatedTarget as HTMLElement | null
+                const list = tabsListRef.current
+                const input = localInputRef.current
+                if (!list || !input) {
+                  return
+                }
+                if (!previous || previous === input || list.contains(previous)) {
+                  return
+                }
+                event.stopPropagation()
+                input.focus({ preventScroll: true })
+              }}
+            >
+              {availableModes.map(({ id, label, Icon }) => (
+                <TabsTrigger
+                  key={id}
+                  value={id}
+                  tabIndex={-1}
+                  data-smart-name-mode={id}
+                  className="flex-none gap-1.5 px-0 text-xs"
+                >
+                  <Icon className="size-3.5" />
+                  <span>{label}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
 
       <Popover
         open={!disabled && open && mode !== 'text' && selectedSource === null}
-        onOpenChange={(next) => setOpen(disabled || selectedSource ? false : next)}
+        onOpenChange={handleSourcePopoverOpenChange}
       >
         <Command
           value={resolvedCommandValue}
@@ -1020,6 +1349,7 @@ export default function SmartWorkspaceNameField({
                 // dialog wider than its max-w.
                 <div
                   ref={setSelectedSourceNode}
+                  data-workspace-source-pill="true"
                   tabIndex={0}
                   onKeyDown={(event) => {
                     if (
@@ -1100,17 +1430,31 @@ export default function SmartWorkspaceNameField({
                   />
                   <Input
                     ref={setInputNode}
+                    data-workspace-name-input="true"
                     value={value}
-                    onChange={(event) => {
-                      onValueChange(event.target.value)
+                    onPointerDown={() => {
                       if (!disabled && mode !== 'text') {
+                        markSourcePopoverUserEngaged()
                         setOpen(true)
                       }
                     }}
-                    onFocus={() => {
+                    onChange={(event) => {
+                      onValueChange(event.target.value)
                       if (!disabled && mode !== 'text') {
+                        markSourcePopoverUserEngaged()
                         setOpen(true)
                       }
+                    }}
+                    onFocus={(event) => {
+                      // Why: only open when focus moves from another composer
+                      // control (Tab/Shift+Tab). Dialog autofocus comes from
+                      // outside the composer root and stays suppressed until
+                      // click/type/tab-within-composer engagement above.
+                      if (!isComposerFieldToFieldFocus(event)) {
+                        return
+                      }
+                      markSourcePopoverUserEngaged()
+                      tryOpenSourcePopover()
                     }}
                     onKeyDown={(event) => {
                       if (event.key === 'Tab' && event.shiftKey) {
@@ -1210,13 +1554,29 @@ export default function SmartWorkspaceNameField({
               </div>
             ) : null}
             <CommandList className="!max-h-none min-h-0 flex-1 scrollbar-sleek">
-              {loading && rows.length === 0 ? (
+              {typedTextActionRow ? (
+                <div
+                  className="sticky top-0 z-10 border-b border-border/40 bg-popover p-1"
+                  onMouseDown={(event) => event.preventDefault()}
+                >
+                  <CommandItem
+                    key={typedTextActionRow.value}
+                    value={typedTextActionRow.value}
+                    onSelect={() => handleSelect(typedTextActionRow)}
+                    className={getRowItemClassName(typedTextActionRow, { pinnedAction: true })}
+                  >
+                    <RowIcon row={typedTextActionRow} />
+                    <RowLabel row={typedTextActionRow} />
+                  </CommandItem>
+                </div>
+              ) : null}
+              {loading && searchResultRows.length === 0 ? (
                 <div className="space-y-1 p-1">
                   {[0, 1, 2].map((index) => (
                     <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
                   ))}
                 </div>
-              ) : rows.length === 0 ? (
+              ) : searchResultRows.length === 0 && !typedTextActionRow ? (
                 <div className="px-3 py-6 text-center text-xs text-muted-foreground">
                   {mode === 'linear' && linearStatusChecked && !linearStatus.connected
                     ? translate(
@@ -1225,21 +1585,21 @@ export default function SmartWorkspaceNameField({
                       )
                     : getSmartWorkspaceEmptyHint(mode)}
                 </div>
-              ) : (
+              ) : searchResultRows.length > 0 ? (
                 <CommandGroup className="p-1">
-                  {rows.map((row) => (
+                  {searchResultRows.map((row) => (
                     <CommandItem
                       key={row.value}
                       value={row.value}
                       onSelect={() => handleSelect(row)}
-                      className="gap-2 px-2 py-1.5 text-xs"
+                      className={getRowItemClassName(row)}
                     >
                       <RowIcon row={row} />
                       <RowLabel row={row} />
                     </CommandItem>
                   ))}
                 </CommandGroup>
-              )}
+              ) : null}
             </CommandList>
           </PopoverContent>
         </Command>
@@ -1250,22 +1610,14 @@ export default function SmartWorkspaceNameField({
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {translate(
-                'auto.components.new.workspace.SmartWorkspaceNameField.4bd98f1091',
-                'Switch project?'
-              )}
-            </DialogTitle>
+            <DialogTitle>{crossRepoSwitchTitle}</DialogTitle>
             <DialogDescription>
               {translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.ad188067ae',
                 'The GitHub URL points to'
               )}{' '}
               {crossRepoPrompt?.link.slug.owner}/{crossRepoPrompt?.link.slug.repo}
-              {translate(
-                'auto.components.new.workspace.SmartWorkspaceNameField.9ef1a7c4b0',
-                ', which is different from the selected project.'
-              )}
+              {crossRepoSwitchDescriptionSuffix}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1280,11 +1632,7 @@ export default function SmartWorkspaceNameField({
                 'auto.components.new.workspace.SmartWorkspaceNameField.eadf877af5',
                 'Keep'
               )}{' '}
-              {selectedRepo?.displayName ??
-                translate(
-                  'auto.components.new.workspace.SmartWorkspaceNameField.fda67f0b61',
-                  'current project'
-                )}
+              {selectedRepo?.displayName ?? crossRepoSwitchFallbackLabel}
             </Button>
             {crossRepoPrompt?.matchingRepo ? (
               <Button onClick={() => void acceptGitHubLink(crossRepoPrompt.matchingRepo!)}>
@@ -1294,14 +1642,14 @@ export default function SmartWorkspaceNameField({
                 )}{' '}
                 {crossRepoPrompt.matchingRepo.displayName}
               </Button>
-            ) : (
+            ) : allowCrossRepoProjectAdd ? (
               <Button onClick={() => void handleAddMatchingRepo()}>
                 {translate(
                   'auto.components.new.workspace.SmartWorkspaceNameField.e57c53727c',
                   'Add project...'
                 )}
               </Button>
-            )}
+            ) : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1367,7 +1715,7 @@ function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'use-name') {
     return (
       <span className="min-w-0 truncate">
-        {translate('auto.components.new.workspace.SmartWorkspaceNameField.b1a7d679ba', 'Use')}
+        {translate('auto.components.new.workspace.SmartWorkspaceNameField.b1a7d679ba', 'Use')}{' '}
         <span className="font-medium text-foreground">
           {translate('auto.components.new.workspace.SmartWorkspaceNameField.34ca97bce3', '"')}
           {row.name}
