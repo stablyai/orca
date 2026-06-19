@@ -1467,6 +1467,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     overscan: ACTIVITY_THREAD_VIRTUALIZER_OVERSCAN,
     rangeExtractor: useCallback(
       (range: Range) => {
+        // Why: keep the nearest previous group header mounted so the active
+        // sticky header remains stable while virtual rows scroll underneath.
         const activeStickyIndex = getActiveActivityThreadStickyIndex(
           stickyThreadGroupIndexes,
           range.startIndex
