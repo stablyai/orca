@@ -17,6 +17,8 @@ import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/tas
  *  phase that never advances past `fetching`. */
 export type WorktreeCreationPhase = 'fetching' | 'creating'
 
+export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
+
 /**
  * Everything needed to run a worktree create in the background and reproduce it
  * verbatim on retry. Captured at the composer's submit cut point — after all
@@ -33,9 +35,13 @@ export type WorktreeCreationRequest = {
    *  repoId keeps old create APIs working, while this records the project-first
    *  host intent for retry, diagnostics, and future metadata writes. */
   workspaceRunContext?: WorkspaceRunContext | null
+  /** Captured from the repo/run owner at submit time so Retry keeps the same
+   *  local-vs-runtime progress behavior even if the focused runtime changes. */
+  worktreeCreateProgressMode?: WorktreeCreationProgressMode
   name: string
   displayName?: string
   baseBranch?: string
+  compareBaseRef?: string
   setupDecision: SetupDecision
   sparseCheckout?: CreateSparseCheckoutRequest
   telemetrySource?: WorkspaceCreateTelemetrySource

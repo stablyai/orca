@@ -12,7 +12,8 @@ import {
 } from './agent-process-inspection-queue'
 import type {
   AgentCompletionCoordinator,
-  AgentCompletionCoordinatorOptions
+  AgentCompletionCoordinatorOptions,
+  AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import {
@@ -21,6 +22,17 @@ import {
 } from './title-agent-identity'
 
 type CompletionSource = 'hook' | 'title' | 'process-exit'
+type CompletionIdentitySource = 'hook' | 'title' | 'process-exit'
+
+type LastCompletionIdentity = {
+  source: CompletionIdentitySource
+  identity: string
+  agentIdentity: string | null
+}
+
+// Why: worktree switches can remount a pane while the underlying PTY and hook
+// stream stay live, so stale completion replays must outlive one coordinator.
+const lastCompletionIdentityByPaneKey = new Map<string, LastCompletionIdentity>()
 
 const IDLE_POLL_INTERVAL_MS = 2_000
 const ACTIVE_POLL_INTERVAL_MS = 750
@@ -48,13 +60,15 @@ export function createAgentCompletionCoordinator(
   let lastCompletionAt = 0
   let lastCompletedTurn: number | null = null
   let lastCompletionSource: CompletionSource | null = null
+  let lastCompletionIdentity: LastCompletionIdentity | null = null
   let lastForegroundAgent: RecognizedAgentProcess | null = null
   let requiresFreshWorking = false
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTitleTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTitle: string | null = null
-  let pendingHookDonePayload: ParsedAgentStatusPayload | null = null
+  let pendingHookDonePayload: AgentCompletionStatusSnapshot | null = null
+  let pendingProcessExitAgent: RecognizedAgentProcess | null = null
   let pendingTitleSequence = 0
   let pendingTitle: {
     id: number
@@ -103,6 +117,7 @@ export function createAgentCompletionCoordinator(
     agentIdentityEstablished = false
     hasAgentRunEvidence = false
     workingStatusObserved = false
+    pendingProcessExitAgent = null
     dropPendingTitle()
   }
 
@@ -116,10 +131,85 @@ export function createAgentCompletionCoordinator(
     return `${source}:${currentTurn}:${processSession}`
   }
 
+  function hookCompletionIdentity(payload: AgentCompletionStatusSnapshot): string | null {
+    if (typeof payload.stateStartedAt !== 'number' || !Number.isFinite(payload.stateStartedAt)) {
+      return null
+    }
+    return [
+      payload.state,
+      payload.agentType ?? '',
+      String(Math.trunc(payload.stateStartedAt))
+    ].join(':')
+  }
+
+  function hookCompletionAgentIdentity(payload: AgentCompletionStatusSnapshot): string | null {
+    return payload.agentType?.trim().toLowerCase() || null
+  }
+
+  function titleCompletionIdentity(title: string): string {
+    return title
+  }
+
+  function titleCompletionAgentIdentity(title: string): string | null {
+    const normalized = title.toLowerCase()
+    if (/\bcodex\b/.test(normalized)) {
+      return 'codex'
+    }
+    if (/\bclaude\b/.test(normalized)) {
+      return 'claude'
+    }
+    if (/\bgemini\b/.test(normalized)) {
+      return 'gemini'
+    }
+    if (/\bcursor(?: agent)?\b/.test(normalized)) {
+      return 'cursor'
+    }
+    if (/\bopencode\b/.test(normalized)) {
+      return 'opencode'
+    }
+    if (/\bdroid\b/.test(normalized)) {
+      return 'droid'
+    }
+    if (/\bhermes\b/.test(normalized)) {
+      return 'hermes'
+    }
+    if (/\baider\b/.test(normalized)) {
+      return 'aider'
+    }
+    if (/\bpi\b/.test(normalized) || normalized.includes('\u03c0')) {
+      return 'pi'
+    }
+    return null
+  }
+
+  function completionIdentityAlreadyNotified(
+    completionIdentity: LastCompletionIdentity | null | undefined
+  ): boolean {
+    if (!completionIdentity) {
+      return false
+    }
+    const previous = lastCompletionIdentityByPaneKey.get(options.paneKey)
+    if (!previous) {
+      return false
+    }
+    if (previous.source === completionIdentity.source) {
+      return previous.identity === completionIdentity.identity
+    }
+    return (
+      previous.agentIdentity !== null &&
+      completionIdentity.agentIdentity !== null &&
+      previous.agentIdentity === completionIdentity.agentIdentity
+    )
+  }
+
   function dispatchCompletion(
     source: CompletionSource,
     title: string,
-    optionsOverride: { quietedHookDone?: boolean; agentStatus?: ParsedAgentStatusPayload } = {}
+    optionsOverride: {
+      quietedHookDone?: boolean
+      agentStatus?: AgentCompletionStatusSnapshot
+      completionIdentity?: LastCompletionIdentity | null
+    } = {}
   ): void {
     if (source !== 'hook' && pendingHookDoneTimer !== null) {
       return
@@ -135,11 +225,17 @@ export function createAgentCompletionCoordinator(
     if (token === lastCompletionToken && now - lastCompletionAt < COMPLETION_REPLAY_GUARD_MS) {
       return
     }
+    if (completionIdentityAlreadyNotified(optionsOverride.completionIdentity)) {
+      return
+    }
     lastCompletionToken = token
     lastCompletionAt = now
     lastCompletedTurn = currentTurn
     lastCompletionSource = source
     workingStatusObserved = false
+    if (optionsOverride.completionIdentity) {
+      lastCompletionIdentityByPaneKey.set(options.paneKey, optionsOverride.completionIdentity)
+    }
     if (optionsOverride.quietedHookDone === true) {
       options.dispatchCompletion(title, {
         source,
@@ -151,7 +247,7 @@ export function createAgentCompletionCoordinator(
     }
   }
 
-  function scheduleHookDoneCompletion(title: string, payload: ParsedAgentStatusPayload): void {
+  function scheduleHookDoneCompletion(title: string, payload: AgentCompletionStatusSnapshot): void {
     pendingHookDoneTitle = title
     pendingHookDonePayload = payload
     if (pendingHookDoneTimer !== null) {
@@ -166,9 +262,19 @@ export function createAgentCompletionCoordinator(
       pendingHookDoneTitle = null
       pendingHookDonePayload = null
       if (pendingTitle) {
+        const hookIdentity = pendingPayload ? hookCompletionIdentity(pendingPayload) : null
         dispatchCompletion('hook', pendingTitle, {
           quietedHookDone: true,
-          ...(pendingPayload ? { agentStatus: pendingPayload } : {})
+          ...(pendingPayload ? { agentStatus: pendingPayload } : {}),
+          ...(hookIdentity
+            ? {
+                completionIdentity: {
+                  source: 'hook',
+                  identity: hookIdentity,
+                  agentIdentity: pendingPayload ? hookCompletionAgentIdentity(pendingPayload) : null
+                }
+              }
+            : {})
         })
       }
     }, HOOK_DONE_QUIET_MS)
@@ -190,7 +296,14 @@ export function createAgentCompletionCoordinator(
     }
     const title = pendingTitle.title
     dropPendingTitle()
-    dispatchCompletion('title', title)
+    markTitleCompletionNotified(title)
+    dispatchCompletion('title', title, {
+      completionIdentity: {
+        source: 'title',
+        identity: titleCompletionIdentity(title),
+        agentIdentity: titleCompletionAgentIdentity(title)
+      }
+    })
   }
 
   function schedulePendingTitleExpiry(): void {
@@ -237,9 +350,16 @@ export function createAgentCompletionCoordinator(
   }
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
+    pendingProcessExitAgent = null
     if (lastForegroundAgent?.agent !== process.agent) {
       if (lastForegroundAgent && hasAgentRunEvidence) {
-        dispatchCompletion('process-exit', lastForegroundAgent.processName)
+        dispatchCompletion('process-exit', lastForegroundAgent.processName, {
+          completionIdentity: {
+            source: 'process-exit',
+            identity: `${lastForegroundAgent.agent}:${lastForegroundAgent.processName}`,
+            agentIdentity: lastForegroundAgent.agent
+          }
+        })
       }
       processSession += 1
     }
@@ -255,8 +375,33 @@ export function createAgentCompletionCoordinator(
       return true
     }
     if (lastForegroundAgent && hasAgentRunEvidence) {
+      if (result.hasChildProcesses) {
+        // Why: Codex can briefly report a shell/null foreground while its TUI or
+        // child work is still alive; do not announce completion from that blip.
+        pendingProcessExitAgent = null
+        scheduleNextPoll()
+        return false
+      }
+      if (
+        !pendingProcessExitAgent ||
+        pendingProcessExitAgent.agent !== lastForegroundAgent.agent ||
+        pendingProcessExitAgent.processName !== lastForegroundAgent.processName
+      ) {
+        // Why: macOS process inspection can transiently report no foreground
+        // child during prompt handoff; require the idle sample to repeat.
+        pendingProcessExitAgent = lastForegroundAgent
+        scheduleNextPoll()
+        return false
+      }
       const exited = lastForegroundAgent
-      dispatchCompletion('process-exit', exited.processName)
+      pendingProcessExitAgent = null
+      dispatchCompletion('process-exit', exited.processName, {
+        completionIdentity: {
+          source: 'process-exit',
+          identity: `${exited.agent}:${exited.processName}`,
+          agentIdentity: exited.agent
+        }
+      })
       lastForegroundAgent = null
       clearAgentRunEvidence()
     } else {
@@ -381,6 +526,7 @@ export function createAgentCompletionCoordinator(
     }
     workingStatusObserved = true
     requiresFreshWorking = false
+    lastCompletionIdentityByPaneKey.delete(options.paneKey)
     currentTurn += 1
     dropPendingTitle()
     return true
@@ -418,7 +564,14 @@ export function createAgentCompletionCoordinator(
         return
       }
       if (agentIdentityEstablished && hasAgentRunEvidence) {
-        dispatchCompletion('title', title)
+        markTitleCompletionNotified(title)
+        dispatchCompletion('title', title, {
+          completionIdentity: {
+            source: 'title',
+            identity: titleCompletionIdentity(title),
+            agentIdentity: titleCompletionAgentIdentity(title)
+          }
+        })
       } else {
         holdTitleCompletionPending(title)
       }
@@ -426,7 +579,14 @@ export function createAgentCompletionCoordinator(
       // Why: a shell can briefly restore cwd between "Codex working" and
       // "Codex done"; the later explicit agent completion is authoritative.
       dropPendingTitle()
-      dispatchCompletion('title', title)
+      markTitleCompletionNotified(title)
+      dispatchCompletion('title', title, {
+        completionIdentity: {
+          source: 'title',
+          identity: titleCompletionIdentity(title),
+          agentIdentity: titleCompletionAgentIdentity(title)
+        }
+      })
     }
     lastTitleStatus = status
   }
@@ -436,13 +596,20 @@ export function createAgentCompletionCoordinator(
       establishAgentEvidence()
     }
     if (agentIdentityEstablished && hasAgentRunEvidence) {
-      dispatchCompletion('title', title)
+      markTitleCompletionNotified(title)
+      dispatchCompletion('title', title, {
+        completionIdentity: {
+          source: 'title',
+          identity: titleCompletionIdentity(title),
+          agentIdentity: titleCompletionAgentIdentity(title)
+        }
+      })
     } else {
       holdTitleCompletionPending(title)
     }
   }
 
-  function observeHookStatus(payload: ParsedAgentStatusPayload): void {
+  function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
     if (isRecognizedAgentType(payload.agentType)) {
       establishAgentEvidence()
     }
@@ -450,6 +617,7 @@ export function createAgentCompletionCoordinator(
       clearPendingHookDone()
       workingStatusObserved = true
       requiresFreshWorking = false
+      lastCompletionIdentity = null
       currentTurn += 1
       dropPendingTitle()
       return
@@ -460,6 +628,19 @@ export function createAgentCompletionCoordinator(
       }
       if (isRecognizedAgentType(payload.agentType)) {
         establishAgentEvidence()
+      }
+      const hookIdentity = hookCompletionIdentity(payload)
+      if (
+        hookIdentity &&
+        lastCompletionIdentity?.source === 'hook' &&
+        hookIdentity === lastCompletionIdentity.identity
+      ) {
+        // Why: activation/switching can replay the same main-process hook snapshot
+        // after the 1s guard; only pending quiet-window detail should refresh.
+        if (payload.state === 'done' && pendingHookDoneTimer !== null) {
+          scheduleHookDoneCompletion(payload.agentType ?? options.paneKey, payload)
+        }
+        return
       }
       if (
         !workingStatusObserved &&
@@ -473,10 +654,36 @@ export function createAgentCompletionCoordinator(
         currentTurn += 1
       }
       if (payload.state === 'done' && workingStatusObserved) {
+        lastCompletionIdentity = hookIdentity
+          ? {
+              source: 'hook',
+              identity: hookIdentity,
+              agentIdentity: hookCompletionAgentIdentity(payload)
+            }
+          : null
         scheduleHookDoneCompletion(payload.agentType ?? options.paneKey, payload)
         return
       }
-      dispatchCompletion('hook', payload.agentType ?? options.paneKey)
+      lastCompletionIdentity = hookIdentity
+        ? {
+            source: 'hook',
+            identity: hookIdentity,
+            agentIdentity: hookCompletionAgentIdentity(payload)
+          }
+        : null
+      dispatchCompletion(
+        'hook',
+        payload.agentType ?? options.paneKey,
+        lastCompletionIdentity ? { completionIdentity: lastCompletionIdentity } : {}
+      )
+    }
+  }
+
+  function markTitleCompletionNotified(title: string): void {
+    lastCompletionIdentity = {
+      source: 'title',
+      identity: titleCompletionIdentity(title),
+      agentIdentity: titleCompletionAgentIdentity(title)
     }
   }
 
@@ -499,6 +706,7 @@ export function createAgentCompletionCoordinator(
     lastCompletionAt = 0
     lastCompletedTurn = null
     lastCompletionSource = null
+    lastCompletionIdentity = null
     lastForegroundAgent = null
     requiresFreshWorking = options.requireFreshWorking ?? false
     inspectionGeneration += 1
@@ -509,6 +717,13 @@ export function createAgentCompletionCoordinator(
     clearPollTimer()
     clearPendingHookDone()
     dropPendingTitle()
+    // Why: the dedup identity is module-scoped so it survives a live-stream remount
+    // (dispose-then-recreate with the same paneKey while isLive() stays true). Only
+    // evict it on genuine teardown — when the PTY is gone (isLive() false) — so the
+    // never-reused ${tabId}:${leafUUID} key can't leak one identity per closed pane.
+    if (!options.isLive()) {
+      lastCompletionIdentityByPaneKey.delete(options.paneKey)
+    }
   }
 
   return {
@@ -521,4 +736,12 @@ export function createAgentCompletionCoordinator(
     resetCompletionState,
     dispose
   }
+}
+
+export function resetAgentCompletionCoordinatorIdentitiesForTest(): void {
+  lastCompletionIdentityByPaneKey.clear()
+}
+
+export function getAgentCompletionCoordinatorIdentityCountForTest(): number {
+  return lastCompletionIdentityByPaneKey.size
 }

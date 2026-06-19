@@ -1832,6 +1832,11 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     }
     case 'hermes':
       return eventName === 'pre_llm_call' || eventName === 'on_session_start'
+    case 'devin':
+      // Why: SessionStart is handled by an early return in normalizeDevinEvent
+      // (clears turn cache, returns null) so it never reaches this branch.
+      // UserPromptSubmit is the real new-turn boundary for Devin.
+      return eventName === 'UserPromptSubmit'
   }
 }
 
@@ -1916,6 +1921,8 @@ function extractToolFields(
       return extractCopilotToolFields(normalizeCopilotEventName(eventName), hookPayload)
     case 'hermes':
       return extractHermesToolFields(eventName, hookPayload)
+    case 'devin':
+      return extractClaudeToolFields(eventName, hookPayload)
   }
 }
 
@@ -1959,6 +1966,66 @@ function normalizeClaudeEvent(
         resetOnNewTurn: isNewTurnEvent('claude', eventName)
       }),
       agentType: 'claude',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage,
+      interrupted
+    })
+  )
+}
+
+// Why: Devin uses Claude-compatible hook payload shapes but has its own
+// documented lifecycle event set. Keep attribution as Devin while normalizing
+// those event names into Orca's shared status states.
+function normalizeDevinEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  if (eventName === 'SessionStart') {
+    // Why: Devin emits SessionStart when the TUI opens/resumes while still idle.
+    // Only UserPromptSubmit or tool activity should create a visible working row —
+    // mapping SessionStart to 'working' made the sidebar show "Devin - Running"
+    // with a spinner before the user typed anything.
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
+  const stateName =
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PostCompaction'
+      ? 'working'
+      : eventName === 'PermissionRequest'
+        ? 'waiting'
+        : eventName === 'Stop' || eventName === 'SessionEnd'
+          ? 'done'
+          : null
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('devin', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('devin', eventName) }
+  )
+
+  const interrupted =
+    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('devin', eventName)
+      }),
+      agentType: 'devin',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage,
@@ -2904,6 +2971,9 @@ export function normalizeHookPayload(
     case 'hermes':
       payload = normalizeHermesEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'devin':
+      payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
   }
 
   // Why: connectionId stays null at the listener layer. The local server keeps
@@ -2956,7 +3026,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/command-code': 'command-code',
   '/hook/grok': 'grok',
   '/hook/copilot': 'copilot',
-  '/hook/hermes': 'hermes'
+  '/hook/hermes': 'hermes',
+  '/hook/devin': 'devin'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

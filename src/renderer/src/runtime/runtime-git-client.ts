@@ -17,6 +17,7 @@ import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../../../shared/commit-message-agent-spec'
+import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
@@ -36,6 +37,15 @@ export type RuntimeGeneratePullRequestFieldsResult =
       branchChangedByPreparation?: boolean
     }
   | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
+
+export type RuntimePullRequestGenerationInput = {
+  base: string
+  title: string
+  body: string
+  draft: boolean
+  provider?: HostedReviewProvider
+  useTemplate?: boolean
+}
 
 type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
   Partial<
@@ -608,7 +618,7 @@ export async function cancelRuntimeGenerateCommitMessage(
 
 export async function generateRuntimePullRequestFields(
   context: RuntimeGitContext,
-  input: { base: string; title: string; body: string; draft: boolean },
+  input: RuntimePullRequestGenerationInput,
   overrides?: RuntimeGeneratePullRequestFieldsOverrides
 ): Promise<RuntimeGeneratePullRequestFieldsResult> {
   const target = getActiveRuntimeTarget(context.settings)

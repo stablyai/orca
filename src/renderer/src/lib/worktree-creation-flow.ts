@@ -31,6 +31,7 @@ function buildStartupOpt(
   return {
     command: plan.launchCommand,
     ...(plan.env ? { env: plan.env } : {}),
+    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
     // Why: command-code shows its prompt in the tab status before the first
     // hook fires, so the prompt is threaded through here.
     ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
@@ -40,7 +41,18 @@ function buildStartupOpt(
   }
 }
 
-async function preflightAgentTrust(request: WorktreeCreationRequest, path: string): Promise<void> {
+function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boolean {
+  if (request.worktreeCreateProgressMode) {
+    return request.worktreeCreateProgressMode === 'indeterminate'
+  }
+  return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
+}
+
+async function preflightAgentTrust(
+  request: WorktreeCreationRequest,
+  path: string,
+  connectionId?: string | null
+): Promise<void> {
   // Why: trust-gated agents (cursor-agent, copilot) consume the bracketed paste
   // as menu input on first launch. Pre-write the trust artifact before any
   // terminal spawns. Best-effort — the worktree already exists, so a failure
@@ -53,7 +65,11 @@ async function preflightAgentTrust(request: WorktreeCreationRequest, path: strin
     return
   }
   try {
-    await window.api.agentTrust.markTrusted({ preset: preflight, workspacePath: path })
+    await window.api.agentTrust.markTrusted({
+      preset: preflight,
+      workspacePath: path,
+      ...(connectionId ? { connectionId } : {})
+    })
   } catch {
     // Best-effort: continue with launch.
   }
@@ -91,7 +107,8 @@ async function executeWorktreeCreation(
         request.linkedLinearIssueOrganizationUrlKey,
         request.linkedBitbucketPR,
         request.linkedAzureDevOpsPR,
-        request.linkedGiteaPR
+        request.linkedGiteaPR,
+        request.compareBaseRef
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
@@ -128,7 +145,9 @@ async function executeWorktreeCreation(
   const startupOpt = buildStartupOpt(request, backendSpawned)
 
   if (worktree.path) {
-    await preflightAgentTrust(request, worktree.path)
+    const repoConnectionId =
+      useAppStore.getState().repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null
+    await preflightAgentTrust(request, worktree.path, repoConnectionId)
   }
 
   // `createWorktree` already inserted the real worktree row. Whether we steal
@@ -196,9 +215,9 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
   const creationId = createBrowserUuid()
   const store = useAppStore.getState()
   // Why: the remote/runtime create path emits no progress events, so the stepped
-  // checklist would freeze on step 1. Mark it indeterminate up front so the panel
-  // shows a single spinner instead of implying phase progress that never arrives.
-  const indeterminate = getActiveRuntimeTarget(store.settings).kind !== 'local'
+  // checklist would freeze on step 1. Use the request's captured repo owner so
+  // Retry does not change shape when focus moves to another runtime.
+  const indeterminate = getWorktreeCreationIndeterminate(request)
   store.beginPendingWorktreeCreation({
     creationId,
     phase: 'fetching',

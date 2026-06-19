@@ -178,9 +178,12 @@ describe('WorktreeCard affiliate list mode', () => {
     })
 
     const surface = container.querySelector<HTMLElement>('[data-worktree-card-surface="true"]')
+    const parentContent = container.querySelector<HTMLElement>(
+      '[data-worktree-card-parent-content=""]'
+    )
     expect(surface).not.toBeNull()
-    expect(surface?.className).toContain('gap-0.5')
-    expect(surface?.className).toContain('pl-0')
+    expect(parentContent?.className).toContain('gap-0.5')
+    expect(parentContent?.className).toContain('pl-0')
     const statusSlot = container.querySelector<HTMLElement>('[data-worktree-card-status-slot]')
     expect(statusSlot?.className).toContain('px-1')
     expect(container.querySelector('[data-testid="context-menu-wrapper"]')).toBeNull()

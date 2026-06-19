@@ -59,7 +59,6 @@ export function GeneralSupportSection({
     if (starState === 'web-fallback') {
       setStarState('opening-github')
       await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
-      await window.api.starNag.complete()
       if (mountedRef.current) {
         setStarState('web-fallback')
       }

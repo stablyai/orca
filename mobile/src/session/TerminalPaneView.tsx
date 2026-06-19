@@ -25,6 +25,7 @@ type TerminalPaneViewProps = {
   onTerminalInput: (handle: string, bytes: string) => void
   onTerminalTap: (handle: string) => void
   onFileTap: (handle: string, pathText: string, line: number | null, column: number | null) => void
+  onOpenUrl: (handle: string, url: string) => void
   onTextScaleChange: (scale: number) => void
 }
 
@@ -45,6 +46,7 @@ export function TerminalPaneView({
   onTerminalInput,
   onTerminalTap,
   onFileTap,
+  onOpenUrl,
   onTextScaleChange
 }: TerminalPaneViewProps) {
   const setRef = useCallback(
@@ -80,6 +82,7 @@ export function TerminalPaneView({
         onTerminalInput={(bytes) => onTerminalInput(handle, bytes)}
         onTerminalTap={() => onTerminalTap(handle)}
         onFileTap={(pathText, line, column) => onFileTap(handle, pathText, line, column)}
+        onOpenUrl={(url) => onOpenUrl(handle, url)}
         onTextScaleChange={onTextScaleChange}
       />
     </View>

@@ -1,10 +1,13 @@
 import React from 'react'
 import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
 import { CheckJobLogTail } from '@/components/right-sidebar/check-job-log-tail'
+import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control-fix-split-button'
 import { translate } from '@/i18n/i18n'
+import { useCheckRunDetailsFixWithAI } from './check-run-details-fix-with-ai'
 
 function formatCheckTimestamp(value: string | null | undefined): string | null {
   if (!value) {
@@ -52,6 +55,7 @@ export function CheckRunDetailsPanel({
   loading,
   error,
   openUrl,
+  worktreeId,
   onRefresh
 }: {
   check: PRCheckDetail
@@ -59,8 +63,28 @@ export function CheckRunDetailsPanel({
   loading: boolean
   error: string | null
   openUrl: string | null | undefined
+  worktreeId: string | null
   onRefresh?: () => void
 }): React.JSX.Element {
+  const {
+    canFixWithAI,
+    disabledReason,
+    isFixing,
+    fixPrompt,
+    repoId,
+    connectionId,
+    launchPlatform,
+    savedAgentId,
+    savedCommandInputTemplate,
+    savedAgentArgs,
+    saveLaunchActionDefault,
+    openSourceControlAiSettings,
+    fixWithAI
+  } = useCheckRunDetailsFixWithAI({
+    worktreeId,
+    check,
+    details
+  })
   const startedAt = formatCheckTimestamp(details?.startedAt)
   const completedAt = formatCheckTimestamp(details?.completedAt)
   const detailsStatusCheck: PRCheckDetail = {
@@ -85,19 +109,86 @@ export function CheckRunDetailsPanel({
           <h1 className="min-w-0 flex-1 truncate text-base font-medium text-foreground">
             {check.name}
           </h1>
-          {onRefresh && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              disabled={loading}
-              onClick={onRefresh}
-            >
-              <RefreshCw className={`size-3.5${loading ? ' animate-spin' : ''}`} />
-              {translate('auto.components.editor.CheckRunDetailsPanel.b7f5e2c91a', 'Refresh')}
-            </Button>
-          )}
+          <div className="flex shrink-0 items-center gap-2">
+            {canFixWithAI && (
+              <SourceControlFixSplitButton
+                label={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.834cb3f23d',
+                  'Fix with AI'
+                )}
+                actionId="fixChecks"
+                dialogTitle={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.834cb3f23d',
+                  'Fix with AI'
+                )}
+                dialogDescription={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.c8f1a2d4e7',
+                  'Choose the agent and edit the full command input before launch.'
+                )}
+                launchSource="task_page"
+                contextUnavailableLabel={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.b3e7f9a1c2',
+                  'Check fix context unavailable'
+                )}
+                primaryTitle={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.d5a8c2f1b9',
+                  'Start the default AI agent to fix this check'
+                )}
+                primaryAriaLabel={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.834cb3f23d',
+                  'Fix with AI'
+                )}
+                chevronTitle={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.e2b4d7c8a1',
+                  'Choose an agent for this check'
+                )}
+                chevronAriaLabel={translate(
+                  'auto.components.editor.CheckRunDetailsPanel.f1c9e3a6d4',
+                  'Choose agent to fix check'
+                )}
+                worktreeId={worktreeId}
+                groupId={worktreeId}
+                connectionId={connectionId}
+                repoId={repoId}
+                launchPlatform={launchPlatform}
+                prompt={fixPrompt}
+                isLaunching={loading || isFixing}
+                disabledReason={disabledReason}
+                variant="default"
+                size="sm"
+                iconClassName="size-3.5"
+                primaryClassName="rounded-r-none font-medium"
+                chevronClassName="rounded-l-none border-l border-primary-foreground/20 px-2"
+                savedAgentId={savedAgentId}
+                savedCommandInputTemplate={savedCommandInputTemplate}
+                savedAgentArgs={savedAgentArgs}
+                onSaveAgentDefault={saveLaunchActionDefault}
+                onOpenSettings={openSourceControlAiSettings}
+                onFixWithDefaultAgent={fixWithAI}
+                onPromptDelivered={() =>
+                  toast.success(
+                    translate(
+                      'auto.components.editor.check.run.details.fix.with.ai.2ef90c9819',
+                      'Started an AI agent for this check.'
+                    )
+                  )
+                }
+              />
+            )}
+            {onRefresh && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                disabled={loading}
+                onClick={onRefresh}
+              >
+                <RefreshCw className={`size-3.5${loading ? ' animate-spin' : ''}`} />
+                {translate('auto.components.editor.CheckRunDetailsPanel.b7f5e2c91a', 'Refresh')}
+              </Button>
+            )}
+          </div>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>

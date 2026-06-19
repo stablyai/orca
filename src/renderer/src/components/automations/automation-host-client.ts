@@ -22,9 +22,13 @@ type RuntimeAutomationUpdateInput = Omit<AutomationUpdateInput, 'projectId' | 'w
   workspace?: string
 }
 
-type AutomationHostTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
+export type AutomationHostTarget =
+  | { kind: 'local' }
+  | { kind: 'environment'; environmentId: string }
 
-function getRuntimeTargetFromHostId(hostId: string | null | undefined): AutomationHostTarget {
+export function getAutomationTargetFromHostId(
+  hostId: string | null | undefined
+): AutomationHostTarget {
   const parsed = parseExecutionHostId(hostId)
   return parsed?.kind === 'runtime'
     ? { kind: 'environment', environmentId: parsed.environmentId }
@@ -41,11 +45,11 @@ export function getAutomationListTarget(
 export function getAutomationOwnerTarget(
   automation: Pick<Automation, 'runContext'>
 ): AutomationHostTarget {
-  return getRuntimeTargetFromHostId(automation.runContext?.hostId)
+  return getAutomationTargetFromHostId(automation.runContext?.hostId)
 }
 
 export function getAutomationCreateTarget(input: AutomationCreateInput): AutomationHostTarget {
-  return getRuntimeTargetFromHostId(input.runContext?.hostId)
+  return getAutomationTargetFromHostId(input.runContext?.hostId)
 }
 
 function toRuntimeAutomationCreateInput(

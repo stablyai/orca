@@ -1,7 +1,7 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import { CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
+import { CalendarClock, CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -24,6 +24,7 @@ import type {
 } from './worktree-card-meta-types'
 import { translate } from '@/i18n/i18n'
 import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSection'
+import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 
 export type {
   WorktreeCardIssueDisplay,
@@ -41,19 +42,20 @@ export function hasWorktreeCardDetails({
   issue,
   linearIssue,
   review,
-  comment
+  comment,
+  automationProvenance
 }: WorktreeCardMetaBadgesProps): boolean {
-  return Boolean(issue || linearIssue || review || hasComment(comment))
+  return Boolean(issue || linearIssue || review || hasComment(comment) || automationProvenance)
 }
 
 export const WorktreeCardMetaBadges = React.forwardRef<
   HTMLDivElement,
   WorktreeCardMetaBadgesRootProps
 >(function WorktreeCardMetaBadges(
-  { issue, linearIssue, review, comment, className, ...props },
+  { issue, linearIssue, review, comment, automationProvenance, className, ...props },
   ref
 ): React.JSX.Element | null {
-  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
+  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment, automationProvenance })) {
     return null
   }
 
@@ -77,6 +79,16 @@ export const WorktreeCardMetaBadges = React.forwardRef<
           )}
         >
           <StickyNote className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+      {automationProvenance && (
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.automationCreated',
+            'Created by automation'
+          )}
+        >
+          <CalendarClock className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {issue && (
@@ -121,9 +133,12 @@ export function WorktreeCardDetailsHover({
   linearIssue,
   review,
   comment,
+  automationProvenance,
   children,
   branchName,
   workspaceTitle,
+  identityOrder = 'workspace-first',
+  automationHostId,
   detailsAfter,
   openDelay = 250,
   closeDelay = 120,
@@ -133,6 +148,8 @@ export function WorktreeCardDetailsHover({
   onOpenLinearIssueInOrca,
   onOpenReviewInOrca,
   onUnlinkReview,
+  onOpenAutomation,
+  onOpenAutomationRun,
   hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
@@ -155,13 +172,34 @@ export function WorktreeCardDetailsHover({
 
   if (
     !showIdentityHeader &&
-    !hasWorktreeCardDetails({ issue, linearIssue, review, comment }) &&
+    !hasWorktreeCardDetails({ issue, linearIssue, review, comment, automationProvenance }) &&
     !detailsAfter
   ) {
     return children
   }
 
   const issueLabels = issue?.labels ?? []
+  const branchIdentity = branchName ? (
+    <div
+      className={cn(
+        'truncate font-mono text-[11px] leading-none text-muted-foreground',
+        identityOrder === 'workspace-first' && 'mt-1'
+      )}
+    >
+      {branchName}
+    </div>
+  ) : null
+  const workspaceIdentity =
+    workspaceTitle && workspaceTitle !== branchName ? (
+      <div
+        className={cn(
+          'truncate text-[13px] font-semibold leading-snug text-foreground',
+          identityOrder === 'branch-first' && 'mt-1'
+        )}
+      >
+        {workspaceTitle}
+      </div>
+    ) : null
 
   return (
     <HoverCard
@@ -185,16 +223,8 @@ export function WorktreeCardDetailsHover({
             <div className="min-w-0 border-l border-border/70 pl-2">
               {/* Why: the closed card no longer carries a branch row; custom-titled
                   worktrees still need their git branch available in the hover. */}
-              {branchName && (
-                <div className="truncate font-mono text-[11px] leading-none text-muted-foreground">
-                  {branchName}
-                </div>
-              )}
-              {workspaceTitle && workspaceTitle !== branchName && (
-                <div className="mt-1 truncate text-[13px] font-semibold leading-snug text-foreground">
-                  {workspaceTitle}
-                </div>
-              )}
+              {identityOrder === 'branch-first' ? branchIdentity : workspaceIdentity}
+              {identityOrder === 'branch-first' ? workspaceIdentity : branchIdentity}
             </div>
           )}
 
@@ -209,6 +239,17 @@ export function WorktreeCardDetailsHover({
                 )}
                 actions={
                   <>
+                    {onEditIssue && (
+                      <MetadataActionIcon
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.807b13b9ec',
+                          'Edit issue'
+                        )}
+                        onClick={onEditIssue}
+                      >
+                        <Pencil className="size-3" />
+                      </MetadataActionIcon>
+                    )}
                     {issue.url && onOpenGitHubIssueInOrca && (
                       <MetadataActionIcon
                         label={translate(
@@ -229,17 +270,6 @@ export function WorktreeCardDetailsHover({
                         href={issue.url}
                       >
                         <ExternalLink className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {onEditIssue && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.807b13b9ec',
-                          'Edit issue'
-                        )}
-                        onClick={onEditIssue}
-                      >
-                        <Pencil className="size-3" />
                       </MetadataActionIcon>
                     )}
                   </>
@@ -328,6 +358,17 @@ export function WorktreeCardDetailsHover({
             onUnlinkReview={onUnlinkReview}
             closeHover={closeHover}
           />
+
+          {automationProvenance && (
+            <WorktreeCardAutomationDetailSection
+              provenance={automationProvenance}
+              worktreeHostId={automationHostId}
+              onOpenAutomation={onOpenAutomation ? dismissAndRun(onOpenAutomation) : undefined}
+              onOpenAutomationRun={
+                onOpenAutomationRun ? dismissAndRun(onOpenAutomationRun) : undefined
+              }
+            />
+          )}
 
           {hasComment(comment) && (
             <WorktreeCardDetailSection>

@@ -1365,6 +1365,81 @@ function withBoundedCacheEntry<T extends { fetchedAt: number }>(
   return evictStaleEntries({ ...cache, [key]: entry })
 }
 
+// Why: the prRefresh* maps are keyed by PR cache key (repo/branch/execution-host)
+// — an ephemeral, unbounded key space over a long session. They have no
+// `fetchedAt` to sort by, so bound them by insertion order (oldest-touched keys
+// evicted first; the writers move each touched key to the end). An evicted
+// long-idle branch simply restarts from a clean state, which is acceptable.
+function capRecordByInsertionOrder<T>(
+  record: Record<string, T>,
+  maxEntries = MAX_CACHE_ENTRIES
+): Record<string, T> {
+  const keys = Object.keys(record)
+  if (keys.length <= maxEntries) {
+    return record
+  }
+  const capped: Record<string, T> = {}
+  for (const key of keys.slice(keys.length - maxEntries)) {
+    capped[key] = record[key]
+  }
+  return capped
+}
+
+function capPrRefreshSequences(
+  sequences: Record<string, number>,
+  maxEntries = MAX_CACHE_ENTRIES
+): Record<string, number> {
+  return capRecordByInsertionOrder(sequences, maxEntries)
+}
+
+// Why: prRefreshStates backs visible status pills (refreshing/queued/paused/error)
+// so — unlike the invisible sequence guard — eviction must never drop an in-progress
+// indicator. Bound it well above any realistic tracked-branch count, and when over
+// cap evict *settled* statuses (error/skipped) first; only fall back to evicting an
+// active (in-flight/queued/paused) entry as a last-resort hard memory bound that
+// realistic usage never reaches. Evicted entries self-heal on the next refresh event.
+const MAX_PR_REFRESH_STATE_ENTRIES = 2000
+const SETTLED_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>(['error', 'skipped'])
+
+function capPrRefreshStates(
+  states: Record<string, PRRefreshState>,
+  maxEntries = MAX_PR_REFRESH_STATE_ENTRIES
+): Record<string, PRRefreshState> {
+  const keys = Object.keys(states)
+  let toEvict = keys.length - maxEntries
+  if (toEvict <= 0) {
+    return states
+  }
+  const evicted = new Set<string>()
+  // First pass: evict oldest settled (error/skipped) entries.
+  for (const key of keys) {
+    if (toEvict === 0) {
+      break
+    }
+    if (SETTLED_PR_REFRESH_STATUSES.has(states[key].status)) {
+      evicted.add(key)
+      toEvict--
+    }
+  }
+  // Last resort: evict oldest remaining keys to enforce the hard bound.
+  for (const key of keys) {
+    if (toEvict === 0) {
+      break
+    }
+    if (!evicted.has(key)) {
+      evicted.add(key)
+      toEvict--
+    }
+  }
+  const capped: Record<string, PRRefreshState> = {}
+  for (const key of keys) {
+    if (!evicted.has(key)) {
+      capped[key] = states[key]
+    }
+  }
+  return capped
+}
+
 function shouldRefreshIssueDecorations(state: AppState): boolean {
   return (state.worktreeCardProperties ?? []).includes('issue')
 }
@@ -3361,6 +3436,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           }
           continue
         }
+        // Why: delete-then-set moves this key to the end of insertion order so
+        // capPrRefreshSequences evicts genuinely idle keys, not active ones.
+        delete nextSequences[alias.cacheKey]
         nextSequences[alias.cacheKey] = event.sequence
         changed = true
 
@@ -3499,6 +3577,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             // longer live and would otherwise accumulate per refresh sequence.
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           }
+          // Why: delete-then-set moves this key to the end of insertion order so
+          // capRecordByInsertionOrder evicts genuinely idle keys, not active ones.
+          delete nextStates[alias.cacheKey]
           nextStates[alias.cacheKey] = {
             status: event.status,
             reason: event.reason,
@@ -3510,8 +3591,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
       return changed
         ? {
-            prRefreshSequences: nextSequences,
-            prRefreshStates: nextStates,
+            prRefreshSequences: capPrRefreshSequences(nextSequences),
+            // Why: bound prRefreshStates too (same unbounded PR-cache-key space),
+            // but with status-aware eviction so visible in-progress pills survive.
+            prRefreshStates: capPrRefreshStates(nextStates),
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache
           }
@@ -3544,14 +3627,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const now = Date.now()
     const stalePRCandidates: { candidate: GitHubPRRefreshCandidate; score: number }[] = []
     const cardProps = state.worktreeCardProperties ?? []
+    const rawCardProps = cardProps as readonly string[]
     const shouldRefreshIssues = shouldRefreshIssueDecorations(state)
     const isPRStatusGrouping = state.groupBy === 'pr-status'
     const rightSidebarShowsPR = rightSidebarShowsPullRequestData(state)
     const shouldRefreshPRs =
       isPRStatusGrouping ||
       rightSidebarShowsPR ||
-      cardProps.includes('pr') ||
-      cardProps.includes('ci')
+      (state.settings?.experimentalNewWorktreeCardStyle === true
+        ? cardProps.includes('status')
+        : cardProps.includes('pr') || rawCardProps.includes('ci'))
 
     for (const worktrees of Object.values(state.worktreesByRepo)) {
       for (const wt of worktrees) {
@@ -3868,10 +3953,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const now = Date.now()
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
     const cardProps = state.worktreeCardProperties ?? []
+    const rawCardProps = cardProps as readonly string[]
     const shouldRefreshPR =
       state.groupBy === 'pr-status' ||
-      cardProps.includes('pr') ||
-      cardProps.includes('ci') ||
+      (state.settings?.experimentalNewWorktreeCardStyle === true
+        ? cardProps.includes('status')
+        : cardProps.includes('pr') || rawCardProps.includes('ci')) ||
       rightSidebarShowsPullRequestData(state)
 
     if (shouldRefreshPR && !worktree.isBare && branch) {

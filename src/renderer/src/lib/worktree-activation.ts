@@ -8,9 +8,11 @@ import type {
   WorktreeSetupLaunch
 } from '../../../shared/types'
 import type { EventProps } from '../../../shared/telemetry-events'
+import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { buildSetupRunnerCommand } from './setup-runner'
 import { buildAgentStartupPlan } from './tui-agent-startup'
+import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
@@ -38,6 +40,7 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getRuntimeEnvironmentIdForWorktree,
   type WorktreeRuntimeOwnerState
@@ -59,6 +62,7 @@ export type AgentStartedTelemetry = EventProps<'agent_started'>
 export type WorktreeStartupPayload = {
   command: string
   env?: Record<string, string>
+  startupCommandDelivery?: StartupCommandDelivery
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
   telemetry?: AgentStartedTelemetry
 }
@@ -100,6 +104,7 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
       command: string
       env?: Record<string, string>
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
+      showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
     }
   ) => void
@@ -155,6 +160,7 @@ export function activateAndRevealFolderWorkspace(
   opts?: {
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     startup?: WorktreeStartupPayload
+    runtimeEnvironmentId?: string | null
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -164,10 +170,17 @@ export function activateAndRevealFolderWorkspace(
   if (!folderWorkspace) {
     return false
   }
-  const pathStatus = state.getFreshFolderWorkspacePathStatus({
-    scope: 'folder-workspace',
-    folderWorkspaceId
-  })
+  const runtimeEnvironmentId =
+    opts && 'runtimeEnvironmentId' in opts
+      ? (opts.runtimeEnvironmentId ?? null)
+      : getRuntimeEnvironmentIdForWorktree(state, folderWorkspaceKey(folderWorkspaceId))
+  const pathStatus = state.getFreshFolderWorkspacePathStatus(
+    {
+      scope: 'folder-workspace',
+      folderWorkspaceId
+    },
+    { runtimeEnvironmentId }
+  )
   if (folderWorkspaceActivationBlocked(pathStatus)) {
     toast.error(getFolderWorkspacePathStatusTitle(pathStatus) ?? 'Cannot open folder workspace', {
       description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
@@ -204,13 +217,22 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
     return undefined
   }
 
+  const state = useAppStore.getState()
+  const repo = state.repos.find((entry) => entry.id === worktree.repoId)
+  const launchPlatform = repo
+    ? getAgentLaunchPlatformForRepo(
+        repo,
+        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(state, worktree.id)
+      )
+    : CLIENT_PLATFORM
+
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: '',
-    cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, useAppStore.getState().settings?.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, useAppStore.getState().settings?.agentDefaultEnv),
-    platform: CLIENT_PLATFORM,
+    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+    agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
+    agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
+    platform: launchPlatform,
     allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {
@@ -220,6 +242,9 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
   return {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
+    ...(startupPlan.startupCommandDelivery
+      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+      : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(agent),
       launch_source: 'sidebar',
@@ -321,6 +346,12 @@ export function activateAndRevealWorktree(
   // rendered and the reveal silently no-ops.
   if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(wt.repoId)) {
     state.setFilterRepoIds([])
+  }
+  if (
+    state.hideAutomationGeneratedWorkspaces &&
+    wt.automationProvenance?.kind === 'created-by-automation'
+  ) {
+    state.setHideAutomationGeneratedWorkspaces(false)
   }
 
   // 6. Reveal in sidebar

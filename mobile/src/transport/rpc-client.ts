@@ -716,9 +716,7 @@ export function connect(
     sharedKey = null
     activeBrowserScreencastRequestId = null
     pendingBrowserScreencastRequestId = null
-    for (const stream of streamListeners.values()) {
-      stream.sent = false
-    }
+    streamListeners.forEach((stream) => (stream.sent = false))
     if (handshakeTimer) {
       clearTimeout(handshakeTimer)
       handshakeTimer = null
@@ -768,6 +766,8 @@ export function connect(
       const closing = ws
       ws = null
       sharedKey = null
+      // Why: close cleanup stale-bails here, so mark active streams for replay.
+      streamListeners.forEach((stream) => (stream.sent = false))
       rejectAllPending(reason)
       if (closing) {
         closing.close()

@@ -388,6 +388,30 @@ export function useEditorPanelContentState({
     void loadDiffContent(current, { force: true })
   }, [activeFile?.diffContentReloadNonce, activeFile?.id, loadDiffContent])
 
+  useEffect(() => {
+    const nonce = activeFile?.fileContentReloadNonce
+    if (!activeFile?.id || nonce === undefined || nonce === 0) {
+      return
+    }
+    const current = openFilesRef.current.find((f) => f.id === activeFile.id)
+    if (
+      !current ||
+      current.isDirty ||
+      (current.mode !== 'edit' && current.mode !== 'markdown-preview')
+    ) {
+      return
+    }
+    setFileContents((prev) => {
+      if (!prev[current.id]) {
+        return prev
+      }
+      const next = { ...prev }
+      delete next[current.id]
+      return next
+    })
+    void loadFileContent(current.filePath, current.id, current.worktreeId, current.relativePath)
+  }, [activeFile?.fileContentReloadNonce, activeFile?.filePath, activeFile?.id, loadFileContent])
+
   useEditorPanelExternalContentEvents({
     loadDiffContent,
     loadFileContent,

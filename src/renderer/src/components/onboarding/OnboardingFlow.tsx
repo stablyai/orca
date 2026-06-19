@@ -8,6 +8,7 @@ import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
 import { IntegrationsStep } from './IntegrationsStep'
+import { WindowsTerminalStep } from './WindowsTerminalStep'
 import { useOnboardingFlow } from './use-onboarding-flow'
 import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
 import { OnboardingFooter } from './OnboardingFooter'
@@ -71,12 +72,27 @@ const stepCopy = {
         'Install the GitHub CLI to:'
       )
     }
+  },
+  windows_terminal: {
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.windowsTerminalTitle',
+        'Set Windows terminal defaults'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.windowsTerminalSubtitle',
+        'Choose the DEFAULT Shell for new panes and how right-click behaves in the terminal.'
+      )
+    }
   }
 } as const
 
 const stepTooltipLabels = {
   agent: 'Default Agent',
   theme: 'Appearance',
+  windows_terminal: 'Windows Terminal',
   notifications: 'Notifications',
   integrations: 'Integrations'
 } as const
@@ -202,7 +218,7 @@ export default function OnboardingFlow({
             </div>
 
             <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
-              {flow.visibleSteps.map(({ step, index: realStepIndex }, visibleIdx) => {
+              {flow.progressSteps.map(({ step, index: realStepIndex, isSkipped }, progressIdx) => {
                 const isActive = realStepIndex === stepIndex
                 const isDone = realStepIndex < stepIndex
                 return (
@@ -218,14 +234,16 @@ export default function OnboardingFlow({
                             ? 'w-10 bg-foreground'
                             : isDone
                               ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
-                              : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
+                              : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45',
+                          isSkipped && 'cursor-default hover:bg-muted-foreground/25'
                         )}
                         aria-label={translate(
                           'auto.components.onboarding.OnboardingFlow.adaa0aa627',
                           'Go to onboarding step {{value0}}: {{value1}}',
-                          { value0: visibleIdx + 1, value1: stepCopy[step.id].title }
+                          { value0: progressIdx + 1, value1: stepTooltipLabels[step.id] }
                         )}
                         aria-current={isActive ? 'step' : undefined}
+                        disabled={isSkipped}
                         onClick={() => flow.jumpToStep(realStepIndex)}
                       />
                     </TooltipTrigger>
@@ -236,9 +254,9 @@ export default function OnboardingFlow({
                 )
               })}
               <span className="ml-3 text-xs font-medium text-muted-foreground">
-                {flow.visibleStepIndex + 1}{' '}
+                {flow.progressStepIndex + 1}{' '}
                 {translate('auto.components.onboarding.OnboardingFlow.4db04f2f57', 'of')}{' '}
-                {flow.visibleSteps.length}
+                {flow.progressSteps.length}
               </span>
             </div>
 
@@ -293,6 +311,12 @@ export default function OnboardingFlow({
                 <NotificationStep settings={flow.settings} updateSettings={flow.updateSettings} />
               )}
               {currentStep.id === 'integrations' && <IntegrationsStep />}
+              {currentStep.id === 'windows_terminal' && (
+                <WindowsTerminalStep
+                  settings={flow.settings}
+                  updateSettings={flow.updateSettings}
+                />
+              )}
             </div>
 
             <OnboardingFooter

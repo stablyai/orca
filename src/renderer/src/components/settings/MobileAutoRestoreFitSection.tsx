@@ -26,7 +26,7 @@ export function MobileAutoRestoreFitSection({
       <p className="text-muted-foreground mb-3 text-xs">
         {translate(
           'auto.components.settings.MobilePane.35100bca5d',
-          "While you're using a terminal on your phone, Orca shrinks it to fit your phone screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always click Restore on the terminal banner to resize it manually."
+          "While you're using a terminal on your phone, Orca shrinks it to fit your phone screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore this terminal or Restore all terminals on the banner to resize manually."
         )}
       </p>
       <Select

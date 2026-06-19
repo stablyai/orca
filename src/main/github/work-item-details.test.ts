@@ -27,11 +27,14 @@ const {
   rateLimitGuardMock: vi.fn<() => RateLimitGuardResult>(() => ({ blocked: false })),
   noteRateLimitSpendMock: vi.fn(),
   ghRepoExecOptionsMock: vi.fn((context) =>
-    context.connectionId ? {} : { cwd: context.repoPath }
+    context.connectionId
+      ? {}
+      : { cwd: context.repoPath, ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}) }
   ),
-  githubRepoContextMock: vi.fn((repoPath, connectionId) => ({
+  githubRepoContextMock: vi.fn((repoPath, connectionId, localGitOptions) => ({
     repoPath,
-    connectionId: connectionId ?? null
+    connectionId: connectionId ?? null,
+    ...localGitOptions
   })),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
@@ -240,5 +243,86 @@ describe('getWorkItemDetails', () => {
     expect(getIssueOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2')
     expect(ghExecFileAsyncMock.mock.calls[0][1]).toEqual({})
     expect(details?.body).toBe('Remote issue body')
+  })
+
+  it('routes local WSL PR detail fan-out through the selected distro', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'pr:42',
+      type: 'pr',
+      number: 42,
+      title: 'Review drawer WSL',
+      state: 'open',
+      url: 'https://github.com/stablyai/orca/pull/42',
+      labels: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      author: 'octocat'
+    })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    getPRCommentsMock.mockResolvedValue([])
+    getPRChecksMock.mockResolvedValue([])
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const target = args.at(-1)
+      if (target === 'repos/stablyai/orca/pulls/42') {
+        return {
+          stdout: JSON.stringify({
+            body: 'PR body',
+            head: { sha: 'head-sha' },
+            base: { sha: 'base-sha' }
+          })
+        }
+      }
+      if (target === 'repos/stablyai/orca/pulls/42/files?per_page=100') {
+        return { stdout: '[]' }
+      }
+      const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+      if (query.includes('viewerViewedState')) {
+        return {
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  id: 'PR_kwDO123',
+                  files: { pageInfo: { hasNextPage: false }, nodes: [] }
+                }
+              }
+            }
+          })
+        }
+      }
+      if (query.includes('participants(first: 100)')) {
+        return {
+          stdout: JSON.stringify({
+            data: { repository: { pullRequest: { participants: { nodes: [] } } } }
+          })
+        }
+      }
+      return { stdout: JSON.stringify({ data: {} }) }
+    })
+
+    const details = await getWorkItemDetails('/repo-root', 42, 'pr', null, localGitOptions)
+
+    expect(details?.body).toBe('PR body')
+    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 42, 'pr', null, localGitOptions)
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
+    expect(getPRCommentsMock).toHaveBeenCalledWith(
+      '/repo-root',
+      42,
+      undefined,
+      null,
+      localGitOptions
+    )
+    expect(getPRChecksMock).toHaveBeenCalledWith(
+      '/repo-root',
+      42,
+      'head-sha',
+      null,
+      undefined,
+      null,
+      localGitOptions
+    )
+    expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
+    )
   })
 })

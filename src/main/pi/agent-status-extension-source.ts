@@ -2,13 +2,12 @@
 // in-process TypeScript extension API (pi.on('agent_start'), 'tool_call',
 // etc.). To get pi panes into the unified agent-hooks pipeline alongside
 // Claude/Codex/Gemini/OpenCode/Cursor, we ship a bundled extension into
-// the Pi overlay (PiTitlebarExtensionService) that POSTs to
+// the selected Pi/OMP extension dir (PiTitlebarExtensionService) that POSTs to
 // /hook/<kind> using the same ORCA_AGENT_HOOK_* + ORCA_PANE_KEY env that every
 // PTY already receives from ipc/pty.ts.
 //
-// Each Pi process still gets its own paneKey through env even when multiple
-// PTYs share one source-scoped overlay. Like the OpenCode plugin, the returned
-// source is a string (loaded by jiti from disk inside the pi process), so we
+// Each Pi process gets its own paneKey through env. Like the OpenCode plugin,
+// the returned source is a string (loaded by jiti from disk inside the pi process), so we
 // keep the source body in plain JS without TS types and avoid pulling pi or
 // any Orca dep into the pi runtime.
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
@@ -96,8 +95,8 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  const isOmpExecutable = executableNames.some((name) =>',
     "    ['omp', 'omp.js', 'omp.sh', 'omp.cmd', 'omp.exe', 'omp.bat'].includes(name)",
     '  )',
-    '  // Why: a bare shell gets the Pi overlay at spawn time, but may later',
-    '  // launch OMP. Runtime executable detection keeps that status labeled',
+    '  // Why: a bare shell may launch either Pi or OMP after spawn. Runtime',
+    '  // executable detection keeps that status labeled',
     '  // as OMP instead of silently reporting it as Pi.',
     '  if (isOmpExecutable) {',
     "    return '/hook/omp'",

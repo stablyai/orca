@@ -4,6 +4,7 @@ import type { RefObject } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { toast } from 'sonner'
 import type { TreeNode } from './file-explorer-types'
+import { FILE_EXPLORER_DRAGGABLE_SELECTOR } from './file-explorer-drag-scroll-marker'
 import { translate } from '@/i18n/i18n'
 
 type UseFileExplorerHandlersParams = {
@@ -177,7 +178,7 @@ export function useFileExplorerHandlers({
         return
       }
       const target = e.target
-      if (!(target instanceof Element) || !target.closest('[data-explorer-draggable="true"]')) {
+      if (!(target instanceof Element) || !target.closest(FILE_EXPLORER_DRAGGABLE_SELECTOR)) {
         return
       }
       if (container.scrollHeight <= container.clientHeight) {

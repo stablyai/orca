@@ -8,6 +8,9 @@ export type LaunchableWorkItem = {
   type: 'issue' | 'pr' | 'mr'
   number: number | null
   repoId?: string
+  branchName?: string
+  baseRefName?: string
+  isCrossRepository?: boolean
   pasteContent?: string
   linearIdentifier?: string
   linearWorkspaceId?: string

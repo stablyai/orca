@@ -9,6 +9,14 @@ import {
 } from './useIpcEvents'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
+const { closeTerminalTabMock } = vi.hoisted(() => ({
+  closeTerminalTabMock: vi.fn()
+}))
+
+vi.mock('@/components/terminal/terminal-tab-actions', () => ({
+  closeTerminalTab: closeTerminalTabMock
+}))
+
 const FUTURE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const STALE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const ORPHAN_LEAF_ID = '33333333-3333-4333-8333-333333333333'
@@ -1814,6 +1822,442 @@ describe('useIpcEvents browser tab close routing', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
+    closeTerminalTabMock.mockReset()
+  })
+
+  type RequestTabCloseListener = (data: {
+    requestId: string
+    tabId: string | null
+    worktreeId?: string
+  }) => void
+  type CloseActiveTabListener = () => void
+  type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
+
+  async function useIpcEventsForCloseRouting({
+    closeActiveTabListenerRef,
+    closeTerminalListenerRef,
+    getState,
+    requestTabCloseListenerRef,
+    replyTabClose = vi.fn()
+  }: {
+    closeActiveTabListenerRef?: { current: CloseActiveTabListener | null }
+    closeTerminalListenerRef?: { current: CloseTerminalListener | null }
+    getState: () => Record<string, unknown>
+    requestTabCloseListenerRef?: { current: RequestTabCloseListener | null }
+    replyTabClose?: ReturnType<typeof vi.fn>
+  }): Promise<void> {
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        }
+      }
+    })
+
+    const appStoreModule = {
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => ({
+          setUpdateStatus: vi.fn(),
+          fetchRepos: vi.fn(),
+          fetchWorktrees: vi.fn(),
+          setActiveView: vi.fn(),
+          activeModal: null,
+          closeModal: vi.fn(),
+          openModal: vi.fn(),
+          activeWorktreeId: 'wt-1',
+          activeView: 'terminal',
+          setActiveRepo: vi.fn(),
+          setActiveWorktree: vi.fn(),
+          revealWorktreeInSidebar: vi.fn(),
+          setIsFullScreen: vi.fn(),
+          updateBrowserTabPageState: vi.fn(),
+          activeTabType: 'browser',
+          editorFontZoomLevel: 0,
+          setEditorFontZoomLevel: vi.fn(),
+          setRateLimitsFromPush: vi.fn(),
+          setSshConnectionState: vi.fn(),
+          setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
+          enqueueSshCredentialRequest: vi.fn(),
+          removeSshCredentialRequest: vi.fn(),
+          settings: { activeRuntimeEnvironmentId: null, terminalFontSize: 13 },
+          activeBrowserTabId: 'workspace-1',
+          activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
+          browserTabsByWorktree: { 'wt-1': [{ id: 'workspace-1' }] },
+          browserPagesByWorkspace: {},
+          unifiedTabsByWorktree: {},
+          closeBrowserTab: vi.fn(),
+          closeBrowserPage: vi.fn(),
+          requestPinnedTabCloseConfirm: vi.fn(),
+          ...getState()
+        })
+      }
+    }
+
+    vi.doMock('../store', () => appStoreModule)
+    vi.doMock('@/store', () => appStoreModule)
+
+    vi.doMock('@/lib/ui-zoom', () => ({
+      applyUIZoom: vi.fn()
+    }))
+    vi.doMock('@/lib/worktree-activation', () => ({
+      activateAndRevealWorktree: vi.fn(),
+      ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+      getVisibleWorktreeIds: () => []
+    }))
+    vi.doMock('@/lib/editor-font-zoom', () => ({
+      nextEditorFontZoomLevel: vi.fn(() => 0),
+      computeEditorFontSize: vi.fn(() => 13)
+    }))
+    vi.doMock('@/components/settings/SettingsConstants', () => ({
+      zoomLevelToPercent: vi.fn(() => 100),
+      ZOOM_MIN: -3,
+      ZOOM_MAX: 3
+    }))
+    vi.doMock('@/lib/zoom-events', () => ({
+      dispatchZoomLevelChanged: vi.fn()
+    }))
+
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
+      api: {
+        repos: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
+        ui: {
+          onStateChanged: () => () => {},
+          onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onToggleLeftSidebar: () => () => {},
+          onToggleRightSidebar: () => () => {},
+          onToggleWorktreePalette: () => () => {},
+          onToggleFloatingTerminal: () => () => {},
+          onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
+          onOpenTasks: () => () => {},
+          onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
+          onWorktreeHistoryNavigate: () => () => {},
+          onActivateWorktree: () => () => {},
+          onCreateTerminal: () => () => {},
+          onRequestTerminalCreate: () => () => {},
+          replyTerminalCreate: () => {},
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onFocusEditorTab: () => () => {},
+          onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
+          onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
+          onCloseTerminal: (listener: CloseTerminalListener) => {
+            if (closeTerminalListenerRef) {
+              closeTerminalListenerRef.current = listener
+            }
+            return () => {}
+          },
+          onSleepWorktree: () => () => {},
+          onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
+          onRequestTabCreate: () => () => {},
+          replyTabCreate: () => {},
+          onRequestTabClose: (listener: RequestTabCloseListener) => {
+            if (requestTabCloseListenerRef) {
+              requestTabCloseListenerRef.current = listener
+            }
+            return () => {}
+          },
+          replyTabClose,
+          onRequestTabSetProfile: () => () => {},
+          replyTabSetProfile: () => {},
+          onNewTerminalTab: () => () => {},
+          onCloseActiveTab: (listener: CloseActiveTabListener) => {
+            if (closeActiveTabListenerRef) {
+              closeActiveTabListenerRef.current = listener
+            }
+            return () => {}
+          },
+          onSwitchTab: () => () => {},
+          onSwitchTabAcrossAllTypes: () => () => {},
+          onSwitchRecentTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
+          onToggleStatusBar: () => () => {},
+          onFullscreenChanged: () => () => {},
+          onTerminalZoom: () => () => {},
+          getZoomLevel: () => 0,
+          set: vi.fn()
+        },
+        settings: {
+          onChanged: () => () => {}
+        },
+        updater: {
+          getStatus: () => Promise.resolve({ state: 'idle' }),
+          onStatus: () => () => {},
+          onClearDismissal: () => () => {}
+        },
+        browser: {
+          onGuestLoadFailed: () => () => {},
+          onOpenLinkInOrcaTab: () => () => {},
+          onNavigationUpdate: () => () => {},
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
+        },
+        rateLimits: {
+          get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+          onUpdate: () => () => {}
+        },
+        ssh: {
+          listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
+          getState: () => Promise.resolve(null),
+          onStateChanged: () => () => {},
+          onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
+          onCredentialResolved: () => () => {}
+        },
+        runtime: {
+          getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => {}
+        },
+        agentStatus: { onSet: () => () => {} }
+      }
+    })
+
+    const { useIpcEvents: registerIpcEvents } = await import('./useIpcEvents')
+    registerIpcEvents()
+  }
+
+  it('delegates terminal close IPC without a pane id to the shared terminal close flow', async () => {
+    const closeTerminalListenerRef: { current: CloseTerminalListener | null } = { current: null }
+
+    await useIpcEventsForCloseRouting({
+      closeTerminalListenerRef,
+      getState: () => ({})
+    })
+
+    closeTerminalListenerRef.current?.({ tabId: 'terminal-1' })
+
+    expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1')
+  })
+
+  it('confirms before closing a pinned active browser tab from the native close event', async () => {
+    const closeActiveTabListenerRef: { current: CloseActiveTabListener | null } = { current: null }
+    const closeBrowserTab = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      closeActiveTabListenerRef,
+      getState: () => ({
+        closeBrowserTab,
+        requestPinnedTabCloseConfirm,
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'browser-unified-1',
+              entityId: 'workspace-1',
+              contentType: 'browser',
+              label: 'Docs',
+              isPinned: true
+            }
+          ]
+        }
+      })
+    })
+
+    closeActiveTabListenerRef.current?.()
+
+    expect(closeBrowserTab).not.toHaveBeenCalled()
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ tabLabel: 'Docs', onConfirm: expect.any(Function) })
+    )
+
+    const { onConfirm } = requestPinnedTabCloseConfirm.mock.calls[0][0] as { onConfirm: () => void }
+    onConfirm()
+
+    expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1')
+  })
+
+  it('confirms CLI workspace browser closes and replies after confirmation', async () => {
+    const requestTabCloseListenerRef: { current: RequestTabCloseListener | null } = {
+      current: null
+    }
+    const closeBrowserTab = vi.fn()
+    const replyTabClose = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      requestTabCloseListenerRef,
+      replyTabClose,
+      getState: () => ({
+        closeBrowserTab,
+        requestPinnedTabCloseConfirm,
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'browser-unified-1',
+              entityId: 'workspace-1',
+              contentType: 'browser',
+              label: 'Docs',
+              isPinned: true
+            }
+          ]
+        }
+      })
+    })
+
+    requestTabCloseListenerRef.current?.({ requestId: 'req-pinned', tabId: 'workspace-1' })
+
+    expect(closeBrowserTab).not.toHaveBeenCalled()
+    expect(replyTabClose).not.toHaveBeenCalledWith({ requestId: 'req-pinned' })
+    const request = requestPinnedTabCloseConfirm.mock.calls[0][0] as {
+      onConfirm: () => void
+      onCancel: () => void
+    }
+
+    request.onConfirm()
+
+    expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1')
+    expect(replyTabClose).toHaveBeenCalledWith({ requestId: 'req-pinned' })
+  })
+
+  it('replies with the pinned error when a CLI browser close is canceled', async () => {
+    const requestTabCloseListenerRef: { current: RequestTabCloseListener | null } = {
+      current: null
+    }
+    const closeBrowserTab = vi.fn()
+    const replyTabClose = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      requestTabCloseListenerRef,
+      replyTabClose,
+      getState: () => ({
+        closeBrowserTab,
+        requestPinnedTabCloseConfirm,
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'browser-unified-1',
+              entityId: 'workspace-1',
+              contentType: 'browser',
+              label: 'Docs',
+              isPinned: true
+            }
+          ]
+        }
+      })
+    })
+
+    requestTabCloseListenerRef.current?.({ requestId: 'req-cancel', tabId: 'workspace-1' })
+    const request = requestPinnedTabCloseConfirm.mock.calls[0][0] as {
+      onCancel: () => void
+    }
+
+    request.onCancel()
+
+    expect(closeBrowserTab).not.toHaveBeenCalled()
+    expect(replyTabClose).toHaveBeenCalledWith({
+      requestId: 'req-cancel',
+      error: 'Browser tab workspace-1 is pinned'
+    })
+  })
+
+  it('lets CLI browser closes bypass confirmation when the pinned-tab setting is off', async () => {
+    const requestTabCloseListenerRef: { current: RequestTabCloseListener | null } = {
+      current: null
+    }
+    const closeBrowserTab = vi.fn()
+    const replyTabClose = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      requestTabCloseListenerRef,
+      replyTabClose,
+      getState: () => ({
+        closeBrowserTab,
+        requestPinnedTabCloseConfirm,
+        settings: {
+          activeRuntimeEnvironmentId: null,
+          confirmClosePinnedTab: false,
+          terminalFontSize: 13
+        },
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'browser-unified-1',
+              entityId: 'workspace-1',
+              contentType: 'browser',
+              label: 'Docs',
+              isPinned: true
+            }
+          ]
+        }
+      })
+    })
+
+    requestTabCloseListenerRef.current?.({ requestId: 'req-off', tabId: 'workspace-1' })
+
+    expect(requestPinnedTabCloseConfirm).not.toHaveBeenCalled()
+    expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1')
+    expect(replyTabClose).toHaveBeenCalledWith({ requestId: 'req-off' })
+  })
+
+  it('guards a CLI last-page close for a pinned browser workspace', async () => {
+    const requestTabCloseListenerRef: { current: RequestTabCloseListener | null } = {
+      current: null
+    }
+    const closeBrowserTab = vi.fn()
+    const closeBrowserPage = vi.fn()
+    const replyTabClose = vi.fn()
+    const requestPinnedTabCloseConfirm = vi.fn()
+
+    await useIpcEventsForCloseRouting({
+      requestTabCloseListenerRef,
+      replyTabClose,
+      getState: () => ({
+        closeBrowserTab,
+        closeBrowserPage,
+        requestPinnedTabCloseConfirm,
+        browserPagesByWorkspace: {
+          'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1' }]
+        },
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'browser-unified-1',
+              entityId: 'workspace-1',
+              contentType: 'browser',
+              label: 'Docs',
+              isPinned: true
+            }
+          ]
+        }
+      })
+    })
+
+    requestTabCloseListenerRef.current?.({ requestId: 'req-page', tabId: 'page-1' })
+
+    expect(closeBrowserPage).not.toHaveBeenCalled()
+    expect(closeBrowserTab).not.toHaveBeenCalled()
+    expect(requestPinnedTabCloseConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({ tabLabel: 'Docs', onConfirm: expect.any(Function) })
+    )
   })
 
   it('closes the active browser tab for the requested worktree when main does not provide a tab id', async () => {

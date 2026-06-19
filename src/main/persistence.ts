@@ -40,6 +40,7 @@ import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
 import type {
   PersistedState,
   Project,
+  ProjectUpdateArgs,
   ProjectHostSetup,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
@@ -69,6 +70,10 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
+import {
+  deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
+  normalizeProjectRuntimePreference
+} from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
 import {
   buildTaskSourceContextFromRepo,
@@ -87,6 +92,8 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  getWorktreeCardModeProperties,
+  isLegacyDefaultedCompactWorktreeCardProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION,
@@ -163,6 +170,10 @@ import {
   projectSourceControlAiToLegacyCommitMessageAi,
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
+import {
+  DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
+  SOURCE_CONTROL_TEXT_ACTION_IDS
+} from '../shared/source-control-ai-actions'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
 import {
   DEFAULT_TUI_AGENT_ARGS,
@@ -174,6 +185,7 @@ import {
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
+import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
 import {
   normalizeFolderWorkspaceName,
   normalizeFolderWorkspaces
@@ -228,6 +240,47 @@ function encryptOptionalSecret(value: string | null | undefined): string | null 
 
 function decryptOptionalSecret(value: string | null | undefined): string | null {
   return value ? decrypt(value) : null
+}
+
+function retireLegacyInstructionsForClearedTextActionRecipes(
+  sourceControlAi: GlobalSettings['sourceControlAi'],
+  previousSettings: GlobalSettings
+): GlobalSettings['sourceControlAi'] {
+  if (!sourceControlAi?.actions) {
+    return sourceControlAi
+  }
+
+  const previousSourceControlAi = normalizeSourceControlAiSettings(
+    previousSettings.sourceControlAi,
+    previousSettings.commitMessageAi
+  )
+  let instructionsByOperation = sourceControlAi.instructionsByOperation
+  let changed = false
+  for (const actionId of SOURCE_CONTROL_TEXT_ACTION_IDS) {
+    if (
+      sourceControlAi.actions[actionId]?.commandInputTemplate !==
+      DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
+    ) {
+      continue
+    }
+    if (
+      previousSourceControlAi.actions?.[actionId]?.commandInputTemplate ===
+        DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId] ||
+      instructionsByOperation?.[actionId] !==
+        previousSourceControlAi.instructionsByOperation[actionId]
+    ) {
+      continue
+    }
+    if (instructionsByOperation?.[actionId] === '') {
+      continue
+    }
+    // Why: `{basePrompt}` is the explicit clear state; an empty instruction
+    // shadows rollback `commitMessageAi.customPrompt` during normalize/project.
+    instructionsByOperation = { ...instructionsByOperation, [actionId]: '' }
+    changed = true
+  }
+
+  return changed ? { ...sourceControlAi, instructionsByOperation } : sourceControlAi
 }
 
 // Why: the data-file path must not be a module-level constant. Module-level
@@ -852,8 +905,14 @@ function remapLegacyOnboardingLastCompletedStep(
   lastCompletedStep: number,
   raw: Record<string, unknown>
 ): number {
-  if (raw.outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
+  if (raw.outcome === 'completed' && lastCompletedStep >= 4) {
     return ONBOARDING_FINAL_STEP
+  }
+  // Why: v3 was the four-step flow before the Windows terminal preference
+  // page. Step 4 already meant notifications, so open progress should resume
+  // there rather than treating it as the newly inserted Windows step.
+  if (raw.flowVersion === 3) {
+    return Math.min(4, lastCompletedStep)
   }
   // Why: v2 was the five-step flow; missing/older versions were seven-step
   // data where step 4 was removed agent setup, not completed integrations.
@@ -1008,11 +1067,8 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   return onboarding.closedAt !== null || persistedDismissed === true
 }
 
-// Why: read a settings field that was removed from the GlobalSettings type
-// but still round-trips on disk via the ...parsed.settings spread. One-shot
-// use only — for the inline-agents default-on migration's Case B discriminator.
-// Delete with the migration in the cleanup release (2+ stable releases after
-// _inlineAgentsDefaultedForAllUsers ships).
+// Why: read a settings field that was removed from GlobalSettings but can
+// still exist on disk. One-shot use for the inline-agents migration.
 function readDeprecatedExperimentFlag(parsed: PersistedState | undefined): boolean {
   return (
     (parsed?.settings as { experimentalAgentDashboard?: boolean } | undefined)
@@ -1926,6 +1982,9 @@ function mergeProjectHostSetupCompatibilityState(
   repos: readonly Repo[]
 ): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
   const projection = projectHostSetupProjectionFromRepos(repos)
+  const existingProjectsById = new Map(
+    (state.projects ?? []).map((project) => [project.id, project])
+  )
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
@@ -1946,8 +2005,18 @@ function mergeProjectHostSetupCompatibilityState(
       ...project,
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
+  const projectedProjects = projection.projects.map((project) => {
+    const existingProject = existingProjectsById.get(project.id)
+    return existingProject?.localWindowsRuntimePreference
+      ? {
+          ...project,
+          localWindowsRuntimePreference: existingProject.localWindowsRuntimePreference,
+          updatedAt: Math.max(project.updatedAt, existingProject.updatedAt)
+        }
+      : project
+  })
   return {
-    projects: [...projection.projects, ...independentProjects],
+    projects: [...projectedProjects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
   }
 }
@@ -2583,6 +2652,16 @@ export class Store {
         ) {
           migratedDisabledTuiAgents.push('claude-agent-teams')
         }
+        const migratedWindowsRuntimeDefault =
+          parsed.settings?.localWindowsRuntimeDefault === undefined
+            ? deriveGlobalWindowsRuntimeDefaultFromLegacySettings(parsed.settings).defaultRuntime
+            : parsed.settings.localWindowsRuntimeDefault
+        if (
+          parsed.settings?.localWindowsRuntimeDefault === undefined &&
+          migratedWindowsRuntimeDefault.kind === 'wsl'
+        ) {
+          this.loadNeedsSave = true
+        }
         if (!autoRenameBranchFromWorkDefaultedOn) {
           this.loadNeedsSave = true
         }
@@ -2594,6 +2673,10 @@ export class Store {
           this.loadNeedsSave = true
         }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
+        const loadedCompactWorktreeCards =
+          parsed.settings?.compactWorktreeCards ??
+          parsed.settings?.experimentalCompactWorktreeCards ??
+          defaults.settings.compactWorktreeCards
         result = {
           ...defaults,
           ...parsed,
@@ -2634,13 +2717,11 @@ export class Store {
             experimentalActivityDefaultedOffForAllUsers: true,
             // Why: compact worktree cards graduated from Experimental; preserve
             // the old opt-in for profiles written during the rollout.
-            compactWorktreeCards:
-              parsed.settings?.compactWorktreeCards ??
-              parsed.settings?.experimentalCompactWorktreeCards ??
-              defaults.settings.compactWorktreeCards,
+            compactWorktreeCards: loadedCompactWorktreeCards,
             experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
+            localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
             floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -2653,6 +2734,9 @@ export class Store {
               parsed.settings?.terminalCustomThemes
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            // Why: persisted settings can be user-edited or written by older
+            // builds; keep tray-minimize false unless the stored value is true.
+            minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
@@ -2725,33 +2809,6 @@ export class Store {
             ) {
               this.loadNeedsSave = true
             }
-            // Why: the 'inline-agents' card property was added after the
-            // feature shipped behind an experimental toggle. Now that the
-            // feature is default-on for everyone, every existing user needs
-            // 'inline-agents' appended to their persisted
-            // worktreeCardProperties on first load after upgrade so the
-            // inline agent rows render without further opt-in. A flag
-            // prevents re-firing so a deliberate uncheck from the Workspaces
-            // view options menu sticks across restarts.
-            //
-            // TRAP — do not key this on `_inlineAgentsDefaultedForExperiment`.
-            // That legacy flag was stamped unconditionally on every successful
-            // load() in prior builds, regardless of whether the experiment was
-            // toggled on. Every prior-RC user therefore already has it set to
-            // true on disk, including the opt-out cohort this widened
-            // migration was specifically written to reach. Gating on the
-            // legacy flag would silently skip exactly those users. The
-            // dedicated `_inlineAgentsDefaultedForAllUsers` flag exists so
-            // the new default-on migration can distinguish "already migrated
-            // under the new rules" from "happened to launch a prior build".
-            //
-            // Case B preservation: a user who turned the experiment on and then
-            // deliberately unchecked 'inline-agents' from the sidebar options
-            // menu has the same on-disk shape as a never-touched user. The
-            // discriminator below reads the deprecated `experimentalAgentDashboard`
-            // value as a one-shot signal. Both branches of the migration stamp
-            // `_inlineAgentsDefaultedForAllUsers`, so subsequent launches don't
-            // depend on the deprecated value continuing to round-trip.
             const rawCardProps = parsed.ui?.worktreeCardProperties
             const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
             const expandedCardPropsMigrated =
@@ -2766,9 +2823,16 @@ export class Store {
               !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
+            const needsLegacyDefaultedCompactMigration =
+              loadedCompactWorktreeCards &&
+              parsed.ui?._worktreeCardModeDefaulted === true &&
+              isLegacyDefaultedCompactWorktreeCardProperties(rawCardProps)
             const migratedCardProps = (() => {
               if (!Array.isArray(rawCardProps)) {
                 return undefined
+              }
+              if (needsLegacyDefaultedCompactMigration) {
+                return getWorktreeCardModeProperties('Compact')
               }
               const candidate = needsInlineAgentsMigration
                 ? [...rawCardProps, 'inline-agents' as const]
@@ -2814,6 +2878,11 @@ export class Store {
             }
             return {
               ...defaults.ui,
+              // Why: missing card properties should follow the persisted card
+              // layout mode; explicit property choices are preserved below.
+              worktreeCardProperties: getWorktreeCardModeProperties(
+                loadedCompactWorktreeCards ? 'Compact' : 'Default'
+              ),
               ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
               // Why: migrate once from the retired Appearance setting only
               // when no explicit persisted chrome preference exists yet.
@@ -3185,6 +3254,25 @@ export class Store {
 
   getProjects(): Project[] {
     return [...this.state.projects]
+  }
+
+  updateProject(id: string, updates: ProjectUpdateArgs['updates']): Project | null {
+    const project = this.state.projects.find((entry) => entry.id === id)
+    if (!project) {
+      return null
+    }
+    if ('localWindowsRuntimePreference' in updates) {
+      if (updates.localWindowsRuntimePreference === undefined) {
+        delete project.localWindowsRuntimePreference
+      } else {
+        project.localWindowsRuntimePreference = normalizeProjectRuntimePreference(
+          updates.localWindowsRuntimePreference
+        )
+      }
+    }
+    project.updatedAt = Date.now()
+    this.scheduleSave()
+    return { ...project }
   }
 
   getProjectHostSetups(): ProjectHostSetup[] {
@@ -4519,6 +4607,12 @@ export class Store {
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     const sanitizedUpdates = { ...updates }
+    // Why: coerce strictly to boolean here (not at the IPC edge) so every write
+    // path is covered and a non-bool renderer payload can never persist a
+    // truthy non-bool that later reads as "tray-minimize on".
+    if ('minimizeToTrayOnClose' in updates) {
+      sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
+    }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
@@ -4592,6 +4686,10 @@ export class Store {
         ? { ...this.state.settings.telemetry, ...sanitizedUpdates.telemetry }
         : this.state.settings.telemetry
     if ('sourceControlAi' in sanitizedUpdates) {
+      sanitizedUpdates.sourceControlAi = retireLegacyInstructionsForClearedTextActionRecipes(
+        sanitizedUpdates.sourceControlAi,
+        this.state.settings
+      )
       const normalizedSourceControlAi = normalizeSourceControlAiSettings(
         sanitizedUpdates.sourceControlAi,
         this.state.settings.commitMessageAi
@@ -4656,6 +4754,10 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
       ),
+      syncTaskStatusFromWorkspaceBoard: this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      // Why: strict boolean coercion so a missing/legacy value reads as false
+      // (first-run notice still fires) rather than leaking a non-bool through.
+      trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds
@@ -4675,6 +4777,7 @@ export class Store {
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
     const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
+    const previousUI = this.getUI()
     const currentUI = {
       ...getDefaultUIState(),
       ...stripMainOwnedTelemetryMarkerFromUI(this.state.ui)
@@ -4695,7 +4798,7 @@ export class Store {
               this.state.ui?.rightSidebarExplorerView,
               nextRightSidebarTab
             )
-    this.state.ui = {
+    const nextUI = {
       ...currentUI,
       ...sanitizedUpdates,
       groupBy: sanitizedUpdates.groupBy
@@ -4727,6 +4830,10 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         sanitizedUpdates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
       ),
+      syncTaskStatusFromWorkspaceBoard:
+        sanitizedUpdates.syncTaskStatusFromWorkspaceBoard !== undefined
+          ? sanitizedUpdates.syncTaskStatusFromWorkspaceBoard === true
+          : this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
       ),
@@ -4769,6 +4876,10 @@ export class Store {
             )
           : normalizeFeatureInteractions(this.state.ui?.featureInteractions)
     }
+    if (persistedUIValuesEqual(previousUI, nextUI)) {
+      return
+    }
+    this.state.ui = nextUI
     this.scheduleSave()
     this.notifyUIChanged()
   }

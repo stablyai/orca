@@ -19,6 +19,59 @@ import {
 const isWindows = process.platform === 'win32'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 const editableRolePattern = /^\s*(\d+)\s+(document|edit|text|pane)(?:\s|$)/im
+const pasteMutationTimeoutMs = 5_000
+
+// Why: Notepad accessibility text can lag immediately after clipboard paste;
+// poll before failing so the smoke tests measure outcome, not snapshot timing.
+async function waitForNotepadText(app: string, marker: string): Promise<ComputerSnapshotResult> {
+  const deadline = Date.now() + pasteMutationTimeoutMs
+  let lastSnapshot: ComputerSnapshotResult | null = null
+  while (Date.now() < deadline) {
+    const snapshot = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+      (await runOrcaCli(['computer', 'get-app-state', '--app', app, '--no-screenshot', '--json']))
+        .stdout
+    ).result
+    if (snapshot.snapshot.treeText.includes(marker)) {
+      return snapshot
+    }
+    lastSnapshot = snapshot
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  }
+  throw new Error(
+    `Timed out waiting for Notepad text: ${marker}. ` +
+      `Last treeText length: ${(lastSnapshot?.snapshot.treeText ?? '').length}`
+  )
+}
+
+async function focusNotepadDocument(app: string): Promise<void> {
+  const snapshot = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+    (
+      await runOrcaCli([
+        'computer',
+        'get-app-state',
+        '--app',
+        app,
+        '--restore-window',
+        '--no-screenshot',
+        '--json'
+      ])
+    ).stdout
+  )
+  const documentIndex = findRoleIndex(snapshot.result.snapshot.treeText, editableRolePattern)
+  expect(documentIndex).toBeGreaterThanOrEqual(0)
+
+  await runOrcaCli([
+    'computer',
+    'click',
+    '--app',
+    app,
+    '--element-index',
+    String(documentIndex),
+    '--restore-window',
+    '--no-screenshot',
+    '--json'
+  ])
+}
 
 describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', () => {
   beforeAll(async () => {
@@ -82,6 +135,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
   test('paste-text mutates the test-owned document', async () => {
     const app = getNotepadAppSelector()
     const marker = `orca-windows-paste-${Date.now()}`
+    await focusNotepadDocument(app)
     const action = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -103,16 +157,14 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
       reason: 'clipboard_paste'
     })
 
-    const after = parseJsonOutput<{ result: ComputerSnapshotResult }>(
-      (await runOrcaCli(['computer', 'get-app-state', '--app', app, '--no-screenshot', '--json']))
-        .stdout
-    )
-    expect(after.result.snapshot.treeText).toContain(marker)
+    const after = await waitForNotepadText(app, marker)
+    expect(after.snapshot.treeText).toContain(marker)
   })
 
   test('Unicode payloads survive paste-text', async () => {
     const app = getNotepadAppSelector()
     const unicode = `orca unicode café Ω 漢字 ${Date.now()}`
+    await focusNotepadDocument(app)
     const pasted = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -134,6 +186,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Notepad)', (
   test('hotkey and paste-text can replace the document selection', async () => {
     const app = getNotepadAppSelector()
     const first = `orca-windows-first-${Date.now()}`
+    await focusNotepadDocument(app)
     await runOrcaCli([
       'computer',
       'paste-text',

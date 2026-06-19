@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react'
-import { X, ChevronDown, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -7,10 +6,10 @@ import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
+import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
-import { translate } from '@/i18n/i18n'
 
 // Why: the dashboard tracks its own rollup states (incl. 'idle'); narrow to the
 // shared dot states for rendering, falling back to 'idle' for any unknown
@@ -153,36 +152,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
   const [expanded, setExpanded] = useState(false)
-  // Why: stop propagation so clicking the X doesn't also fire the worktree
-  // card's click handler (which navigates away from the dashboard).
-  const handleDismiss = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      onDismiss(agent.paneKey)
-    },
-    [onDismiss, agent.paneKey]
-  )
-  // Why: the chevron toggles expand-collapse and must not propagate — clicks
-  // on it would otherwise bubble to the row's activate handler and navigate
-  // away the instant the user tried to reveal the full text. Stop mousedown
-  // too so focus-based navigation on the parent can't fire first.
-  const handleToggleExpand = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
+  const handleToggleExpanded = useCallback(() => {
     setExpanded((prev) => !prev)
-  }, [])
-  const stopMouseDown = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-  }, [])
-  // Why: nested buttons (dismiss X, expand chevron) are real <button>s whose
-  // native Enter/Space handling fires their onClick. Stopping Enter/Space
-  // propagation (not preventDefault) preserves native button activation while
-  // defending against any ancestor key handlers that might otherwise react to
-  // the bubbled event.
-  const stopKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.stopPropagation()
-    }
   }, [])
   // Why: agent rows navigate directly to the agent's own tab, while the
   // surrounding worktree card navigates to whatever tab the worktree last had
@@ -207,16 +178,6 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       ) {
         return
       }
-      e.preventDefault()
-      e.stopPropagation()
-      if (sendTargetStatus === 'eligible') {
-        onSendTargetClick?.(agent.paneKey)
-      }
-    },
-    [agent.paneKey, onSendTargetClick, sendTargetStatus]
-  )
-  const handleInlineSendTargetClick = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
       e.preventDefault()
       e.stopPropagation()
       if (sendTargetStatus === 'eligible') {
@@ -267,12 +228,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // content already fits is a no-op; the cost of an occasionally inert
   // toggle is much lower than layout jitter on every live row.
 
+  const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
+  const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
+  const relativeTimestamp = doneTimeAgo ?? startedTimeAgo
   const tsParts: string[] = []
-  if (startedAt !== null) {
-    tsParts.push(`started ${formatTimeAgo(startedAt, now)}`)
+  if (startedTimeAgo !== null) {
+    tsParts.push(`started ${startedTimeAgo}`)
   }
-  if (doneAt !== null) {
-    tsParts.push(`done ${formatTimeAgo(doneAt, now)}`)
+  if (doneTimeAgo !== null) {
+    tsParts.push(`done ${doneTimeAgo}`)
   }
 
   const titleParts = sendTargetDisabledReason ? [sendTargetDisabledReason, ...tsParts] : tsParts
@@ -415,120 +379,16 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             +{childAgentCount}
           </span>
         )}
-        {/* Why: right cluster keeps passive time and dismiss affordance in one
-            place. State belongs in the leading gutter; repeating it here as
-            text makes interrupted rows look like the old badge treatment. */}
-        <span className="relative ml-auto flex h-3.5 w-12 shrink-0 items-center justify-end">
-          {(sendTargetStatus === "eligible" || sendTargetStatus === "sending") && (
-            <button
-              type="button"
-              onClick={handleInlineSendTargetClick}
-              onMouseDown={stopMouseDown}
-              onKeyDown={stopKeyDown}
-              disabled={sendTargetStatus === 'sending'}
-              className={cn(
-                'worktree-agent-send-target-button absolute right-0 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none transition-[background-color,border-color,color,opacity]',
-                sendTargetStatus === 'sending' && 'cursor-progress opacity-75'
-              )}
-              aria-label={translate("auto.components.dashboard.DashboardAgentRow.0272969e28", "Send to this agent")}
-              title={translate("auto.components.dashboard.DashboardAgentRow.0272969e28", "Send to this agent")}
-            >
-              <Send className="size-3" />
-              <span>{translate("auto.components.dashboard.DashboardAgentRow.912e136cd9", "Send")}</span>
-            </button>
-          )}
-          {/* Why: timestamp and dismiss-X share a single slot so passive
-              rows show "time ago" and hovered rows swap in the X — no
-              reserved-space gap, no competing columns. Grid stacks both
-              children in cell 1,1 so the slot width is the larger of the
-              two (usually the timestamp, e.g. "just now" / "12m ago"),
-              which keeps the chevron's column stable whether or not the
-              row is hovered. Using opacity (not display:none) lets us
-              fade the crossfade instead of snapping, and keyboard focus
-              on the hidden X still activates it because `opacity-0`
-              doesn't remove it from the tab order. */}
-          {!sendTargetStatus && (startedAt !== null || doneAt !== null) && (
-            <span className="relative grid grid-cols-1 grid-rows-1 shrink-0 items-center justify-items-end">
-              <span
-                className={cn(
-                  '[grid-area:1/1] pointer-events-none text-[10px] leading-none text-muted-foreground/60',
-                  'transition-opacity duration-150',
-                  'group-hover/agent-row:opacity-0'
-                )}
-                aria-hidden
-              >
-                {doneAt !== null
-                  ? formatTimeAgo(doneAt, now)
-                  : startedAt !== null
-                    ? formatTimeAgo(startedAt, now)
-                    : null}
-              </span>
-              <button
-                type="button"
-                onClick={handleDismiss}
-                onMouseDown={stopMouseDown}
-                onKeyDown={stopKeyDown}
-                className={cn(
-                  '[grid-area:1/1] inline-flex items-center justify-center text-muted-foreground/70 hover:text-foreground',
-                  'opacity-0 transition-opacity duration-150',
-                  'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
-                )}
-                aria-label={translate("auto.components.dashboard.DashboardAgentRow.b06e13fcf7", "Dismiss agent")}
-                title={translate("auto.components.dashboard.DashboardAgentRow.5ae84475cc", "Dismiss")}
-              >
-                <X className="size-3.5" />
-              </button>
-            </span>
-          )}
-          {/* Why: when there is no timestamp yet (fresh agent, never
-              reported), the grid slot above does not render — show the X
-              as a standalone hover-only control so dismiss is still
-              reachable. Rare path; most rows have a timestamp the moment
-              they start. */}
-          {!sendTargetStatus && startedAt === null && doneAt === null && (
-            <button
-              type="button"
-              onClick={handleDismiss}
-              onMouseDown={stopMouseDown}
-              onKeyDown={stopKeyDown}
-              className={cn(
-                'inline-flex shrink-0 items-center justify-center text-muted-foreground/70 hover:text-foreground',
-                'opacity-0 transition-opacity duration-150',
-                'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
-              )}
-              aria-label={translate("auto.components.dashboard.DashboardAgentRow.b06e13fcf7", "Dismiss agent")}
-              title={translate("auto.components.dashboard.DashboardAgentRow.5ae84475cc", "Dismiss")}
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
-          {/* Why: chevron points down when collapsed (content below is
-              available) and rotates 180° to point up when expanded
-              (content is showing above the fold line). Single glyph
-              with a transform animates smoothly; swapping between two
-              glyphs (ChevronDown / ChevronUp) would snap because the
-              old node unmounts. Invisible placeholder keeps vertical
-              alignment stable across rows when nothing is expandable
-              so the row-trailing edge stays stable. */}
-          {!hideExpand && (
-            <button
-              type="button"
-              onClick={handleToggleExpand}
-              onMouseDown={stopMouseDown}
-              onKeyDown={stopKeyDown}
-              className="inline-flex shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
-              aria-label={expanded ? translate("auto.components.dashboard.DashboardAgentRow.a41fb5376e", "Collapse details") : translate("auto.components.dashboard.DashboardAgentRow.a743da52ff", "Expand details")}
-              aria-expanded={expanded}
-            >
-              <ChevronDown
-                className={cn(
-                  'size-3.5 transition-transform duration-150',
-                  expanded && 'rotate-180'
-                )}
-              />
-            </button>
-          )}
-        </span>
+        <DashboardAgentRowTrailingControls
+          paneKey={agent.paneKey}
+          relativeTimestamp={relativeTimestamp}
+          expanded={expanded}
+          hideExpand={hideExpand}
+          sendTargetStatus={sendTargetStatus}
+          onDismiss={onDismiss}
+          onToggleExpanded={handleToggleExpanded}
+          onSendTargetClick={onSendTargetClick}
+        />
       </div>
       <DashboardAgentRowToolStep
         expanded={expanded}

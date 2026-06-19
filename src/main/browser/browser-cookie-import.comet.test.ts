@@ -14,6 +14,11 @@ vi.mock('electron', () => ({
 }))
 
 import { BROWSER_FAMILY_LABELS } from '../../shared/constants'
+
+function slashPath(pathValue: string): string {
+  return pathValue.replaceAll('\\', '/')
+}
+
 describe('detectInstalledBrowsers — Comet', () => {
   const originalPlatform = process.platform
   const originalHome = process.env.HOME
@@ -41,16 +46,17 @@ describe('detectInstalledBrowsers — Comet', () => {
       return {
         ...actual,
         existsSync: (p: string) => {
-          if (p.includes('Comet/Default/Network/Cookies')) {
+          const normalizedPath = slashPath(p)
+          if (normalizedPath.includes('Comet/Default/Network/Cookies')) {
             return true
           }
-          if (p.includes('Comet/Local State')) {
+          if (normalizedPath.includes('Comet/Local State')) {
             return true
           }
           return false
         },
         readFileSync: (p: string, enc?: string) => {
-          if (typeof p === 'string' && p.includes('Comet/Local State')) {
+          if (typeof p === 'string' && slashPath(p).includes('Comet/Local State')) {
             return JSON.stringify({ profile: { info_cache: { Default: { name: 'Default' } } } })
           }
           return actual.readFileSync(p as never, enc as never)
@@ -63,7 +69,7 @@ describe('detectInstalledBrowsers — Comet', () => {
     const comet = detected.find((b) => b.family === 'comet')
     expect(comet).toBeDefined()
     expect(comet?.label).toBe('Comet')
-    expect(comet?.cookiesPath).toContain('Comet/Default/Network/Cookies')
+    expect(slashPath(comet?.cookiesPath ?? '')).toContain('Comet/Default/Network/Cookies')
     expect(comet?.keychainService).toBe('Comet Safe Storage')
   })
 
@@ -87,16 +93,17 @@ describe('detectInstalledBrowsers — Comet', () => {
       return {
         ...actual,
         existsSync: (p: string) => {
-          if (p.includes('Comet/Default/Network/Cookies')) {
+          const normalizedPath = slashPath(p)
+          if (normalizedPath.includes('Comet/Default/Network/Cookies')) {
             return true
           }
-          if (p.includes('Comet/Local State')) {
+          if (normalizedPath.includes('Comet/Local State')) {
             return true
           }
           return false
         },
         readFileSync: (p: string, enc?: string) => {
-          if (typeof p === 'string' && p.includes('Comet/Local State')) {
+          if (typeof p === 'string' && slashPath(p).includes('Comet/Local State')) {
             return JSON.stringify({
               profile: {
                 info_cache: {

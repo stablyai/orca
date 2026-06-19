@@ -1,4 +1,5 @@
-import { lazy, type RefObject } from 'react'
+import { type RefObject } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
@@ -22,6 +23,7 @@ type DiffSectionBodyProps = {
     startLine?: number
     top: number
     left?: number
+    lineHeight: number
   } | null
   addLineCommentPlaceholder?: string
   addLineCommentLabel?: string
@@ -80,6 +82,7 @@ export function DiffSectionBody({
           startLine={popover.startLine}
           top={popover.top}
           left={popover.left}
+          lineHeight={popover.lineHeight}
           placeholder={addLineCommentPlaceholder}
           submitLabel={addLineCommentLabel}
           submittingLabel="Posting…"

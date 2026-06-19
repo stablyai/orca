@@ -16,6 +16,7 @@ import {
   type DecodedFrame,
   MessageType
 } from './protocol'
+import { relayTestSocketPath } from './relay-test-socket-path'
 
 // Why: --connect normally calls process.exit on mismatch / fatal handshake
 // errors. Stub it for tests so the harness sees a thrown sentinel error
@@ -38,7 +39,7 @@ describe('handshake round-trip over a real Socket pair', () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-handshake-test-'))
-    sockPath = join(tmpDir, 'relay.sock')
+    sockPath = relayTestSocketPath(tmpDir)
     exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
       throw new ExitCalled(code ?? 0)
     }) as never)

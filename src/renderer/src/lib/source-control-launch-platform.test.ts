@@ -30,4 +30,26 @@ describe('resolveSourceControlLaunchPlatform', () => {
       })
     ).toBe('win32')
   })
+
+  it('uses linux shell planning for Windows paths forced to local WSL runtime', async () => {
+    const { resolveSourceControlLaunchPlatform } = await import('./source-control-launch-platform')
+
+    expect(
+      resolveSourceControlLaunchPlatform({
+        connectionId: null,
+        worktreePath: String.raw`C:\Users\alice\repo`,
+        projectRuntime: {
+          status: 'resolved',
+          runtime: {
+            kind: 'wsl',
+            hostPlatform: 'wsl',
+            distro: 'Ubuntu',
+            reason: 'project-override',
+            projectId: 'project-1',
+            cacheKey: 'project-1:wsl:Ubuntu'
+          }
+        }
+      })
+    ).toBe('linux')
+  })
 })

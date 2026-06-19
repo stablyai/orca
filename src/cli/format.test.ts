@@ -95,10 +95,10 @@ describe('formatCliError', () => {
       ok: false,
       error: {
         code: 'LINEAGE_PARENT_NOT_FOUND',
-        message: 'Parent workspace was not found.',
+        message: 'Parent selector was not found.',
         data: {
           nextSteps: [
-            'Run `orca worktree list` and pass a valid --parent-worktree selector.',
+            'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
             'Retry with --no-parent to create without lineage.',
             123
           ]
@@ -109,8 +109,8 @@ describe('formatCliError', () => {
 
     expect(formatCliError(error)).toBe(
       [
-        'Parent workspace was not found.',
-        'Next step: Run `orca worktree list` and pass a valid --parent-worktree selector.',
+        'Parent selector was not found.',
+        'Next step: Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
         'Next step: Retry with --no-parent to create without lineage.'
       ].join('\n')
     )

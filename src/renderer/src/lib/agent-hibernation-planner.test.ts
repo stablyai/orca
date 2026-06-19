@@ -82,7 +82,11 @@ function plannedWorktrees(input: AgentHibernationPlannerSnapshot): string[] {
   return planAgentHibernationCandidates(input).map((candidate) => candidate.worktreeId)
 }
 
-describe('agent hibernation planner', () => {
+function plannedPaneKeys(input: AgentHibernationPlannerSnapshot): string[] {
+  return planAgentHibernationCandidates(input).map((candidate) => candidate.paneKey)
+}
+
+describe('agent sleep planner', () => {
   it('selects nothing when disabled, active, or foreground', () => {
     expect(
       plannedWorktrees(
@@ -128,10 +132,26 @@ describe('agent hibernation planner', () => {
     ).toEqual(['wt-bg'])
   })
 
-  it('rejects untracked live PTYs and already-sleeping panes', () => {
+  it('emits a pane candidate when a sibling shell PTY is live', () => {
     expect(
-      plannedWorktrees(snapshot({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] } }))
-    ).toEqual([])
+      planAgentHibernationCandidates(
+        snapshot({ ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] } })
+      )
+    ).toMatchObject([
+      {
+        id: `wt-bg|tab-1:${LEAF}`,
+        worktreeId: 'wt-bg',
+        paneKey: `tab-1:${LEAF}`,
+        tabId: 'tab-1',
+        leafId: LEAF,
+        targetPtyIds: ['pty-1'],
+        expectedRuntimePtyIds: ['pty-1'],
+        paneKeys: [`tab-1:${LEAF}`]
+      }
+    ])
+  })
+
+  it('rejects panes without live PTYs and already-sleeping panes', () => {
     expect(plannedWorktrees(snapshot({ ptyIdsByTabId: { 'tab-1': [] } }))).toEqual([])
     expect(
       plannedWorktrees(
@@ -144,14 +164,126 @@ describe('agent hibernation planner', () => {
     expect(plannedWorktrees(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toEqual([])
   })
 
-  it('selects a worktree when all live PTYs are eligible done agents', () => {
+  it('does not let a mobile-locked sibling PTY block an unlocked target pane', () => {
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-shell'] },
+          mobileLockedPtyIds: ['pty-shell']
+        })
+      )
+    ).toEqual([`tab-1:${LEAF}`])
+  })
+
+  it('selects runtime-backed live PTYs when the renderer live map is empty', () => {
+    const [candidate] = planAgentHibernationCandidates(
+      snapshot({
+        ptyIdsByTabId: { 'tab-1': [] },
+        runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['pty-1'] },
+        runtimeLivenessRequiredWorktreeIds: ['wt-bg']
+      })
+    )
+
+    expect(candidate).toMatchObject({
+      worktreeId: 'wt-bg',
+      paneKeys: [`tab-1:${LEAF}`],
+      expectedRuntimePtyIds: ['pty-1']
+    })
+  })
+
+  it('matches wrapped remote renderer PTY IDs to raw runtime PTY IDs', () => {
+    const [candidate] = planAgentHibernationCandidates(
+      snapshot({
+        terminalLayoutsByTabId: { 'tab-1': layout(LEAF, 'remote:env-1@@terminal-1') },
+        ptyIdsByTabId: { 'tab-1': ['remote:env-1@@terminal-1'] },
+        runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['terminal-1'] },
+        runtimeLivenessRequiredWorktreeIds: ['wt-bg']
+      })
+    )
+
+    expect(candidate).toMatchObject({
+      worktreeId: 'wt-bg',
+      paneKeys: [`tab-1:${LEAF}`],
+      expectedRuntimePtyIds: ['terminal-1']
+    })
+  })
+
+  it('does not select layout-only stale PTYs without runtime liveness', () => {
+    expect(
+      plannedWorktrees(
+        snapshot({
+          ptyIdsByTabId: { 'tab-1': [] },
+          runtimeLivePtyIdsByWorktreeId: { 'wt-bg': [] },
+          runtimeLivenessRequiredWorktreeIds: ['wt-bg']
+        })
+      )
+    ).toEqual([])
+    expect(
+      plannedWorktrees(
+        snapshot({
+          ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+          runtimeLivePtyIdsByWorktreeId: { 'wt-bg': [] },
+          runtimeLivenessRequiredWorktreeIds: ['wt-bg']
+        })
+      )
+    ).toEqual([])
+    expect(
+      plannedWorktrees(
+        snapshot({
+          ptyIdsByTabId: { 'tab-1': [] },
+          runtimeLivenessRequiredWorktreeIds: ['wt-bg']
+        })
+      )
+    ).toEqual([])
+  })
+
+  it('allows runtime-backed worktrees with sibling live PTYs', () => {
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          ptyIdsByTabId: { 'tab-1': [] },
+          runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['pty-1', 'pty-shell'] },
+          runtimeLivenessRequiredWorktreeIds: ['wt-bg']
+        })
+      )
+    ).toEqual([`tab-1:${LEAF}`])
+  })
+
+  it('applies mobile locks to runtime-backed PTYs', () => {
+    expect(
+      plannedWorktrees(
+        snapshot({
+          ptyIdsByTabId: { 'tab-1': [] },
+          runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['pty-1'] },
+          runtimeLivenessRequiredWorktreeIds: ['wt-bg'],
+          mobileLockedPtyIds: ['pty-1']
+        })
+      )
+    ).toEqual([])
+  })
+
+  it('applies mobile locks across wrapped remote and raw runtime PTY IDs', () => {
+    expect(
+      plannedWorktrees(
+        snapshot({
+          terminalLayoutsByTabId: { 'tab-1': layout(LEAF, 'remote:env-1@@terminal-1') },
+          ptyIdsByTabId: { 'tab-1': ['remote:env-1@@terminal-1'] },
+          runtimeLivePtyIdsByWorktreeId: { 'wt-bg': ['terminal-1'] },
+          runtimeLivenessRequiredWorktreeIds: ['wt-bg'],
+          mobileLockedPtyIds: ['remote:env-1@@terminal-1']
+        })
+      )
+    ).toEqual([])
+  })
+
+  it('selects each eligible done agent pane independently', () => {
     expect(plannedWorktrees(snapshot())).toEqual(['wt-bg'])
     const second = entry({
       paneKey: `tab-1:${OTHER_LEAF}`,
       providerSession: { key: 'session_id', id: 'session-2' }
     })
     expect(
-      plannedWorktrees(
+      plannedPaneKeys(
         snapshot({
           terminalLayoutsByTabId: {
             'tab-1': {
@@ -170,7 +302,7 @@ describe('agent hibernation planner', () => {
           agentStatusByPaneKey: { [`tab-1:${LEAF}`]: entry(), [second.paneKey]: second }
         })
       )
-    ).toEqual(['wt-bg'])
+    ).toEqual([`tab-1:${LEAF}`, `tab-1:${OTHER_LEAF}`])
   })
 
   it('requires two stable ticks and resets on signature changes', () => {

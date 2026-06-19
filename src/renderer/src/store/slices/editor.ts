@@ -118,6 +118,33 @@ type BranchCompareLike = Pick<
   'baseRef' | 'baseOid' | 'compareRef' | 'headOid' | 'mergeBase'
 >
 
+function getKnownGitHead(head: string | null | undefined): string | undefined {
+  const trimmed = head?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+function createLoadingBranchCompareSummary(baseRef: string): GitBranchCompareSummary {
+  return {
+    baseRef,
+    baseOid: null,
+    compareRef: 'HEAD',
+    headOid: null,
+    mergeBase: null,
+    changedFiles: 0,
+    status: 'loading'
+  }
+}
+
+function branchCompareMatchesStatusHead(
+  summary: GitBranchCompareSummary,
+  statusHead: string
+): boolean {
+  const summaryHead = getKnownGitHead(summary.headOid)
+  // Why: git status reports '(initial)' for unborn branches, while branch
+  // compare represents that same state as a null headOid.
+  return summaryHead === statusHead || (statusHead === '(initial)' && summary.headOid === null)
+}
+
 type CommitCompareLike = Pick<
   GitCommitCompareSummary,
   'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
@@ -222,9 +249,17 @@ export type OpenFile = {
    * tab from the tree bumps this so the panel refetches instead of reusing a
    * stale snapshot. */
   diffContentReloadNonce?: number
+  /** Why: terminal/agent links can be the user's manual recovery path when a
+   * remote watcher misses an external write. Bumping this refetches clean tabs. */
+  fileContentReloadNonce?: number
   /** Why: CI check full-details tabs are virtual editor tabs backed by fetched
    *  PR check-run metadata instead of a file on disk. */
   checkRunDetails?: OpenCheckRunDetailsState
+  /** Why: on the web client an editor tab can either be mirrored from the host
+   *  runtime's session snapshot or opened locally by the web user. Only mirrored
+   *  tabs may be culled when they vanish from a later host snapshot; locally
+   *  opened tabs have no host counterpart and must survive snapshot syncs. */
+  mirroredFromRuntimeSession?: boolean
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
 }
 
@@ -240,7 +275,12 @@ export type MarkdownViewMode = 'source' | 'rich' | 'preview'
 export type EditorViewMode = 'edit' | 'changes'
 
 /** Enough state to restore a tab via `openFile` after `closeFile` (id is always filePath). */
-export type ClosedEditorTabSnapshot = Omit<OpenFile, 'id' | 'isDirty'>
+// Why: omit mirroredFromRuntimeSession so a user-reopened tab is never treated
+// as host-owned; otherwise the web session sync could cull it on the next snapshot.
+export type ClosedEditorTabSnapshot = Omit<
+  OpenFile,
+  'id' | 'isDirty' | 'mirroredFromRuntimeSession'
+>
 
 const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 
@@ -248,6 +288,7 @@ type EditorOpenTargetOptions = {
   targetGroupId?: string
   preview?: boolean
   runtimeEnvironmentId?: string | null
+  forceContentReload?: boolean
 }
 
 type GitRuntimeOperationOptions = {
@@ -351,6 +392,7 @@ export type EditorSlice = {
   rightSidebarWidth: number
   rightSidebarTab: ActiveRightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
+  rightSidebarRouteRequestId: number
   rightSidebarTabByWorktree: Record<string, ActiveRightSidebarTab>
   rightSidebarExplorerViewByWorktree: Record<string, RightSidebarExplorerView>
   activityBarPosition: ActivityBarPosition
@@ -394,6 +436,7 @@ export type EditorSlice = {
       targetGroupId?: string
       recordReplacedPreview?: boolean
       suppressActiveRuntimeFallback?: boolean
+      forceContentReload?: boolean
     }
   ) => void
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
@@ -513,6 +556,7 @@ export type EditorSlice = {
 
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
+  gitStatusHeadByWorktree: Record<string, string>
   // Why: when status was truncated at the entry limit (a repo with an enormous
   // un-ignored folder), the SCM view shows a "too many changes" state and
   // polling pauses. `{ limit }` when huge, absent otherwise.
@@ -597,7 +641,13 @@ export type EditorSlice = {
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
   gitBranchCompareRequestKeyByWorktree: Record<string, string>
-  beginGitBranchCompareRequest: (worktreeId: string, requestKey: string, baseRef: string) => void
+  gitBranchCompareRequestStatusHeadByWorktree: Record<string, string | null>
+  beginGitBranchCompareRequest: (
+    worktreeId: string,
+    requestKey: string,
+    baseRef: string,
+    options?: { preserveExistingSummary?: boolean }
+  ) => void
   setGitBranchCompareResult: (
     worktreeId: string,
     requestKey: string,
@@ -887,6 +937,19 @@ function withDiffContentReloadRequest(file: OpenFile): OpenFile {
     ...file,
     diffContentReloadNonce: (file.diffContentReloadNonce ?? 0) + 1
   }
+}
+
+function shouldRequestExistingFileContentReload(
+  existing: OpenFile,
+  nextMode: OpenFile['mode'],
+  options: EditorOpenTargetOptions | undefined
+): boolean {
+  return (
+    options?.forceContentReload === true &&
+    !existing.isDirty &&
+    (existing.mode === 'edit' || existing.mode === 'markdown-preview') &&
+    (nextMode === 'edit' || nextMode === 'markdown-preview')
+  )
 }
 
 function isEditorFileIdOccupiedByOtherOwner(
@@ -1494,6 +1557,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   rightSidebarWidth: 280,
   rightSidebarTab: 'explorer',
   rightSidebarExplorerView: 'files',
+  rightSidebarRouteRequestId: 0,
   rightSidebarTabByWorktree: {},
   rightSidebarExplorerViewByWorktree: {},
   activityBarPosition: 'top',
@@ -1501,13 +1565,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
   setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
   setRightSidebarTab: (tab) =>
-    set({
+    set((s) => ({
       rightSidebarTab: tab,
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       ...(tab === 'explorer' ? { rightSidebarExplorerView: 'files' as const } : {})
-    }),
+    })),
   setRightSidebarExplorerView: (view) =>
     set((s) => ({
       rightSidebarExplorerView: view,
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       ...(s.activeWorktreeId
         ? {
             rightSidebarExplorerViewByWorktree: {
@@ -1522,6 +1588,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       rightSidebarOpen: true,
       rightSidebarTab: 'explorer',
       rightSidebarExplorerView: 'files',
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       ...(s.activeWorktreeId
         ? {
             rightSidebarExplorerViewByWorktree: {
@@ -1537,6 +1604,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         rightSidebarOpen: true,
         rightSidebarTab: 'explorer' as const,
         rightSidebarExplorerView: 'search' as const,
+        rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
         ...(s.activeWorktreeId
           ? {
               rightSidebarExplorerViewByWorktree: {
@@ -1626,6 +1694,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       rightSidebarOpen: true,
       rightSidebarTab: 'explorer',
       rightSidebarExplorerView: 'files',
+      rightSidebarRouteRequestId: s.rightSidebarRouteRequestId + 1,
       rightSidebarExplorerViewByWorktree: {
         ...s.rightSidebarExplorerViewByWorktree,
         [worktreeId]: 'files'
@@ -1693,6 +1762,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       if (existing) {
         // If opening as non-preview, also pin the existing tab
         const updatedPreview = isPreview ? existing.isPreview : false
+        const fileContentReloadNonce = shouldRequestExistingFileContentReload(
+          existing,
+          file.mode,
+          options
+        )
+          ? (existing.fileContentReloadNonce ?? 0) + 1
+          : existing.fileContentReloadNonce
         const needsExistingUpdate =
           existing.mode !== file.mode ||
           existing.diffSource !== file.diffSource ||
@@ -1706,7 +1782,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.language !== file.language ||
           existing.relativePath !== file.relativePath ||
           existing.worktreeId !== file.worktreeId ||
-          existing.runtimeEnvironmentId !== runtimeEnvironmentId
+          existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
+          existing.fileContentReloadNonce !== fileContentReloadNonce
         if (!needsExistingUpdate) {
           return activeResult
         }
@@ -1730,7 +1807,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   conflict: file.conflict,
                   skippedConflicts: file.skippedConflicts,
                   conflictReview: file.conflictReview,
-                  isPreview: updatedPreview
+                  isPreview: updatedPreview,
+                  fileContentReloadNonce
                 }
               : f
           ),
@@ -1826,7 +1904,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           // semantically *wants* silent eviction) is unaffected.
           let nextRecentlyClosed = s.recentlyClosedEditorTabsByWorktree
           if (recordReplacedPreview && replacedPreview.id !== id) {
-            const { id: _rid, isDirty: _rdirty, ...snap } = replacedPreview
+            const {
+              id: _rid,
+              isDirty: _rdirty,
+              mirroredFromRuntimeSession: _rmirrored,
+              ...snap
+            } = replacedPreview
             const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
             nextRecentlyClosed = {
               ...s.recentlyClosedEditorTabsByWorktree,
@@ -2191,7 +2274,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         !shouldDeleteFromDisk &&
         closedFile.mode !== 'markdown-preview'
       ) {
-        const { id: _id, isDirty: _dirty, ...snap } = closedFile
+        const {
+          id: _id,
+          isDirty: _dirty,
+          mirroredFromRuntimeSession: _mirrored,
+          ...snap
+        } = closedFile
         const stack = s.recentlyClosedEditorTabsByWorktree[wtRecent] ?? []
         nextRecentlyClosed = {
           ...s.recentlyClosedEditorTabsByWorktree,
@@ -2370,7 +2458,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         ) {
           continue
         }
-        const { id: _id, isDirty: _dirty, ...snap } = f
+        const { id: _id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snap } = f
         nextRecentClosed = [snap as ClosedEditorTabSnapshot, ...nextRecentClosed].slice(
           0,
           MAX_RECENT_CLOSED_EDITOR_TABS
@@ -3402,6 +3490,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // Git status
   gitStatusByWorktree: {},
+  gitStatusHeadByWorktree: {},
   gitStatusHugeByWorktree: {},
   gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
@@ -3503,6 +3592,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const prevHuge = s.gitStatusHugeByWorktree[worktreeId]
       const nextHuge = status.didHitLimit ? { limit: nextEntries.length } : undefined
       const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
+      const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
+      const nextStatusHead = getKnownGitHead(status.head)
+      const statusHeadUnchanged = prevStatusHead === nextStatusHead
+
+      const prevBranchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
+      // Why: a compare request can finish after git status has observed a new
+      // HEAD; reject that stale snapshot before it can render a false clean state.
+      const shouldInvalidateBranchCompare =
+        !statusHeadUnchanged &&
+        nextStatusHead !== undefined &&
+        prevBranchSummary?.status === 'ready' &&
+        !branchCompareMatchesStatusHead(prevBranchSummary, nextStatusHead)
 
       if (
         statusUnchanged &&
@@ -3510,7 +3611,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         openFilesUnchanged &&
         operationUnchanged &&
         ignoredUnchanged &&
-        hugeUnchanged
+        hugeUnchanged &&
+        statusHeadUnchanged &&
+        !shouldInvalidateBranchCompare
       ) {
         return s
       }
@@ -3525,9 +3628,29 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               return copy
             })()
 
+      const nextStatusHeadMap = statusHeadUnchanged
+        ? s.gitStatusHeadByWorktree
+        : nextStatusHead
+          ? { ...s.gitStatusHeadByWorktree, [worktreeId]: nextStatusHead }
+          : (() => {
+              const copy = { ...s.gitStatusHeadByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
+      const nextBranchCompareSummaries = shouldInvalidateBranchCompare
+        ? {
+            ...s.gitBranchCompareSummaryByWorktree,
+            [worktreeId]: createLoadingBranchCompareSummary(prevBranchSummary.baseRef)
+          }
+        : s.gitBranchCompareSummaryByWorktree
+      const nextBranchChanges = shouldInvalidateBranchCompare
+        ? { ...s.gitBranchChangesByWorktree, [worktreeId]: [] }
+        : s.gitBranchChangesByWorktree
+
       return {
         openFiles: nextOpenFiles,
         gitStatusHugeByWorktree: nextHugeMap,
+        gitStatusHeadByWorktree: nextStatusHeadMap,
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
@@ -3539,7 +3662,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           : { ...s.gitConflictOperationByWorktree, [worktreeId]: status.conflictOperation },
         trackedConflictPathsByWorktree: trackedUnchanged
           ? s.trackedConflictPathsByWorktree
-          : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked }
+          : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked },
+        gitBranchCompareSummaryByWorktree: nextBranchCompareSummaries,
+        gitBranchChangesByWorktree: nextBranchChanges
       }
     }),
   setConflictOperation: (worktreeId, operation) =>
@@ -3852,28 +3977,42 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   gitBranchChangesByWorktree: {},
   gitBranchCompareSummaryByWorktree: {},
   gitBranchCompareRequestKeyByWorktree: {},
-  beginGitBranchCompareRequest: (worktreeId, requestKey, baseRef) =>
+  gitBranchCompareRequestStatusHeadByWorktree: {},
+  beginGitBranchCompareRequest: (worktreeId, requestKey, baseRef, options) =>
     set((s) => ({
       gitBranchCompareRequestKeyByWorktree: {
         ...s.gitBranchCompareRequestKeyByWorktree,
         [worktreeId]: requestKey
       },
-      gitBranchCompareSummaryByWorktree: {
-        ...s.gitBranchCompareSummaryByWorktree,
-        [worktreeId]: {
-          baseRef,
-          baseOid: null,
-          compareRef: 'HEAD',
-          headOid: null,
-          mergeBase: null,
-          changedFiles: 0,
-          status: 'loading'
-        }
-      }
+      gitBranchCompareRequestStatusHeadByWorktree: {
+        ...s.gitBranchCompareRequestStatusHeadByWorktree,
+        [worktreeId]: getKnownGitHead(s.gitStatusHeadByWorktree[worktreeId]) ?? null
+      },
+      ...(options?.preserveExistingSummary
+        ? {}
+        : {
+            gitBranchCompareSummaryByWorktree: {
+              ...s.gitBranchCompareSummaryByWorktree,
+              [worktreeId]: createLoadingBranchCompareSummary(baseRef)
+            }
+          })
     })),
   setGitBranchCompareResult: (worktreeId, requestKey, result) =>
     set((s) => {
       if (s.gitBranchCompareRequestKeyByWorktree[worktreeId] !== requestKey) {
+        return s
+      }
+      const statusHead = getKnownGitHead(s.gitStatusHeadByWorktree[worktreeId])
+      const requestStatusHead = s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId]
+      // Why: polling refreshes can leave the prior UI visible while a compare
+      // request is in flight; never let a pre-status-change result overwrite
+      // a newer status snapshot.
+      if (
+        result.summary.status !== 'loading' &&
+        statusHead !== undefined &&
+        requestStatusHead !== statusHead &&
+        !branchCompareMatchesStatusHead(result.summary, statusHead)
+      ) {
         return s
       }
       const prevEntries = s.gitBranchChangesByWorktree[worktreeId]
@@ -4434,6 +4573,7 @@ function areUpstreamStatusesEqual(
     prev.upstreamName === next.upstreamName &&
     prev.ahead === next.ahead &&
     prev.behind === next.behind &&
+    prev.hasConfiguredPushTarget === next.hasConfiguredPushTarget &&
     prev.behindCommitsArePatchEquivalent === next.behindCommitsArePatchEquivalent
   )
 }

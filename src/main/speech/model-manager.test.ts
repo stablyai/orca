@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
@@ -116,6 +116,35 @@ describe('ModelManager', () => {
       await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
         id: 'openai-gpt-4o-mini-transcribe',
         status: 'ready'
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('deletes a ready local model and reports it as not downloaded', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manifest = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'local')
+      expect(manifest?.files).toBeDefined()
+      const manager = new ModelManager(dir)
+      const modelDir = manager.getModelDir(manifest!.id)
+      for (const file of manifest!.files ?? []) {
+        const path = join(modelDir, file)
+        mkdirSync(dirname(path), { recursive: true })
+        writeFileSync(path, 'model file')
+      }
+
+      await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
+        id: manifest!.id,
+        status: 'ready'
+      })
+      await manager.deleteModel(manifest!.id)
+
+      expect(existsSync(modelDir)).toBe(false)
+      await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
+        id: manifest!.id,
+        status: 'not-downloaded'
       })
     } finally {
       rmSync(dir, { recursive: true, force: true })

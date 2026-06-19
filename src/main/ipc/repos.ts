@@ -9,10 +9,12 @@ import { z } from 'zod'
 import type { Store } from '../persistence'
 import type {
   BaseRefSearchResult,
+  Project,
   Repo,
   ProjectGroup,
   FolderWorkspace,
   ProjectGroupImportResult,
+  ProjectUpdateArgs,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
   ProjectHostSetupDeleteArgs,
@@ -67,6 +69,7 @@ import {
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
   isForEachRefExcludeUnsupportedError,
+  mergeBaseRefSearchResultGroups,
   searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -679,6 +682,19 @@ const ProjectHostSetupExistingFolderIpcArgs = z.object({
   setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional()
 })
 
+const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('inherit-global') }),
+  z.object({ kind: z.literal('windows-host') }),
+  z.object({ kind: z.literal('wsl'), distro: z.string().min(1) })
+])
+
+const ProjectUpdateIpcArgs = z.object({
+  projectId: z.string().min(1),
+  updates: z.object({
+    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional()
+  })
+})
+
 const ProjectHostSetupCreateIpcArgs = z.object({
   projectId: z.string().min(1),
   hostId: z
@@ -1082,6 +1098,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('projects:list')
+  ipcMain.removeHandler('projects:update')
   ipcMain.removeHandler('projectHostSetups:list')
   ipcMain.removeHandler('projectHostSetups:create')
   ipcMain.removeHandler('projectHostSetups:setupExistingFolder')
@@ -1124,6 +1141,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   ipcMain.handle('projects:list', () => store.getProjects())
+
+  ipcMain.handle('projects:update', (_event, rawArgs: ProjectUpdateArgs): Project | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectUpdateIpcArgs,
+      rawArgs,
+      'project_update_invalid_args'
+    )
+    return store.updateProject(args.projectId, args.updates)
+  })
 
   ipcMain.handle('projectHostSetups:list', () => store.getProjectHostSetups())
 
@@ -1892,7 +1918,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       ) {
         delete updates.forkSyncMode
       }
-      // Why: `symlinkPaths` is consumed by `createWorktreeSymlinks` which
+      // Why: `symlinkPaths` is consumed by worktree path materialization, which
       // calls `.trim()` on each entry. A renderer bug or preload-version skew
       // that persists a non-`string[]` value (e.g. `[42, null]`, a bare
       // string) would throw inside the worktree-create path with no UI
@@ -2398,29 +2424,51 @@ async function searchBaseRefDetailsForRepo(
     try {
       // Why: argv (including the two-remote-glob rationale) lives in
       // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
-      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      let result: { stdout: string }
-      try {
-        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
-      } catch (err) {
-        if (!isForEachRefExcludeUnsupportedError(err)) {
-          throw err
-        }
-        result = await provider.exec(
-          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
-          repo.path
-        )
-      }
-      const remotesResult = await remotesPromise
-      // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
-      // to the shared helper so the SSH and local paths cannot diverge.
-      // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
-      // HEAD-filter rationale.
+      const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
       const remotes = remotesResult.stdout
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
-      return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
+      const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
+        try {
+          return (
+            await provider.exec(
+              buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                remoteNames: remotes,
+                patternGroup
+              }),
+              repo.path
+            )
+          ).stdout
+        } catch (err) {
+          if (!isForEachRefExcludeUnsupportedError(err)) {
+            throw err
+          }
+          return (
+            await provider.exec(
+              buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                excludeRemoteHead: false,
+                remoteNames: remotes,
+                patternGroup
+              }),
+              repo.path
+            )
+          ).stdout
+        }
+      }
+      // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
+      // to the shared helper so the SSH and local paths cannot diverge.
+      // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
+      // HEAD-filter rationale.
+      const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
+      if (searchTokens.length > 1) {
+        const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
+        return mergeBaseRefSearchResultGroups(
+          results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
+          limit
+        )
+      }
+      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
     } catch (err) {
       console.warn('[repos:searchBaseRefs] SSH for-each-ref failed', {
         path: repo.path,

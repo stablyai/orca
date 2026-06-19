@@ -138,16 +138,25 @@ export async function createMobilePr(
   worktreeId: string,
   input: MobilePrCreateInput
 ): Promise<MobilePrCreateOutcome> {
-  const response = await client.sendRequest(
-    'hostedReview.create',
-    buildMobilePrCreateParams(worktreeId, input)
-  )
-  if (!response.ok) {
-    return { ok: false, error: response.error?.message || 'Failed to create pull request' }
+  try {
+    const response = await client.sendRequest(
+      'hostedReview.create',
+      buildMobilePrCreateParams(worktreeId, input)
+    )
+    if (!response.ok) {
+      return { ok: false, error: response.error?.message || 'Failed to create pull request' }
+    }
+    const result = (response as RpcSuccess).result as CreateHostedReviewResult
+    if (result.ok) {
+      return { ok: true, url: result.url, number: result.number }
+    }
+    return { ok: false, error: result.error || 'Failed to create pull request' }
+  } catch (err) {
+    // Why: create-PR runs from an inline form; transport drops should surface as
+    // form errors instead of escaping as unhandled promise rejections.
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'Failed to create pull request'
+    }
   }
-  const result = (response as RpcSuccess).result as CreateHostedReviewResult
-  if (result.ok) {
-    return { ok: true, url: result.url, number: result.number }
-  }
-  return { ok: false, error: result.error || 'Failed to create pull request' }
 }

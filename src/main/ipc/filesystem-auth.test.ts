@@ -291,7 +291,7 @@ describe('filesystem-auth path containment', () => {
 
   it('allows git-relative files under dotdot-prefixed child directories', () => {
     expect(validateGitRelativeFilePath(resolve('/workspace/repo'), '..fixtures/file.ts')).toBe(
-      '..fixtures/file.ts'
+      join('..fixtures', 'file.ts')
     )
   })
 

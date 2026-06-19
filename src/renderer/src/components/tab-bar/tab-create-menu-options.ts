@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { normalizeMatchQuery, scoreQueryTokens } from './query-token-match'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 
 export type TabCreateMenuOptionKind =
@@ -28,58 +29,13 @@ export type TabCreateMenuOptionsContext = {
   windowsShellEntries?: readonly { label: string; shell: BuiltInWindowsTerminalShell }[]
 }
 
-function normalizeQuery(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ')
-}
-
-function tokenize(value: string): string[] {
-  return normalizeQuery(value)
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean)
-}
-
-function scoreQueryTokens(
-  query: string,
-  values: readonly string[]
-): { allTokensMatched: boolean; score: number } {
-  const candidateTokens = values.flatMap(tokenize)
-  if (candidateTokens.length === 0) {
-    return { allTokensMatched: false, score: 0 }
-  }
-
-  const queryTokens = tokenize(query)
-  if (queryTokens.length === 0) {
-    return { allTokensMatched: false, score: 0 }
-  }
-
-  let score = 0
-  let allTokensMatched = true
-  for (const queryToken of queryTokens) {
-    let best = 0
-    for (const candidateToken of candidateTokens) {
-      if (candidateToken === queryToken) {
-        best = Math.max(best, 3)
-      } else if (candidateToken.startsWith(queryToken)) {
-        best = Math.max(best, 2)
-      } else if (candidateToken.includes(queryToken)) {
-        best = Math.max(best, 1)
-      }
-    }
-    if (best === 0) {
-      allTokensMatched = false
-    }
-    score += best
-  }
-  return { allTokensMatched, score }
-}
-
 function scoreMenuOption(query: string, option: TabCreateMenuOption): number {
-  const normalizedQuery = normalizeQuery(query)
+  const normalizedQuery = normalizeMatchQuery(query)
   if (!normalizedQuery) {
     return 0
   }
   const values = [option.label, ...option.keywords]
-  const normalizedLabel = normalizeQuery(option.label)
+  const normalizedLabel = normalizeMatchQuery(option.label)
   if (normalizedQuery === normalizedLabel) {
     return 100
   }
@@ -207,7 +163,7 @@ export function findMatchingTabCreateMenuOptions(
   query: string,
   options: readonly TabCreateMenuOption[]
 ): TabCreateMenuOption[] {
-  const normalizedQuery = normalizeQuery(query)
+  const normalizedQuery = normalizeMatchQuery(query)
   if (!normalizedQuery) {
     return []
   }

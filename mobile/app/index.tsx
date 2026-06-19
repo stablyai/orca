@@ -19,6 +19,9 @@ import {
   type AccountsSnapshot,
   type ProviderKey,
   getActiveProviderRateLimits,
+  getUsageBarState,
+  hasActiveProviderUsage,
+  hasRenderableUsage,
   UsageBar
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -609,9 +612,10 @@ export default function HomeScreen() {
       if (!snap) {
         continue
       }
-      const hasClaude = snap.claude.accounts.length > 0
-      const hasCodex = snap.codex.accounts.length > 0
-      if (hasClaude || hasCodex) {
+      // Why: also show hosts whose only usage is the system-default login
+      // (no Orca-managed accounts but live rate-limit data for the active
+      // target), otherwise system-default users see no usage section at all.
+      if (hasRenderableUsage(snap, 'claude') || hasRenderableUsage(snap, 'codex')) {
         items.push({ host, snapshot: snap })
       }
     }
@@ -979,16 +983,16 @@ export default function HomeScreen() {
                             provider === 'claude'
                               ? snapshot.claude.accounts
                               : snapshot.codex.accounts
-                          if (accounts.length === 0) {
+                          const limits = getActiveProviderRateLimits(snapshot, provider)
+                          // Why: with no managed accounts, still render a
+                          // "System default" row when the active target has
+                          // live usage data; the row label already falls back
+                          // to "System default" below.
+                          if (accounts.length === 0 && !hasActiveProviderUsage(limits)) {
                             return null
                           }
-                          const limits = getActiveProviderRateLimits(snapshot, provider)
-                          const isFetching =
-                            limits?.status === 'fetching' || limits?.status === 'idle'
-                          const unavailable =
-                            limits == null ||
-                            limits.status === 'unavailable' ||
-                            limits.status === 'error'
+                          const sessionBar = getUsageBarState(limits, 'session')
+                          const weeklyBar = getUsageBarState(limits, 'weekly')
                           return (
                             <View key={provider} style={styles.accountsRow}>
                               <View style={styles.accountsIcon}>
@@ -1005,15 +1009,15 @@ export default function HomeScreen() {
                                 <View style={styles.accountsBars}>
                                   <UsageBar
                                     label="5h"
-                                    usedPercent={limits?.session?.usedPercent ?? null}
-                                    unavailable={unavailable}
-                                    loading={isFetching && limits?.session == null}
+                                    usedPercent={sessionBar.usedPercent}
+                                    unavailable={sessionBar.unavailable}
+                                    loading={sessionBar.loading}
                                   />
                                   <UsageBar
                                     label="7d"
-                                    usedPercent={limits?.weekly?.usedPercent ?? null}
-                                    unavailable={unavailable}
-                                    loading={isFetching && limits?.weekly == null}
+                                    usedPercent={weeklyBar.usedPercent}
+                                    unavailable={weeklyBar.unavailable}
+                                    loading={weeklyBar.loading}
                                   />
                                 </View>
                               </View>

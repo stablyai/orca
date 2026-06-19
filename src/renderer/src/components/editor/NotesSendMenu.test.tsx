@@ -63,8 +63,18 @@ vi.mock('@/store', () => ({
     selector({
       openAgentSendPopoverTargetMode: storeMocks.openAgentSendPopoverTargetMode,
       closeAgentSendPopoverTargetMode: storeMocks.closeAgentSendPopoverTargetMode,
-      agentSendPopoverTargetMode: storeMocks.state.agentSendPopoverTargetMode
+      agentSendPopoverTargetMode: storeMocks.state.agentSendPopoverTargetMode,
+      agentStatusByPaneKey: {},
+      agentStatusEpoch: 0,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      ptyIdsByTabId: {},
+      runtimePaneTitlesByTabId: {}
     })
+}))
+
+vi.mock('zustand/react/shallow', () => ({
+  useShallow: (selector: unknown) => selector
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -115,8 +125,30 @@ vi.mock('@/components/tab-bar/QuickLaunchButton', () => ({
   }
 }))
 
+vi.mock('@/components/sidebar/useWorktreeAgentRows', () => ({
+  useWorktreeAgentRows: () => []
+}))
+
+vi.mock('@/components/dashboard/useNow', () => ({
+  useNow: () => 0
+}))
+
+vi.mock('@/components/AgentStateDot', () => ({
+  AgentStateDot: function AgentStateDot(props: Record<string, unknown>) {
+    return { type: 'AgentStateDot', props }
+  },
+  agentStateLabel: (state: string) => state
+}))
+
+vi.mock('@/lib/agent-catalog', () => ({
+  AgentIcon: function AgentIcon(props: Record<string, unknown>) {
+    return { type: 'AgentIcon', props }
+  }
+}))
+
 vi.mock('@/lib/active-agent-note-send', () => ({
   activeAgentNotesSendFailureMessage: (status: string) => status,
+  getActiveTerminalNoteTarget: () => null,
   sendNotesToActiveAgentSession: vi.fn(),
   useCanSendNotesToActiveTerminal: () => false
 }))
@@ -309,10 +341,10 @@ describe('NotesSendMenu', () => {
     )
   })
 
-  it('offers the active session action alongside new agent launchers', () => {
+  it('offers new agent launchers when no existing agent targets are listed', () => {
     const tree = renderMenu()
 
-    expect(findByType(tree, 'DropdownMenuItem').props.disabled).toBe(true)
+    expect(findAllByType(tree, 'DropdownMenuItem')).toHaveLength(0)
     expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
       worktreeId: 'wt-1',
       groupId: 'group-1',

@@ -5,6 +5,8 @@
     "strict": true,
     "paths": {
       "@/*": ["./src/*"],
+      "tweetnacl": ["./node_modules/tweetnacl"],
+      "ws": ["./node_modules/@types/ws"],
       "zod": ["./node_modules/zod"]
     }
   },

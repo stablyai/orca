@@ -278,7 +278,9 @@ export const GIT_METHODS: RpcMethod[] = [
         base: params.base,
         title: params.title,
         body: params.body,
-        draft: params.draft
+        draft: params.draft,
+        provider: params.provider,
+        useTemplate: params.useTemplate
       }
       const override = buildCommitMessageGenerationOverride(params)
       if (override === undefined) {

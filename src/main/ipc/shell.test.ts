@@ -56,6 +56,7 @@ vi.mock('../win32-utils', () => ({
 }))
 
 import { EXTERNAL_EDITOR_CLI_COMMAND, registerShellHandlers } from './shell'
+import { resolveExternalEditorLaunchSpec } from '../external-editor-launch'
 
 function createSpawnedProcess(result: 'spawn' | 'error' = 'spawn'): {
   once: ReturnType<typeof vi.fn>
@@ -215,7 +216,9 @@ describe('registerShellHandlers', () => {
         ok: false,
         reason: 'launch-failed'
       })
-      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND)
+      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND, {
+        platform: process.platform
+      })
       expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith('editor-cli', [
         normalize(workspacePath)
       ])
@@ -236,7 +239,9 @@ describe('registerShellHandlers', () => {
       const handler = getHandler('shell:openInExternalEditor')
 
       await expect(handler({}, workspacePath)).resolves.toEqual({ ok: true })
-      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND)
+      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND, {
+        platform: process.platform
+      })
       expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith('editor-cli', [
         normalize(workspacePath)
       ])
@@ -255,7 +260,7 @@ describe('registerShellHandlers', () => {
       const handler = getHandler('shell:openInExternalEditor')
 
       await expect(handler({}, workspacePath, 'cursor')).resolves.toEqual({ ok: true })
-      expect(resolveCliCommandMock).toHaveBeenCalledWith('cursor')
+      expect(resolveCliCommandMock).toHaveBeenCalledWith('cursor', { platform: process.platform })
       expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith('editor-cli', [
         normalize(workspacePath)
       ])
@@ -284,7 +289,9 @@ describe('registerShellHandlers', () => {
       const handler = getHandler('shell:openInExternalEditor')
 
       await expect(handler({}, workspacePath, '   ')).resolves.toEqual({ ok: true })
-      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND)
+      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND, {
+        platform: process.platform
+      })
     })
 
     it('uses platform-safe launcher command arguments', async () => {
@@ -296,7 +303,9 @@ describe('registerShellHandlers', () => {
       const handler = getHandler('shell:openInExternalEditor')
 
       await expect(handler({}, workspacePath)).resolves.toEqual({ ok: true })
-      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND)
+      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND, {
+        platform: process.platform
+      })
       expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith('editor-cli', [
         normalize(workspacePath)
       ])
@@ -306,6 +315,22 @@ describe('registerShellHandlers', () => {
         windowsHide: true
       })
       expect(openPathMock).not.toHaveBeenCalled()
+    })
+
+    it('runs compound shell commands through the platform shell', async () => {
+      const filePath = normalize(resolve('note.md'))
+      const handler = getHandler('shell:openInExternalEditor')
+      const launchSpec = resolveExternalEditorLaunchSpec('open -a "Typora"', filePath)
+
+      await expect(handler({}, filePath, 'open -a "Typora"')).resolves.toEqual({ ok: true })
+      expect(resolveCliCommandMock).not.toHaveBeenCalled()
+      expect(getSpawnArgsForWindowsMock).not.toHaveBeenCalled()
+      expect(launchSpec.kind).toBe('shell')
+      expect(spawnMock).toHaveBeenCalledWith(launchSpec.spawnCmd, launchSpec.spawnArgs, {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      })
     })
   })
 

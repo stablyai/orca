@@ -1,10 +1,10 @@
 import { useCallback, useMemo } from 'react'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import type { SkillDiscoveryTarget } from '../../../../shared/skills'
 import type { GlobalSettings } from '../../../../shared/types'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME
+  ORCA_CLI_SKILL_NAME,
+  ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
@@ -17,11 +17,11 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import {
-  buildSkillInstallCommandForRuntime,
-  CliSkillRuntimeControl,
+  buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
   getAgentSkillTerminalShellOverride,
   getSelectedAgentRuntime,
+  getSkillDiscoveryTargetForRuntime,
   getWslCliDistroRequest
 } from './CliSkillRuntimeSetup'
 import { Label } from '../ui/label'
@@ -30,7 +30,6 @@ import { translate } from '@/i18n/i18n'
 type CliAgentSkillSetupProps = {
   currentPlatform: string
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
   wslSupportedPlatform: boolean
   wslAvailable: boolean
   wslCapabilitiesLoading: boolean
@@ -40,7 +39,6 @@ type CliAgentSkillSetupProps = {
 export function CliAgentSkillSetup({
   currentPlatform,
   settings,
-  updateSettings,
   wslSupportedPlatform,
   wslAvailable,
   wslCapabilitiesLoading,
@@ -51,12 +49,9 @@ export function CliAgentSkillSetup({
       getSelectedAgentRuntime(settings, wslSupportedPlatform, wslAvailable, wslCapabilitiesLoading),
     [settings, wslAvailable, wslCapabilitiesLoading, wslSupportedPlatform]
   )
-  const cliSkillDiscoveryTarget = useMemo<SkillDiscoveryTarget | undefined>(
-    () =>
-      agentRuntime.runtime === 'wsl'
-        ? { runtime: 'wsl', wslDistro: agentRuntime.wslDistro }
-        : undefined,
-    [agentRuntime.runtime, agentRuntime.wslDistro]
+  const cliSkillDiscoveryTarget = useMemo(
+    () => getSkillDiscoveryTargetForRuntime(agentRuntime),
+    [agentRuntime]
   )
   const {
     installed: cliSkillDetected,
@@ -67,8 +62,12 @@ export function CliAgentSkillSetup({
     discoveryTarget: cliSkillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const cliSkillInstallCommand = buildSkillInstallCommandForRuntime(
+  const cliSkillInstallCommand = buildSkillCommandForRuntime(
     ORCA_CLI_SKILL_INSTALL_COMMAND,
+    agentRuntime
+  )
+  const cliSkillUpdateCommand = buildSkillCommandForRuntime(
+    ORCA_CLI_SKILL_UPDATE_COMMAND,
     agentRuntime
   )
   const cliSkillTerminalShellOverride = getAgentSkillTerminalShellOverride(
@@ -96,14 +95,6 @@ export function CliAgentSkillSetup({
         </p>
       </div>
 
-      <CliSkillRuntimeControl
-        runtime={agentRuntime}
-        updateSettings={updateSettings}
-        wslSupportedPlatform={wslSupportedPlatform}
-        wslAvailable={wslAvailable}
-        wslCapabilitiesLoading={wslCapabilitiesLoading}
-      />
-
       <AgentSkillSetupPanel
         className="mt-3"
         variant="inline"
@@ -113,6 +104,7 @@ export function CliAgentSkillSetup({
           'Enables agents to use Orca workspace, terminal, and progress commands.'
         )}
         command={cliSkillInstallCommand}
+        installedCommand={cliSkillUpdateCommand}
         terminalTitle={translate(
           'auto.components.settings.CliSection.cliSkillTerminalTitle',
           'CLI skill setup'

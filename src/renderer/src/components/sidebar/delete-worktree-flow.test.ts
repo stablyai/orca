@@ -190,7 +190,7 @@ describe('runWorktreeBatchDelete', () => {
     })
   })
 
-  it('keeps parent workspace deletes behind confirmation even when confirmation is skipped', () => {
+  it('keeps parent worktree deletes behind confirmation even when confirmation is skipped', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
     setWorktrees([
       { id: 'parent', displayName: 'parent' },

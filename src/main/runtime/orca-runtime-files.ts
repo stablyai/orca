@@ -43,6 +43,7 @@ import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { isENOENT, resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
 import { searchWithGitGrep } from '../ipc/filesystem-search-git'
+import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { checkRgAvailable } from '../ipc/rg-availability'
 import {
   listMarkdownDocuments,
@@ -790,14 +791,20 @@ export class RuntimeFileCommands {
     rootPath: string,
     options: SearchOptions
   ): Promise<SearchResult> {
-    const authorizedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
+    const store = this.host.requireStore()
+    const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
+    const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
+      store,
+      rootPath,
+      authorizedRootPath
+    )
     const maxResults = Math.max(
       1,
       Math.min(options.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
     )
-    const rgAvailable = await checkRgAvailable(authorizedRootPath)
+    const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
     if (!rgAvailable) {
-      return searchWithGitGrep(authorizedRootPath, options, maxResults)
+      return searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions)
     }
 
     return new Promise((resolvePromise) => {
@@ -853,6 +860,7 @@ export class RuntimeFileCommands {
 
       const nextChild = wslAwareSpawn('rg', rgArgs, {
         cwd: authorizedRootPath,
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       child = nextChild

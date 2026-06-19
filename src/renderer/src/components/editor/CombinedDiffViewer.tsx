@@ -1617,7 +1617,7 @@ export default function CombinedDiffViewer({
                               comments={diffCommentsForWorktree}
                               filePath={section.path}
                               showFileScope
-                              triggerClassName="p-0.5 opacity-0 group-hover:opacity-100"
+                              triggerClassName="p-0.5 can-hover:opacity-0 group-hover:opacity-100"
                             />
                           ) : null
                         }}

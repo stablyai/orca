@@ -4,9 +4,13 @@ import { WebView } from 'react-native-webview'
 import type { WebViewMessageEvent } from 'react-native-webview'
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
+import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
 import { XTERM_HTML } from './terminal-webview-html'
+import type { TerminalWebViewCommand } from './terminal-webview-messages'
+import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
+type TerminalOscLinks = TerminalOscLinkRange[]
 
 export type TerminalModes = {
   bracketedPasteMode: boolean
@@ -35,6 +39,8 @@ export type TerminalSelectionEvents = {
   onTerminalTap?: () => void
   // Tap landed on a detected file path; RN resolves + opens it.
   onFileTap?: (pathText: string, line: number | null, column: number | null) => void
+  // WebView-detected URL tap; RN chooses the mobile routing destination.
+  onOpenUrl?: (url: string) => void
   // Why: pinch-to-zoom in the terminal snaps to a text-size preset and reports it
   // here so the app persists it and keeps Settings + other panes in sync.
   onTextScaleChange?: (scale: number) => void
@@ -42,8 +48,18 @@ export type TerminalSelectionEvents = {
 
 export type TerminalWebViewHandle = {
   write: (data: string) => void
-  init: (cols: number, rows: number, initialData?: string) => void
+  init: (
+    cols: number,
+    rows: number,
+    initialData?: string,
+    preserveScroll?: boolean,
+    oscLinks?: TerminalOscLinks
+  ) => void
   resize: (cols: number, rows: number) => void
+  // Why: reflow the local xterm buffer (scrollback included) to a new width
+  // after a server-side PTY reflow, so older wrapped lines rewrap to match the
+  // latest output. No-op on the alternate screen.
+  reflow: (cols: number, rows: number) => void
   clear: () => void
   measureFitDimensions: (containerHeight?: number) => Promise<{ cols: number; rows: number } | null>
   resetZoom: () => void
@@ -65,28 +81,9 @@ type Props = {
   onWebReady?: () => void
 } & TerminalSelectionEvents
 
-type TerminalMessage =
-  | { type: 'write'; id?: number; data: string }
-  | {
-      type: 'init'
-      id?: number
-      cols: number
-      rows: number
-      initialData?: string
-      terminalTheme?: MobileTerminalTheme
-      fontScale?: number
-    }
-  | { type: 'set-font-scale'; id?: number; fontScale: number }
-  | { type: 'resize'; id?: number; cols: number; rows: number }
-  | { type: 'clear'; id?: number }
-  | { type: 'measure'; id?: number; containerHeight?: number }
-  | { type: 'reset-zoom'; id?: number }
-  | { type: 'cancel-select'; id?: number }
-  | { type: 'do-select-all'; id?: number }
-  | { type: 'set-theme'; id?: number; terminalTheme?: MobileTerminalTheme }
-
-const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000
-const MAX_PENDING_WEB_WRITE_MESSAGES = 4096
+// Why: WebView treats source identity as page identity on some platforms; keep
+// parent/session re-renders from reloading xterm and forcing fresh snapshots.
+const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }
 
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function TerminalWebView(
   {
@@ -103,15 +100,14 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onTerminalInput,
     onTerminalTap,
     onFileTap,
+    onOpenUrl,
     onTextScaleChange
   },
   ref
 ) {
   const webViewRef = useRef<WebView>(null)
   const isWebReadyRef = useRef(false)
-  const pendingMessagesRef = useRef<TerminalMessage[]>([])
-  const pendingWriteBytesRef = useRef(0)
-  const pendingWriteCountRef = useRef(0)
+  const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
   const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   const measureResolveRef = useRef<
@@ -124,66 +120,24 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const readyPromiseRef = useRef<Promise<void> | null>(null)
   const readyResolveRef = useRef<(() => void) | null>(null)
 
-  const sendToWebView = useCallback((msg: TerminalMessage) => {
+  const sendToWebView = useCallback((msg: TerminalWebViewCommand) => {
     messageIdRef.current += 1
     webViewRef.current?.postMessage(JSON.stringify({ ...msg, id: messageIdRef.current }))
   }, [])
 
   const flushPendingMessages = useCallback(() => {
-    const pending = pendingMessagesRef.current
-    pendingMessagesRef.current = []
-    pendingWriteBytesRef.current = 0
-    pendingWriteCountRef.current = 0
-    for (const msg of pending) {
-      sendToWebView(msg)
-    }
-  }, [sendToWebView])
-
-  const clearPendingMessages = useCallback(() => {
-    pendingMessagesRef.current = []
-    pendingWriteBytesRef.current = 0
-    pendingWriteCountRef.current = 0
-  }, [])
-
-  const queuePendingMessage = useCallback((msg: TerminalMessage) => {
-    const pending = pendingMessagesRef.current
-    pending.push(msg)
-    if (msg.type !== 'write') {
-      return
-    }
-
-    pendingWriteBytesRef.current += msg.data.length
-    pendingWriteCountRef.current += 1
-    while (
-      pendingWriteBytesRef.current > MAX_PENDING_WEB_WRITE_BYTES ||
-      pendingWriteCountRef.current > MAX_PENDING_WEB_WRITE_MESSAGES
-    ) {
-      const dropIndex = pending.findIndex((candidate) => candidate.type === 'write')
-      if (dropIndex === -1) {
-        pendingWriteBytesRef.current = 0
-        pendingWriteCountRef.current = 0
-        return
-      }
-      const [dropped] = pending.splice(dropIndex, 1)
-      if (dropped?.type === 'write') {
-        pendingWriteBytesRef.current = Math.max(
-          0,
-          pendingWriteBytesRef.current - dropped.data.length
-        )
-        pendingWriteCountRef.current = Math.max(0, pendingWriteCountRef.current - 1)
-      }
-    }
-  }, [])
+    pendingMessages.flush(sendToWebView)
+  }, [pendingMessages, sendToWebView])
 
   const postMessage = useCallback(
-    (msg: TerminalMessage) => {
+    (msg: TerminalWebViewCommand) => {
       if (!isWebReadyRef.current) {
-        queuePendingMessage(msg)
+        pendingMessages.queue(msg)
         return
       }
       sendToWebView(msg)
     },
-    [queuePendingMessage, sendToWebView]
+    [pendingMessages, sendToWebView]
   )
 
   const handleMessage = useCallback(
@@ -257,6 +211,11 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           const column = typeof msg.column === 'number' ? msg.column : null
           onFileTap?.(pathText, line, column)
         }
+      } else if (msg.type === 'open-url') {
+        const url = typeof msg.url === 'string' ? msg.url : ''
+        if (url.length > 0) {
+          onOpenUrl?.(url)
+        }
       } else if (msg.type === 'keyboard-avoidance-metrics') {
         const cursorY = typeof msg.cursorY === 'number' ? msg.cursorY : 0
         const rows = typeof msg.rows === 'number' ? msg.rows : 0
@@ -297,6 +256,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onTerminalInput,
       onTerminalTap,
       onFileTap,
+      onOpenUrl,
       onTextScaleChange
     ]
   )
@@ -305,8 +265,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     isWebReadyRef.current = false
     // Why: messages queued for a previous WebView generation are stale after a reload;
     // dropping them avoids replaying terminal chunks before the next init snapshot.
-    clearPendingMessages()
-  }, [clearPendingMessages])
+    pendingMessages.clear()
+  }, [pendingMessages])
 
   useEffect(() => {
     postMessage({ type: 'set-theme', terminalTheme })
@@ -324,7 +284,13 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       write(data: string) {
         postMessage({ type: 'write', data })
       },
-      init(cols: number, rows: number, initialData?: string) {
+      init(
+        cols: number,
+        rows: number,
+        initialData?: string,
+        preserveScroll?: boolean,
+        oscLinks?: TerminalOscLinks
+      ) {
         // Why: arm a fresh ready promise BEFORE posting init. The WebView
         // resolves it via the 'ready' notify at the end of its rAF chain.
         // Resolve any prior in-flight ready first so awaiters from the
@@ -341,10 +307,22 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         readyPromiseRef.current = new Promise<void>((resolve) => {
           readyResolveRef.current = resolve
         })
-        postMessage({ type: 'init', cols, rows, initialData, terminalTheme, fontScale: textScale })
+        postMessage({
+          type: 'init',
+          cols,
+          rows,
+          initialData,
+          oscLinks,
+          terminalTheme,
+          fontScale: textScale,
+          preserveScroll
+        })
       },
       resize(cols: number, rows: number) {
         postMessage({ type: 'resize', cols, rows })
+      },
+      reflow(cols: number, rows: number) {
+        postMessage({ type: 'reflow', cols, rows })
       },
       clear() {
         postMessage({ type: 'clear' })
@@ -419,7 +397,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   return (
     <WebView
       ref={webViewRef}
-      source={{ html: XTERM_HTML }}
+      source={XTERM_WEBVIEW_SOURCE}
       style={[styles.webview, style]}
       originWhitelist={['*']}
       javaScriptEnabled

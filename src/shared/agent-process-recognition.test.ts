@@ -37,6 +37,28 @@ describe('agent process recognition', () => {
     expect(isExpectedAgentProcess('powershell.exe', 'claude')).toBe(false)
   })
 
+  it('does not recognize Claude print-mode hook subprocesses as interactive agents', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'claude --print --model haiku "Analyze this conversation and determine: Does the assistant have more autonomous work to do RIGHT NOW?"'
+      )
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`/home/dev/.local/bin/claude -p "Context: This summary will be shown in a list"`
+      )
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`C:\Users\dev\AppData\Roaming\npm\claude.exe --output-format=json "hook prompt"`
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('claude --resume abc123')).toEqual({
+      agent: 'claude',
+      processName: 'claude'
+    })
+  })
+
   it('recognizes Command Code without classifying Windows cmd.exe as an agent', () => {
     expect(recognizeAgentProcess('command-code')).toEqual({
       agent: 'command-code',
@@ -51,6 +73,54 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('command-code')).toBe(true)
     expect(isRecognizedAgentType('cmd.exe')).toBe(false)
     expect(recognizeAgentProcess('cmd.exe')).toBeNull()
+  })
+
+  it('recognizes Ante without classifying ante-prefixed path fragments as the agent', () => {
+    expect(recognizeAgentProcess('ante')).toEqual({
+      agent: 'ante',
+      processName: 'ante'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.ante/bin/ante')).toEqual({
+      agent: 'ante',
+      processName: 'ante'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.ante/bin/ante', 'ante')).toBe(true)
+    expect(isRecognizedAgentType('ante')).toBe(true)
+    // Why: 'ante' is a common token in directory and binary names; only the
+    // exact normalized basename may classify as the agent.
+    expect(recognizeAgentProcess('ante-obsidian')).toBeNull()
+    expect(recognizeAgentProcess('antechamber')).toBeNull()
+    expect(isExpectedAgentProcess('ante-obsidian', 'ante')).toBe(false)
+  })
+
+  it('does not recognize Ante headless one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('ante -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('ante -psummarize')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('ante --prompt "review this for security issues"')
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('ante --prompt=review --output-format minimal')
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('ante --resume ses_123')).toEqual({
+      agent: 'ante',
+      processName: 'ante'
+    })
+  })
+
+  it('does not recognize wrapped Ante headless one-shot commands as interactive agents', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine('node /Users/dev/.ante/bin/ante --prompt "review"')
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node C:\Users\dev\.ante\bin\ante.cmd -p review`
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('node /Users/dev/.ante/bin/ante')).toEqual({
+      agent: 'ante',
+      processName: 'ante'
+    })
   })
 
   it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {

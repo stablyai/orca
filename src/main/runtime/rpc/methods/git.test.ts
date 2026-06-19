@@ -512,13 +512,22 @@ describe('git RPC methods', () => {
         title: '',
         body: '',
         draft: false,
+        provider: 'github',
+        useTemplate: true,
         sourceControlAiResolvedParams
       })
     )
 
     expect(runtime.generateRuntimePullRequestFields).toHaveBeenCalledWith(
       'id:wt-1',
-      { base: 'main', title: '', body: '', draft: false },
+      {
+        base: 'main',
+        title: '',
+        body: '',
+        draft: false,
+        provider: 'github',
+        useTemplate: true
+      },
       { sourceControlAiResolvedParams }
     )
   })

@@ -6,6 +6,7 @@ import {
 } from '../../../shared/agent-session-resume'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { GlobalSettings, TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
 export const DEFAULT_AGENT_HIBERNATION_IDLE_MS = 30 * 60 * 1000
 export const MIN_AGENT_HIBERNATION_IDLE_MS = 60 * 1000
@@ -18,6 +19,8 @@ export type AgentHibernationPlannerSnapshot = {
   tabsByWorktree: Record<string, TerminalTab[]>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
   ptyIdsByTabId: Record<string, string[] | undefined>
+  runtimeLivePtyIdsByWorktreeId?: Record<string, string[] | undefined>
+  runtimeLivenessRequiredWorktreeIds?: string[]
   mobileLockedPtyIds: string[]
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord | undefined>
@@ -26,8 +29,14 @@ export type AgentHibernationPlannerSnapshot = {
 }
 
 export type AgentHibernationCandidate = {
+  id: string
   worktreeId: string
+  paneKey: string
+  tabId: string
+  leafId: string
   paneKeys: string[]
+  targetPtyIds: string[]
+  expectedRuntimePtyIds: string[]
   signature: string
 }
 
@@ -40,11 +49,18 @@ export type AgentHibernationPlan = {
 
 type EligiblePane = {
   paneKey: string
+  tabId: string
+  leafId: string
   ptyId: string
+  runtimePtyId: string
   providerSessionId: string
   state: AgentStatusEntry['state']
   updatedAt: number
   inputAt: number
+}
+
+function toRuntimePtyId(ptyId: string): string {
+  return parseRemoteRuntimePtyId(ptyId)?.handle ?? ptyId
 }
 
 export function getEffectiveAgentHibernationIdleMs(value: unknown): number {
@@ -58,21 +74,36 @@ export function getEffectiveAgentHibernationIdleMs(value: unknown): number {
 
 function getLivePtyIdsForTab(
   tab: TerminalTab,
-  ptyIdsByTabId: Record<string, string[] | undefined>
+  ptyIdsByTabId: Record<string, string[] | undefined>,
+  runtimeLivePtyIdsByWorktreeId: Record<string, string[] | undefined> | undefined,
+  runtimeLivenessRequired: boolean
 ): string[] {
-  const ids = ptyIdsByTabId[tab.id] ?? []
-  return ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
+  const ids = new Set<string>()
+  for (const id of runtimeLivePtyIdsByWorktreeId?.[tab.worktreeId] ?? []) {
+    if (typeof id === 'string' && id.length > 0) {
+      ids.add(toRuntimePtyId(id))
+    }
+  }
+  if (!runtimeLivenessRequired) {
+    for (const id of ptyIdsByTabId[tab.id] ?? []) {
+      if (typeof id === 'string' && id.length > 0) {
+        ids.add(toRuntimePtyId(id))
+      }
+    }
+  }
+  return [...ids]
 }
 
 function getPaneLivePtyId(
   entry: AgentStatusEntry,
   layout: TerminalLayoutSnapshot | undefined
-): string | null {
+): { leafId: string; ptyId: string } | null {
   const parsed = parsePaneKey(entry.paneKey)
-  if (!parsed || parsed.tabId !== entry.tabId) {
+  if (!parsed || (entry.tabId && parsed.tabId !== entry.tabId)) {
     return null
   }
-  return layout?.ptyIdsByLeafId?.[parsed.leafId] ?? null
+  const ptyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
+  return ptyId ? { leafId: parsed.leafId, ptyId } : null
 }
 
 function getEntryTabId(entry: AgentStatusEntry): string | null {
@@ -89,6 +120,7 @@ function getEligiblePane(args: {
   livePtyIds: Set<string>
   sleepingAgentSessionsByPaneKey: AgentHibernationPlannerSnapshot['sleepingAgentSessionsByPaneKey']
   lastTerminalInputAtByPaneKey: AgentHibernationPlannerSnapshot['lastTerminalInputAtByPaneKey']
+  mobileLockedPtyIds: Set<string>
   now: number
   idleMs: number
 }): EligiblePane | null {
@@ -98,7 +130,8 @@ function getEligiblePane(args: {
     layout,
     livePtyIds,
     sleepingAgentSessionsByPaneKey,
-    lastTerminalInputAtByPaneKey
+    lastTerminalInputAtByPaneKey,
+    mobileLockedPtyIds
   } = args
   if (entry.state !== 'done' || sleepingAgentSessionsByPaneKey[entry.paneKey]) {
     return null
@@ -122,13 +155,21 @@ function getEligiblePane(args: {
   if (typeof inputAt === 'number' && Number.isFinite(inputAt) && inputAt > entry.updatedAt) {
     return null
   }
-  const ptyId = getPaneLivePtyId(entry, layout)
-  if (!ptyId || !livePtyIds.has(ptyId)) {
+  const livePane = getPaneLivePtyId(entry, layout)
+  if (!livePane) {
+    return null
+  }
+  const { leafId, ptyId } = livePane
+  const runtimePtyId = toRuntimePtyId(ptyId)
+  if (!livePtyIds.has(runtimePtyId) || mobileLockedPtyIds.has(runtimePtyId)) {
     return null
   }
   return {
     paneKey: entry.paneKey,
+    tabId: tab.id,
+    leafId,
     ptyId,
+    runtimePtyId,
     providerSessionId: entry.providerSession.id,
     state: entry.state,
     updatedAt: entry.updatedAt,
@@ -142,9 +183,13 @@ function signatureFor(worktreeId: string, panes: EligiblePane[]): string {
     .sort((a, b) => a.paneKey.localeCompare(b.paneKey))
     .map(
       (pane) =>
-        `${pane.paneKey}:${pane.ptyId}:${pane.providerSessionId}:${pane.state}:${pane.updatedAt}:${pane.inputAt}`
+        `${pane.paneKey}:${pane.ptyId}:${pane.runtimePtyId}:${pane.providerSessionId}:${pane.state}:${pane.updatedAt}:${pane.inputAt}`
     )
   return `${worktreeId}|${parts.join('|')}`
+}
+
+function candidateIdFor(worktreeId: string, paneKey: string): string {
+  return `${worktreeId}|${paneKey}`
 }
 
 function getAgentEntriesByTabId(
@@ -176,8 +221,11 @@ export function planAgentHibernationCandidates(
     return []
   }
   const idleMs = getEffectiveAgentHibernationIdleMs(snapshot.settings.agentHibernationIdleMs)
-  const mobileLockedPtyIds = new Set(snapshot.mobileLockedPtyIds)
+  const mobileLockedPtyIds = new Set(snapshot.mobileLockedPtyIds.map(toRuntimePtyId))
   const foregroundWorktreeIds = new Set(snapshot.foregroundWorktreeIds)
+  const runtimeLivenessRequiredWorktreeIds = new Set(
+    snapshot.runtimeLivenessRequiredWorktreeIds ?? []
+  )
   const agentEntriesByTabId = getAgentEntriesByTabId(snapshot.agentStatusByPaneKey)
   const candidates: AgentHibernationCandidate[] = []
   for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
@@ -189,17 +237,22 @@ export function planAgentHibernationCandidates(
     ) {
       continue
     }
-    const livePtyIds = new Set<string>()
-    const eligibleByPtyId = new Map<string, EligiblePane>()
-    let rejected = false
+    if (
+      runtimeLivenessRequiredWorktreeIds.has(worktreeId) &&
+      !Object.prototype.hasOwnProperty.call(
+        snapshot.runtimeLivePtyIdsByWorktreeId ?? {},
+        worktreeId
+      )
+    ) {
+      continue
+    }
     for (const tab of tabs) {
-      const tabLivePtyIds = getLivePtyIdsForTab(tab, snapshot.ptyIdsByTabId)
-      for (const ptyId of tabLivePtyIds) {
-        livePtyIds.add(ptyId)
-      }
-      if (tabLivePtyIds.some((ptyId) => mobileLockedPtyIds.has(ptyId))) {
-        rejected = true
-      }
+      const tabLivePtyIds = getLivePtyIdsForTab(
+        tab,
+        snapshot.ptyIdsByTabId,
+        snapshot.runtimeLivePtyIdsByWorktreeId,
+        runtimeLivenessRequiredWorktreeIds.has(worktreeId)
+      )
       if (tabLivePtyIds.length === 0) {
         continue
       }
@@ -212,27 +265,29 @@ export function planAgentHibernationCandidates(
           livePtyIds: new Set(tabLivePtyIds),
           sleepingAgentSessionsByPaneKey: snapshot.sleepingAgentSessionsByPaneKey,
           lastTerminalInputAtByPaneKey: snapshot.lastTerminalInputAtByPaneKey,
+          mobileLockedPtyIds,
           now: snapshot.now,
           idleMs
         })
         if (eligible) {
-          eligibleByPtyId.set(eligible.ptyId, eligible)
-        } else if (entry.state !== 'done' || getPaneLivePtyId(entry, layout)) {
-          rejected = true
+          candidates.push({
+            id: candidateIdFor(worktreeId, eligible.paneKey),
+            worktreeId,
+            paneKey: eligible.paneKey,
+            tabId: eligible.tabId,
+            leafId: eligible.leafId,
+            paneKeys: [eligible.paneKey],
+            targetPtyIds: [eligible.ptyId],
+            expectedRuntimePtyIds: [eligible.runtimePtyId],
+            signature: signatureFor(worktreeId, [eligible])
+          })
         }
       }
     }
-    if (rejected || livePtyIds.size === 0 || eligibleByPtyId.size !== livePtyIds.size) {
-      continue
-    }
-    const panes = [...eligibleByPtyId.values()]
-    candidates.push({
-      worktreeId,
-      paneKeys: panes.map((pane) => pane.paneKey).sort(),
-      signature: signatureFor(worktreeId, panes)
-    })
   }
-  return candidates.sort((a, b) => a.worktreeId.localeCompare(b.worktreeId))
+  return candidates.sort(
+    (a, b) => a.worktreeId.localeCompare(b.worktreeId) || a.paneKey.localeCompare(b.paneKey)
+  )
 }
 
 export function confirmAgentHibernationCandidates(
@@ -242,8 +297,8 @@ export function confirmAgentHibernationCandidates(
   const confirmationState: AgentHibernationConfirmationState = {}
   const confirmed: AgentHibernationCandidate[] = []
   for (const candidate of candidates) {
-    confirmationState[candidate.worktreeId] = candidate.signature
-    if (previous[candidate.worktreeId] === candidate.signature) {
+    confirmationState[candidate.id] = candidate.signature
+    if (previous[candidate.id] === candidate.signature) {
       confirmed.push(candidate)
     }
   }

@@ -4,6 +4,9 @@ import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-typ
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
+import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
+import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
+import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
@@ -44,7 +47,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.1.0-beta.198/css/xterm.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.1.0-beta.285/css/xterm.min.css">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
@@ -63,7 +66,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
     transform-origin: top left;
     display: inline-block;
   }
-  .xterm { -webkit-user-select: none; user-select: none; }
+  .xterm { -webkit-user-select: none; user-select: none; font-variant-emoji: text; }
   .xterm .xterm-viewport {
     overflow-y: hidden !important;
     scrollbar-width: none !important;
@@ -189,12 +192,17 @@ export const XTERM_HTML = `<!DOCTYPE html>
     <button id="sel-menu-all">Select All</button>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.1.0-beta.198/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@6.1.0-beta.285/lib/xterm.min.js"></script><script src="https://cdn.jsdelivr.net/npm/@xterm/addon-unicode11@0.10.0-beta.285/lib/addon-unicode11.js"></script><script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.20.0-beta.284/lib/addon-webgl.js"></script>
 <script>
 (function() {
   var surface = document.getElementById('terminal-surface');
   var ESC = String.fromCharCode(27);
   var C1_CSI = String.fromCharCode(155);
+  var CLAUDE_STATUS_DOT = String.fromCharCode(0x23fa);
+  var TEXT_PRESENTATION_SELECTOR = String.fromCharCode(0xfe0e);
+  var EMOJI_PRESENTATION_SELECTOR = String.fromCharCode(0xfe0f);
+  var CLAUDE_STATUS_DOT_PATTERN = new RegExp(CLAUDE_STATUS_DOT + '[' + TEXT_PRESENTATION_SELECTOR + EMOJI_PRESENTATION_SELECTOR + ']*', 'g');
+  var statusDotPendingSelector = false;
   var PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096;
   var term = null;
   var scrollIndicator = document.getElementById('scroll-indicator');
@@ -266,6 +274,8 @@ export const XTERM_HTML = `<!DOCTYPE html>
   var trackedMouseTrackingMode = 'none';
   var sgrMouseMode = false;
   var sgrMousePixelsMode = false;
+  var initialOscLinks = [], initialOscLinkRowOffset = 0;
+  var initialOscLinkEvictionReady = false;
   var mouseModeScanTail = '';
   var handledMessageIds = [];
   // Why: after init() the initial scrollback applyFitScale may have run
@@ -400,34 +410,11 @@ export const XTERM_HTML = `<!DOCTYPE html>
     }
   }
 
-  // Why: the desktop terminal may have fewer rows than needed to fill
-  // the phone's WebView at the current scale (e.g. 40 desktop rows
-  // scaled to 0.3x only covers ~40% of the viewport). Resize xterm's
-  // viewport to fill the available height so there's no blank gap
-  // below the last terminal line. This is display-only — the PTY is
-  // not resized — so the extra rows just show empty terminal background
-  // managed by xterm, not a separate HTML gap. Never shrink below the
-  // original init row count to avoid clipping active terminal content.
-  function adjustRowsForViewport() {
-    // Why: mobile replays a live PTY snapshot and then applies live cursor-
-    // relative chunks from that same PTY. Resizing only the WebView xterm
-    // changes cursor coordinates and makes TUI repaint chunks duplicate or
-    // overlap existing frames. Keep xterm rows identical to the PTY.
-    return;
-    if (!term || !term.element) return;
-    // Why: active alternate-screen TUIs (Claude Code, vim, etc.) are exact
-    // screen snapshots. Locally resizing the mobile xterm after replay can
-    // mutate the alt buffer and drop cell attributes, which shows as white text.
-    if (activeAltScreenSnapshot) return;
-    var cellHeight = getCellHeight();
-    if (cellHeight > 0 && currentScale > 0) {
-      var vpHeight = window.innerHeight;
-      var neededRows = Math.floor(vpHeight / (cellHeight * currentScale));
-      if (neededRows >= initRows && neededRows !== term.rows) {
-        term.resize(term.cols, neededRows);
-      }
-    }
-  }
+  // Why: intentional no-op. Mobile replays a live PTY snapshot then applies
+  // live cursor-relative chunks from that same PTY; resizing only the WebView
+  // xterm changes cursor coordinates and makes TUI repaint chunks duplicate or
+  // overlap. Kept as a no-op so its call sites stay legible.
+  function adjustRowsForViewport() {}
 
   // Why: cold-start fit. After init() opens xterm, the renderer needs
   // several frames before cell dimensions are computed. Reading too early
@@ -572,8 +559,36 @@ export const XTERM_HTML = `<!DOCTYPE html>
     writeQueueHead = 0;
   }
 
+  function isStatusDotPresentationSelector(value) {
+    return value === TEXT_PRESENTATION_SELECTOR || value === EMOJI_PRESENTATION_SELECTOR;
+  }
+
+  function endsWithStatusDotPresentationSequence(data) {
+    var i = data.length - 1;
+    while (i >= 0 && isStatusDotPresentationSelector(data.charAt(i))) i--;
+    return i >= 0 && data.charAt(i) === CLAUDE_STATUS_DOT;
+  }
+
+  // Why: iOS WebKit promotes Claude's record/status dot to a colorful emoji glyph.
+  function normalizeStatusDotPresentation(data) {
+    if (typeof data !== 'string' || data.length === 0) return data;
+    if (statusDotPendingSelector) {
+      statusDotPendingSelector = false;
+      var strippedPendingSelectors = false;
+      while (data.length > 0 && isStatusDotPresentationSelector(data.charAt(0))) data = data.slice(1);
+      strippedPendingSelectors = data.length === 0;
+      if (strippedPendingSelectors) {
+        statusDotPendingSelector = true;
+        return '';
+      }
+    }
+    var normalized = data.replace(CLAUDE_STATUS_DOT_PATTERN, CLAUDE_STATUS_DOT + TEXT_PRESENTATION_SELECTOR);
+    statusDotPendingSelector = endsWithStatusDotPresentationSequence(data);
+    return normalized;
+  }
+
   function enqueueWrite(data) {
-    writeQueue.push(data);
+    writeQueue.push(normalizeStatusDotPresentation(data));
   }
 
   function nextQueuedWrite() {
@@ -641,12 +656,18 @@ export const XTERM_HTML = `<!DOCTYPE html>
     pumpWrites(terminalGeneration);
   }
 
-  function init(cols, rows, initialData, nextTheme, nextFontScale) {
+  function init(cols, rows, initialData, nextTheme, nextFontScale, preserveScroll, nextOscLinks) {
     if (typeof nextFontScale === 'number' && nextFontScale > 0) currentTextScale = nextFontScale;
+    // Why: a width-reflow re-stream rewraps the same content at new cols.
+    // Distance-from-bottom (rows) is the only stable anchor across reflow,
+    // since line counts and cell positions change. null = stay pinned to bottom.
+    var prevB = preserveScroll && term && term.buffer && term.buffer.active ? term.buffer.active : null;
+    var scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1;
     terminalGeneration++;
     var gen = terminalGeneration;
     ready = false;
     resetWriteQueue();
+    statusDotPendingSelector = false;
     writesDraining = false;
     afterDrainCallbacks = [];
     initRows = rows || 24;
@@ -668,6 +689,9 @@ export const XTERM_HTML = `<!DOCTYPE html>
     // mirrored modes aligned with exactly what this mobile xterm replays.
     updateMouseModeFromData(replayData);
     activeAltScreenSnapshot = isAltScreenActive(replayData);
+    initialOscLinks = Array.isArray(nextOscLinks) ? nextOscLinks : [];
+    initialOscLinkRowOffset = 0;
+    initialOscLinkEvictionReady = false;
     var oldTerm = term;
     var oldSurface = surface;
     var nextSurface = null;
@@ -690,8 +714,10 @@ export const XTERM_HTML = `<!DOCTYPE html>
       cols: cols || 80,
       rows: rows || 24,
       theme: terminalTheme,
-      fontFamily: '"Menlo", "Consolas", "DejaVu Sans Mono", monospace',
+      fontFamily: '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace',
       fontSize: fontPxForScale(currentTextScale),
+      fontWeight: '300',
+      fontWeightBold: '500',
       scrollback: 5000,
       disableStdin: true,
       cursorBlink: false,
@@ -701,6 +727,10 @@ export const XTERM_HTML = `<!DOCTYPE html>
       allowProposedApi: true
     });
     term.open(surface);
+    if (window.WebglAddon && window.WebglAddon.WebglAddon) {
+      try { var webglAddon = new window.WebglAddon.WebglAddon(); term.loadAddon(webglAddon); if (webglAddon.onContextLoss) webglAddon.onContextLoss(function() { try { webglAddon && webglAddon.dispose && webglAddon.dispose(); } catch (e) {} }); } catch (e) {}
+    }
+    if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) try { term.loadAddon(new window.Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch (e) {}
     if (typeof replayData === 'string' && replayData.length > 0) {
       enqueueWrite(replayData);
     }
@@ -723,6 +753,14 @@ export const XTERM_HTML = `<!DOCTYPE html>
           oldSurface.remove();
           if (oldTerm) oldTerm.dispose();
         }
+        // Why: restore the reader's place after the rewrapped buffer replays.
+        // Replay lands at bottom, so only act when they were scrolled up (rows>0).
+        if (scrollAnchorRows > 0 && term && term.buffer && term.buffer.active) {
+          try { term.scrollToLine(Math.max(0, (term.buffer.active.baseY || 0) - scrollAnchorRows)); } catch (e) {}
+        }
+        captureInitialOscLinkTexts();
+        initialOscLinkRowOffset = 0;
+        initialOscLinkEvictionReady = true;
         applyFitScale('init-replay');
         notify({ type: 'ready', cols: cols, rows: rows });
       });
@@ -754,6 +792,9 @@ export const XTERM_HTML = `<!DOCTYPE html>
     applyFitScale('resize-msg');
     notify({ type: 'ready', cols: cols, rows: rows });
   }
+
+  // reflow(): see terminal-webview-reflow-injected.ts (extracted for max-lines).
+  ${TERMINAL_REFLOW_JS}
 
   function notify(msg) {
     if (window.ReactNativeWebView) {
@@ -822,7 +863,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
       if (handledMessageIds.length > 256) handledMessageIds.shift();
     }
     if (msg.type === 'init') {
-      init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme, msg.fontScale);
+      init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme, msg.fontScale, msg.preserveScroll, msg.oscLinks);
     } else if (msg.type === 'set-font-scale') {
       // Why: ignore RN echoing back the value a pinch just set (msg.fontScale ===
       // currentTextScale) so the post-pinch state isn't reset; only apply changes.
@@ -834,17 +875,22 @@ export const XTERM_HTML = `<!DOCTYPE html>
       }
     } else if (msg.type === 'resize') {
       resize(msg.cols, msg.rows);
+    } else if (msg.type === 'reflow') { reflow(msg.cols, msg.rows);
     } else if (msg.type === 'write') {
       write(msg.data);
     } else if (msg.type === 'clear') {
       terminalGeneration++;
       resetWriteQueue();
+      statusDotPendingSelector = false;
       afterDrainCallbacks = [];
       writesDraining = false;
       mouseModeScanTail = '';
       trackedMouseTrackingMode = 'none';
       sgrMouseMode = false;
       sgrMousePixelsMode = false;
+      initialOscLinks = [];
+      initialOscLinkRowOffset = 0;
+      initialOscLinkEvictionReady = false;
       if (term) { term.clear(); term.reset(); }
       emitModesIfChanged();
       resetEvictionCounter();
@@ -887,6 +933,13 @@ export const XTERM_HTML = `<!DOCTYPE html>
   var WORD_RE = /[\\p{L}\\p{N}_./:@~+=?&#%-]/u;
   var LONG_PRESS_MS = 500;
   var LONG_PRESS_SLOP = 10;
+  // Why: a tap that opens a link/path must survive small finger jitter. The
+  // long-press slop (10px) only cancels the press-to-select timer; reusing it
+  // to gate the tap dropped any URL/file tap that wandered >10px — at fit scale
+  // a few screen px of jitter is a normal tap. Use a wider, time-bounded tap
+  // window so deliberate scrolls/pans still don't fire a tap.
+  var TAP_SLOP = 24;
+  var TAP_MAX_MS = 700;
   var EDGE_SCROLL_PX = 40;
   var EDGE_SCROLL_INTERVAL = 60;
 
@@ -902,6 +955,11 @@ export const XTERM_HTML = `<!DOCTYPE html>
   var sel = null; // { anchor:{col,row}, focus:{col,row}, activeHandle:null|'start'|'end' }
   var longPressTimer = null;
   var longPressOrigin = null; // {x,y, identifier}
+  // Why: tap detection is tracked separately from the long-press timer so a
+  // small jitter that cancels the press-to-select timer does not also cancel
+  // the tap (which opens links/paths). {x,y,t,identifier} or null once the
+  // gesture is disqualified as a tap (moved too far or held too long).
+  var tapCandidate = null;
   var edgeScrollTimer = null;
   var edgeScrollDir = 0;
   var edgeScrollClientX = 0;
@@ -930,6 +988,7 @@ export const XTERM_HTML = `<!DOCTYPE html>
 
   function logFeedAndEvict() {
     linesEverWritten++;
+    if (initialOscLinkEvictionReady && isBufferFull()) initialOscLinkRowOffset += 1;
     if (selMode === 'select' && sel && isBufferFull()) {
       sel.anchor.row -= 1;
       sel.focus.row -= 1;
@@ -1316,9 +1375,22 @@ export const XTERM_HTML = `<!DOCTYPE html>
     return line.translateToString(false);
   }
 
+  // Why: getLineText collapses wide chars (emoji, CJK) to one string char, so a
+  // tap's CELL column no longer equals the STRING index that url/path matchers use.
+  // Convert by measuring the string length up to the tapped cell (the count of
+  // string chars before it). Without this, taps on lines with a leading wide char
+  // (e.g. agent output prefixed with ⏺) resolve to the wrong column and miss.
+  function cellColToStringIndex(absRow, col) {
+    if (!term) return col;
+    var line = term.buffer.active.getLine(absRow);
+    if (!line) return col;
+    return line.translateToString(false, 0, col).length;
+  }
+
   // File-path-under-tap detection (matchFilePathAtColumn). See
   // terminal-path-tap-injected.ts; mirrors the unit-tested terminal-path-tap.ts.
   ${TERMINAL_PATH_TAP_JS}
+  ${URL_TAP_WEBVIEW_JS}
 
   function seedWordSelection(col, absRow) {
     var line = getLineText(absRow);
@@ -1505,164 +1577,9 @@ export const XTERM_HTML = `<!DOCTYPE html>
     else stopEdgeScroll();
   }
 
-  // ============================================================
-  // LATCHING TOUCH DISPATCHER (document-level)
-  // ============================================================
-  var dispatch = { mode: 'idle', touchId: null, touchIds: null, longPressFingerInsideOverlay: false };
-
-  function touchById(touches, id) {
-    for (var i = 0; i < touches.length; i++) {
-      if (touches[i].identifier === id) return touches[i];
-    }
-    return null;
-  }
-
-  function targetInside(target, el) {
-    if (!target || !el) return false;
-    return el.contains(target);
-  }
-
-  function clearLongPress() {
-    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-    longPressOrigin = null;
-  }
-
-  function armLongPress(touch) {
-    longPressOrigin = { x: touch.clientX, y: touch.clientY, identifier: touch.identifier };
-    longPressTimer = setTimeout(function() {
-      longPressTimer = null;
-      if (!longPressOrigin) return;
-      var c = viewportToCell(longPressOrigin.x, longPressOrigin.y);
-      if (!c) return;
-      enterSelect(c.col, c.row);
-    }, LONG_PRESS_MS);
-  }
-
-  function touchSlopExceeded(t) {
-    if (!longPressOrigin) return false;
-    var dx = Math.abs(t.clientX - longPressOrigin.x);
-    var dy = Math.abs(t.clientY - longPressOrigin.y);
-    return (dx + dy) > LONG_PRESS_SLOP;
-  }
-
-  // Why: existing surface handlers stay attached to surface but we wrap
-  // their entry to no-op when the dispatcher latches into select-drag.
-  function dispatcherShouldBlockSurface() {
-    return dispatch.mode === 'select-drag';
-  }
-
-  document.addEventListener('touchstart', function(e) {
-    var t = e.touches[0];
-    var target = e.target;
-    var onHandle = target === handleStart || target === handleEnd;
-    var inOverlay = targetInside(target, selectionOverlay);
-    var inSurface = targetInside(target, surface);
-
-    if (e.touches.length === 2) {
-      // pinch latch
-      if (selMode === 'select') {
-        notify({ type: 'mobile-clip-cancel-by-pinch' });
-        cancelSelect();
-      }
-      dispatch.mode = 'pinch';
-      dispatch.touchIds = [e.touches[0].identifier, e.touches[1].identifier];
-      clearLongPress();
-      return;
-    }
-
-    if (onHandle && selMode === 'select') {
-      // start handle drag
-      var handleName = (target === handleStart) ? 'start' : 'end';
-      sel.activeHandle = handleName;
-      dispatch.mode = 'select-drag';
-      dispatch.touchId = t.identifier;
-      e.preventDefault();
-      return;
-    }
-
-    if (inOverlay) {
-      // tap on menu pill — let the buttons' own handlers fire
-      return;
-    }
-
-    if (inSurface && selMode === 'select') {
-      // Why: tap-to-dismiss matches native iOS/Android — touching outside the
-      // selection clears it. We cancel immediately and latch to 'surface' so
-      // the same gesture still drives scroll/pan without a second touch.
-      cancelSelect();
-      dispatch.mode = 'surface';
-      dispatch.touchId = t.identifier;
-      return;
-    }
-
-    if (inSurface) {
-      dispatch.mode = 'surface';
-      dispatch.touchId = t.identifier;
-      armLongPress(t);
-    }
-  }, { capture: true, passive: false });
-
-  document.addEventListener('touchmove', function(e) {
-    if (dispatch.mode === 'select-drag') {
-      var t = touchById(e.touches, dispatch.touchId);
-      if (!t || !sel || !sel.activeHandle) return;
-      e.preventDefault();
-      handleDragMove(sel.activeHandle, t.clientX, t.clientY);
-      return;
-    }
-    if (dispatch.mode === 'surface' || dispatch.mode === 'pinch') {
-      // long-press slop check
-      if (longPressTimer && e.touches.length === 1) {
-        if (touchSlopExceeded(e.touches[0])) clearLongPress();
-      }
-      // existing surface handler will run from its own listener
-    }
-  }, { capture: true, passive: false });
-
-  document.addEventListener('touchend', function(e) {
-    if (dispatch.mode === 'select-drag') {
-      if (sel) sel.activeHandle = null;
-      stopEdgeScroll();
-      dispatch.mode = 'idle';
-      dispatch.touchId = null;
-      return;
-    }
-    if (dispatch.mode === 'pinch') {
-      if (e.touches.length < 2) {
-        dispatch.mode = (e.touches.length === 1) ? 'surface' : 'idle';
-        dispatch.touchIds = null;
-        if (e.touches.length === 1) dispatch.touchId = e.touches[0].identifier;
-      }
-      return;
-    }
-    if (dispatch.mode === 'surface') {
-      if (e.touches.length === 0 && longPressOrigin && selMode !== 'select') {
-        var clickInput = buildMouseClickInput(longPressOrigin.x, longPressOrigin.y);
-        if (clickInput) {
-          notify({ type: 'terminal-input', bytes: clickInput });
-        } else if (!isClickMouseTrackingMode(getMouseTrackingMode())) {
-          // Tap on a file path → terminal-file-tap (RN opens it); else focus.
-          notifyTapOrFilePath(longPressOrigin.x, longPressOrigin.y);
-        }
-      }
-      clearLongPress();
-      if (e.touches.length === 0) {
-        dispatch.mode = 'idle';
-        dispatch.touchId = null;
-      }
-    }
-  }, { capture: true, passive: true });
-
-  document.addEventListener('touchcancel', function() {
-    clearLongPress();
-    stopEdgeScroll();
-    if (dispatch.mode === 'select-drag') {
-      if (sel) sel.activeHandle = null;
-    }
-    dispatch.mode = 'idle';
-    dispatch.touchId = null;
-    dispatch.touchIds = null;
-  }, { capture: true, passive: true });
+  // Latching document-level touch dispatcher: see
+  // terminal-webview-tap-dispatch-injected.ts (extracted for max-lines).
+  ${TERMINAL_TAP_DISPATCH_JS}
 
   btnCopy.addEventListener('click', function(e) {
     e.preventDefault();

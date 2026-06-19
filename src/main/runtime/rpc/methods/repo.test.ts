@@ -9,6 +9,40 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('repo RPC methods', () => {
+  it('updates project runtime preferences on the runtime server', async () => {
+    const project = {
+      id: 'project-1',
+      displayName: 'Project',
+      badgeColor: '#737373',
+      sourceRepoIds: [],
+      createdAt: 1,
+      updatedAt: 2,
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateProject: vi.fn().mockReturnValue(project)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('project.update', {
+        projectId: 'project-1',
+        updates: { localWindowsRuntimePreference: { kind: 'windows-host' } }
+      })
+    )
+
+    expect(runtime.updateProject).toHaveBeenCalledWith('project-1', {
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        project: { id: 'project-1', localWindowsRuntimePreference: { kind: 'windows-host' } }
+      }
+    })
+  })
+
   it('creates a repo on the runtime server', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

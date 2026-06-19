@@ -914,6 +914,7 @@ function RemoteBrowserPagePane({
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
+  const keybindings = useAppStore((state) => state.keybindings)
 
   currentBrowserTabIdRef.current = browserTab.id
   currentBrowserTabUrlRef.current = browserTab.url
@@ -1143,6 +1144,11 @@ function RemoteBrowserPagePane({
   )
 
   useEffect(() => {
+    // Why: StrictMode (and any real remount) runs mount→cleanup→mount. The
+    // cleanup sets mountedRef false; without re-arming it on mount, every
+    // subsequent operation token reads as stale (isCurrentRemoteOperationToken
+    // gates on mountedRef) and the pane wedges on "Opening remote browser".
+    mountedRef.current = true
     return () => {
       mountedRef.current = false
       remoteOperationGenerationRef.current += 1
@@ -1172,9 +1178,11 @@ function RemoteBrowserPagePane({
   }, [clearPendingRemoteWheel])
 
   useEffect(() => {
-    remoteOperationGenerationRef.current += 1
-    streamGenerationRef.current += 1
-    activeStreamTokenRef.current = null
+    // Why: only reset the visible frame/wheel when the pane's identity changes.
+    // The stream/operation generations are owned solely by the streaming effect
+    // below — bumping them here too races that effect (e.g. under StrictMode's
+    // mount→cleanup→mount), leaving its captured token permanently one behind so
+    // the pane wedges on "Opening remote browser" while frames are available.
     remoteStreamViewportSizeRef.current = null
     clearPendingRemoteWheel()
     clearStreamFrame()
@@ -1931,6 +1939,31 @@ function RemoteBrowserPagePane({
     [runRemoteNavigation]
   )
 
+  // Browser history shortcuts for SSH/runtime browsers.
+  // Why: remote browser panes have no local webview ref, so history shortcuts
+  // must route through the runtime RPC methods rather than desktop WebContents.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const shortcutPlatform = getShortcutPlatform()
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      const method = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
+        ? 'browser.back'
+        : keybindingMatchesAction('browser.forward', e, shortcutPlatform, keybindings)
+          ? 'browser.forward'
+          : null
+      if (method === null) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      void runRemoteNavigation(method)
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [isActive, keybindings, runRemoteNavigation])
+
   const submitAddressBar = (): void => {
     const searchEngine = useAppStore.getState().browserDefaultSearchEngine
     const kagiSessionLink = useAppStore.getState().browserKagiSessionLink
@@ -2588,11 +2621,23 @@ function BrowserPagePane({
     clearTimeout(browserZoomFeedbackTimerRef.current)
   }, [])
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
+  const dismissAddressBarSuggestionsRef = useRef<(() => void) | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const browserTabIdRef = useRef(browserTab.id)
   browserTabIdRef.current = browserTab.id
   const inputLockedRef = useRef(inputLocked)
   inputLockedRef.current = inputLocked
+  const navigateBrowserHistoryRef = useRef<(direction: 'back' | 'forward') => void>(() => {})
+  navigateBrowserHistoryRef.current = (direction: 'back' | 'forward'): void => {
+    // Why: Logitech Options+ side-button remaps on macOS arrive as these
+    // keyboard shortcuts. This local pane owns the webview ref, so route the
+    // remap through the same navigation path as the toolbar buttons.
+    if (direction === 'back') {
+      webviewRef.current?.goBack()
+    } else {
+      webviewRef.current?.goForward()
+    }
+  }
   const keybindings = useAppStore((state) => state.keybindings)
   const browserDefaultZoomLevel = useAppStore(
     (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
@@ -3225,6 +3270,45 @@ function BrowserPagePane({
     })
   }, [isActive])
 
+  // Browser history shortcuts (renderer path: focus on browser chrome)
+  // Why: macOS cannot deliver Logitech side-button navigation to Electron, but
+  // Logi Options+ can remap those buttons to standard browser history chords.
+  // Handle the chords here when focus is on the toolbar or address bar.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const shortcutPlatform = getShortcutPlatform()
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      const direction = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
+        ? 'back'
+        : keybindingMatchesAction('browser.forward', e, shortcutPlatform, keybindings)
+          ? 'forward'
+          : null
+      if (direction === null) {
+        return
+      }
+      e.preventDefault()
+      e.stopPropagation()
+      navigateBrowserHistoryRef.current(direction)
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [isActive, keybindings])
+
+  // Browser history shortcuts (IPC path: focus inside webview guest)
+  // Why: a focused webview is a separate WebContents. Main forwards the same
+  // remapped history chords back here so page focus and toolbar focus behave
+  // identically.
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    return window.api.ui.onBrowserHistoryNavigate((direction) => {
+      navigateBrowserHistoryRef.current(direction)
+    })
+  }, [isActive])
+
   // Close find bar when tab is deactivated
   useEffect(() => {
     if (!isActive) {
@@ -3426,6 +3510,10 @@ function BrowserPagePane({
     }
 
     webviewRef.current = webview
+
+    const dismissAddressBarSuggestions = (): void => {
+      dismissAddressBarSuggestionsRef.current?.()
+    }
 
     const handleDomReady = (): void => {
       const webContentsId = webview.getWebContentsId()
@@ -3661,6 +3749,7 @@ function BrowserPagePane({
     }
 
     webview.addEventListener('dom-ready', handleDomReady)
+    webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
     // Why: separate handler registered only on 'did-navigate' (full page loads),
@@ -3693,6 +3782,7 @@ function BrowserPagePane({
 
     return () => {
       webview.removeEventListener('dom-ready', handleDomReady)
+      webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
       webview.removeEventListener('did-stop-loading', handleDidStopLoading)
       webview.removeEventListener('did-navigate', handleDidNavigate)
@@ -4629,6 +4719,7 @@ function BrowserPagePane({
           onSubmit={submitAddressBar}
           onNavigate={navigateToUrl}
           inputRef={addressBarInputRef}
+          dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
         />
 
         <BrowserImportHintButton profileId={sessionProfileId} />
@@ -5232,7 +5323,7 @@ function BrowserPagePane({
                   <Button
                     size="icon-xs"
                     variant="ghost"
-                    className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
+                    className="can-hover:opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
                     onClick={() => handleDeleteBrowserAnnotation(annotation.id)}
                     aria-label={translate(
                       'auto.components.browser.pane.BrowserPane.f2d0c22d67',

@@ -10,6 +10,7 @@ import {
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 
 type TerminalOverlayAssignment = {
   groupId: string
@@ -210,7 +211,10 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         leaveWorktreeIfEmpty()
       }}
       onCloseTab={() => {
-        closeTab(terminalTabId)
+        // Why: route through closeTerminalTab (not the raw store closeTab) so a
+        // pinned tab hits the confirmation guard. The overlay's direct
+        // store.closeTab was the path that closed pinned terminals silently.
+        closeTerminalTab(terminalTabId)
         leaveWorktreeIfEmpty()
       }}
     />

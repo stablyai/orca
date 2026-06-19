@@ -4,7 +4,7 @@ import { ArrowLeft, Search, Server } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
 import type { GitHubRepositoryIdentity, GlobalSettings } from '../../../../shared/types'
-import { useShortcutKeyCombos } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '../repo/repo-icon'
@@ -138,7 +138,7 @@ export function SettingsSidebar({
   // Settings should remain a stable place to reopen the checklist.
   const showSetupGuideTopRow =
     setupGuideProgress.ready && setupGuideProgress.doneCount < setupGuideProgress.total
-  const searchShortcutCombos = useShortcutKeyCombos('settings.search')
+  const searchShortcutCombos = useShortcutKeyComboDetails('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
       'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
@@ -201,10 +201,11 @@ export function SettingsSidebar({
           />
           {searchQuery === '' ? (
             <span className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center">
-              {searchShortcutCombos.map((keys) => (
+              {searchShortcutCombos.map((combo) => (
                 <ShortcutKeyCombo
-                  key={keys.join('-')}
-                  keys={keys}
+                  key={combo.keys.join('-')}
+                  keys={combo.keys}
+                  doubleTap={combo.doubleTap}
                   className="inline-flex gap-0.5"
                   separatorClassName="text-[10px] text-muted-foreground"
                 />

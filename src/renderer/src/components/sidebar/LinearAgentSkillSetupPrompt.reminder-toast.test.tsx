@@ -49,7 +49,7 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
 }))
 
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
-  buildSkillInstallCommandForRuntime: (
+  buildSkillCommandForRuntime: (
     command: string,
     runtime: { runtime: string; wslDistro?: string | null }
   ) =>

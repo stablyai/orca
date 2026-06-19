@@ -3,7 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getLocalExecutionHostLabel, toSshExecutionHostId } from '../../../../shared/execution-host'
+import { getExecutionHostLabel, toSshExecutionHostId } from '../../../../shared/execution-host'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   RUNTIME_PROTOCOL_VERSION,
@@ -15,7 +15,8 @@ import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 
 let container: HTMLDivElement
 let root: Root
-const localHostLabel = getLocalExecutionHostLabel()
+
+const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
 function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'displayName' | 'path'>): Repo {
   return {
@@ -143,7 +144,7 @@ describe('RepositoryHostSetupsSection', () => {
     renderSection(localRepo)
 
     expect(container.textContent).toContain('Viewing host')
-    expect(container.textContent).toContain(localHostLabel)
+    expect(container.textContent).toContain(LOCAL_HOST_LABEL)
   })
 
   it('opens the selected host setup settings pane through the setup repo id', () => {

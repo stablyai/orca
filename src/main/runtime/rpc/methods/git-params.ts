@@ -172,7 +172,11 @@ export const GitGeneratePullRequestFields = GitGenerateCommitMessage.extend({
   base: z.string().min(1, 'Missing base branch'),
   title: z.string(),
   body: z.string(),
-  draft: z.boolean()
+  draft: z.boolean(),
+  provider: z
+    .enum(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea', 'unsupported'])
+    .optional(),
+  useTemplate: z.boolean().optional()
 })
 
 export const GitBulkPaths = WorktreeSelector.extend({

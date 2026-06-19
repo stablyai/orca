@@ -134,6 +134,7 @@ describe('web keybindings preload API', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
   })
 
   it('returns snapshots and persists customized bindings in browser storage', async () => {
@@ -306,6 +307,141 @@ describe('web settings preload API', () => {
     expect(settings.autoRenameBranchFromWorkDefaultedOn).toBe(true)
     expect(stored.autoRenameBranchFromWork).toBe(false)
     expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
+  })
+
+  it('hydrates compact worktree cards from paired runtime settings', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { settings: { compactWorktreeCards: true } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      compactWorktreeCards?: boolean
+    }
+
+    expect(settings.compactWorktreeCards).toBe(true)
+    expect(stored.compactWorktreeCards).toBe(true)
+    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+  }, 15_000)
+
+  it('hydrates new worktree card style from a paired runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { settings: { experimentalNewWorktreeCardStyle: true } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      experimentalNewWorktreeCardStyle?: boolean
+    }
+
+    expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(stored.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+  })
+
+  it('forwards compact worktree card updates to a paired runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { settings: { compactWorktreeCards: true } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.set({ compactWorktreeCards: true })
+
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      compactWorktreeCards?: boolean
+    }
+
+    expect(settings.compactWorktreeCards).toBe(true)
+    expect(stored.compactWorktreeCards).toBe(true)
+    expect(runtimeCalls).toEqual([
+      { method: 'settings.update', params: { compactWorktreeCards: true } }
+    ])
+  }, 15_000)
+
+  it('forwards new worktree card style updates to a paired runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { settings: { experimentalNewWorktreeCardStyle: true } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.set({
+      experimentalNewWorktreeCardStyle: true
+    })
+
+    expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(runtimeCalls).toEqual([
+      { method: 'settings.update', params: { experimentalNewWorktreeCardStyle: true } }
+    ])
   })
 })
 
@@ -1124,6 +1260,104 @@ describe('web worktree preload API', () => {
     expect(runtimeCalls).toEqual([
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
       { method: 'worktree.list', params: { repo: 'repo-1', limit: 10_000 } }
+    ])
+  })
+
+  it('forwards review compare-base fields through runtime worktree calls', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'worktree.resolvePrBase') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { baseBranch: TEST_COMMIT_OID, compareBaseRef: 'refs/remotes/origin/main' },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'worktree.resolveMrBase') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: {
+                baseBranch: 'origin/source',
+                compareBaseRef: 'refs/remotes/origin/release'
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: {
+              worktree: { id: 'repo-1::/workspace/review', path: '/workspace/review' }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.worktrees.create({
+      repoId: 'repo-1',
+      name: 'review-pr-42',
+      baseBranch: TEST_COMMIT_OID,
+      compareBaseRef: 'refs/remotes/origin/main',
+      setupDecision: 'inherit'
+    })
+    await globals.window.api.worktrees.resolvePrBase({
+      repoId: 'repo-1',
+      prNumber: 42,
+      headRefName: 'feature/fix',
+      baseRefName: 'main',
+      isCrossRepository: true
+    })
+    await globals.window.api.worktrees.resolveMrBase({
+      repoId: 'repo-1',
+      mrIid: 7,
+      sourceBranch: 'feature/mr',
+      targetBranch: 'release',
+      isCrossRepository: false
+    })
+
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'worktree.create',
+        params: expect.objectContaining({
+          repo: 'repo-1',
+          baseBranch: TEST_COMMIT_OID,
+          compareBaseRef: 'refs/remotes/origin/main'
+        })
+      },
+      {
+        method: 'worktree.resolvePrBase',
+        params: {
+          repo: 'repo-1',
+          prNumber: 42,
+          headRefName: 'feature/fix',
+          baseRefName: 'main',
+          isCrossRepository: true
+        }
+      },
+      {
+        method: 'worktree.resolveMrBase',
+        params: {
+          repo: 'repo-1',
+          mrIid: 7,
+          sourceBranch: 'feature/mr',
+          targetBranch: 'release',
+          isCrossRepository: false
+        }
+      }
     ])
   })
 })

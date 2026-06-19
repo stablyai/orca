@@ -39,6 +39,27 @@ export function mirrorEntry(sourcePath: string, targetPath: string): void {
   symlinkSync(sourcePath, targetPath, isDirectoryLike ? 'dir' : 'file')
 }
 
+export function mirrorWritableFileEntry(sourcePath: string, targetPath: string): void {
+  if (process.platform === 'win32') {
+    try {
+      linkSync(sourcePath, targetPath)
+      return
+    } catch {
+      // Cross-device homes cannot hardlink; try a file symlink so writable
+      // SQLite state can still flow to source instead of a disposable copy.
+    }
+
+    try {
+      symlinkSync(sourcePath, targetPath, 'file')
+      return
+    } catch {
+      throw new Error(`Unable to create source-backed writable file mirror: ${targetPath}`)
+    }
+  }
+
+  symlinkSync(sourcePath, targetPath, 'file')
+}
+
 // Exported for tests. A "descend candidate" is an entry whose children we
 // should recurse into when tearing down the overlay. Anything that is a
 // symlink (including a Windows directory junction) must NOT be a candidate

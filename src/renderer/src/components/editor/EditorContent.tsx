@@ -4,7 +4,8 @@ now Changes view mode). Keeping the mode-selection branches colocated is easier
 to reason about than scattering the switch across per-mode wrappers. Individual
 renderers (MonacoEditor, DiffViewer, ChangesModeView, MarkdownPreview, etc.)
 already live in their own modules. */
-import React, { lazy } from 'react'
+import React from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
@@ -19,9 +20,9 @@ import {
 } from './ConflictComponents'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
-import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { getMarkdownRenderMode } from './markdown-render-mode'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
+import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
 import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
@@ -40,11 +41,6 @@ const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 const MermaidViewer = lazy(() => import('./MermaidViewer'))
 const CsvViewer = lazy(() => import('./CsvViewer'))
 const IpynbViewer = lazy(() => import('./IpynbViewer'))
-
-const richMarkdownSizeEncoder = new TextEncoder()
-// Why: encodeInto() with a pre-allocated buffer avoids creating a new
-// Uint8Array on every render, reducing GC pressure for large files.
-const richMarkdownSizeBuffer = new Uint8Array(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)
 
 export function getMarkdownSourceLineOffset(frontMatterRaw: string): number {
   return (frontMatterRaw.match(/\r\n|\r|\n/g) ?? []).length
@@ -326,12 +322,7 @@ export function EditorContent({
     const currentContent = editBuffers[activeFile.id] ?? fc.content
     const richModeUnsupportedMessage = getMarkdownRichModeUnsupportedMessage(currentContent)
     const renderMode = getMarkdownRenderMode({
-      // Why: the threshold is defined in bytes because large pasted Unicode
-      // documents can exceed ProseMirror's performance envelope long before
-      // JS string length reaches the same numeric value.
-      exceedsRichModeSizeLimit:
-        richMarkdownSizeEncoder.encodeInto(currentContent, richMarkdownSizeBuffer).written >
-        RICH_MARKDOWN_MAX_SIZE_BYTES,
+      exceedsRichModeSizeLimit: exceedsMarkdownRichModeSizeLimit(currentContent),
       hasRichModeUnsupportedContent: richModeUnsupportedMessage !== null,
       viewMode: mdViewMode
     })
@@ -637,6 +628,7 @@ export function EditorContent({
         loading={checkRunDetails.loading}
         error={checkRunDetails.error}
         openUrl={openUrl}
+        worktreeId={activeFile.worktreeId}
         onRefresh={() => {
           void reloadOpenCheckRunDetailsTab(activeFile.id)
         }}

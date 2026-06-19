@@ -3,7 +3,18 @@ export function quotePosixShell(value: string): string {
 }
 
 export function escapeWslShCommandForWindows(command: string): string {
-  return command.replace(/\$/g, '\\$')
+  // WSL preprocesses unescaped $ in Windows argv before the WSL-side shell
+  // sees it, even when the POSIX script text would single-quote the dollar.
+  let escaped = ''
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index]
+    if (char === '$' && command[index - 1] !== '\\') {
+      escaped += '\\$'
+      continue
+    }
+    escaped += char
+  }
+  return escaped
 }
 
 export function buildWslLoginShellCommand(command: string): string {

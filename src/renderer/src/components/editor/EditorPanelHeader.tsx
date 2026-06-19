@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
@@ -25,12 +25,12 @@ type EditorPanelHeaderProps = {
   hasEditorToggle: boolean
   availableEditorToggleModes: readonly EditorToggleValue[]
   effectiveToggleValue: EditorToggleValue
-  mdViewMode: MarkdownViewMode
-  hasViewModeToggle: boolean
   canOpenPreviewToSide: boolean
   canShowMarkdownPreview: boolean
   canShowMarkdownTableOfContents: boolean
   isMarkdownTableOfContentsDisabled: boolean
+  shouldShowMarkdownExportAction: boolean
+  canExportMarkdownToPdf: boolean
   showMarkdownTableOfContents: boolean
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
@@ -59,12 +59,12 @@ export function EditorPanelHeader({
   hasEditorToggle,
   availableEditorToggleModes,
   effectiveToggleValue,
-  mdViewMode,
-  hasViewModeToggle,
   canOpenPreviewToSide,
   canShowMarkdownPreview,
   canShowMarkdownTableOfContents,
   isMarkdownTableOfContentsDisabled,
+  shouldShowMarkdownExportAction,
+  canExportMarkdownToPdf,
   showMarkdownTableOfContents,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
@@ -246,8 +246,8 @@ export function EditorPanelHeader({
       )}
       <EditorPanelMarkdownActionsMenu
         isMarkdown={isMarkdown}
-        hasViewModeToggle={hasViewModeToggle}
-        mdViewMode={mdViewMode}
+        shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
+        canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={markdownFrontmatterVisible}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}

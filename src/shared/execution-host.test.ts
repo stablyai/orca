@@ -71,4 +71,10 @@ describe('execution host identity', () => {
       'runtime:runtime-1'
     )
   })
+
+  it('labels local execution hosts by platform', () => {
+    expect(getLocalExecutionHostLabel('darwin')).toBe('Local Mac')
+    expect(getLocalExecutionHostLabel('linux')).toBe('Local Linux')
+    expect(getLocalExecutionHostLabel('win32')).toBe('Local Windows')
+  })
 })

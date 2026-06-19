@@ -14,6 +14,11 @@ import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import {
+  getCachedWindowsTerminalCapabilities,
+  hasCachedWindowsTerminalCapabilities
+} from '@/lib/windows-terminal-capabilities'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
@@ -32,6 +37,8 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
+import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
+import { shouldUseShellReadyStartupDelivery } from '../../../../shared/codex-startup-delivery'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
   mode2031SequenceFor,
@@ -56,10 +63,7 @@ import type { ScrollState } from '@/lib/pane-manager/pane-manager-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 import { e2eConfig } from '@/lib/e2e-config'
-import type {
-  AgentStatusEntry,
-  ParsedAgentStatusPayload
-} from '../../../../shared/agent-status-types'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import {
   createAgentInterruptInference,
@@ -71,6 +75,7 @@ import {
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 import {
   markTerminalBracketedPasteInterrupted,
   observeTerminalBracketedPasteModeOutput,
@@ -80,7 +85,11 @@ import { createCommandCodeOutputStatusDetector } from './command-code-output-sta
 import type { PtyDataMeta } from './pty-dispatcher'
 import { getEagerPtyBufferHandle } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-link-detector'
-import { installConptyDeviceAttributesHandler } from './terminal-conpty-device-attributes'
+import {
+  CONPTY_DA1_RESPONSE,
+  createTerminalPixelSizeQueryResponder,
+  installTerminalCapabilityReplyHandlers
+} from './terminal-capability-replies'
 import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
@@ -88,6 +97,7 @@ import {
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -106,6 +116,7 @@ const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
 const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1500
 const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
 const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
+const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
 const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS = 50
@@ -127,7 +138,6 @@ const INACTIVE_FOREGROUND_IMMEDIATE_BUDGET_CHARS = 32 * 1024
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because main recovery was unavailable.]\r\n'
-
 type E2eTerminalPtyDataInjectionApi = {
   inject: (paneKey: string, data: string, meta?: PtyDataMeta) => boolean
   keys: () => string[]
@@ -461,7 +471,12 @@ function isStatelessRendererReplyCsiQuery(sequence: string): boolean {
   if (sequence.endsWith('c')) {
     return true
   }
-  return sequence === '\x1b[5n'
+  return (
+    sequence === '\x1b[5n' ||
+    sequence === '\x1b[>q' ||
+    sequence === '\x1b[14t' ||
+    sequence === '\x1b[16t'
+  )
 }
 
 function isStatefulRendererReplyCsiQuery(sequence: string): boolean {
@@ -781,6 +796,7 @@ export function connectPanePty(
   let cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
+  let sshShellReadyFallbackTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationGraceTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationMaxTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteStatusUnsubscribe: (() => void) | null = null
@@ -1455,7 +1471,7 @@ export function connectPanePty(
     title: string,
     options: {
       allowDoneDetailAfterGrace?: boolean
-      agentStatusSnapshot?: ParsedAgentStatusPayload
+      agentStatusSnapshot?: AgentCompletionStatusSnapshot
     } = {}
   ): void => {
     if (!syncAgentTaskCompleteTrackingEnabled()) {
@@ -1625,6 +1641,16 @@ export function connectPanePty(
       : null) ?? (tab?.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null)
   const runtimeEnvironmentId =
     remoteRuntimeOwnerForTransport ?? getRuntimeEnvironmentIdForWorktree(state, deps.worktreeId)
+  const localWindowsTerminalCapabilities = hasCachedWindowsTerminalCapabilities()
+    ? getCachedWindowsTerminalCapabilities()
+    : null
+  const projectRuntime =
+    !connectionId && runtimeEnvironmentId === null
+      ? getLocalProjectExecutionRuntimeContext(state, deps.worktreeId, undefined, {
+          wslAvailable: localWindowsTerminalCapabilities?.wslAvailable,
+          availableWslDistros: localWindowsTerminalCapabilities?.wslDistros ?? null
+        })
+      : undefined
   const shouldOwnAgentStatusInRenderer = runtimeEnvironmentId !== null
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
@@ -1644,6 +1670,9 @@ export function connectPanePty(
     cwd: deps.cwd,
     env: paneEnv,
     command: shouldDeliverStartupViaTerminalPaste ? undefined : paneStartup?.command,
+    startupCommandDelivery: shouldDeliverStartupViaTerminalPaste
+      ? undefined
+      : paneStartup?.startupCommandDelivery,
     connectionId,
     worktreeId: deps.worktreeId,
     // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
@@ -1654,6 +1683,7 @@ export function connectPanePty(
     leafId: pane.leafId,
     activate: deps.isActiveRef.current && deps.isVisibleRef.current,
     ...(shellOverride ? { shellOverride } : {}),
+    ...(projectRuntime ? { projectRuntime } : {}),
     ...(paneStartup?.telemetry ? { telemetry: paneStartup.telemetry } : {}),
     onPtyExit: onExit,
     onTitleChange,
@@ -1676,9 +1706,18 @@ export function connectPanePty(
             // be stored against a title that was never paired with it.
             const currentState = useAppStore.getState()
             const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
-            currentState.setAgentStatus(cacheKey, payload, title)
+            currentState.setAgentStatus(
+              cacheKey,
+              payload,
+              resolveAgentStatusTerminalTitle(payload, title)
+            )
             if (syncAgentTaskCompleteTrackingEnabled()) {
-              agentCompletionCoordinator.observeHookStatus(payload)
+              const storedStatus = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+              const notificationPayload =
+                typeof storedStatus?.stateStartedAt === 'number'
+                  ? { ...payload, stateStartedAt: storedStatus.stateStartedAt }
+                  : payload
+              agentCompletionCoordinator.observeHookStatus(notificationPayload)
             }
             if (payload.state === 'working' && pendingTerminalBellNotification) {
               scheduleTerminalBellNotification()
@@ -1691,13 +1730,17 @@ export function connectPanePty(
     ? createRemoteRuntimePtyTransport(runtimeEnvironmentId, transportOptions)
     : createIpcPtyTransport(transportOptions)
   deps.paneTransportsRef.current.set(pane.id, transport)
-  const conptyDeviceAttributesDisposable = isNativeWindowsConpty
-    ? installConptyDeviceAttributesHandler({
-        parser: pane.terminal.parser,
-        sendInput: (data) => transport.sendInput(data),
-        isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id)
-      })
-    : null
+  const terminalCapabilityRepliesDisposable = installTerminalCapabilityReplyHandlers({
+    terminal: pane.terminal,
+    parser: pane.terminal.parser,
+    sendInput: (data) => transport.sendInput(data),
+    isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id),
+    ...(isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
+  })
+  const respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(
+    pane.terminal,
+    (data) => transport.sendInput(data)
+  )
 
   const onDataDisposable = pane.terminal.onData((data) => {
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
@@ -1953,11 +1996,47 @@ export function connectPanePty(
     }
 
     // Why: for ordinary local startup commands, the local PTY provider already
-    // writes via the shell-ready barrier. terminal-paste startup commands must
-    // stay renderer-delivered so xterm can apply bracketed-paste semantics.
+    // writes via the shell-ready barrier. terminal-paste and SSH startup
+    // commands stay renderer-delivered so xterm/relay can apply their handling.
     let pendingStartupCommand =
       shouldDeliverStartupViaTerminalPaste || connectionId ? (paneStartup?.command ?? null) : null
+    const shouldWaitForSshShellReady =
+      Boolean(connectionId) &&
+      shouldUseShellReadyStartupDelivery({
+        command: paneStartup?.command,
+        startupCommandDelivery: paneStartup?.startupCommandDelivery
+      }) &&
+      !shouldDeliverStartupViaTerminalPaste
+    const sshShellReadyMarkerScan = shouldWaitForSshShellReady
+      ? createShellReadyMarkerScanState()
+      : null
+    let sshStartupShellReady = !shouldWaitForSshShellReady
+    const markSshStartupShellReady = (): void => {
+      if (sshStartupShellReady) {
+        return
+      }
+      sshStartupShellReady = true
+      if (sshShellReadyFallbackTimer !== null) {
+        clearTimeout(sshShellReadyFallbackTimer)
+        sshShellReadyFallbackTimer = null
+      }
+      schedulePendingStartupCommandDelivery()
+    }
+    let sessionRestoredBannerShown = false
+    const showSessionRestoredBanner = (): void => {
+      if (sessionRestoredBannerShown) {
+        return
+      }
+      sessionRestoredBannerShown = true
+      deps.onShowSessionRestoredBanner(pane.id)
+    }
     const getColdRestoreAgentResumePlatform = (): NodeJS.Platform => {
+      if (projectRuntime?.status === 'repair-required') {
+        return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
+      }
+      if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+        return 'linux'
+      }
       if (connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
         return 'linux'
       }
@@ -1995,6 +2074,9 @@ export function connectPanePty(
       // Why: cold restore means the PTY process is gone but the agent provider
       // session is still resumable, so the replacement shell must launch it.
       pendingStartupCommand = startupPlan.launchCommand
+      if (sleepingRecord) {
+        showSessionRestoredBanner()
+      }
       if (!useLiveEntry && sleepingRecord) {
         state.clearSleepingAgentSession(cacheKey)
       }
@@ -2002,6 +2084,18 @@ export function connectPanePty(
     }
     const schedulePendingStartupCommandDelivery = (): void => {
       if (!pendingStartupCommand) {
+        return
+      }
+      if (!sshStartupShellReady) {
+        if (sshShellReadyFallbackTimer === null) {
+          // Why: some SSH shells cannot emit Orca's ready marker. Prefer the
+          // marker when available, but fall back to the old renderer delivery
+          // behavior instead of dropping the startup command forever.
+          sshShellReadyFallbackTimer = setTimeout(() => {
+            sshShellReadyFallbackTimer = null
+            markSshStartupShellReady()
+          }, SSH_SHELL_READY_STARTUP_FALLBACK_MS)
+        }
         return
       }
       if (startupInjectTimer !== null) {
@@ -2070,6 +2164,9 @@ export function connectPanePty(
             }
           } else if (typeof gen === 'number') {
             void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+          }
+          if (resolvedPtyId && connectionId) {
+            schedulePendingStartupCommandDelivery()
           }
           return resolvedPtyId
         })
@@ -2930,7 +3027,15 @@ export function connectPanePty(
         hasReceivedPtyOutput = true
         recordAgentHibernationPaneOutput(cacheKey)
       }
+      if (sshShellReadyMarkerScan) {
+        const scanned = scanForShellReadyMarker(sshShellReadyMarkerScan, data)
+        if (scanned.matched) {
+          markSshStartupShellReady()
+        }
+        data = scanned.output
+      }
       resetHiddenOutputRestoreIfPtyChanged()
+      respondToTerminalPixelSizeQueries(data)
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       for (const link of observeTerminalGitHubPRLink(data)) {
         useAppStore.getState().observeTerminalGitHubPullRequestLink(deps.worktreeId, link)
@@ -3094,7 +3199,7 @@ export function connectPanePty(
         // land in the new shell's stdin. See replay-guard.ts.
         writeReplayData('\x1b[2J\x1b[3J\x1b[H')
         writeReplayData(connectResult.coldRestore.scrollback)
-        writeReplayData('\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n')
+        const didPrepareResume = prepareColdRestoreAgentResumeCommand()
         // Cold-restore means the daemon lost the session and spawned a
         // fresh shell — no TUI is consuming the mode-setting bytes that a
         // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
@@ -3103,7 +3208,7 @@ export function connectPanePty(
         if (!isRemoteRuntimePtyId(ptyId)) {
           window.api.pty.ackColdRestore(ptyId)
         }
-        if (prepareColdRestoreAgentResumeCommand()) {
+        if (didPrepareResume) {
           schedulePendingStartupCommandDelivery()
         }
       }
@@ -3378,10 +3483,15 @@ export function connectPanePty(
     const existingPtyId = storeSnapshot.tabsByWorktree[deps.worktreeId]?.find(
       (t) => t.id === deps.tabId
     )?.ptyId
+    const hasSleepingAgentSession = Boolean(storeSnapshot.sleepingAgentSessionsByPaneKey[cacheKey])
 
     const restoredSessionId = restoredPtyId ?? null
+    const sleptRemoteRuntimeSessionId =
+      restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) && hasSleepingAgentSession
+        ? restoredSessionId
+        : null
     const detachedLivePtyId =
-      existingPtyId && !hadExistingPaneTransportAtConnect
+      existingPtyId && !hadExistingPaneTransportAtConnect && !sleptRemoteRuntimeSessionId
         ? restoredSessionId
           ? restoredSessionId === existingPtyId
             ? restoredSessionId
@@ -3389,11 +3499,18 @@ export function connectPanePty(
           : existingPtyId
         : null
     const detachedRemoteLeafPtyId =
-      restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) ? restoredSessionId : null
+      restoredSessionId && isRemoteRuntimePtyId(restoredSessionId) && !hasSleepingAgentSession
+        ? restoredSessionId
+        : null
     const candidateReattachSessionId =
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
         : detachedLivePtyId
+    if (sleptRemoteRuntimeSessionId) {
+      deps.syncPanePtyLayoutBinding(pane.id, null)
+      deps.clearTabPtyId(deps.tabId, sleptRemoteRuntimeSessionId)
+      prepareColdRestoreAgentResumeCommand()
+    }
     const currentTabLivePtyIds = storeSnapshot.ptyIdsByTabId[deps.tabId] ?? []
     const candidateHasEagerBuffer = Boolean(
       candidateReattachSessionId &&
@@ -3640,6 +3757,10 @@ export function connectPanePty(
         clearTimeout(startupInjectTimer)
         startupInjectTimer = null
       }
+      if (sshShellReadyFallbackTimer !== null) {
+        clearTimeout(sshShellReadyFallbackTimer)
+        sshShellReadyFallbackTimer = null
+      }
       clearPendingAgentTaskCompleteNotification()
       pendingTerminalBellNotification = false
       clearTerminalBellNotificationTimer()
@@ -3665,7 +3786,7 @@ export function connectPanePty(
         connectFrame = null
       }
       onDataDisposable.dispose()
-      conptyDeviceAttributesDisposable?.dispose()
+      terminalCapabilityRepliesDisposable.dispose()
       onResizeDisposable.dispose()
       pane.container.removeEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
       geometryReportObserver?.disconnect()

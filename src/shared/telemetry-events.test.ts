@@ -177,11 +177,18 @@ describe('star_nag_outcome schema', () => {
     expect(isCohortExtendedEvent('star_nag_outcome')).toBe(true)
   })
 
-  it('accepts next_threshold only as a positive integer', () => {
+  it('accepts next_threshold only as a positive integer for deferrals', () => {
     expect(
       eventSchemas.star_nag_outcome.safeParse({
         ...valid,
         outcome: 'dismissed',
+        next_threshold: 70
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'later',
         next_threshold: 70
       }).success
     ).toBe(true)
@@ -195,6 +202,45 @@ describe('star_nag_outcome schema', () => {
       eventSchemas.star_nag_outcome.safeParse({ ...valid, outcome: 'shown', next_threshold: 70 })
         .success
     ).toBe(false)
+  })
+
+  it('accepts cooldown_days only for deferrals', () => {
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'later',
+        cooldown_days: 30
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'dismissed',
+        cooldown_days: 30
+      }).success
+    ).toBe(true)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, cooldown_days: 0 }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'opened_repo',
+        cooldown_days: 30
+      }).success
+    ).toBe(false)
+  })
+
+  it('accepts new star nag action outcomes', () => {
+    for (const outcome of [
+      'star_clicked',
+      'direct_star_succeeded',
+      'direct_star_failed',
+      'opened_repo',
+      'later'
+    ]) {
+      expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, outcome }).success).toBe(true)
+    }
   })
 
   it('rejects unknown outcome source mode and bucket values', () => {

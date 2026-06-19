@@ -4,8 +4,9 @@ import { TUI_AGENT_CONFIG } from './tui-agent-config'
  * Pi-compatible agent kinds. Both Pi and OMP (omp.sh) consume the same
  * `PI_CODING_AGENT_DIR` env contract and the same extension API, but each
  * defaults its on-disk config dir to a different `~/.<kind>/agent` path.
- * The Orca overlay needs to know which agent is being launched so it mirrors
- * the user's actual source dir for THAT agent, with no cross-agent fallback
+ * Orca's managed extension installer needs to know which agent is being
+ * launched so it targets the user's actual source dir for THAT agent, with no
+ * cross-agent fallback
  * (otherwise switching agents in the same workspace silently shadows the
  * other agent's user extensions).
  */
@@ -41,12 +42,12 @@ const OMP_REGEX = makeLaunchCmdRegex(OMP_LAUNCH_CMD)
  *
  * Returns 'omp' when the command launches OMP (`omp` / `omp.sh`), otherwise
  * defaults to 'pi'. Defaulting to 'pi' preserves prior behavior for the
- * non-launch case (e.g. bare shells that may later invoke `pi`) where the
- * `~/.pi/agent` overlay was always materialized.
+ * non-launch case (e.g. bare shells that may later invoke `pi`) where Orca
+ * prepared Pi integration by default.
  *
- * NEVER cross-fall-back: a missing source dir for the resolved kind is the
- * overlay's "no source, just Orca extensions" branch - the other agent's
- * dir MUST NOT be substituted.
+ * NEVER cross-fall-back: a missing source dir for the resolved kind means
+ * "create that kind's extension dir only" - the other agent's dir MUST NOT
+ * be substituted.
  */
 export function detectPiAgentKindFromCommand(command: string | undefined): PiAgentKind {
   if (typeof command === 'string' && OMP_REGEX.test(command)) {

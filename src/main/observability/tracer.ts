@@ -4,8 +4,8 @@
 // recording — rather than the Effect Tracer.Tracer interface, and emit the
 // same NDJSON record shape our local sink expects (`type: 'effect-span'`,
 // `traceId`, `spanId`, `parentSpanId?`, `attributes`, `events`, `exit`).
-// Wire-compatibility is what lets us pipe traces into the same Grafana LGTM
-// dashboards used by local OpenTelemetry collectors.
+// The compact shape keeps local diagnostic files readable and cheap to
+// collect for user-reviewed support uploads.
 //
 // Concurrency model: in-process span tree maintained via Node's
 // `AsyncLocalStorage`, so a child span created inside an `await` chain
@@ -89,10 +89,8 @@ const noopSpan: ActiveSpan = {
 let activeSink: TracerSink | null = null
 const contextStorage = new AsyncLocalStorage<SpanContext>()
 
-// 16-byte traceId / 8-byte spanId — OpenTelemetry hex shapes. Using
-// `randomBytes(8)` over `randomUUID()` because the OTLP exporter expects the
-// shorter spanId without dashes; standardizing on the OTLP shape avoids a
-// per-exporter conversion later.
+// 16-byte traceId / 8-byte spanId — compact hex IDs keep local NDJSON
+// records close to standard trace shapes without introducing UUID dashes.
 function genTraceId(): string {
   return randomBytes(16).toString('hex')
 }
@@ -127,9 +125,8 @@ export function getActiveSpanContext(): SpanContext | undefined {
  * resolves to `fn`'s return value; `fn`'s thrown errors propagate after
  * the span has been recorded as a Failure.
  *
- * This is the function 90% of call sites should reach for. It mirrors
- * OpenTelemetry's `tracer.startActiveSpan` shape so engineers who have used
- * OTel anywhere recognize the call site immediately.
+ * This is the function 90% of call sites should reach for: it keeps span
+ * lifetime scoped to the async work it measures.
  */
 export async function withSpan<T>(
   name: string,

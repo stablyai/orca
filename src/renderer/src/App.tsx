@@ -1,6 +1,5 @@
 /* eslint-disable max-lines */
 import {
-  lazy,
   Suspense,
   useCallback,
   useEffect,
@@ -10,6 +9,7 @@ import {
   useState,
   type SetStateAction
 } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 
 import {
   ArrowLeft,
@@ -24,6 +24,10 @@ import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/const
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import {
+  isPairedWebClientWindow,
+  shouldRenderDesktopWindowChrome
+} from '@/lib/desktop-window-chrome'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { buildAppFontFamily } from '@/lib/app-font-family'
@@ -49,6 +53,8 @@ import { dispatchWindowCloseRequest } from './components/window-close-request-co
 import { useSystemPrefersDark } from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
 import { StarNagCard } from './components/StarNagCard'
+import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
+import { StarNagToastHost } from './components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { onOnboardingReopened } from './components/onboarding/show-onboarding-event'
@@ -64,6 +70,7 @@ import {
 } from '@/lib/floating-workspace-terminal-actions'
 import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
+import { OPEN_WORKSPACE_BOARD_EVENT } from './components/sidebar/useWorkspaceBoardPanel'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'
@@ -135,16 +142,30 @@ import {
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
-  type KeybindingContext
+  type KeybindingContext,
+  type PhysicalModifierToken
 } from '../../shared/keybindings'
+import {
+  ModifierDoubleTapDetector,
+  toModifierDoubleTapEvent
+} from '../../shared/modifier-double-tap-detector'
 import { isGitRepoKind } from '../../shared/repo-kind'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveMountedLazyModalIds, type LazyModalId } from './lazy-modal-mount-state'
 import { translate } from '@/i18n/i18n'
+import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
 const shortcutPlatform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+// Why: Windows and Linux both run with the native title bar removed (Windows
+// via titleBarStyle: 'hidden', Linux via frame: false), so the renderer draws
+// its own logo/menu anchor and min/max/close controls on both. Paired web
+// clients run in a browser tab, so they must not render desktop window chrome.
+const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
+  platform: shortcutPlatform,
+  isWebClient: isPairedWebClientWindow()
+})
 
 function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -152,9 +173,26 @@ function getKeybindingContext(target: EventTarget | null): KeybindingContext {
     : 'app'
 }
 
-// Why: 'hidden' titleBarStyle on Windows removes the native OS title bar,
-// so we render our own minimize/maximize/close buttons.  These SVG icons match
-// the Fluent/Win11 style: thin 10×10 paths on a 40×30 hit area.
+// Abstraction over a real KeyboardEvent and a synthetic double-tap gesture so a
+// single dispatch path serves both. KeybindingInput-compatible (key/code +
+// modifier flags) so it flows straight into keybindingMatchesAction.
+type ShortcutDispatchInput = {
+  key?: string
+  code?: string
+  altKey?: boolean
+  metaKey?: boolean
+  ctrlKey?: boolean
+  shiftKey?: boolean
+  doubleTapModifier?: PhysicalModifierToken
+  target: EventTarget | null
+  defaultPrevented: boolean
+  preventDefault: () => void
+}
+
+// Why: Windows ('hidden' titleBarStyle) and Linux (frame: false) both remove
+// the native OS title bar, so we render our own minimize/maximize/close
+// buttons. These SVG icons match the Fluent/Win11 style: thin 10×10 paths on a
+// 40×30 hit area.
 function WindowControls(): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
@@ -548,6 +586,7 @@ function App(): React.JSX.Element {
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
@@ -1222,6 +1261,7 @@ function App(): React.JSX.Element {
         hideSleepingWorkspaces: !showSleepingWorkspaces,
         showSleepingWorkspaces,
         hideDefaultBranchWorkspace,
+        hideAutomationGeneratedWorkspaces,
         showDotfilesByWorktree,
         filterRepoIds,
         // Why: rides the same debounced save so dashboard auto-acks (which fire
@@ -1247,6 +1287,7 @@ function App(): React.JSX.Element {
     projectOrderBy,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
+    hideAutomationGeneratedWorkspaces,
     showDotfilesByWorktree,
     filterRepoIds,
     acknowledgedAgentsByPaneKey
@@ -1346,26 +1387,25 @@ function App(): React.JSX.Element {
   }
 
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.repeat) {
-        return
-      }
+    const doubleTapDetector = new ModifierDoubleTapDetector()
+
+    const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
       // Why: child-component handlers (e.g. terminal search Cmd+G / Cmd+Shift+G)
       // register on the same window capture phase and fire first. If they already
       // called preventDefault, this handler must not also act on the event —
       // otherwise both actions execute (e.g. search navigation AND sidebar open).
-      if (e.defaultPrevented) {
+      if (input.defaultPrevented) {
         return
       }
       // Why: the Settings recorder intentionally captures existing app
       // shortcuts, so global handlers must not fire while its button has focus.
       if (
-        e.target instanceof Element &&
-        e.target.closest('[data-shortcut-recorder-active]') !== null
+        input.target instanceof Element &&
+        input.target.closest('[data-shortcut-recorder-active]') !== null
       ) {
         return
       }
-      const context = getKeybindingContext(e.target)
+      const context = getKeybindingContext(input.target)
 
       // Note: some app-level shortcuts are also intercepted via
       // before-input-event in createMainWindow.ts so they still work when a
@@ -1373,7 +1413,7 @@ function App(): React.JSX.Element {
       // local-focus cases and to preserve the same guards in one place.
 
       const matchShortcut = (actionId: KeybindingActionId): boolean =>
-        keybindingMatchesAction(actionId, e, shortcutPlatform, keybindings, {
+        keybindingMatchesAction(actionId, input, shortcutPlatform, keybindings, {
           context,
           terminalShortcutPolicy: settings?.terminalShortcutPolicy
         })
@@ -1406,7 +1446,7 @@ function App(): React.JSX.Element {
             ? selectedExplorerFolderRelativePath(document.activeElement)
             : null
         if (selectedFolderRelativePath !== null && activeWorktreeId) {
-          e.preventDefault()
+          input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
           actions.showRightSidebarSearch({
             includePattern: folderRelativePathToIncludeGlob(selectedFolderRelativePath)
@@ -1416,7 +1456,7 @@ function App(): React.JSX.Element {
 
         const selectedText = getSelectedTextForFileSearch()
         if (selectedText) {
-          e.preventDefault()
+          input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
           openSearchSidebar(selectedText)
           return
@@ -1426,7 +1466,7 @@ function App(): React.JSX.Element {
       // Why: an empty floating workspace has no tab to close; Cmd/Ctrl+W
       // should hide that transient overlay before underlying app surfaces act.
       if (
-        keybindingMatchesAction('tab.close', e, shortcutPlatform, keybindings, {
+        keybindingMatchesAction('tab.close', input, shortcutPlatform, keybindings, {
           context: 'app'
         }) &&
         shouldMinimizeFloatingWorkspacePanelOnCloseShortcut({
@@ -1434,7 +1474,7 @@ function App(): React.JSX.Element {
           floatingVisibleTabCount
         })
       ) {
-        e.preventDefault()
+        input.preventDefault()
         setFloatingTerminalOpenWithFocus(false)
         return
       }
@@ -1445,14 +1485,14 @@ function App(): React.JSX.Element {
       // Cmd+B for the markdown editor (see createMainWindow.ts +
       // docs/markdown-cmd-b-bold-design.md), but this renderer-side fallback
       // still covers the blur→press IPC race and any non-carved editable surface.
-      if (isEditableTarget(e.target)) {
+      if (isEditableTarget(input.target)) {
         return
       }
 
       // Why: xterm's helper textarea is intentionally not a generic editable
       // target, but floating-terminal SSH/tmux control chords must still reach
       // the terminal instead of app-level chrome shortcuts.
-      if (isFloatingWorkspaceTerminalInputTarget(e.target)) {
+      if (isFloatingWorkspaceTerminalInputTarget(input.target)) {
         return
       }
 
@@ -1465,7 +1505,7 @@ function App(): React.JSX.Element {
         if (creationLayoutActive || !shouldShowWorktreeHistoryControls(activeView)) {
           return
         }
-        e.preventDefault()
+        input.preventDefault()
         const store = useAppStore.getState()
         if (matchShortcut('worktree.history.back')) {
           store.goBackWorktree()
@@ -1483,7 +1523,7 @@ function App(): React.JSX.Element {
       const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
       if (floatingWorkspaceFocused) {
         if (
-          isFloatingWorkspacePanelShortcut(e, shortcutPlatform, null, keybindings, {
+          isFloatingWorkspacePanelShortcut(input, shortcutPlatform, null, keybindings, {
             context,
             terminalShortcutPolicy: settings?.terminalShortcutPolicy
           })
@@ -1494,7 +1534,7 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+B — toggle left sidebar
       if (matchShortcut('sidebar.left.toggle')) {
-        e.preventDefault()
+        input.preventDefault()
         notifyTerminalCapture('sidebar.left.toggle')
         actions.toggleSidebar()
         return
@@ -1507,7 +1547,7 @@ function App(): React.JSX.Element {
       if (workspaceChromeActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
         const store = useAppStore.getState()
         if (store.activeTabType === 'terminal' && store.activeTabId) {
-          e.preventDefault()
+          input.preventDefault()
           notifyTerminalCapture('tab.rename')
           store.setRenamingTabId(store.activeTabId)
           return
@@ -1523,11 +1563,20 @@ function App(): React.JSX.Element {
         matchShortcut('workspace.rename') &&
         activeWorktreeId
       ) {
-        e.preventDefault()
+        input.preventDefault()
         notifyTerminalCapture('workspace.rename')
         const store = useAppStore.getState()
         store.setSidebarOpen(true)
         requestScrollToCurrentWorkspaceRevealAndRename()
+        return
+      }
+
+      if (matchShortcut('workspace.openBoard') && activeView !== 'settings') {
+        input.preventDefault()
+        notifyTerminalCapture('workspace.openBoard')
+        const store = useAppStore.getState()
+        store.setSidebarOpen(true)
+        window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
         return
       }
 
@@ -1542,7 +1591,7 @@ function App(): React.JSX.Element {
       if (matchShortcut('view.tasks') && activeView !== 'settings') {
         const store = useAppStore.getState()
         if (store.repos.some((repo) => isGitRepoKind(repo))) {
-          e.preventDefault()
+          input.preventDefault()
           notifyTerminalCapture('view.tasks')
           store.openTaskPage()
         }
@@ -1555,7 +1604,7 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+L — toggle right sidebar
       if (matchShortcut('sidebar.right.toggle')) {
-        e.preventDefault()
+        input.preventDefault()
         notifyTerminalCapture('sidebar.right.toggle')
         actions.toggleRightSidebar()
         return
@@ -1563,7 +1612,7 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+Shift+E — toggle right sidebar / explorer tab
       if (matchShortcut('sidebar.explorer.toggle')) {
-        e.preventDefault()
+        input.preventDefault()
         notifyTerminalCapture('sidebar.explorer.toggle')
         actions.showRightSidebarFiles()
         return
@@ -1571,7 +1620,7 @@ function App(): React.JSX.Element {
 
       // Cmd/Ctrl+Shift+F — toggle right sidebar / search tab
       if (matchShortcut('sidebar.search.toggle')) {
-        e.preventDefault()
+        input.preventDefault()
         notifyTerminalCapture('sidebar.search.toggle')
         openSearchSidebar(null)
         return
@@ -1586,7 +1635,7 @@ function App(): React.JSX.Element {
         if (document.querySelector('[data-terminal-search-root]')) {
           return
         }
-        e.preventDefault()
+        input.preventDefault()
         notifyTerminalCapture('sidebar.sourceControl.toggle')
         actions.setRightSidebarTab('source-control')
         actions.setRightSidebarOpen(true)
@@ -1594,7 +1643,7 @@ function App(): React.JSX.Element {
       }
 
       if (matchShortcut('sidebar.checks.toggle')) {
-        e.preventDefault()
+        input.preventDefault()
         notifyTerminalCapture('sidebar.checks.toggle')
         actions.setRightSidebarTab('checks')
         actions.setRightSidebarOpen(true)
@@ -1605,15 +1654,79 @@ function App(): React.JSX.Element {
       // Why: Ctrl+Shift+I is the built-in DevTools accelerator on Windows/Linux;
       // intercepting it would break an essential developer tool.
       if (matchShortcut('sidebar.ports.toggle')) {
-        e.preventDefault()
+        input.preventDefault()
         notifyTerminalCapture('sidebar.ports.toggle')
         actions.setRightSidebarTab('ports')
         actions.setRightSidebarOpen(true)
       }
     }
 
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const detected = doubleTapDetector.process(
+        toModifierDoubleTapEvent({
+          type: 'keyDown',
+          code: e.code,
+          key: e.key,
+          shift: e.shiftKey,
+          control: e.ctrlKey,
+          alt: e.altKey,
+          meta: e.metaKey,
+          isAutoRepeat: e.repeat
+        }),
+        Date.now()
+      )
+      if (e.repeat) {
+        return
+      }
+      if (detected) {
+        // Synthetic input: no key/modifier flags, so only DoubleTap bindings match.
+        dispatchShortcutInput({
+          doubleTapModifier: detected.modifier,
+          target: e.target,
+          defaultPrevented: e.defaultPrevented,
+          preventDefault: () => e.preventDefault()
+        })
+        return
+      }
+      dispatchShortcutInput({
+        key: e.key,
+        code: e.code,
+        altKey: e.altKey,
+        metaKey: e.metaKey,
+        ctrlKey: e.ctrlKey,
+        shiftKey: e.shiftKey,
+        target: e.target,
+        defaultPrevented: e.defaultPrevented,
+        preventDefault: () => e.preventDefault()
+      })
+    }
+
+    const onKeyUp = (e: KeyboardEvent): void => {
+      doubleTapDetector.process(
+        toModifierDoubleTapEvent({
+          type: 'keyUp',
+          code: e.code,
+          key: e.key,
+          shift: e.shiftKey,
+          control: e.ctrlKey,
+          alt: e.altKey,
+          meta: e.metaKey
+        }),
+        Date.now()
+      )
+    }
+
+    // Why: a window blur mid-gesture must not leave the detector armed.
+    const onBlur = (): void => doubleTapDetector.reset()
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    window.addEventListener('keyup', onKeyUp, { capture: true })
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, { capture: true })
+      window.removeEventListener('keyup', onKeyUp, { capture: true })
+      window.removeEventListener('blur', onBlur)
+    }
   }, [
     activeView,
     activeWorktreeId,
@@ -1679,9 +1792,9 @@ function App(): React.JSX.Element {
       <div className="flex h-full items-center">
         {isMac && !isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
-        ) : isWindows ? (
-          /* Why: on Windows the native title bar is hidden, so we render the
-             Orca logo as a non-interactive identity anchor and a ··· button
+        ) : hasCustomTitleBar ? (
+          /* Why: on Windows/Linux the native title bar is removed, so we render
+             the Orca logo as a non-interactive identity anchor and a ··· button
              that pops up the application menu (the same menu revealed by Alt
              on the default autoHideMenuBar). */
           <>
@@ -1704,7 +1817,7 @@ function App(): React.JSX.Element {
         ) : (
           <div className="pl-2" />
         )}
-        {showSidebar && !isWindows && (
+        {showSidebar && !hasCustomTitleBar && (
           <>
             {settings?.showTitlebarAppName !== false && (
               <ContextMenu>
@@ -1847,25 +1960,26 @@ function App(): React.JSX.Element {
       visible at a time. */}
       {!rightSidebarOpen && rightSidebarToggle}
       {/* Why: reserve space so content is not obscured by the
-      fixed-position window-controls overlay on Windows. */}
-      {isWindows && <div className="window-controls-titlebar-spacer" />}
+      fixed-position window-controls overlay on Windows/Linux. */}
+      {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )
 
   return (
     <div
       ref={setAppRootNode}
-      className="flex flex-col h-screen w-screen overflow-hidden"
+      className="flex flex-col h-dvh w-screen overflow-hidden"
       style={
         {
           '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
           // Why: consumed by anything that needs to avoid the fixed-position
-          // window-controls overlay on Windows (floating sidebar toggle, right
-          // sidebar header, etc.) without hardcoding 138px in multiple places.
-          '--window-controls-width': isWindows ? '138px' : '0px',
+          // window-controls overlay on Windows/Linux (floating sidebar toggle,
+          // right sidebar header, etc.) without hardcoding 138px in multiple
+          // places.
+          '--window-controls-width': hasCustomTitleBar ? '138px' : '0px',
           // Why: consumed by the side-position activity bar to push icons below
-          // the fixed-position window-controls overlay on Windows.
-          '--window-controls-height': isWindows ? '36px' : '0px'
+          // the fixed-position window-controls overlay on Windows/Linux.
+          '--window-controls-height': hasCustomTitleBar ? '36px' : '0px'
         } as React.CSSProperties
       }
     >
@@ -2014,9 +2128,9 @@ function App(): React.JSX.Element {
                               {
                                 // Why: right: var(--window-controls-width) is the single
                                 // mechanism that keeps the toggle clear of the
-                                // fixed-position window-controls overlay on Windows (138px)
-                                // and sits at the right edge on non-Windows (0px). No
-                                // internal spacer needed — adding one would push the button
+                                // fixed-position window-controls overlay on custom desktop
+                                // chrome (138px) and sits at the right edge otherwise (0px).
+                                // No internal spacer needed — adding one would push the button
                                 // a further 138px to the left and cover the pane-actions
                                 // Ellipsis button with an un-clickable div.
                                 right: 'var(--window-controls-width)',
@@ -2334,6 +2448,15 @@ function App(): React.JSX.Element {
             >
               <StarNagCard />
             </RecoverableRenderErrorBoundary>
+            <RecoverableRenderErrorBoundary
+              boundaryId="overlay.star-nag-toast"
+              surface="overlay"
+              resetKey={activeView}
+              compact
+            >
+              <StarNagToastHost />
+            </RecoverableRenderErrorBoundary>
+            <StarNagAgentValueMomentObserver />
             {/* Why: the existing-user opt-in banner mounts at App root so it
           renders once per renderer session, not per view. It gates
           internally on the cohort markers populated by the migration,
@@ -2447,11 +2570,12 @@ function App(): React.JSX.Element {
         </ConfirmationDialogProvider>
       </TooltipProvider>
       <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+      <PinnedTabCloseDialog />
       {/* Why: rendered last so it sits after all -webkit-app-region:drag elements
           in DOM order. Electron's hit-test for drag regions is DOM-order-based and
           ignores z-index — placing WindowControls earlier caused the drag region to
           win, making the buttons unclickable. */}
-      {isWindows && <WindowControls />}
+      {hasCustomTitleBar && <WindowControls />}
     </div>
   )
 }

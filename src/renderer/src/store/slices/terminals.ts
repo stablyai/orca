@@ -22,6 +22,9 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stab
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { clearTransientTerminalState, emptyLayoutSnapshot } from './terminal-helpers'
@@ -37,6 +40,7 @@ import {
 } from './tab-group-state'
 import {
   ensurePtyDispatcher,
+  restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
 } from '@/components/terminal-pane/pty-transport'
 import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/terminal-layout-leaf-ids'
@@ -50,6 +54,12 @@ import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import {
+  collectHibernatedCompletionEvidenceForWorktree,
+  collectSleepingAgentSessionRecordsForWorktree,
+  type AgentStatusWorktreeShutdownReason
+} from './agent-status'
 
 function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   const usedOrdinals = new Set<number>()
@@ -179,19 +189,22 @@ function resolveCreatedTabShellOverride(
   explicitShellOverride: string | undefined,
   defaultWindowsShell: string | undefined,
   isRemoteWorktree: boolean,
-  isWslWorktree: boolean
+  isWslWorktree: boolean,
+  projectRuntime: ProjectExecutionRuntimeResolution | undefined
 ): string | undefined {
   if (isRemoteWorktree) {
     return undefined
   }
+  if (isWindowsRendererRuntime()) {
+    return resolveLocalWindowsTerminalShellOverrideForTab({
+      explicitShellOverride,
+      defaultWindowsShell,
+      isWslWorktree,
+      projectRuntime
+    })
+  }
   if (explicitShellOverride !== undefined) {
     return explicitShellOverride
-  }
-  if (isWindowsRendererRuntime()) {
-    if (isWslWorktree) {
-      return 'wsl.exe'
-    }
-    return defaultWindowsShell
   }
   return undefined
 }
@@ -241,6 +254,18 @@ function resolveTerminalStopRuntimeEnvironmentId(
   return getRuntimeEnvironmentIdForWorktree(state, worktreeId)
 }
 
+function sortedUniquePtyIds(ptyIds: readonly string[] | undefined): string[] {
+  return [...new Set((ptyIds ?? []).filter((ptyId) => ptyId.length > 0))].sort()
+}
+
+function equalStringSets(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+  const bSet = new Set(b)
+  return a.every((value) => bSet.has(value))
+}
+
 export type TerminalSlice = {
   tabsByWorktree: Record<string, TerminalTab[]>
   activeTabId: string | null
@@ -285,9 +310,12 @@ export type TerminalSlice = {
       /** Renderer-delivered startup input for callers that need xterm paste
        *  semantics before the submit Enter. */
       delivery?: 'terminal-paste'
+      startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       /** Initial prompt-start status for agents that lack native prompt hooks. */
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
+      /** Show the restored-session banner when this startup command mounts. */
+      showSessionRestoredBanner?: boolean
       /** Telemetry metadata for the `agent_started` event. Threaded all the
        *  way to the `pty:spawn` IPC handler in main so the event fires only
        *  after spawn confirms — never on click-intent. */
@@ -401,7 +429,22 @@ export type TerminalSlice = {
   clearTabPtyId: (tabId: string, ptyId?: string) => void
   shutdownWorktreeTerminals: (
     worktreeId: string,
-    opts?: { keepIdentifiers?: boolean; sleepingPaneKeys?: string[] }
+    opts?: {
+      keepIdentifiers?: boolean
+      shutdownReason?: AgentStatusWorktreeShutdownReason
+      sleepingPaneKeys?: string[]
+      expectedRuntimePtyIds?: string[]
+    }
+  ) => Promise<void>
+  shutdownCompletedAgentPaneForHibernation: (
+    worktreeId: string,
+    opts: {
+      paneKey: string
+      tabId: string
+      leafId: string
+      ptyId: string
+      expectedRuntimePtyId?: string
+    }
   ) => Promise<void>
   suppressPtyExit: (ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
@@ -419,14 +462,22 @@ export type TerminalSlice = {
     startup: {
       command: string
       delivery?: 'terminal-paste'
+      startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
+      showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
     }
   ) => void
-  consumeTabStartupCommand: (
-    tabId: string
-  ) => { command: string; env?: Record<string, string>; telemetry?: AgentStartedTelemetry } | null
+  consumeTabStartupCommand: (tabId: string) => {
+    command: string
+    delivery?: 'terminal-paste'
+    startupCommandDelivery?: StartupCommandDelivery
+    env?: Record<string, string>
+    initialAgentStatus?: { agent: TuiAgent; prompt: string }
+    showSessionRestoredBanner?: boolean
+    telemetry?: AgentStartedTelemetry
+  } | null
   queueTabSetupSplit: (
     tabId: string,
     startup: { command: string; env?: Record<string, string>; direction: SetupSplitDirection }
@@ -642,16 +693,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const nextOrdinal = getNextTerminalOrdinal(existing)
       const defaultTitle = `Terminal ${nextOrdinal}`
       const quickCommandLabel = options?.quickCommandLabel?.trim()
+      const isRemoteWorktree = worktreeUsesRemoteConnection(s, worktreeId)
+      const isWslWorktree = worktreeUsesWslPath(s, worktreeId)
       const createdShellOverride = resolveCreatedTabShellOverride(
         shellOverride,
         s.settings?.terminalWindowsShell,
         // Why: SSH PTYs ignore local Windows shell selection; persisting a
         // local shell icon would mislabel a remote terminal.
-        worktreeUsesRemoteConnection(s, worktreeId),
+        isRemoteWorktree,
         // Why: WSL UNC worktrees are repo-scoped WSL environments. New default
         // terminals should enter that distro even when the global Windows shell
         // preference is PowerShell or cmd.exe.
-        worktreeUsesWslPath(s, worktreeId)
+        isWslWorktree,
+        isRemoteWorktree ? undefined : getLocalProjectExecutionRuntimeContext(s, worktreeId)
       )
       tab = {
         id,
@@ -1462,6 +1516,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       .find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId)
     if (item) {
       get().setUnifiedTabColor(item.id, color)
+      // Why: tab color is host-authoritative for remote-server tabs; mirror it
+      // so it persists instead of reverting on the next snapshot.
+      const state = get()
+      const owningWorktreeId = Object.keys(state.unifiedTabsByWorktree).find((wId) =>
+        (state.unifiedTabsByWorktree[wId] ?? []).some((entry) => entry.id === item.id)
+      )
+      if (owningWorktreeId && getRuntimeEnvironmentIdForWorktree(state, owningWorktreeId)) {
+        void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+          setWebRuntimeTabProps({ worktreeId: owningWorktreeId, tabId: item.id, color })
+        )
+      }
     }
   },
 
@@ -1518,6 +1583,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const isFirstPty = existingPtyIds.length === 0
       const isActiveWorktree = worktreeId != null && s.activeWorktreeId === worktreeId
       const shouldBumpSortEpoch = isFirstPty && isActiveWorktree && !wasActivationSpawn
+      const nextSuppressedPtyExitIds = { ...s.suppressedPtyExitIds }
+      delete nextSuppressedPtyExitIds[ptyId]
+      const remoteRuntimePtyHandle = parseRemoteRuntimePtyId(ptyId)?.handle
+      if (remoteRuntimePtyHandle) {
+        delete nextSuppressedPtyExitIds[remoteRuntimePtyHandle]
+      }
       return {
         ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
         ptyIdsByTabId: {
@@ -1528,6 +1599,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...s.lastKnownRelayPtyIdByTabId,
           [tabId]: ptyId
         },
+        suppressedPtyExitIds: nextSuppressedPtyExitIds,
         ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
       }
     })
@@ -1635,10 +1707,224 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     }
   },
 
+  shutdownCompletedAgentPaneForHibernation: async (worktreeId, opts) => {
+    const paneKeys = [opts.paneKey]
+    const expectedRuntimePtyIds = sortedUniquePtyIds(
+      opts.expectedRuntimePtyId ? [opts.expectedRuntimePtyId] : []
+    )
+    const shutdownPtyIds = sortedUniquePtyIds([opts.ptyId, ...expectedRuntimePtyIds])
+    const state = get()
+    const tab = (state.tabsByWorktree[worktreeId] ?? []).find(
+      (candidate) => candidate.id === opts.tabId
+    )
+    const parsed = parsePaneKey(opts.paneKey)
+    const layout = state.terminalLayoutsByTabId[opts.tabId]
+    const liveTabPtyIds = state.ptyIdsByTabId[opts.tabId] ?? []
+    if (
+      !tab ||
+      !parsed ||
+      parsed.tabId !== opts.tabId ||
+      parsed.leafId !== opts.leafId ||
+      layout?.ptyIdsByLeafId?.[opts.leafId] !== opts.ptyId ||
+      (expectedRuntimePtyIds.length === 0 && !liveTabPtyIds.includes(opts.ptyId))
+    ) {
+      throw new Error('agent_hibernation_pane_binding_mismatch')
+    }
+
+    const sleepingAgentSessionRecords = collectSleepingAgentSessionRecordsForWorktree(
+      state,
+      worktreeId,
+      paneKeys
+    )
+    const retainedCompletionEvidence = collectHibernatedCompletionEvidenceForWorktree(
+      state,
+      worktreeId,
+      paneKeys
+    )
+
+    const capture = shutdownBufferCaptures.get(opts.tabId)
+    if (capture) {
+      try {
+        capture({ includeLocalBuffers: false })
+      } catch {
+        // Don't let one tab's capture failure block the pane hibernation.
+      }
+    }
+
+    const clearTargetSuppressions = (): void => {
+      set((s) => {
+        const next = { ...s.suppressedPtyExitIds }
+        for (const ptyId of shutdownPtyIds) {
+          delete next[ptyId]
+        }
+        return { suppressedPtyExitIds: next }
+      })
+    }
+
+    set((s) => ({
+      suppressedPtyExitIds: {
+        ...s.suppressedPtyExitIds,
+        ...Object.fromEntries(shutdownPtyIds.map((ptyId) => [ptyId, true] as const))
+      }
+    }))
+
+    if (expectedRuntimePtyIds.length > 0) {
+      const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(get(), worktreeId)
+      if (!runtimeEnvironmentId) {
+        clearTargetSuppressions()
+        throw new Error('missing_runtime_for_exact_terminal_stop')
+      }
+      let stopResult: {
+        stoppedPtyIds?: string[]
+        livePtyIds?: string[]
+        postStopVerified?: boolean
+        postStopFailure?: string
+      }
+      try {
+        stopResult = await callRuntimeRpc<{
+          stoppedPtyIds?: string[]
+          livePtyIds?: string[]
+          postStopVerified?: boolean
+          postStopFailure?: string
+        }>(
+          { kind: 'environment', environmentId: runtimeEnvironmentId },
+          'terminal.stopExact',
+          {
+            worktree: toRuntimeWorktreeSelector(worktreeId),
+            expectedPtyIds: expectedRuntimePtyIds,
+            keepHistory: true,
+            targetOnly: true
+          },
+          { timeoutMs: 15_000 }
+        )
+      } catch (err) {
+        clearTargetSuppressions()
+        throw err
+      }
+      const stoppedPtyIds = sortedUniquePtyIds(stopResult.stoppedPtyIds)
+      const livePtyIds = sortedUniquePtyIds(stopResult.livePtyIds)
+      const targetWasLive = expectedRuntimePtyIds.every((ptyId) => livePtyIds.includes(ptyId))
+      if (!equalStringSets(stoppedPtyIds, expectedRuntimePtyIds) || !targetWasLive) {
+        clearTargetSuppressions()
+        throw new Error('exact_terminal_stop_mismatch')
+      }
+      if (stopResult.postStopVerified !== true) {
+        clearTargetSuppressions()
+        throw new Error(stopResult.postStopFailure ?? 'exact_terminal_stop_unverified')
+      }
+      unregisterPtyDataHandlers(shutdownPtyIds)
+    } else if (!opts.ptyId.startsWith('remote:')) {
+      // Why: pty.kill can flush final data before exit; unregister first so
+      // pane hibernation cannot fire phantom notifications from stale handlers.
+      const handlerSnapshots = unregisterPtyDataHandlers(shutdownPtyIds)
+      try {
+        await window.api.pty.kill(opts.ptyId, { keepHistory: true })
+      } catch (err) {
+        restorePtyDataHandlersAfterFailedShutdown(handlerSnapshots)
+        clearTargetSuppressions()
+        throw err
+      }
+    }
+
+    set((s) => {
+      const existingPtyIds = s.ptyIdsByTabId[opts.tabId] ?? []
+      const shutdownPtyIdSet = new Set(shutdownPtyIds)
+      const remainingPtyIds = existingPtyIds.filter((ptyId) => !shutdownPtyIdSet.has(ptyId))
+      const nextTabsByWorktree = { ...s.tabsByWorktree }
+      const tabs = nextTabsByWorktree[worktreeId] ?? []
+      const tabIndex = tabs.findIndex((candidate) => candidate.id === opts.tabId)
+      if (tabIndex !== -1) {
+        const nextTabs = [...tabs]
+        nextTabs[tabIndex] = {
+          ...nextTabs[tabIndex],
+          ptyId: remainingPtyIds.at(-1) ?? null
+        }
+        nextTabsByWorktree[worktreeId] = nextTabs
+      }
+
+      const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
+      for (const ptyId of shutdownPtyIds) {
+        delete nextCodexRestartNoticeByPtyId[ptyId]
+      }
+      const nextLastKnownRelay =
+        remainingPtyIds.length === 0
+          ? { ...s.lastKnownRelayPtyIdByTabId }
+          : s.lastKnownRelayPtyIdByTabId
+      if (remainingPtyIds.length === 0) {
+        delete nextLastKnownRelay[opts.tabId]
+      }
+
+      let nextRuntimePaneTitlesByTabId = s.runtimePaneTitlesByTabId
+      const numericPaneId = Number(opts.leafId)
+      if (
+        Number.isInteger(numericPaneId) &&
+        s.runtimePaneTitlesByTabId[opts.tabId]?.[numericPaneId]
+      ) {
+        const nextByPane = { ...s.runtimePaneTitlesByTabId[opts.tabId] }
+        delete nextByPane[numericPaneId]
+        nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
+        if (Object.keys(nextByPane).length > 0) {
+          nextRuntimePaneTitlesByTabId[opts.tabId] = nextByPane
+        } else {
+          delete nextRuntimePaneTitlesByTabId[opts.tabId]
+        }
+      }
+
+      const nextUnreadTerminalPanes = { ...s.unreadTerminalPanes }
+      const nextUnreadAgentCompletionPanes = { ...s.unreadAgentCompletionPanes }
+      const nextLastTerminalInputAtByPaneKey = { ...s.lastTerminalInputAtByPaneKey }
+      delete nextUnreadTerminalPanes[opts.paneKey]
+      delete nextUnreadAgentCompletionPanes[opts.paneKey]
+      delete nextLastTerminalInputAtByPaneKey[opts.paneKey]
+
+      return {
+        tabsByWorktree: nextTabsByWorktree,
+        ptyIdsByTabId: {
+          ...s.ptyIdsByTabId,
+          [opts.tabId]: remainingPtyIds
+        },
+        lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
+        suppressedPtyExitIds: {
+          ...s.suppressedPtyExitIds,
+          ...Object.fromEntries(shutdownPtyIds.map((ptyId) => [ptyId, true] as const))
+        },
+        codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
+        ...(nextRuntimePaneTitlesByTabId !== s.runtimePaneTitlesByTabId
+          ? { runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId }
+          : {}),
+        unreadTerminalPanes: nextUnreadTerminalPanes,
+        unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes,
+        lastTerminalInputAtByPaneKey: nextLastTerminalInputAtByPaneKey
+      }
+    })
+
+    set((s) => ({
+      sleepingAgentSessionsByPaneKey: {
+        ...s.sleepingAgentSessionsByPaneKey,
+        ...sleepingAgentSessionRecords
+      }
+    }))
+
+    get().dropHibernatedAgentStatusPane(worktreeId, opts.paneKey, {
+      retainedCompletionEvidence
+    })
+  },
+
   shutdownWorktreeTerminals: async (worktreeId, opts) => {
     const keepIdentifiers = opts?.keepIdentifiers ?? false
+    const shutdownReason: AgentStatusWorktreeShutdownReason =
+      opts?.shutdownReason ?? (keepIdentifiers ? 'manual-sleep' : 'remove-worktree')
     const tabs = get().tabsByWorktree[worktreeId] ?? []
     const ptyIds = tabs.flatMap((tab) => get().ptyIdsByTabId[tab.id] ?? [])
+    const expectedRuntimePtyIds = sortedUniquePtyIds(opts?.expectedRuntimePtyIds)
+    const shutdownPtyIds = sortedUniquePtyIds([...ptyIds, ...expectedRuntimePtyIds])
+    const sleepingAgentSessionRecords = keepIdentifiers
+      ? collectSleepingAgentSessionRecordsForWorktree(get(), worktreeId, opts?.sleepingPaneKeys)
+      : {}
+    const retainedCompletionEvidence =
+      shutdownReason === 'auto-hibernate-completed-agent'
+        ? collectHibernatedCompletionEvidenceForWorktree(get(), worktreeId, opts?.sleepingPaneKeys)
+        : []
 
     // Why: the main process flushes any remaining batched PTY data before
     // sending the exit event (pty.ts onExit handler). Without this, that
@@ -1647,7 +1933,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     // notifications for a worktree that is already being torn down —
     // the "phantom alerts" users see after shutting down worktrees.
     // Removing the data handlers first ensures the final flush is a no-op.
-    unregisterPtyDataHandlers(ptyIds)
+    if (expectedRuntimePtyIds.length === 0) {
+      unregisterPtyDataHandlers(shutdownPtyIds)
+    }
 
     // Why (ordering invariant — DESIGN_DOC §3.3.c): on sleep, capture every
     // pane's serializer buffer into terminalLayoutsByTabId[tab].buffersByLeafId
@@ -1673,6 +1961,76 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     }
 
+    const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(get(), worktreeId)
+    if (expectedRuntimePtyIds.length > 0) {
+      if (!runtimeEnvironmentId) {
+        throw new Error('missing_runtime_for_exact_terminal_stop')
+      }
+      set((s) => ({
+        suppressedPtyExitIds: {
+          ...s.suppressedPtyExitIds,
+          ...Object.fromEntries(shutdownPtyIds.map((ptyId) => [ptyId, true] as const))
+        }
+      }))
+      let stopResult: {
+        stoppedPtyIds?: string[]
+        livePtyIds?: string[]
+        postStopVerified?: boolean
+        postStopFailure?: string
+        remainingLivePtyIds?: string[]
+      }
+      try {
+        stopResult = await callRuntimeRpc<{
+          stoppedPtyIds?: string[]
+          livePtyIds?: string[]
+        }>(
+          { kind: 'environment', environmentId: runtimeEnvironmentId },
+          'terminal.stopExact',
+          {
+            worktree: toRuntimeWorktreeSelector(worktreeId),
+            expectedPtyIds: expectedRuntimePtyIds,
+            keepHistory: keepIdentifiers
+          },
+          { timeoutMs: 15_000 }
+        )
+      } catch (err) {
+        set((s) => {
+          const next = { ...s.suppressedPtyExitIds }
+          for (const ptyId of shutdownPtyIds) {
+            delete next[ptyId]
+          }
+          return { suppressedPtyExitIds: next }
+        })
+        throw err
+      }
+      const stoppedPtyIds = sortedUniquePtyIds(stopResult.stoppedPtyIds)
+      const livePtyIds = sortedUniquePtyIds(stopResult.livePtyIds)
+      if (
+        !equalStringSets(stoppedPtyIds, expectedRuntimePtyIds) ||
+        !equalStringSets(livePtyIds, expectedRuntimePtyIds)
+      ) {
+        set((s) => {
+          const next = { ...s.suppressedPtyExitIds }
+          for (const ptyId of shutdownPtyIds) {
+            delete next[ptyId]
+          }
+          return { suppressedPtyExitIds: next }
+        })
+        throw new Error('exact_terminal_stop_mismatch')
+      }
+      if (stopResult.postStopVerified !== true) {
+        set((s) => {
+          const next = { ...s.suppressedPtyExitIds }
+          for (const ptyId of shutdownPtyIds) {
+            delete next[ptyId]
+          }
+          return { suppressedPtyExitIds: next }
+        })
+        throw new Error(stopResult.postStopFailure ?? 'exact_terminal_stop_unverified')
+      }
+      unregisterPtyDataHandlers(shutdownPtyIds)
+    }
+
     set((s) => {
       const nextTabsByWorktree = keepIdentifiers
         ? s.tabsByWorktree
@@ -1691,7 +2049,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         : { ...s.runtimePaneTitlesByTabId }
       const nextSuppressedPtyExitIds = {
         ...s.suppressedPtyExitIds,
-        ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, true] as const))
+        ...Object.fromEntries(shutdownPtyIds.map((ptyId) => [ptyId, true] as const))
       }
       // Why: pendingCodexPaneRestartIds is keyed by ptyId — under sleep we
       // preserve it so a mid-restart marker survives wake against the same
@@ -1702,7 +2060,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ? s.pendingCodexPaneRestartIds
         : { ...s.pendingCodexPaneRestartIds }
       const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
-      for (const ptyId of ptyIds) {
+      for (const ptyId of shutdownPtyIds) {
         if (!keepIdentifiers) {
           delete nextPendingCodexPaneRestartIds[ptyId]
         }
@@ -1827,24 +2185,29 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
 
     if (keepIdentifiers) {
-      get().captureSleepingAgentSessionsByWorktree(worktreeId, opts?.sleepingPaneKeys)
+      set((s) => ({
+        sleepingAgentSessionsByPaneKey: {
+          ...s.sleepingAgentSessionsByPaneKey,
+          ...sleepingAgentSessionRecords
+        }
+      }))
     } else {
       get().clearSleepingAgentSessionsByWorktree(worktreeId)
     }
 
-    // Why: sleep/remove fold the whole worktree surface. The live PTY bindings
-    // were cleared above and kill is about to run, so live rows are stale;
-    // retained rows are folded too so a grey slept card does not keep a green
-    // "done" row. Sweep by worktreeId because retained snapshots can outlive
-    // their original tab.
-    get().dropAgentStatusByWorktree(worktreeId)
+    // Why: only automatic completed-agent sleep keeps passive completion
+    // evidence; manual sleep/remove still fold the entire worktree surface.
+    get().dropAgentStatusByWorktree(worktreeId, {
+      shutdownReason,
+      sleepingPaneKeys: opts?.sleepingPaneKeys,
+      retainedCompletionEvidence
+    })
 
-    if (ptyIds.length === 0) {
+    if (ptyIds.length === 0 && expectedRuntimePtyIds.length === 0) {
       return
     }
 
-    const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(get(), worktreeId)
-    if (runtimeEnvironmentId) {
+    if (runtimeEnvironmentId && expectedRuntimePtyIds.length === 0) {
       await callRuntimeRpc(
         { kind: 'environment', environmentId: runtimeEnvironmentId },
         'terminal.stop',
@@ -1855,6 +2218,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
     await Promise.allSettled(
       ptyIds
+        .filter((ptyId) => !expectedRuntimePtyIds.includes(ptyId))
         .filter((ptyId) => !ptyId.startsWith('remote:'))
         .map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
     )
