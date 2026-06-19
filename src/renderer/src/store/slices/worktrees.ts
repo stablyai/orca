@@ -936,8 +936,9 @@ function buildWorktreeRenameState(
   for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
     renameKey(key, renameValueByKey[key] as ((value: unknown) => unknown) | undefined)
   }
-  // Not in the shared purge list (purge drops them only via single removeWorktree);
-  // re-key them here so a renamed worktree keeps its editor-undo + push/pull state.
+  // Re-key these on rename so a renamed worktree keeps its editor-undo + push/pull
+  // state. (Both removal paths — buildWorktreePurgeState and the single
+  // removeWorktree reducer — now also purge them on removal.)
   renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>
     files.map(withNewWorktreeId)
   )
@@ -1024,6 +1025,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
   // Collect every tab id (and removed file id) we are about to orphan.
   const doomedTabIds = new Set<string>()
   const doomedBrowserWorkspaceIds = new Set<string>()
+  const doomedPageIds = new Set<string>()
   const removedFileIds = new Set<string>()
   for (const id of worktreeIdSet) {
     for (const tab of s.tabsByWorktree[id] ?? []) {
@@ -1031,6 +1033,15 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     for (const workspace of s.browserTabsByWorktree[id] ?? []) {
       doomedBrowserWorkspaceIds.add(workspace.id)
+    }
+  }
+  // Why: the per-page browser maps are keyed by page id, not worktree/workspace id.
+  // Collect every page owned by a doomed workspace so this bulk purge can evict
+  // them. (The single removeWorktree path clears these via closeBrowserTab, but the
+  // authoritative-scan reconcile that also reaches this reducer does not.)
+  for (const workspaceId of doomedBrowserWorkspaceIds) {
+    for (const page of s.browserPagesByWorkspace[workspaceId] ?? []) {
+      doomedPageIds.add(page.id)
     }
   }
   for (const file of s.openFiles) {
@@ -1109,6 +1120,17 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return changed ? out : obj
   }
+  const omitByPageId = <T>(obj: Record<string, T>): Record<string, T> => {
+    let changed = false
+    const out = { ...obj }
+    for (const pageId of doomedPageIds) {
+      if (pageId in out) {
+        delete out[pageId]
+        changed = true
+      }
+    }
+    return changed ? out : obj
+  }
   const omitByFileId = <T>(obj: Record<string, T>): Record<string, T> => {
     let changed = false
     const out = { ...obj }
@@ -1166,6 +1188,20 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     browserPagesByWorkspace: omitByBrowserWorkspaceId(s.browserPagesByWorkspace),
     recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
     activeBrowserTabIdByWorktree: omitByWorktree(s.activeBrowserTabIdByWorktree),
+    // Why: these browser maps are keyed by page/workspace id and were only cleaned
+    // on the single-worktree removal path (closeBrowserTab); this bulk reconcile path
+    // missed them, orphaning an annotation/handle/focus/closed-page entry per page of
+    // every externally-removed worktree for the session.
+    browserAnnotationsByPageId: omitByPageId(s.browserAnnotationsByPageId),
+    remoteBrowserPageHandlesByPageId: omitByPageId(s.remoteBrowserPageHandlesByPageId),
+    pendingAddressBarFocusByPageId: omitByPageId(s.pendingAddressBarFocusByPageId),
+    // createBrowserTab writes both the workspace id and the page id into this map.
+    pendingAddressBarFocusByTabId: omitByPageId(
+      omitByBrowserWorkspaceId(s.pendingAddressBarFocusByTabId)
+    ),
+    recentlyClosedBrowserPagesByWorkspace: omitByBrowserWorkspaceId(
+      s.recentlyClosedBrowserPagesByWorkspace
+    ),
     // Editor state
     activeFileIdByWorktree: omitByWorktree(s.activeFileIdByWorktree),
     activeTabTypeByWorktree: omitByWorktree(s.activeTabTypeByWorktree),
@@ -1181,6 +1217,9 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
     // Git status caches
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
+    // Why: keyed by worktreeId; re-keyed on rename but missed by both removal
+    // paths, leaking an upstream-status entry per removed worktree.
+    remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
     gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
     gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
     gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),
@@ -1204,10 +1243,18 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // leaking a cursor-line / view-mode entry per file of every removed worktree.
     editorCursorLine: omitByFileId(s.editorCursorLine),
     editorViewMode: omitByFileId(s.editorViewMode),
+    // Why: keyed by worktreeId; re-keyed on rename but missed by both removal
+    // paths, leaking the per-worktree editor-undo (Cmd/Ctrl+Shift+T) snapshots.
+    recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
     // Top-level actives
     openFiles: nextOpenFiles,
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
     lastVisitedAtByWorktreeId: omitByWorktree(s.lastVisitedAtByWorktreeId),
+    // Why: keyed by worktreeId; the write-once default-terminal idempotency guard
+    // was re-keyed on rename but missed by both removal paths.
+    defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
+      s.defaultTerminalTabsAppliedByWorktreeId
+    ),
     activeWorktreeId: removedActive ? null : s.activeWorktreeId,
     activeWorkspaceKey: (() => {
       if (s.activeWorkspaceKey && worktreeIdSet.has(s.activeWorkspaceKey)) {
@@ -2084,6 +2131,23 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             // inherits stale matches from a path that no longer exists.
             delete nextSearch[worktreeId]
             return nextSearch
+          })(),
+          // Why: these worktree-keyed maps are re-keyed on rename but were missed
+          // by both removal paths, leaking one entry per removed worktree.
+          remoteStatusesByWorktree: (() => {
+            const next = { ...s.remoteStatusesByWorktree }
+            delete next[worktreeId]
+            return next
+          })(),
+          recentlyClosedEditorTabsByWorktree: (() => {
+            const next = { ...s.recentlyClosedEditorTabsByWorktree }
+            delete next[worktreeId]
+            return next
+          })(),
+          defaultTerminalTabsAppliedByWorktreeId: (() => {
+            const next = { ...s.defaultTerminalTabsAppliedByWorktreeId }
+            delete next[worktreeId]
+            return next
           })(),
           activeWorktreeId: removedActiveWorktree ? null : s.activeWorktreeId,
           activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
