@@ -293,7 +293,7 @@ describe('OpenClaudeHookService-compatible install', () => {
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('/hook/claude')
       expect(
-        readFileSync(join(tmpHome, '.orca', 'agent-hooks', 'openclaude-hook.sh'), 'utf-8')
+        readFileSync(join(tmpHome, '.orca', 'agent-hooks', OPENCLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).not.toContain('DEVIN_PROJECT_DIR')
       expect(existsSync(join(tmpHome, '.claude', 'settings.json'))).toBe(false)
     } finally {

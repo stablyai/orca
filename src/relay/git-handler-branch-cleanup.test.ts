@@ -16,7 +16,7 @@ function worktreeList(...entries: { path: string; branch?: string }[]): string {
 }
 
 function resolvedRepoPath(): string {
-  return path.resolve('/repo-feature', '/repo/.git', '..')
+  return path.posix.resolve('/repo-feature', '/repo/.git', '..')
 }
 
 describe('removeWorktreeOp branch cleanup', () => {
