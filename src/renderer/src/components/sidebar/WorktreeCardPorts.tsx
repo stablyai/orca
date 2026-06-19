@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
-import { Plug, Copy, ExternalLink, FolderOpen, Trash2 } from 'lucide-react'
+import { Plug, Copy, ExternalLink, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
@@ -11,7 +11,6 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import {
   canStopWorkspacePort,
   getPortOpenBrowserTooltipLabel,
-  goToWorkspacePortOwner,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   refreshWorkspacePortScanAfterStop,
@@ -293,44 +292,22 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
 export function WorktreeCardPortsDetails({
   ports
 }: WorktreeCardPortsProps): React.JSX.Element | null {
-  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const handleGoToWorktree = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation()
-      recordFeatureInteraction('ports')
-      const ownerPort = ports[0]
-      if (!ownerPort || !goToWorkspacePortOwner(ownerPort)) {
-        toast.error(
-          translate('auto.components.sidebar.WorktreeCardPorts.3e5f66564e', 'Workspace unavailable')
-        )
-      }
-    },
-    [ports, recordFeatureInteraction]
-  )
-
   if (ports.length === 0) {
     return null
   }
 
   return (
     <WorktreeCardDetailSection>
+      {/* Count lives inline after the label (not on the right, which is the action zone);
+          the "Go to Worktree" action is omitted here since the card is already scoped to its worktree. */}
       <div className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         <Plug className="size-3" />
         <span>
-          {translate('auto.components.sidebar.WorktreeCardPorts.3240f320d7', 'Live Ports')}
+          {translate('auto.components.sidebar.WorktreeCardPorts.3240f320d7', 'Live Ports')}{' '}
+          <span className="font-normal tabular-nums text-muted-foreground/70">
+            ({ports.length})
+          </span>
         </span>
-        <div className="ml-auto flex items-center gap-1">
-          <PortAction
-            label={translate(
-              'auto.components.sidebar.WorktreeCardPorts.34f733dda2',
-              'Go to Worktree'
-            )}
-            onClick={handleGoToWorktree}
-          >
-            <FolderOpen className="size-3" />
-          </PortAction>
-          <span className="font-normal tabular-nums text-muted-foreground/70">{ports.length}</span>
-        </div>
       </div>
       <WorktreeCardDetailSectionContent className="space-y-0.5">
         {ports.map((port) => (
