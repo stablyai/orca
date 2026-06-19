@@ -120,17 +120,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     click: (_menuItem, window) => onOpenCrashReport(window)
   }
 
-  const pasteShortcutLabel = isMac ? '⌘V' : 'Ctrl+V'
-  const pasteItem: Electron.MenuItemConstructorOptions = {
-    label: `${translateMain('menu.paste', 'Paste')}\t${pasteShortcutLabel}`,
-    click: () => {
-      // Why: a real paste role/accelerator bypasses renderer target ownership
-      // and can duplicate terminal paste. The renderer decides the owner, then
-      // explicitly asks main for native paste only as a fallback.
-      BrowserWindow.getFocusedWindow()?.webContents.send('ui:appMenuPaste')
-    }
-  }
-
   // Why: the macOS app-menu (named after the app) is mandatory on darwin and
   // owns hide/hideOthers/unhide/services/quit roles that only make sense in
   // the system menu bar. On Windows/Linux that menu would render as a
@@ -173,7 +162,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { type: 'separator' },
       { role: 'cut' },
       { role: 'copy' },
-      pasteItem,
+      { role: 'paste' },
       { role: 'selectAll' }
     ]
   }

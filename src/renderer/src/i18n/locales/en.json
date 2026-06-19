@@ -56,8 +56,7 @@
     "zoomOut": "Zoom Out",
     "openWorktreePalette": "Open Worktree Palette",
     "window": "Window",
-    "help": "Help",
-    "paste": "Paste"
+    "help": "Help"
   },
   "tray": {
     "openOrca": "Open Orca",

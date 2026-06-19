@@ -56,8 +56,7 @@
     "zoomOut": "Alejar",
     "openWorktreePalette": "Abrir paleta de árbol de trabajo",
     "window": "Ventana",
-    "help": "Ayuda",
-    "paste": "Paste"
+    "help": "Ayuda"
   },
   "tray": {
     "openOrca": "Abrir Orca",

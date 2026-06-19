@@ -56,8 +56,7 @@
     "zoomOut": "缩小",
     "openWorktreePalette": "打开工作树面板",
     "window": "窗口",
-    "help": "帮助",
-    "paste": "Paste"
+    "help": "帮助"
   },
   "tray": {
     "openOrca": "打开 Orca",

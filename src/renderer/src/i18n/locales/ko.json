@@ -56,8 +56,7 @@
     "zoomOut": "축소",
     "openWorktreePalette": "워크트리 팔레트 열기",
     "window": "창",
-    "help": "도움말",
-    "paste": "Paste"
+    "help": "도움말"
   },
   "tray": {
     "openOrca": "Orca 열기",
