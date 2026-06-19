@@ -44,6 +44,47 @@ export function resolveRuntimePaneTitleLeafId(
   return resolveRuntimePaneTitleLeafIdFromRoot(tabLayout?.root, runtimePaneId)
 }
 
+/**
+ * Resolve the runtime-reported pane title for a specific layout leaf. Pane
+ * title maps are keyed by runtime pane id, which only lines up with the leaf id
+ * after replay-order resolution — split tabs can carry a sparse title map, so a
+ * lone background title must not be attributed to an unrelated leaf.
+ */
+export function resolveRuntimePaneTitleForLeaf(
+  tabLayout: { root?: TerminalLayoutSnapshot['root'] } | undefined,
+  paneTitles: Record<number, string> | undefined,
+  leafId: string
+): string | null {
+  if (!paneTitles) {
+    return null
+  }
+
+  const titleEntries = Object.entries(paneTitles)
+  if (titleEntries.length === 0) {
+    return null
+  }
+
+  if (tabLayout?.root) {
+    for (const [runtimePaneId, title] of titleEntries) {
+      if (resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId) === leafId) {
+        return title
+      }
+    }
+    return null
+  }
+
+  if (titleEntries.length === 1) {
+    return titleEntries[0][1]
+  }
+
+  for (const [runtimePaneId, title] of titleEntries) {
+    if (resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId) === leafId) {
+      return title
+    }
+  }
+  return null
+}
+
 export function resolveRuntimePaneTitleLeafIdFromRoot(
   root: TerminalPaneLayoutNode | null | undefined,
   runtimePaneId: string

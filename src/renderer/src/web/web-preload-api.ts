@@ -1132,7 +1132,8 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         parentWorkspace: args.parentWorkspace,
         workspaceStatus: args.workspaceStatus,
-        manualOrder: args.manualOrder
+        manualOrder: args.manualOrder,
+        automationProvenanceRequest: args.automationProvenanceRequest
       })
     },
     // Why: the runtime create path emits no two-phase progress, so the web
@@ -2646,6 +2647,9 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
       runtimeSettings.experimentalNewWorktreeCardStyle =
         result.settings.experimentalNewWorktreeCardStyle
     }
+    if (typeof result.settings.compactWorktreeCards === 'boolean') {
+      runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
+    }
     const next = mergeSettings(local, runtimeSettings)
     writeJson(SETTINGS_STORAGE_KEY, next)
     return next
@@ -2665,6 +2669,9 @@ async function syncRuntimeBackedSettings(
   const runtimeUpdates: Partial<GlobalSettings> = {}
   if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
     runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
+  }
+  if (typeof updates.compactWorktreeCards === 'boolean') {
+    runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
   }
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext

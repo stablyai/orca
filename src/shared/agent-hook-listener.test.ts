@@ -412,7 +412,9 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
 
-    expect(started?.payload).toMatchObject({ agentType: 'devin', state: 'working' })
+    // Why: SessionStart fires when the TUI opens/resumes while still idle.
+    // It must not create a visible "working" row before the user submits a prompt.
+    expect(started).toBeNull()
     expect(compacted?.payload).toMatchObject({ agentType: 'devin', state: 'working' })
     expect(ended?.payload).toMatchObject({ agentType: 'devin', state: 'done' })
   })

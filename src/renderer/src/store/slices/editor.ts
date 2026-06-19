@@ -118,6 +118,33 @@ type BranchCompareLike = Pick<
   'baseRef' | 'baseOid' | 'compareRef' | 'headOid' | 'mergeBase'
 >
 
+function getKnownGitHead(head: string | null | undefined): string | undefined {
+  const trimmed = head?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+function createLoadingBranchCompareSummary(baseRef: string): GitBranchCompareSummary {
+  return {
+    baseRef,
+    baseOid: null,
+    compareRef: 'HEAD',
+    headOid: null,
+    mergeBase: null,
+    changedFiles: 0,
+    status: 'loading'
+  }
+}
+
+function branchCompareMatchesStatusHead(
+  summary: GitBranchCompareSummary,
+  statusHead: string
+): boolean {
+  const summaryHead = getKnownGitHead(summary.headOid)
+  // Why: git status reports '(initial)' for unborn branches, while branch
+  // compare represents that same state as a null headOid.
+  return summaryHead === statusHead || (statusHead === '(initial)' && summary.headOid === null)
+}
+
 type CommitCompareLike = Pick<
   GitCommitCompareSummary,
   'commitOid' | 'parentOid' | 'compareRef' | 'baseRef'
@@ -529,6 +556,7 @@ export type EditorSlice = {
 
   // Git status cache
   gitStatusByWorktree: Record<string, GitStatusEntry[]>
+  gitStatusHeadByWorktree: Record<string, string>
   // Why: when status was truncated at the entry limit (a repo with an enormous
   // un-ignored folder), the SCM view shows a "too many changes" state and
   // polling pauses. `{ limit }` when huge, absent otherwise.
@@ -613,7 +641,13 @@ export type EditorSlice = {
   gitBranchChangesByWorktree: Record<string, GitBranchChangeEntry[]>
   gitBranchCompareSummaryByWorktree: Record<string, GitBranchCompareSummary | null>
   gitBranchCompareRequestKeyByWorktree: Record<string, string>
-  beginGitBranchCompareRequest: (worktreeId: string, requestKey: string, baseRef: string) => void
+  gitBranchCompareRequestStatusHeadByWorktree: Record<string, string | null>
+  beginGitBranchCompareRequest: (
+    worktreeId: string,
+    requestKey: string,
+    baseRef: string,
+    options?: { preserveExistingSummary?: boolean }
+  ) => void
   setGitBranchCompareResult: (
     worktreeId: string,
     requestKey: string,
@@ -3456,6 +3490,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   // Git status
   gitStatusByWorktree: {},
+  gitStatusHeadByWorktree: {},
   gitStatusHugeByWorktree: {},
   gitIgnoredPathsByWorktree: {},
   gitConflictOperationByWorktree: {},
@@ -3557,6 +3592,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const prevHuge = s.gitStatusHugeByWorktree[worktreeId]
       const nextHuge = status.didHitLimit ? { limit: nextEntries.length } : undefined
       const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
+      const prevStatusHead = s.gitStatusHeadByWorktree[worktreeId]
+      const nextStatusHead = getKnownGitHead(status.head)
+      const statusHeadUnchanged = prevStatusHead === nextStatusHead
+
+      const prevBranchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
+      // Why: a compare request can finish after git status has observed a new
+      // HEAD; reject that stale snapshot before it can render a false clean state.
+      const shouldInvalidateBranchCompare =
+        !statusHeadUnchanged &&
+        nextStatusHead !== undefined &&
+        prevBranchSummary?.status === 'ready' &&
+        !branchCompareMatchesStatusHead(prevBranchSummary, nextStatusHead)
 
       if (
         statusUnchanged &&
@@ -3564,7 +3611,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         openFilesUnchanged &&
         operationUnchanged &&
         ignoredUnchanged &&
-        hugeUnchanged
+        hugeUnchanged &&
+        statusHeadUnchanged &&
+        !shouldInvalidateBranchCompare
       ) {
         return s
       }
@@ -3579,9 +3628,29 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               return copy
             })()
 
+      const nextStatusHeadMap = statusHeadUnchanged
+        ? s.gitStatusHeadByWorktree
+        : nextStatusHead
+          ? { ...s.gitStatusHeadByWorktree, [worktreeId]: nextStatusHead }
+          : (() => {
+              const copy = { ...s.gitStatusHeadByWorktree }
+              delete copy[worktreeId]
+              return copy
+            })()
+      const nextBranchCompareSummaries = shouldInvalidateBranchCompare
+        ? {
+            ...s.gitBranchCompareSummaryByWorktree,
+            [worktreeId]: createLoadingBranchCompareSummary(prevBranchSummary.baseRef)
+          }
+        : s.gitBranchCompareSummaryByWorktree
+      const nextBranchChanges = shouldInvalidateBranchCompare
+        ? { ...s.gitBranchChangesByWorktree, [worktreeId]: [] }
+        : s.gitBranchChangesByWorktree
+
       return {
         openFiles: nextOpenFiles,
         gitStatusHugeByWorktree: nextHugeMap,
+        gitStatusHeadByWorktree: nextStatusHeadMap,
         gitStatusByWorktree: statusUnchanged
           ? s.gitStatusByWorktree
           : { ...s.gitStatusByWorktree, [worktreeId]: nextEntries },
@@ -3593,7 +3662,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           : { ...s.gitConflictOperationByWorktree, [worktreeId]: status.conflictOperation },
         trackedConflictPathsByWorktree: trackedUnchanged
           ? s.trackedConflictPathsByWorktree
-          : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked }
+          : { ...s.trackedConflictPathsByWorktree, [worktreeId]: currentTracked },
+        gitBranchCompareSummaryByWorktree: nextBranchCompareSummaries,
+        gitBranchChangesByWorktree: nextBranchChanges
       }
     }),
   setConflictOperation: (worktreeId, operation) =>
@@ -3906,28 +3977,42 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   gitBranchChangesByWorktree: {},
   gitBranchCompareSummaryByWorktree: {},
   gitBranchCompareRequestKeyByWorktree: {},
-  beginGitBranchCompareRequest: (worktreeId, requestKey, baseRef) =>
+  gitBranchCompareRequestStatusHeadByWorktree: {},
+  beginGitBranchCompareRequest: (worktreeId, requestKey, baseRef, options) =>
     set((s) => ({
       gitBranchCompareRequestKeyByWorktree: {
         ...s.gitBranchCompareRequestKeyByWorktree,
         [worktreeId]: requestKey
       },
-      gitBranchCompareSummaryByWorktree: {
-        ...s.gitBranchCompareSummaryByWorktree,
-        [worktreeId]: {
-          baseRef,
-          baseOid: null,
-          compareRef: 'HEAD',
-          headOid: null,
-          mergeBase: null,
-          changedFiles: 0,
-          status: 'loading'
-        }
-      }
+      gitBranchCompareRequestStatusHeadByWorktree: {
+        ...s.gitBranchCompareRequestStatusHeadByWorktree,
+        [worktreeId]: getKnownGitHead(s.gitStatusHeadByWorktree[worktreeId]) ?? null
+      },
+      ...(options?.preserveExistingSummary
+        ? {}
+        : {
+            gitBranchCompareSummaryByWorktree: {
+              ...s.gitBranchCompareSummaryByWorktree,
+              [worktreeId]: createLoadingBranchCompareSummary(baseRef)
+            }
+          })
     })),
   setGitBranchCompareResult: (worktreeId, requestKey, result) =>
     set((s) => {
       if (s.gitBranchCompareRequestKeyByWorktree[worktreeId] !== requestKey) {
+        return s
+      }
+      const statusHead = getKnownGitHead(s.gitStatusHeadByWorktree[worktreeId])
+      const requestStatusHead = s.gitBranchCompareRequestStatusHeadByWorktree[worktreeId]
+      // Why: polling refreshes can leave the prior UI visible while a compare
+      // request is in flight; never let a pre-status-change result overwrite
+      // a newer status snapshot.
+      if (
+        result.summary.status !== 'loading' &&
+        statusHead !== undefined &&
+        requestStatusHead !== statusHead &&
+        !branchCompareMatchesStatusHead(result.summary, statusHead)
+      ) {
         return s
       }
       const prevEntries = s.gitBranchChangesByWorktree[worktreeId]

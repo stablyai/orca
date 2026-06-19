@@ -280,6 +280,10 @@ function Settings(): React.JSX.Element {
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
   )
+  const terminalFontSuggestions = useMemo(
+    () => fontSuggestions.filter((font) => font !== DEFAULT_APP_FONT_FAMILY),
+    [fontSuggestions]
+  )
   const [activeSectionId, setActiveSectionId] = useState('general')
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
     getInitialMountedSectionIds
@@ -1342,9 +1346,7 @@ function Settings(): React.JSX.Element {
                       updateSettings={updateSettings}
                       applyTheme={applyTheme}
                       fontSuggestions={fontSuggestions}
-                      terminalFontSuggestions={fontSuggestions.filter(
-                        (font) => font !== DEFAULT_APP_FONT_FAMILY
-                      )}
+                      terminalFontSuggestions={terminalFontSuggestions}
                       systemPrefersDark={systemPrefersDark}
                       ghostty={ghostty}
                       warpThemes={warpThemes}

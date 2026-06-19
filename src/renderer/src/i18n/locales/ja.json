@@ -913,7 +913,8 @@
         "16e9e3df89": "星付き",
         "0d0ace8861": "GitHub でスターを付ける",
         "ec43b38ba7": "GitHub でスター済み",
-        "157bb5ecbb": "GitHub を開く"
+        "157bb5ecbb": "GitHub を開く",
+        "preflightDismiss": "Dismiss"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -3516,7 +3517,8 @@
           "f506a1262a": "ワークスペースのフィルタリング",
           "75405270ed": "フィルターの編集 ({{value0}} がアクティブ)",
           "489d1c8c9f": "プロジェクトを検索...",
-          "ee240a39eb": "フィルターの編集"
+          "ee240a39eb": "フィルターの編集",
+          "automationCreated": "自動化で作成されたワークスペースを非表示"
         },
         "SidebarHeader": {
           "92154beb7e": "新規ワークスペース",
@@ -3578,7 +3580,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "デフォルトのブランチを非表示にする",
           "ed1611b65b": "スリープ中を非表示",
-          "82594419ba": "フィルター"
+          "82594419ba": "フィルター",
+          "automationCreated": "自動化で作成されたワークスペースを非表示"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent アクティビティのレイアウト",
@@ -3631,7 +3634,8 @@
           "8d62c68b35": "ノート",
           "2d74665a56": "ポート",
           "65a9820bd1": "Agent ステータス",
-          "219ebf1961": "ブランチ名"
+          "219ebf1961": "ブランチ名",
+          "automation": "Automation"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
@@ -3731,7 +3735,15 @@
           "3ea2702e62": "リンク済み {{value0}} #{{value1}}",
           "b105fd3057": "リンク Linear {{value0}}",
           "3f2649eeb8": "リンクされた Issue #{{value0}}",
-          "fe075cb851": "ワークスペースのメモ"
+          "fe075cb851": "ワークスペースのメモ",
+          "automationHeader": "自動化",
+          "openAutomation": "自動化を開く",
+          "openAutomationRun": "実行を開く",
+          "automationCreated": "自動化によって作成",
+          "checkingAutomationAvailability": "自動化の利用可否を確認中...",
+          "automationMissing": "自動化は利用できなくなりました。",
+          "automationRunMissing": "実行履歴は利用できなくなりました。",
+          "automationAvailabilityUnavailable": "自動化の利用可否を確認できませんでした。"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状態: オープン",
@@ -4281,7 +4293,9 @@
           "6627e75c92": "HTTP/1.1の互換性について説明する",
           "e9506d3377": "HTTP/1.1 互換性",
           "8b7a8df299": "サポートのトラブルシューティングのための低レベルの回避策。",
-          "8d8d8ac599": "互換性"
+          "8d8d8ac599": "互換性",
+          "network": "ネットワーク",
+          "networkDescription": "プロキシや企業環境向けのアプリレベルのネットワークルーティング。"
         },
         "AgentLocationSetting": {
           "92f4238f1a": "WSL のデフォルト",
@@ -4733,7 +4747,7 @@
           "37df688d6f": "フローティング ワークスペースを有効にして、新規タブの開始位置を選択します。",
           "1f67f39384": "フローティングワークスペース"
         },
-        "GeneralCacheTimerSection": {
+        "AgentCacheTimerSection": {
           "05de84a104": "1時間",
           "54395ecd7c": "5分",
           "8b9e202e0a": "これをプロバイダーのキャッシュ TTL と一致させます。デフォルトは 5 分です。",
@@ -4769,7 +4783,7 @@
           "d21136d9ef": "Orca がファイル編集を保持する方法を構成します。",
           "45c6e85c4d": "エディタ"
         },
-        "GeneralNetworkSettingsSection": {
+        "AdvancedNetworkSettingsSection": {
           "3e431564b5": "ローカルホスト、127.0.0.1、*.internal",
           "33ee3ca3af": "オプション。ホストはカンマ、セミコロン、または改行で区切ります。",
           "f6d76cc8f4": "プロキシ バイパス ルール",
@@ -4780,7 +4794,8 @@
           "f00daf6324": "HTTPプロキシ",
           "823e0f15b1": "Orca ネットワーク リクエストとローカル terminal の子のプロキシ URL。",
           "d93c7cd531": "アプリレベルのネットワークルーティングを構成します。",
-          "c46cdbbd4e": "ネットワーク"
+          "c46cdbbd4e": "ネットワーク",
+          "configureProxy": "プロキシを設定"
         },
         "GeneralPane": {
           "d58fccfd84": "ナビゲーション",
@@ -11171,7 +11186,9 @@
           "d441032f7e": "一時停止",
           "5918020edc": "走る",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "自動化は利用できなくなりました。",
+          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。"
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo ブランチを検索...",

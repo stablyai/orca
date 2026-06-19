@@ -13,6 +13,10 @@ import {
   getPRGroupKey,
   type PendingCreationRef
 } from './worktree-list-groups'
+import {
+  REPO_HEADER_ACTION_BUTTON_CLASS,
+  REPO_HEADER_ACTION_REVEAL_CLASS
+} from './repo-header-action-button-class'
 import type {
   DetectedWorktree,
   Project,
@@ -55,6 +59,10 @@ const worktree: Worktree = {
 }
 
 const repoMap = new Map([[repo.id, repo]])
+
+function readWorktreeListSource(): string {
+  return readFileSync(fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)), 'utf8')
+}
 
 const remoteRepo: Repo = {
   id: 'repo-remote',
@@ -205,7 +213,7 @@ describe('buildRows with pinned worktrees', () => {
 
   it('emits Pinned and All headers in groupBy none', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
-    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', label: 'Pinned', count: 1 })
+    expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned', label: 'Pinned' })
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-pinned' } })
     expect(rows[2]).toMatchObject({ type: 'header', key: 'all', label: 'All', count: 3 })
     expect(rows[2]).toMatchObject({ type: 'header', icon: ALL_GROUP_META.icon })
@@ -215,7 +223,7 @@ describe('buildRows with pinned worktrees', () => {
     const rows = buildRows('none', [unpinned1, unpinned2], repoMap, null, new Set())
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'all', label: 'All', count: 2 },
+      { type: 'header', key: 'all', label: 'All' },
       { type: 'item', worktree: { id: 'wt-1' } },
       { type: 'item', worktree: { id: 'wt-2' } }
     ])
@@ -225,7 +233,7 @@ describe('buildRows with pinned worktrees', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set())
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'pinned', count: 1 },
+      { type: 'header', key: 'pinned' },
       { type: 'item', worktree: { id: 'wt-pinned' } },
       { type: 'header', key: 'all', count: 3 },
       { type: 'item', worktree: { id: 'wt-1' } },
@@ -238,7 +246,7 @@ describe('buildRows with pinned worktrees', () => {
     const rows = buildRows('none', [unpinned1, pinned, unpinned2], repoMap, null, new Set(['all']))
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'pinned', count: 1 },
+      { type: 'header', key: 'pinned' },
       { type: 'item', worktree: { id: 'wt-pinned' } },
       { type: 'header', key: 'all', count: 3 }
     ])
@@ -280,8 +288,7 @@ describe('buildRows with pinned worktrees', () => {
     expect(rows[0]).toMatchObject({
       type: 'header',
       key: 'workspace-status:in-progress',
-      label: 'In progress',
-      count: 2
+      label: 'In progress'
     })
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
     expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-2' } })
@@ -634,7 +641,7 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'repo:repo-1', count: 0 },
+      { type: 'header', key: 'repo:repo-1' },
       {
         type: 'imported-worktrees-card',
         key: 'imported-worktrees-card:repo-group:repo-1',
@@ -663,7 +670,7 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'repo:repo-1', label: 'orca', count: 0 },
+      { type: 'header', key: 'repo:repo-1', label: 'orca' },
       {
         type: 'imported-worktrees-card',
         key: 'imported-worktrees-card:repo-group:repo-1',
@@ -873,7 +880,6 @@ describe('buildRows with pinned worktrees', () => {
       type: 'header',
       key: 'repo:folder-1',
       label: 'design-assets',
-      count: 1,
       repo: folderRepo
     })
     expect(rows[1]).toMatchObject({ type: 'item', worktree: { id: folderWorktree.id } })
@@ -884,10 +890,8 @@ describe('buildRows with pinned worktrees', () => {
     const rows = buildRows('workspace-status', [review], repoMap, null, new Set())
 
     expect(
-      rows
-        .filter((r) => r.type === 'header')
-        .map((r) => ({ key: r.key, label: r.label, count: r.count }))
-    ).toEqual([{ key: 'workspace-status:in-review', label: 'In review', count: 1 }])
+      rows.filter((r) => r.type === 'header').map((r) => ({ key: r.key, label: r.label }))
+    ).toEqual([{ key: 'workspace-status:in-review', label: 'In review' }])
   })
 
   it('uses customized workspace status labels and order', () => {
@@ -909,12 +913,10 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(
-      rows
-        .filter((r) => r.type === 'header')
-        .map((r) => ({ key: r.key, label: r.label, count: r.count }))
+      rows.filter((r) => r.type === 'header').map((r) => ({ key: r.key, label: r.label }))
     ).toEqual([
-      { key: 'workspace-status:blocked', label: 'Blocked', count: 1 },
-      { key: 'workspace-status:in-progress', label: 'Doing', count: 1 }
+      { key: 'workspace-status:blocked', label: 'Blocked' },
+      { key: 'workspace-status:in-progress', label: 'Doing' }
     ])
   })
 })
@@ -1166,13 +1168,12 @@ describe('project groups', () => {
         type: 'header',
         key: 'project-group:group-1',
         label: 'Platform',
-        count: 0,
         projectGroup: group
       })
     ])
   })
 
-  it('counts grouped repos before their visible worktrees are loaded', () => {
+  it('renders grouped repos before their visible worktrees are loaded', () => {
     const group: ProjectGroup = {
       id: 'group-1',
       name: 'Platform',
@@ -1206,14 +1207,12 @@ describe('project groups', () => {
 
     expect(rows[0]).toMatchObject({
       type: 'header',
-      key: 'project-group:group-1',
-      count: 1
+      key: 'project-group:group-1'
     })
     expect(rows[1]).toMatchObject({
       type: 'header',
       key: 'repo:repo-1',
-      projectGroupDepth: 1,
-      count: 0
+      projectGroupDepth: 1
     })
   })
 
@@ -1251,7 +1250,7 @@ describe('project groups', () => {
     expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
       'project-group:group-1'
     ])
-    expect(rows[0]).toMatchObject({ count: 0 })
+    expect(rows[0]).toMatchObject({ label: 'Platform' })
   })
 
   it('renders ungrouped repos as top-level repo rows when Project Groups exist', () => {
@@ -1628,7 +1627,6 @@ describe('project groups', () => {
       type: 'item',
       groupDepth: 2
     })
-    expect(rows[0]).toMatchObject({ count: 1 })
   })
 
   it('renders folder workspaces under their owning folder-backed Project Group', () => {
@@ -1909,9 +1907,9 @@ describe('project groups', () => {
       'repo:repo-service-a',
       'repo:repo-service-b'
     ])
-    expect(rows.filter((row) => row.type === 'header').map((row) => row.count)).toEqual([
-      2, 2, 2, 0, 0
-    ])
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.projectGroupDepth)).toEqual(
+      [0, 1, 2, 3, 3]
+    )
   })
 
   it('returns both parent Project Group and repo keys for grouped repo reveals', () => {
@@ -2159,28 +2157,27 @@ describe('buildRows workspace lineage nesting', () => {
 
 describe('WorktreeList header styles', () => {
   it('does not title-case workspace group labels', () => {
-    const source = readFileSync(
-      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
-      'utf8'
-    )
+    const source = readWorktreeListSource()
 
     expect(source).not.toContain('leading-none capitalize')
   })
 
-  it('shows a pointer cursor over the disclosure chevron path', () => {
-    const source = readFileSync(
-      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
-      'utf8'
+  it('collapses repo header actions without reserving title width', () => {
+    expect(REPO_HEADER_ACTION_REVEAL_CLASS).toContain('min-w-0 max-w-0 -ml-1.5')
+    expect(REPO_HEADER_ACTION_REVEAL_CLASS).toContain('focus:ml-0 focus:max-w-5 focus:opacity-100')
+    expect(REPO_HEADER_ACTION_REVEAL_CLASS).toContain(
+      'group-hover:ml-0 group-hover:max-w-5 group-hover:opacity-100'
     )
-
-    expect(source).toContain('[&_path]:cursor-pointer')
+    expect(REPO_HEADER_ACTION_BUTTON_CLASS).toContain(
+      'transition-[margin,max-width,opacity,background-color,color]'
+    )
+    expect(REPO_HEADER_ACTION_BUTTON_CLASS).toContain(
+      'data-[state=open]:ml-0 data-[state=open]:max-w-5 data-[state=open]:opacity-100'
+    )
   })
 
   it('resolves repo header color from project group headers only', () => {
-    const source = readFileSync(
-      fileURLToPath(new URL('./WorktreeList.tsx', import.meta.url)),
-      'utf8'
-    )
+    const source = readWorktreeListSource()
 
     expect(source).toContain('resolveProjectGroupHeaderColor({')
     expect(source).toContain('headerKey: row.key')

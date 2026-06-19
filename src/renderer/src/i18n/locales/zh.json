@@ -913,7 +913,8 @@
         "16e9e3df89": "已加星标",
         "0d0ace8861": "在 GitHub 上加星标",
         "ec43b38ba7": "已在 GitHub 上加星标",
-        "157bb5ecbb": "打开 GitHub"
+        "157bb5ecbb": "打开 GitHub",
+        "preflightDismiss": "Dismiss"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -3516,7 +3517,8 @@
           "f506a1262a": "搜索工作区",
           "75405270ed": "编辑搜索器（{{value0}} 活动）",
           "489d1c8c9f": "搜索项目...",
-          "ee240a39eb": "编辑搜索器"
+          "ee240a39eb": "编辑搜索器",
+          "automationCreated": "隐藏自动化创建的工作区"
         },
         "SidebarHeader": {
           "92154beb7e": "新工作区",
@@ -3578,7 +3580,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "隐藏默认分支",
           "ed1611b65b": "隐藏休眠项",
-          "82594419ba": "搜索器"
+          "82594419ba": "搜索器",
+          "automationCreated": "隐藏自动化创建的工作区"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 活动布局",
@@ -3631,7 +3634,8 @@
           "8d62c68b35": "笔记",
           "2d74665a56": "端口",
           "65a9820bd1": "Agent 状态",
-          "219ebf1961": "分支名称"
+          "219ebf1961": "分支名称",
+          "automation": "Automation"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",
@@ -3731,7 +3735,15 @@
           "3ea2702e62": "已链接 {{value0}} #{{value1}}",
           "b105fd3057": "链接 Linear {{value0}}",
           "3f2649eeb8": "链接议题#{{value0}}",
-          "fe075cb851": "工作区笔记"
+          "fe075cb851": "工作区笔记",
+          "automationHeader": "自动化",
+          "openAutomation": "打开自动化",
+          "openAutomationRun": "打开运行",
+          "automationCreated": "由自动化创建",
+          "checkingAutomationAvailability": "正在检查自动化可用性...",
+          "automationMissing": "自动化已不可用。",
+          "automationRunMissing": "运行历史已不可用。",
+          "automationAvailabilityUnavailable": "无法检查自动化可用性。"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状态：开放",
@@ -4281,7 +4293,9 @@
           "6627e75c92": "解释 HTTP/1.1 兼容性",
           "e9506d3377": "HTTP/1.1 兼容性",
           "8b7a8df299": "支持故障排除的低级解决方法。",
-          "8d8d8ac599": "兼容性"
+          "8d8d8ac599": "兼容性",
+          "network": "网络",
+          "networkDescription": "用于代理和企业环境的应用级网络路由。"
         },
         "AgentLocationSetting": {
           "92f4238f1a": "WSL 默认值",
@@ -4733,7 +4747,7 @@
           "37df688d6f": "启用浮动工作区并选择新选项卡的开始位置。",
           "1f67f39384": "浮动工作区"
         },
-        "GeneralCacheTimerSection": {
+        "AgentCacheTimerSection": {
           "05de84a104": "1小时",
           "54395ecd7c": "5分钟",
           "8b9e202e0a": "将此与您的提供商的缓存 TTL 相匹配。默认值为 5 分钟。",
@@ -4769,7 +4783,7 @@
           "d21136d9ef": "配置 Orca 如何保留文件编辑。",
           "45c6e85c4d": "编辑"
         },
-        "GeneralNetworkSettingsSection": {
+        "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",
           "33ee3ca3af": "可选。用逗号、分号或换行符分隔主机。",
           "f6d76cc8f4": "代理绕过规则",
@@ -4780,7 +4794,8 @@
           "f00daf6324": "HTTPAgent",
           "823e0f15b1": "Orca 网络请求和本地 terminal 子项的 Agent URL。",
           "d93c7cd531": "配置应用程序级网络路由。",
-          "c46cdbbd4e": "网络"
+          "c46cdbbd4e": "网络",
+          "configureProxy": "配置代理"
         },
         "GeneralPane": {
           "d58fccfd84": "导航",
@@ -11171,7 +11186,9 @@
           "d441032f7e": "暂停",
           "5918020edc": "跑步",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "自动化已不可用。",
+          "pendingAutomationRunMissing": "运行历史已不可用。"
         },
         "CreateFromPicker": {
           "f061f49e3f": "搜索 repo 分支...",

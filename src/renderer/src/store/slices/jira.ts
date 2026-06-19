@@ -55,7 +55,9 @@ function evictStaleEntries<T>(
 
 function looksLikeAuthError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error)
-  return /authenticat|unauthorized|forbidden|401|403/i.test(msg)
+  // Why: Jira 403 commonly means endpoint/project access is denied while the
+  // saved token is still valid; do not flip Settings back to disconnected.
+  return /authenticat|unauthorized|401/i.test(msg)
 }
 
 type InflightJiraReadRequest<T> = {

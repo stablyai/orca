@@ -32,7 +32,6 @@ import type {
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
@@ -102,7 +101,7 @@ import {
   getNextVisibleContextualTourStepIndex,
   getPreviousVisibleContextualTourStepIndex
 } from '../../components/contextual-tours/contextual-tour-gate'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '../../lib/agent-status'
+import { agentKindForAgentType, formatAgentTypeLabel } from '../../lib/agent-status'
 import {
   deriveRunningAgentSendTargets,
   resolveRunningAgentSendTarget
@@ -446,11 +445,6 @@ function hydratedUIPartialMatchesState(state: AppState, hydrated: Partial<UISlic
   )
 }
 
-function agentKindForTarget(agentType: Parameters<typeof agentTypeToIconAgent>[0]) {
-  const tuiAgent = agentTypeToIconAgent(agentType)
-  return tuiAgent ? tuiAgentToAgentKind(tuiAgent) : 'other'
-}
-
 let agentSendTargetModeInstanceCounter = 0
 
 function createAgentSendTargetModeInstanceId(): string {
@@ -673,6 +667,14 @@ export type UISlice = {
   closeActivityPage: () => void
   selectedAutomationId: string | null
   setSelectedAutomationId: (id: string | null) => void
+  pendingAutomationRunNavigation: {
+    automationId: string
+    runId: string | null
+    hostId?: ExecutionHostId
+  } | null
+  setPendingAutomationRunNavigation: (
+    navigation: { automationId: string; runId: string | null; hostId?: ExecutionHostId } | null
+  ) => void
   openAutomationsPage: () => void
   closeAutomationsPage: () => void
   openSpacePage: () => void
@@ -792,6 +794,8 @@ export type UISlice = {
   setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
+  hideAutomationGeneratedWorkspaces: boolean
+  setHideAutomationGeneratedWorkspaces: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
@@ -1009,7 +1013,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     mode.onPromptDelivered?.()
     const [{ toast }, { track }] = await Promise.all([import('sonner'), import('@/lib/telemetry')])
     track('agent_prompt_sent', {
-      agent_kind: agentKindForTarget(target.entry.agentType),
+      agent_kind: agentKindForAgentType(target.entry.agentType),
       launch_source: mode.launchSource,
       request_kind: 'followup'
     })
@@ -1316,6 +1320,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     })),
   selectedAutomationId: null,
   setSelectedAutomationId: (id) => set({ selectedAutomationId: id }),
+  pendingAutomationRunNavigation: null,
+  setPendingAutomationRunNavigation: (navigation) =>
+    set({ pendingAutomationRunNavigation: navigation }),
   openAutomationsPage: () => {
     get().recordViewVisit('automations')
     set((state) => ({
@@ -1893,6 +1900,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   hideDefaultBranchWorkspace: false,
   setHideDefaultBranchWorkspace: (v) => set({ hideDefaultBranchWorkspace: v }),
+  hideAutomationGeneratedWorkspaces: false,
+  setHideAutomationGeneratedWorkspaces: (v) => set({ hideAutomationGeneratedWorkspaces: v }),
 
   showDotfilesByWorktree: {},
   setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
@@ -2219,6 +2228,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
         workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
         hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
+        hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
         filterRepoIds: (ui.filterRepoIds ?? []).filter((repoId) => validRepoIds.has(repoId)),
         collapsedGroups: new Set(ui.collapsedGroups ?? []),

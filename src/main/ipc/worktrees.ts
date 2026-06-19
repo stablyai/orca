@@ -14,6 +14,7 @@ import { inspectSetupScriptImportCandidates } from '../../shared/setup-script-im
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
 import { deleteWorktreeHistoryDir } from '../terminal-history'
 import type {
+  AutomationWorkspaceProvenance,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   DetectedWorktree,
@@ -89,6 +90,15 @@ import { removeWorktreeLinkedPaths } from './worktree-symlinks'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { workspaceSourceSchema, type WorkspaceSource } from '../../shared/telemetry-events'
+import {
+  finishAutomationWorkspaceProvenanceRequest,
+  releaseAutomationWorkspaceProvenanceRequest,
+  resolveAutomationWorkspaceProvenance
+} from '../automations/workspace-provenance'
+
+type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
+  automationProvenance?: AutomationWorkspaceProvenance
+}
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import {
@@ -627,6 +637,9 @@ function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: WorktreeMeta
     lastActivityAt: meta.lastActivityAt ?? 0,
     ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
     ...(meta.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
+    ...(meta.automationProvenance !== undefined
+      ? { automationProvenance: meta.automationProvenance }
+      : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,
     mobileDiffReview: meta.mobileDiffReview
@@ -698,7 +711,7 @@ function listVisibleFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
 }
 
 function createFolderWorkspace(
-  args: CreateWorktreeArgs,
+  args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store
 ): CreateWorktreeResult {
@@ -715,6 +728,7 @@ function createFolderWorkspace(
     createdAt: now,
     orcaCreatedAt: now,
     orcaCreationSource: 'desktop',
+    ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
     ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
@@ -1022,6 +1036,17 @@ export function registerWorktreeHandlers(
         const sourceParse = workspaceSourceSchema.safeParse(args.telemetrySource)
         const source: WorkspaceSource = sourceParse.success ? sourceParse.data : 'unknown'
 
+        const automationProvenance = resolveAutomationWorkspaceProvenance({
+          authority: runtime,
+          repoSelector: args.repoId,
+          repo,
+          request: args.automationProvenanceRequest
+        })
+        const createArgs: CreateWorktreeArgsWithSystemProvenance = {
+          ...args,
+          automationProvenance
+        }
+
         let result: CreateWorktreeResult
         try {
           // Why: only wrap the helpers themselves. The pre-validation throws
@@ -1030,11 +1055,12 @@ export function registerWorktreeHandlers(
           // git/filesystem failures the funnel cares about — bucketing them
           // into `unknown` would pollute the failure taxonomy.
           result = isFolderRepo(repo)
-            ? createFolderWorkspace(args, repo, store)
+            ? createFolderWorkspace(createArgs, repo, store)
             : repo.connectionId
-              ? await createRemoteWorktree(args, repo, store, mainWindow)
-              : await createLocalWorktree(args, repo, store, mainWindow, runtime)
+              ? await createRemoteWorktree(createArgs, repo, store, mainWindow)
+              : await createLocalWorktree(createArgs, repo, store, mainWindow, runtime)
         } catch (error) {
+          releaseAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
           track('workspace_create_failed', {
             source,
             error_class: classifyWorkspaceCreateError(error),
@@ -1042,6 +1068,7 @@ export function registerWorktreeHandlers(
           })
           throw error
         }
+        finishAutomationWorkspaceProvenanceRequest(args.automationProvenanceRequest)
 
         // Why: emit `workspace_created` only after the underlying create has
         // resolved (the helpers throw on failure, so reaching this line means

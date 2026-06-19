@@ -89,6 +89,8 @@ import {
   getDefaultUIState,
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
+  getWorktreeCardModeProperties,
+  isLegacyDefaultedCompactWorktreeCardProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION,
@@ -2651,6 +2653,10 @@ export class Store {
           this.loadNeedsSave = true
         }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
+        const loadedCompactWorktreeCards =
+          parsed.settings?.compactWorktreeCards ??
+          parsed.settings?.experimentalCompactWorktreeCards ??
+          defaults.settings.compactWorktreeCards
         result = {
           ...defaults,
           ...parsed,
@@ -2691,10 +2697,7 @@ export class Store {
             experimentalActivityDefaultedOffForAllUsers: true,
             // Why: compact worktree cards graduated from Experimental; preserve
             // the old opt-in for profiles written during the rollout.
-            compactWorktreeCards:
-              parsed.settings?.compactWorktreeCards ??
-              parsed.settings?.experimentalCompactWorktreeCards ??
-              defaults.settings.compactWorktreeCards,
+            compactWorktreeCards: loadedCompactWorktreeCards,
             experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
@@ -2797,9 +2800,16 @@ export class Store {
               !deliberateUncheck &&
               Array.isArray(rawCardProps) &&
               !rawCardProps.includes('inline-agents')
+            const needsLegacyDefaultedCompactMigration =
+              loadedCompactWorktreeCards &&
+              parsed.ui?._worktreeCardModeDefaulted === true &&
+              isLegacyDefaultedCompactWorktreeCardProperties(rawCardProps)
             const migratedCardProps = (() => {
               if (!Array.isArray(rawCardProps)) {
                 return undefined
+              }
+              if (needsLegacyDefaultedCompactMigration) {
+                return getWorktreeCardModeProperties('Compact')
               }
               const candidate = needsInlineAgentsMigration
                 ? [...rawCardProps, 'inline-agents' as const]
@@ -2845,6 +2855,11 @@ export class Store {
             }
             return {
               ...defaults.ui,
+              // Why: missing card properties should follow the persisted card
+              // layout mode; explicit property choices are preserved below.
+              worktreeCardProperties: getWorktreeCardModeProperties(
+                loadedCompactWorktreeCards ? 'Compact' : 'Default'
+              ),
               ...stripMainOwnedTelemetryMarkerFromUI(parsed.ui),
               // Why: migrate once from the retired Appearance setting only
               // when no explicit persisted chrome preference exists yet.

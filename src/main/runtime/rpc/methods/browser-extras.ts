@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { BrowserTarget, OptionalFiniteNumber } from '../schemas'
 import {
@@ -21,7 +22,16 @@ import {
   Viewport
 } from './browser-schemas'
 
-const MouseClick = MouseXY.merge(MouseButton).extend({ radius: OptionalFiniteNumber })
+const MouseModifiers = z
+  .unknown()
+  .transform((v) => (Array.isArray(v) ? v : undefined))
+  .pipe(z.union([z.array(z.enum(['cmd', 'ctrl', 'alt', 'shift'])), z.undefined()]))
+  .optional()
+
+const MouseClick = MouseXY.merge(MouseButton).extend({
+  radius: OptionalFiniteNumber,
+  modifiers: MouseModifiers
+})
 
 export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
   defineMethod({

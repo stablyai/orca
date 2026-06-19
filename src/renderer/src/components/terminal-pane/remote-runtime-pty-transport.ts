@@ -47,6 +47,7 @@ export function createRemoteRuntimePtyTransport(
 ): PtyTransport {
   const {
     command,
+    startupCommandDelivery,
     env,
     worktreeId,
     tabId,
@@ -375,6 +376,7 @@ export function createRemoteRuntimePtyTransport(
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
           worktree: toRuntimeWorktreeSelector(worktreeId),
           command,
+          startupCommandDelivery,
           env,
           tabId,
           leafId,

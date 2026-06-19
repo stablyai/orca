@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
 import type { SshRemotePtyLease, SshTarget } from './ssh-types'
-import type { Automation, AutomationRun } from './automations-types'
+import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
 import type { GitHubProjectSettings } from './github-project-types'
 import type {
@@ -28,6 +28,7 @@ import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
 } from './source-control-ai-types'
+import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
@@ -495,7 +496,29 @@ export type Worktree = {
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
   mobileDiffReview?: MobileDiffReviewState
+  automationProvenance?: AutomationWorkspaceProvenance
 } & GitWorktreeInfo
+
+export type AutomationWorkspaceProvenance = {
+  kind: 'created-by-automation'
+  automationId: string
+  automationNameSnapshot: string
+  automationRunId: string
+  automationRunTitleSnapshot: string
+  createdAt: number
+  executionTargetType: AutomationExecutionTargetType
+  executionTargetId: string
+  projectId: string
+  repoId?: string
+  hostId?: ExecutionHostId
+}
+
+export type AutomationWorkspaceProvenanceRequest = {
+  automationId: string
+  automationRunId: string
+  dispatchToken: string
+  createRequestId: string
+}
 
 export type GitPushTarget = {
   remoteName: string
@@ -583,6 +606,8 @@ export type WorktreeMeta = {
    *  them. Self-prunes when the worktree is deleted. */
   priorWorktreeIds?: string[]
   mobileDiffReview?: MobileDiffReviewState
+  /** System-owned provenance for workspaces created by automation new-per-run dispatches. */
+  automationProvenance?: AutomationWorkspaceProvenance
 }
 
 export type WorktreeOwnership = 'orca-managed' | 'external' | 'unknown-legacy'
@@ -1867,6 +1892,7 @@ export type WorktreeSetupLaunch = {
 export type WorktreeStartupLaunch = {
   command: string
   env?: Record<string, string>
+  startupCommandDelivery?: StartupCommandDelivery
   telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
 }
 
@@ -1958,6 +1984,8 @@ export type CreateWorktreeArgs = {
    *  creation in the renderer, so concurrent background creates each drive
    *  their own status surface. Omitted by synchronous callers. */
   creationId?: string
+  /** Authorizes the host to mint system-owned automation provenance. */
+  automationProvenanceRequest?: AutomationWorkspaceProvenanceRequest
 }
 
 export type CreateWorktreeResult = {
@@ -2912,6 +2940,7 @@ export type WorktreeCardProperty =
   | 'issue'
   | 'linear-issue'
   | 'pr'
+  | 'automation'
   | 'comment'
   | 'ports'
   // Why: inline list of agent activity rendered directly inside each
@@ -3009,6 +3038,8 @@ export type PersistedUIState = {
    *  the predicate in visible-worktrees.ts excludes worktrees with an empty
    *  branch. */
   hideDefaultBranchWorkspace: boolean
+  /** Hide workspaces created by automation new-per-run dispatches. */
+  hideAutomationGeneratedWorkspaces?: boolean
   /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
   showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]

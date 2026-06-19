@@ -17,7 +17,10 @@ import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/gith
 import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
-import { isDefaultBranchWorkspace } from '@/components/sidebar/visible-worktrees'
+import {
+  isAutomationGeneratedWorkspace,
+  isDefaultBranchWorkspace
+} from '@/components/sidebar/visible-worktrees'
 import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
@@ -321,6 +324,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
   const workspacePortScan = useAppStore((s) => s.workspacePortScan?.result ?? null)
@@ -393,6 +397,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
           return false
         }
+        if (hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(worktree)) {
+          return false
+        }
         if (
           !showSleepingWorkspaces &&
           isInactiveWorkspace(worktree.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
@@ -404,6 +411,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [
       allWorktrees,
       browserTabsByWorktree,
+      hideAutomationGeneratedWorkspaces,
       hideDefaultBranchWorkspace,
       ptyIdsByTabId,
       showSleepingWorkspaces,

@@ -9,6 +9,7 @@ import {
 } from '../../shared/agent-detection'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import type { AgentStatus } from '../../shared/agent-detection'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusIpcPayload,
@@ -42,6 +43,7 @@ import type {
   AutomationWorkspaceMode
 } from '../../shared/automations-types'
 import type {
+  AutomationWorkspaceProvenance,
   BaseRefSearchResult,
   CreateWorktreeResult,
   DetectedWorktree,
@@ -527,6 +529,7 @@ import {
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
   isForEachRefExcludeUnsupportedError,
+  mergeBaseRefSearchResultGroups,
   getRemoteDrift,
   getRecentDriftSubjects
 } from '../git/repo'
@@ -722,6 +725,7 @@ type RuntimeStore = {
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
+    compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
@@ -904,6 +908,7 @@ type RuntimeHeadlessTerminal = {
 
 type HeadlessSeedMetadata = {
   cwd?: string | null
+  oscLinks?: TerminalOscLinkRange[]
 }
 
 type RuntimePtyController = {
@@ -912,6 +917,7 @@ type RuntimePtyController = {
     rows: number
     cwd?: string
     command?: string
+    startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
     envToDelete?: string[]
     telemetry?: WorktreeStartupLaunch['telemetry']
@@ -1192,6 +1198,9 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     lastActivityAt: meta.lastActivityAt ?? 0,
     ...(meta.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
     ...(meta.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
+    ...(meta.automationProvenance !== undefined
+      ? { automationProvenance: meta.automationProvenance }
+      : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,
     mobileDiffReview: meta.mobileDiffReview
@@ -2086,6 +2095,7 @@ export class OrcaRuntimeService {
     | 'defaultLinearTeamSelection'
     | 'githubProjects'
     | 'experimentalNewWorktreeCardStyle'
+    | 'compactWorktreeCards'
   > {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
@@ -2104,7 +2114,8 @@ export class OrcaRuntimeService {
       defaultRepoSelection: settings.defaultRepoSelection ?? null,
       defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,
       githubProjects: settings.githubProjects,
-      experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true
+      experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
+      compactWorktreeCards: settings.compactWorktreeCards === true
     }
   }
 
@@ -2123,6 +2134,7 @@ export class OrcaRuntimeService {
       | 'defaultLinearTeamSelection'
       | 'githubProjects'
       | 'experimentalNewWorktreeCardStyle'
+      | 'compactWorktreeCards'
     >
   ): Pick<
     GlobalSettings,
@@ -2139,6 +2151,7 @@ export class OrcaRuntimeService {
     | 'defaultLinearTeamSelection'
     | 'githubProjects'
     | 'experimentalNewWorktreeCardStyle'
+    | 'compactWorktreeCards'
   > {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
@@ -3477,6 +3490,7 @@ export class OrcaRuntimeService {
           await this.createHeadlessMobileSessionTerminal(
             worktreeId,
             true,
+            undefined,
             undefined,
             undefined,
             {
@@ -4887,6 +4901,7 @@ export class OrcaRuntimeService {
     lastTitle?: string
     seq?: number
     source?: 'headless' | 'renderer'
+    oscLinks?: TerminalOscLinkRange[]
   } | null> {
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
   }
@@ -4902,6 +4917,7 @@ export class OrcaRuntimeService {
     lastTitle?: string
     seq?: number
     source?: 'headless' | 'renderer'
+    oscLinks?: TerminalOscLinkRange[]
   } | null> {
     return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
@@ -4969,6 +4985,9 @@ export class OrcaRuntimeService {
         await state.emulator.write(data)
         if (metadata.cwd !== undefined) {
           state.emulator.setCwd(metadata.cwd)
+        }
+        if (metadata.oscLinks !== undefined) {
+          state.emulator.setRestoredOscLinks(metadata.oscLinks)
         }
       })
       .catch(() => {
@@ -5134,6 +5153,7 @@ export class OrcaRuntimeService {
     lastTitle?: string
     seq?: number
     source?: 'headless' | 'renderer'
+    oscLinks?: TerminalOscLinkRange[]
   } | null> {
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
@@ -5146,6 +5166,7 @@ export class OrcaRuntimeService {
       rows: number
       cwd?: string | null
       lastTitle?: string
+      oscLinks?: TerminalOscLinkRange[]
     } | null = null
     try {
       // Why: read-fallback wants visible alt-screen content (e.g. an active
@@ -5228,6 +5249,7 @@ export class OrcaRuntimeService {
     lastTitle?: string
     seq?: number
     source?: 'headless'
+    oscLinks?: TerminalOscLinkRange[]
   } | null> {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
@@ -5253,7 +5275,8 @@ export class OrcaRuntimeService {
           cwd: snapshot.cwd,
           lastTitle: snapshot.lastTitle,
           seq: state.outputSequence,
-          source: 'headless'
+          source: 'headless',
+          oscLinks: snapshot.oscLinks
         }
       : null
   }
@@ -9033,25 +9056,47 @@ export class OrcaRuntimeService {
     }
     const normalizedQuery = normalizeRefSearchQuery(query)
     try {
-      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      let result: { stdout: string }
-      try {
-        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
-      } catch (err) {
-        if (!isForEachRefExcludeUnsupportedError(err)) {
-          throw err
-        }
-        result = await provider.exec(
-          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
-          repo.path
-        )
-      }
-      const remotesResult = await remotesPromise
+      const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
       const remotes = remotesResult.stdout
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
-      return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
+      const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
+        try {
+          return (
+            await provider.exec(
+              buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                remoteNames: remotes,
+                patternGroup
+              }),
+              repo.path
+            )
+          ).stdout
+        } catch (err) {
+          if (!isForEachRefExcludeUnsupportedError(err)) {
+            throw err
+          }
+          return (
+            await provider.exec(
+              buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                excludeRemoteHead: false,
+                remoteNames: remotes,
+                patternGroup
+              }),
+              repo.path
+            )
+          ).stdout
+        }
+      }
+      const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
+      if (searchTokens.length > 1) {
+        const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
+        return mergeBaseRefSearchResultGroups(
+          results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
+          limit
+        )
+      }
+      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
     } catch (err) {
       console.warn('[runtime:repo.searchRefs] SSH for-each-ref failed', {
         path: repo.path,
@@ -10678,6 +10723,9 @@ export class OrcaRuntimeService {
         agent,
         startup: {
           command: draftLaunchPlan.launchCommand,
+          ...(draftLaunchPlan.startupCommandDelivery
+            ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
+            : {}),
           ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
         }
       }
@@ -10699,6 +10747,9 @@ export class OrcaRuntimeService {
       agent,
       startup: {
         command: startupPlan.launchCommand,
+        ...(startupPlan.startupCommandDelivery
+          ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+          : {}),
         ...(startupPlan.env ? { env: startupPlan.env } : {})
       },
       draftPaste: { agent, content }
@@ -10736,6 +10787,9 @@ export class OrcaRuntimeService {
       agent,
       startup: {
         command: startupPlan.launchCommand,
+        ...(startupPlan.startupCommandDelivery
+          ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+          : {}),
         ...(startupPlan.env ? { env: startupPlan.env } : {})
       },
       ...(startupPlan.followupPrompt
@@ -11054,6 +11108,7 @@ export class OrcaRuntimeService {
     startupAgent?: TuiAgent
     startupPrompt?: string
     pendingFirstAgentMessageRename?: boolean
+    automationProvenance?: AutomationWorkspaceProvenance
     startup?: WorktreeStartupLaunch
     startupDraft?: string
     startupDraftPaste?: WorktreeStartupDraftPaste
@@ -11113,6 +11168,7 @@ export class OrcaRuntimeService {
           path: settings.workspaceDir,
           nestWorkspaces: settings.nestWorkspaces
         },
+        ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
         ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
         ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
         ...(args.linkedLinearIssue !== undefined
@@ -11155,6 +11211,7 @@ export class OrcaRuntimeService {
           const terminal = await this.createTerminal(`id:${worktree.id}`, {
             command: effectiveStartup.command,
             env: effectiveStartup.env,
+            startupCommandDelivery: effectiveStartup.startupCommandDelivery,
             telemetry: effectiveStartup.telemetry
           })
           if (effectiveDraftPaste) {
@@ -11631,6 +11688,7 @@ export class OrcaRuntimeService {
       ...(args.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent
         ? { pendingFirstAgentMessageRename: true }
         : {}),
+      ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
       ...(args.comment !== undefined ? { comment: args.comment } : {}),
       ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
       ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
@@ -11736,6 +11794,7 @@ export class OrcaRuntimeService {
         const terminal = await this.createTerminal(`id:${worktree.id}`, {
           command: effectiveStartup.command,
           env: effectiveStartup.env,
+          startupCommandDelivery: effectiveStartup.startupCommandDelivery,
           telemetry: effectiveStartup.telemetry
         })
         if (effectiveDraftPaste) {
@@ -11909,6 +11968,7 @@ export class OrcaRuntimeService {
       setupDecision?: 'run' | 'skip' | 'inherit'
       createdWithAgent?: TuiAgent
       pendingFirstAgentMessageRename?: boolean
+      automationProvenance?: AutomationWorkspaceProvenance
       startup?: WorktreeStartupLaunch
       startupFollowup?: WorktreeStartupFollowup
       startupDraftPaste?: WorktreeStartupDraftPaste
@@ -11959,7 +12019,8 @@ export class OrcaRuntimeService {
         ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
         ...(args.pendingFirstAgentMessageRename === true
           ? { pendingFirstAgentMessageRename: true }
-          : {})
+          : {}),
+        ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {})
       },
       repo,
       this.store as unknown as Store,
@@ -11992,6 +12053,7 @@ export class OrcaRuntimeService {
         const terminal = await this.createTerminal(`path:${result.worktree.path}`, {
           command: args.startup.command,
           env: args.startup.env,
+          startupCommandDelivery: args.startup.startupCommandDelivery,
           telemetry: args.startup.telemetry
         })
         if (args.startupDraftPaste) {
@@ -12267,7 +12329,14 @@ export class OrcaRuntimeService {
       }
       return gitExecFileAsync(
         ['fetch', '--no-tags', base.remote, `+refs/heads/${base.branch}:${base.ref}`],
-        { cwd: repoPath, ...gitOptions }
+        {
+          cwd: repoPath,
+          ...gitOptions,
+          // Why: exact remote-base refresh is the network gate for worktree
+          // creation, so honor repo SSH routing and bound custom wrappers.
+          useConfiguredSshCommandForNetwork: true,
+          timeout: 60_000
+        }
       )
         .then((): RemoteFetchResult => {
           this.rememberFreshFetchCompletedAt(key)
@@ -12597,13 +12666,13 @@ export class OrcaRuntimeService {
       if (!worktree.instanceId || !parent.instanceId) {
         throw new RuntimeLineageError(
           'LINEAGE_PARENT_CONTEXT_MISSING',
-          'Workspace instance identity was unavailable.'
+          'Worktree instance identity was unavailable.'
         )
       }
       if (!this.store.setWorktreeLineage) {
         throw new RuntimeLineageError(
           'LINEAGE_PARENT_CONTEXT_MISSING',
-          'Workspace lineage storage was unavailable.'
+          'Worktree lineage storage was unavailable.'
         )
       }
       const createdAt = Date.now()
@@ -13541,6 +13610,7 @@ export class OrcaRuntimeService {
     opts: {
       command?: string
       env?: Record<string, string>
+      startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       telemetry?: WorktreeStartupLaunch['telemetry']
       title?: string
       focus?: boolean
@@ -13618,6 +13688,7 @@ export class OrcaRuntimeService {
         rows: 40,
         cwd: workspace.path,
         command: agentTeamsPlan?.command ?? opts.command,
+        startupCommandDelivery: opts.startupCommandDelivery,
         env,
         envToDelete: agentTeamsPlan?.envToDelete,
         telemetry: opts.telemetry,
@@ -13714,6 +13785,7 @@ export class OrcaRuntimeService {
         requestId,
         worktreeId,
         command: opts.command,
+        startupCommandDelivery: opts.startupCommandDelivery,
         title: opts.title,
         activate: opts.focus === true || opts.activate === true
       })
@@ -13750,6 +13822,7 @@ export class OrcaRuntimeService {
     return await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,
       env: startup.startup.env,
+      startupCommandDelivery: startup.startup.startupCommandDelivery,
       telemetry: startup.startup.telemetry,
       title: opts.title
     })
@@ -13761,6 +13834,7 @@ export class OrcaRuntimeService {
       afterTabId?: string
       targetGroupId?: string
       command?: string
+      startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       agent?: TuiAgent
       activate?: boolean
     } = {}
@@ -13787,6 +13861,7 @@ export class OrcaRuntimeService {
         opts.activate !== false,
         opts.afterTabId,
         command,
+        opts.startupCommandDelivery,
         undefined,
         opts.agent
       )
@@ -13820,6 +13895,7 @@ export class OrcaRuntimeService {
         afterTabId: afterDesktopTabId,
         targetGroupId: opts.targetGroupId,
         command,
+        startupCommandDelivery: opts.startupCommandDelivery,
         activate: opts.activate
       })
     })
@@ -13876,6 +13952,7 @@ export class OrcaRuntimeService {
     activate: boolean,
     afterTabId?: string,
     command?: string,
+    startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery'],
     identity?: { tabId: string; leafId: string; sessionId?: string },
     launchAgent?: TuiAgent
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
@@ -13887,6 +13964,7 @@ export class OrcaRuntimeService {
     const terminal = await this.createTerminal(`id:${worktreeId}`, {
       focus: false,
       command,
+      startupCommandDelivery,
       ...(identity
         ? {
             tabId: identity.tabId,
@@ -14805,7 +14883,7 @@ export class OrcaRuntimeService {
     const childWorktreeId = child.id
     const parentWorktreeId = parent.id
     if (childWorktreeId === parentWorktreeId) {
-      throw new RuntimeLineageError('LINEAGE_PARENT_CYCLE', 'A workspace cannot parent itself.')
+      throw new RuntimeLineageError('LINEAGE_PARENT_CYCLE', 'A worktree cannot parent itself.')
     }
     const instanceByWorktreeId = new Map(
       this.resolvedWorktreeCache?.worktrees.map((worktree) => [
@@ -14822,7 +14900,7 @@ export class OrcaRuntimeService {
       if (visited.has(cursor)) {
         throw new RuntimeLineageError(
           'LINEAGE_PARENT_CYCLE',
-          'Parent workspace would create a lineage cycle.'
+          'Parent selector would create a lineage cycle.'
         )
       }
       visited.add(cursor)
@@ -14852,13 +14930,13 @@ export class OrcaRuntimeService {
     if (input.noParent === true && (input.parentWorkspace || input.parentWorktree)) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        'Choose either a parent workspace flag or --no-parent, not both.'
+        'Choose either one parent selector or --no-parent.'
       )
     }
     if (input.parentWorkspace && input.parentWorktree) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        'Choose either --parent-workspace or --parent-worktree, not both.'
+        'Choose either one parent selector or --no-parent.'
       )
     }
 
@@ -14877,10 +14955,10 @@ export class OrcaRuntimeService {
       } catch {
         throw new RuntimeLineageError(
           'LINEAGE_PARENT_NOT_FOUND',
-          'Parent workspace was not found.',
+          'Parent selector was not found.',
           {
             nextSteps: [
-              'Pass a valid --parent-workspace selector such as folder:<id> or worktree:<id>.',
+              'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
               'Retry with --no-parent to create without lineage.'
             ]
           }
@@ -14905,10 +14983,10 @@ export class OrcaRuntimeService {
       } catch {
         throw new RuntimeLineageError(
           'LINEAGE_PARENT_NOT_FOUND',
-          'Parent workspace was not found.',
+          'Parent selector was not found.',
           {
             nextSteps: [
-              'Run `orca worktree list` and pass a valid --parent-worktree selector.',
+              'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
               'Retry with --no-parent to create without lineage.'
             ]
           }
@@ -14931,7 +15009,7 @@ export class OrcaRuntimeService {
         warnings.push({
           code: 'LINEAGE_PARENT_CONTEXT_MISSING',
           message:
-            'Worktree created, but Orca could not validate the environment parent workspace.',
+            'Worktree created, but Orca could not validate the environment parent context.',
           details: { envParentWorkspace: input.envParentWorkspace }
         })
       }
@@ -15000,7 +15078,7 @@ export class OrcaRuntimeService {
         warnings.push({
           code: 'LINEAGE_PARENT_CONTEXT_MISSING',
           message:
-            'Worktree created, but Orca could not validate the caller terminal as a parent workspace.',
+            'Worktree created, but Orca could not validate the caller terminal as a parent context.',
           details: { callerTerminalHandle: input.callerTerminalHandle }
         })
       }
@@ -15016,7 +15094,7 @@ export class OrcaRuntimeService {
         warnings.push({
           code: 'LINEAGE_PARENT_CONTEXT_MISSING',
           message:
-            'Worktree created, but Orca could not validate the current directory as a parent workspace.',
+            'Worktree created, but Orca could not validate the current directory as a parent context.',
           details: { cwdParentWorktree: input.cwdParentWorktree }
         })
       }
@@ -15040,7 +15118,7 @@ export class OrcaRuntimeService {
         warnings: [
           {
             code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
-            message: 'Worktree created, but Orca could not prove which parent workspace caused it.',
+            message: 'Worktree created, but Orca could not prove which parent context caused it.',
             details: {
               terminalParentWorkspaceKey: candidates.find((c) => c.source === 'terminal-context')
                 ?.parent.workspaceKey,

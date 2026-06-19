@@ -79,6 +79,10 @@ export default function FolderWorkspacePrChecksPanel({
     [childWorktrees, repos, settings, hostedReviewCache, prCache, checksCache, refreshOutcomes]
   )
   const folderWorkspaceId = folderWorkspace?.id ?? null
+  const headerSummary = useMemo(
+    () => formatReviewChecksHeaderSummary(projection.summary),
+    [projection.summary]
+  )
   const refreshCandidates = useMemo(
     () => getParentPrChecksRefreshCandidates({ worktrees: childWorktrees, repos }),
     [childWorktrees, repos]
@@ -210,11 +214,14 @@ export default function FolderWorkspacePrChecksPanel({
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium text-foreground">
-              {folderWorkspace.name}
+              {translate(
+                'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.reviewChecks',
+                'Review checks'
+              )}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {formatSummary(projection.summary)}
-            </div>
+            {headerSummary ? (
+              <div className="mt-1 truncate text-xs text-muted-foreground">{headerSummary}</div>
+            ) : null}
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -276,26 +283,71 @@ export default function FolderWorkspacePrChecksPanel({
   )
 }
 
-function formatSummary(summary: {
+function formatReviewChecksHeaderSummary(summary: {
   attached: number
-  knownReview: number
   failing: number
   pending: number
   passing: number
-  noPr: number
-  unknown: number
-}): string {
-  return translate(
-    'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.summary',
-    '{{value0}} attached · {{value1}} with PR/MR · {{value2}} attention · {{value3}} pending · {{value4}} passing · {{value5}} no PR · {{value6}} unknown',
-    {
-      value0: summary.attached,
-      value1: summary.knownReview,
-      value2: summary.failing,
-      value3: summary.pending,
-      value4: summary.passing,
-      value5: summary.noPr,
-      value6: summary.unknown
-    }
-  )
+}): string | null {
+  if (summary.attached === 0) {
+    return null
+  }
+  const worktreeCount = formatWorktreeCount(summary.attached)
+  const attentionParts = [
+    summary.failing > 0 ? formatFailingCount(summary.failing) : null,
+    summary.pending > 0 ? formatPendingCount(summary.pending) : null
+  ].filter((part): part is string => part !== null)
+
+  if (attentionParts.length > 0) {
+    return [...attentionParts, worktreeCount].join(' · ')
+  }
+  if (summary.passing === summary.attached) {
+    return [
+      worktreeCount,
+      translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.allChecksPassing',
+        'all checks passing'
+      )
+    ].join(' · ')
+  }
+  return worktreeCount
+}
+
+function formatWorktreeCount(count: number): string {
+  return count === 1
+    ? translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneWorktree',
+        '1 worktree'
+      )
+    : translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCount',
+        '{{value0}} worktrees',
+        { value0: count }
+      )
+}
+
+function formatFailingCount(count: number): string {
+  return count === 1
+    ? translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneFailing',
+        '1 failing'
+      )
+    : translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCount',
+        '{{value0}} failing',
+        { value0: count }
+      )
+}
+
+function formatPendingCount(count: number): string {
+  return count === 1
+    ? translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.onePending',
+        '1 pending'
+      )
+    : translate(
+        'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCount',
+        '{{value0}} pending',
+        { value0: count }
+      )
 }

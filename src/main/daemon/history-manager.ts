@@ -201,6 +201,7 @@ export class HistoryManager {
       const checkpointFile: TerminalCheckpointFile = {
         snapshotAnsi: snapshot.snapshotAnsi,
         scrollbackAnsi: snapshot.scrollbackAnsi,
+        oscLinks: snapshot.oscLinks,
         rehydrateSequences: snapshot.rehydrateSequences,
         cwd: effectiveCwd,
         cols: snapshot.cols,

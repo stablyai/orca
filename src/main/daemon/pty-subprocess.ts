@@ -33,6 +33,10 @@ import {
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine
 } from '../../shared/agent-process-recognition'
+import {
+  shouldUseShellReadyStartupDelivery,
+  type StartupCommandDelivery
+} from '../../shared/codex-startup-delivery'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
@@ -51,6 +55,7 @@ export type PtySubprocessOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
   /** Explicit shell executable path/basename the renderer asked for.
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
@@ -504,9 +509,15 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // wrapper need shell-ready code after user startup files run.
     let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     if (opts.command && isCodexStartupCommand) {
-      // Why: Codex needs the env-restoring wrapper, but waiting for a shell
-      // marker delays the first useful TUI frame.
-      shellLaunch = getAttributionShellLaunchConfig(shellPath)
+      const shouldWaitForShellReady = shouldUseShellReadyStartupDelivery({
+        command: opts.command,
+        startupCommandDelivery: opts.startupCommandDelivery
+      })
+      // Why: payload-bearing Codex startup text can be dropped by rc-file noise;
+      // plain Codex stays markerless to preserve the startup-speed path.
+      shellLaunch = shouldWaitForShellReady
+        ? getShellReadyLaunchConfig(shellPath)
+        : getAttributionShellLaunchConfig(shellPath)
     } else if (opts.command) {
       shellLaunch = getShellReadyLaunchConfig(shellPath)
     } else {

@@ -133,6 +133,7 @@ describe('remote runtime request connection integration', () => {
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },
+        showRepo: () => repo,
         listDetectedManagedWorktrees: () => ({
           repoId: repo.id,
           authoritative: true,
@@ -347,6 +348,7 @@ describe('remote runtime request connection integration', () => {
         },
         watchFileExplorer: async () => () => {},
         listRepos: () => [repo],
+        showRepo: () => repo,
         listDetectedManagedWorktrees: () => ({
           repoId: repo.id,
           authoritative: true,

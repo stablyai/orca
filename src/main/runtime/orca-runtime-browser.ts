@@ -1044,7 +1044,13 @@ export class RuntimeBrowserCommands {
   }
 
   async browserMouseClick(
-    params: { x: number; y: number; button?: string; radius?: number } & BrowserCommandTargetParams
+    params: {
+      x: number
+      y: number
+      button?: string
+      radius?: number
+      modifiers?: ('cmd' | 'ctrl' | 'alt' | 'shift')[]
+    } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
     return this.requireAgentBrowserBridge().mouseClick(
@@ -1053,7 +1059,8 @@ export class RuntimeBrowserCommands {
       params.button,
       target.worktreeId,
       target.browserPageId,
-      clampOptionalNumber(params.radius, 0, 64)
+      clampOptionalNumber(params.radius, 0, 64),
+      params.modifiers
     )
   }
 

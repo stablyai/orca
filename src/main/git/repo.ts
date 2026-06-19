@@ -504,6 +504,12 @@ async function getDefaultBaseRefAsync(
 const REF_SEARCH_CANDIDATE_MULTIPLIER = 4
 const REF_SEARCH_LEGACY_HEADROOM = 100
 
+type RefSearchPatternGroup = 'all' | 'segmented' | 'branchRoot'
+
+function getRefSearchTokens(normalizedQuery: string): string[] {
+  return normalizedQuery.split('/').filter((t) => t.length > 0)
+}
+
 function getRefSearchCandidateCount(limit: number, excludesRemoteHead: boolean): number {
   if (!Number.isInteger(limit) || limit <= 0) {
     throw new Error('invalid_limit')
@@ -515,7 +521,11 @@ function getRefSearchCandidateCount(limit: number, excludesRemoteHead: boolean):
 export function buildSearchBaseRefsArgv(
   normalizedQuery: string,
   limit: number,
-  options: { excludeRemoteHead?: boolean } = {}
+  options: {
+    excludeRemoteHead?: boolean
+    remoteNames?: readonly string[]
+    patternGroup?: RefSearchPatternGroup
+  } = {}
 ): string[] {
   const excludeRemoteHead = options.excludeRemoteHead ?? true
   const candidateCount = getRefSearchCandidateCount(limit, excludeRemoteHead)
@@ -541,7 +551,7 @@ export function buildSearchBaseRefsArgv(
   // patterns. A single remaining token means the user hasn't committed
   // to a remote-plus-branch query yet — route through the widened
   // single-segment globs below instead of pinning to one segment.
-  const tokens = normalizedQuery.split('/').filter((t) => t.length > 0)
+  const tokens = getRefSearchTokens(normalizedQuery)
   if (tokens.length <= 1) {
     const q = tokens[0] ?? ''
     // Why `**`, not `*`: git for-each-ref globs are fnmatch-style where a
@@ -563,7 +573,82 @@ export function buildSearchBaseRefsArgv(
   // as `<remote>/<branch>`, so users naturally retype that format; this
   // branch is what makes re-typing a visible result actually find it.
   const segmented = tokens.map((token) => `*${token}*`).join('/')
-  return [...base, `refs/remotes/${segmented}`, `refs/heads/${segmented}`]
+  const substringQuery = tokens.join('/')
+  const remoteBranchRootPatterns =
+    options.remoteNames && options.remoteNames.length > 0
+      ? options.remoteNames.flatMap((remote) => [
+          `refs/remotes/${remote}/${substringQuery}*`,
+          `refs/remotes/${remote}/${substringQuery}*/**`
+        ])
+      : [`refs/remotes/*/${substringQuery}*`, `refs/remotes/*/${substringQuery}*/**`]
+  const segmentedPatterns = [`refs/remotes/${segmented}`, `refs/heads/${segmented}`]
+  const branchRootPatterns = [
+    // Why: branch names often contain slashes (`plan/docs`). Segment-wise
+    // display-format globs only align with `<remote>/<branch>`; these root
+    // patterns also match the local branch name beneath any configured remote.
+    `refs/heads/${substringQuery}*`,
+    `refs/heads/${substringQuery}*/**`,
+    ...remoteBranchRootPatterns
+  ]
+  const patterns =
+    options.patternGroup === 'segmented'
+      ? segmentedPatterns
+      : options.patternGroup === 'branchRoot'
+        ? branchRootPatterns
+        : [...segmentedPatterns, ...branchRootPatterns]
+  return [...base, ...patterns]
+}
+
+async function runSearchBaseRefsGit(
+  path: string,
+  normalizedQuery: string,
+  limit: number,
+  options: { remoteNames: readonly string[]; patternGroup?: RefSearchPatternGroup }
+): Promise<{ stdout: string }> {
+  try {
+    return await gitExecFileAsync(
+      buildSearchBaseRefsArgv(normalizedQuery, limit, {
+        remoteNames: options.remoteNames,
+        patternGroup: options.patternGroup
+      }),
+      { cwd: path }
+    )
+  } catch (err) {
+    if (!isForEachRefExcludeUnsupportedError(err)) {
+      throw err
+    }
+    return gitExecFileAsync(
+      buildSearchBaseRefsArgv(normalizedQuery, limit, {
+        excludeRemoteHead: false,
+        remoteNames: options.remoteNames,
+        patternGroup: options.patternGroup
+      }),
+      { cwd: path }
+    )
+  }
+}
+
+export function mergeBaseRefSearchResultGroups(
+  groups: readonly BaseRefSearchResult[][],
+  limit: number
+): BaseRefSearchResult[] {
+  const seen = new Set<string>()
+  const merged: BaseRefSearchResult[] = []
+  const maxLength = Math.max(0, ...groups.map((group) => group.length))
+  for (let index = 0; index < maxLength && merged.length < limit; index += 1) {
+    for (const group of groups) {
+      const entry = group[index]
+      if (!entry || seen.has(entry.refName)) {
+        continue
+      }
+      seen.add(entry.refName)
+      merged.push(entry)
+      if (merged.length >= limit) {
+        break
+      }
+    }
+  }
+  return merged
 }
 
 export function isForEachRefExcludeUnsupportedError(error: unknown): boolean {
@@ -655,23 +740,31 @@ export async function searchBaseRefDetails(
   try {
     // Why: argv (including the two-remote-glob rationale) lives in
     // buildSearchBaseRefsArgv so the SSH sibling cannot drift.
-    const remotesPromise = listRemoteNames(path)
-    let result: { stdout: string }
-    try {
-      result = await gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery, limit), {
-        cwd: path
-      })
-    } catch (err) {
-      if (!isForEachRefExcludeUnsupportedError(err)) {
-        throw err
-      }
-      result = await gitExecFileAsync(
-        buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
-        { cwd: path }
+    const remotes = await listRemoteNames(path)
+    const tokens = getRefSearchTokens(normalizedQuery)
+    if (tokens.length > 1) {
+      // Why: ambiguous slash queries need both display-format matches
+      // (`upstream/feat`) and local branch-name matches (`plan/docs`).
+      // Parse and merge buckets before the final limit so neither side starves.
+      const results = await Promise.all([
+        runSearchBaseRefsGit(path, normalizedQuery, limit, {
+          remoteNames: remotes,
+          patternGroup: 'segmented'
+        }),
+        runSearchBaseRefsGit(path, normalizedQuery, limit, {
+          remoteNames: remotes,
+          patternGroup: 'branchRoot'
+        })
+      ])
+      return mergeBaseRefSearchResultGroups(
+        results.map((entry) => parseAndFilterSearchRefDetails(entry.stdout, limit, remotes)),
+        limit
       )
     }
-    const remotes = await remotesPromise
 
+    const result = await runSearchBaseRefsGit(path, normalizedQuery, limit, {
+      remoteNames: remotes
+    })
     return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
   } catch (err) {
     // Why: surface the failure for diagnostics; callers treat `[]` as "no

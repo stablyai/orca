@@ -231,10 +231,20 @@ describe('launchWorkItemDirect', () => {
         type: 'pr',
         number: 42,
         title: 'Fix the bug',
-        url: 'https://github.com/acme/repo/pull/42'
+        url: 'https://github.com/acme/repo/pull/42',
+        branchName: 'feature/fix',
+        baseRefName: 'main',
+        isCrossRepository: true
       }
     })
 
+    expect(mocks.resolvePrBase).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      prNumber: 42,
+      headRefName: 'feature/fix',
+      baseRefName: 'main',
+      isCrossRepository: true
+    })
     expect(mocks.createWorktree).toHaveBeenCalledWith(
       'repo-1',
       'review-pr-42',

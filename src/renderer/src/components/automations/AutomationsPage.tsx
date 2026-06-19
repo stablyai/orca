@@ -116,7 +116,10 @@ import {
 import {
   createAutomationForTarget,
   deleteAutomationForTarget,
+  type AutomationHostTarget,
   getAutomationListTarget,
+  getAutomationOwnerTarget,
+  getAutomationTargetFromHostId,
   listAutomationRunsForTarget,
   listAutomationsForTarget,
   runAutomationNowForTarget,
@@ -151,6 +154,10 @@ type SelectedExternalRunPage = {
   manager: ExternalAutomationManager
   job: ExternalAutomationJob
   run: ExternalAutomationRun
+}
+
+function getAutomationHostTargetKey(target: AutomationHostTarget): string {
+  return target.kind === 'environment' ? `environment:${target.environmentId}` : 'local'
 }
 
 function getDefaultWorktree(worktrees: readonly Worktree[]): Worktree | null {
@@ -353,6 +360,8 @@ export default function AutomationsPage(): React.JSX.Element {
   )
   const selectedId = useAppStore((s) => s.selectedAutomationId)
   const setSelectedId = useAppStore((s) => s.setSelectedAutomationId)
+  const pendingAutomationRunNavigation = useAppStore((s) => s.pendingAutomationRunNavigation)
+  const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
@@ -365,6 +374,7 @@ export default function AutomationsPage(): React.JSX.Element {
 
   const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<AutomationRun[]>([])
+  const [automationHostTargetKey, setAutomationHostTargetKey] = useState<string | null>(null)
   const [selectedAutomationRuns, setSelectedAutomationRuns] = useState<{
     automationId: string | null
     runs: AutomationRun[]
@@ -478,7 +488,9 @@ export default function AutomationsPage(): React.JSX.Element {
     (automations.length === 0 ? (externalAutomationEntries[0] ?? null) : null)
   const selected =
     selectedExternal === null
-      ? (automations.find((automation) => automation.id === selectedId) ?? automations[0] ?? null)
+      ? selectedId
+        ? (automations.find((automation) => automation.id === selectedId) ?? null)
+        : (automations[0] ?? null)
       : null
   const runsWithWorkspaceNames = useMemo(
     () =>
@@ -515,9 +527,10 @@ export default function AutomationsPage(): React.JSX.Element {
     selected && selectedAutomationRuns.automationId === selected.id
       ? selectedAutomationRunsWithWorkspaceNames
       : runsWithWorkspaceNames
-  const selectedRuns = selected
-    ? selectedRunsSource.filter((run) => run.automationId === selected.id)
-    : []
+  const selectedRuns = useMemo(
+    () => (selected ? selectedRunsSource.filter((run) => run.automationId === selected.id) : []),
+    [selected, selectedRunsSource]
+  )
   const selectedAutomationRunPage = selectedAutomationRunPageId
     ? (selectedRuns.find((run) => run.id === selectedAutomationRunPageId) ?? null)
     : null
@@ -534,6 +547,72 @@ export default function AutomationsPage(): React.JSX.Element {
       }
     }
   }, [worktreeMap])
+  useEffect(() => {
+    if (!pendingAutomationRunNavigation || isLoading) {
+      return
+    }
+    const pending = pendingAutomationRunNavigation
+    const pendingTargetKey = getAutomationHostTargetKey(
+      getAutomationTargetFromHostId(pending.hostId)
+    )
+    if (automationHostTargetKey !== pendingTargetKey) {
+      return
+    }
+    const pendingAutomation = automations.find(
+      (automation) => automation.id === pending.automationId
+    )
+    if (!pendingAutomation) {
+      // Why: stale provenance should not silently select the first automation.
+      setSelectedId(pending.automationId)
+      setSelectedAutomationRunPageId(null)
+      setPendingAutomationRunNavigation(null)
+      toast.message(
+        translate(
+          'auto.components.automations.AutomationsPage.pendingAutomationMissing',
+          'Automation no longer available.'
+        )
+      )
+      return
+    }
+    if (selectedId !== pending.automationId) {
+      setSelectedId(pending.automationId)
+      return
+    }
+    if (!pending.runId) {
+      setActivePaneTab('overview')
+      setSelectedAutomationRunPageId(null)
+      setPendingAutomationRunNavigation(null)
+      return
+    }
+    if (selectedAutomationRuns.automationId !== pending.automationId) {
+      return
+    }
+    setActivePaneTab('runs')
+    const pendingRun = selectedRuns.find((run) => run.id === pending.runId)
+    if (pendingRun) {
+      setSelectedAutomationRunPageId(pending.runId)
+      setPendingAutomationRunNavigation(null)
+      return
+    }
+    setSelectedAutomationRunPageId(null)
+    setPendingAutomationRunNavigation(null)
+    toast.message(
+      translate(
+        'auto.components.automations.AutomationsPage.pendingAutomationRunMissing',
+        'Run history no longer available.'
+      )
+    )
+  }, [
+    automations,
+    automationHostTargetKey,
+    isLoading,
+    pendingAutomationRunNavigation,
+    selectedAutomationRuns.automationId,
+    selectedId,
+    selectedRuns,
+    setPendingAutomationRunNavigation,
+    setSelectedId
+  ])
   const activeTerminalTabIds = useMemo(() => {
     const ids = new Set<string>()
     for (const tabs of Object.values(unifiedTabsByWorktree)) {
@@ -790,7 +869,10 @@ export default function AutomationsPage(): React.JSX.Element {
 
   const refresh = useCallback(async () => {
     setIsLoading(true)
-    const automationHostTarget = getAutomationListTarget(settings)
+    const pendingNavigation = useAppStore.getState().pendingAutomationRunNavigation
+    const automationHostTarget = pendingNavigation
+      ? getAutomationTargetFromHostId(pendingNavigation.hostId)
+      : getAutomationListTarget(settings)
     try {
       const [nextAutomations, nextRuns, nextExternalManagers] = await Promise.all([
         listAutomationsForTarget(automationHostTarget),
@@ -801,26 +883,44 @@ export default function AutomationsPage(): React.JSX.Element {
       const hasCurrentSelection = nextAutomations.some(
         (automation) => automation.id === currentSelectedId
       )
-      const nextSelectedId = hasCurrentSelection
-        ? currentSelectedId
-        : (nextAutomations[0]?.id ?? null)
+      let nextSelectedId: string | null
+      if (hasCurrentSelection) {
+        nextSelectedId = currentSelectedId
+      } else if (pendingNavigation) {
+        nextSelectedId = pendingNavigation.automationId
+      } else {
+        nextSelectedId = nextAutomations[0]?.id ?? null
+      }
       const nextSelectedRuns = nextSelectedId
         ? await listAutomationRunsForTarget(automationHostTarget, nextSelectedId)
         : []
       setAutomations(nextAutomations)
       setRuns(nextRuns)
+      setAutomationHostTargetKey(getAutomationHostTargetKey(automationHostTarget))
       setSelectedAutomationRuns({
         automationId: nextSelectedId,
         runs: nextSelectedRuns
       })
       setExternalManagers(nextExternalManagers)
-      if (!hasCurrentSelection) {
+      if (!hasCurrentSelection && !pendingNavigation) {
         selectAutomationId(nextAutomations[0]?.id ?? null)
       }
     } finally {
       setIsLoading(false)
     }
   }, [selectAutomationId, settings])
+
+  useEffect(() => {
+    if (!pendingAutomationRunNavigation || isLoading) {
+      return
+    }
+    const pendingTargetKey = getAutomationHostTargetKey(
+      getAutomationTargetFromHostId(pendingAutomationRunNavigation.hostId)
+    )
+    if (automationHostTargetKey !== pendingTargetKey) {
+      void refresh()
+    }
+  }, [automationHostTargetKey, isLoading, pendingAutomationRunNavigation, refresh])
 
   const hydratePersistedUIState = useCallback(async (): Promise<void> => {
     useAppStore.getState().hydratePersistedUI(await window.api.ui.get())
@@ -843,17 +943,22 @@ export default function AutomationsPage(): React.JSX.Element {
       return
     }
     let cancelled = false
-    void listAutomationRunsForTarget(getAutomationListTarget(settings), automationId).then(
-      (nextRuns) => {
-        if (!cancelled) {
-          setSelectedAutomationRuns({ automationId, runs: nextRuns })
-        }
+    const target =
+      pendingAutomationRunNavigation?.automationId === automationId &&
+      pendingAutomationRunNavigation.hostId
+        ? getAutomationTargetFromHostId(pendingAutomationRunNavigation.hostId)
+        : selected
+          ? getAutomationOwnerTarget(selected)
+          : getAutomationListTarget(settings)
+    void listAutomationRunsForTarget(target, automationId).then((nextRuns) => {
+      if (!cancelled) {
+        setSelectedAutomationRuns({ automationId, runs: nextRuns })
       }
-    )
+    })
     return () => {
       cancelled = true
     }
-  }, [selected?.id, runs, settings])
+  }, [pendingAutomationRunNavigation, selected, selected?.id, runs, settings])
 
   useEffect(() => {
     const onAutomationsChanged = (): void => {

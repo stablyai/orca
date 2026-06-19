@@ -13,6 +13,7 @@ import type { AppIdentity } from '../shared/app-identity'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type { TaskSourceContext } from '../shared/task-source-context'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
+import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
@@ -1014,6 +1015,7 @@ export type PreloadApi = {
       cwd?: string
       env?: Record<string, string>
       command?: string
+      startupCommandDelivery?: StartupCommandDelivery
       connectionId?: string | null
       worktreeId?: string
       sessionId?: string
@@ -2385,6 +2387,7 @@ export type PreloadApi = {
         afterTabId?: string
         targetGroupId?: string
         command?: string
+        startupCommandDelivery?: StartupCommandDelivery
         title?: string
         activate?: boolean
       }) => void

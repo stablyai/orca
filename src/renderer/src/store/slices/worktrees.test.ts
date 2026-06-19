@@ -130,12 +130,14 @@ function createTestStore() {
         showDotfilesByWorktree: {},
         expandedDirs: {},
         gitStatusByWorktree: {},
+        gitStatusHeadByWorktree: {},
         gitIgnoredPathsByWorktree: {},
         gitConflictOperationByWorktree: {},
         trackedConflictPathsByWorktree: {},
         gitBranchChangesByWorktree: {},
         gitBranchCompareSummaryByWorktree: {},
         gitBranchCompareRequestKeyByWorktree: {},
+        gitBranchCompareRequestStatusHeadByWorktree: {},
         activeFileIdByWorktree: {},
         activeBrowserTabIdByWorktree: {},
         browserTabsByWorktree: {},
@@ -2114,6 +2116,10 @@ describe('removeWorktree state cleanup', () => {
         'repo1::/path/wt1': [{ path: 'a.ts' }],
         'repo1::/path/wt2': [{ path: 'b.ts' }]
       },
+      gitStatusHeadByWorktree: {
+        'repo1::/path/wt1': 'head-1',
+        'repo1::/path/wt2': 'head-2'
+      },
       gitIgnoredPathsByWorktree: {
         'repo1::/path/wt1': ['dist/'],
         'repo1::/path/wt2': ['coverage/']
@@ -2137,6 +2143,10 @@ describe('removeWorktree state cleanup', () => {
       gitBranchCompareRequestKeyByWorktree: {
         'repo1::/path/wt1': 'req-1',
         'repo1::/path/wt2': 'req-2'
+      },
+      gitBranchCompareRequestStatusHeadByWorktree: {
+        'repo1::/path/wt1': 'head-1',
+        'repo1::/path/wt2': 'head-2'
       }
     } as unknown as Partial<AppState>)
 
@@ -2144,6 +2154,9 @@ describe('removeWorktree state cleanup', () => {
 
     expect(store.getState().gitStatusByWorktree).toEqual({
       'repo1::/path/wt2': [{ path: 'b.ts' }]
+    })
+    expect(store.getState().gitStatusHeadByWorktree).toEqual({
+      'repo1::/path/wt2': 'head-2'
     })
     expect(store.getState().gitIgnoredPathsByWorktree).toEqual({
       'repo1::/path/wt2': ['coverage/']
@@ -2162,6 +2175,9 @@ describe('removeWorktree state cleanup', () => {
     })
     expect(store.getState().gitBranchCompareRequestKeyByWorktree).toEqual({
       'repo1::/path/wt2': 'req-2'
+    })
+    expect(store.getState().gitBranchCompareRequestStatusHeadByWorktree).toEqual({
+      'repo1::/path/wt2': 'head-2'
     })
   })
 
@@ -3671,6 +3687,14 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         'repoA::/a/wt1': ['dist/'],
         'repoA::/a/wt2': ['coverage/']
       },
+      gitStatusHeadByWorktree: {
+        'repoA::/a/wt1': 'head-1',
+        'repoA::/a/wt2': 'head-2'
+      },
+      gitBranchCompareRequestStatusHeadByWorktree: {
+        'repoA::/a/wt1': 'head-1',
+        'repoA::/a/wt2': 'head-2'
+      },
       rightSidebarTabByWorktree: {
         'repoA::/a/wt1': 'search' as never,
         'repoA::/a/wt2': 'checks'
@@ -3700,6 +3724,10 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.openFiles).toEqual([])
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
     expect(s.markdownFrontmatterVisible).toEqual({ 'file-99': true })
+    expect(s.gitStatusHeadByWorktree).toEqual({ 'repoA::/a/wt2': 'head-2' })
+    expect(s.gitBranchCompareRequestStatusHeadByWorktree).toEqual({
+      'repoA::/a/wt2': 'head-2'
+    })
     expect(s.gitIgnoredPathsByWorktree).toEqual({ 'repoA::/a/wt2': ['coverage/'] })
     expect(s.rightSidebarTabByWorktree).toEqual({ 'repoA::/a/wt2': 'checks' })
     expect(s.activeWorktreeId).toBeNull()
@@ -4091,6 +4119,8 @@ describe('migrateWorktreeIdentity', () => {
       unifiedTabsByWorktree: { [OLD]: [{ id: 'unified1', worktreeId: OLD }] },
       groupsByWorktree: { [OLD]: [{ id: 'group1', worktreeId: OLD }] },
       gitStatusByWorktree: { [OLD]: [{ path: 'a.ts' }] },
+      gitStatusHeadByWorktree: { [OLD]: 'head-old' },
+      gitBranchCompareRequestStatusHeadByWorktree: { [OLD]: 'head-old' },
       lastVisitedAtByWorktreeId: { [OLD]: 123 },
       defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
       recentlyClosedEditorTabsByWorktree: { [OLD]: [{ id: 'f1', worktreeId: OLD }] },
@@ -4132,6 +4162,8 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.unifiedTabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.groupsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.gitStatusByWorktree[NEW]).toEqual([{ path: 'a.ts' }])
+    expect(s.gitStatusHeadByWorktree[NEW]).toBe('head-old')
+    expect(s.gitBranchCompareRequestStatusHeadByWorktree[NEW]).toBe('head-old')
     expect(s.rightSidebarExplorerViewByWorktree[OLD]).toBeUndefined()
     expect(s.rightSidebarExplorerViewByWorktree[NEW]).toBe('search')
     expect(s.lastVisitedAtByWorktreeId[NEW]).toBe(123)

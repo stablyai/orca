@@ -913,7 +913,8 @@
         "16e9e3df89": "con estrella",
         "0d0ace8861": "Dar estrella en GitHub",
         "ec43b38ba7": "Con estrella en GitHub",
-        "157bb5ecbb": "Abrir GitHub"
+        "157bb5ecbb": "Abrir GitHub",
+        "preflightDismiss": "Dismiss"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -3535,7 +3536,8 @@
           "f506a1262a": "Filtrar espacios de trabajo",
           "75405270ed": "Editar filtros ({{value0}} activo)",
           "489d1c8c9f": "Buscar proyectos...",
-          "ee240a39eb": "Editar filtros"
+          "ee240a39eb": "Editar filtros",
+          "automationCreated": "Ocultar creados por automatizaciones"
         },
         "SidebarHeader": {
           "92154beb7e": "Nuevo espacio de trabajo",
@@ -3597,7 +3599,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "Ocultar rama predeterminada",
           "ed1611b65b": "Ocultar durmiendo",
-          "82594419ba": "Filtros"
+          "82594419ba": "Filtros",
+          "automationCreated": "Ocultar creados por automatizaciones"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Diseño de actividad del Agent",
@@ -3648,9 +3651,11 @@
           "1a0eec0d35": "Estado",
           "b5536d5a88": "Tareas",
           "8d62c68b35": "Notas",
+          "automation": "Automation",
           "2d74665a56": "Puertos",
           "65a9820bd1": "Estados del agente",
-          "219ebf1961": "Nombre de rama"
+          "219ebf1961": "Nombre de rama",
+          "automation": "Automation"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -3750,7 +3755,15 @@
           "3ea2702e62": "Vinculado {{value0}} #{{value1}}",
           "b105fd3057": "Linear vinculado {{value0}}",
           "3f2649eeb8": "Problema vinculado #{{value0}}",
-          "fe075cb851": "Notas del espacio de trabajo"
+          "fe075cb851": "Notas del espacio de trabajo",
+          "automationHeader": "Automatización",
+          "openAutomation": "Abrir automatización",
+          "openAutomationRun": "Abrir ejecución",
+          "automationCreated": "Creado por automatización",
+          "checkingAutomationAvailability": "Comprobando disponibilidad de la automatización...",
+          "automationMissing": "La automatización ya no está disponible.",
+          "automationRunMissing": "El historial de ejecuciones ya no está disponible.",
+          "automationAvailabilityUnavailable": "No se pudo comprobar la disponibilidad de la automatización."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "Estado: Abierto",
@@ -4296,7 +4309,9 @@
           "6627e75c92": "Explicar la compatibilidad HTTP/1.1",
           "e9506d3377": "Compatibilidad HTTP/1.1",
           "8b7a8df299": "Soluciones alternativas de bajo nivel para la resolución de problemas de soporte.",
-          "8d8d8ac599": "Compatibilidad"
+          "8d8d8ac599": "Compatibilidad",
+          "network": "Red",
+          "networkDescription": "Enrutamiento de red a nivel de aplicación para proxies y entornos corporativos."
         },
         "AgentLocationSetting": {
           "92f4238f1a": "WSL predeterminado",
@@ -4748,7 +4763,7 @@
           "37df688d6f": "Habilite el espacio de trabajo flotante y elija dónde comienzan las nuevas pestañas.",
           "1f67f39384": "Espacio de trabajo flotante"
         },
-        "GeneralCacheTimerSection": {
+        "AgentCacheTimerSection": {
           "05de84a104": "1 hora",
           "54395ecd7c": "5 minutos",
           "8b9e202e0a": "Haga coincidir esto con el TTL de caché de su proveedor. El valor predeterminado es 5 minutos.",
@@ -4784,7 +4799,7 @@
           "d21136d9ef": "Configure cómo Orca persiste en las ediciones de archivos.",
           "45c6e85c4d": "Editor"
         },
-        "GeneralNetworkSettingsSection": {
+        "AdvancedNetworkSettingsSection": {
           "3e431564b5": "host local, 127.0.0.1, *.interno",
           "33ee3ca3af": "Opcional. Separe los hosts con comas, punto y coma o líneas nuevas.",
           "f6d76cc8f4": "Reglas de omisión de proxy",
@@ -4795,7 +4810,8 @@
           "f00daf6324": "Proxy HTTP",
           "823e0f15b1": "URL proxy para solicitudes de red Orca y terminales secundarios locales.",
           "d93c7cd531": "Configure el enrutamiento de red a nivel de aplicación.",
-          "c46cdbbd4e": "Red"
+          "c46cdbbd4e": "Red",
+          "configureProxy": "Configurar proxy"
         },
         "GeneralPane": {
           "d58fccfd84": "Navegación",
@@ -11171,7 +11187,9 @@
           "d441032f7e": "pausa",
           "5918020edc": "correr",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "La automatización ya no está disponible.",
+          "pendingAutomationRunMissing": "El historial de ejecuciones ya no está disponible."
         },
         "CreateFromPicker": {
           "f061f49e3f": "Buscar sucursales de repo...",

@@ -37,6 +37,8 @@ import {
   POST_REPLAY_REATTACH_RESET,
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
+import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shell-ready-marker-scan'
+import { shouldUseShellReadyStartupDelivery } from '../../../../shared/codex-startup-delivery'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
   mode2031SequenceFor,
@@ -114,6 +116,7 @@ const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
 const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1500
 const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
 const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
+const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
 const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS = 50
@@ -793,6 +796,7 @@ export function connectPanePty(
   let cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
+  let sshShellReadyFallbackTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationGraceTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationMaxTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteStatusUnsubscribe: (() => void) | null = null
@@ -1666,6 +1670,9 @@ export function connectPanePty(
     cwd: deps.cwd,
     env: paneEnv,
     command: shouldDeliverStartupViaTerminalPaste ? undefined : paneStartup?.command,
+    startupCommandDelivery: shouldDeliverStartupViaTerminalPaste
+      ? undefined
+      : paneStartup?.startupCommandDelivery,
     connectionId,
     worktreeId: deps.worktreeId,
     // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
@@ -1989,10 +1996,32 @@ export function connectPanePty(
     }
 
     // Why: for ordinary local startup commands, the local PTY provider already
-    // writes via the shell-ready barrier. terminal-paste startup commands must
-    // stay renderer-delivered so xterm can apply bracketed-paste semantics.
+    // writes via the shell-ready barrier. terminal-paste and SSH startup
+    // commands stay renderer-delivered so xterm/relay can apply their handling.
     let pendingStartupCommand =
       shouldDeliverStartupViaTerminalPaste || connectionId ? (paneStartup?.command ?? null) : null
+    const shouldWaitForSshShellReady =
+      Boolean(connectionId) &&
+      shouldUseShellReadyStartupDelivery({
+        command: paneStartup?.command,
+        startupCommandDelivery: paneStartup?.startupCommandDelivery
+      }) &&
+      !shouldDeliverStartupViaTerminalPaste
+    const sshShellReadyMarkerScan = shouldWaitForSshShellReady
+      ? createShellReadyMarkerScanState()
+      : null
+    let sshStartupShellReady = !shouldWaitForSshShellReady
+    const markSshStartupShellReady = (): void => {
+      if (sshStartupShellReady) {
+        return
+      }
+      sshStartupShellReady = true
+      if (sshShellReadyFallbackTimer !== null) {
+        clearTimeout(sshShellReadyFallbackTimer)
+        sshShellReadyFallbackTimer = null
+      }
+      schedulePendingStartupCommandDelivery()
+    }
     let sessionRestoredBannerShown = false
     const showSessionRestoredBanner = (): void => {
       if (sessionRestoredBannerShown) {
@@ -2055,6 +2084,18 @@ export function connectPanePty(
     }
     const schedulePendingStartupCommandDelivery = (): void => {
       if (!pendingStartupCommand) {
+        return
+      }
+      if (!sshStartupShellReady) {
+        if (sshShellReadyFallbackTimer === null) {
+          // Why: some SSH shells cannot emit Orca's ready marker. Prefer the
+          // marker when available, but fall back to the old renderer delivery
+          // behavior instead of dropping the startup command forever.
+          sshShellReadyFallbackTimer = setTimeout(() => {
+            sshShellReadyFallbackTimer = null
+            markSshStartupShellReady()
+          }, SSH_SHELL_READY_STARTUP_FALLBACK_MS)
+        }
         return
       }
       if (startupInjectTimer !== null) {
@@ -2123,6 +2164,9 @@ export function connectPanePty(
             }
           } else if (typeof gen === 'number') {
             void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
+          }
+          if (resolvedPtyId && connectionId) {
+            schedulePendingStartupCommandDelivery()
           }
           return resolvedPtyId
         })
@@ -2983,6 +3027,13 @@ export function connectPanePty(
         hasReceivedPtyOutput = true
         recordAgentHibernationPaneOutput(cacheKey)
       }
+      if (sshShellReadyMarkerScan) {
+        const scanned = scanForShellReadyMarker(sshShellReadyMarkerScan, data)
+        if (scanned.matched) {
+          markSshStartupShellReady()
+        }
+        data = scanned.output
+      }
       resetHiddenOutputRestoreIfPtyChanged()
       respondToTerminalPixelSizeQueries(data)
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
@@ -3705,6 +3756,10 @@ export function connectPanePty(
       if (startupInjectTimer !== null) {
         clearTimeout(startupInjectTimer)
         startupInjectTimer = null
+      }
+      if (sshShellReadyFallbackTimer !== null) {
+        clearTimeout(sshShellReadyFallbackTimer)
+        sshShellReadyFallbackTimer = null
       }
       clearPendingAgentTaskCompleteNotification()
       pendingTerminalBellNotification = false

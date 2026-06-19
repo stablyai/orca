@@ -913,7 +913,8 @@
         "16e9e3df89": "별표가 붙은",
         "0d0ace8861": "GitHub에서 별표 주기",
         "ec43b38ba7": "GitHub에 별표 표시됨",
-        "157bb5ecbb": "GitHub 열기"
+        "157bb5ecbb": "GitHub 열기",
+        "preflightDismiss": "Dismiss"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -3516,7 +3517,8 @@
           "f506a1262a": "워크스페이스 필터링",
           "75405270ed": "필터 편집({{value0}} 활성)",
           "489d1c8c9f": "프로젝트 검색...",
-          "ee240a39eb": "필터 편집"
+          "ee240a39eb": "필터 편집",
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
         },
         "SidebarHeader": {
           "92154beb7e": "새로운 워크스페이스",
@@ -3578,7 +3580,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "기본 브랜치 숨기기",
           "ed1611b65b": "슬립 중인 항목 숨기기",
-          "82594419ba": "필터"
+          "82594419ba": "필터",
+          "automationCreated": "자동화로 생성된 워크스페이스 숨기기"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 활동 레이아웃",
@@ -3631,7 +3634,8 @@
           "8d62c68b35": "메모",
           "2d74665a56": "포트",
           "65a9820bd1": "Agent 상태",
-          "219ebf1961": "브랜치 이름"
+          "219ebf1961": "브랜치 이름",
+          "automation": "Automation"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
@@ -3731,7 +3735,15 @@
           "3ea2702e62": "연결됨 {{value0}} #{{value1}}",
           "b105fd3057": "연결된 Linear {{value0}}",
           "3f2649eeb8": "연결된 이슈 #{{value0}}",
-          "fe075cb851": "워크스페이스 메모"
+          "fe075cb851": "워크스페이스 메모",
+          "automationHeader": "자동화",
+          "openAutomation": "자동화 열기",
+          "openAutomationRun": "실행 열기",
+          "automationCreated": "자동화가 생성함",
+          "checkingAutomationAvailability": "자동화 사용 가능 여부 확인 중...",
+          "automationMissing": "자동화를 더 이상 사용할 수 없습니다.",
+          "automationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다.",
+          "automationAvailabilityUnavailable": "자동화 사용 가능 여부를 확인할 수 없습니다."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "상태: 열림",
@@ -4281,7 +4293,9 @@
           "6627e75c92": "HTTP/1.1 호환성 설명",
           "e9506d3377": "HTTP/1.1 호환성",
           "8b7a8df299": "지원 문제 해결을 위한 낮은 수준의 해결 방법입니다.",
-          "8d8d8ac599": "호환성"
+          "8d8d8ac599": "호환성",
+          "network": "네트워크",
+          "networkDescription": "프록시 및 기업 환경을 위한 앱 수준 네트워크 라우팅."
         },
         "AgentLocationSetting": {
           "92f4238f1a": "WSL 기본값",
@@ -4733,7 +4747,7 @@
           "37df688d6f": "플로팅 워크스페이스를 활성화하고 새 탭이 시작되는 위치를 선택하세요.",
           "1f67f39384": "플로팅 워크스페이스"
         },
-        "GeneralCacheTimerSection": {
+        "AgentCacheTimerSection": {
           "05de84a104": "1시간",
           "54395ecd7c": "5분",
           "8b9e202e0a": "이를 공급자의 캐시 TTL과 일치시킵니다. 기본값은 5분입니다.",
@@ -4769,7 +4783,7 @@
           "d21136d9ef": "Orca가 파일 편집을 유지하는 방법을 구성합니다.",
           "45c6e85c4d": "편집자"
         },
-        "GeneralNetworkSettingsSection": {
+        "AdvancedNetworkSettingsSection": {
           "3e431564b5": "로컬호스트, 127.0.0.1, *.internal",
           "33ee3ca3af": "선택 사항. 쉼표, 세미콜론 또는 새 줄로 호스트를 구분합니다.",
           "f6d76cc8f4": "프록시 우회 규칙",
@@ -4780,7 +4794,8 @@
           "f00daf6324": "HTTP 프록시",
           "823e0f15b1": "Orca 네트워크 요청 및 로컬 terminal 하위 항목에 대한 프록시 URL입니다.",
           "d93c7cd531": "앱 수준 네트워크 라우팅을 구성합니다.",
-          "c46cdbbd4e": "회로망"
+          "c46cdbbd4e": "회로망",
+          "configureProxy": "프록시 구성"
         },
         "GeneralPane": {
           "d58fccfd84": "항해",
@@ -11171,7 +11186,9 @@
           "d441032f7e": "정지시키다",
           "5918020edc": "달리다",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "자동화를 더 이상 사용할 수 없습니다.",
+          "pendingAutomationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다."
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo 브랜치 검색...",

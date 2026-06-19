@@ -114,6 +114,7 @@ import { initializeBrowserSessionsForApp } from './browser/browser-session-start
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
+import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
 import {
   getCrashBreadcrumbSnapshot,
@@ -168,15 +169,6 @@ let runtimeRpc: OrcaRuntimeRpcServer | null = null
 // offscreen browser backend (and thus advertises browser pane support).
 let headlessBrowserDisplayAvailable = false
 
-function buildHeadlessAutomationWorkspaceName(runTitle: string, scheduledFor: number): string {
-  const slug = runTitle
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 40)
-  const stamp = new Date(scheduledFor).toISOString().replace(/[-:]/g, '').slice(0, 13)
-  return `auto-${slug || 'run'}-${stamp}`
-}
 let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
 let crashReports: CrashReportStore | null = null
@@ -1369,15 +1361,11 @@ app.whenReady().then(async () => {
 
           if (automation.workspaceMode === 'new_per_run') {
             const created = await runtimeService.createManagedWorktree({
-              repoSelector: target.repo.id,
-              name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
-              baseBranch: automation.baseBranch ?? undefined,
-              setupDecision: 'inherit',
-              activate: false,
-              createdWithAgent: automation.agentId,
-              startupAgent: automation.agentId,
-              startupPrompt: automation.prompt,
-              telemetrySource: 'unknown'
+              ...buildHeadlessAutomationWorktreeCreateArgs({
+                automation,
+                run,
+                repo: target.repo
+              })
             })
             terminalHandle = created.startupTerminal?.handle ?? ''
             terminalSessionId = created.startupTerminal?.tabId ?? null

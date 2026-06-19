@@ -191,6 +191,35 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('uses fallback shell readiness when startup-command shell spawn falls back', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/usr/bin/fish'
+        spawnMock.mockImplementationOnce(() => {
+          throw new Error('fish failed')
+        })
+        spawnMock.mockReturnValue(mockProc)
+
+        await provider.spawn({ cols: 80, rows: 24, command: "printf 'linked issue context'" })
+
+        expect(spawnMock.mock.calls[0]?.[0]).toBe('/bin/zsh')
+        await Promise.resolve()
+        vi.advanceTimersByTime(50)
+        await Promise.resolve()
+        expect(mockProc.write).not.toHaveBeenCalled()
+
+        const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+        dataCallback('\x1b]777;orca-shell-ready\x07user@host % ')
+        await Promise.resolve()
+        vi.advanceTimersByTime(50)
+        await Promise.resolve()
+
+        expect(mockProc.write).toHaveBeenCalledWith("printf 'linked issue context'\n")
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('honors explicit terminal env overrides after deleting requested defaults', async () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => {

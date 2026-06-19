@@ -913,7 +913,8 @@
         "16e9e3df89": "starred",
         "0d0ace8861": "Star on GitHub",
         "ec43b38ba7": "Starred on GitHub",
-        "157bb5ecbb": "Open GitHub"
+        "157bb5ecbb": "Open GitHub",
+        "preflightDismiss": "Dismiss"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -3541,7 +3542,8 @@
           "f506a1262a": "Filter workspaces",
           "75405270ed": "Edit filters ({{value0}} active)",
           "489d1c8c9f": "Search projects...",
-          "ee240a39eb": "Edit filters"
+          "ee240a39eb": "Edit filters",
+          "automationCreated": "Hide automation-created"
         },
         "SidebarHeader": {
           "25a95899c9": "Add Project",
@@ -3603,7 +3605,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "Hide default branch",
           "ed1611b65b": "Hide sleeping",
-          "82594419ba": "Filters"
+          "82594419ba": "Filters",
+          "automationCreated": "Hide automation-created"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",
@@ -3645,6 +3648,7 @@
           "2a81e07366": "Full list",
           "25105b28cb": "Compact",
           "d7084e8bc8": "Agent activity",
+          "automation": "Automation",
           "b64d8bcca0": "Ports",
           "26c71e536c": "Notes",
           "b8dcc6f321": "PR/MR link",
@@ -3662,6 +3666,7 @@
           "1a0eec0d35": "Status",
           "b5536d5a88": "Tasks",
           "8d62c68b35": "Notes",
+          "automation": "Automation",
           "2d74665a56": "Ports",
           "65a9820bd1": "Agent statuses",
           "219ebf1961": "Branch name"
@@ -3764,7 +3769,15 @@
           "3ea2702e62": "Linked {{value0}} #{{value1}}",
           "b105fd3057": "Linked Linear {{value0}}",
           "3f2649eeb8": "Linked issue #{{value0}}",
-          "fe075cb851": "Workspace notes"
+          "fe075cb851": "Workspace notes",
+          "automationHeader": "Automation",
+          "openAutomation": "Open automation",
+          "openAutomationRun": "Open run",
+          "automationCreated": "Created by automation",
+          "checkingAutomationAvailability": "Checking automation availability...",
+          "automationMissing": "Automation no longer available.",
+          "automationRunMissing": "Run history no longer available.",
+          "automationAvailabilityUnavailable": "Automation availability could not be checked."
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",
@@ -4296,7 +4309,9 @@
           "6627e75c92": "Explain HTTP/1.1 compatibility",
           "e9506d3377": "HTTP/1.1 Compatibility",
           "8b7a8df299": "Low-level workarounds for support troubleshooting.",
-          "8d8d8ac599": "Compatibility"
+          "8d8d8ac599": "Compatibility",
+          "network": "Network",
+          "networkDescription": "App-level network routing for proxies and corporate environments."
         },
         "AgentLocationSetting": {
           "92f4238f1a": "WSL default",
@@ -4748,7 +4763,7 @@
           "37df688d6f": "Enable the floating workspace and choose where new tabs start.",
           "1f67f39384": "Floating Workspace"
         },
-        "GeneralCacheTimerSection": {
+        "AgentCacheTimerSection": {
           "05de84a104": "1 hour",
           "54395ecd7c": "5 minutes",
           "8b9e202e0a": "Match this to your provider's cache TTL. The default is 5 minutes.",
@@ -4784,7 +4799,7 @@
           "d21136d9ef": "Configure how Orca persists file edits.",
           "45c6e85c4d": "Editor"
         },
-        "GeneralNetworkSettingsSection": {
+        "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "Optional. Separate hosts with commas, semicolons, or new lines.",
           "f6d76cc8f4": "Proxy Bypass Rules",
@@ -4795,7 +4810,8 @@
           "f00daf6324": "HTTP Proxy",
           "823e0f15b1": "Proxy URL for Orca network requests and local terminal children.",
           "d93c7cd531": "Configure app-level network routing.",
-          "c46cdbbd4e": "Network"
+          "c46cdbbd4e": "Network",
+          "configureProxy": "Configure proxy"
         },
         "GeneralPane": {
           "d58fccfd84": "Navigation",
@@ -11171,7 +11187,9 @@
           "d441032f7e": "pause",
           "5918020edc": "run",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "Automation no longer available.",
+          "pendingAutomationRunMissing": "Run history no longer available."
         },
         "CreateFromPicker": {
           "f061f49e3f": "Search repo branches...",

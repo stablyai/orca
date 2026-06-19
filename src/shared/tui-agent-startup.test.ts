@@ -57,6 +57,24 @@ describe('tui agent startup plans', () => {
     })
 
     expect(plan?.launchCommand).toBe("codex 'fix it'")
+    expect(plan?.startupCommandDelivery).toBe('shell-ready')
+  })
+
+  it('keeps plain empty Codex startup on the fast delivery path', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan).toEqual({
+      agent: 'codex',
+      launchCommand: 'codex',
+      expectedProcess: 'codex',
+      followupPrompt: null
+    })
   })
 
   it('launches Claude without Orca settings injection', () => {
@@ -264,6 +282,28 @@ describe('tui agent startup plans', () => {
     expect(plan?.env).toEqual({ ORCA_OMP_PREFILL: 'fix the omp regression' })
     expect(plan?.expectedProcess).toBe('omp')
     expect(plan?.launchCommand).toBe('omp; unset ORCA_OMP_PREFILL')
+  })
+
+  it('returns null for oversized Windows flag drafts so callers paste after ready', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'claude',
+        draft: 'x'.repeat(25_000),
+        cmdOverrides: {},
+        platform: 'win32'
+      })
+    ).toBeNull()
+  })
+
+  it('returns null for oversized Windows env-var drafts so callers paste after ready', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'pi',
+        draft: 'x'.repeat(25_000),
+        cmdOverrides: {},
+        platform: 'win32'
+      })
+    ).toBeNull()
   })
 
   it('launches Devin with stdin-after-start prompt delivery', () => {

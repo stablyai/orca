@@ -4,11 +4,13 @@ import { WebView } from 'react-native-webview'
 import type { WebViewMessageEvent } from 'react-native-webview'
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
+import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
 import { XTERM_HTML } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
+type TerminalOscLinks = TerminalOscLinkRange[]
 
 export type TerminalModes = {
   bracketedPasteMode: boolean
@@ -46,7 +48,13 @@ export type TerminalSelectionEvents = {
 
 export type TerminalWebViewHandle = {
   write: (data: string) => void
-  init: (cols: number, rows: number, initialData?: string, preserveScroll?: boolean) => void
+  init: (
+    cols: number,
+    rows: number,
+    initialData?: string,
+    preserveScroll?: boolean,
+    oscLinks?: TerminalOscLinks
+  ) => void
   resize: (cols: number, rows: number) => void
   // Why: reflow the local xterm buffer (scrollback included) to a new width
   // after a server-side PTY reflow, so older wrapped lines rewrap to match the
@@ -276,7 +284,13 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       write(data: string) {
         postMessage({ type: 'write', data })
       },
-      init(cols: number, rows: number, initialData?: string, preserveScroll?: boolean) {
+      init(
+        cols: number,
+        rows: number,
+        initialData?: string,
+        preserveScroll?: boolean,
+        oscLinks?: TerminalOscLinks
+      ) {
         // Why: arm a fresh ready promise BEFORE posting init. The WebView
         // resolves it via the 'ready' notify at the end of its rAF chain.
         // Resolve any prior in-flight ready first so awaiters from the
@@ -298,6 +312,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           cols,
           rows,
           initialData,
+          oscLinks,
           terminalTheme,
           fontScale: textScale,
           preserveScroll
