@@ -549,6 +549,36 @@ function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
   )
 }
 
+function HostContextBadge({
+  label,
+  description
+}: {
+  label: string | undefined
+  description: string | undefined
+}): React.JSX.Element | null {
+  if (!label) {
+    return null
+  }
+  const accessibleLabel = description ?? label
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-host-context-badge=""
+          className="inline-flex h-4 max-w-[7.5rem] shrink-0 items-center gap-1 overflow-hidden rounded border border-worktree-sidebar-border bg-worktree-sidebar-accent/60 px-1.5 text-[10px] font-medium leading-none text-muted-foreground"
+          aria-label={accessibleLabel}
+        >
+          <Server className="size-2.5 shrink-0" />
+          <span className="truncate">{label}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {accessibleLabel}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function HostHeaderHealthIcon({
   health
 }: {
@@ -3598,6 +3628,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
                           {row.label}
                         </div>
+                        <HostContextBadge
+                          label={row.hostContextLabel}
+                          description={row.hostContextDescription}
+                        />
                         <RepoForkIndicator upstream={row.repo?.upstream} />
                         <FolderPathStatusIndicator status={projectGroupPathStatus} />
                       </div>
@@ -4074,6 +4108,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     // Why: pinned worktrees also render in their natural group;
                     // only the overlay row is the mixed-repo section needing icons.
                     hostContextLabel={itemRow.hostContextLabel}
+                    hostContextDescription={itemRow.hostContextDescription}
                     inPinnedSection={isPinnedOverlayRow}
                     renameRowKey={itemRow.rowKey}
                     lineageChildCount={itemRow.lineageChildCount}
@@ -4277,6 +4312,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       activationRowKey={folderWorktree.id}
                       onSelectionGesture={onSelectionGesture}
                       onContextMenuSelect={onContextMenuSelect}
+                      hostContextLabel={folderWorkspaceRow.hostContextLabel}
+                      hostContextDescription={folderWorkspaceRow.hostContextDescription}
                     />
                     <div className="pointer-events-auto absolute right-3 top-1.5">
                       <FolderPathStatusIndicator status={folderWorkspacePathStatus} />

@@ -355,7 +355,14 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'project:github:stablyai/orca', label: 'Orca', count: 2 },
+      {
+        type: 'header',
+        key: 'project:github:stablyai/orca',
+        label: 'Orca',
+        count: 2,
+        hostContextLabel: 'Multiple hosts',
+        hostContextDescription: `Multiple hosts: ${LOCAL_HOST_LABEL}, gpu-vm`
+      },
       { type: 'item', worktree: { id: worktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
       { type: 'item', worktree: { id: remoteWorktree.id }, hostContextLabel: 'gpu-vm' }
     ])
@@ -477,13 +484,20 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'project:github:stablyai/orca', label: 'Orca', count: 2 },
+      {
+        type: 'header',
+        key: 'project:github:stablyai/orca',
+        label: 'Orca',
+        count: 2,
+        hostContextLabel: 'Multiple hosts',
+        hostContextDescription: `Multiple hosts: ${LOCAL_HOST_LABEL}, dev box`
+      },
       { type: 'item', worktree: { id: worktree.id }, hostContextLabel: LOCAL_HOST_LABEL },
       { type: 'item', worktree: { id: runtimeWorktree.id }, hostContextLabel: 'dev box' }
     ])
   })
 
-  it('omits host context labels when a project group only has one host', () => {
+  it('omits host context labels for local-only projects without other hosts', () => {
     const secondLocalWorktree: Worktree = {
       ...worktree,
       id: 'wt-local-2',
@@ -525,6 +539,84 @@ describe('buildRows with pinned worktrees', () => {
         expect(row.hostContextLabel).toBeUndefined()
       }
     }
+  })
+
+  it('shows the local host label when another host exists in sidebar context', () => {
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      new Map([[repo.id, repo]]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: [{ ...project, sourceRepoIds: [repo.id] }],
+        projectHostSetups: [projectHostSetups[0]]
+      },
+      [],
+      new Map([
+        ['local', LOCAL_HOST_LABEL],
+        ['ssh:gpu-vm', 'gpu-vm']
+      ])
+    )
+
+    expect(rows[0]).toMatchObject({
+      type: 'header',
+      key: 'project:github:stablyai/orca',
+      hostContextLabel: LOCAL_HOST_LABEL,
+      hostContextDescription: `Local: ${LOCAL_HOST_LABEL}`
+    })
+  })
+
+  it('shows host context for remote-only projects', () => {
+    const rows = buildRows(
+      'repo',
+      [remoteWorktree],
+      new Map([[remoteRepo.id, remoteRepo]]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[remoteWorktree.id, remoteWorktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [],
+      {
+        projects: [{ ...project, sourceRepoIds: [remoteRepo.id] }],
+        projectHostSetups: [projectHostSetups[1]!]
+      },
+      [],
+      new Map([
+        ['local', LOCAL_HOST_LABEL],
+        ['ssh:gpu-vm', 'gpu-vm']
+      ])
+    )
+
+    expect(rows).toMatchObject([
+      {
+        type: 'header',
+        key: 'project:github:stablyai/orca',
+        label: 'Orca',
+        hostContextLabel: 'gpu-vm',
+        hostContextDescription: 'SSH host: gpu-vm'
+      },
+      { type: 'item', worktree: { id: remoteWorktree.id } }
+    ])
   })
 
   it('keeps same-named repos separate without project setup identity', () => {
@@ -1690,6 +1782,77 @@ describe('project groups', () => {
         folderWorkspace: { id: 'folder-workspace-1' },
         projectGroup: { id: 'group-root' },
         groupDepth: 1
+      }
+    ])
+  })
+
+  it('shows host context for remote folder-backed Project Groups and folder workspaces', () => {
+    const group: ProjectGroup = {
+      id: 'group-root',
+      name: 'Platform',
+      parentPath: '/monorepo',
+      connectionId: 'gpu-vm',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const folderWorkspace: FolderWorkspace = {
+      id: 'folder-workspace-remote',
+      projectGroupId: group.id,
+      name: 'Remote folder work',
+      folderPath: '/monorepo',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 10,
+      lastActivityAt: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      undefined,
+      [group],
+      new Set(),
+      new Map(),
+      [],
+      undefined,
+      [folderWorkspace],
+      new Map([
+        ['local', LOCAL_HOST_LABEL],
+        ['ssh:gpu-vm', 'gpu-vm']
+      ])
+    )
+
+    expect(rows).toMatchObject([
+      {
+        type: 'header',
+        key: 'project-group:group-root',
+        hostContextLabel: 'gpu-vm',
+        hostContextDescription: 'SSH host: gpu-vm'
+      },
+      {
+        type: 'folder-workspace',
+        folderWorkspace: { id: 'folder-workspace-remote' },
+        hostContextLabel: 'gpu-vm',
+        hostContextDescription: 'SSH host: gpu-vm'
       }
     ])
   })

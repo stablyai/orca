@@ -88,6 +88,7 @@ type WorktreeCardProps = {
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
   hostContextLabel?: string
+  hostContextDescription?: string
   inPinnedSection?: boolean
   activationRowKey?: string
   renameRowKey?: string
@@ -192,6 +193,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   nativeDragEnabled = true,
   hideRepoBadge,
   hostContextLabel,
+  hostContextDescription,
   inPinnedSection = false,
   activationRowKey,
   renameRowKey,
@@ -1495,12 +1497,21 @@ const WorktreeCard = React.memo(function WorktreeCard({
               )}
 
               {showHostContextBadge && (
-                <Badge
-                  variant="secondary"
-                  className="h-[16px] max-w-[7rem] shrink-0 rounded border border-border bg-accent px-1.5 text-[10px] font-medium leading-none text-muted-foreground dark:bg-accent/80 dark:border-border/50"
-                >
-                  <span className="truncate">{hostContextLabel}</span>
-                </Badge>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      variant="secondary"
+                      className="h-[16px] max-w-[7rem] shrink-0 rounded border border-border bg-accent px-1.5 text-[10px] font-medium leading-none text-muted-foreground dark:bg-accent/80 dark:border-border/50"
+                      aria-label={hostContextDescription ?? hostContextLabel}
+                    >
+                      <Server className="size-2.5 shrink-0" />
+                      <span className="truncate">{hostContextLabel}</span>
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    {hostContextDescription ?? hostContextLabel}
+                  </TooltipContent>
+                </Tooltip>
               )}
 
               {isFolder ? (

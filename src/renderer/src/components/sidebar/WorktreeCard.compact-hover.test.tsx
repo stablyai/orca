@@ -527,4 +527,43 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('data-worktree-card-meta-row=""')
     expect(markup).toContain('feature/local-branch')
   })
+
+  it('shows host context in the detailed metadata row with accessible text', async () => {
+    settings = { compactWorktreeCards: false }
+    worktreeCardProperties = ['status']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+        hostContextLabel="gpu-vm"
+        hostContextDescription="SSH host: gpu-vm"
+      />
+    )
+
+    expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('aria-label="SSH host: gpu-vm"')
+    expect(markup).toContain('gpu-vm')
+  })
+
+  it('does not duplicate host context on compact cards', async () => {
+    settings = { compactWorktreeCards: true }
+    worktreeCardProperties = ['status']
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree()}
+        repo={makeRepo()}
+        isActive={false}
+        hostContextLabel="gpu-vm"
+        hostContextDescription="SSH host: gpu-vm"
+      />
+    )
+
+    expect(markup).not.toContain('SSH host: gpu-vm')
+  })
 })
