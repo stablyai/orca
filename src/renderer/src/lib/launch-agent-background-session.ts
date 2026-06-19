@@ -10,6 +10,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
+import { resolveTuiAgentBaseAgent } from '../../../shared/tui-agent-profiles'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -63,7 +64,10 @@ export async function launchAgentBackgroundSession(
   if (!worktree) {
     throw new Error('The target workspace is no longer available.')
   }
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
+  const agentProfiles = store.settings?.agentProfiles ?? []
+  const variables = { repoPath: repo?.path, worktreePath: worktree.path }
+  const baseAgent = resolveTuiAgentBaseAgent(agent, agentProfiles) ?? agent
+  const preflight = TUI_AGENT_CONFIG[baseAgent].preflightTrust
   if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
     try {
       await window.api.agentTrust.markTrusted({
@@ -75,8 +79,18 @@ export async function launchAgentBackgroundSession(
     }
   }
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+  const agentArgs = resolveTuiAgentLaunchArgs(
+    agent,
+    store.settings?.agentDefaultArgs,
+    agentProfiles,
+    variables
+  )
+  const agentEnv = resolveTuiAgentLaunchEnv(
+    agent,
+    store.settings?.agentDefaultEnv,
+    agentProfiles,
+    variables
+  )
   const launchPlatform = repo
     ? getAgentLaunchPlatformForRepo(
         repo,
@@ -85,7 +99,7 @@ export async function launchAgentBackgroundSession(
     : CLIENT_PLATFORM
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  const isFollowupPath = TUI_AGENT_CONFIG[baseAgent].promptInjectionMode === 'stdin-after-start'
 
   let startupPlan: AgentStartupPlan | null = null
   let pasteDraftAfterLaunch: string | null = null
@@ -96,6 +110,8 @@ export async function launchAgentBackgroundSession(
       cmdOverrides,
       agentArgs,
       agentEnv,
+      agentProfiles,
+      variables,
       platform: launchPlatform,
       allowEmptyPromptLaunch: true
     })
@@ -107,6 +123,8 @@ export async function launchAgentBackgroundSession(
       cmdOverrides,
       agentArgs,
       agentEnv,
+      agentProfiles,
+      variables,
       platform: launchPlatform,
       allowEmptyPromptLaunch: !hasPrompt
     })

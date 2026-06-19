@@ -3,7 +3,7 @@ import { Maximize2, Minimize2, Minus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentCatalogWithProfiles, AgentIcon } from '@/lib/agent-catalog'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
@@ -36,6 +36,7 @@ export function FloatingTerminalWindowControls({
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
 
   const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
+  const agentProfiles = useAppStore((s) => s.settings?.agentProfiles ?? [])
   const defaultAgent =
     defaultTuiAgent &&
     defaultTuiAgent !== 'blank' &&
@@ -45,9 +46,10 @@ export function FloatingTerminalWindowControls({
   const defaultAgentLabel = useMemo(
     () =>
       defaultAgent
-        ? (getAgentCatalog().find((agent) => agent.id === defaultAgent)?.label ?? defaultAgent)
+        ? (getAgentCatalogWithProfiles(agentProfiles).find((agent) => agent.id === defaultAgent)
+            ?.label ?? defaultAgent)
         : null,
-    [defaultAgent]
+    [agentProfiles, defaultAgent]
   )
 
   const launchDefaultAgent = useCallback(() => {
@@ -55,12 +57,26 @@ export function FloatingTerminalWindowControls({
       return
     }
     const state = useAppStore.getState()
+    const profiles = state.settings?.agentProfiles ?? []
+    const variables = { worktreePath: state.settings?.floatingTerminalCwd }
     const startupPlan = buildAgentStartupPlan({
       agent: defaultAgent,
       prompt: '',
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(defaultAgent, state.settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv),
+      agentArgs: resolveTuiAgentLaunchArgs(
+        defaultAgent,
+        state.settings?.agentDefaultArgs,
+        profiles,
+        variables
+      ),
+      agentEnv: resolveTuiAgentLaunchEnv(
+        defaultAgent,
+        state.settings?.agentDefaultEnv,
+        profiles,
+        variables
+      ),
+      agentProfiles: profiles,
+      variables,
       platform: CLIENT_PLATFORM,
       allowEmptyPromptLaunch: true
     })

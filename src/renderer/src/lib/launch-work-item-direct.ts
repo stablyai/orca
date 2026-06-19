@@ -10,6 +10,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveTuiAgentBaseAgent } from '../../../shared/tui-agent-profiles'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
@@ -250,12 +251,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     // Why: agents that gate first-launch behind a "Do you trust this folder?"
     // menu (cursor-agent, copilot) consume the bracketed paste as menu input.
     // Pre-write the same trust artifact those CLIs write after the user
-    // accepts so the menu never fires. Best-effort — main swallows errors,
-    // and we guard the IPC presence so a stale preload bundle (which can
-    // ship a renderer that's ahead of the loaded preload) doesn't crash the
-    // launch with "Cannot read properties of undefined".
+    // accepts so the menu never fires. Best-effort and IPC-presence-guarded
+    // so stale preload bundles do not crash direct launches.
     if (effectiveAgent && worktreePath && window.api.agentTrust?.markTrusted) {
-      const preflight = TUI_AGENT_CONFIG[effectiveAgent].preflightTrust
+      const baseAgent = resolveTuiAgentBaseAgent(effectiveAgent, store.settings?.agentProfiles)
+      const preflight = baseAgent ? TUI_AGENT_CONFIG[baseAgent].preflightTrust : undefined
       if (preflight) {
         try {
           await window.api.agentTrust.markTrusted({

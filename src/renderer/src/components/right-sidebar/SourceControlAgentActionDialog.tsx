@@ -72,6 +72,8 @@ export function SourceControlAgentActionDialog(
     statusCopy,
     agentArgs,
     commandTemplate,
+    repoPath,
+    worktreePath,
     saveLaunchRecipe,
     saveTargetValue,
     saveTargets,
@@ -108,6 +110,8 @@ export function SourceControlAgentActionDialog(
             statusCopy={statusCopy}
             agentArgs={agentArgs}
             commandTemplate={commandTemplate}
+            repoPath={repoPath}
+            worktreePath={worktreePath}
             savedCommandInputTemplate={savedCommandInputTemplate}
             saveLaunchRecipe={saveLaunchRecipe}
             saveTargetValue={saveTargetValue}

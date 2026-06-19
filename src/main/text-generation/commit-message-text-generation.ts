@@ -89,10 +89,11 @@ export type RemoteCommitMessageExecResult = {
 export type TextGenerationOperation = 'commit-message' | 'pull-request-fields' | 'branch-name'
 
 export type CommitMessageGenerationTarget =
-  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
+  | { kind: 'local'; cwd: string; repoPath?: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
   | {
       kind: 'remote'
       cwd: string
+      repoPath?: string
       execute: (
         plan: CommitMessagePlan,
         cwd: string,
@@ -821,6 +822,8 @@ export async function generateCommitMessageFromContext(
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
           basePrompt,
           branch: context.branch ?? '(detached)',
+          repoPath: target.repoPath,
+          worktreePath: target.cwd,
           stagedFiles: context.stagedSummary,
           stagedPatch: context.stagedPatch
         })
@@ -885,6 +888,8 @@ export async function generatePullRequestFieldsFromContext(
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
           basePrompt,
           branch: context.branch ?? '(detached)',
+          repoPath: target.repoPath,
+          worktreePath: target.cwd,
           baseBranch: context.base,
           currentTitle: context.currentTitle,
           currentBody: context.currentBody,
@@ -935,6 +940,8 @@ export async function generateBranchNameFromContext(
     params.commandInputTemplate !== undefined
       ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
           basePrompt,
+          repoPath: target.repoPath,
+          worktreePath: target.cwd,
           firstPrompt: context.firstPrompt,
           assistantMessage: context.assistantMessage ?? ''
         })

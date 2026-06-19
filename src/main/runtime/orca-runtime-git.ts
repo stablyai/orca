@@ -148,6 +148,7 @@ function localTextGenerationTargetForTarget(
   return {
     kind: 'local',
     cwd: target.worktree.path,
+    ...(target.repo?.path ? { repoPath: target.repo.path } : {}),
     ...(wslDistro ? { wslDistro } : {}),
     ...(env ? { env } : {})
   }
@@ -596,6 +597,7 @@ export class RuntimeGitCommands {
       return generateCommitMessageFromContext(context, resolvedSettings.params, {
         kind: 'remote',
         cwd: target.worktree.path,
+        ...(target.repo?.path ? { repoPath: target.repo.path } : {}),
         execute: (plan, cwd, timeoutMs, operation) =>
           provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
         missingBinaryLocation: 'remote PATH'
@@ -721,6 +723,7 @@ export class RuntimeGitCommands {
       return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
         kind: 'remote',
         cwd: target.worktree.path,
+        ...(target.repo?.path ? { repoPath: target.repo.path } : {}),
         execute: (plan, cwd, timeoutMs, operation) =>
           provider!.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
         missingBinaryLocation: 'remote PATH'

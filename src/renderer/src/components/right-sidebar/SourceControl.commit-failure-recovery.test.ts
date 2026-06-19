@@ -89,6 +89,17 @@ describe('SourceControl commit failure recovery prompt', () => {
     ).toBe('Fix this commit failure.')
   })
 
+  it('renders repo and worktree paths in saved launch templates', () => {
+    expect(
+      buildCommitFailureAgentCommandInput({
+        commandInputTemplate: '{basePrompt}\n\nRepo: {repoPath}\nWorktree: {worktreePath}',
+        basePrompt: 'Fix this commit failure.',
+        repoPath: '/repo/main',
+        worktreePath: '/repo/worktree'
+      })
+    ).toBe('Fix this commit failure.\n\nRepo: /repo/main\nWorktree: /repo/worktree')
+  })
+
   it('trims custom launch overrides before the direct launch path uses them', () => {
     expect(
       buildCommitFailureAgentCommandInput({

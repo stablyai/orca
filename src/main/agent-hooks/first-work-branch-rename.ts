@@ -223,7 +223,13 @@ async function runAutoRename(
   }
   const params = resolvedParams.params
 
-  const target = await resolveGenerationTarget(worktreePath, params.agentId, provider, deps)
+  const target = await resolveGenerationTarget(
+    worktreePath,
+    repo.path,
+    params.agentId,
+    provider,
+    deps
+  )
   if (!target) {
     deps.setRenameError(worktreeId, 'Could not prepare the branch-name generation environment.')
     return retry('could not prepare generation environment')
@@ -354,6 +360,7 @@ async function runFolderWorkspaceTitleAutoRename(
   }
   const target = await resolveGenerationTarget(
     folderPath,
+    null,
     resolvedParams.params.agentId,
     null,
     deps

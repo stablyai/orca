@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveTuiAgentBaseAgent } from '../../../shared/tui-agent-profiles'
 import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
@@ -60,7 +61,9 @@ async function preflightAgentTrust(
   if (!request.agent || !window.api.agentTrust?.markTrusted) {
     return
   }
-  const preflight = TUI_AGENT_CONFIG[request.agent].preflightTrust
+  const agentProfiles = useAppStore.getState().settings?.agentProfiles
+  const baseAgent = resolveTuiAgentBaseAgent(request.agent, agentProfiles)
+  const preflight = baseAgent ? TUI_AGENT_CONFIG[baseAgent].preflightTrust : undefined
   if (!preflight) {
     return
   }

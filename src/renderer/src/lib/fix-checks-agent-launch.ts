@@ -20,6 +20,7 @@ import {
   renderSourceControlActionCommandTemplate
 } from '../../../shared/source-control-ai-actions'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import { findTuiAgentProfile, isTuiAgentProfileDetected } from '../../../shared/tui-agent-profiles'
 import type {
   GitHubWorkItem,
   TuiAgent,
@@ -54,9 +55,12 @@ async function detectAgentsForConnection(
 }
 
 function isAgentAvailable(agent: TuiAgent, detectedAgents: TuiAgent[]): boolean {
+  const settings = useAppStore.getState().settings
+  const profile = findTuiAgentProfile(agent, settings?.agentProfiles)
+  const detectedSet = new Set(detectedAgents)
   return (
-    detectedAgents.includes(agent) &&
-    isTuiAgentEnabled(agent, useAppStore.getState().settings?.disabledTuiAgents)
+    (profile ? isTuiAgentProfileDetected(profile, detectedSet) : detectedSet.has(agent)) &&
+    isTuiAgentEnabled(agent, settings?.disabledTuiAgents)
   )
 }
 
@@ -103,7 +107,8 @@ async function pickExistingWorktreeAgent(
   const agent = pickSourceControlLaunchAgent({
     defaultAgent: settings?.defaultTuiAgent,
     detectedAgents,
-    disabledAgents: settings?.disabledTuiAgents
+    disabledAgents: settings?.disabledTuiAgents,
+    profiles: settings?.agentProfiles
   })
   if (!agent) {
     toast.error(

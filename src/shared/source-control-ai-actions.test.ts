@@ -124,7 +124,24 @@ describe('source-control AI launch action defaults', () => {
     expect(resolveSourceControlActionCommandTemplate(undefined, 'resolveComments')).toBe(
       '{basePrompt}'
     )
-    expect(SOURCE_CONTROL_ACTION_VARIABLES.resolveComments).toEqual(['basePrompt'])
+    expect(SOURCE_CONTROL_ACTION_VARIABLES.resolveComments).toEqual([
+      'basePrompt',
+      'repoPath',
+      'worktreePath'
+    ])
+  })
+
+  it('exposes repo and worktree path variables to every action template', () => {
+    for (const variables of Object.values(SOURCE_CONTROL_ACTION_VARIABLES)) {
+      expect(variables).toContain('repoPath')
+      expect(variables).toContain('worktreePath')
+    }
+  })
+
+  it('keeps action variables alphabetized', () => {
+    for (const variables of Object.values(SOURCE_CONTROL_ACTION_VARIABLES)) {
+      expect(variables).toEqual([...variables].sort((left, right) => left.localeCompare(right)))
+    }
   })
 
   it('renders known template variables and leaves unknown variables visible', () => {

@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalogWithProfiles } from '@/lib/agent-catalog'
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink,
@@ -23,6 +23,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
+import { isTuiAgentProfileDetected } from '../../../shared/tui-agent-profiles'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -826,6 +827,30 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [disabledTuiAgentKey]
   )
+  const agentProfileKey = (settings?.agentProfiles ?? [])
+    .map((profile) => {
+      const envKey = Object.entries(profile.defaultEnv ?? {})
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, value]) => `${key}\u0002${value}`)
+        .join('\u0003')
+      return [
+        profile.id,
+        profile.baseAgent,
+        profile.label,
+        profile.cmdOverride ?? '',
+        profile.defaultArgs ?? '',
+        envKey
+      ].join('\u0001')
+    })
+    .join('\u0000')
+  const agentProfiles = useMemo(
+    () => settings?.agentProfiles ?? [],
+    // Why: settings IPC round-trips clone profile arrays; include all persisted
+    // profile fields so catalog labels, commands, args, and env updates refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [agentProfileKey]
+  )
+  const agentCatalog = useMemo(() => getAgentCatalogWithProfiles(agentProfiles), [agentProfiles])
   // Why: the long-form composer's agent selection is a required TuiAgent (not
   // null/blank), so 'blank' preferences from global settings must collapse to
   // the Claude default here — the blank-terminal affordance only lives in the
@@ -833,10 +858,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const enabledCatalogAgents = useMemo(
     () =>
       filterEnabledTuiAgents(
-        getAgentCatalog().map((agent) => agent.id),
+        agentCatalog.map((agent) => agent.id),
         disabledTuiAgents
       ),
-    [disabledTuiAgents]
+    [agentCatalog, disabledTuiAgents]
   )
   const fallbackDefaultAgent: TuiAgent =
     settings?.defaultTuiAgent &&
@@ -1307,12 +1332,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       const enabledIds = filterEnabledTuiAgents(ids, disabledTuiAgents)
       if (!newWorkspaceDraft?.agent && !settings?.defaultTuiAgent && enabledIds.length > 0) {
-        const firstInCatalogOrder = getAgentCatalog().find((a) => enabledIds.includes(a.id))
+        const firstInCatalogOrder = agentCatalog.find((a) => enabledIds.includes(a.id))
         if (firstInCatalogOrder) {
           setTuiAgent(firstInCatalogOrder.id)
         }
       } else if (!isTuiAgentEnabled(tuiAgent, disabledTuiAgents)) {
-        const firstEnabledDetected = getAgentCatalog().find((a) => enabledIds.includes(a.id))
+        const firstEnabledDetected = agentCatalog.find((a) => {
+          if (!enabledIds.includes(a.id)) {
+            return false
+          }
+          const profile = agentProfiles.find((entry) => entry.id === a.id)
+          return profile ? isTuiAgentProfileDetected(profile, detectedAgentIds) : true
+        })
         setTuiAgent(firstEnabledDetected?.id ?? fallbackDefaultAgent)
       }
     })
@@ -2704,11 +2735,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           note,
           quickAgent: agent,
           autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
-          agentCmdOverrides: settings?.agentCmdOverrides,
+          agentCmdOverrides: settings?.agentCmdOverrides as Record<string, string> | undefined,
           agentArgs: agent
-            ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs)
+            ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs, agentProfiles, {
+                worktreePath: selectedProjectGroup.parentPath
+              })
             : undefined,
-          agentEnv: agent ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv) : undefined,
+          agentEnv: agent
+            ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv, agentProfiles, {
+                worktreePath: selectedProjectGroup.parentPath
+              })
+            : undefined,
           isRemote: folderTargetIsRemote,
           launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
           runtimeEnvironmentId: folderTargetRuntimeEnvironmentId,
@@ -2760,6 +2797,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       persistDraft,
       resolvePendingSmartGitHubSubmit,
       selectedProjectGroup,
+      agentProfiles,
       settings?.agentCmdOverrides,
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
@@ -2949,8 +2987,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         agent: tuiAgent,
         prompt: submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
+        agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs, agentProfiles, {
+          repoPath: selectedRepoPath,
+          worktreePath: selectedRepoPath
+        }),
+        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv, agentProfiles, {
+          repoPath: selectedRepoPath,
+          worktreePath: selectedRepoPath
+        }),
+        agentProfiles,
+        variables: { repoPath: selectedRepoPath, worktreePath: selectedRepoPath },
         platform: selectedRepoAgentLaunchPlatform
       })
 
@@ -3107,6 +3153,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     settings?.agentDefaultArgs,
     settings?.agentDefaultEnv,
     settings?.autoRenameBranchFromWork,
+    agentProfiles,
+    selectedRepoPath,
     setSidebarOpen,
     setupDecision,
     sparseEnabled,
@@ -3303,8 +3351,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 agent,
                 draft: quickDraftPrompt,
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
-                agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
-                agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
+                agentArgs: resolveTuiAgentLaunchArgs(
+                  agent,
+                  settings?.agentDefaultArgs,
+                  agentProfiles,
+                  {
+                    repoPath: selectedRepoPath,
+                    worktreePath: selectedRepoPath
+                  }
+                ),
+                agentEnv: resolveTuiAgentLaunchEnv(
+                  agent,
+                  settings?.agentDefaultEnv,
+                  agentProfiles,
+                  {
+                    repoPath: selectedRepoPath,
+                    worktreePath: selectedRepoPath
+                  }
+                ),
+                agentProfiles,
+                variables: { repoPath: selectedRepoPath, worktreePath: selectedRepoPath },
                 platform: selectedRepoAgentLaunchPlatform
               })
 
@@ -3325,8 +3391,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             agent,
             prompt: quickPrompt,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
-            agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
-            agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
+            agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs, agentProfiles, {
+              repoPath: selectedRepoPath,
+              worktreePath: selectedRepoPath
+            }),
+            agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv, agentProfiles, {
+              repoPath: selectedRepoPath,
+              worktreePath: selectedRepoPath
+            }),
+            agentProfiles,
+            variables: { repoPath: selectedRepoPath, worktreePath: selectedRepoPath },
             platform: selectedRepoAgentLaunchPlatform,
             allowEmptyPromptLaunch: true
           })
@@ -3462,6 +3536,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       resolvedInitialWorkspaceStatus,
       selectedRepo,
       selectedRepoAgentLaunchPlatform,
+      selectedRepoPath,
       selectedRepoIsGit,
       selectedRepoSettings,
       selectedRepoRequiresConnection,
@@ -3471,6 +3546,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
+      agentProfiles,
       disabledTuiAgents,
       setupDecision,
       sparseEnabled,

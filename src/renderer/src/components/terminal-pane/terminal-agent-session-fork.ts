@@ -6,6 +6,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { resolveTuiAgentBaseAgent } from '../../../../shared/tui-agent-profiles'
 import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/types'
@@ -108,7 +109,9 @@ async function preflightForkAgentTrust(args: {
   connectionId?: string | null
 }): Promise<void> {
   const { agent, workspacePath, connectionId } = args
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
+  const agentProfiles = useAppStore.getState().settings?.agentProfiles
+  const baseAgent = resolveTuiAgentBaseAgent(agent, agentProfiles)
+  const preflight = baseAgent ? TUI_AGENT_CONFIG[baseAgent].preflightTrust : undefined
   if (!preflight || !workspacePath || !window.api.agentTrust?.markTrusted) {
     return
   }

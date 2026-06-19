@@ -1,5 +1,6 @@
 import type { TuiAgent } from '../../../shared/types'
 import { TUI_AGENT_CONFIG, type DraftPasteReadySignal } from '../../../shared/tui-agent-config'
+import { resolveTuiAgentBaseAgent } from '../../../shared/tui-agent-profiles'
 import { useAppStore } from '@/store'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-dispatcher'
 import {
@@ -87,7 +88,9 @@ export async function pasteDraftWhenAgentReady(args: {
 }): Promise<boolean> {
   const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
 
-  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
+  const agentProfiles = useAppStore.getState().settings?.agentProfiles
+  const baseAgent = agent ? resolveTuiAgentBaseAgent(agent, agentProfiles) : null
+  const agentConfig = baseAgent ? TUI_AGENT_CONFIG[baseAgent] : null
 
   // Why: agents with a native draft prefill mechanism (flag or env var)
   // launch with the URL already in their input box. Pasting again would

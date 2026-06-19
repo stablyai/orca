@@ -3,6 +3,7 @@ import {
   ensureAgentStartupInTerminal,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
+import { useAppStore } from '@/store'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import {
@@ -14,6 +15,7 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/worktree-activation'
 import { isWorkItemLookupText } from '@/lib/work-item-lookup-text'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { resolveTuiAgentBaseAgent } from '../../../../shared/tui-agent-profiles'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { FolderWorkspace, ProjectGroup, TuiAgent } from '../../../../shared/types'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
@@ -127,7 +129,9 @@ async function preflightFolderWorkspaceAgentTrust(args: {
   if (!args.agent || !window.api.agentTrust?.markTrusted) {
     return
   }
-  const preflight = TUI_AGENT_CONFIG[args.agent].preflightTrust
+  const agentProfiles = useAppStore.getState().settings?.agentProfiles
+  const baseAgent = resolveTuiAgentBaseAgent(args.agent, agentProfiles)
+  const preflight = baseAgent ? TUI_AGENT_CONFIG[baseAgent].preflightTrust : undefined
   if (!preflight || !args.workspacePath) {
     return
   }

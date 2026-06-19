@@ -32,4 +32,13 @@ describe('SourceControlActionVariableChips', () => {
     expect(markup).toContain('overflow-y-auto')
     expect(markup).toContain('Generate a commit message.')
   })
+
+  it('shows repo and worktree paths as available Source Control variables', () => {
+    const markup = renderToStaticMarkup(
+      <SourceControlActionVariableChips actionId="commitMessage" onInsert={() => {}} />
+    )
+
+    expect(markup).toContain('{repoPath}')
+    expect(markup).toContain('{worktreePath}')
+  })
 })

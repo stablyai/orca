@@ -164,6 +164,25 @@ describe('CommitMessageAiPane', () => {
     expect(getAgentCatalogForAction('fixChecks', null).map((agent) => agent.id)).toContain('aider')
   })
 
+  it('offers agent profiles for launch actions but not text-generation actions', () => {
+    const profiles = [
+      {
+        id: 'agent-profile:claude-foo',
+        baseAgent: 'claude',
+        label: 'Claude (foo)',
+        defaultArgs: '--foo',
+        defaultEnv: {}
+      }
+    ] as const
+
+    expect(
+      getAgentCatalogForAction('fixChecks', null, profiles).map((agent) => agent.id)
+    ).toContain('agent-profile:claude-foo')
+    expect(
+      getAgentCatalogForAction('commitMessage', null, profiles).map((agent) => agent.id)
+    ).not.toContain('agent-profile:claude-foo')
+  })
+
   it('explains which agents are supported for text-generation recipes', () => {
     const markup = renderPane(
       buildSettings({

@@ -2201,7 +2201,7 @@ export type ClaudeManagedAccountRuntimeSelection = {
 
 /** All AI coding agents Orca knows how to launch. Used for the agent picker in the new-workspace
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
-export type TuiAgent =
+export type BuiltInTuiAgent =
   | 'claude' // Claude Code
   | 'claude-agent-teams' // Claude Code Agent Teams via Orca native panes
   | 'openclaude' // OpenClaude
@@ -2235,6 +2235,18 @@ export type TuiAgent =
   | 'grok' // xAI Grok CLI
   | 'devin' // Devin CLI
   | 'ante' // Ante (Antigma Labs)
+
+export type TuiAgentProfileId = `agent-profile:${string}`
+export type TuiAgent = BuiltInTuiAgent | TuiAgentProfileId
+
+export type TuiAgentProfile = {
+  id: TuiAgentProfileId
+  baseAgent: BuiltInTuiAgent
+  label: string
+  cmdOverride?: string
+  defaultArgs?: string
+  defaultEnv?: Record<string, string>
+}
 
 export type TaskViewPresetId = 'all' | 'issues' | 'review' | 'my-issues' | 'my-prs' | 'prs'
 
@@ -2625,6 +2637,8 @@ export type GlobalSettings = {
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+  /** User-defined launch profiles backed by a built-in agent implementation. */
+  agentProfiles?: TuiAgentProfile[]
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */
   agentYoloDefaultsMigrated?: boolean
   /** Why: disabling must persist so startup does not reinstall global agent

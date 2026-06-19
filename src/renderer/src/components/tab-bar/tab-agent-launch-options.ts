@@ -1,5 +1,5 @@
-import { getAgentCatalog } from '@/lib/agent-catalog'
-import type { TuiAgent } from '../../../../shared/types'
+import { getAgentCatalogWithProfiles } from '@/lib/agent-catalog'
+import type { TuiAgent, TuiAgentProfile } from '../../../../shared/types'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
@@ -15,16 +15,14 @@ function compactAgentAlias(value: string): string {
   return normalizeAgentAlias(value).replace(/[\s_-]+/g, '')
 }
 
-function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string; cmd: string } | null {
-  return getAgentCatalog().find((entry) => entry.id === agent) ?? null
-}
-
 export function orderTabLaunchAgents(
   defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detected: readonly TuiAgent[]
+  detected: readonly TuiAgent[],
+  profiles?: readonly TuiAgentProfile[] | null
 ): TuiAgent[] {
-  const inCatalogOrder = getAgentCatalog()
-    .filter((entry) => detected.includes(entry.id))
+  const detectedSet = new Set<TuiAgent>(detected)
+  const inCatalogOrder = getAgentCatalogWithProfiles(profiles)
+    .filter((entry) => detectedSet.has(entry.baseAgent ?? entry.id))
     .map((entry) => entry.id)
   if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
     return inCatalogOrder
@@ -34,10 +32,14 @@ export function orderTabLaunchAgents(
 
 export function buildTabAgentLaunchOptions(
   agents: readonly TuiAgent[],
-  commandOverrides: Partial<Record<TuiAgent, string>> = {}
+  commandOverrides: Partial<Record<TuiAgent, string>> = {},
+  profiles?: readonly TuiAgentProfile[] | null
 ): TabAgentLaunchOption[] {
+  const catalogById = new Map(
+    getAgentCatalogWithProfiles(profiles).map((entry) => [entry.id, entry])
+  )
   return agents.map((agent) => {
-    const entry = getCatalogEntry(agent)
+    const entry = catalogById.get(agent)
     const label = entry?.label ?? agent
     const aliases = new Set<string>([
       normalizeAgentAlias(agent),

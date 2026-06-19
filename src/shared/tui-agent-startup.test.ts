@@ -143,6 +143,36 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex --profile work 'fix it'")
   })
 
+  it('launches profile ids with base agent behavior and profile variables', () => {
+    const profiles = [
+      {
+        id: 'agent-profile:claude-work' as const,
+        baseAgent: 'claude' as const,
+        label: 'Claude Work',
+        defaultArgs: '--plugin-dir {worktreePath}/plugins'
+      }
+    ]
+    const agent = profiles[0].id
+    const plan = buildAgentStartupPlan({
+      agent,
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: resolveTuiAgentLaunchArgs(agent, null, profiles, {
+        worktreePath: '/repo/worktree'
+      }),
+      agentProfiles: profiles,
+      variables: { worktreePath: '/repo/worktree' },
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent,
+      launchCommand: "claude '--plugin-dir' '/repo/worktree/plugins' 'fix it'",
+      expectedProcess: 'claude',
+      followupPrompt: null
+    })
+  })
+
   it('builds Windows resume plans that PowerShell can invoke', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',

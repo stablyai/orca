@@ -50,6 +50,8 @@ function renderForm(
       statusCopy: null,
       agentArgs: '',
       commandTemplate: '{basePrompt}',
+      repoPath: null,
+      worktreePath: null,
       savedCommandInputTemplate: '{basePrompt}',
       saveLaunchRecipe: true,
       saveTargetValue: 'global',
@@ -105,6 +107,13 @@ describe('SourceControlAgentActionDialogForm', () => {
     const markup = renderForm()
 
     expect(markup).toContain('Resolve the merge conflicts reported for this pull request.')
+  })
+
+  it('passes the current worktree path preview to variable chips', () => {
+    const markup = renderForm({ repoPath: '/repo/main', worktreePath: '/repo/worktree' })
+
+    expect(markup).toContain('/repo/main')
+    expect(markup).toContain('/repo/worktree')
   })
 
   it('checks already-saved copy against the selected save target', () => {

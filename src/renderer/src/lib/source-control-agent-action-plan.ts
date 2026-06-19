@@ -4,10 +4,16 @@ import {
   planAgentCliArgsSuffix,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
+import { draftPlanToStartupPlan } from '@/lib/launch-agent-tab-startup-plan'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../shared/types'
+import {
+  findTuiAgentProfile,
+  isTuiAgentProfileDetected,
+  resolveTuiAgentBaseAgent
+} from '../../../shared/tui-agent-profiles'
+import type { TuiAgent, TuiAgentProfile } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 export type SourceControlLaunchPlanDelivery =
@@ -34,6 +40,7 @@ export function planSourceControlAgentActionLaunch(args: {
   detectedAgents: TuiAgent[]
   disabledAgents?: TuiAgent[]
   cmdOverrides?: Partial<Record<TuiAgent, string>>
+  agentProfiles?: readonly TuiAgentProfile[] | null
   agentArgs?: string | null
   platform?: NodeJS.Platform
 }): SourceControlLaunchPlanResult {
@@ -56,7 +63,9 @@ export function planSourceControlAgentActionLaunch(args: {
       )
     }
   }
-  if (!args.detectedAgents.includes(agent)) {
+  const profile = findTuiAgentProfile(agent, args.agentProfiles)
+  const detectedSet = new Set(args.detectedAgents)
+  if (profile ? !isTuiAgentProfileDetected(profile, detectedSet) : !detectedSet.has(agent)) {
     return {
       ok: false,
       error: translate(
@@ -86,65 +95,49 @@ export function planSourceControlAgentActionLaunch(args: {
   }
   let startupPlan: AgentStartupPlan | null = null
   let delivery: SourceControlLaunchPlanDelivery
+  const baseAgent = resolveTuiAgentBaseAgent(agent, args.agentProfiles) ?? agent
+  const commonLaunchArgs = {
+    agent,
+    cmdOverrides,
+    platform,
+    agentArgs: args.agentArgs,
+    agentProfiles: args.agentProfiles
+  }
 
   if (args.promptDelivery === 'submit-after-ready') {
     startupPlan = buildAgentStartupPlan({
-      agent,
+      ...commonLaunchArgs,
       prompt: '',
-      cmdOverrides,
-      platform,
-      agentArgs: args.agentArgs,
       allowEmptyPromptLaunch: true
     })
     delivery = 'paste-submit'
   } else if (args.promptDelivery === 'draft') {
     const draftLaunchPlan = buildAgentDraftLaunchPlan({
-      agent,
-      draft: trimmedInput,
-      cmdOverrides,
-      platform,
-      agentArgs: args.agentArgs
+      ...commonLaunchArgs,
+      draft: trimmedInput
     })
     if (draftLaunchPlan) {
-      startupPlan = {
-        agent: draftLaunchPlan.agent,
-        launchCommand: draftLaunchPlan.launchCommand,
-        expectedProcess: draftLaunchPlan.expectedProcess,
-        followupPrompt: null,
-        ...(draftLaunchPlan.startupCommandDelivery
-          ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
-          : {}),
-        ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
-      }
+      startupPlan = draftPlanToStartupPlan(draftLaunchPlan)
       delivery = 'draft-native'
     } else {
       startupPlan = buildAgentStartupPlan({
-        agent,
+        ...commonLaunchArgs,
         prompt: '',
-        cmdOverrides,
-        platform,
-        agentArgs: args.agentArgs,
         allowEmptyPromptLaunch: true
       })
       delivery = 'draft-paste'
     }
-  } else if (TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start') {
+  } else if (TUI_AGENT_CONFIG[baseAgent].promptInjectionMode === 'stdin-after-start') {
     startupPlan = buildAgentStartupPlan({
-      agent,
+      ...commonLaunchArgs,
       prompt: '',
-      cmdOverrides,
-      platform,
-      agentArgs: args.agentArgs,
       allowEmptyPromptLaunch: true
     })
     delivery = 'draft-paste'
   } else {
     startupPlan = buildAgentStartupPlan({
-      agent,
+      ...commonLaunchArgs,
       prompt: trimmedInput,
-      cmdOverrides,
-      platform,
-      agentArgs: args.agentArgs,
       allowEmptyPromptLaunch: false
     })
     delivery = 'argv'

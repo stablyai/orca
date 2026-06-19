@@ -1,14 +1,19 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent, TuiAgentProfile } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import {
+  buildTabAgentLaunchOptions,
+  orderTabLaunchAgents,
+  type TabAgentLaunchOption
+} from './tab-agent-launch-options'
 import { translate } from '@/i18n/i18n'
 
 export type QuickLaunchAgentMenuItemsProps = {
@@ -32,23 +37,17 @@ export type QuickLaunchAgentMenuItemsProps = {
   onPromptDelivered?: () => void
 }
 
-function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
-  return getAgentCatalog().find((a) => a.id === agent) ?? null
-}
-
-function orderAgents(
+export function buildQuickLaunchAgentMenuOptions(
   defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detected: TuiAgent[]
-): TuiAgent[] {
-  const inCatalogOrder = getAgentCatalog()
-    .filter((entry) => detected.includes(entry.id))
-    .map((entry) => entry.id)
-  if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
-    return inCatalogOrder
-  }
-  // Why: surface the user's configured default first — matches the prior
-  // split-button behavior where the default agent was the primary action.
-  return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
+  detected: readonly TuiAgent[],
+  disabled: readonly TuiAgent[],
+  profiles: readonly TuiAgentProfile[]
+): TabAgentLaunchOption[] {
+  const enabledDetected = filterEnabledTuiAgents(detected, disabled)
+  const agents = orderTabLaunchAgents(defaultAgent, enabledDetected, profiles).filter((agent) =>
+    isTuiAgentEnabled(agent, disabled)
+  )
+  return buildTabAgentLaunchOptions(agents, {}, profiles)
 }
 
 export function shouldShowLaunchWatchdogTimeout({ hasPty }: { hasPty: boolean }): boolean {
@@ -114,6 +113,7 @@ function QuickLaunchAgentMenuItemsInner({
   const { detectedIds } = useDetectedAgents(connectionId)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
+  const agentProfiles = useAppStore((s) => s.settings?.agentProfiles ?? [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
@@ -122,10 +122,18 @@ function QuickLaunchAgentMenuItemsInner({
     openSettingsPage()
   }, [openSettingsPage, openSettingsTarget])
 
+  const agentOptions = useMemo(
+    () =>
+      detectedIds
+        ? buildQuickLaunchAgentMenuOptions(defaultAgent, detectedIds, disabledAgents, agentProfiles)
+        : [],
+    [agentProfiles, defaultAgent, detectedIds, disabledAgents]
+  )
+
   const runLaunch = useCallback(
     (agent: TuiAgent) => {
-      const entry = getCatalogEntry(agent)
-      const label = entry?.label ?? agent
+      const option = agentOptions.find((candidate) => candidate.agent === agent)
+      const label = option?.label ?? agent
       const result = launchAgentInNewTab({
         agent,
         worktreeId,
@@ -173,15 +181,21 @@ function QuickLaunchAgentMenuItemsInner({
         toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
+    [
+      worktreeId,
+      groupId,
+      onFocusTerminal,
+      prompt,
+      promptDelivery,
+      launchSource,
+      onPromptDelivered,
+      agentOptions
+    ]
   )
-
-  const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
-  const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
 
   return (
     <>
-      {agents.length === 0 ? (
+      {agentOptions.length === 0 ? (
         <DropdownMenuItem
           disabled
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
@@ -194,9 +208,8 @@ function QuickLaunchAgentMenuItemsInner({
               )}
         </DropdownMenuItem>
       ) : null}
-      {agents.map((agent) => {
-        const entry = getCatalogEntry(agent)
-        const label = entry?.label ?? agent
+      {agentOptions.map((option) => {
+        const { agent, label } = option
         return (
           <DropdownMenuItem
             key={agent}
@@ -208,7 +221,7 @@ function QuickLaunchAgentMenuItemsInner({
               { value0: label }
             )}
           >
-            <AgentIcon agent={agent} size={14} />
+            <AgentIcon agent={agent} profiles={agentProfiles} size={14} />
             {label}
           </DropdownMenuItem>
         )

@@ -4356,7 +4356,13 @@
           "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual"
+          "agentPermissionsManual": "Manual",
+          "profileName": "Name",
+          "profileBadge": "Profile",
+          "duplicateProfile": "Duplicate agent",
+          "deleteProfile": "Delete profile",
+          "variables": "Variables",
+          "worktreePathVariableHint": "Available in command, arguments, and environment values."
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",

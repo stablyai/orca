@@ -27,19 +27,23 @@ export function getTerminalQuickCommandAgentOptions(
   const catalogOrder = new Map<TuiAgent, number>(catalog.map((entry, index) => [entry.id, index]))
 
   return [...catalog].sort((a, b) => {
-    const aSupported = supportsTerminalAgentQuickCommand(a.id)
-    const bSupported = supportsTerminalAgentQuickCommand(b.id)
+    const aSupported = isTerminalQuickCommandAgentOptionSupported(a)
+    const bSupported = isTerminalQuickCommandAgentOptionSupported(b)
     if (aSupported !== bSupported) {
       return aSupported ? -1 : 1
     }
 
     const fallbackRank = QUICK_COMMAND_AGENT_PRESENTATION_ORDER.length
-    const aRank = QUICK_COMMAND_AGENT_ORDER_RANK.get(a.id) ?? fallbackRank
-    const bRank = QUICK_COMMAND_AGENT_ORDER_RANK.get(b.id) ?? fallbackRank
+    const aRank = QUICK_COMMAND_AGENT_ORDER_RANK.get(a.baseAgent ?? a.id) ?? fallbackRank
+    const bRank = QUICK_COMMAND_AGENT_ORDER_RANK.get(b.baseAgent ?? b.id) ?? fallbackRank
     if (aRank !== bRank) {
       return aRank - bRank
     }
 
     return (catalogOrder.get(a.id) ?? 0) - (catalogOrder.get(b.id) ?? 0)
   })
+}
+
+export function isTerminalQuickCommandAgentOptionSupported(entry: AgentCatalogEntry): boolean {
+  return supportsTerminalAgentQuickCommand(entry.baseAgent ?? entry.id)
 }

@@ -321,6 +321,17 @@ describe('AgentsPane', () => {
     expect(markup).not.toContain('aria-label="Disable Claude"')
   })
 
+  it('shows path variables in expanded agent launch settings', () => {
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      agentDefaultArgs: { claude: '--plugin-dir {worktreePath}/plugins' }
+    })
+
+    expect(markup).toContain('{repoPath}')
+    expect(markup).toContain('{worktreePath}')
+    expect(markup).toContain('Available in command, arguments, and environment values.')
+  })
+
   it('only toggles agent availability when the segmented value changes', () => {
     const onSetEnabled = vi.fn()
     const control = AgentAvailabilityControl({

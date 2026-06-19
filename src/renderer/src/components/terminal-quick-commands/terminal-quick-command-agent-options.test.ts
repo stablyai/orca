@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { AGENT_CATALOG, getAgentCatalogWithProfiles } from '@/lib/agent-catalog'
 import { supportsTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
-import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
+import {
+  getTerminalQuickCommandAgentOptions,
+  isTerminalQuickCommandAgentOptionSupported
+} from './terminal-quick-command-agent-options'
 
 describe('terminal quick command agent options', () => {
   it('does not inherit OpenClaude as the second quick-command agent option', () => {
@@ -27,5 +30,27 @@ describe('terminal quick command agent options', () => {
     expect(new Set(getTerminalQuickCommandAgentOptions().map((entry) => entry.id))).toEqual(
       new Set(AGENT_CATALOG.map((entry) => entry.id))
     )
+  })
+
+  it('keeps profile agents with their supported base agent', () => {
+    const options = getTerminalQuickCommandAgentOptions(
+      getAgentCatalogWithProfiles([
+        {
+          id: 'agent-profile:claude-foo',
+          baseAgent: 'claude',
+          label: 'Claude (foo)',
+          defaultArgs: '--foo',
+          defaultEnv: {}
+        }
+      ])
+    )
+    const ids = options.map((entry) => entry.id)
+    const profile = options.find((entry) => entry.id === 'agent-profile:claude-foo')
+
+    expect(ids.slice(ids.indexOf('claude'), ids.indexOf('claude') + 2)).toEqual([
+      'claude',
+      'agent-profile:claude-foo'
+    ])
+    expect(profile && isTerminalQuickCommandAgentOptionSupported(profile)).toBe(true)
   })
 })

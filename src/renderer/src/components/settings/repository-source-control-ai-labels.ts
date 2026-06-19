@@ -1,4 +1,5 @@
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent, TuiAgentProfile } from '../../../../shared/types'
+import { resolveTuiAgentBaseAgent } from '../../../../shared/tui-agent-profiles'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   resolveSourceControlActionCommandTemplate,
@@ -40,13 +41,17 @@ export function resolveAgentArgsPlaceholderAgent(
   agentId: TuiAgent | CustomAgentId | null | undefined,
   source: SourceControlAiSettings,
   actionId: SourceControlActionId,
-  defaultTuiAgent: TuiAgent | 'blank' | null | undefined
+  defaultTuiAgent: TuiAgent | 'blank' | null | undefined,
+  agentProfiles: readonly TuiAgentProfile[] = []
 ): TuiAgent | null {
   const effectiveAgent = agentId === undefined ? source.actions?.[actionId]?.agentId : agentId
   if (effectiveAgent && !isCustomAgentId(effectiveAgent)) {
-    return effectiveAgent
+    return resolveTuiAgentBaseAgent(effectiveAgent, agentProfiles) ?? effectiveAgent
   }
-  return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
+  if (defaultTuiAgent && defaultTuiAgent !== 'blank') {
+    return resolveTuiAgentBaseAgent(defaultTuiAgent, agentProfiles) ?? defaultTuiAgent
+  }
+  return null
 }
 
 export function completeRepoActionRecipe(

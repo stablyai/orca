@@ -14,6 +14,8 @@ export type UseSourceControlAgentActionDialogResult = {
   statusCopy: string | null
   agentArgs: string
   commandTemplate: string
+  repoPath: string | null
+  worktreePath: string | null
   saveLaunchRecipe: boolean
   saveTargetValue: string
   saveTargets: { value: string; label: string }[]

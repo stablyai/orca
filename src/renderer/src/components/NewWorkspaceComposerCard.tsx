@@ -17,13 +17,14 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalogWithProfiles } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
+import { isTuiAgentProfileDetected } from '../../../shared/tui-agent-profiles'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
@@ -357,6 +358,7 @@ export default function NewWorkspaceComposerCard({
   const activeModal = useAppStore((s) => s.activeModal)
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
+  const agentProfiles = useAppStore((s) => s.settings?.agentProfiles ?? [])
   const updateSettings = useAppStore((s) => s.updateSettings)
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
@@ -442,17 +444,24 @@ export default function NewWorkspaceComposerCard({
   }, [cancelNameInputFocusFrame, nameInputRef])
 
   const visibleQuickAgents = React.useMemo(() => {
+    const catalog = getAgentCatalogWithProfiles(agentProfiles)
     const enabledIds = new Set(
       filterEnabledTuiAgents(
-        getAgentCatalog().map((agent) => agent.id),
+        catalog.map((agent) => agent.id),
         disabledTuiAgents
       )
     )
-    return getAgentCatalog().filter(
-      (agent) =>
-        enabledIds.has(agent.id) && (detectedAgentIds === null || detectedAgentIds.has(agent.id))
-    )
-  }, [detectedAgentIds, disabledTuiAgents])
+    return catalog.filter((agent) => {
+      if (!enabledIds.has(agent.id)) {
+        return false
+      }
+      const profile = agentProfiles.find((entry) => entry.id === agent.id)
+      if (profile) {
+        return isTuiAgentProfileDetected(profile, detectedAgentIds)
+      }
+      return detectedAgentIds === null || detectedAgentIds.has(agent.id)
+    })
+  }, [agentProfiles, detectedAgentIds, disabledTuiAgents])
 
   const handleAddRepo = React.useCallback((): void => {
     openModal('add-repo')

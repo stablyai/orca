@@ -222,6 +222,7 @@ export function CommitMessageAiPane({
       key="action-recipes"
       config={config}
       defaultTuiAgent={settings.defaultTuiAgent}
+      agentProfiles={settings.agentProfiles}
       customPromptDiscardSignal={customPromptDiscardSignal}
       onCustomPromptDirtyChange={onCustomPromptDirtyChange}
       searchQuery={searchQuery}

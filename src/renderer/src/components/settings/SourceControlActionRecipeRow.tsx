@@ -1,7 +1,8 @@
 import { Terminal } from 'lucide-react'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings, TuiAgent, TuiAgentProfile } from '../../../../shared/types'
 import type { CustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import { CUSTOM_AGENT_ID, isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
+import { resolveTuiAgentBaseAgent } from '../../../../shared/tui-agent-profiles'
 import {
   SOURCE_CONTROL_ACTION_LABELS,
   type SourceControlActionId
@@ -28,6 +29,7 @@ const DEFAULT_AGENT_VALUE = '__default_agent__'
 type SourceControlActionRecipeRowProps = {
   actionId: SourceControlActionId
   selectedAgent: TuiAgent | CustomAgentId | null
+  agentProfiles: readonly TuiAgentProfile[]
   draftValue: ActionRecipeDraftValue
   baseValue: ActionRecipeDraftValue
   defaultTuiAgent: GlobalSettings['defaultTuiAgent']
@@ -42,17 +44,22 @@ type SourceControlActionRecipeRowProps = {
 
 function resolveAgentArgsPlaceholderAgent(
   selectedAgent: TuiAgent | CustomAgentId | null | undefined,
-  defaultTuiAgent: GlobalSettings['defaultTuiAgent']
+  defaultTuiAgent: GlobalSettings['defaultTuiAgent'],
+  agentProfiles: readonly TuiAgentProfile[]
 ): TuiAgent | null {
   if (selectedAgent && !isCustomAgentId(selectedAgent)) {
-    return selectedAgent
+    return resolveTuiAgentBaseAgent(selectedAgent, agentProfiles) ?? selectedAgent
   }
-  return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
+  if (defaultTuiAgent && defaultTuiAgent !== 'blank') {
+    return resolveTuiAgentBaseAgent(defaultTuiAgent, agentProfiles) ?? defaultTuiAgent
+  }
+  return null
 }
 
 export function SourceControlActionRecipeRow({
   actionId,
   selectedAgent,
+  agentProfiles,
   draftValue,
   baseValue,
   defaultTuiAgent,
@@ -66,9 +73,9 @@ export function SourceControlActionRecipeRow({
 }: SourceControlActionRecipeRowProps): React.JSX.Element {
   const templateDirty = JSON.stringify(draftValue) !== JSON.stringify(baseValue)
   const agentArgsPlaceholder = getSourceControlAgentArgsPlaceholder(
-    resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent)
+    resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent, agentProfiles)
   )
-  const agentOptions = getAgentCatalogForAction(actionId, selectedAgent)
+  const agentOptions = getAgentCatalogForAction(actionId, selectedAgent, agentProfiles)
   const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent)
   const agentSupportText = getSourceControlActionAgentSupportText(actionId)
 
@@ -113,7 +120,7 @@ export function SourceControlActionRecipeRow({
               {agentOptions.map((agent) => (
                 <SelectItem key={agent.id} value={agent.id}>
                   <span className="flex items-center gap-2">
-                    <AgentIcon agent={agent.id} size={14} />
+                    <AgentIcon agent={agent.id} profiles={agentProfiles} size={14} />
                     {agent.label}
                   </span>
                 </SelectItem>

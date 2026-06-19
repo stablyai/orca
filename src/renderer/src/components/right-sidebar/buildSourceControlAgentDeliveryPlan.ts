@@ -1,6 +1,6 @@
 import { planSourceControlAgentActionLaunch } from '@/lib/source-control-agent-action-plan'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent, TuiAgentProfile } from '../../../../shared/types'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
 
@@ -12,6 +12,7 @@ type BuildSourceControlAgentDeliveryPlanArgs = {
   detectedAgents: TuiAgent[]
   connectionUnavailable: boolean
   launchPlatform?: NodeJS.Platform
+  agentProfiles?: readonly TuiAgentProfile[] | null
 }
 
 export function buildSourceControlAgentDeliveryPlan({
@@ -21,7 +22,8 @@ export function buildSourceControlAgentDeliveryPlan({
   promptDelivery,
   detectedAgents,
   connectionUnavailable,
-  launchPlatform
+  launchPlatform,
+  agentProfiles
 }: BuildSourceControlAgentDeliveryPlanArgs): SourceControlAgentActionDeliveryPlanState {
   if (connectionUnavailable) {
     return buildSourceControlAgentConnectionErrorPlan()
@@ -34,6 +36,7 @@ export function buildSourceControlAgentDeliveryPlan({
     detectedAgents,
     disabledAgents: useAppStore.getState().settings?.disabledTuiAgents,
     cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides,
+    agentProfiles,
     platform: launchPlatform
   })
   if (!result.ok) {

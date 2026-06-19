@@ -1,7 +1,8 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
-import type { TuiAgent } from '../../../shared/types'
+import type { BuiltInTuiAgent, TuiAgent, TuiAgentProfile } from '../../../shared/types'
+import { findTuiAgentProfile } from '../../../shared/tui-agent-profiles'
 import {
   AgentLetterIcon,
   AiderIcon,
@@ -15,6 +16,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export type AgentCatalogEntry = {
   id: TuiAgent
+  baseAgent?: BuiltInTuiAgent
   label: string
   /** Default CLI binary name used for PATH detection. */
   cmd: string
@@ -270,15 +272,55 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
 // Why: tests and a few legacy call sites still import a catalog snapshot.
 export const AGENT_CATALOG: AgentCatalogEntry[] = getAgentCatalog()
 
-export function getAgentLabel(agent: TuiAgent): string {
-  return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
+export function getAgentCatalogWithProfiles(
+  profiles?: readonly TuiAgentProfile[] | null
+): AgentCatalogEntry[] {
+  const catalog = getAgentCatalog()
+  if (!profiles?.length) {
+    return catalog
+  }
+  const byId = new Map(catalog.map((entry) => [entry.id, entry]))
+  const profilesByBase = new Map<TuiAgent, TuiAgentProfile[]>()
+  for (const profile of profiles) {
+    const existing = profilesByBase.get(profile.baseAgent) ?? []
+    existing.push(profile)
+    profilesByBase.set(profile.baseAgent, existing)
+  }
+  return catalog.flatMap((entry): AgentCatalogEntry[] => [
+    entry,
+    ...(profilesByBase.get(entry.id) ?? []).flatMap((profile): AgentCatalogEntry[] => {
+      const base = byId.get(profile.baseAgent)
+      if (!base) {
+        return []
+      }
+      return [
+        {
+          ...base,
+          id: profile.id,
+          baseAgent: profile.baseAgent,
+          label: profile.label,
+          cmd: profile.cmdOverride || profile.defaultArgs || base.cmd
+        }
+      ]
+    })
+  ])
+}
+
+export function getAgentLabel(
+  agent: TuiAgent,
+  profiles?: readonly TuiAgentProfile[] | null
+): string {
+  const profile = findTuiAgentProfile(agent, profiles)
+  return profile?.label ?? getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
 }
 
 export function AgentIcon({
   agent,
+  profiles,
   size = 14
 }: {
   agent: TuiAgent | null | undefined
+  profiles?: readonly TuiAgentProfile[] | null
   size?: number
 }): React.JSX.Element {
   // Why: render a neutral question-mark glyph when the agent identity is not
@@ -288,31 +330,33 @@ export function AgentIcon({
   if (!agent) {
     return <AgentLetterIcon letter="?" size={size} />
   }
-  if (agent === 'claude' || agent === 'claude-agent-teams') {
+  const profile = findTuiAgentProfile(agent, profiles)
+  const iconAgent = profile?.baseAgent ?? agent
+  if (iconAgent === 'claude' || iconAgent === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />
   }
-  if (agent === 'codex') {
+  if (iconAgent === 'codex') {
     return <OpenAIIcon size={size} />
   }
-  if (agent === 'droid') {
+  if (iconAgent === 'droid') {
     return <DroidIcon size={size} />
   }
-  if (agent === 'pi') {
+  if (iconAgent === 'pi') {
     return <PiIcon size={size} />
   }
-  if (agent === 'omp') {
+  if (iconAgent === 'omp') {
     return <OmpIcon size={size} />
   }
-  if (agent === 'aider') {
+  if (iconAgent === 'aider') {
     return <AiderIcon size={size} />
   }
-  if (agent === 'kilo') {
+  if (iconAgent === 'kilo') {
     return <KiloIcon size={size} />
   }
-  if (agent === 'copilot') {
+  if (iconAgent === 'copilot') {
     return <CopilotIcon size={size} />
   }
-  const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
+  const catalogEntry = getAgentCatalog().find((a) => a.id === iconAgent)
   if (catalogEntry?.iconUrl) {
     return (
       <img
@@ -338,6 +382,6 @@ export function AgentIcon({
       />
     )
   }
-  const label = catalogEntry?.label ?? agent
+  const label = profile?.label ?? catalogEntry?.label ?? agent
   return <AgentLetterIcon letter={label.charAt(0).toUpperCase()} size={size} />
 }

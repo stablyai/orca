@@ -36,6 +36,8 @@ type SourceControlAgentActionDialogFormProps = {
   statusCopy: string | null
   agentArgs: string
   commandTemplate: string
+  repoPath: string | null
+  worktreePath: string | null
   savedCommandInputTemplate?: string | null
   saveLaunchRecipe: boolean
   saveTargetValue: string
@@ -80,6 +82,8 @@ export function SourceControlAgentActionDialogForm({
   statusCopy,
   agentArgs,
   commandTemplate,
+  repoPath,
+  worktreePath,
   savedCommandInputTemplate,
   saveLaunchRecipe,
   saveTargetValue,
@@ -243,7 +247,11 @@ export function SourceControlAgentActionDialogForm({
           />
           <SourceControlActionVariableChips
             actionId={actionId}
-            variablePreviews={{ basePrompt: baseCommandInput }}
+            variablePreviews={{
+              basePrompt: baseCommandInput,
+              ...(repoPath ? { repoPath } : {}),
+              ...(worktreePath ? { worktreePath } : {})
+            }}
             onInsert={(variable) => {
               const separator =
                 commandTemplate.endsWith('\n') || commandTemplate.length === 0 ? '' : ' '

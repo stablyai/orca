@@ -5,7 +5,7 @@ import type {
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings, Repo, TuiAgent, TuiAgentProfile } from '../../../../shared/types'
 import { buildSourceControlAgentDeliveryPlan } from './buildSourceControlAgentDeliveryPlan'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
@@ -29,6 +29,7 @@ type UseSourceControlAgentActionStartArgs = {
   launchPlatform?: NodeJS.Platform
   launchSource: LaunchSource
   connectionUnavailable: boolean
+  agentProfiles?: readonly TuiAgentProfile[] | null
   refreshDetectedAgents: () => Promise<TuiAgent[]>
   onStart?: (args: {
     agent: TuiAgent
@@ -77,6 +78,7 @@ export function useSourceControlAgentActionStart({
   launchPlatform,
   launchSource,
   connectionUnavailable,
+  agentProfiles,
   refreshDetectedAgents,
   onStart,
   onSaveAgentDefault,
@@ -100,7 +102,8 @@ export function useSourceControlAgentActionStart({
         promptDelivery,
         detectedAgents: currentDetectedAgents,
         connectionUnavailable,
-        launchPlatform
+        launchPlatform,
+        agentProfiles
       })
     },
     [
@@ -110,7 +113,8 @@ export function useSourceControlAgentActionStart({
       promptDelivery,
       refreshDetectedAgents,
       selectedAgent,
-      launchPlatform
+      launchPlatform,
+      agentProfiles
     ]
   )
 

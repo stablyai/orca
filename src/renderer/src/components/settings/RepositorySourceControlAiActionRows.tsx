@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Terminal } from 'lucide-react'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent, TuiAgentProfile } from '../../../../shared/types'
 import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
 import type {
   RepoSourceControlAiOverrides,
@@ -43,6 +43,7 @@ type RepositorySourceControlAiActionRowsProps = {
   repoAi: RepoSourceControlAiOverrides
   source: SourceControlAiSettings
   defaultTuiAgent: TuiAgent | 'blank' | null | undefined
+  agentProfiles: readonly TuiAgentProfile[]
   onActionModeChange: (actionId: SourceControlActionId, mode: string) => void
   onActionAgentChange: (actionId: SourceControlActionId, value: string) => void
   onActionTemplateChange: (actionId: SourceControlActionId, value: string) => void
@@ -54,6 +55,7 @@ export function RepositorySourceControlAiActionRows({
   repoAi,
   source,
   defaultTuiAgent,
+  agentProfiles,
   onActionModeChange,
   onActionAgentChange,
   onActionTemplateChange,
@@ -85,9 +87,15 @@ export function RepositorySourceControlAiActionRows({
             ? ''
             : inheritedAgentArgs ||
               getSourceControlAgentArgsPlaceholder(
-                resolveAgentArgsPlaceholderAgent(effectiveAgent, source, actionId, defaultTuiAgent)
+                resolveAgentArgsPlaceholderAgent(
+                  effectiveAgent,
+                  source,
+                  actionId,
+                  defaultTuiAgent,
+                  agentProfiles
+                )
               )
-        const agentOptions = getAgentCatalogForAction(actionId, effectiveAgent)
+        const agentOptions = getAgentCatalogForAction(actionId, effectiveAgent, agentProfiles)
         const agentWarningText = getSourceControlActionAgentWarningText(actionId, effectiveAgent)
         const agentSupportText = getSourceControlActionAgentSupportText(actionId)
         return (
@@ -177,7 +185,7 @@ export function RepositorySourceControlAiActionRows({
                     {agentOptions.map((agent) => (
                       <SelectItem key={agent.id} value={agent.id}>
                         <span className="flex items-center gap-2">
-                          <AgentIcon agent={agent.id} size={14} />
+                          <AgentIcon agent={agent.id} profiles={agentProfiles} size={14} />
                           {agent.label}
                         </span>
                       </SelectItem>

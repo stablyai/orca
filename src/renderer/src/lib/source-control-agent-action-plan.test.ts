@@ -83,4 +83,25 @@ describe('planSourceControlAgentActionLaunch', () => {
     expect(result.ok && result.delivery).toBe('draft-native')
     expect(result.ok && result.commandLabel).toContain('--prefill')
   })
+
+  it('accepts profiles when their base agent is detected', () => {
+    const result = planSourceControlAgentActionLaunch({
+      agent: 'agent-profile:claude-foo',
+      commandInput: 'Fix checks',
+      promptDelivery: 'submit-after-ready',
+      detectedAgents: ['claude'],
+      agentProfiles: [
+        {
+          id: 'agent-profile:claude-foo',
+          baseAgent: 'claude',
+          label: 'Claude (foo)',
+          defaultArgs: '--foo'
+        }
+      ],
+      platform: 'darwin'
+    })
+
+    expect(result.ok && result.delivery).toBe('paste-submit')
+    expect(result.ok && result.commandLabel).toBe('claude')
+  })
 })

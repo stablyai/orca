@@ -56,6 +56,7 @@ import {
   type BuiltInWindowsTerminalShell,
   WINDOWS_GIT_BASH_SHELL
 } from '../../../../shared/windows-terminal-shell'
+import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -318,6 +319,7 @@ function TabBarInner({
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
+  const agentProfiles = useAppStore((s) => s.settings?.agentProfiles ?? [])
   const agentDetectionTargetKey = useAppStore((s): string | undefined => {
     const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
     const worktree = allWorktrees.find((w) => w.id === worktreeId)
@@ -354,10 +356,13 @@ function TabBarInner({
   const agentLaunchOptions = useMemo(
     () =>
       buildTabAgentLaunchOptions(
-        orderTabLaunchAgents(defaultAgent, detectedIds ?? []),
-        agentCmdOverrides
+        orderTabLaunchAgents(defaultAgent, detectedIds ?? [], agentProfiles).filter((agent) =>
+          isTuiAgentEnabled(agent, settings?.disabledTuiAgents)
+        ),
+        agentCmdOverrides,
+        agentProfiles
       ),
-    [agentCmdOverrides, defaultAgent, detectedIds]
+    [agentCmdOverrides, agentProfiles, defaultAgent, detectedIds, settings?.disabledTuiAgents]
   )
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(

@@ -22,6 +22,7 @@ import { translate } from '@/i18n/i18n'
 type SourceControlAiActionRecipeDefaultsProps = {
   config: SourceControlAiSettings
   defaultTuiAgent: GlobalSettings['defaultTuiAgent']
+  agentProfiles: GlobalSettings['agentProfiles']
   customPromptDiscardSignal?: number
   onCustomPromptDirtyChange?: (dirty: boolean) => void
   searchQuery: string
@@ -79,6 +80,7 @@ const ACTION_RECIPES_SEARCH_ENTRY = {
 export function SourceControlAiActionRecipeDefaults({
   config,
   defaultTuiAgent,
+  agentProfiles,
   customPromptDiscardSignal,
   onCustomPromptDirtyChange,
   searchQuery,
@@ -163,6 +165,7 @@ export function SourceControlAiActionRecipeDefaults({
               key={actionId}
               actionId={actionId}
               selectedAgent={selectedAgent as TuiAgent | CustomAgentId | null}
+              agentProfiles={agentProfiles ?? []}
               draftValue={actionRecipeDraftState.values[actionId]}
               baseValue={actionRecipeDraftState.baseValues[actionId]}
               defaultTuiAgent={defaultTuiAgent}

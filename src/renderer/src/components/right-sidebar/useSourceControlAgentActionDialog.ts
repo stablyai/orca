@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalogWithProfiles } from '@/lib/agent-catalog'
 import { pickSourceControlLaunchAgent } from '@/lib/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
-import { useRepoById } from '@/store/selectors'
+import { useRepoById, useWorktreeById } from '@/store/selectors'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/types'
@@ -17,6 +17,7 @@ import {
 import { useSourceControlAgentActionStart } from './useSourceControlAgentActionStart'
 
 const DEFAULT_SAVE_TARGET_VALUE = 'global'
+const EMPTY_AGENT_PROFILES = []
 
 export function useSourceControlAgentActionDialog({
   open,
@@ -39,6 +40,7 @@ export function useSourceControlAgentActionDialog({
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
   const settings = useAppStore((state) => state.settings)
   const repo = useRepoById(repoId ?? null)
+  const worktree = useWorktreeById(worktreeId ?? null)
   const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
   const ensureRemoteDetectedAgents = useAppStore((state) => state.ensureRemoteDetectedAgents)
   const [commandTemplate, setCommandTemplate] = useState(
@@ -57,6 +59,7 @@ export function useSourceControlAgentActionDialog({
   const [saveTargetValue, setSaveTargetValue] = useState(DEFAULT_SAVE_TARGET_VALUE)
 
   const disabledAgents = settings?.disabledTuiAgents
+  const agentProfiles = settings?.agentProfiles ?? EMPTY_AGENT_PROFILES
   const connectionUnavailable = Boolean(worktreeId && connectionId === undefined)
 
   const refreshDetectedAgents = useCallback(async (): Promise<TuiAgent[]> => {
@@ -107,7 +110,8 @@ export function useSourceControlAgentActionDialog({
             savedAgent: savedAgentId,
             defaultAgent: settings?.defaultTuiAgent,
             detectedAgents: nextAgents,
-            disabledAgents
+            disabledAgents,
+            profiles: agentProfiles
           })
       )
       setDetectedOpenCycle(cycle)
@@ -123,7 +127,8 @@ export function useSourceControlAgentActionDialog({
     savedAgentArgs,
     savedCommandInputTemplate,
     repoId,
-    settings?.defaultTuiAgent
+    settings?.defaultTuiAgent,
+    agentProfiles
   ])
 
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
@@ -134,18 +139,33 @@ export function useSourceControlAgentActionDialog({
   )
   const agentOptions = useMemo(
     () =>
-      getAgentCatalog().filter(
-        (entry) => enabledDetectedAgents.includes(entry.id) || entry.id === selectedAgent
+      getAgentCatalogWithProfiles(agentProfiles).filter(
+        (entry) =>
+          isSourceControlAgentDetectedAndEnabled(
+            entry.id,
+            enabledDetectedAgents,
+            disabledAgents,
+            agentProfiles
+          ) || entry.id === selectedAgent
       ),
-    [enabledDetectedAgents, selectedAgent]
+    [agentProfiles, disabledAgents, enabledDetectedAgents, selectedAgent]
   )
   const selectedAgentUnavailable = Boolean(
     selectedAgent &&
-    !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
+    !isSourceControlAgentDetectedAndEnabled(
+      selectedAgent,
+      detectedAgents,
+      disabledAgents,
+      agentProfiles
+    )
   )
   const hasEnabledAgents = enabledDetectedAgents.length > 0
+  const repoPath = repo?.path ?? null
+  const worktreePath = worktree?.path ?? null
   const commandInput = renderSourceControlActionCommandTemplate(commandTemplate, {
-    basePrompt: baseCommandInput
+    basePrompt: baseCommandInput,
+    repoPath,
+    worktreePath
   })
   const trimmedCommandInput = commandInput.trim()
 
@@ -168,6 +188,7 @@ export function useSourceControlAgentActionDialog({
       launchPlatform,
       launchSource,
       connectionUnavailable,
+      agentProfiles,
       refreshDetectedAgents,
       onStart,
       onSaveAgentDefault,
@@ -228,7 +249,8 @@ export function useSourceControlAgentActionDialog({
     selectedAgentUnavailable,
     connectionUnavailable,
     hasEnabledAgents,
-    detecting
+    detecting,
+    profiles: agentProfiles
   })
 
   const onSelectedAgentChange = useCallback(
@@ -270,6 +292,8 @@ export function useSourceControlAgentActionDialog({
     statusCopy,
     agentArgs,
     commandTemplate,
+    repoPath,
+    worktreePath,
     saveLaunchRecipe,
     saveTargetValue,
     saveTargets,

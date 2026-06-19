@@ -161,6 +161,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
+import { resolveTuiAgentBaseAgent } from '../../shared/tui-agent-profiles'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { detectInstalledAgents, detectRemoteAgents } from '../ipc/preflight'
 import {
@@ -707,6 +708,7 @@ type RuntimeStore = {
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
+    agentProfiles?: GlobalSettings['agentProfiles']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
@@ -10004,7 +10006,8 @@ export class OrcaRuntimeService {
   private buildStartupForAgent(
     repo: Repo,
     agent: TuiAgent,
-    prompt: string | undefined
+    prompt: string | undefined,
+    paths: { worktreePath?: string | null } = {}
   ): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -10016,12 +10019,25 @@ export class OrcaRuntimeService {
     // Why: CLI clients may target SSH runtimes from macOS/Windows, so quote for
     // the workspace shell rather than the client shell.
     const agentLaunchPlatform = this.getAgentLaunchPlatformForRepo(repo)
+    const variables = { repoPath: repo.path, worktreePath: paths.worktreePath }
     const startupPlan = buildAgentStartupPlan({
       agent,
       prompt: prompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentArgs: resolveTuiAgentLaunchArgs(
+        agent,
+        settings.agentDefaultArgs,
+        settings.agentProfiles,
+        variables
+      ),
+      agentEnv: resolveTuiAgentLaunchEnv(
+        agent,
+        settings.agentDefaultEnv,
+        settings.agentProfiles,
+        variables
+      ),
+      agentProfiles: settings.agentProfiles,
+      variables,
       platform: agentLaunchPlatform,
       allowEmptyPromptLaunch: true
     })
@@ -10049,7 +10065,8 @@ export class OrcaRuntimeService {
   }
 
   private markLocalWorkspaceTrustedForAgent(agent: TuiAgent, workspacePath: string): void {
-    const preset = TUI_AGENT_CONFIG[agent].preflightTrust
+    const baseAgent = resolveTuiAgentBaseAgent(agent, this.store?.getSettings().agentProfiles)
+    const preset = baseAgent ? TUI_AGENT_CONFIG[baseAgent].preflightTrust : undefined
     if (!preset) {
       return
     }
@@ -10071,7 +10088,8 @@ export class OrcaRuntimeService {
     connectionId: string,
     workspacePath: string
   ): Promise<void> {
-    const preset = TUI_AGENT_CONFIG[agent].preflightTrust
+    const baseAgent = resolveTuiAgentBaseAgent(agent, this.store?.getSettings().agentProfiles)
+    const preset = baseAgent ? TUI_AGENT_CONFIG[baseAgent].preflightTrust : undefined
     if (!preset) {
       return
     }
@@ -10230,8 +10248,10 @@ export class OrcaRuntimeService {
     if (!ptyId) {
       return Promise.resolve(null)
     }
-    const readySignal =
-      TUI_AGENT_CONFIG[agent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
+    const baseAgent = resolveTuiAgentBaseAgent(agent, this.store?.getSettings().agentProfiles)
+    const readySignal = baseAgent
+      ? (TUI_AGENT_CONFIG[baseAgent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste')
+      : 'render-quiet-after-bracketed-paste'
     return new Promise<string | null>((resolve) => {
       let settled = false
       let recent = ''
@@ -13037,7 +13057,9 @@ export class OrcaRuntimeService {
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt)
+    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, {
+      worktreePath: worktree.path
+    })
     if (repo.connectionId) {
       await this.markRemoteWorkspaceTrustedForAgent(opts.agent, repo.connectionId, worktree.path)
     } else {
@@ -13147,12 +13169,28 @@ export class OrcaRuntimeService {
     // Why: mobile may be running on iOS while the actual terminal shell is
     // Windows/macOS/Linux or an SSH Linux host; quote for the host shell.
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+    const variables = {
+      repoPath: workspace.repo?.path ?? workspace.path,
+      worktreePath: workspace.path
+    }
     const startupPlan = buildAgentStartupPlan({
       agent: opts.agent,
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
+      agentArgs: resolveTuiAgentLaunchArgs(
+        opts.agent,
+        settings.agentDefaultArgs,
+        settings.agentProfiles,
+        variables
+      ),
+      agentEnv: resolveTuiAgentLaunchEnv(
+        opts.agent,
+        settings.agentDefaultEnv,
+        settings.agentProfiles,
+        variables
+      ),
+      agentProfiles: settings.agentProfiles,
+      variables,
       platform,
       allowEmptyPromptLaunch: true
     })
@@ -14221,8 +14259,7 @@ export class OrcaRuntimeService {
       } catch {
         warnings.push({
           code: 'LINEAGE_PARENT_CONTEXT_MISSING',
-          message:
-            'Worktree created, but Orca could not validate the environment parent context.',
+          message: 'Worktree created, but Orca could not validate the environment parent context.',
           details: { envParentWorkspace: input.envParentWorkspace }
         })
       }

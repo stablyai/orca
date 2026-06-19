@@ -40,7 +40,11 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { cn } from '@/lib/utils'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import {
+  getAgentCatalog,
+  getAgentCatalogWithProfiles,
+  getAgentLabel as getCatalogAgentLabel
+} from '@/lib/agent-catalog'
 import { useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type {
@@ -64,7 +68,7 @@ import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/proto
 import type { PreflightStatus } from '../../../../preload/api-types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo, TuiAgent, TuiAgentProfile, Worktree } from '../../../../shared/types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
 import {
   buildAutomationCronSchedule,
@@ -132,6 +136,7 @@ import { useContextualTour } from '@/components/contextual-tours/use-contextual-
 import { translate } from '@/i18n/i18n'
 
 const AGENTS = getAgentCatalog().map((agent) => agent.id)
+const EMPTY_AGENT_PROFILES: readonly TuiAgentProfile[] = []
 const DEFAULT_TIME = '09:00'
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 type AutomationPaneTab = 'overview' | 'runs'
@@ -241,8 +246,11 @@ function buildHermesCronSchedule(draft: AutomationDraft): string {
   })
 }
 
-function getAgentLabel(agentId: string): string {
-  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
+function getAutomationAgentLabel(
+  agentId: TuiAgent,
+  agentProfiles: readonly TuiAgentProfile[] | null | undefined
+): string {
+  return getCatalogAgentLabel(agentId, agentProfiles)
 }
 
 function getExternalAutomationKey(
@@ -364,7 +372,12 @@ export default function AutomationsPage(): React.JSX.Element {
   const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
-  const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
+  const agentProfiles = settings?.agentProfiles ?? EMPTY_AGENT_PROFILES
+  const agentCatalog = useMemo(() => getAgentCatalogWithProfiles(agentProfiles), [agentProfiles])
+  const enabledAgents = filterEnabledTuiAgents(
+    agentCatalog.map((agent) => agent.id),
+    settings?.disabledTuiAgents
+  )
   const defaultAgent =
     settings?.defaultTuiAgent &&
     settings.defaultTuiAgent !== 'blank' &&
@@ -2247,7 +2260,9 @@ export default function AutomationsPage(): React.JSX.Element {
                           <span className="shrink-0">/</span>
                           <span className="truncate">{workspaceLabel}</span>
                           <span className="shrink-0">·</span>
-                          <span className="truncate">{getAgentLabel(automation.agentId)}</span>
+                          <span className="truncate">
+                            {getAutomationAgentLabel(automation.agentId, agentProfiles)}
+                          </span>
                         </span>
                         <span className="mt-1 block truncate text-xs text-muted-foreground">
                           {usageText}
@@ -2665,6 +2680,7 @@ export default function AutomationsPage(): React.JSX.Element {
                       : (selectedWorktree?.displayName ?? 'Missing workspace')
                   }
                   hostLabelById={hostLabelById}
+                  agentProfiles={agentProfiles}
                   runNowAvailability={selectedRunNowAvailability}
                   now={relativeNow}
                   onRunNow={(automation) => void runNow(automation)}

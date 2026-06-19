@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent, TuiAgentProfile } from '../../../../shared/types'
 import {
   SOURCE_CONTROL_TEXT_ACTION_IDS,
   type SourceControlActionId
@@ -10,7 +10,12 @@ import {
   isCustomAgentId,
   listCommitMessageAgentCapabilities
 } from '../../../../shared/commit-message-agent-spec'
-import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import {
+  getAgentCatalog,
+  getAgentCatalogWithProfiles,
+  getAgentLabel,
+  type AgentCatalogEntry
+} from '@/lib/agent-catalog'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 
@@ -94,10 +99,11 @@ export function getSourceControlAgentArgsPlaceholder(
 // agent even if it is no longer a supported text generator.
 export function getAgentCatalogForAction(
   actionId: SourceControlActionId,
-  selectedAgent: TuiAgent | CustomAgentId | null | undefined
+  selectedAgent: TuiAgent | CustomAgentId | null | undefined,
+  agentProfiles?: readonly TuiAgentProfile[] | null
 ): AgentCatalogEntry[] {
   if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
-    return getAgentCatalog()
+    return getAgentCatalogWithProfiles(agentProfiles)
   }
   return getAgentCatalog().filter(
     (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
@@ -139,7 +145,7 @@ export function getSourceControlActionAgentWarningText(
     if (TEXT_GENERATION_AGENT_ID_SET.has(selectedAgent)) {
       return null
     }
-    const agentLabel = getAgentCatalog().find((agent) => agent.id === selectedAgent)?.label
+    const agentLabel = getAgentLabel(selectedAgent)
     return translate(
       'auto.components.settings.source.control.action.recipe.options.unsupportedSavedAgent',
       '{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below.',
