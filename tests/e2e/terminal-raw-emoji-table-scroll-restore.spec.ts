@@ -491,8 +491,12 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     writeFileSync(scriptPath, rawEmojiFixtureBoxTableScript(EMOJI_TABLE_FIXTURE, runId))
 
     try {
+      const completionMarker = rawEmojiFixtureCompletionMarker(runId)
       await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
-      await orcaPage.waitForTimeout(80)
+      // Why: Windows ConPTY can return the PowerShell prompt while xterm is
+      // still flushing synchronized output if the pane is hidden immediately.
+      // This golden is about restored table geometry, not shell-flush timing.
+      await waitForTerminalOutput(orcaPage, completionMarker, 10_000, 30_000)
       await switchToWorktree(orcaPage, secondWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await orcaPage.waitForTimeout(1_000)
@@ -506,9 +510,9 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
       await expect
         .poll(() => getTerminalContent(orcaPage, 30_000), {
           timeout: 30_000,
-          message: 'raw emoji table did not finish streaming after workspace switch'
+          message: 'raw emoji table marker did not survive workspace switch'
         })
-        .toContain(rawEmojiFixtureCompletionMarker(runId))
+        .toContain(completionMarker)
 
       await scrollActiveTerminalToText(orcaPage, 'Singer')
       await closeFeatureTips(orcaPage)
