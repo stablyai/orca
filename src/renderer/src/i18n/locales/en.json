@@ -4750,11 +4750,11 @@
           "agentHibernation": {
             "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
             "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
-            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
-            "idleMinutesLabel": "Hibernate after",
+            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can sleep it.",
+            "idleMinutesLabel": "Sleep after",
             "idleMinutesSuffix": "minutes",
-            "title": "Agent hibernation",
-            "toggleLabel": "Toggle agent hibernation"
+            "title": "Agent sleep",
+            "toggleLabel": "Toggle agent sleep"
           },
           "newWorktreeCardStyle": {
             "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
@@ -6850,11 +6850,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
-              "hibernate": "hibernate",
               "minutes": "minutes",
               "sleep": "sleep",
               "terminal": "terminal",
-              "title": "Agent hibernation"
+              "title": "Agent sleep"
             },
             "newWorktreeCardStyle": {
               "card": "card",

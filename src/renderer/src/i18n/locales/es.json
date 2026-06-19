@@ -4753,11 +4753,11 @@
           "agentHibernation": {
             "copy": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando las vuelves a abrir. Experimental mientras ajustamos el modelo de seguridad.",
             "description": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando las vuelves a abrir.",
-            "idleMinutesDescription": "Cuántos minutos inactivo debe esperar un agente en segundo plano completado antes de que Orca pueda hibernarlo.",
-            "idleMinutesLabel": "Hibernar después de",
+            "idleMinutesDescription": "Cuántos minutos inactivo debe esperar un agente en segundo plano completado antes de que Orca pueda suspenderlo.",
+            "idleMinutesLabel": "Suspender después de",
             "idleMinutesSuffix": "minutos",
-            "title": "Hibernación de agentes",
-            "toggleLabel": "Alternar hibernación de agentes"
+            "title": "Suspensión de agentes",
+            "toggleLabel": "Alternar suspensión de agentes"
           },
           "newWorktreeCardStyle": {
             "copy": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
@@ -6830,11 +6830,10 @@
               "agent": "agente",
               "agents": "agentes",
               "description": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando se vuelven a abrir.",
-              "hibernate": "hibernar",
               "minutes": "minutos",
               "sleep": "suspender",
               "terminal": "terminal",
-              "title": "Hibernación de agentes"
+              "title": "Suspensión de agentes"
             },
             "newWorktreeCardStyle": {
               "card": "tarjeta",

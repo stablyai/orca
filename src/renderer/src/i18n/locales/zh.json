@@ -4738,11 +4738,11 @@
           "agentHibernation": {
             "copy": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。我们仍在调校安全模型，此功能为实验性功能。",
             "description": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。",
-            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其休眠前需要等待的空闲分钟数。",
-            "idleMinutesLabel": "休眠等待时间",
+            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其睡眠前需要等待的空闲分钟数。",
+            "idleMinutesLabel": "睡眠等待时间",
             "idleMinutesSuffix": "分钟",
-            "title": "Agent 休眠",
-            "toggleLabel": "切换 agent 休眠"
+            "title": "Agent 睡眠",
+            "toggleLabel": "切换 agent 睡眠"
           },
           "newWorktreeCardStyle": {
             "copy": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
@@ -6815,11 +6815,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "在配置的空闲时间后停止后台 agent 终端，并在再次打开时恢复受支持的会话。",
-              "hibernate": "休眠",
               "minutes": "分钟",
               "sleep": "睡眠",
               "terminal": "终端",
-              "title": "Agent 休眠"
+              "title": "Agent 睡眠"
             },
             "newWorktreeCardStyle": {
               "card": "卡片",

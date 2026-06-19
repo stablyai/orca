@@ -2195,7 +2195,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       get().clearSleepingAgentSessionsByWorktree(worktreeId)
     }
 
-    // Why: only automatic completed-agent hibernation keeps passive completion
+    // Why: only automatic completed-agent sleep keeps passive completion
     // evidence; manual sleep/remove still fold the entire worktree surface.
     get().dropAgentStatusByWorktree(worktreeId, {
       shutdownReason,

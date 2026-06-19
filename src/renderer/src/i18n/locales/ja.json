@@ -4738,11 +4738,11 @@
           "agentHibernation": {
             "copy": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。安全モデルを調整中の実験的機能です。",
             "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。",
-            "idleMinutesDescription": "完了したバックグラウンド agent を Orca が休止状態にできるまで待つアイドル時間（分）。",
-            "idleMinutesLabel": "休止まで",
+            "idleMinutesDescription": "完了したバックグラウンド agent を Orca がスリープ状態にできるまで待つアイドル時間（分）。",
+            "idleMinutesLabel": "スリープまで",
             "idleMinutesSuffix": "分",
-            "title": "Agent の休止",
-            "toggleLabel": "Agent の休止を切り替え"
+            "title": "Agent のスリープ",
+            "toggleLabel": "Agent のスリープを切り替え"
           },
           "newWorktreeCardStyle": {
             "copy": "更新された worktree カードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
@@ -6852,11 +6852,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、再度開いたときに対応セッションを再開します。",
-              "hibernate": "休止",
               "minutes": "分",
               "sleep": "スリープ",
               "terminal": "terminal",
-              "title": "Agent の休止"
+              "title": "Agent のスリープ"
             },
             "newWorktreeCardStyle": {
               "card": "カード",

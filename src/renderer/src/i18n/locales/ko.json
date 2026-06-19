@@ -4738,11 +4738,11 @@
           "agentHibernation": {
             "copy": "설정된 유휴 시간이 지난 백그라운드 agent terminals을 중지하고, 다시 열 때 지원되는 세션을 재개합니다. 안전 모델을 조정하는 동안 제공되는 실험적 기능입니다.",
             "description": "설정된 유휴 시간이 지난 백그라운드 agent terminals을 중지하고, 다시 열 때 지원되는 세션을 재개합니다.",
-            "idleMinutesDescription": "완료된 백그라운드 agent를 Orca가 최대 절전 모드로 전환하기 전에 기다릴 유휴 시간(분)입니다.",
-            "idleMinutesLabel": "최대 절전까지",
+            "idleMinutesDescription": "완료된 백그라운드 agent를 Orca가 절전 모드로 전환하기 전에 기다릴 유휴 시간(분)입니다.",
+            "idleMinutesLabel": "절전까지",
             "idleMinutesSuffix": "분",
-            "title": "Agent 최대 절전",
-            "toggleLabel": "Agent 최대 절전 전환"
+            "title": "Agent 절전",
+            "toggleLabel": "Agent 절전 전환"
           },
           "newWorktreeCardStyle": {
             "copy": "업데이트된 worktree 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
@@ -6815,11 +6815,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "설정된 유휴 시간이 지난 백그라운드 agent terminals을 중지하고, 다시 열 때 지원되는 세션을 재개합니다.",
-              "hibernate": "최대 절전",
               "minutes": "분",
               "sleep": "절전",
               "terminal": "terminal",
-              "title": "Agent 최대 절전"
+              "title": "Agent 절전"
             },
             "newWorktreeCardStyle": {
               "card": "카드",
