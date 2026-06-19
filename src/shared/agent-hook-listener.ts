@@ -2069,6 +2069,13 @@ function normalizeDevinEvent(
   )
 }
 
+// Why: Kimi's AskUserQuestion tool is auto-allowed, so it emits PreToolUse
+// instead of PermissionRequest while blocked on a human answer. Treat it as a
+// waiting state so the UI shows the attention icon instead of the working spinner.
+function isKimiUserInputTool(toolName: string | undefined): boolean {
+  return toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase() === 'askuserquestion'
+}
+
 // Why: Kimi Code emits Claude-compatible hook payloads and reuses Claude's
 // lifecycle event names (UserPromptSubmit/PreToolUse/Stop/...). Normalize them
 // into Orca's shared status states while attributing the status to Kimi so the
@@ -2080,17 +2087,22 @@ function normalizeKimiEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  const stateName =
+  const toolName = readString(hookPayload, 'tool_name')
+  const isUserInputTool = isKimiUserInputTool(toolName)
+
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
     eventName === 'UserPromptSubmit' ||
-    eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure'
-      ? 'working'
-      : eventName === 'PermissionRequest'
-        ? 'waiting'
-        : eventName === 'Stop' || eventName === 'StopFailure'
-          ? 'done'
-          : null
+    eventName === 'PostToolUseFailure' ||
+    (eventName === 'PreToolUse' && !isUserInputTool)
+  ) {
+    stateName = 'working'
+  } else if (eventName === 'PermissionRequest' || (eventName === 'PreToolUse' && isUserInputTool)) {
+    stateName = 'waiting'
+  } else if (eventName === 'Stop' || eventName === 'StopFailure') {
+    stateName = 'done'
+  }
 
   if (!stateName) {
     return null

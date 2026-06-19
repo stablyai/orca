@@ -480,6 +480,55 @@ describe('shared agent-hook-listener', () => {
     expect(stopped?.providerSession).toMatchObject({ key: 'session_id', id: 'session_abc' })
   })
 
+  it('maps Kimi AskUserQuestion PreToolUse to waiting, then back to working on answer', () => {
+    const question = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          session_id: 'session_abc',
+          tool_name: 'AskUserQuestion',
+          tool_input: {
+            questions: [
+              {
+                question: 'Which region should I deploy to?',
+                options: [{ label: 'us-east', description: 'US East' }]
+              }
+            ]
+          }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'session_abc',
+          tool_name: 'AskUserQuestion',
+          tool_response: { selected: ['us-east'] }
+        }
+      },
+      'production'
+    )
+
+    expect(question?.payload).toMatchObject({
+      agentType: 'kimi',
+      state: 'waiting',
+      toolName: 'AskUserQuestion'
+    })
+    expect(answered?.payload).toMatchObject({
+      agentType: 'kimi',
+      state: 'working',
+      toolName: 'AskUserQuestion'
+    })
+  })
+
   it('rejects oversized paneKey', () => {
     const event = normalizeHookPayload(
       state,
