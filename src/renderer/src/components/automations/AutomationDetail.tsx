@@ -1,10 +1,23 @@
 import React from 'react'
-import { Pencil, Pause, Play, Trash2 } from 'lucide-react'
+import { FolderInput, Pencil, Pause, Play, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type {
+  Automation,
+  AutomationFolder,
+  AutomationRun
+} from '../../../../shared/automations-types'
+import { resolveAutomationFolderColor } from './automation-folder-colors'
 import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
 import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
@@ -26,10 +39,66 @@ type AutomationDetailProps = {
   hostLabelById?: ReadonlyMap<string, string>
   runNowAvailability: AutomationTargetAvailability | null
   now: number
+  folders: AutomationFolder[]
   onRunNow: (automation: Automation) => void
   onEdit: (automation: Automation) => void
   onToggle: (automation: Automation) => void
   onDelete: (automation: Automation) => void
+  onMoveToFolder: (automation: Automation, folderId: string | null) => void
+}
+
+function AutomationFolderChip({
+  automation,
+  folders,
+  onMoveToFolder
+}: {
+  automation: Automation
+  folders: AutomationFolder[]
+  onMoveToFolder: (automation: Automation, folderId: string | null) => void
+}): React.JSX.Element {
+  const currentFolder = folders.find((folder) => folder.id === automation.folderId) ?? null
+  const dotColor = currentFolder ? resolveAutomationFolderColor(currentFolder.color) : null
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Badge
+          asChild
+          variant="outline"
+          className="cursor-pointer gap-1.5 hover:bg-accent hover:text-accent-foreground"
+        >
+          <button type="button">
+            <span
+              className={cn('size-2 rounded-full', dotColor ? '' : 'bg-muted-foreground/40')}
+              style={dotColor ? { backgroundColor: dotColor } : undefined}
+              aria-hidden
+            />
+            {currentFolder
+              ? currentFolder.name
+              : translate('auto.components.automations.AutomationDetail.unfiled', 'Unfiled')}
+            <FolderInput className="size-3" />
+          </button>
+        </Badge>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-44">
+        <DropdownMenuItem
+          disabled={(automation.folderId ?? null) === null}
+          onSelect={() => onMoveToFolder(automation, null)}
+        >
+          {translate('auto.components.automations.AutomationDetail.unfiled', 'Unfiled')}
+        </DropdownMenuItem>
+        {folders.length > 0 ? <DropdownMenuSeparator /> : null}
+        {folders.map((folder) => (
+          <DropdownMenuItem
+            key={folder.id}
+            disabled={automation.folderId === folder.id}
+            onSelect={() => onMoveToFolder(automation, folder.id)}
+          >
+            <span className="truncate">{folder.name}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 function DetailMetric({
@@ -103,10 +172,12 @@ export function AutomationDetail({
   hostLabelById,
   runNowAvailability,
   now,
+  folders,
   onRunNow,
   onEdit,
   onToggle,
-  onDelete
+  onDelete,
+  onMoveToFolder
 }: AutomationDetailProps): React.JSX.Element {
   if (!automation) {
     return (
@@ -149,6 +220,13 @@ export function AutomationDetail({
           <p className="mt-1 truncate text-sm text-muted-foreground">
             {projectName} / {workspaceName}
           </p>
+          <div className="mt-2 flex items-center">
+            <AutomationFolderChip
+              automation={automation}
+              folders={folders}
+              onMoveToFolder={onMoveToFolder}
+            />
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <Tooltip>

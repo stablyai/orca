@@ -22,6 +22,7 @@ export const BOOLEAN_FLAGS = new Set([
   'attachments',
   'children',
   'comments',
+  'create-folder',
   'current',
   'dry-run',
   'enter',
@@ -47,6 +48,7 @@ export const BOOLEAN_FLAGS = new Set([
   'staged',
   'tasks',
   'text-stdin',
+  'unfile',
   'unread',
   'value-stdin',
   'wait'

@@ -10860,8 +10860,18 @@ describe('OrcaRuntimeService', () => {
       },
       tabGroups: {
         [TEST_WORKTREE_ID]: [
-          { id: 'group-left', worktreeId: TEST_WORKTREE_ID, activeTabId: 'host-tab', tabOrder: ['host-tab'] },
-          { id: 'group-right', worktreeId: TEST_WORKTREE_ID, activeTabId: 'host-tab-2', tabOrder: ['host-tab-2'] }
+          {
+            id: 'group-left',
+            worktreeId: TEST_WORKTREE_ID,
+            activeTabId: 'host-tab',
+            tabOrder: ['host-tab']
+          },
+          {
+            id: 'group-right',
+            worktreeId: TEST_WORKTREE_ID,
+            activeTabId: 'host-tab-2',
+            tabOrder: ['host-tab-2']
+          }
         ]
       },
       tabGroupLayouts: {

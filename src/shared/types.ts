@@ -1,7 +1,12 @@
 /* eslint-disable max-lines */
 import type { ExecutionHostId } from './execution-host'
 import type { SshRemotePtyLease, SshTarget } from './ssh-types'
-import type { Automation, AutomationExecutionTargetType, AutomationRun } from './automations-types'
+import type {
+  Automation,
+  AutomationExecutionTargetType,
+  AutomationFolder,
+  AutomationRun
+} from './automations-types'
 import type { WorkspaceSource } from './workspace-source'
 import type { GitHubProjectSettings } from './github-project-types'
 import type {
@@ -3334,6 +3339,7 @@ export type PersistedState = {
   migrationUnsupportedPtyEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]
+  automationFolders: AutomationFolder[]
   automationRuns: AutomationRun[]
   onboarding: OnboardingState
   /** Main-owned telemetry de-dupe marker; never exposed through PersistedUIState. */

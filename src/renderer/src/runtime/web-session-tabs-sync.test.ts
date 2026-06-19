@@ -150,7 +150,12 @@ describe('applyWebSessionTabsSnapshot', () => {
     }
     // Client closed host-tab-1; an in-flight pre-close snapshot still lists it.
     recordWebSessionCloseIntent(WT, 'host-tab-1', NOW)
-    const stalePreClose = applyWebSessionTabsSnapshot(makeState(), makeSnapshot([surface]), ENV, NOW)
+    const stalePreClose = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([surface]),
+      ENV,
+      NOW
+    )
     expect((stalePreClose.tabsByWorktree?.[WT] ?? []).map((tab) => tab.id)).not.toContain(
       toWebTerminalSurfaceTabId('host-tab-1')
     )
