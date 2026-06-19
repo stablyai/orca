@@ -1386,10 +1386,50 @@ function App(): React.JSX.Element {
     )
   }
 
+  const globalShortcutStateRef = useRef({
+    activeView,
+    activeWorktreeId,
+    actions,
+    floatingTerminalOpen,
+    floatingVisibleTabCount,
+    keybindings,
+    terminalShortcutPolicy: settings?.terminalShortcutPolicy,
+    setFloatingTerminalOpenWithFocus,
+    workspaceChromeActive,
+    creationLayoutActive
+  })
+  // Why: window key listeners are global and long-lived; keep one registration
+  // while letting the handler read current shortcut state on each key event.
+  globalShortcutStateRef.current = {
+    activeView,
+    activeWorktreeId,
+    actions,
+    floatingTerminalOpen,
+    floatingVisibleTabCount,
+    keybindings,
+    terminalShortcutPolicy: settings?.terminalShortcutPolicy,
+    setFloatingTerminalOpenWithFocus,
+    workspaceChromeActive,
+    creationLayoutActive
+  }
+
   useEffect(() => {
     const doubleTapDetector = new ModifierDoubleTapDetector()
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
+      const {
+        activeView,
+        activeWorktreeId,
+        actions,
+        floatingTerminalOpen,
+        floatingVisibleTabCount,
+        keybindings,
+        terminalShortcutPolicy,
+        setFloatingTerminalOpenWithFocus,
+        workspaceChromeActive,
+        creationLayoutActive
+      } = globalShortcutStateRef.current
+
       // Why: child-component handlers (e.g. terminal search Cmd+G / Cmd+Shift+G)
       // register on the same window capture phase and fire first. If they already
       // called preventDefault, this handler must not also act on the event —
@@ -1415,13 +1455,10 @@ function App(): React.JSX.Element {
       const matchShortcut = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, input, shortcutPlatform, keybindings, {
           context,
-          terminalShortcutPolicy: settings?.terminalShortcutPolicy
+          terminalShortcutPolicy
         })
       const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
-        if (
-          context !== 'terminal' ||
-          (settings?.terminalShortcutPolicy ?? 'orca-first') !== 'orca-first'
-        ) {
+        if (context !== 'terminal' || (terminalShortcutPolicy ?? 'orca-first') !== 'orca-first') {
           return
         }
         showTerminalShortcutCaptureNotification({
@@ -1525,7 +1562,7 @@ function App(): React.JSX.Element {
         if (
           isFloatingWorkspacePanelShortcut(input, shortcutPlatform, null, keybindings, {
             context,
-            terminalShortcutPolicy: settings?.terminalShortcutPolicy
+            terminalShortcutPolicy
           })
         ) {
           return
@@ -1727,18 +1764,7 @@ function App(): React.JSX.Element {
       window.removeEventListener('keyup', onKeyUp, { capture: true })
       window.removeEventListener('blur', onBlur)
     }
-  }, [
-    activeView,
-    activeWorktreeId,
-    actions,
-    floatingTerminalOpen,
-    floatingVisibleTabCount,
-    keybindings,
-    settings?.terminalShortcutPolicy,
-    setFloatingTerminalOpenWithFocus,
-    workspaceChromeActive,
-    creationLayoutActive
-  ])
+  }, [])
 
   useLayoutEffect(() => {
     const controls = titlebarLeftControlsRef.current
