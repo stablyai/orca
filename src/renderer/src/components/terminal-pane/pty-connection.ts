@@ -2786,6 +2786,9 @@ export function connectPanePty(
       restoreScrollStateAfterLayout(pane.terminal, state)
     }
 
+    /** Replay a daemon main-buffer snapshot into the pane during hidden-output
+     *  restore. Skips the destructive scrollback clear for alternate-screen
+     *  snapshots so the renderer keeps history it can't otherwise recover (#5723). */
     function applyMainBufferSnapshot(snapshot: {
       data: string
       cols: number

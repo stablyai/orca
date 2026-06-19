@@ -4136,6 +4136,9 @@ export class OrcaRuntimeService {
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
   }
 
+  /** Serialize a local PTY's headless main buffer for the desktop hidden-output
+   *  restore (pty:getMainBufferSnapshot), including empty snapshots so a blank
+   *  pane can still be reconciled. Reports `alternateScreen` for the restore guard. */
   serializeMainTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
@@ -4463,6 +4466,9 @@ export class OrcaRuntimeService {
     }
   }
 
+  /** Serialize the runtime's headless emulator for a PTY into replayable ANSI,
+   *  reporting `alternateScreen` so the desktop restore knows the snapshot
+   *  carries no normal-buffer scrollback and must not clear the renderer's. */
   private async serializeHeadlessTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}
