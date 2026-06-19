@@ -301,9 +301,6 @@ export function createMainWindow(
     // visibility transitions hardens Orca against black-surface failures during
     // browser-tab restore and tab switching.
     mainWindow.webContents.setBackgroundThrottling(false)
-    mainWindow.on('restore', () => {
-      forceRepaint(mainWindow)
-    })
     mainWindow.on('show', () => {
       forceRepaint(mainWindow)
     })
@@ -440,6 +437,16 @@ export function createMainWindow(
 
   mainWindow.on('leave-full-screen', () => {
     mainWindow.webContents.send('window:fullscreen-changed', false)
+  })
+
+  mainWindow.on('minimize', () => {
+    mainWindow.webContents.send('window:minimized-changed', true)
+  })
+  mainWindow.on('restore', () => {
+    mainWindow.webContents.send('window:minimized-changed', false)
+    if (process.platform === 'darwin') {
+      forceRepaint(mainWindow)
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

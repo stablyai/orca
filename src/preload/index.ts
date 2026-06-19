@@ -3244,6 +3244,12 @@ const api = {
       ipcRenderer.on('window:fullscreen-changed', listener)
       return () => ipcRenderer.removeListener('window:fullscreen-changed', listener)
     },
+    onMinimizedChanged: (callback: (isMinimized: boolean) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, isMinimized: boolean) =>
+        callback(isMinimized)
+      ipcRenderer.on('window:minimized-changed', listener)
+      return () => ipcRenderer.removeListener('window:minimized-changed', listener)
+    },
     /** Desktop custom titlebar only: minimize via renderer-drawn window controls. */
     minimize: (): void => {
       ipcRenderer.send('window:minimize')

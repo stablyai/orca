@@ -16,7 +16,9 @@ import {
 
 const mocks = vi.hoisted(() => ({
   cleanupCallbacks: [] as (() => void)[],
-  fitPanes: vi.fn()
+  fitPanes: vi.fn(),
+  minimizedChangedCallbacks: [] as ((isMinimized: boolean) => void)[],
+  unsubscribeMinimizedChanged: vi.fn()
 }))
 
 vi.mock('react', async (importOriginal) => {
@@ -69,8 +71,18 @@ describe('useTerminalContainerFitSync', () => {
     vi.stubGlobal('ResizeObserver', MockResizeObserver)
     ;(globalThis as { window?: unknown }).window = {
       addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
+      removeEventListener: vi.fn(),
+      api: {
+        ui: {
+          onMinimizedChanged: vi.fn((callback: (isMinimized: boolean) => void) => {
+            mocks.minimizedChangedCallbacks.push(callback)
+            return mocks.unsubscribeMinimizedChanged
+          })
+        }
+      }
     }
+    mocks.minimizedChangedCallbacks = []
+    mocks.unsubscribeMinimizedChanged.mockClear()
   })
 
   afterEach(() => {
@@ -209,6 +221,40 @@ describe('useTerminalContainerFitSync', () => {
     expect(event.detail).toEqual({ cols: 110, rows: 32 })
   })
 
+  it('holds resize work while the window is minimized and flushes after restore settles', () => {
+    const paneElement = createPaneElement()
+    const container = {
+      classList: { contains: () => false },
+      querySelectorAll: () => [paneElement]
+    } as unknown as HTMLDivElement
+
+    useTerminalContainerFitSync({
+      isVisible: true,
+      isSyncFitEnabled: true,
+      managerRef: { current: { fitAllPanes: vi.fn() } as never },
+      containerRef: { current: container }
+    })
+
+    mocks.minimizedChangedCallbacks[0]?.(true)
+    expect(isTerminalContainerResizeSettling()).toBe(true)
+    expect(queuePanePtyResizeIfHeld(paneElement, 120, 35)).toBe(true)
+
+    vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_MAX_SETTLE_MS * 2)
+
+    expect(mocks.fitPanes).not.toHaveBeenCalled()
+    expect(paneElement.dispatchEvent).not.toHaveBeenCalled()
+    expect(isTerminalContainerResizeSettling()).toBe(true)
+
+    mocks.minimizedChangedCallbacks[0]?.(false)
+    vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS)
+
+    expect(mocks.fitPanes).toHaveBeenCalledTimes(1)
+    expect(isTerminalContainerResizeSettling()).toBe(false)
+    expect(paneElement.dispatchEvent).toHaveBeenCalledTimes(1)
+    const event = vi.mocked(paneElement.dispatchEvent).mock.calls[0]?.[0] as CustomEvent
+    expect(event.detail).toEqual({ cols: 120, rows: 35 })
+  })
+
   it('cancels a held PTY resize when the observed container unmounts before settling', () => {
     const paneElement = createPaneElement()
     const container = {
@@ -234,5 +280,6 @@ describe('useTerminalContainerFitSync', () => {
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(paneElement.dispatchEvent).not.toHaveBeenCalled()
     expect(isTerminalContainerResizeSettling()).toBe(false)
+    expect(mocks.unsubscribeMinimizedChanged).toHaveBeenCalled()
   })
 })

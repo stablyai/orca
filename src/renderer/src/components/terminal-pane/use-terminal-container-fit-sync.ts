@@ -74,19 +74,26 @@ export function useTerminalContainerFitSync({
         maxSettleTimerId = null
       }
     }
-    function beginResizeSettle(): void {
-      if (releaseResizeSettle) {
+    function armMaxSettleTimer(): void {
+      if (maxSettleTimerId !== null) {
         return
       }
-      releaseResizeSettle = beginTerminalContainerResizeSettle()
-      ptyResizeHold = holdPtyResizesForPaneSubtrees([container])
-      // Why: resize observers can keep firing during a long drag or platform
-      // window animation. A hard cap keeps suppression from starving the final
-      // xterm fit if the quiet-period debounce never gets a turn.
       maxSettleTimerId = setTimeout(() => {
         maxSettleTimerId = null
         finishResizeSettle(true)
       }, TERMINAL_CONTAINER_RESIZE_MAX_SETTLE_MS)
+    }
+    function beginResizeSettle(armMaxTimer = true): void {
+      if (!releaseResizeSettle) {
+        releaseResizeSettle = beginTerminalContainerResizeSettle()
+        ptyResizeHold = holdPtyResizesForPaneSubtrees([container])
+      }
+      // Why: resize observers can keep firing during a long drag or platform
+      // window animation. A hard cap keeps suppression from starving the final
+      // xterm fit if the quiet-period debounce never gets a turn.
+      if (armMaxTimer) {
+        armMaxSettleTimer()
+      }
     }
     function releasePendingResizeSettle(flush: boolean): void {
       releaseResizeSettle?.()
@@ -122,16 +129,32 @@ export function useTerminalContainerFitSync({
       // the held final PTY grid still needs to reach the backend.
       releasePendingResizeSettle(flush)
     }
-    const resizeObserver = new ResizeObserver(() => {
+    function scheduleFinalResizeSettle(): void {
       beginResizeSettle()
       clearTimer()
       timerId = setTimeout(() => {
         timerId = null
         finishResizeSettle(true)
       }, TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS)
+    }
+    const unsubscribeMinimizedChanged = window.api.ui.onMinimizedChanged((isMinimized) => {
+      if (isMinimized) {
+        // Why: minimized windows can report hidden/intermediate geometry for a
+        // long time. Keep fits and PTY resizes held until restore provides a
+        // measurable final layout.
+        beginResizeSettle(false)
+        clearTimer()
+        clearMaxSettleTimer()
+        return
+      }
+      scheduleFinalResizeSettle()
+    })
+    const resizeObserver = new ResizeObserver(() => {
+      scheduleFinalResizeSettle()
     })
     resizeObserver.observe(container)
     return () => {
+      unsubscribeMinimizedChanged()
       resizeObserver.disconnect()
       clearTimer()
       finishResizeSettle(false)
