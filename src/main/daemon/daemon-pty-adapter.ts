@@ -303,6 +303,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
     this.coldRestoreCache.delete(id)
+    // Why: the !keepHistory close path doesn't take a final checkpoint, so a
+    // session stranded in sessionsNeedingFullCheckpoint would never be cleared.
+    this.sessionsNeedingFullCheckpoint.delete(id)
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
@@ -873,6 +876,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
         this.coldRestoreCache.delete(event.sessionId)
+        // Why: an exited session can never be checkpointed again, so its pending
+        // full-checkpoint flag is dead state. Without this, a cold-restored
+        // session that exits before its first checkpoint leaks a permanent entry.
+        this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
         this.stopCheckpointTimerIfIdle()
         if (this.historyManager) {
           void this.historyManager

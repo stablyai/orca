@@ -193,6 +193,24 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
+  describe('sessionsNeedingFullCheckpoint cleanup (leak regression)', () => {
+    // Why: the cold-restore path flags a session for a full checkpoint. If the
+    // session exits before that checkpoint lands, the flag was never cleared and
+    // leaked a permanent Set entry for the daemon's lifetime.
+    it('clears the pending full-checkpoint flag when a session exits', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const internals = adapter as unknown as { sessionsNeedingFullCheckpoint: Set<string> }
+      // Simulate the cold-restore reanchor path having flagged this session.
+      internals.sessionsNeedingFullCheckpoint.add(id)
+      expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(true)
+
+      lastSubprocess._simulateExit(0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(false)
+    })
+  })
+
   describe('sendSignal', () => {
     it('sends signal to the session', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
