@@ -1,19 +1,13 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   findKeybindingConflicts,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
   getKeybindingDefinition,
-  isKeybindingAllowedInTerminal,
-  isKeybindingPotentialTerminalConflict,
   keybindingFromInputForAction,
-  keybindingIsActiveInContext,
   normalizeKeybindingListForAction,
   type KeybindingActionId,
-  type KeybindingDefinition,
-  type KeybindingInput,
-  type KeybindingOverrides,
-  type TerminalShortcutPolicy
+  type KeybindingInput
 } from '../../../../shared/keybindings'
 import {
   EMPTY_DISABLED_TUI_AGENTS,
@@ -23,7 +17,13 @@ import {
 import { useAppStore } from '../../store'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
-import type { ShortcutTerminalStatus } from './ShortcutBindingRow'
+import { getShortcutTerminalStatus } from './shortcut-terminal-status'
+import {
+  hasCommonBindingOverride,
+  hasOwnBindingOverride,
+  removeBindingOverride,
+  sameBindings
+} from './keybinding-override-edits'
 import {
   getShortcutSearchEntry,
   matchesShortcutFilter,
@@ -37,6 +37,12 @@ import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
 import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { clearRecordingActionForShortcutMutation } from './shortcut-recording-state'
+import {
+  adjustRecordingIndexAfterRemove,
+  appendBinding,
+  removeBindingAt,
+  replaceBindingAt
+} from './shortcut-binding-list-mutations'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
@@ -46,83 +52,6 @@ const platform: NodeJS.Platform = isMac
   : navigator.userAgent.includes('Windows')
     ? 'win32'
     : 'linux'
-
-function sameBindings(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((binding, index) => binding === b[index])
-}
-
-function hasOwnBindingOverride(
-  overrides: KeybindingOverrides,
-  actionId: KeybindingActionId
-): boolean {
-  return Object.prototype.hasOwnProperty.call(overrides, actionId)
-}
-
-function removeBindingOverride(
-  overrides: KeybindingOverrides,
-  actionId: KeybindingActionId
-): KeybindingOverrides {
-  const next = { ...overrides }
-  delete next[actionId]
-  return next
-}
-
-function hasCommonBindingOverride(
-  snapshot: ReturnType<typeof useAppStore.getState>['keybindingSnapshot'],
-  actionId: KeybindingActionId
-): boolean {
-  return hasOwnBindingOverride(snapshot?.commonOverrides ?? {}, actionId)
-}
-
-function getShortcutTerminalStatus(
-  definition: KeybindingDefinition,
-  terminalShortcutPolicy: TerminalShortcutPolicy,
-  hasEffectiveBinding: boolean
-): ShortcutTerminalStatus | undefined {
-  if (!hasEffectiveBinding) {
-    return undefined
-  }
-  if (definition.scope === 'terminal') {
-    return {
-      label: translate('auto.components.settings.ShortcutsPane.cb02e00202', 'Terminal'),
-      description: translate(
-        'auto.components.settings.ShortcutsPane.781cb74d22',
-        'Runs from terminal panes.'
-      )
-    }
-  }
-  if (isKeybindingAllowedInTerminal(definition)) {
-    return {
-      label: translate('auto.components.settings.ShortcutsPane.25b0004fbf', 'Terminal active'),
-      description: translate(
-        'auto.components.settings.ShortcutsPane.3c0fac059a',
-        'Still runs while a terminal has keyboard focus.'
-      )
-    }
-  }
-  if (!isKeybindingPotentialTerminalConflict(definition)) {
-    return undefined
-  }
-  const activeInTerminal = keybindingIsActiveInContext(definition, {
-    context: 'terminal',
-    terminalShortcutPolicy
-  })
-  return activeInTerminal
-    ? {
-        label: translate('auto.components.settings.ShortcutsPane.2a0e8aeccf', 'Orca first'),
-        description: translate(
-          'auto.components.settings.ShortcutsPane.dfa8ff612f',
-          'Also runs while a terminal or TUI has keyboard focus.'
-        )
-      }
-    : {
-        label: translate('auto.components.settings.ShortcutsPane.5c65d5db9d', 'Terminal first'),
-        description: translate(
-          'auto.components.settings.ShortcutsPane.f0b35b0b2e',
-          'Disabled while a terminal or TUI has keyboard focus.'
-        )
-      }
-}
 
 export function ShortcutsPane(): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
@@ -141,8 +70,24 @@ export function ShortcutsPane(): React.JSX.Element {
   const mountedRef = useMountedRef()
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
+  // Which binding index of the recording action is being captured. Equals the
+  // effective length when capturing a brand-new (appended) binding.
+  const [recordingBindingIndex, setRecordingBindingIndex] = useState<number | null>(null)
+  // Bindings an action had right before it was disabled, so "Enable" can restore
+  // them in one click instead of forcing a reset-to-default.
+  const [disableMemory, setDisableMemory] = useState<Partial<Record<KeybindingActionId, string[]>>>(
+    {}
+  )
   const [shortcutQuery, setShortcutQuery] = useState('')
   const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
+
+  // Why: tell the main process to suspend global shortcut dispatch while any row
+  // is recording, so the captured chord lands in the editor instead of firing.
+  // One source of truth here avoids races between per-row recorder effects.
+  useEffect(() => {
+    window.api.ui.setShortcutRecorderFocused(recordingActionId !== null)
+    return () => window.api.ui.setShortcutRecorderFocused(false)
+  }, [recordingActionId])
 
   const groups = useMemo(() => groupDefinitions(disabledTuiAgents), [disabledTuiAgents])
   const ignoredConflictActionIds = useMemo(
@@ -283,11 +228,23 @@ export function ShortcutsPane(): React.JSX.Element {
       return
     }
 
-    // Why: the visual editor records one chord at a time; users can still
-    // manage multi-binding arrays directly in keybindings.json.
-    if ((await saveBindings(actionId, [captured.value])) && mountedRef.current) {
+    // Edit just the targeted binding (or append a new one) instead of replacing
+    // the whole list, so an action's other bindings survive the capture.
+    const current = getEffectiveKeybindingsForAction(actionId, platform, keybindings)
+    const next =
+      recordingBindingIndex === null || recordingBindingIndex >= current.length
+        ? appendBinding(current, captured.value)
+        : replaceBindingAt(current, recordingBindingIndex, captured.value)
+    if ((await saveBindings(actionId, next)) && mountedRef.current) {
       setRecordingActionId(null)
+      setRecordingBindingIndex(null)
     }
+  }
+
+  const removeBinding = async (actionId: KeybindingActionId, index: number): Promise<void> => {
+    setErrors((prev) => ({ ...prev, [actionId]: undefined }))
+    const current = getEffectiveKeybindingsForAction(actionId, platform, keybindings)
+    await saveBindings(actionId, removeBindingAt(current, index))
   }
 
   const resetBinding = async (actionId: KeybindingActionId): Promise<void> => {
@@ -327,6 +284,9 @@ export function ShortcutsPane(): React.JSX.Element {
   const clearRecordingForAction = (actionId: KeybindingActionId): void => {
     // Why: disable/reset are final shortcut edits; the next keypress must not
     // be captured into the shortcut the user just removed or restored.
+    if (recordingActionId === actionId) {
+      setRecordingBindingIndex(null)
+    }
     setRecordingActionId((current) => clearRecordingActionForShortcutMutation(current, actionId))
   }
 
@@ -396,25 +356,61 @@ export function ShortcutsPane(): React.JSX.Element {
           />
 
           <ShortcutRowsList
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1 scrollbar-sleek"
+            // overflow-x-hidden is explicit: overflow-y-auto alone makes the
+            // browser compute overflow-x to auto, which produced the phantom
+            // horizontal scroll when long edit-time content popped in.
+            className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto pr-1 scrollbar-sleek"
             groups={visibleShortcutGroups}
             platform={platform}
             errors={errors}
+            disableMemory={disableMemory}
             recordingActionId={recordingActionId}
-            onStartRecording={(actionId) => {
+            recordingBindingIndex={recordingBindingIndex}
+            onStartRecordingAt={(actionId, index) => {
               setRecordingActionId(actionId)
+              setRecordingBindingIndex(index)
               clearError(actionId)
             }}
-            onCancelRecording={() => setRecordingActionId(null)}
+            onAppendBinding={(actionId) => {
+              const current = getEffectiveKeybindingsForAction(actionId, platform, keybindings)
+              setRecordingActionId(actionId)
+              setRecordingBindingIndex(current.length)
+              clearError(actionId)
+            }}
+            onCancelRecording={() => {
+              setRecordingActionId(null)
+              setRecordingBindingIndex(null)
+            }}
             onCapture={(actionId, input) => void captureBinding(actionId, input)}
             onClearError={clearError}
-            onDisable={(actionId) => {
+            onRemoveBindingAt={(actionId, index) => {
+              // Keep a pending capture aimed at the right row after the removal
+              // shifts indices (or clear it if the recorded row itself is gone).
+              if (recordingActionId === actionId) {
+                const nextIndex = adjustRecordingIndexAfterRemove(recordingBindingIndex, index)
+                setRecordingBindingIndex(nextIndex)
+                if (nextIndex === null) {
+                  setRecordingActionId(null)
+                }
+              }
+              void removeBinding(actionId, index)
+            }}
+            onResetAction={(actionId) => {
+              clearRecordingForAction(actionId)
+              void resetBinding(actionId)
+            }}
+            onDisableAction={(actionId) => {
+              // Remember the current bindings first so "Enable" can restore them.
+              const current = getEffectiveKeybindingsForAction(actionId, platform, keybindings)
+              setDisableMemory((memory) => ({ ...memory, [actionId]: current }))
               clearRecordingForAction(actionId)
               void disableBinding(actionId)
             }}
-            onReset={(actionId) => {
-              clearRecordingForAction(actionId)
-              void resetBinding(actionId)
+            onEnableAction={(actionId) => {
+              const remembered = disableMemory[actionId]
+              if (remembered && remembered.length > 0) {
+                void saveBindings(actionId, remembered)
+              }
             }}
           />
         </div>

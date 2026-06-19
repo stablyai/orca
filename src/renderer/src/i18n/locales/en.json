@@ -4391,10 +4391,10 @@
           "5f5142a62a": "Previous icon"
         },
         "AppearancePane": {
+          "3057983501": "Unassigned",
           "872af9556e": "System Tray",
           "2edf606c46": "Minimize to Tray on Close",
           "b707773a0d": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",
-          "3057983501": "Unassigned",
           "0cd9b8228f": "Choose the app icon shown in the Dock and window switcher.",
           "ca1590d42f": "App Icon",
           "61d842eca0": "Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.",
@@ -5827,19 +5827,6 @@
           "82db1b7de4": "Onboarding checklist, {{value0}} of {{value1}} done. Show setup guide.",
           "df38d612b7": "No projects added yet.",
           "3e483e256b": "No matching project settings."
-        },
-        "ShortcutBindingRow": {
-          "4a4c2c9d32": "Add shortcut",
-          "87381fd8f8": "Press keys…",
-          "9cdaaa3d8f": "Disable shortcut",
-          "3b62c142fa": "Disable {{value0}}",
-          "f75335b155": "Reset to default",
-          "4f2c9b2a05": "Reset {{value0}} to default",
-          "97dccee14e": "Modified",
-          "3b11ef3a43": "{{value0}} shortcut",
-          "f6579be67b": "Change shortcut",
-          "6a7848fdac": "Listening for shortcut",
-          "a98d551407": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels."
         },
         "ShortcutFilterRail": {
           "28b63545bf": "Status",
@@ -8113,6 +8100,36 @@
           "d37e92a06b": "ORCA_DIAGNOSTICS_DISABLED=1 is set — app diagnostics are off.",
           "5ebb31e1fb": "Running in CI — diagnostics are off.",
           "e27c8d45bf": "Diagnostics are disabled by an environment variable."
+        },
+        "ShortcutCommandBlock": {
+          "eb72c52c28": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.",
+          "70b5d25583": "{{value0}} shortcut",
+          "287e07ddde": "Modified",
+          "3c83cd7d1c": "Disabled",
+          "07939d084e": "Reset {{value0}} to default",
+          "9b02917027": "Reset to default",
+          "a799f90f82": "Disable {{value0}}",
+          "25e6e76618": "Disable shortcut",
+          "035a822ef0": "Add shortcut",
+          "a0e2ef0e61": "Add another shortcut for {{value0}}",
+          "245c83af24": "Add another shortcut",
+          "482a60225d": "Enable {{value0}}",
+          "6287677c37": "Enable",
+          "01481b964c": "Add shortcut for {{value0}}"
+        },
+        "ShortcutRecorderButton": {
+          "1a13bb054d": "Press shortcut keys for {{value0}}. Escape cancels.",
+          "3732775d74": "Add shortcut for {{value0}}",
+          "88764af2c1": "Change shortcut for {{value0}}",
+          "30feb099d6": "Change shortcut {{value0}} of {{value1}} for {{value2}}",
+          "5d982a2a1f": "Listening for shortcut",
+          "152e0bcd64": "Add shortcut",
+          "5bd56445da": "Change shortcut",
+          "f5ed5dcbf6": "Press keys…"
+        },
+        "ShortcutRemoveButton": {
+          "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
+          "2a9588b1c2": "Remove this binding"
         }
       },
       "right": {

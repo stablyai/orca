@@ -4,7 +4,7 @@ import { formatKeybindingList, type KeybindingDefinition } from '../../../../sha
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-import type { ShortcutTerminalStatus } from './ShortcutBindingRow'
+import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 
