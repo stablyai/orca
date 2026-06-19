@@ -2110,6 +2110,19 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
       get().removeWorkspaceSpaceWorktrees?.([worktreeId])
+      // Why: PR/commit-message generation records are keyed by worktree and were
+      // never evicted on removal — they leaked one record (title/body text) per
+      // worktree for the session. Prune to the surviving worktree set, reusing
+      // the generation slices' tested prune actions.
+      const liveWorktreeKeys = new Set(
+        get()
+          .allWorktrees()
+          .map((w) => w.id)
+      )
+      // Optional-chained like removeWorkspaceSpaceWorktrees above: minimal store
+      // assemblies (some unit tests) omit the generation slices.
+      get().prunePullRequestGenerationRecords?.(liveWorktreeKeys)
+      get().pruneCommitMessageGenerationRecords?.(liveWorktreeKeys)
       const preservedBranch = removalResult?.preservedBranch
       if (preservedBranch) {
         showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
