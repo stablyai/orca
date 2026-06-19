@@ -285,4 +285,72 @@ describe('tui agent startup plans', () => {
   it('appends Devin default permission-mode bypass before stdin prompt delivery', () => {
     expect(resolveTuiAgentLaunchArgs('devin', null)).toBe('--permission-mode bypass')
   })
+
+  it('uses printf command substitution for multiline prompts on POSIX shells', () => {
+    // Why: POSIX shells allow literal newlines inside single-quoted args, but
+    // that triggers a continuation prompt in the terminal. printf keeps the
+    // typed command on one physical line while still passing real newlines.
+    const plan = buildAgentStartupPlan({
+      agent: 'droid',
+      prompt: 'File: docs/plan.md\nLine: 19\nUser comment: "what do you think about it?"',
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+    expect(plan).toEqual({
+      agent: 'droid',
+      launchCommand:
+        "droid \"$(printf '%s\\n' 'File: docs/plan.md' 'Line: 19' 'User comment: \"what do you think about it?\"')\"",
+      expectedProcess: 'droid',
+      followupPrompt: null
+    })
+  })
+
+  it('uses simple POSIX quoting for single-line prompts', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'droid',
+      prompt: 'fix the bug',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+    expect(plan?.launchCommand).toBe("droid 'fix the bug'")
+  })
+
+  it('collapses embedded newlines on Windows shells to keep the command on one line', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'droid',
+      prompt: 'File: docs/plan.md\nLine: 19\nUser comment: "what do you think about it?"',
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+    expect(plan).toEqual({
+      agent: 'droid',
+      launchCommand:
+        'droid \'File: docs/plan.md Line: 19 User comment: "what do you think about it?"\'',
+      expectedProcess: 'droid',
+      followupPrompt: null
+    })
+  })
+
+  it('normalizes CRLF to LF in prompts on POSIX shells', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'droid',
+      prompt: 'step one\r\nstep two',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+    // CRLF becomes LF, which triggers the printf path
+    expect(plan?.launchCommand).toBe("droid \"$(printf '%s\\n' 'step one' 'step two')\"")
+  })
+
+  it('uses printf command substitution for argv agents with multiline code prompts', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: 'Review this function:\n\n```ts\nconst x = 1\n```',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+    expect(plan?.launchCommand).toBe(
+      "codex \"$(printf '%s\\n' 'Review this function:' '' '```ts' 'const x = 1' '```')\""
+    )
+  })
 })

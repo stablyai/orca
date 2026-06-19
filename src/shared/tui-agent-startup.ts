@@ -33,7 +33,18 @@ export function quoteStartupArg(value: string, shell: AgentStartupShell): string
   if (shell === 'cmd') {
     return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
   }
-  return `'${value.replace(/'/g, `'\\''`)}'`
+  // Why: POSIX shells allow literal newlines inside a single-quoted argument,
+  // but that makes the terminal show a `quote>` (or `>`) continuation prompt
+  // while the user is reading the line. Keep the typed command on one physical
+  // line by using printf command substitution for multiline values, while still
+  // passing the exact value (including real newlines) as a single argv
+  // argument when the shell executes the command.
+  if (!value.includes('\n')) {
+    return `'${value.replace(/'/g, `'\\''`)}'`
+  }
+  const lines = value.split('\n')
+  const quotedLines = lines.map((line) => `'${line.replace(/'/g, `'\\''`)}'`)
+  return `"$(printf '%s\\n' ${quotedLines.join(' ')})"`
 }
 
 export function buildShellCommandFromArgv(
@@ -110,7 +121,15 @@ export function buildAgentStartupPlan(args: {
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
-  const trimmedPrompt = prompt.trim()
+  // Why: the prompt is embedded in a shell command written to the PTY after
+  // the shell is ready. Windows shells (PowerShell, cmd) parse embedded
+  // newlines unreliably, so collapse CR/LF to spaces to stay on one physical
+  // line. On POSIX we normalize CRLF/CR to LF so line endings are stable and
+  // do not surprise the shell.
+  const trimmedPrompt =
+    shell === 'powershell' || shell === 'cmd'
+      ? prompt.trim().replace(/[\r\n]+/g, ' ')
+      : prompt.trim().replace(/\r\n?/g, '\n')
   const config = TUI_AGENT_CONFIG[agent]
   const baseCommand = resolveBaseCommand({
     agent,
