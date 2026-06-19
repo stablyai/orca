@@ -118,7 +118,9 @@ export function useTerminalContainerFitSync({
         }
         return
       }
-      releasePendingResizeSettle(false)
+      // Why: a transiently unavailable manager should only skip the local fit;
+      // the held final PTY grid still needs to reach the backend.
+      releasePendingResizeSettle(flush)
     }
     const resizeObserver = new ResizeObserver(() => {
       beginResizeSettle()

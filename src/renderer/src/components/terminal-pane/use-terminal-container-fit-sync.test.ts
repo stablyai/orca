@@ -118,6 +118,33 @@ describe('useTerminalContainerFitSync', () => {
     expect(event.detail).toEqual({ cols: 100, rows: 30 })
   })
 
+  it('flushes the held PTY resize when the manager is unavailable at settle time', () => {
+    const paneElement = createPaneElement()
+    const container = {
+      classList: { contains: () => false },
+      querySelectorAll: () => [paneElement]
+    } as unknown as HTMLDivElement
+
+    useTerminalContainerFitSync({
+      isVisible: true,
+      isSyncFitEnabled: true,
+      managerRef: { current: null },
+      containerRef: { current: container }
+    })
+
+    mockResizeObservers[0]?.trigger()
+    expect(queuePanePtyResizeIfHeld(paneElement, 101, 31)).toBe(true)
+
+    vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS)
+
+    expect(mocks.fitPanes).not.toHaveBeenCalled()
+    expect(isTerminalContainerResizeSettling()).toBe(false)
+    expect(paneElement.dispatchEvent).toHaveBeenCalledTimes(1)
+    const event = vi.mocked(paneElement.dispatchEvent).mock.calls[0]?.[0] as CustomEvent
+    expect(event.type).toBe(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT)
+    expect(event.detail).toEqual({ cols: 101, rows: 31 })
+  })
+
   it('resets the quiet-period debounce when resize observations continue', () => {
     const paneElement = createPaneElement()
     const container = {
