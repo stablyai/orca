@@ -152,6 +152,44 @@ describe('terminal paste runtime', () => {
     })
   })
 
+  it('classifies quoted WSL shell overrides that include arguments', () => {
+    expect(
+      resolveTerminalPasteRuntime({
+        platform: 'win32',
+        ptyId: 'pty-1',
+        connectionId: null,
+        transport: {
+          getConnectionId: () => null,
+          getLocalSessionMetadata: () => ({
+            shellOverride: '  "C:\\Windows\\System32\\wsl.exe" -d Ubuntu-24.04'
+          })
+        }
+      })
+    ).toMatchObject({
+      runtimeKey: 'wsl:default',
+      kind: 'wsl'
+    })
+  })
+
+  it('does not classify non-WSL shell overrides that merely contain wsl in arguments', () => {
+    expect(
+      resolveTerminalPasteRuntime({
+        platform: 'win32',
+        ptyId: 'pty-1',
+        connectionId: null,
+        transport: {
+          getConnectionId: () => null,
+          getLocalSessionMetadata: () => ({
+            shellOverride: 'powershell.exe -NoProfile wsl.exe'
+          })
+        }
+      })
+    ).toMatchObject({
+      runtimeKey: 'local:win32',
+      kind: 'local'
+    })
+  })
+
   it('keeps SSH runtime precedence over local WSL metadata', () => {
     expect(
       resolveTerminalPasteRuntime({

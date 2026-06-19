@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import * as path from 'path'
 import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
 
@@ -15,7 +16,7 @@ function worktreeList(...entries: { path: string; branch?: string }[]): string {
 }
 
 function resolvedRepoPath(): string {
-  return '/repo'
+  return path.posix.resolve('/repo-feature', '/repo/.git', '..')
 }
 
 describe('removeWorktreeOp branch cleanup', () => {

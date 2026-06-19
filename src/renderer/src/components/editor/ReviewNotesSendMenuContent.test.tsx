@@ -83,7 +83,8 @@ vi.mock('zustand/react/shallow', () => ({
 
 vi.mock('@/lib/active-agent-note-send', () => ({
   activeAgentNotesSendFailureMessage: (status: string) => status,
-  sendNotesToActiveAgentSession: harness.sendNotesToActiveAgentSession
+  sendNotesToActiveAgentSession: harness.sendNotesToActiveAgentSession,
+  useCanSendNotesToActiveTerminal: () => true
 }))
 
 vi.mock('@/lib/notes-send-agent-targets', () => ({

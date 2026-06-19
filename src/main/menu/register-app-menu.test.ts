@@ -179,22 +179,17 @@ describe('registerAppMenu', () => {
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
-  it('routes Edit > Paste through renderer ownership without a native paste role', () => {
+  it('keeps Edit > Paste on the native Electron paste role in this split', () => {
     const send = vi.fn()
     getFocusedWindowMock.mockReturnValue({ webContents: { send } })
     registerAppMenu(buildMenuOptions())
 
     const editSubmenu = getSubmenu(getTemplate(), 'Edit')
-    const pasteLabel = `Paste\t${isMac ? '⌘V' : 'Ctrl+V'}`
-    const pasteItem = editSubmenu.find((item) => item.label === pasteLabel)
+    const pasteItem = editSubmenu.find((item) => item.role === 'paste')
 
     expect(pasteItem).toBeDefined()
-    expect(pasteItem?.role).toBeUndefined()
-    expect(pasteItem?.accelerator).toBeUndefined()
-
-    pasteItem?.click?.({} as never, {} as never, {} as never)
-
-    expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
+    expect(pasteItem?.click).toBeUndefined()
+    expect(send).not.toHaveBeenCalled()
   })
 
   it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {

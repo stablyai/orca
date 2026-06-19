@@ -18,7 +18,7 @@ export function reportTerminalDropUploadSkipsAndFailures(
             { value0: skipped.length, value1: skipped.length === 1 ? '' : 's' }
           )
         : translate(
-            'auto.components.terminal.pane.terminal.drop.handler.53f015fd85',
+            'auto.components.terminal.pane.terminal.drop.handler.b4cf68e889',
             'Skipped {{value0}} {{value1}}.',
             { value0: skipped.length, value1: noun }
           )

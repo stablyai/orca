@@ -2,7 +2,7 @@
 one focused file because the registration helper is stateful and each spawn-path
 assertion reuses the same mocked IPC and node-pty harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { delimiter, join } from 'node:path'
+import { delimiter, join, posix } from 'node:path'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES
@@ -11,7 +11,11 @@ import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
-const expectedOmpStatusExtension = '/tmp/default-omp-agent/extensions/orca-agent-status.ts'
+const expectedOmpStatusExtension = posix.join(
+  '/tmp/default-omp-agent',
+  'extensions',
+  'orca-agent-status.ts'
+)
 const expectedAttributionShimDir = join(
   '/tmp/orca-user-data',
   'orca-terminal-attribution',

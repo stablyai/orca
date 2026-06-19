@@ -46,7 +46,7 @@ describe('OSC title extraction', () => {
     const extracted = extractLastOscTitle(data)
 
     expect(extracted).toHaveLength(MAX_OSC_TITLE_CHARS)
-    expect(extracted?.startsWith('a')).toBe(true)
+    expect(extracted?.startsWith('a'.repeat(MAX_OSC_TITLE_CHARS / 2))).toBe(true)
     expect(extracted?.endsWith('b'.repeat(MAX_OSC_TITLE_CHARS / 2))).toBe(true)
     expect(extractAllOscTitles(data)).toEqual([extracted])
   })

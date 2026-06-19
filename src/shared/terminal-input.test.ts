@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR,
   assertTerminalInputWithinLimit,
   getTerminalInputByteLength,
@@ -26,6 +27,12 @@ describe('terminal input bounds', () => {
 
     expect(chunks).toEqual(['ab', '😀', 'cd'])
     expect(chunks.join('')).toBe('ab😀cd')
+  })
+
+  it('uses 16KB as the default terminal input chunk budget', () => {
+    const chunks = splitTerminalInputChunks('x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1))
+
+    expect(chunks).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'x'])
   })
 
   it('iterates chunks lazily without prebuilding every terminal input chunk', () => {

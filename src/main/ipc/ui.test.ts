@@ -21,7 +21,11 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
+import {
+  clearTrustedUIRendererWebContentsId,
+  registerUIHandlers,
+  setTrustedUIRendererWebContentsId
+} from './ui'
 
 function makeStore() {
   return {
@@ -73,6 +77,7 @@ describe('registerUIHandlers', () => {
     const pasteAndMatchStyle = vi.fn()
     const event = makeUIEvent()
     const sender = event.sender
+    setTrustedUIRendererWebContentsId(17)
     fromWebContentsMock.mockReturnValue({ webContents: { paste, pasteAndMatchStyle } })
 
     registerUIHandlers(makeStore() as never)
@@ -117,6 +122,44 @@ describe('registerUIHandlers', () => {
     expect(fromWebContentsMock).not.toHaveBeenCalled()
     expect(paste).not.toHaveBeenCalled()
     expect(pasteAndMatchStyle).not.toHaveBeenCalled()
+  })
+
+  it('rejects packaged file-url senders until the main window id is registered', () => {
+    const paste = vi.fn()
+    const pasteAndMatchStyle = vi.fn()
+    const event = makeUIEvent()
+    fromWebContentsMock.mockReturnValue({ webContents: { paste, pasteAndMatchStyle } })
+
+    registerUIHandlers(makeStore() as never)
+
+    getNativePasteHandler()?.(event)
+
+    expect(fromWebContentsMock).not.toHaveBeenCalled()
+    expect(paste).not.toHaveBeenCalled()
+    expect(pasteAndMatchStyle).not.toHaveBeenCalled()
+  })
+
+  it('clears the trusted renderer id without clearing a newer window id', () => {
+    const paste = vi.fn()
+    const pasteAndMatchStyle = vi.fn()
+    setTrustedUIRendererWebContentsId(17)
+    clearTrustedUIRendererWebContentsId(42)
+    fromWebContentsMock.mockReturnValue({ webContents: { paste, pasteAndMatchStyle } })
+
+    registerUIHandlers(makeStore() as never)
+
+    getNativePasteHandler()?.(makeUIEvent())
+
+    expect(paste).toHaveBeenCalledTimes(1)
+
+    clearTrustedUIRendererWebContentsId(17)
+    fromWebContentsMock.mockClear()
+    paste.mockClear()
+
+    getNativePasteHandler()?.(makeUIEvent())
+
+    expect(fromWebContentsMock).not.toHaveBeenCalled()
+    expect(paste).not.toHaveBeenCalled()
   })
 
   it('allows native paste fallback only from the configured dev renderer origin', () => {

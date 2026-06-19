@@ -2378,6 +2378,7 @@
                 "ce8248b835": "Ruta del árbol de trabajo no disponible.",
                 "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
                 "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "b4cf68e889": "Skipped {{value0}} {{value1}}.",
                 "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
                 "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
