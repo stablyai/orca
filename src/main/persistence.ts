@@ -2471,6 +2471,31 @@ export class Store {
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
         const defaults = getDefaultPersistedState(homeDir)
+        const rawSettings =
+          parsed.settings && typeof parsed.settings === 'object' && !Array.isArray(parsed.settings)
+            ? (parsed.settings as Partial<GlobalSettings>)
+            : undefined
+        const hasPersistedSourceControlViewMode =
+          rawSettings !== undefined &&
+          Object.prototype.hasOwnProperty.call(rawSettings, 'sourceControlViewMode')
+        const hasPersistedSourceControlViewModeEducationDismissed =
+          rawSettings !== undefined &&
+          Object.prototype.hasOwnProperty.call(
+            rawSettings,
+            'sourceControlViewModeEducationDismissed'
+          )
+        // Why: tree is the new-profile default, but old profiles that never
+        // chose a layout were already living with the former implicit list mode.
+        const rawSourceControlViewMode = parsed.settings?.sourceControlViewMode
+        const migratedSourceControlViewMode =
+          hasPersistedSourceControlViewMode &&
+          (rawSourceControlViewMode === 'tree' || rawSourceControlViewMode === 'list')
+            ? rawSourceControlViewMode
+            : 'list'
+        const migratedSourceControlViewModeEducationDismissed =
+          hasPersistedSourceControlViewModeEducationDismissed
+            ? parsed.settings?.sourceControlViewModeEducationDismissed === true
+            : rawSourceControlViewMode === 'tree'
         const rawSourceControlAi = parsed.settings?.sourceControlAi
         const rawSourceControlAiMissing = rawSourceControlAi === undefined
         const rawSourceControlAiActionsMissing =
@@ -2731,6 +2756,9 @@ export class Store {
               seedDefaults: true
             }),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
+            sourceControlViewMode: migratedSourceControlViewMode,
+            sourceControlViewModeEducationDismissed:
+              migratedSourceControlViewModeEducationDismissed,
             sourceControlAi: migratedSourceControlAi,
             // Why: new builds read sourceControlAi, but rollback builds still
             // write commitMessageAi; after merging those writes, refresh the

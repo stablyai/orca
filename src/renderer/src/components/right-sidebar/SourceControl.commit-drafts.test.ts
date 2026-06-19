@@ -131,10 +131,10 @@ describe('SourceControl remote action refresh', () => {
 })
 
 describe('SourceControl view mode preference', () => {
-  it('normalizes missing and unknown persisted values to list', () => {
-    expect(normalizeSourceControlViewMode(undefined)).toBe('list')
-    expect(normalizeSourceControlViewMode(null)).toBe('list')
-    expect(normalizeSourceControlViewMode('grid')).toBe('list')
+  it('normalizes missing and unknown persisted values to the resolved default', () => {
+    expect(normalizeSourceControlViewMode(undefined)).toBe('tree')
+    expect(normalizeSourceControlViewMode(null)).toBe('tree')
+    expect(normalizeSourceControlViewMode('grid')).toBe('tree')
   })
 
   it('preserves valid persisted view modes', () => {

@@ -8613,7 +8613,15 @@
             "b715ef615b": "{{value0}} commits ahead of {{value1}}",
             "c1a8f3e204": "1 commit behind {{value0}}",
             "d2b9g4f315": "{{value0}} commits behind {{value1}}",
-            "e9c2a5d416": "Even with {{value0}}"
+            "e9c2a5d416": "Even with {{value0}}",
+            "d4e8a6f312": "Use folders for structure or one flat list for scanning. Change this later from More actions.",
+            "e7a9f63a12": "Tree",
+            "f3b91c50a4": "List",
+            "ccd4a812af": "Dismiss view options",
+            "7b26e5a8c1": "View options",
+            "96fd0e13a7": "Choose how Source Control groups files",
+            "19d52c8a04": "Use tree view",
+            "0f2a91c7b5": "Use list view"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

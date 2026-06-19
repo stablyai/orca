@@ -17,8 +17,12 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').showGitIgnoredFiles).toBe(true)
   })
 
-  it('uses list view for Source Control changes by default', () => {
-    expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
+  it('uses tree view for Source Control changes by default', () => {
+    expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('tree')
+  })
+
+  it('shows Source Control view education by default', () => {
+    expect(getDefaultSettings('/tmp').sourceControlViewModeEducationDismissed).toBe(false)
   })
 
   it('keeps first-work branch auto-renaming on by default for new settings', () => {

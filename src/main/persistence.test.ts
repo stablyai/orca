@@ -1695,6 +1695,7 @@ describe('Store', () => {
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     expect(store.getSettings().sourceControlViewMode).toBe('list')
+    expect(store.getSettings().sourceControlViewModeEducationDismissed).toBe(false)
     expect(store.getSettings().showGitIgnoredFiles).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().showAutomationsButton).toBe(true)
@@ -3959,10 +3960,44 @@ describe('Store', () => {
 
   it('updateSettings persists sourceControlViewMode as a user setting', async () => {
     const store = await createStore()
-    expect(store.getSettings().sourceControlViewMode).toBe('list')
-
-    store.updateSettings({ sourceControlViewMode: 'tree' })
     expect(store.getSettings().sourceControlViewMode).toBe('tree')
+
+    store.updateSettings({
+      sourceControlViewMode: 'list',
+      sourceControlViewModeEducationDismissed: true
+    })
+    expect(store.getSettings().sourceControlViewMode).toBe('list')
+    expect(store.getSettings().sourceControlViewModeEducationDismissed).toBe(true)
+  })
+
+  it('keeps existing persisted profiles without sourceControlViewMode on list', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { theme: 'dark' },
+      githubCache: { pr: {}, issue: {} }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().sourceControlViewMode).toBe('list')
+    expect(store.getSettings().sourceControlViewModeEducationDismissed).toBe(false)
+  })
+
+  it('auto-dismisses source-control view education for historical explicit tree users', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { theme: 'dark', sourceControlViewMode: 'tree' },
+      githubCache: { pr: {}, issue: {} }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().sourceControlViewMode).toBe('tree')
+    expect(store.getSettings().sourceControlViewModeEducationDismissed).toBe(true)
   })
 
   it('updateSettings normalizes terminal shortcut policy', async () => {
