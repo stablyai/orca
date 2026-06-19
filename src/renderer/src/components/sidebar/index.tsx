@@ -153,6 +153,7 @@ function Sidebar({
             {/* Fixed bottom toolbar */}
             <SidebarToolbar
               workspaceBoardOpen={workspaceBoardOpen}
+              workspaceBoardDragPreviewOpen={workspaceBoardDragPreviewOpen}
               onWorkspaceBoardToggle={toggleWorkspaceBoard}
             />
           </>

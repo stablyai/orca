@@ -1426,6 +1426,29 @@
   opacity: 0.42;
 }
 
+/* Why: while a card drag previews the board, pulse the toolbar trigger with the
+   same ring the drawer uses so it reads as another way to open the board. */
+@keyframes workspace-board-trigger-preview-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--sidebar-ring) 55%, transparent);
+  }
+
+  70%,
+  100% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--sidebar-ring) 0%, transparent);
+  }
+}
+
+[data-workspace-board-trigger][data-workspace-board-preview='true'] {
+  animation: workspace-board-trigger-preview-pulse 1.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-workspace-board-trigger][data-workspace-board-preview='true'] {
+    animation: none;
+  }
+}
+
 @keyframes workspace-kanban-sheet-in {
   from {
     clip-path: inset(0 100% 0 0);

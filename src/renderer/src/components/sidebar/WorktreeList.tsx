@@ -159,7 +159,6 @@ import {
   setSidebarPointerDragDocumentStyles,
   updateSidebarDragPreviewPosition
 } from './worktree-sidebar-pointer-drag-dom'
-import { shouldStartWorkspaceBoardDragPreview } from './workspace-board-drag-preview-intent'
 import {
   getWorktreeSidebarDragAutoscroll,
   getWorktreeSidebarDragRectsForGroup,
@@ -2180,24 +2179,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       clearWorktreeDrag()
       return
     }
-    const previewSidebarContainer = scrollRef.current
+    // Why: reveal the companion board preview the moment a card drag begins so the
+    // user sees the drop target on the right and can choose whether to aim for it,
+    // rather than discovering it only after dragging into the sidebar edge.
     if (
       !drag.workspaceBoardDragPreviewRequested &&
       !workspaceBoardOpen &&
-      previewSidebarContainer
+      !hasWorkspaceKanbanSidebarDropBoard()
     ) {
-      const sidebarRect = previewSidebarContainer.getBoundingClientRect()
-      if (
-        shouldStartWorkspaceBoardDragPreview({
-          pointerX: drag.currentX,
-          startX: drag.startX,
-          sidebarRight: sidebarRect.right
-        }) &&
-        !hasWorkspaceKanbanSidebarDropBoard()
-      ) {
-        drag.workspaceBoardDragPreviewRequested = true
-        onWorkspaceBoardDragPreviewStart()
-      }
+      drag.workspaceBoardDragPreviewRequested = true
+      onWorkspaceBoardDragPreviewStart()
     }
     const boardTarget = updateWorkspaceKanbanSidebarDropTargetVisual({
       x: drag.currentX,
