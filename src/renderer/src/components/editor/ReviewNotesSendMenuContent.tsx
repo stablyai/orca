@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
-  ACTIVE_AGENT_EXPLICIT_TARGET_SEND_TIMEOUT_MS,
   activeAgentNotesSendFailureMessage,
   sendNotesToActiveAgentSession,
   type ActiveAgentNotesSendResult
@@ -28,7 +27,6 @@ import { useNow } from '@/components/dashboard/useNow'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-status-inputs'
 import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import { translate } from '@/i18n/i18n'
@@ -90,14 +88,8 @@ export function ReviewNotesSendMenuContent({
     worktreeId
   ])
   const orderedSendTargets = useMemo(
-    () =>
-      orderSendTargetsByWorktreeAgentRows(
-        sendTargets,
-        agentRows,
-        terminalLayoutsByTabId,
-        ptyIdsByTabId
-      ),
-    [agentRows, sendTargets, terminalLayoutsByTabId, ptyIdsByTabId]
+    () => orderSendTargetsByWorktreeAgentRows(sendTargets, agentRows),
+    [agentRows, sendTargets]
   )
 
   const runNotesSend = useCallback(
@@ -165,8 +157,7 @@ export function ReviewNotesSendMenuContent({
           sendNotesToActiveAgentSession({
             worktreeId,
             prompt,
-            noteTarget: { tabId: target.tabId, leafId: target.leafId },
-            timeoutMs: ACTIVE_AGENT_EXPLICIT_TARGET_SEND_TIMEOUT_MS
+            noteTarget: { tabId: target.tabId, leafId: target.leafId }
           }),
         () => {
           onPromptDelivered?.()
@@ -233,10 +224,7 @@ function resolveCurrentSendTargetEligibility(
         }
   }
 
-  const ptyId = state.terminalLayoutsByTabId[target.tabId]?.ptyIdsByLeafId?.[target.leafId] ?? null
-  return ptyId && state.ptyIdsByTabId[target.tabId]?.includes(ptyId)
-    ? { status: 'eligible' }
-    : { status: 'disabled', disabledReason: 'Terminal is no longer available' }
+  return { status: 'disabled', disabledReason: 'Terminal is no longer available' }
 }
 
 function AgentTargetMenuItem({
@@ -264,7 +252,7 @@ function AgentTargetMenuItem({
     <DropdownMenuItem
       disabled={disabled}
       onSelect={() => onSend(target)}
-      // Why: surface the ineligibility reason (working/stale/no-terminal) as a
+      // Why: surface the ineligibility reason (permission/stale/no-terminal) as a
       // hover tooltip rather than inline text, matching DashboardAgentRow's
       // title-attribute treatment of the same disabledReason.
       title={target.status === 'disabled' ? target.disabledReason : undefined}
@@ -286,18 +274,14 @@ function AgentTargetMenuItem({
 
 function orderSendTargetsByWorktreeAgentRows(
   sendTargets: NotesSendAgentTarget[],
-  agentRows: DashboardAgentRowData[],
-  terminalLayoutsByTabId: Record<string, { ptyIdsByLeafId?: Record<string, string> } | undefined>,
-  ptyIdsByTabId: Record<string, string[]>
+  agentRows: DashboardAgentRowData[]
 ): OrderedSendTarget[] {
   const targetsByPaneKey = new Map(sendTargets.map((target) => [target.paneKey, target]))
   const usedPaneKeys = new Set<string>()
   const ordered: OrderedSendTarget[] = []
 
   for (const agent of agentRows) {
-    const target =
-      targetsByPaneKey.get(agent.paneKey) ??
-      deriveTitleOnlySendTarget(agent, terminalLayoutsByTabId, ptyIdsByTabId)
+    const target = targetsByPaneKey.get(agent.paneKey)
     if (!target) {
       continue
     }
@@ -312,29 +296,6 @@ function orderSendTargetsByWorktreeAgentRows(
   }
 
   return ordered
-}
-
-function deriveTitleOnlySendTarget(
-  agent: DashboardAgentRowData,
-  terminalLayoutsByTabId: Record<string, { ptyIdsByLeafId?: Record<string, string> } | undefined>,
-  ptyIdsByTabId: Record<string, string[]>
-): NotesSendAgentTarget | null {
-  const parsed = parsePaneKey(agent.paneKey)
-  if (!parsed) {
-    return null
-  }
-  const ptyId = terminalLayoutsByTabId[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
-  if (!ptyId || !ptyIdsByTabId[parsed.tabId]?.includes(ptyId)) {
-    return null
-  }
-  return {
-    paneKey: agent.paneKey,
-    tabId: parsed.tabId,
-    leafId: parsed.leafId,
-    agentType: agent.agentType,
-    tabTitle: agent.tab.title,
-    status: 'eligible'
-  }
 }
 
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {

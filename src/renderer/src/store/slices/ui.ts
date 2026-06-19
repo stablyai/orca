@@ -979,16 +979,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     )
 
     const label = formatAgentTypeLabel(target.entry.agentType)
-    const {
-      ACTIVE_AGENT_EXPLICIT_TARGET_SEND_TIMEOUT_MS,
-      activeAgentNotesSendFailureMessage,
-      sendNotesToActiveAgentSession
-    } = await import('@/lib/active-agent-note-send')
+    const { activeAgentNotesSendFailureMessage, sendNotesToActiveAgentSession } =
+      await import('@/lib/active-agent-note-send')
     const result = await sendNotesToActiveAgentSession({
       worktreeId: mode.worktreeId,
       prompt: mode.prompt,
-      noteTarget: { tabId: target.tabId, leafId: target.leafId },
-      timeoutMs: ACTIVE_AGENT_EXPLICIT_TARGET_SEND_TIMEOUT_MS
+      noteTarget: { tabId: target.tabId, leafId: target.leafId }
     }).catch((error) => {
       console.error('Failed to send notes to sidebar agent target:', error)
       return { status: 'no-active-terminal' as const }

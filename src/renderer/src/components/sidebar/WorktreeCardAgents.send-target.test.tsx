@@ -65,6 +65,14 @@ function targetStoreState(now: number): Record<string, unknown> {
     },
     terminalLayoutsByTabId: {
       'tab-1': {
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: '11111111-1111-4111-8111-111111111111' },
+          second: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' }
+        },
+        activeLeafId: '11111111-1111-4111-8111-111111111111',
+        expandedLeafId: null,
         ptyIdsByLeafId: {
           '11111111-1111-4111-8111-111111111111': 'pty-1',
           '22222222-2222-4222-8222-222222222222': 'pty-2'
@@ -73,7 +81,8 @@ function targetStoreState(now: number): Record<string, unknown> {
     },
     ptyIdsByTabId: {
       'tab-1': ['pty-1', 'pty-2']
-    }
+    },
+    runtimePaneTitlesByTabId: {}
   }
 }
 
@@ -91,6 +100,7 @@ vi.mock('@/store', () => ({
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
       ptyIdsByTabId: {},
+      runtimePaneTitlesByTabId: {},
       sendPromptToSidebarAgentTarget: mockSendPromptToSidebarAgentTarget,
       ...mockStoreState
     })
@@ -156,6 +166,27 @@ describe('WorktreeCardAgents send targets', () => {
     expect(markup).toContain(`data-pane-key="${WORKING_PANE_KEY}"`)
     expect(markup).toContain('data-has-send-handler="true"')
   }, 10_000)
+
+  it('disables rows whose live pane title needs permission', async () => {
+    const now = Date.now()
+    mockAgents = [agentRow(WORKING_PANE_KEY, 'working', now)]
+    mockStoreState = {
+      ...targetStoreState(now),
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          2: 'Codex - action required'
+        }
+      },
+      agentSendPopoverTargetMode: activeTargetMode()
+    }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+
+    expect(markup).toContain('data-agent-send-target="disabled"')
+    expect(markup).toContain('data-disabled-reason="Agent needs permission"')
+    expect(markup).toContain(`data-pane-key="${WORKING_PANE_KEY}"`)
+  })
 
   it('leaves other worktree rows in ordinary mode during target selection', async () => {
     mockStoreState = {

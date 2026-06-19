@@ -367,20 +367,15 @@ export type RuntimeTerminalSend = {
   handle: string
   accepted: boolean
   bytesWritten: number
+  refusedReason?: 'no-agent' | 'permission'
 }
 
-export type RuntimeTerminalSendWhenIdleStatus =
-  | 'sent'
-  | 'no-active-terminal'
-  | 'no-agent'
-  | 'not-ready'
-  | 'not-writable'
-  | 'partial-submit-failed'
+export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
 
-export type RuntimeTerminalSendWhenIdle = {
+export type RuntimeTerminalAgentStatus = {
   handle: string
-  status: RuntimeTerminalSendWhenIdleStatus
-  bytesWritten: number
+  isRunningAgent: boolean
+  status: RuntimeTerminalAgentStatusState
 }
 
 export type RuntimeTerminalCreate = {

@@ -15,9 +15,13 @@ import type { GlobalSettings } from '../../../shared/types'
 // OpenCode / Gemini / cursor-agent / copilot) treat the inserted text as a
 // single atomic paste instead of echoing character-by-character or triggering
 // line-edit shortcuts. Callers choose whether to append Enter after the paste.
-const BRACKETED_PASTE_BEGIN = '\x1b[200~'
-const BRACKETED_PASTE_END = '\x1b[201~'
-const POST_PASTE_SUBMIT_DELAY_MS = 50
+export const BRACKETED_PASTE_BEGIN = '\x1b[200~'
+export const BRACKETED_PASTE_END = '\x1b[201~'
+export const POST_PASTE_SUBMIT_DELAY_MS = 50
+
+export function sanitizeBracketedPasteContent(content: string): string {
+  return content.replaceAll('\u001b', '\u241b')
+}
 
 // Why: every prefill-capable TUI we ship support for (claude / codex / pi /
 // opencode / gemini / cursor-agent / copilot) emits `CSI ? 2004 h` (DECSET
@@ -162,7 +166,7 @@ async function sendBracketedPasteToAgent(args: {
   submit: boolean
 }): Promise<boolean> {
   const { settings = useAppStore.getState().settings, ptyId, content, submit } = args
-  const pastePayload = `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}`
+  const pastePayload = `${BRACKETED_PASTE_BEGIN}${sanitizeBracketedPasteContent(content)}${BRACKETED_PASTE_END}`
   try {
     const pasted = await sendRuntimePtyInputVerified(settings, ptyId, pastePayload)
     if (!pasted) {

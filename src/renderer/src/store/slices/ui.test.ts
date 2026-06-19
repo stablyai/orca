@@ -31,7 +31,6 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/active-agent-note-send', () => ({
-  ACTIVE_AGENT_EXPLICIT_TARGET_SEND_TIMEOUT_MS: 60_000,
   activeAgentNotesSendFailureMessage: (
     status: string,
     options: { explicitTarget?: boolean } = {}
@@ -291,6 +290,43 @@ describe('createUISlice agent send target mode', () => {
     })
   })
 
+  it('disables sidebar target rows that need permission', async () => {
+    const store = createUIStore()
+    seedAgentSendState(store)
+    const agentStatusByPaneKey = store.getState().agentStatusByPaneKey
+    store.setState({
+      agentStatusByPaneKey: {
+        ...agentStatusByPaneKey,
+        [workingPaneKey]: {
+          ...agentStatusByPaneKey[workingPaneKey]!,
+          state: 'blocked'
+        }
+      }
+    } as Partial<AppState>)
+
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      eligiblePaneKeys: [readyPaneKey],
+      disabledPaneKeys: {
+        [workingPaneKey]: 'Agent needs permission'
+      },
+      status: 'open'
+    })
+    await expect(store.getState().sendPromptToSidebarAgentTarget(workingPaneKey)).resolves.toBe(
+      false
+    )
+    expect(mocks.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
+  })
+
   it('does not reveal the sidebar when the current workspace has no eligible targets', () => {
     const store = createUIStore()
     seedAgentSendState(store)
@@ -355,8 +391,7 @@ describe('createUISlice agent send target mode', () => {
     expect(mocks.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
       worktreeId,
       prompt: 'Review this',
-      noteTarget: { tabId, leafId: readyLeafId },
-      timeoutMs: 60_000
+      noteTarget: { tabId, leafId: readyLeafId }
     })
     expect(onPromptDelivered).toHaveBeenCalledTimes(1)
     expect(mocks.track).toHaveBeenCalledWith('agent_prompt_sent', {
@@ -397,7 +432,7 @@ describe('createUISlice agent send target mode', () => {
     })
   })
 
-  it('sends to a working agent row through the idle-gated note helper', async () => {
+  it('sends to a working agent row through the selected-target note helper', async () => {
     const store = createUIStore()
     seedAgentSendState(store)
     store.getState().openAgentSendPopoverTargetMode({
@@ -416,8 +451,7 @@ describe('createUISlice agent send target mode', () => {
     expect(mocks.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
       worktreeId,
       prompt: 'Review this',
-      noteTarget: { tabId, leafId: workingLeafId },
-      timeoutMs: 60_000
+      noteTarget: { tabId, leafId: workingLeafId }
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Codex')
     expect(store.getState().agentSendPopoverTargetMode).toBeNull()

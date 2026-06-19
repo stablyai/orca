@@ -213,9 +213,8 @@ import type {
   RuntimeRepoSearchRefs,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
+  RuntimeTerminalAgentStatus,
   RuntimeTerminalSend,
-  RuntimeTerminalSendWhenIdle,
-  RuntimeTerminalSendWhenIdleStatus,
   RuntimeTerminalCreate,
   RuntimeTerminalSplit,
   RuntimeTerminalFocus,
@@ -800,6 +799,7 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   tailTruncated: boolean
   tailLinesTotal: number
   preview: string
+  waitBlockedAt: number | null
   lastAgentStatus: AgentStatus | null
   // Why: the most recent OSC title observed on this leaf's PTY data. Used by
   // worktree.ps so daemon-hosted terminals (no renderer pushing pane titles)
@@ -861,6 +861,7 @@ type RuntimePtyWorktreeRecord = {
   tailTruncated: boolean
   tailLinesTotal: number
   preview: string
+  waitBlockedAt: number | null
 }
 
 export type RuntimeTerminalAgentStatusEvent = {
@@ -2506,6 +2507,7 @@ export class OrcaRuntimeService {
         tailTruncated: tailSource?.tailTruncated ?? false,
         tailLinesTotal: tailSource?.tailLinesTotal ?? 0,
         preview: tailSource?.preview ?? '',
+        waitBlockedAt: tailSource?.waitBlockedAt ?? null,
         lastAgentStatus: tailSource?.lastAgentStatus ?? null,
         lastOscTitle: tailSource?.lastOscTitle ?? null,
         lastOscTitleAt: tailSource?.lastOscTitleAt ?? null,
@@ -3854,11 +3856,25 @@ export class OrcaRuntimeService {
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       pty.tailPendingAnsi = normalized.pendingAnsi
+      const previousWaitText = buildTerminalWaitText(
+        pty.tailBuffer,
+        pty.tailPartialLine,
+        pty.preview
+      )
       const nextTail = appendNormalizedToTailBuffer(
         pty.tailBuffer,
         pty.tailPartialLine,
         normalized.text
       )
+      if (
+        nextTailHasNewerBlockedReason(
+          previousWaitText,
+          buildTerminalWaitText(nextTail.lines, nextTail.partialLine, pty.preview),
+          normalized.text
+        )
+      ) {
+        pty.waitBlockedAt = at
+      }
       ptyTailAfter = nextTail
       pty.tailBuffer = nextTail.lines
       pty.tailPartialLine = nextTail.partialLine
@@ -3913,14 +3929,29 @@ export class OrcaRuntimeService {
         leaf.tailTruncated = pty.tailTruncated
         leaf.tailLinesTotal = pty.tailLinesTotal
         leaf.preview = pty.preview
+        leaf.waitBlockedAt = pty.waitBlockedAt
       } else {
         const normalized = normalizeTerminalChunk(data, leaf.tailPendingAnsi)
         leaf.tailPendingAnsi = normalized.pendingAnsi
+        const previousWaitText = buildTerminalWaitText(
+          leaf.tailBuffer,
+          leaf.tailPartialLine,
+          leaf.preview
+        )
         const nextTail = appendNormalizedToTailBuffer(
           leaf.tailBuffer,
           leaf.tailPartialLine,
           normalized.text
         )
+        if (
+          nextTailHasNewerBlockedReason(
+            previousWaitText,
+            buildTerminalWaitText(nextTail.lines, nextTail.partialLine, leaf.preview),
+            normalized.text
+          )
+        ) {
+          leaf.waitBlockedAt = at
+        }
         leaf.tailBuffer = nextTail.lines
         leaf.tailPartialLine = nextTail.partialLine
         leaf.tailTruncated = leaf.tailTruncated || nextTail.truncated
@@ -6737,7 +6768,10 @@ export class OrcaRuntimeService {
       enter?: boolean
       interrupt?: boolean
     },
-    options: { beforeWrite?: (ptyId: string) => void; suffixFailureError?: string } = {}
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+    } = {}
   ): Promise<RuntimeTerminalSend> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -6748,7 +6782,7 @@ export class OrcaRuntimeService {
       if (payload === null) {
         throw new Error('invalid_terminal_send')
       }
-      options.beforeWrite?.(pty.pty.ptyId)
+      await options.beforeWrite?.(pty.pty.ptyId)
       await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
       return {
         handle,
@@ -6766,7 +6800,7 @@ export class OrcaRuntimeService {
       throw new Error('invalid_terminal_send')
     }
 
-    options.beforeWrite?.(leaf.ptyId)
+    await options.beforeWrite?.(leaf.ptyId)
     await this.writeTerminalAction(leaf.ptyId, action, payload, options)
 
     return {
@@ -6776,148 +6810,179 @@ export class OrcaRuntimeService {
     }
   }
 
-  async sendTerminalWhenIdle(
-    handle: string,
-    action: {
-      text?: string
-      enter?: boolean
-      interrupt?: boolean
-    },
-    options?: { timeoutMs?: number; signal?: AbortSignal; beforeWrite?: (ptyId: string) => void }
-  ): Promise<RuntimeTerminalSendWhenIdle> {
-    const payload = buildSendPayload(action)
-    if (payload === null) {
-      throw new Error('invalid_terminal_send')
+  async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
+    const terminal = this.getTerminalAgentStatusSnapshot(handle)
+    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
+    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
+    const liveTitleClearsBlockedText =
+      terminal.titleStatusIsLive &&
+      terminal.titleStatus !== null &&
+      terminal.titleStatus !== 'permission'
+    if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
+      return { handle, isRunningAgent: true, status: 'permission' }
     }
-
-    try {
-      const wait = await this.waitForTerminal(handle, {
-        condition: 'tui-idle',
-        timeoutMs: options?.timeoutMs,
-        signal: options?.signal
-      })
-      if (!wait.satisfied) {
-        return { handle, status: 'not-ready', bytesWritten: 0 }
-      }
-      if (wait.status !== 'running') {
-        return { handle, status: 'no-active-terminal', bytesWritten: 0 }
-      }
-    } catch (error) {
-      return this.mapTerminalSendWhenIdleError(handle, error)
+    if (
+      blockedByWaitText &&
+      !liveTitleClearsBlockedText &&
+      (!explicitStatus ||
+        explicitStatus.status === 'permission' ||
+        (terminal.waitBlockedAt !== null && terminal.waitBlockedAt >= explicitStatus.updatedAt))
+    ) {
+      return { handle, isRunningAgent: true, status: 'permission' }
     }
-
-    let isAgent = false
-    try {
-      isAgent = await this.isTerminalRunningAgent(handle)
-    } catch (error) {
-      return this.mapTerminalSendWhenIdleError(handle, error)
-    }
-    if (!isAgent) {
-      return { handle, status: 'no-agent', bytesWritten: 0 }
-    }
-
-    const readinessStatus = this.getImmediateTuiIdleSendFailureStatus(handle)
-    if (readinessStatus) {
-      return { handle, status: readinessStatus, bytesWritten: 0 }
-    }
-
-    try {
-      const send = await this.sendTerminal(handle, action, {
-        beforeWrite: options?.beforeWrite,
-        suffixFailureError: 'terminal_submit_failed_after_text'
-      })
+    if (explicitStatus) {
+      // Why: permission titles can linger after hooks report the agent resumed.
+      // Fresh hook state is tighter, but current shell/management evidence wins.
+      const isRunningAgent =
+        !terminalTitleBlocksExplicitAgentStatus(terminal.title) &&
+        !(await this.terminalHasShellForegroundProcess(handle))
       return {
         handle,
-        status: send.accepted ? 'sent' : 'not-writable',
-        bytesWritten: send.bytesWritten
+        isRunningAgent,
+        status: isRunningAgent ? explicitStatus.status : null
       }
-    } catch (error) {
-      return this.mapTerminalSendWhenIdleError(handle, error)
+    }
+    if (terminal.titleStatus) {
+      return { handle, isRunningAgent: true, status: terminal.titleStatus }
+    }
+
+    return {
+      handle,
+      isRunningAgent: await this.isTerminalRunningAgent(handle),
+      status: null
     }
   }
 
-  private getImmediateTuiIdleSendFailureStatus(
-    handle: string
-  ): RuntimeTerminalSendWhenIdleStatus | null {
+  private getTerminalAgentStatusSnapshot(handle: string): {
+    waitText: string
+    waitBlockedAt: number | null
+    title: string | null
+    titleStatus: AgentStatus | null
+    titleStatusIsLive: boolean
+  } {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
-        return 'no-active-terminal'
+        throw new Error('terminal_gone')
       }
+      const leaf = this.getPrimaryLeafForPty(pty.pty.ptyId)
+      const leafTitle = leaf
+        ? getLatestAgentCandidateTitleInfo(
+            { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
+            { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt }
+          )
+        : null
+      const ptyTitle =
+        leafTitle ??
+        getLatestAgentCandidateTitleInfo(
+          { title: pty.pty.title, updatedAt: pty.pty.titleUpdatedAt },
+          { title: pty.pty.lastOscTitle, updatedAt: pty.pty.lastOscTitleAt }
+        )
       const waitText = buildTerminalWaitText(
         pty.pty.tailBuffer,
         pty.pty.tailPartialLine,
         pty.pty.preview
       )
-      if (detectTerminalWaitBlockedReason(waitText)) {
-        return 'not-ready'
+      return {
+        waitText,
+        waitBlockedAt: pty.pty.waitBlockedAt,
+        title: ptyTitle?.title ?? null,
+        titleStatus: ptyTitle
+          ? detectAgentStatusFromTitle(ptyTitle.title)
+          : pty.pty.lastAgentStatus,
+        titleStatusIsLive: ptyTitle !== null
       }
-      if (
-        pty.pty.lastAgentStatus === 'idle' ||
-        this.getAdoptedPtyExplicitIdleStatus(pty.pty) === 'idle' ||
-        isKnownReadyPromptPreview(waitText)
-      ) {
-        return null
-      }
-      return 'not-ready'
     }
 
-    try {
-      const { leaf } = this.getLiveLeafForHandle(handle)
-      if (getTerminalState(leaf) !== 'running') {
-        return 'no-active-terminal'
-      }
-      if (!leaf.writable || !leaf.ptyId) {
-        return 'not-writable'
-      }
-      const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-      if (detectTerminalWaitBlockedReason(waitText)) {
-        return 'not-ready'
-      }
-      const title = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
-      if (
-        leaf.lastAgentStatus === 'idle' ||
-        (title && detectExplicitIdleStatusFromTitle(title) === 'idle') ||
-        isKnownReadyPromptPreview(waitText)
-      ) {
-        return null
-      }
-      return 'not-ready'
-    } catch {
-      return 'no-active-terminal'
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    if (getTerminalState(leaf) !== 'running') {
+      throw new Error('terminal_exited')
+    }
+    if (!leaf.ptyId) {
+      throw new Error('terminal_gone')
+    }
+    const title = getLatestAgentCandidateTitleInfo(
+      { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
+      { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
+      { title: this.tabs.get(leaf.tabId)?.title, updatedAt: 0 }
+    )
+    return {
+      waitText: buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview),
+      waitBlockedAt: leaf.waitBlockedAt,
+      title: title?.title ?? null,
+      titleStatus: title ? detectAgentStatusFromTitle(title.title) : leaf.lastAgentStatus,
+      titleStatusIsLive: (title?.updatedAt ?? 0) > 0
     }
   }
 
-  private mapTerminalSendWhenIdleError(
-    handle: string,
-    error: unknown
-  ): RuntimeTerminalSendWhenIdle {
-    const message = error instanceof Error ? error.message : String(error)
-    if (message.includes('timeout')) {
-      return { handle, status: 'not-ready', bytesWritten: 0 }
+  private async terminalHasShellForegroundProcess(handle: string): Promise<boolean> {
+    if (!this.ptyController) {
+      return false
     }
-    if (message.includes('terminal_submit_failed_after_text')) {
-      return { handle, status: 'partial-submit-failed', bytesWritten: 0 }
+    try {
+      const pty = this.getLivePtyForHandle(handle)
+      const ptyId = pty?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+      if (!ptyId) {
+        return false
+      }
+      const foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
+      return foregroundProcess !== null && isShellProcess(foregroundProcess)
+    } catch {
+      return false
     }
-    if (message.includes('terminal_not_writable')) {
-      return { handle, status: 'not-writable', bytesWritten: 0 }
+  }
+
+  private getFreshExplicitAgentStatusForHandle(handle: string): {
+    status: NonNullable<RuntimeTerminalAgentStatus['status']>
+    updatedAt: number
+  } | null {
+    const paneKey = this.getPaneKeyForTerminalHandle(handle)
+    const now = Date.now()
+    let bestStatus: NonNullable<RuntimeTerminalAgentStatus['status']> | null = null
+    let bestUpdatedAt = -1
+
+    const consider = (
+      state: AgentStatusEntry['state'] | undefined,
+      updatedAt: number | null | undefined
+    ): void => {
+      if (!state) {
+        return
+      }
+      if (typeof updatedAt !== 'number' || now - updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
+        return
+      }
+      const status = mapExplicitAgentStateToRuntimeTerminalStatus(state)
+      // Why: older retained permission rows can remain visible after the agent
+      // resumes. Prefer the newest explicit state; only let permission win ties.
+      if (updatedAt > bestUpdatedAt || (updatedAt === bestUpdatedAt && status === 'permission')) {
+        bestStatus = status
+        bestUpdatedAt = updatedAt
+      }
     }
-    if (
-      message.includes('terminal_handle_stale') ||
-      message.includes('terminal_exited') ||
-      message.includes('terminal_gone') ||
-      message.includes('no_active_terminal')
-    ) {
-      return { handle, status: 'no-active-terminal', bytesWritten: 0 }
+
+    if (paneKey) {
+      const retained = this.latestAgentStatusByPaneKey.get(paneKey)
+      consider(retained?.payload.state, retained?.updatedAt)
     }
-    throw error
+
+    for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+      if (entry.terminalHandle !== handle && (!paneKey || entry.paneKey !== paneKey)) {
+        continue
+      }
+      consider(entry.state, entry.receivedAt)
+    }
+
+    return bestStatus ? { status: bestStatus, updatedAt: bestUpdatedAt } : null
   }
 
   private async writeTerminalAction(
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     payload: string,
-    options: { beforeWrite?: (ptyId: string) => void; suffixFailureError?: string } = {}
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+    } = {}
   ): Promise<void> {
     // Why: TUI apps (Claude Code, etc.) treat a single large write as a paste
     // event. Keep Enter/interrupt as a second write for both visible and
@@ -6925,7 +6990,7 @@ export class OrcaRuntimeService {
     const hasText = typeof action.text === 'string' && action.text.length > 0
     const hasSuffix = action.enter || action.interrupt
     if (hasText && hasSuffix) {
-      options.beforeWrite?.(ptyId)
+      await options.beforeWrite?.(ptyId)
       const textWrote = this.ptyController?.write(ptyId, action.text!) ?? false
       if (!textWrote) {
         throw new Error('terminal_not_writable')
@@ -6933,7 +6998,7 @@ export class OrcaRuntimeService {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
       await new Promise((resolve) => setTimeout(resolve, 500))
       try {
-        options.beforeWrite?.(ptyId)
+        await options.beforeWrite?.(ptyId)
       } catch (error) {
         if (options.suffixFailureError) {
           throw new Error(options.suffixFailureError)
@@ -15002,7 +15067,8 @@ export class OrcaRuntimeService {
         tailPendingAnsi: '',
         tailTruncated: false,
         tailLinesTotal: 0,
-        preview: state.preview ?? ''
+        preview: state.preview ?? '',
+        waitBlockedAt: null
       }
       if (state.title) {
         this.setPtyManagementTitleFromObservedTitle(pty, state.title, titleObservedAt ?? 0)
@@ -15121,6 +15187,7 @@ export class OrcaRuntimeService {
     pty.tailPendingAnsi = ''
     pty.tailTruncated = false
     pty.tailLinesTotal = 0
+    pty.waitBlockedAt = null
   }
 
   private pruneDisconnectedPtyRecords(): void {
@@ -15789,16 +15856,7 @@ export class OrcaRuntimeService {
   // status without throwing on stale handles, so this returns null on any error.
   getAgentStatusForHandle(handle: string): string | null {
     try {
-      const { leaf } = this.getLiveLeafForHandle(handle)
-      const title = getLatestAgentCandidateTitle(
-        { title: leaf.paneTitle, updatedAt: leaf.paneTitleUpdatedAt },
-        { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
-        { title: this.tabs.get(leaf.tabId)?.title, updatedAt: 0 }
-      )
-      if (title) {
-        return detectAgentStatusFromTitle(title)
-      }
-      return leaf.lastAgentStatus
+      return this.getTerminalAgentStatusSnapshot(handle).titleStatus
     } catch {
       return null
     }
@@ -19968,6 +20026,36 @@ function isKnownReadyPromptPreview(preview: string): boolean {
 
 function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBlockedReason | null {
   const normalized = preview.toLowerCase()
+  return findActionableTerminalWaitBlockedSignal(normalized)?.reason ?? null
+}
+
+function nextTailHasNewerBlockedReason(
+  previousWaitText: string,
+  nextWaitText: string,
+  appendedText: string
+): boolean {
+  const nextBlockedSignal = findActionableTerminalWaitBlockedSignal(nextWaitText.toLowerCase())
+  if (!nextBlockedSignal) {
+    return false
+  }
+  // Why: permission prompts can arrive split across PTY chunks. Stamp the
+  // blocked signal when the accumulated tail first becomes blocked, or when
+  // a later prompt appears after stale blocked text already in the tail.
+  const previousBlockedSignal = findActionableTerminalWaitBlockedSignal(
+    previousWaitText.toLowerCase()
+  )
+  if (previousBlockedSignal === null) {
+    return true
+  }
+  const appendCandidateSignal = findActionableTerminalWaitBlockedSignal(
+    `${previousWaitText}${appendedText}`.toLowerCase()
+  )
+  return appendCandidateSignal !== null && appendCandidateSignal.index > previousBlockedSignal.index
+}
+
+function findActionableTerminalWaitBlockedSignal(
+  normalized: string
+): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
   if (blockedSignal === null) {
     return null
@@ -19975,10 +20063,7 @@ function detectTerminalWaitBlockedReason(preview: string): RuntimeTerminalWaitBl
   const readyIndex = findKnownReadyPromptIndex(normalized)
   // Why: retained terminal tails can include stale startup modals. If a known
   // ready prompt appears after that modal, the latest signal is ready.
-  if (readyIndex !== null && readyIndex > blockedSignal.index) {
-    return null
-  }
-  return blockedSignal.reason
+  return readyIndex !== null && readyIndex > blockedSignal.index ? null : blockedSignal
 }
 
 function findKnownReadyPromptIndex(normalized: string): number | null {
@@ -20031,24 +20116,25 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
 function findTerminalWaitBlockedSignal(
   normalized: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
+  const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
   const updateIndex = normalized.lastIndexOf('update available')
   if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {
-    return { reason: 'codex-update-prompt', index: updateIndex }
+    candidates.push({ reason: 'codex-update-prompt', index: updateIndex })
   }
   const cwdIndex = normalized.lastIndexOf('choose working directory to')
   if (cwdIndex !== -1 && normalized.includes('press enter to continue', cwdIndex)) {
-    return { reason: 'codex-cwd-prompt', index: cwdIndex }
+    candidates.push({ reason: 'codex-cwd-prompt', index: cwdIndex })
   }
   const modelMigrationIndex = normalized.lastIndexOf('codex just got an upgrade')
   if (
     modelMigrationIndex !== -1 &&
     normalized.includes('press enter to continue', modelMigrationIndex)
   ) {
-    return { reason: 'codex-model-migration-prompt', index: modelMigrationIndex }
+    candidates.push({ reason: 'codex-model-migration-prompt', index: modelMigrationIndex })
   }
   const hooksIndex = normalized.lastIndexOf('hooks need review')
   if (hooksIndex !== -1 && normalized.includes('press enter to confirm', hooksIndex)) {
-    return { reason: 'codex-hooks-review-prompt', index: hooksIndex }
+    candidates.push({ reason: 'codex-hooks-review-prompt', index: hooksIndex })
   }
   const trustIndex = Math.max(
     normalized.lastIndexOf('do you trust'),
@@ -20063,7 +20149,7 @@ function findTerminalWaitBlockedSignal(
       trustSegment.includes('directory') ||
       trustSegment.includes('repo'))
   ) {
-    return { reason: 'codex-trust-workspace', index: trustIndex }
+    candidates.push({ reason: 'codex-trust-workspace', index: trustIndex })
   }
   const interactivePromptIndex = Math.max(
     normalized.lastIndexOf('press enter to confirm'),
@@ -20083,9 +20169,19 @@ function findTerminalWaitBlockedSignal(
     interactivePromptContext.includes('trust') ||
     interactivePromptContext.includes('hook')
   if (interactivePromptIndex !== -1 && hasCodexInteractiveContext) {
-    return { reason: 'codex-interactive-prompt', index: interactivePromptIndex }
+    const contextStart = Math.max(0, interactivePromptIndex - 600)
+    const hasSpecificPromptInContext = candidates.some(
+      (candidate) => candidate.index >= contextStart && candidate.index <= interactivePromptIndex
+    )
+    if (!hasSpecificPromptInContext) {
+      candidates.push({ reason: 'codex-interactive-prompt', index: interactivePromptIndex })
+    }
   }
-  return null
+  return candidates.length > 0
+    ? candidates.reduce((latest, candidate) =>
+        candidate.index > latest.index ? candidate : latest
+      )
+    : null
 }
 
 function buildTerminalWaitResult(
@@ -20269,9 +20365,22 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
   return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
 }
 
+function terminalTitleBlocksExplicitAgentStatus(title: string | null): boolean {
+  if (!title) {
+    return false
+  }
+  return isClaudeManagementTitle(title) || isShellProcess(title)
+}
+
 function getLatestAgentCandidateTitle(
   ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
 ): string | null {
+  return getLatestAgentCandidateTitleInfo(...titles)?.title ?? null
+}
+
+function getLatestAgentCandidateTitleInfo(
+  ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
+): { title: string; updatedAt: number } | null {
   let latest: { title: string; updatedAt: number } | null = null
   for (const candidate of titles) {
     const title = candidate.title?.trim()
@@ -20283,7 +20392,7 @@ function getLatestAgentCandidateTitle(
       latest = { title, updatedAt }
     }
   }
-  return latest?.title ?? null
+  return latest
 }
 
 function getSavedTabWorktreeStatus(title: string, hasPty: boolean): RuntimeWorktreeStatus {
@@ -20301,6 +20410,20 @@ function getDetectedWorktreeStatus(
     return 'working'
   }
   return hasPty ? 'active' : 'inactive'
+}
+
+function mapExplicitAgentStateToRuntimeTerminalStatus(
+  state: AgentStatusEntry['state']
+): NonNullable<RuntimeTerminalAgentStatus['status']> {
+  switch (state) {
+    case 'blocked':
+    case 'waiting':
+      return 'permission'
+    case 'working':
+      return 'working'
+    case 'done':
+      return 'idle'
+  }
 }
 
 function mergeWorktreeStatus(

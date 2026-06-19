@@ -87,7 +87,6 @@ vi.mock('zustand/react/shallow', () => ({
 }))
 
 vi.mock('@/lib/active-agent-note-send', () => ({
-  ACTIVE_AGENT_EXPLICIT_TARGET_SEND_TIMEOUT_MS: 60_000,
   activeAgentNotesSendFailureMessage: (
     status: string,
     options: { explicitTarget?: boolean } = {}
@@ -451,7 +450,7 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(collectText(items[1])).toContain('Claude')
   })
 
-  it('can target a title-detected agent row that has not reported hook status yet', async () => {
+  it('does not target title-detected rows skipped by target derivation', async () => {
     const paneKey = makePaneKey(TAB_B, LEAF_B)
     harness.worktreeAgentRows = [
       agentRow({
@@ -470,18 +469,48 @@ describe('ReviewNotesSendMenuContent', () => {
     })
 
     const tree = render()
-    const item = findByType(tree, 'DropdownMenuItem')
-    ;(item.props.onSelect as () => void)()
-    await flushMicrotasks()
+    const items = findAllByType(tree, 'DropdownMenuItem')
 
-    expect(collectText(item)).toContain('Codex')
-    expect(collectText(item)).toContain('Idle')
-    expect(harness.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      prompt: 'my notes',
-      noteTarget: { tabId: TAB_B, leafId: LEAF_B },
-      timeoutMs: 60_000
+    expect(items).toHaveLength(0)
+    expect(harness.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('disables title-detected dashboard rows when target derivation reports permission', () => {
+    const paneKey = makePaneKey(TAB_B, LEAF_B)
+    harness.worktreeAgentRows = [
+      agentRow({
+        paneKey,
+        tabId: TAB_B,
+        title: 'Codex',
+        agentType: 'codex',
+        state: 'blocked',
+        startedAt: harness.now
+      })
+    ]
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_B, { title: 'Codex' })] },
+      terminalLayoutsByTabId: { [TAB_B]: leafLayout(LEAF_B, 'pty-b') },
+      ptyIdsByTabId: { [TAB_B]: ['pty-b'] }
     })
+    harness.noteTargets = [
+      {
+        paneKey,
+        tabId: TAB_B,
+        leafId: LEAF_B,
+        agentType: 'codex',
+        tabTitle: 'Codex',
+        status: 'disabled',
+        disabledReason: 'Agent needs permission'
+      }
+    ]
+
+    const tree = render()
+    const item = findByType(tree, 'DropdownMenuItem')
+
+    expect(item.props.disabled).toBe(true)
+    expect(item.props.title).toBe('Agent needs permission')
+    ;(item.props.onSelect as () => void)()
+    expect(harness.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
   })
 
   it('does not offer a title-detected agent row after its live PTY has exited', () => {
@@ -589,8 +618,7 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(harness.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       prompt: 'my notes',
-      noteTarget: { tabId: TAB_A, leafId: LEAF_A },
-      timeoutMs: 60_000
+      noteTarget: { tabId: TAB_A, leafId: LEAF_A }
     })
     expect(onPromptDelivered).toHaveBeenCalledTimes(1)
     expect(harness.track).toHaveBeenCalledWith('agent_prompt_sent', {
@@ -691,6 +719,32 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(harness.toastMessage).toHaveBeenCalledWith('Agent status is stale')
   })
 
+  it('refuses stale menu targets that disappear from target derivation before click', () => {
+    const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') },
+      ptyIdsByTabId: { [TAB_A]: ['pty-a'] }
+    })
+    harness.noteTargets = [
+      {
+        paneKey: statusPaneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Terminal 1',
+        status: 'eligible'
+      }
+    ]
+
+    const tree = render()
+    harness.noteTargets = []
+    ;(findByType(tree, 'DropdownMenuItem').props.onSelect as () => void)()
+
+    expect(harness.sendNotesToActiveAgentSession).not.toHaveBeenCalled()
+    expect(harness.toastMessage).toHaveBeenCalledWith('Terminal is no longer available')
+  })
+
   it('keeps a working agent selectable and preserves the Working state text', async () => {
     const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
     setStore({
@@ -728,8 +782,7 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(harness.sendNotesToActiveAgentSession).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       prompt: 'my notes',
-      noteTarget: { tabId: TAB_A, leafId: LEAF_A },
-      timeoutMs: 60_000
+      noteTarget: { tabId: TAB_A, leafId: LEAF_A }
     })
   })
 
