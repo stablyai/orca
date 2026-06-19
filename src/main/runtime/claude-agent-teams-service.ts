@@ -81,6 +81,10 @@ export class ClaudeAgentTeamsService {
     }
   }
 
+  getActiveTeamCount(): number {
+    return this.teams.size
+  }
+
   async handleTmuxCompat(
     request: AgentTeamsTmuxCompatRequest,
     api: AgentTeamsTerminalApi

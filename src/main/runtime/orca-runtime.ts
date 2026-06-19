@@ -2980,7 +2980,9 @@ export class OrcaRuntimeService {
       .map((group) => {
         const tabOrder = retainedOrder.get(group.id) ?? []
         const keptActive =
-          group.activeTabId && tabOrder.includes(group.activeTabId) && liveTabIds.has(group.activeTabId)
+          group.activeTabId &&
+          tabOrder.includes(group.activeTabId) &&
+          liveTabIds.has(group.activeTabId)
             ? group.activeTabId
             : null
         return {
@@ -3370,8 +3372,7 @@ export class OrcaRuntimeService {
       groupIdByTabId.set(newTabAssignment!.tabId, newTabAssignment!.groupId)
     }
     const activeGroupId =
-      (activeTopLevelId ? groupIdByTabId.get(activeTopLevelId) : undefined) ??
-      existingGroups[0]!.id
+      (activeTopLevelId ? groupIdByTabId.get(activeTopLevelId) : undefined) ?? existingGroups[0]!.id
     const orderByGroup = new Map<string, string[]>(existingGroups.map((group) => [group.id, []]))
     for (const tabId of tabOrder) {
       const groupId = groupIdByTabId.get(tabId) ?? activeGroupId
@@ -4061,14 +4062,12 @@ export class OrcaRuntimeService {
   // Merge the client's pane structure into the persisted tab layout. PTY
   // bindings and active leaf stay host-owned; only ratios/expand/titles change.
   // terminalLayoutsByTabId is keyed by tab id (worktree-independent).
-  private persistHeadlessTerminalPaneLayout(
-    args: {
-      tabId: string
-      root: TerminalPaneLayoutNode | null
-      expandedLeafId: string | null
-      titlesByLeafId?: Record<string, string>
-    }
-  ): void {
+  private persistHeadlessTerminalPaneLayout(args: {
+    tabId: string
+    root: TerminalPaneLayoutNode | null
+    expandedLeafId: string | null
+    titlesByLeafId?: Record<string, string>
+  }): void {
     const session = this.store?.getWorkspaceSession?.()
     if (!session || !this.store?.setWorkspaceSession) {
       return
@@ -4167,11 +4166,7 @@ export class OrcaRuntimeService {
     })
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const reorderedTargetActiveTabId =
-      active?.type === 'terminal'
-        ? active.parentTabId
-        : active
-          ? active.id
-          : (tabOrder[0] ?? null)
+      active?.type === 'terminal' ? active.parentTabId : active ? active.id : (tabOrder[0] ?? null)
     // Why: reorder only changes ONE group's order. Preserve every other group so
     // a multi-group split isn't deleted by re-sorting tabs in one of its groups.
     const existingGroups = snapshot.tabGroups ?? []
@@ -4323,9 +4318,7 @@ export class OrcaRuntimeService {
       ...session,
       tabsByWorktree: {
         ...session.tabsByWorktree,
-        [worktreeId]: tabs.map((tab) =>
-          tab.id === tabId ? { ...tab, customTitle: title } : tab
-        )
+        [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, customTitle: title } : tab))
       }
     })
   }
@@ -6162,6 +6155,14 @@ export class OrcaRuntimeService {
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.clearAgentRowSnapshotsForPty(ptyId)
+    // Why: a Claude agent-team leader whose PTY exits naturally (agent finished,
+    // process died, renderer reload) must release its team + nested panes map.
+    // Previously only explicit closeTerminal evicted it, so natural exits leaked
+    // one team per never-reused teamId for the runtime's lifetime.
+    const exitedTeamLeaderHandle = this.handleByPtyId.get(ptyId)
+    if (exitedTeamLeaderHandle) {
+      this.claudeAgentTeams.removeTeamForLeaderHandle(exitedTeamLeaderHandle)
+    }
     // Layout state machine: clear `layouts` and `layoutQueues`. Any
     // already-queued applyLayout work for this ptyId will run, but every
     // applyLayout re-checks `layouts.has(ptyId)` (or fresh-subscribe) and
@@ -15118,8 +15119,7 @@ export class OrcaRuntimeService {
       } catch {
         warnings.push({
           code: 'LINEAGE_PARENT_CONTEXT_MISSING',
-          message:
-            'Worktree created, but Orca could not validate the environment parent context.',
+          message: 'Worktree created, but Orca could not validate the environment parent context.',
           details: { envParentWorkspace: input.envParentWorkspace }
         })
       }
@@ -15907,6 +15907,9 @@ export class OrcaRuntimeService {
     this.clearAgentRowSnapshotsForPty(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
+      // Why: pruning can remove a PTY without onPtyExit firing; release any agent
+      // team owned by this leader handle so it does not leak.
+      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
       this.handleByPtyId.delete(ptyId)
       const record = this.handles.get(handle)
       if (record?.tabId.startsWith('pty:')) {
