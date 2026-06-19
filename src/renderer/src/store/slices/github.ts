@@ -1365,25 +1365,31 @@ function withBoundedCacheEntry<T extends { fetchedAt: number }>(
   return evictStaleEntries({ ...cache, [key]: entry })
 }
 
-// Why: prRefreshSequences only ever grows — one entry per PR cache key
-// (repo/branch/execution-host) ever observed, and branches are ephemeral and
-// unbounded over a long session. It has no `fetchedAt` to sort by, so bound it
-// by insertion order (oldest-touched keys evicted first; the writer moves each
-// touched key to the end). An evicted long-idle branch simply restarts sequence
-// comparison from 0, which is acceptable.
+// Why: the prRefresh* maps are keyed by PR cache key (repo/branch/execution-host)
+// — an ephemeral, unbounded key space over a long session. They have no
+// `fetchedAt` to sort by, so bound them by insertion order (oldest-touched keys
+// evicted first; the writers move each touched key to the end). An evicted
+// long-idle branch simply restarts from a clean state, which is acceptable.
+function capRecordByInsertionOrder<T>(
+  record: Record<string, T>,
+  maxEntries = MAX_CACHE_ENTRIES
+): Record<string, T> {
+  const keys = Object.keys(record)
+  if (keys.length <= maxEntries) {
+    return record
+  }
+  const capped: Record<string, T> = {}
+  for (const key of keys.slice(keys.length - maxEntries)) {
+    capped[key] = record[key]
+  }
+  return capped
+}
+
 function capPrRefreshSequences(
   sequences: Record<string, number>,
   maxEntries = MAX_CACHE_ENTRIES
 ): Record<string, number> {
-  const keys = Object.keys(sequences)
-  if (keys.length <= maxEntries) {
-    return sequences
-  }
-  const capped: Record<string, number> = {}
-  for (const key of keys.slice(keys.length - maxEntries)) {
-    capped[key] = sequences[key]
-  }
-  return capped
+  return capRecordByInsertionOrder(sequences, maxEntries)
 }
 
 function shouldRefreshIssueDecorations(state: AppState): boolean {
@@ -3523,6 +3529,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             // longer live and would otherwise accumulate per refresh sequence.
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           }
+          // Why: delete-then-set moves this key to the end of insertion order so
+          // capRecordByInsertionOrder evicts genuinely idle keys, not active ones.
+          delete nextStates[alias.cacheKey]
           nextStates[alias.cacheKey] = {
             status: event.status,
             reason: event.reason,
@@ -3535,7 +3544,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return changed
         ? {
             prRefreshSequences: capPrRefreshSequences(nextSequences),
-            prRefreshStates: nextStates,
+            // Why: bound prRefreshStates by the same insertion-order cap as its
+            // sibling sequences map — both share the unbounded PR-cache-key space.
+            prRefreshStates: capRecordByInsertionOrder(nextStates),
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache
           }
