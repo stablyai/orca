@@ -16,8 +16,12 @@ import {
 } from '@/lib/github-links'
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type {
+  WorktreeAgentStartupPlanTemplate,
+  WorktreeCreationRequest
+} from '@/lib/pending-worktree-creation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { draftPlanToStartupPlan } from '@/lib/launch-agent-tab-startup-plan'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import {
   resolveTuiAgentLaunchArgs,
@@ -156,6 +160,51 @@ import {
   resolveComposerBranchSelection
 } from './composer-branch-selection'
 import { translate } from '@/i18n/i18n'
+
+function buildComposerAgentStartupPlan(
+  template: WorktreeAgentStartupPlanTemplate,
+  variables: { repoPath?: string | null; worktreePath?: string | null }
+): ReturnType<typeof buildAgentStartupPlan> {
+  const agentArgs = resolveTuiAgentLaunchArgs(
+    template.agent,
+    template.agentDefaultArgs,
+    template.agentProfiles,
+    variables
+  )
+  const agentEnv = resolveTuiAgentLaunchEnv(
+    template.agent,
+    template.agentDefaultEnv,
+    template.agentProfiles,
+    variables
+  )
+  const common = {
+    agent: template.agent,
+    cmdOverrides: template.cmdOverrides,
+    agentArgs,
+    agentEnv,
+    agentProfiles: template.agentProfiles,
+    variables,
+    platform: template.platform
+  }
+  if (template.draftPrompt) {
+    const draftPlan = buildAgentDraftLaunchPlan({
+      ...common,
+      draft: template.draftPrompt
+    })
+    if (draftPlan) {
+      return draftPlanToStartupPlan(draftPlan)
+    }
+  }
+  const startupPlan = buildAgentStartupPlan({
+    ...common,
+    prompt: template.prompt,
+    allowEmptyPromptLaunch: template.allowEmptyPromptLaunch
+  })
+  if (startupPlan && template.draftPrompt) {
+    startupPlan.draftPrompt = template.draftPrompt
+  }
+  return startupPlan
+}
 
 export function canResolveFolderSmartGitHubSubmit({
   hasFolderSourceRepos
@@ -1338,11 +1387,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       } else if (!isTuiAgentEnabled(tuiAgent, disabledTuiAgents)) {
         const firstEnabledDetected = agentCatalog.find((a) => {
-          if (!enabledIds.includes(a.id)) {
-            return false
-          }
           const profile = agentProfiles.find((entry) => entry.id === a.id)
-          return profile ? isTuiAgentProfileDetected(profile, detectedAgentIds) : true
+          if (profile) {
+            return (
+              isTuiAgentEnabled(profile.id, disabledTuiAgents) &&
+              isTuiAgentProfileDetected(profile, detectedAgentIds)
+            )
+          }
+          return enabledIds.includes(a.id)
         })
         setTuiAgent(firstEnabledDetected?.id ?? fallbackDefaultAgent)
       }
@@ -2738,11 +2790,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           agentCmdOverrides: settings?.agentCmdOverrides as Record<string, string> | undefined,
           agentArgs: agent
             ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs, agentProfiles, {
+                repoPath: selectedRepoPath,
                 worktreePath: selectedProjectGroup.parentPath
               })
             : undefined,
           agentEnv: agent
             ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv, agentProfiles, {
+                repoPath: selectedRepoPath,
                 worktreePath: selectedProjectGroup.parentPath
               })
             : undefined,
@@ -2796,6 +2850,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       onCreated,
       persistDraft,
       resolvePendingSmartGitHubSubmit,
+      selectedRepoPath,
       selectedProjectGroup,
       agentProfiles,
       settings?.agentCmdOverrides,
@@ -2983,42 +3038,24 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         Boolean(tuiAgent) &&
         !effectiveBranchNameOverride &&
         !createDisplayName
-      const startupPlan = buildAgentStartupPlan({
+      const startupPlanTemplate: WorktreeAgentStartupPlanTemplate = {
         agent: tuiAgent,
         prompt: submitStartupPrompt,
         cmdOverrides: settings?.agentCmdOverrides ?? {},
-        agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs, agentProfiles, {
-          repoPath: selectedRepoPath,
-          worktreePath: selectedRepoPath
-        }),
-        agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv, agentProfiles, {
-          repoPath: selectedRepoPath,
-          worktreePath: selectedRepoPath
-        }),
+        agentDefaultArgs: settings?.agentDefaultArgs,
+        agentDefaultEnv: settings?.agentDefaultEnv,
         agentProfiles,
-        variables: { repoPath: selectedRepoPath, worktreePath: selectedRepoPath },
         platform: selectedRepoAgentLaunchPlatform
-      })
+      }
 
-      // Why: backend startup is safe only when the launch command is
-      // self-contained. Agents that need post-ready paste/follow-up stay on
-      // the renderer path so prompt delivery is not skipped.
+      // Why: git worktree paths are known only after create completes; build
+      // the agent command post-create so `{worktreePath}` resolves correctly.
       const composerTelemetry: AgentStartedTelemetry = {
         agent_kind: tuiAgentToAgentKind(tuiAgent),
         launch_source: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
         request_kind: 'new'
       }
-      const backendStartup =
-        startupPlan && !startupPlan.draftPrompt && !startupPlan.followupPrompt
-          ? {
-              command: startupPlan.launchCommand,
-              ...(startupPlan.env ? { env: startupPlan.env } : {}),
-              ...(startupPlan.startupCommandDelivery
-                ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-                : {}),
-              telemetry: composerTelemetry
-            }
-          : undefined
+      const backendStartup = undefined
       const result = await createWorktree(
         repoId,
         workspaceName,
@@ -3052,6 +3089,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         submitCompareBaseRef
       )
       const worktree = result.worktree
+      const startupPlan = buildComposerAgentStartupPlan(startupPlanTemplate, {
+        repoPath: selectedRepoPath,
+        worktreePath: worktree.path
+      })
 
       const trimmedNote = note.trim()
       // Why: linked source metadata is already included in createWorktree.
@@ -3344,70 +3385,20 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote, {
             cliAvailable: quickLinearCliAvailable
           })
-        const draftLaunchPlan =
-          agent === null || !quickDraftPrompt
+        const startupPlanTemplate: WorktreeAgentStartupPlanTemplate | null =
+          agent === null
             ? null
-            : buildAgentDraftLaunchPlan({
+            : {
                 agent,
-                draft: quickDraftPrompt,
+                prompt: quickPrompt,
+                ...(quickDraftPrompt ? { draftPrompt: quickDraftPrompt } : {}),
+                allowEmptyPromptLaunch: true,
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
-                agentArgs: resolveTuiAgentLaunchArgs(
-                  agent,
-                  settings?.agentDefaultArgs,
-                  agentProfiles,
-                  {
-                    repoPath: selectedRepoPath,
-                    worktreePath: selectedRepoPath
-                  }
-                ),
-                agentEnv: resolveTuiAgentLaunchEnv(
-                  agent,
-                  settings?.agentDefaultEnv,
-                  agentProfiles,
-                  {
-                    repoPath: selectedRepoPath,
-                    worktreePath: selectedRepoPath
-                  }
-                ),
+                agentDefaultArgs: settings?.agentDefaultArgs,
+                agentDefaultEnv: settings?.agentDefaultEnv,
                 agentProfiles,
-                variables: { repoPath: selectedRepoPath, worktreePath: selectedRepoPath },
                 platform: selectedRepoAgentLaunchPlatform
-              })
-
-        let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
-        if (draftLaunchPlan) {
-          startupPlan = {
-            agent: draftLaunchPlan.agent,
-            launchCommand: draftLaunchPlan.launchCommand,
-            expectedProcess: draftLaunchPlan.expectedProcess,
-            followupPrompt: null,
-            ...(draftLaunchPlan.startupCommandDelivery
-              ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
-              : {}),
-            ...(draftLaunchPlan.env ? { env: draftLaunchPlan.env } : {})
-          }
-        } else if (agent !== null) {
-          startupPlan = buildAgentStartupPlan({
-            agent,
-            prompt: quickPrompt,
-            cmdOverrides: settings?.agentCmdOverrides ?? {},
-            agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs, agentProfiles, {
-              repoPath: selectedRepoPath,
-              worktreePath: selectedRepoPath
-            }),
-            agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv, agentProfiles, {
-              repoPath: selectedRepoPath,
-              worktreePath: selectedRepoPath
-            }),
-            agentProfiles,
-            variables: { repoPath: selectedRepoPath, worktreePath: selectedRepoPath },
-            platform: selectedRepoAgentLaunchPlatform,
-            allowEmptyPromptLaunch: true
-          })
-          if (startupPlan && quickDraftPrompt) {
-            startupPlan.draftPrompt = quickDraftPrompt
-          }
-        }
+              }
 
         const quickTelemetry: AgentStartedTelemetry | null =
           agent === null
@@ -3418,17 +3409,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                   telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
                 request_kind: 'new'
               }
-        const backendStartup =
-          startupPlan && !startupPlan.draftPrompt && !startupPlan.followupPrompt
-            ? {
-                command: startupPlan.launchCommand,
-                ...(startupPlan.env ? { env: startupPlan.env } : {}),
-                ...(startupPlan.startupCommandDelivery
-                  ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-                  : {}),
-                ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
-              }
-            : undefined
+        // Why: background git creates can retry after the modal closes, but the
+        // created worktree path is not known until the create call returns.
+        const startupPlan = null
+        const backendStartup = undefined
         const request: WorktreeCreationRequest = {
           repoId,
           worktreeCreateProgressMode:
@@ -3489,6 +3473,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           pendingFirstAgentMessageRename,
           note: trimmedNote,
           startupPlan,
+          startupPlanTemplate,
           quickPrompt,
           quickTelemetry
         }
@@ -3536,7 +3521,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       resolvedInitialWorkspaceStatus,
       selectedRepo,
       selectedRepoAgentLaunchPlatform,
-      selectedRepoPath,
       selectedRepoIsGit,
       selectedRepoSettings,
       selectedRepoRequiresConnection,

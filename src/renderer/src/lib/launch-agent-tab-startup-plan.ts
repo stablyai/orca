@@ -30,8 +30,10 @@ export function buildLaunchAgentTabStartupPlan(args: {
 }): LaunchAgentTabStartupPlan {
   const trimmedPrompt = args.prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const baseAgent = resolveTuiAgentBaseAgent(args.agent, args.agentProfiles) ?? args.agent
-  const isFollowupPath = TUI_AGENT_CONFIG[baseAgent].promptInjectionMode === 'stdin-after-start'
+  const baseAgent = resolveTuiAgentBaseAgent(args.agent, args.agentProfiles)
+  const isFollowupPath = baseAgent
+    ? TUI_AGENT_CONFIG[baseAgent].promptInjectionMode === 'stdin-after-start'
+    : false
   const common = {
     agent: args.agent,
     cmdOverrides: args.cmdOverrides,

@@ -417,7 +417,12 @@
                 "46f1a2c9bd": "La entrada del comando está vacía.",
                 "8eb541cc83": "El agente seleccionado no fue detectado en este host de espacio de trabajo.",
                 "b96e091fc9": "El agente seleccionado está deshabilitado en Configuración.",
-                "a7ac8717c7": "Elija un agente antes de comenzar."
+                "a7ac8717c7": "Elija un agente antes de comenzar.",
+                "profile": {
+                  "resolution": {
+                    "failed": "Could not resolve the selected agent profile."
+                  }
+                }
               }
             }
           },

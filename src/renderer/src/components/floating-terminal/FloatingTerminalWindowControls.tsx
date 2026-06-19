@@ -90,7 +90,9 @@ export function FloatingTerminalWindowControls({
       )
       return
     }
-    const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
+    const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, {
+      activate: false
+    })
     state.queueTabStartupCommand(tab.id, {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
@@ -136,7 +138,7 @@ export function FloatingTerminalWindowControls({
               )}
               onClick={launchDefaultAgent}
             >
-              <AgentIcon agent={defaultAgent} size={14} />
+              <AgentIcon agent={defaultAgent} profiles={agentProfiles} size={14} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>

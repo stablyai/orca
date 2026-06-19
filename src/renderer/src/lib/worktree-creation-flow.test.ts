@@ -1,13 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 
 const store = {
-  settings: { activeRuntimeEnvironmentId: null as string | null },
+  settings: {
+    activeRuntimeEnvironmentId: null as string | null,
+    agentProfiles: []
+  },
+  repos: [{ id: 'repo-1', path: '/repo/main', connectionId: null }],
+  pendingWorktreeCreations: {} as Record<string, unknown>,
+  activePendingCreationId: 'creation-1' as string | null,
   beginPendingWorktreeCreation: vi.fn(),
   setActiveView: vi.fn(),
   setSidebarOpen: vi.fn(),
+  setActivePendingWorktreeCreation: vi.fn(),
+  updatePendingWorktreeCreation: vi.fn(),
+  removePendingWorktreeCreation: vi.fn(),
+  updateWorktreeMeta: vi.fn(),
   createWorktree: vi.fn(() => new Promise(() => {}))
 }
 
@@ -35,6 +45,8 @@ vi.mock('@/lib/new-workspace', () => ({
 }))
 
 import { runBackgroundWorktreeCreation } from './worktree-creation-flow'
+import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 
 const FLOW_SOURCE = readFileSync(join(__dirname, 'worktree-creation-flow.ts'), 'utf8')
 
@@ -62,6 +74,25 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 }
 
 describe('runBackgroundWorktreeCreation', () => {
+  beforeEach(() => {
+    store.settings = { activeRuntimeEnvironmentId: null, agentProfiles: [] }
+    store.repos = [{ id: 'repo-1', path: '/repo/main', connectionId: null }]
+    store.pendingWorktreeCreations = {}
+    store.activePendingCreationId = 'creation-1'
+    store.beginPendingWorktreeCreation.mockImplementation((entry) => {
+      store.pendingWorktreeCreations[entry.creationId] = entry
+    })
+    store.createWorktree.mockReset()
+    store.createWorktree.mockImplementation(() => new Promise(() => {}))
+    store.removePendingWorktreeCreation.mockClear()
+    store.updateWorktreeMeta.mockClear()
+    vi.mocked(ensureAgentStartupInTerminal).mockClear()
+    vi.mocked(activateAndRevealWorktree).mockReset()
+    vi.mocked(activateAndRevealWorktree).mockReturnValue({
+      primaryTabId: 'tab-1'
+    })
+  })
+
   it('uses the captured repo-owner progress mode instead of focused runtime state', () => {
     store.settings.activeRuntimeEnvironmentId = null
     store.beginPendingWorktreeCreation.mockClear()
@@ -94,6 +125,47 @@ describe('runBackgroundWorktreeCreation', () => {
       })
     )
   })
+
+  it('resolves startup profile path variables after the worktree is created', async () => {
+    store.createWorktree.mockResolvedValueOnce({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/worktrees/feature' },
+      startupTerminal: { spawned: false }
+    })
+
+    runBackgroundWorktreeCreation(
+      makeRequest({
+        agent: 'agent-profile:claude-work',
+        quickPrompt: 'fix it',
+        startupPlanTemplate: {
+          agent: 'agent-profile:claude-work',
+          prompt: 'fix it',
+          cmdOverrides: {},
+          agentDefaultArgs: {
+            'agent-profile:claude-work': '--plugin-dir {worktreePath}/plugins --repo {repoPath}'
+          },
+          agentProfiles: [
+            {
+              id: 'agent-profile:claude-work',
+              baseAgent: 'claude',
+              label: 'Claude Work'
+            }
+          ],
+          platform: 'linux'
+        }
+      })
+    )
+
+    await vi.waitFor(() => expect(ensureAgentStartupInTerminal).toHaveBeenCalled())
+
+    expect(ensureAgentStartupInTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          launchCommand:
+            "claude '--plugin-dir' '/worktrees/feature/plugins' '--repo' '/repo/main' 'fix it'"
+        })
+      })
+    )
+  })
 })
 
 describe('worktree creation flow agent trust preflight', () => {
@@ -112,7 +184,7 @@ describe('worktree creation flow agent trust preflight', () => {
     expect(preflight).toContain('connectionId?: string | null')
     expect(preflight).toContain('...(connectionId ? { connectionId } : {})')
     expect(createFlow).toContain('repoConnectionId')
-    expect(createFlow).toContain('repo.id === worktree.repoId')
+    expect(createFlow).toContain('entry.id === worktree.repoId')
     expect(createFlow).toContain(
       'await preflightAgentTrust(request, worktree.path, repoConnectionId)'
     )

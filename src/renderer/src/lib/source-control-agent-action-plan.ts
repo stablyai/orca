@@ -95,7 +95,16 @@ export function planSourceControlAgentActionLaunch(args: {
   }
   let startupPlan: AgentStartupPlan | null = null
   let delivery: SourceControlLaunchPlanDelivery
-  const baseAgent = resolveTuiAgentBaseAgent(agent, args.agentProfiles) ?? agent
+  const baseAgent = resolveTuiAgentBaseAgent(agent, args.agentProfiles)
+  if (!baseAgent) {
+    return {
+      ok: false,
+      error: translate(
+        'auto.lib.source.control.agent.action.plan.profile.resolution.failed',
+        'Could not resolve the selected agent profile.'
+      )
+    }
+  }
   const commonLaunchArgs = {
     agent,
     cmdOverrides,

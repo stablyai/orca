@@ -221,6 +221,19 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("claude '--model' 'sonnet' '--name' 'Bob''s' 'fix it'")
   })
 
+  it('preserves Windows path separators in CLI arguments before quoting', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: '',
+      cmdOverrides: {},
+      agentArgs: '--plugin-dir C:\\Users\\me\\repo\\plugin',
+      platform: 'win32',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--plugin-dir' 'C:\\Users\\me\\repo\\plugin'")
+  })
+
   it('carries agent launch environment defaults into startup plans', () => {
     const plan = buildAgentStartupPlan({
       agent: 'goose',

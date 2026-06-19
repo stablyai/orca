@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { getAgentCatalogWithProfiles } from '@/lib/agent-catalog'
 import {
   buildTabAgentLaunchOptions,
   findMatchingTabAgentLaunchOptions,
@@ -63,5 +64,18 @@ describe('tab agent launch options', () => {
       'agent-profile:claude-foo',
       'codex'
     ])
+  })
+
+  it('does not use profile default args as the catalog command fallback', () => {
+    const [profile] = getAgentCatalogWithProfiles([
+      {
+        id: 'agent-profile:claude-foo' as const,
+        baseAgent: 'claude' as const,
+        label: 'Claude (foo)',
+        defaultArgs: '--model sonnet'
+      }
+    ]).filter((agent) => agent.id === 'agent-profile:claude-foo')
+
+    expect(profile.cmd).toBe('claude')
   })
 })

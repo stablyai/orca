@@ -417,7 +417,12 @@
                 "46f1a2c9bd": "命令输入为空。",
                 "8eb541cc83": "此工作区主机上未检测到所选 agent。",
                 "b96e091fc9": "选定的 Agent 在“设置”中被禁用。",
-                "a7ac8717c7": "在开始之前选择一个 Agent。"
+                "a7ac8717c7": "在开始之前选择一个 Agent。",
+                "profile": {
+                  "resolution": {
+                    "failed": "Could not resolve the selected agent profile."
+                  }
+                }
               }
             }
           },

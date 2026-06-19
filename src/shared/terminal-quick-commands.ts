@@ -32,7 +32,10 @@ function normalizeTerminalQuickCommandScope(input: unknown): TerminalQuickComman
   if (!repoId) {
     return { type: 'global' }
   }
-  return { type: 'repo', repoId: repoId.slice(0, MAX_QUICK_COMMAND_REPO_ID_LENGTH) }
+  return {
+    type: 'repo',
+    repoId: repoId.slice(0, MAX_QUICK_COMMAND_REPO_ID_LENGTH)
+  }
 }
 
 export function getTerminalQuickCommandScope(
@@ -104,6 +107,8 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
     if (!hasLabel && !hasCommand && !hasPrompt) {
       continue
     }
+    // Why: keep profile IDs round-trippable in settings normalization; support
+    // checks for profile-backed options are evaluated later with profile context.
     const agent =
       supportsTerminalAgentQuickCommand(record.agent) || isTuiAgentProfileId(record.agent)
         ? record.agent

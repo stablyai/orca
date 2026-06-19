@@ -299,7 +299,7 @@ export function getAgentCatalogWithProfiles(
           id: profile.id,
           baseAgent: profile.baseAgent,
           label: profile.label,
-          cmd: profile.cmdOverride || profile.defaultArgs || base.cmd
+          cmd: profile.cmdOverride || base.cmd
         }
       ]
     })

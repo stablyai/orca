@@ -135,7 +135,8 @@ export function getSourceControlActionAgentSupportText(
 
 export function getSourceControlActionAgentWarningText(
   actionId: SourceControlActionId,
-  selectedAgent: TuiAgent | CustomAgentId | null | undefined
+  selectedAgent: TuiAgent | CustomAgentId | null | undefined,
+  agentProfiles?: readonly TuiAgentProfile[] | null
 ): string | null {
   if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
     return null
@@ -145,7 +146,7 @@ export function getSourceControlActionAgentWarningText(
     if (TEXT_GENERATION_AGENT_ID_SET.has(selectedAgent)) {
       return null
     }
-    const agentLabel = getAgentLabel(selectedAgent)
+    const agentLabel = getAgentLabel(selectedAgent, agentProfiles)
     return translate(
       'auto.components.settings.source.control.action.recipe.options.unsupportedSavedAgent',
       '{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below.',

@@ -3,12 +3,22 @@ import { useAppStore } from '@/store'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { resolveTuiAgentBaseAgent } from '../../../shared/tui-agent-profiles'
 import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../shared/tui-agent-launch-defaults'
+import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
   type ActivateAndRevealResult,
   type WorktreeStartupPayload
 } from '@/lib/worktree-activation'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentStartupPlan,
+  type AgentStartupPlan
+} from './tui-agent-startup'
+import { draftPlanToStartupPlan } from './launch-agent-tab-startup-plan'
 import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
@@ -23,9 +33,10 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 // only seeds the first terminal when the backend did not already spawn it.
 function buildStartupOpt(
   request: WorktreeCreationRequest,
-  backendSpawned: boolean
+  backendSpawned: boolean,
+  startupPlan: AgentStartupPlan | null
 ): WorktreeStartupPayload | undefined {
-  const plan = request.startupPlan
+  const plan = startupPlan
   if (!plan || backendSpawned) {
     return undefined
   }
@@ -36,10 +47,68 @@ function buildStartupOpt(
     // Why: command-code shows its prompt in the tab status before the first
     // hook fires, so the prompt is threaded through here.
     ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
-      ? { initialAgentStatus: { agent: request.agent, prompt: request.quickPrompt.trim() } }
+      ? {
+          initialAgentStatus: {
+            agent: request.agent,
+            prompt: request.quickPrompt.trim()
+          }
+        }
       : {}),
     ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {})
   }
+}
+
+function buildPostCreateStartupPlan(
+  request: WorktreeCreationRequest,
+  repoPath: string | null | undefined,
+  worktreePath: string | null | undefined
+): AgentStartupPlan | null {
+  const template = request.startupPlanTemplate
+  if (!template) {
+    return request.startupPlan
+  }
+  const variables = { repoPath, worktreePath }
+  const agentArgs = resolveTuiAgentLaunchArgs(
+    template.agent,
+    template.agentDefaultArgs,
+    template.agentProfiles,
+    variables
+  )
+  const agentEnv = resolveTuiAgentLaunchEnv(
+    template.agent,
+    template.agentDefaultEnv,
+    template.agentProfiles,
+    variables
+  )
+  const common = {
+    agent: template.agent,
+    cmdOverrides: template.cmdOverrides,
+    agentArgs,
+    agentEnv,
+    agentProfiles: template.agentProfiles,
+    variables,
+    platform: template.platform
+  }
+
+  if (template.draftPrompt) {
+    const draftPlan = buildAgentDraftLaunchPlan({
+      ...common,
+      draft: template.draftPrompt
+    })
+    if (draftPlan) {
+      return draftPlanToStartupPlan(draftPlan)
+    }
+  }
+
+  const startupPlan = buildAgentStartupPlan({
+    ...common,
+    prompt: template.prompt,
+    allowEmptyPromptLaunch: template.allowEmptyPromptLaunch
+  })
+  if (startupPlan && template.draftPrompt) {
+    startupPlan.draftPrompt = template.draftPrompt
+  }
+  return startupPlan
 }
 
 function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boolean {
@@ -58,7 +127,7 @@ async function preflightAgentTrust(
   // as menu input on first launch. Pre-write the trust artifact before any
   // terminal spawns. Best-effort — the worktree already exists, so a failure
   // here must not strand it.
-  if (!request.agent || !window.api.agentTrust?.markTrusted) {
+  if (!request.agent || typeof window === 'undefined' || !window.api.agentTrust?.markTrusted) {
     return
   }
   const agentProfiles = useAppStore.getState().settings?.agentProfiles
@@ -145,11 +214,12 @@ async function executeWorktreeCreation(
   }
 
   const backendSpawned = result.startupTerminal?.spawned === true
-  const startupOpt = buildStartupOpt(request, backendSpawned)
+  const repo = useAppStore.getState().repos.find((entry) => entry.id === worktree.repoId) ?? null
+  const startupPlan = buildPostCreateStartupPlan(request, repo?.path, worktree.path)
+  const startupOpt = buildStartupOpt(request, backendSpawned, startupPlan)
 
   if (worktree.path) {
-    const repoConnectionId =
-      useAppStore.getState().repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null
+    const repoConnectionId = repo?.connectionId ?? null
     await preflightAgentTrust(request, worktree.path, repoConnectionId)
   }
 
@@ -184,11 +254,11 @@ async function executeWorktreeCreation(
   // Why: clearing synchronously right after activation lets React commit the
   // panel→terminal swap in one frame — no two-row flicker, no empty-terminal flash.
   useAppStore.getState().removePendingWorktreeCreation(creationId)
-  if (request.startupPlan && !backendSpawned) {
+  if (startupPlan && !backendSpawned) {
     void ensureAgentStartupInTerminal({
       worktreeId: worktree.id,
       primaryTabId,
-      startup: request.startupPlan
+      startup: startupPlan
     })
   }
   if (stillActive) {

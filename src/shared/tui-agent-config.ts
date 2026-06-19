@@ -329,6 +329,8 @@ export function isBuiltInTuiAgent(value: unknown): value is BuiltInTuiAgent {
 }
 
 export function isTuiAgent(value: unknown): value is TuiAgent {
+  // Why: this guard validates ID shape only; profile existence is resolved
+  // later against the current `agentProfiles` set at launch/planning time.
   return isBuiltInTuiAgent(value) || isTuiAgentProfileId(value)
 }
 

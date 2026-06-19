@@ -96,7 +96,11 @@ export function RepositorySourceControlAiActionRows({
                 )
               )
         const agentOptions = getAgentCatalogForAction(actionId, effectiveAgent, agentProfiles)
-        const agentWarningText = getSourceControlActionAgentWarningText(actionId, effectiveAgent)
+        const agentWarningText = getSourceControlActionAgentWarningText(
+          actionId,
+          effectiveAgent,
+          agentProfiles
+        )
         const agentSupportText = getSourceControlActionAgentSupportText(actionId)
         return (
           <div key={actionId} className="space-y-3 rounded-md border border-border px-3 py-3">
@@ -111,7 +115,11 @@ export function RepositorySourceControlAiActionRows({
                 <div className="flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
                   <span>{actionScopeLabel(hasOverride)}</span>
                   <span>
-                    {commandTemplateStateLabel({ hasOverride, inheritedTemplate, actionId })}
+                    {commandTemplateStateLabel({
+                      hasOverride,
+                      inheritedTemplate,
+                      actionId
+                    })}
                   </span>
                   <span>
                     {agentArgsStateLabel({

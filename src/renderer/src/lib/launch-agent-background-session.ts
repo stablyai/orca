@@ -66,8 +66,8 @@ export async function launchAgentBackgroundSession(
   }
   const agentProfiles = store.settings?.agentProfiles ?? []
   const variables = { repoPath: repo?.path, worktreePath: worktree.path }
-  const baseAgent = resolveTuiAgentBaseAgent(agent, agentProfiles) ?? agent
-  const preflight = TUI_AGENT_CONFIG[baseAgent].preflightTrust
+  const baseAgent = resolveTuiAgentBaseAgent(agent, agentProfiles)
+  const preflight = baseAgent ? TUI_AGENT_CONFIG[baseAgent].preflightTrust : undefined
   if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
     try {
       await window.api.agentTrust.markTrusted({
@@ -99,7 +99,9 @@ export async function launchAgentBackgroundSession(
     : CLIENT_PLATFORM
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[baseAgent].promptInjectionMode === 'stdin-after-start'
+  const isFollowupPath = baseAgent
+    ? TUI_AGENT_CONFIG[baseAgent].promptInjectionMode === 'stdin-after-start'
+    : false
 
   let startupPlan: AgentStartupPlan | null = null
   let pasteDraftAfterLaunch: string | null = null

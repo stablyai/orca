@@ -56,7 +56,7 @@ import {
   type BuiltInWindowsTerminalShell,
   WINDOWS_GIT_BASH_SHELL
 } from '../../../../shared/windows-terminal-shell'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -345,10 +345,16 @@ function TabBarInner({
       return { kind: 'local' }
     }
     if (agentDetectionTargetKey.startsWith('ssh:')) {
-      return { kind: 'ssh', connectionId: agentDetectionTargetKey.slice('ssh:'.length) }
+      return {
+        kind: 'ssh',
+        connectionId: agentDetectionTargetKey.slice('ssh:'.length)
+      }
     }
     if (agentDetectionTargetKey.startsWith('runtime:')) {
-      return { kind: 'runtime', environmentId: agentDetectionTargetKey.slice('runtime:'.length) }
+      return {
+        kind: 'runtime',
+        environmentId: agentDetectionTargetKey.slice('runtime:'.length)
+      }
     }
     return { kind: 'local' }
   }, [agentDetectionTargetKey])
@@ -356,9 +362,11 @@ function TabBarInner({
   const agentLaunchOptions = useMemo(
     () =>
       buildTabAgentLaunchOptions(
-        orderTabLaunchAgents(defaultAgent, detectedIds ?? [], agentProfiles).filter((agent) =>
-          isTuiAgentEnabled(agent, settings?.disabledTuiAgents)
-        ),
+        orderTabLaunchAgents(
+          defaultAgent,
+          filterEnabledTuiAgents(detectedIds ?? [], settings?.disabledTuiAgents),
+          agentProfiles
+        ).filter((agent) => isTuiAgentEnabled(agent, settings?.disabledTuiAgents)),
         agentCmdOverrides,
         agentProfiles
       ),
@@ -540,7 +548,10 @@ function TabBarInner({
       defaultEntry,
       ...allShells.filter((shell) => shell.shell !== defaultEntry.shell)
     ]
-    return orderedShells.map((entry) => ({ label: entry.label, shell: entry.shell }))
+    return orderedShells.map((entry) => ({
+      label: entry.label,
+      shell: entry.shell
+    }))
   }, [
     defaultWindowsShell,
     onNewTerminalWithShell,

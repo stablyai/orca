@@ -417,7 +417,12 @@
                 "46f1a2c9bd": "명령 입력이 비어 있습니다.",
                 "8eb541cc83": "선택한 agent가 이 워크스페이스 호스트에서 감지되지 않았습니다.",
                 "b96e091fc9": "선택한 agent는 설정에서 비활성화되어 있습니다.",
-                "a7ac8717c7": "시작하기 전에 agent를 선택하세요."
+                "a7ac8717c7": "시작하기 전에 agent를 선택하세요.",
+                "profile": {
+                  "resolution": {
+                    "failed": "Could not resolve the selected agent profile."
+                  }
+                }
               }
             }
           },

@@ -417,7 +417,12 @@
                 "46f1a2c9bd": "コマンド入力が空です。",
                 "8eb541cc83": "選択した agent はこのワークスペース ホストで検出されませんでした。",
                 "b96e091fc9": "選択した agent は設定で無効になっています。",
-                "a7ac8717c7": "開始する前に agent を選択。"
+                "a7ac8717c7": "開始する前に agent を選択。",
+                "profile": {
+                  "resolution": {
+                    "failed": "Could not resolve the selected agent profile."
+                  }
+                }
               }
             }
           },

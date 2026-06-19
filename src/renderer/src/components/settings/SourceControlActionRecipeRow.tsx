@@ -76,7 +76,11 @@ export function SourceControlActionRecipeRow({
     resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent, agentProfiles)
   )
   const agentOptions = getAgentCatalogForAction(actionId, selectedAgent, agentProfiles)
-  const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent)
+  const agentWarningText = getSourceControlActionAgentWarningText(
+    actionId,
+    selectedAgent,
+    agentProfiles
+  )
   const agentSupportText = getSourceControlActionAgentSupportText(actionId)
 
   return (

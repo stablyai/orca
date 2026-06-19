@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
-import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
+import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { isTuiAgentProfileDetected } from '../../../shared/tui-agent-profiles'
 import type {
   GitHubWorkItem,
@@ -457,7 +457,10 @@ export default function NewWorkspaceComposerCard({
       }
       const profile = agentProfiles.find((entry) => entry.id === agent.id)
       if (profile) {
-        return isTuiAgentProfileDetected(profile, detectedAgentIds)
+        return (
+          isTuiAgentEnabled(profile.baseAgent, disabledTuiAgents) &&
+          isTuiAgentProfileDetected(profile, detectedAgentIds)
+        )
       }
       return detectedAgentIds === null || detectedAgentIds.has(agent.id)
     })

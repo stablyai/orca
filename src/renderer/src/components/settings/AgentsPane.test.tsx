@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: Agents pane settings interactions share
    store-backed queue fixtures that are easier to audit beside the UI helper coverage. */
 import React from 'react'
+import { tmpdir } from 'node:os'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -307,7 +308,7 @@ describe('AgentsPane', () => {
 
   it('renders per-agent availability as labeled status choices without row explanation copy', () => {
     const markup = renderPane({
-      ...getDefaultSettings('/tmp'),
+      ...getDefaultSettings(tmpdir()),
       disabledTuiAgents: ['claude']
     })
 
@@ -323,7 +324,7 @@ describe('AgentsPane', () => {
 
   it('shows path variables in expanded agent launch settings', () => {
     const markup = renderPane({
-      ...getDefaultSettings('/tmp'),
+      ...getDefaultSettings(tmpdir()),
       agentDefaultArgs: { claude: '--plugin-dir {worktreePath}/plugins' }
     })
 
@@ -441,7 +442,9 @@ describe('AgentsPane', () => {
     await flushPromiseQueue()
 
     expect(updateSettings).toHaveBeenCalledTimes(2)
-    expect(updates[1]).toMatchObject({ disabledTuiAgents: ['claude', 'codex'] })
+    expect(updates[1]).toMatchObject({
+      disabledTuiAgents: ['claude', 'codex']
+    })
 
     writes[1].resolve()
     await secondWrite

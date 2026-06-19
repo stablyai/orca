@@ -7,6 +7,7 @@ import type { TuiAgent, TuiAgentProfile } from './types'
 export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
 
 export type AgentCliArgsPlan = { ok: true; suffix: string } | { ok: false; error: string }
+type TokenizeCliArgsResult = { ok: true; tokens: string[] } | { ok: false; error: string }
 
 export function resolveStartupShell(
   platform: NodeJS.Platform,
@@ -36,6 +37,69 @@ export function buildShellCommandFromArgv(
   return command
 }
 
+function tokenizeCliArgsTemplate(
+  template: string,
+  shell: AgentStartupShell
+): TokenizeCliArgsResult {
+  if (shell === 'posix') {
+    return tokenizeCustomCommandTemplate(template)
+  }
+  const tokens: string[] = []
+  let current = ''
+  let inToken = false
+  let quote: '"' | "'" | null = null
+  let i = 0
+
+  while (i < template.length) {
+    const ch = template[i]
+    if (quote) {
+      if (ch === '\\' && quote === '"' && template[i + 1] === '"') {
+        current += '"'
+        i += 2
+        continue
+      }
+      if (ch === quote) {
+        quote = null
+        inToken = true
+        i++
+        continue
+      }
+      current += ch
+      i++
+      continue
+    }
+
+    if (ch === '"' || ch === "'") {
+      quote = ch
+      inToken = true
+      i++
+      continue
+    }
+
+    if (/\s/.test(ch)) {
+      if (inToken) {
+        tokens.push(current)
+        current = ''
+        inToken = false
+      }
+      i++
+      continue
+    }
+
+    current += ch
+    inToken = true
+    i++
+  }
+
+  if (quote) {
+    return { ok: false, error: 'Unclosed quote in command template.' }
+  }
+  if (inToken) {
+    tokens.push(current)
+  }
+  return { ok: true, tokens }
+}
+
 export function planAgentCliArgsSuffix(
   agentArgs: string | null | undefined,
   shell: AgentStartupShell
@@ -44,9 +108,12 @@ export function planAgentCliArgsSuffix(
   if (!trimmed) {
     return { ok: true, suffix: '' }
   }
-  const tokenized = tokenizeCustomCommandTemplate(trimmed)
+  const tokenized = tokenizeCliArgsTemplate(trimmed, shell)
   if (!tokenized.ok) {
-    return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
+    return {
+      ok: false,
+      error: `CLI arguments are invalid: ${tokenized.error}`
+    }
   }
   return {
     ok: true,
@@ -79,5 +146,8 @@ export function resolveAgentStartupBaseCommand(args: {
   }
   // Why: Codex status hooks live in Orca's runtime CODEX_HOME; adding
   // --profile-v2 makes Codex load a second hook representation and warn.
-  return { ok: true, command: suffix.suffix ? `${command} ${suffix.suffix}` : command }
+  return {
+    ok: true,
+    command: suffix.suffix ? `${command} ${suffix.suffix}` : command
+  }
 }

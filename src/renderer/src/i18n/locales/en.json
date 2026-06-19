@@ -417,7 +417,12 @@
                 "46f1a2c9bd": "Command input is empty.",
                 "8eb541cc83": "The selected agent was not detected on this workspace host.",
                 "b96e091fc9": "The selected agent is disabled in Settings.",
-                "a7ac8717c7": "Choose an agent before starting."
+                "a7ac8717c7": "Choose an agent before starting.",
+                "profile": {
+                  "resolution": {
+                    "failed": "Could not resolve the selected agent profile."
+                  }
+                }
               }
             }
           },
