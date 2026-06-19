@@ -8,16 +8,21 @@ export type ModalReturnFocusSurface = {
   worktreeId: string | null
   browserPageId: string | null
   browserTarget: BrowserFocusTarget
+  terminalTabId: string | null
+  terminalLeafId: string | null
 }
 
 export type ModalReturnFocusAction =
   | { kind: 'browser'; pageId: string; target: BrowserFocusTarget }
+  | { kind: 'terminal'; tabId: string; leafId: string | null }
+  | { kind: 'editor' }
+  | { kind: 'simulator' }
   | { kind: 'surface' }
   | { kind: 'none' }
 
 // Why: a browser page lives in a separate webContents, so focus must route
-// through the browser focus request channel; terminal/editor share the DOM and
-// can be focused directly. Mirrors WorktreeJumpPalette's close-time branching.
+// through the browser focus request channel. Other surfaces need type-specific
+// DOM focus so a hidden xterm cannot steal focus from the active editor.
 export function resolveModalReturnFocusAction(
   captured: ModalReturnFocusSurface | null
 ): ModalReturnFocusAction {
@@ -26,6 +31,15 @@ export function resolveModalReturnFocusAction(
   }
   if (captured.tabType === 'browser' && captured.browserPageId) {
     return { kind: 'browser', pageId: captured.browserPageId, target: captured.browserTarget }
+  }
+  if (captured.tabType === 'terminal' && captured.terminalTabId) {
+    return { kind: 'terminal', tabId: captured.terminalTabId, leafId: captured.terminalLeafId }
+  }
+  if (captured.tabType === 'editor' && captured.worktreeId) {
+    return { kind: 'editor' }
+  }
+  if (captured.tabType === 'simulator' && captured.worktreeId) {
+    return { kind: 'simulator' }
   }
   if (captured.worktreeId) {
     return { kind: 'surface' }

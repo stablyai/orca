@@ -180,7 +180,7 @@ export default function QuickOpen(): React.JSX.Element | null {
   // Why: Radix's onCloseAutoFocus restore is suppressed below, so dismissing
   // the dialog (Esc / click-away) would otherwise leave the active panel
   // unfocused. This returns focus to the surface that was active on open.
-  const { skipReturnFocus } = useModalReturnFocus(visible)
+  const { captureReturnFocus, skipReturnFocus } = useModalReturnFocus(visible)
 
   // Why: reset input only on open. Keeping this out of the file-load effect
   // prevents unrelated store updates (which can produce a new excludePaths
@@ -233,11 +233,16 @@ export default function QuickOpen(): React.JSX.Element | null {
     e.preventDefault()
   }, [])
 
+  const handleOpenAutoFocus = useCallback(() => {
+    captureReturnFocus()
+  }, [captureReturnFocus])
+
   return (
     <CommandDialog
       open={visible}
       onOpenChange={handleOpenChange}
       shouldFilter={false}
+      onOpenAutoFocus={handleOpenAutoFocus}
       onCloseAutoFocus={handleCloseAutoFocus}
       title={translate('auto.components.QuickOpen.ec31e058f7', 'Go to file')}
       description={translate('auto.components.QuickOpen.9e97f08d0f', 'Search for a file to open')}

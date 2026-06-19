@@ -1863,6 +1863,32 @@ function RemoteBrowserPagePane({
     })
   }, [isActive])
 
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const handleBrowserFocusRequest = (event: Event): void => {
+      const detail = (event as CustomEvent<BrowserFocusRequestDetail>).detail
+      if (!detail || detail.pageId !== browserTab.id) {
+        return
+      }
+      const focusTarget = consumeBrowserFocusRequest(browserTab.id)
+      if (!focusTarget) {
+        return
+      }
+      if (focusTarget === 'address-bar') {
+        addressBarInputRef.current?.focus()
+        addressBarInputRef.current?.select()
+        return
+      }
+      const target = imageRef.current ?? remoteViewportRef.current
+      target?.focus()
+    }
+    window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+    return () =>
+      window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+  }, [browserTab.id, isActive])
+
   const runRemoteNavigation = useCallback(
     async (
       method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
@@ -2515,6 +2541,7 @@ function RemoteBrowserPagePane({
       </div>
       <div
         ref={remoteViewportRef}
+        tabIndex={-1}
         className="relative min-h-0 flex-1 overflow-hidden bg-background"
       >
         {frameUrl ? (
