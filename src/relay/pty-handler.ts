@@ -13,7 +13,6 @@ import {
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
-import { buildTerminalCapabilityEnv } from '../shared/terminal-capability-env'
 
 // Why: node-pty is a native addon that may not be installed on the remote.
 // Dynamic import keeps the require() lazy so loadPty() returns null gracefully
@@ -209,11 +208,7 @@ export class PtyHandler {
     rendererEnv: Record<string, string> | undefined,
     ctx: { id: string; paneKey?: string; shell: string; command?: string }
   ): Record<string, string> {
-    const baseEnv = {
-      ...process.env,
-      ...rendererEnv,
-      ...buildTerminalCapabilityEnv(process.env.ORCA_APP_VERSION ?? '0.0.0-dev')
-    } as Record<string, string>
+    const baseEnv = { ...process.env, ...rendererEnv } as Record<string, string>
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {

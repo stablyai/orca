@@ -629,30 +629,31 @@ describe('registerPtyHandlers', () => {
       expect(env.LANG).toBe('fr_FR.UTF-8')
     })
 
-    it('advertises xterm.js-compatible terminal capabilities while preserving Orca identity', async () => {
+    it('always sets TERM and COLORTERM regardless of env', async () => {
       const env = await spawnAndGetEnv()
       expect(env.TERM).toBe('xterm-256color')
       expect(env.COLORTERM).toBe('truecolor')
-      expect(env.TERM_PROGRAM).toBe('vscode')
-      expect(env.TERM_PROGRAM_VERSION).toBe('1.100.0')
-      expect(env.ORCA_TERM_PROGRAM).toBe('Orca')
+      expect(env.TERM_PROGRAM).toBe('Orca')
     })
 
     it('advertises OSC 8 hyperlink support via FORCE_HYPERLINK', async () => {
-      // Why: some hyperlink detectors still miss Electron embedders even with
-      // xterm.js-compatible TERM_PROGRAM values; Orca routes OSC 8 natively.
+      // Why: the supports-hyperlinks npm package hard-codes a TERM_PROGRAM
+      // allowlist (iTerm.app / WezTerm / vscode) and reports false for
+      // TERM_PROGRAM=Orca, so tools like Claude Code emit plain text instead
+      // of ESC]8;; wrappers. Setting FORCE_HYPERLINK=1 forces the detector to
+      // return true; xterm.js + our linkHandler handle the sequences natively.
       const env = await spawnAndGetEnv()
       expect(env.FORCE_HYPERLINK).toBe('1')
     })
 
-    it('surfaces ORCA_APP_VERSION as ORCA_TERM_PROGRAM_VERSION for Orca identity', async () => {
+    it('surfaces ORCA_APP_VERSION as TERM_PROGRAM_VERSION for TUI feature gating', async () => {
       const env = await spawnAndGetEnv(undefined, { ORCA_APP_VERSION: '1.2.3-test' })
-      expect(env.ORCA_TERM_PROGRAM_VERSION).toBe('1.2.3-test')
+      expect(env.TERM_PROGRAM_VERSION).toBe('1.2.3-test')
     })
 
-    it('falls back to a placeholder Orca version when ORCA_APP_VERSION is unset', async () => {
+    it('falls back to a placeholder version when ORCA_APP_VERSION is unset', async () => {
       const env = await spawnAndGetEnv(undefined, { ORCA_APP_VERSION: undefined })
-      expect(env.ORCA_TERM_PROGRAM_VERSION).toBe('0.0.0-dev')
+      expect(env.TERM_PROGRAM_VERSION).toBe('0.0.0-dev')
     })
 
     it('injects the selected Codex home into Orca terminal PTYs', async () => {

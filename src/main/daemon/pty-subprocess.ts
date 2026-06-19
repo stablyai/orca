@@ -21,7 +21,6 @@ import { resolveEffectiveWindowsPowerShell } from '../providers/windows-powershe
 import { isPwshAvailable } from '../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
-import { buildTerminalCapabilityEnv } from '../../shared/terminal-capability-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
@@ -402,7 +401,21 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   const env: Record<string, string> = {
     ...process.env,
     ...opts.env,
-    ...buildTerminalCapabilityEnv(process.env.ORCA_APP_VERSION ?? '0.0.0-dev')
+    TERM: 'xterm-256color',
+    COLORTERM: 'truecolor',
+    TERM_PROGRAM: 'Orca',
+    // Why: TUIs feature-gate on TERM_PROGRAM_VERSION. The daemon is forked
+    // by main (daemon-init.ts:93) with the parent's env, so ORCA_APP_VERSION
+    // — set in src/main/index.ts from app.getVersion() — is inherited here.
+    TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
+    // Why: opt tools (Claude Code, ls --hyperlink, etc.) into emitting OSC 8
+    // hyperlinks. The `supports-hyperlinks` npm package gates on a hard-coded
+    // TERM_PROGRAM allowlist (iTerm.app / WezTerm / vscode) and returns false
+    // for TERM_PROGRAM=Orca, so callers drop OSC 8 output entirely and emit
+    // bare text instead. xterm.js in Orca parses OSC 8 and the pane's
+    // linkHandler routes clicks, so forcing the advertisement is safe and
+    // restores clickable refs like `owner/repo#123` / `PR#123`.
+    FORCE_HYPERLINK: '1'
   } as Record<string, string>
   for (const key of opts.envToDelete ?? []) {
     delete env[key]

@@ -162,15 +162,6 @@ describe('PtyHandler', () => {
     const result = await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
     expect(result).toEqual({ id: 'pty-1' })
     expect(mockPtySpawn).toHaveBeenCalled()
-    const spawnOptions = mockPtySpawn.mock.calls[0]?.[2]
-    expect(spawnOptions?.env).toMatchObject({
-      TERM: 'xterm-256color',
-      COLORTERM: 'truecolor',
-      TERM_PROGRAM: 'vscode',
-      TERM_PROGRAM_VERSION: '1.100.0',
-      ORCA_TERM_PROGRAM: 'Orca',
-      FORCE_HYPERLINK: '1'
-    })
     expect(handler.activePtyCount).toBe(1)
   })
 
