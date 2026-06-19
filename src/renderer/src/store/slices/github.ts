@@ -1365,6 +1365,27 @@ function withBoundedCacheEntry<T extends { fetchedAt: number }>(
   return evictStaleEntries({ ...cache, [key]: entry })
 }
 
+// Why: prRefreshSequences only ever grows — one entry per PR cache key
+// (repo/branch/execution-host) ever observed, and branches are ephemeral and
+// unbounded over a long session. It has no `fetchedAt` to sort by, so bound it
+// by insertion order (oldest-touched keys evicted first; the writer moves each
+// touched key to the end). An evicted long-idle branch simply restarts sequence
+// comparison from 0, which is acceptable.
+function capPrRefreshSequences(
+  sequences: Record<string, number>,
+  maxEntries = MAX_CACHE_ENTRIES
+): Record<string, number> {
+  const keys = Object.keys(sequences)
+  if (keys.length <= maxEntries) {
+    return sequences
+  }
+  const capped: Record<string, number> = {}
+  for (const key of keys.slice(keys.length - maxEntries)) {
+    capped[key] = sequences[key]
+  }
+  return capped
+}
+
 function shouldRefreshIssueDecorations(state: AppState): boolean {
   return (state.worktreeCardProperties ?? []).includes('issue')
 }
@@ -3361,6 +3382,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           }
           continue
         }
+        // Why: delete-then-set moves this key to the end of insertion order so
+        // capPrRefreshSequences evicts genuinely idle keys, not active ones.
+        delete nextSequences[alias.cacheKey]
         nextSequences[alias.cacheKey] = event.sequence
         changed = true
 
@@ -3510,7 +3534,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
       return changed
         ? {
-            prRefreshSequences: nextSequences,
+            prRefreshSequences: capPrRefreshSequences(nextSequences),
             prRefreshStates: nextStates,
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache
