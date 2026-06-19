@@ -38,6 +38,28 @@ describe('computeWorktreeSidebarDropPreview', () => {
       })
     ).toBeNull()
   })
+
+  it('collapses lineage child rects into the parent drag unit for preview offsets', () => {
+    const preview = computeWorktreeSidebarDropPreview({
+      pointerY: 430,
+      containerTop: 0,
+      scrollTop: 0,
+      rects: [
+        { worktreeId: 'parent', groupIndex: 0, top: 0, bottom: 90 },
+        { worktreeId: 'child-a', groupIndex: 1, top: 96, bottom: 186 },
+        { worktreeId: 'child-b', groupIndex: 2, top: 192, bottom: 282 },
+        { worktreeId: 'sibling', groupIndex: 3, top: 288, bottom: 388 }
+      ],
+      groupIds: ['parent', 'sibling'],
+      draggedIds: ['parent']
+    })
+
+    expect(preview).toMatchObject({
+      dropIndex: 2,
+      dropIndicatorY: 391
+    })
+    expect(Array.from(preview?.previewOffsetsByWorktreeId ?? [])).toEqual([['sibling', -288]])
+  })
 })
 
 describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
