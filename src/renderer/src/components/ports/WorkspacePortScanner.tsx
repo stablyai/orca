@@ -13,9 +13,15 @@ import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
 
 const WORKSPACE_PORT_SCAN_INTERVAL_MS = 30_000
+const WORKSPACE_PORT_SCAN_INITIAL_DELAY_MS = 12_000
 const WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS = 1_000
 type WorkspacePortScannerRefreshOptions = {
   force?: boolean
+}
+
+type WorkspacePortTargetScan = {
+  key: string
+  result: WorkspacePortScanResult
 }
 
 function makeUnavailableScan(reason: string): WorkspacePortScanResult {
@@ -25,6 +31,22 @@ function makeUnavailableScan(reason: string): WorkspacePortScanResult {
     ports: [],
     unavailableReason: reason
   }
+}
+
+async function scanWorkspacePortTargets(
+  targets: readonly RuntimeClientTarget[]
+): Promise<WorkspacePortTargetScan[]> {
+  const results: WorkspacePortTargetScan[] = []
+  for (const target of targets) {
+    const key = workspacePortScanKeyForTarget(target)
+    try {
+      results.push({ key, result: await scanWorkspacePortsForTarget(target) })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      results.push({ key, result: makeUnavailableScan(message || 'Workspace port scan failed.') })
+    }
+  }
+  return results
 }
 
 export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }): null {
@@ -82,18 +104,10 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
 
       const generation = generationRef.current
       setWorkspacePortScanRefreshing(true)
-      const promise = Promise.all(
-        targets.map(async (target) => {
-          const key = workspacePortScanKeyForTarget(target)
-          try {
-            const result = await scanWorkspacePortsForTarget(target)
-            return { key, result }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error)
-            return { key, result: makeUnavailableScan(message || 'Workspace port scan failed.') }
-          }
-        })
-      )
+      // Why: multiple runtime hosts can map to multiple IPC/remote scans. Run
+      // them sequentially so a visible-window tick cannot fan out into several
+      // simultaneous lsof/netstat/remote probes and make the app feel frozen.
+      const promise = scanWorkspacePortTargets(targets)
         .then((results) => {
           if (generation === generationRef.current) {
             const scansByKey = Object.fromEntries(results.map(({ key, result }) => [key, result]))
@@ -142,11 +156,13 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
     setWorkspacePortScan(null)
 
     // Why: workspace port scans can cross runtime IPC or shell out remotely.
-    // Keep the timer stopped while no UI can display the result; visibility
-    // changes run one immediate refresh on return.
+    // Delay the first background scan so startup hydration and terminal restore
+    // do not compete with lsof/netstat probes.
     const stopVisibleInterval = installWindowVisibilityInterval({
       run: () => void refresh(),
-      intervalMs: WORKSPACE_PORT_SCAN_INTERVAL_MS
+      intervalMs: WORKSPACE_PORT_SCAN_INTERVAL_MS,
+      runImmediately: false,
+      initialDelayMs: WORKSPACE_PORT_SCAN_INITIAL_DELAY_MS
     })
 
     return () => {
