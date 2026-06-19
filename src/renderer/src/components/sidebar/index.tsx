@@ -84,7 +84,9 @@ function Sidebar({
   const fetchWorktreeLineage = useAppStore((s) => s.fetchWorktreeLineage)
   const onlineRuntimeEnvKey = React.useMemo(
     () =>
-      [...runtimeStatusByEnvironmentId.entries()]
+      // Why: tolerate an absent map — a partial/hydrating store can leave this
+      // undefined, and a thrown selector would crash the whole sidebar render.
+      [...(runtimeStatusByEnvironmentId?.entries() ?? [])]
         .filter(([, entry]) => Boolean(entry?.status))
         .map(([id]) => id)
         .sort()
