@@ -15,9 +15,13 @@ import { create } from 'zustand'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import type { AppState } from '../types'
+import type { GitHubPRRefreshEvent, GitHubPRRefreshReason } from '../../../../shared/types'
 
 // MAX_CACHE_ENTRIES is module-private; mirror its value here.
 const MAX_CACHE_ENTRIES = 500
+
+// A prRefreshStates entry shape (the module's PRRefreshState type is not exported).
+type SeededRefreshState = { status: 'in-flight'; reason: GitHubPRRefreshReason; updatedAt: number }
 
 const mockApi = {
   gh: {
@@ -49,11 +53,11 @@ function createTestStore() {
 }
 
 // A status-only refresh event (no outcome) lands in the prRefreshStates writer.
-function statusEvent(cacheKey: string, sequence: number) {
+function statusEvent(cacheKey: string, sequence: number): GitHubPRRefreshEvent {
   return {
     sequence,
-    reason: 'visible' as const,
-    status: 'paused' as const,
+    reason: 'visible',
+    status: 'in-flight',
     aliases: [{ cacheKey, repoPath: `/repo/${cacheKey}`, branch: cacheKey }]
   }
 }
@@ -85,10 +89,10 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
     const store = createTestStore()
 
     // Seed more state entries than the cap allows.
-    const seeded: Record<string, { status: 'paused'; reason: string; updatedAt: number }> = {}
+    const seeded: Record<string, SeededRefreshState> = {}
     const seedCount = MAX_CACHE_ENTRIES + 100
     for (let i = 0; i < seedCount; i++) {
-      seeded[`seed-${i}`] = { status: 'paused', reason: 'visible', updatedAt: 0 }
+      seeded[`seed-${i}`] = { status: 'in-flight', reason: 'visible', updatedAt: 0 }
     }
     store.setState({ prRefreshStates: seeded })
 
@@ -106,15 +110,15 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
     const store = createTestStore()
     store.getState().applyGitHubPRRefreshEvent(statusEvent('only-key', 3))
     expect(store.getState().prRefreshStates['only-key']).toBeDefined()
-    expect(store.getState().prRefreshStates['only-key']?.status).toBe('paused')
+    expect(store.getState().prRefreshStates['only-key']?.status).toBe('in-flight')
   })
 
   it('keeps a refreshed older key by moving it to most-recent before capping', () => {
     const store = createTestStore()
-    const seeded: Record<string, { status: 'paused'; reason: string; updatedAt: number }> = {}
+    const seeded: Record<string, SeededRefreshState> = {}
     const seedCount = MAX_CACHE_ENTRIES + 100
     for (let i = 0; i < seedCount; i++) {
-      seeded[`seed-${i}`] = { status: 'paused', reason: 'visible', updatedAt: 0 }
+      seeded[`seed-${i}`] = { status: 'in-flight', reason: 'visible', updatedAt: 0 }
     }
     store.setState({ prRefreshStates: seeded })
 
