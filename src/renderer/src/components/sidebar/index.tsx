@@ -15,11 +15,12 @@ import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
-const WorktreeMetaDialog = React.lazy(() => import('./WorktreeMetaDialog'))
-const RemoveFolderDialog = React.lazy(() => import('./RemoveFolderDialog'))
-const WorktreeVisibilityDialog = React.lazy(() => import('./WorktreeVisibilityDialog'))
-const OrcaYamlTrustDialog = React.lazy(() => import('./OrcaYamlTrustDialog'))
+const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
+const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
+const WorktreeVisibilityDialog = lazyWithRetry(() => import('./WorktreeVisibilityDialog'))
+const OrcaYamlTrustDialog = lazyWithRetry(() => import('./OrcaYamlTrustDialog'))
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500

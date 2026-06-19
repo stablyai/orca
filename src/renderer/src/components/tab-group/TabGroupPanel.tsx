@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo } from 'react'
+import { Suspense, useMemo } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'

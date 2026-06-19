@@ -98,6 +98,7 @@ type WorktreeCardProps = {
   lineageChildren?: React.ReactNode
   lineageChildrenStyle?: React.CSSProperties
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  isLineageDropTarget?: boolean
   onActivate?: () => void
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
@@ -202,6 +203,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   lineageChildren,
   lineageChildrenStyle,
   onLineageToggle,
+  isLineageDropTarget = false,
   affiliateListMode = false
 }: WorktreeCardProps) {
   const openModal = useAppStore((s) => s.openModal)
@@ -1682,13 +1684,15 @@ const WorktreeCard = React.memo(function WorktreeCard({
         titleOnlyCard ? 'py-2' : 'pt-1.5 pb-2',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
         'rounded-lg',
-        isActiveSurface
-          ? activeSurfaceIsSecondary
-            ? 'border border-sidebar-ring/25 bg-sidebar-accent/45 shadow-none ring-1 ring-sidebar-ring/15'
-            : 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-          : isMultiSelected
-            ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
-            : 'border border-transparent worktree-sidebar-card-hover',
+        isLineageDropTarget
+          ? 'border border-accent-foreground/20 bg-accent/80'
+          : isActiveSurface
+            ? activeSurfaceIsSecondary
+              ? 'border border-sidebar-ring/25 bg-sidebar-accent/45 shadow-none ring-1 ring-sidebar-ring/15'
+              : 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
+            : isMultiSelected
+              ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
+              : 'border border-transparent worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         revealHighlight && [
           'scroll-to-current-workspace-reveal-highlight',

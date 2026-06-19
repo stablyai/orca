@@ -86,10 +86,18 @@ function hasMeaningfulContent(chunk: string): boolean {
  * one giant session and we would never emit the idle-time stop boundaries that
  * the stats design relies on.
  */
+// Why: onExit deletes a PTY's record instead of leaving a tombstone, so a data
+// chunk delivered AFTER exit (the exit-then-data race during pty.ts shutdown)
+// would resurrect a fresh record nothing ever deletes. Remember recently-exited
+// ids in a bounded FIFO to refuse resurrection; the cap keeps the guard itself
+// bounded, and per-spawn UUID ptyIds are never reused so aged-out ids are safe.
+const MAX_EXITED_PTY_IDS = 1024
+
 export class AgentDetector {
   private ptys = new Map<string, PtyRecord>()
   private oscTitleScanTailByPtyId = new Map<string, string>()
   private meaningfulContentScanTailByPtyId = new Map<string, string>()
+  private exitedPtyIds = new Set<string>()
   private stats: StatsCollector
   private meaningfulContentDetector: MeaningfulContentDetector
 
@@ -106,6 +114,11 @@ export class AgentDetector {
   onData(ptyId: string, rawData: string, at: number): void {
     let record = this.ptys.get(ptyId)
     if (!record) {
+      // Why: refuse to resurrect a PTY that already exited — a late post-exit
+      // data chunk must not create a new tracked record (which nothing deletes).
+      if (this.exitedPtyIds.has(ptyId)) {
+        return
+      }
       record = {
         state: 'unknown',
         sessionOpen: false,
@@ -197,6 +210,16 @@ export class AgentDetector {
     this.ptys.delete(ptyId)
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.meaningfulContentScanTailByPtyId.delete(ptyId)
+    // Remember this id (bounded FIFO) so a late data chunk can't resurrect it.
+    this.exitedPtyIds.delete(ptyId)
+    this.exitedPtyIds.add(ptyId)
+    while (this.exitedPtyIds.size > MAX_EXITED_PTY_IDS) {
+      const oldest = this.exitedPtyIds.values().next()
+      if (oldest.done) {
+        break
+      }
+      this.exitedPtyIds.delete(oldest.value)
+    }
   }
 
   private extractLastOscTitleForPty(ptyId: string, rawData: string): string | null {
@@ -221,6 +244,10 @@ export class AgentDetector {
     } else {
       this.meaningfulContentScanTailByPtyId.delete(ptyId)
     }
+  }
+
+  get trackedPtyCount(): number {
+    return this.ptys.size
   }
 }
 

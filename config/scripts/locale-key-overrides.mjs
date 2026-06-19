@@ -1,5 +1,4 @@
 import { mergeLocaleKeyOverrides } from './locale-key-override-merge.mjs'
-import { KO_KEY_OVERRIDES } from './locale-ko-key-overrides.mjs'
 
 // Key-specific overrides from high-visibility UI audit (P0/P1/P2).
 // Why: some fixes depend on full key context, not English value alone.
@@ -604,7 +603,4 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.right.sidebar.PortsPanel.c9d106547a': { ja: '転送' }
 }
 
-export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(
-  BASE_LOCALE_KEY_OVERRIDES,
-  KO_KEY_OVERRIDES
-)
+export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)

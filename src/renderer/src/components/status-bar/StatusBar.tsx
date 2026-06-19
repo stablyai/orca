@@ -14,6 +14,7 @@ import {
   Server
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -70,18 +71,18 @@ type StatusBarProps = {
   floatingTerminalOpen: boolean
 }
 
-const PetStatusSegment = React.lazy(() =>
+const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
 )
-const ResourceUsageStatusSegment = React.lazy(() =>
+const ResourceUsageStatusSegment = lazyWithRetry(() =>
   import('./ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
   }))
 )
-const PortsStatusSegment = React.lazy(() =>
+const PortsStatusSegment = lazyWithRetry(() =>
   import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
 )
-const SshStatusSegment = React.lazy(() =>
+const SshStatusSegment = lazyWithRetry(() =>
   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
 )
 

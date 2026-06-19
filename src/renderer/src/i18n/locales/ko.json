@@ -3798,7 +3798,9 @@
           "8dacff1fe0": "읽음으로 표시",
           "3baa7d6507": "고정",
           "697d0f6e1b": "고정 해제",
-          "250de158fd": "워크스페이스 제거"
+          "250de158fd": "워크스페이스 제거",
+          "changeParentWorkspace": "상위 워크트리 변경...",
+          "setParentWorkspace": "상위 워크트리 설정..."
         },
         "WorktreeList": {
           "d880ea0744": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -3839,7 +3841,8 @@
           "groupDeleteFailedDesc": "그룹을 삭제하는 중 문제가 발생했습니다. 제거된 프로젝트는 없습니다.",
           "7a8b9c0d1e": "업데이트 필요",
           "hostAuthNeeded": "인증 필요",
-          "hostDisconnected": "Disconnected"
+          "hostDisconnected": "Disconnected",
+          "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",
@@ -4181,6 +4184,12 @@
           "c7d8e9f0a1": "{{value0}}개 업데이트됨",
           "d8e9f0a1b2": "{{value0}}개 건너뜀",
           "e9f0a1b2c3": "{{value0}}개 실패"
+        },
+        "WorktreeParentPickerPopover": {
+          "failedSetParent": "상위 워크트리를 설정하지 못했습니다",
+          "current": "현재",
+          "searchPlaceholder": "워크트리 검색...",
+          "empty": "일치하는 적격 워크트리가 없습니다."
         }
       },
       "shared": {
@@ -6253,7 +6262,8 @@
           "ad5d036ecc": "마이크 권한을 요청할 수 없습니다. 음성 받아쓰기가 활성화되지 않았습니다.",
           "f9a9cf6928": "음성 받아쓰기를 활성화하려면 마이크 권한이 필요합니다.",
           "1eac933202": "macOS 개인 정보 보호 및 보안을 열었습니다. 액세스 권한을 부여한 후 받아쓰기를 다시 활성화하세요.",
-          "cd9fe37556": "마이크 권한이 부여되었습니다."
+          "cd9fe37556": "마이크 권한이 부여되었습니다.",
+          "6fa734ed95": "Delete {{value0}}"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",
@@ -6814,7 +6824,6 @@
               "agent": "agent",
               "agents": "agents",
               "description": "설정된 유휴 시간이 지난 백그라운드 agent terminals을 중지하고, 다시 열 때 지원되는 세션을 재개합니다.",
-              "hibernate": "최대 절전",
               "minutes": "분",
               "sleep": "절전",
               "terminal": "terminal",
@@ -9071,6 +9080,9 @@
                 "copyCommand": "명령 복사"
               }
             }
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "보기"
           }
         }
       },

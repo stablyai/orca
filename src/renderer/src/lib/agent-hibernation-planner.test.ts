@@ -86,7 +86,7 @@ function plannedPaneKeys(input: AgentHibernationPlannerSnapshot): string[] {
   return planAgentHibernationCandidates(input).map((candidate) => candidate.paneKey)
 }
 
-describe('agent hibernation planner', () => {
+describe('agent sleep planner', () => {
   it('selects nothing when disabled, active, or foreground', () => {
     expect(
       plannedWorktrees(

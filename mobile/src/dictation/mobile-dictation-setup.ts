@@ -51,6 +51,17 @@ export async function downloadDictationModel(
   }
 }
 
+export async function deleteDictationModel(
+  client: Pick<RpcClient, 'sendRequest'>,
+  modelId: string
+): Promise<MobileSpeechSetup> {
+  const response = await client.sendRequest('speech.models.delete', { modelId })
+  if (!response.ok) {
+    throw new Error(response.error?.message || 'Failed to delete model')
+  }
+  return (response as RpcSuccess).result as MobileSpeechSetup
+}
+
 export async function setDictationConfig(
   client: Pick<RpcClient, 'sendRequest'>,
   params: { enabled?: boolean; modelId?: string; dictationMode?: 'toggle' | 'hold' }

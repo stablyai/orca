@@ -625,6 +625,10 @@ import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { VoiceSettings } from '../../shared/speech-types'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel, SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
+import {
+  deleteLocalSpeechModel,
+  getSpeechModelDeletionErrorCode
+} from '../speech/speech-model-deletion'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
@@ -2980,7 +2984,9 @@ export class OrcaRuntimeService {
       .map((group) => {
         const tabOrder = retainedOrder.get(group.id) ?? []
         const keptActive =
-          group.activeTabId && tabOrder.includes(group.activeTabId) && liveTabIds.has(group.activeTabId)
+          group.activeTabId &&
+          tabOrder.includes(group.activeTabId) &&
+          liveTabIds.has(group.activeTabId)
             ? group.activeTabId
             : null
         return {
@@ -3370,8 +3376,7 @@ export class OrcaRuntimeService {
       groupIdByTabId.set(newTabAssignment!.tabId, newTabAssignment!.groupId)
     }
     const activeGroupId =
-      (activeTopLevelId ? groupIdByTabId.get(activeTopLevelId) : undefined) ??
-      existingGroups[0]!.id
+      (activeTopLevelId ? groupIdByTabId.get(activeTopLevelId) : undefined) ?? existingGroups[0]!.id
     const orderByGroup = new Map<string, string[]>(existingGroups.map((group) => [group.id, []]))
     for (const tabId of tabOrder) {
       const groupId = groupIdByTabId.get(tabId) ?? activeGroupId
@@ -4061,14 +4066,12 @@ export class OrcaRuntimeService {
   // Merge the client's pane structure into the persisted tab layout. PTY
   // bindings and active leaf stay host-owned; only ratios/expand/titles change.
   // terminalLayoutsByTabId is keyed by tab id (worktree-independent).
-  private persistHeadlessTerminalPaneLayout(
-    args: {
-      tabId: string
-      root: TerminalPaneLayoutNode | null
-      expandedLeafId: string | null
-      titlesByLeafId?: Record<string, string>
-    }
-  ): void {
+  private persistHeadlessTerminalPaneLayout(args: {
+    tabId: string
+    root: TerminalPaneLayoutNode | null
+    expandedLeafId: string | null
+    titlesByLeafId?: Record<string, string>
+  }): void {
     const session = this.store?.getWorkspaceSession?.()
     if (!session || !this.store?.setWorkspaceSession) {
       return
@@ -4167,11 +4170,7 @@ export class OrcaRuntimeService {
     })
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const reorderedTargetActiveTabId =
-      active?.type === 'terminal'
-        ? active.parentTabId
-        : active
-          ? active.id
-          : (tabOrder[0] ?? null)
+      active?.type === 'terminal' ? active.parentTabId : active ? active.id : (tabOrder[0] ?? null)
     // Why: reorder only changes ONE group's order. Preserve every other group so
     // a multi-group split isn't deleted by re-sorting tabs in one of its groups.
     const existingGroups = snapshot.tabGroups ?? []
@@ -4323,9 +4322,7 @@ export class OrcaRuntimeService {
       ...session,
       tabsByWorktree: {
         ...session.tabsByWorktree,
-        [worktreeId]: tabs.map((tab) =>
-          tab.id === tabId ? { ...tab, customTitle: title } : tab
-        )
+        [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, customTitle: title } : tab))
       }
     })
   }
@@ -5549,6 +5546,28 @@ export class OrcaRuntimeService {
     return { started: true }
   }
 
+  async deleteMobileSpeechModel(modelId: string): Promise<RuntimeSpeechSetupState> {
+    if (!this.store?.getSettings || !this.store.updateSettings) {
+      throw new Error('voice_dictation_unavailable')
+    }
+    const store = this.store
+    try {
+      // The runtime store is adapted to the minimal speech settings contract used by deletion.
+      await deleteLocalSpeechModel({
+        store: {
+          getSettings: () => store.getSettings(),
+          updateSettings: (updates, options) => store.updateSettings?.(updates, options)
+        },
+        modelManager: getSpeechModelManager(store),
+        sttService: getSpeechSttService(store),
+        modelId
+      })
+    } catch (error) {
+      throw new Error(getSpeechModelDeletionErrorCode(error) ?? 'voice_model_delete_failed')
+    }
+    return this.listMobileSpeechModels()
+  }
+
   // Enables/disables dictation and/or selects the model, merging into the
   // existing voice settings so other voice fields are preserved.
   async configureMobileDictation(params: {
@@ -6162,6 +6181,14 @@ export class OrcaRuntimeService {
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.clearAgentRowSnapshotsForPty(ptyId)
+    // Why: a Claude agent-team leader whose PTY exits naturally (agent finished,
+    // process died, renderer reload) must release its team + nested panes map.
+    // Previously only explicit closeTerminal evicted it, so natural exits leaked
+    // one team per never-reused teamId for the runtime's lifetime.
+    const exitedTeamLeaderHandle = this.handleByPtyId.get(ptyId)
+    if (exitedTeamLeaderHandle) {
+      this.claudeAgentTeams.removeTeamForLeaderHandle(exitedTeamLeaderHandle)
+    }
     // Layout state machine: clear `layouts` and `layoutQueues`. Any
     // already-queued applyLayout work for this ptyId will run, but every
     // applyLayout re-checks `layouts.has(ptyId)` (or fresh-subscribe) and
@@ -10578,22 +10605,48 @@ export class OrcaRuntimeService {
 
   private async ensureRemoteOrcaDirIgnored(
     fsProvider: IFilesystemProvider,
-    repoPath: string
+    repoPath: string,
+    options: { required?: boolean } = {}
   ): Promise<void> {
     const gitignorePath = joinWorktreeRelativePath(repoPath, '.gitignore')
+    let result: Awaited<ReturnType<IFilesystemProvider['readFile']>>
     try {
-      const result = await fsProvider.readFile(gitignorePath)
-      if (result.isBinary || /^\.orca\/?$/m.test(result.content)) {
+      result = await fsProvider.readFile(gitignorePath)
+    } catch (error) {
+      if (!isENOENT(error)) {
+        if (options.required) {
+          throw error
+        }
+        console.warn('[runtime] Could not inspect remote .gitignore for .orca', error)
         return
       }
-      const separator = result.content.endsWith('\n') ? '' : '\n'
-      await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
-    } catch {
       try {
         await fsProvider.writeFile(gitignorePath, '.orca\n')
-      } catch (error) {
-        console.warn('[runtime] Could not update remote .gitignore to exclude .orca', error)
+      } catch (writeError) {
+        if (options.required) {
+          throw writeError
+        }
+        console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
       }
+      return
+    }
+    if (result.isBinary) {
+      if (options.required) {
+        throw new Error('Remote .gitignore is binary; cannot verify .orca is ignored')
+      }
+      return
+    }
+    if (/^\.orca\/?$/m.test(result.content)) {
+      return
+    }
+    const separator = result.content.endsWith('\n') ? '' : '\n'
+    try {
+      await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
+    } catch (writeError) {
+      if (options.required) {
+        throw writeError
+      }
+      console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
     }
   }
 
@@ -12746,6 +12799,7 @@ export class OrcaRuntimeService {
       this.store.removeWorkspaceLineage?.(worktreeWorkspaceKey(worktree.id))
     } else if (lineage?.parentWorktree) {
       const parent = await this.resolveWorktreeSelector(lineage.parentWorktree)
+
       this.validateLineageParent(worktree, parent)
       if (!worktree.instanceId || !parent.instanceId) {
         throw new RuntimeLineageError(
@@ -14918,7 +14972,19 @@ export class OrcaRuntimeService {
     }
 
     if (selector.startsWith('id:')) {
-      candidates = worktrees.filter((worktree) => worktree.id === selector.slice(3))
+      const worktreeId = selector.slice(3)
+      candidates = worktrees.filter((worktree) => worktree.id === worktreeId)
+      if (candidates.length === 0) {
+        const parsed = splitWorktreeIdForFilesystem(worktreeId)
+        const repo = parsed ? this.store?.getRepo(parsed.repoId) : null
+        const fallback =
+          repo?.connectionId && this.store?.getWorktreeMeta(worktreeId)
+            ? this.buildResolvedWorktreeFromId(worktreeId)
+            : null
+        if (fallback !== null) {
+          candidates = [fallback]
+        }
+      }
     } else if (selector.startsWith('path:')) {
       candidates = worktrees.filter((worktree) =>
         runtimePathsEqual(worktree.path, selector.slice(5))
@@ -15118,8 +15184,7 @@ export class OrcaRuntimeService {
       } catch {
         warnings.push({
           code: 'LINEAGE_PARENT_CONTEXT_MISSING',
-          message:
-            'Worktree created, but Orca could not validate the environment parent context.',
+          message: 'Worktree created, but Orca could not validate the environment parent context.',
           details: { envParentWorkspace: input.envParentWorkspace }
         })
       }
@@ -15907,6 +15972,9 @@ export class OrcaRuntimeService {
     this.clearAgentRowSnapshotsForPty(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
+      // Why: pruning can remove a PTY without onPtyExit firing; release any agent
+      // team owned by this leader handle so it does not leak.
+      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
       this.handleByPtyId.delete(ptyId)
       const record = this.handles.get(handle)
       if (record?.tabId.startsWith('pty:')) {

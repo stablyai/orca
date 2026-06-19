@@ -1,6 +1,7 @@
 /* eslint-disable max-lines */
 
-import React, { useEffect, useCallback, useMemo, useRef, useState, lazy, Suspense } from 'react'
+import React, { useEffect, useCallback, useMemo, useRef, useState, Suspense } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'

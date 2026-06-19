@@ -630,7 +630,32 @@ function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoI
     : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
 }
 
-function settingsForWorktreeOwner(state: Pick<AppState, 'repos' | 'settings'>, worktreeId: string) {
+function settingsForExecutionHostOwner(
+  settings: AppState['settings'],
+  executionHostId: string | null | undefined
+) {
+  const parsed = parseExecutionHostId(executionHostId)
+  if (parsed?.kind === 'runtime') {
+    return settings
+      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
+      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
+  }
+  if (parsed?.kind === 'local' || parsed?.kind === 'ssh') {
+    return settings
+      ? { ...settings, activeRuntimeEnvironmentId: null }
+      : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+  }
+  return settings
+}
+
+function settingsForWorktreeOwner(
+  state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo'>,
+  worktreeId: string
+) {
+  const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
+  if (worktree?.hostId) {
+    return settingsForExecutionHostOwner(state.settings, worktree.hostId)
+  }
   return settingsForRepoOwner(state, getRepoIdFromWorktreeId(worktreeId))
 }
 
@@ -730,6 +755,87 @@ function projectWorktreeLineageToWorkspaceLineage(
   return next
 }
 
+type WorktreeLineageUpdateResult = {
+  target: ReturnType<typeof getActiveRuntimeTarget>
+  lineage: WorktreeLineage | null
+  updatedRemoteWorktree?: WorktreeWithLineage
+}
+
+async function setWorktreeLineageForRuntime(
+  settings: AppState['settings'],
+  worktreeId: string,
+  args: { parentWorktreeId?: string; noParent?: boolean }
+): Promise<WorktreeLineageUpdateResult> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind === 'local') {
+    return {
+      target,
+      lineage: await window.api.worktrees.updateLineage({ worktreeId, ...args })
+    }
+  }
+  const result = await callRuntimeRpc<{ worktree: WorktreeWithLineage }>(
+    target,
+    'worktree.set',
+    {
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      ...(args.parentWorktreeId
+        ? { parentWorktree: toRuntimeWorktreeSelector(args.parentWorktreeId) }
+        : {}),
+      ...(args.noParent === true ? { noParent: true } : {})
+    },
+    { timeoutMs: 15_000 }
+  )
+  return {
+    target,
+    lineage: result.worktree.lineage ?? null,
+    updatedRemoteWorktree: result.worktree
+  }
+}
+
+function applyWorktreeLineageUpdate(
+  set: Parameters<StateCreator<AppState>>[0],
+  worktreeId: string,
+  result: WorktreeLineageUpdateResult
+): void {
+  set((s) => {
+    const next = { ...s.worktreeLineageById }
+    if (result.lineage) {
+      next[worktreeId] = result.lineage
+    } else {
+      delete next[worktreeId]
+    }
+    return {
+      worktreeLineageById: next,
+      workspaceLineageByChildKey: projectWorktreeLineageToWorkspaceLineage(
+        worktreeId,
+        result.lineage,
+        s.workspaceLineageByChildKey
+      ),
+      worktreesByRepo:
+        result.target.kind === 'local' || !result.updatedRemoteWorktree
+          ? s.worktreesByRepo
+          : replaceWorktreeInRepoLists(s.worktreesByRepo, result.updatedRemoteWorktree),
+      sortEpoch: s.sortEpoch + 1
+    }
+  })
+}
+
+async function refreshWorktreeLineageForSettings(
+  settings: AppState['settings'],
+  set: Parameters<StateCreator<AppState>>[0]
+): Promise<void> {
+  const lineage = await listWorktreeLineageForRuntime(settings)
+  const hostId = getSettingsFocusedExecutionHostId(settings)
+  set((s) => ({
+    worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
+    workspaceLineageByChildKey: mergeWorkspaceLineageForHost(
+      s,
+      hostId,
+      lineage.workspaceLineageByChildKey
+    )
+  }))
+}
+
 async function refreshRemoteWorktreeLineageBestEffort(
   settings: AppState['settings'],
   set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void
@@ -756,16 +862,20 @@ async function refreshRemoteWorktreeLineageBestEffort(
 }
 
 function getWorktreeHostId(
-  state: Pick<AppState, 'repos'>,
+  state: Pick<AppState, 'repos' | 'worktreesByRepo'>,
   worktreeId: string
 ): ExecutionHostId | null {
+  const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
+  if (worktree?.hostId) {
+    return worktree.hostId
+  }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const repo = state.repos.find((entry) => entry.id === repoId)
   return repo ? getRepoExecutionHostId(repo) : null
 }
 
 function mergeLineageForHost(
-  state: Pick<AppState, 'repos' | 'worktreeLineageById'>,
+  state: Pick<AppState, 'repos' | 'worktreesByRepo' | 'worktreeLineageById'>,
   hostId: ExecutionHostId,
   lineage: Record<string, WorktreeLineage>
 ): Record<string, WorktreeLineage> {
@@ -779,7 +889,7 @@ function mergeLineageForHost(
 }
 
 function mergeWorkspaceLineageForHost(
-  state: Pick<AppState, 'repos' | 'workspaceLineageByChildKey'>,
+  state: Pick<AppState, 'repos' | 'worktreesByRepo' | 'workspaceLineageByChildKey'>,
   hostId: ExecutionHostId,
   lineage: Record<string, WorkspaceLineage>
 ): Record<string, WorkspaceLineage> {
@@ -936,8 +1046,9 @@ function buildWorktreeRenameState(
   for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
     renameKey(key, renameValueByKey[key] as ((value: unknown) => unknown) | undefined)
   }
-  // Not in the shared purge list (purge drops them only via single removeWorktree);
-  // re-key them here so a renamed worktree keeps its editor-undo + push/pull state.
+  // Re-key these on rename so a renamed worktree keeps its editor-undo + push/pull
+  // state. (Both removal paths — buildWorktreePurgeState and the single
+  // removeWorktree reducer — now also purge them on removal.)
   renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>
     files.map(withNewWorktreeId)
   )
@@ -1024,6 +1135,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
   // Collect every tab id (and removed file id) we are about to orphan.
   const doomedTabIds = new Set<string>()
   const doomedBrowserWorkspaceIds = new Set<string>()
+  const doomedPageIds = new Set<string>()
   const removedFileIds = new Set<string>()
   for (const id of worktreeIdSet) {
     for (const tab of s.tabsByWorktree[id] ?? []) {
@@ -1031,6 +1143,15 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     for (const workspace of s.browserTabsByWorktree[id] ?? []) {
       doomedBrowserWorkspaceIds.add(workspace.id)
+    }
+  }
+  // Why: the per-page browser maps are keyed by page id, not worktree/workspace id.
+  // Collect every page owned by a doomed workspace so this bulk purge can evict
+  // them. (The single removeWorktree path clears these via closeBrowserTab, but the
+  // authoritative-scan reconcile that also reaches this reducer does not.)
+  for (const workspaceId of doomedBrowserWorkspaceIds) {
+    for (const page of s.browserPagesByWorkspace[workspaceId] ?? []) {
+      doomedPageIds.add(page.id)
     }
   }
   for (const file of s.openFiles) {
@@ -1109,6 +1230,17 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return changed ? out : obj
   }
+  const omitByPageId = <T>(obj: Record<string, T>): Record<string, T> => {
+    let changed = false
+    const out = { ...obj }
+    for (const pageId of doomedPageIds) {
+      if (pageId in out) {
+        delete out[pageId]
+        changed = true
+      }
+    }
+    return changed ? out : obj
+  }
   const omitByFileId = <T>(obj: Record<string, T>): Record<string, T> => {
     let changed = false
     const out = { ...obj }
@@ -1166,6 +1298,20 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     browserPagesByWorkspace: omitByBrowserWorkspaceId(s.browserPagesByWorkspace),
     recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
     activeBrowserTabIdByWorktree: omitByWorktree(s.activeBrowserTabIdByWorktree),
+    // Why: these browser maps are keyed by page/workspace id and were only cleaned
+    // on the single-worktree removal path (closeBrowserTab); this bulk reconcile path
+    // missed them, orphaning an annotation/handle/focus/closed-page entry per page of
+    // every externally-removed worktree for the session.
+    browserAnnotationsByPageId: omitByPageId(s.browserAnnotationsByPageId),
+    remoteBrowserPageHandlesByPageId: omitByPageId(s.remoteBrowserPageHandlesByPageId),
+    pendingAddressBarFocusByPageId: omitByPageId(s.pendingAddressBarFocusByPageId),
+    // createBrowserTab writes both the workspace id and the page id into this map.
+    pendingAddressBarFocusByTabId: omitByPageId(
+      omitByBrowserWorkspaceId(s.pendingAddressBarFocusByTabId)
+    ),
+    recentlyClosedBrowserPagesByWorkspace: omitByBrowserWorkspaceId(
+      s.recentlyClosedBrowserPagesByWorkspace
+    ),
     // Editor state
     activeFileIdByWorktree: omitByWorktree(s.activeFileIdByWorktree),
     activeTabTypeByWorktree: omitByWorktree(s.activeTabTypeByWorktree),
@@ -1181,6 +1327,9 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
     // Git status caches
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
+    // Why: keyed by worktreeId; re-keyed on rename but missed by both removal
+    // paths, leaking an upstream-status entry per removed worktree.
+    remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
     gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
     gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
     gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),
@@ -1204,10 +1353,18 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // leaking a cursor-line / view-mode entry per file of every removed worktree.
     editorCursorLine: omitByFileId(s.editorCursorLine),
     editorViewMode: omitByFileId(s.editorViewMode),
+    // Why: keyed by worktreeId; re-keyed on rename but missed by both removal
+    // paths, leaking the per-worktree editor-undo (Cmd/Ctrl+Shift+T) snapshots.
+    recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
     // Top-level actives
     openFiles: nextOpenFiles,
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
     lastVisitedAtByWorktreeId: omitByWorktree(s.lastVisitedAtByWorktreeId),
+    // Why: keyed by worktreeId; the write-once default-terminal idempotency guard
+    // was re-keyed on rename but missed by both removal paths.
+    defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
+      s.defaultTerminalTabsAppliedByWorktreeId
+    ),
     activeWorktreeId: removedActive ? null : s.activeWorktreeId,
     activeWorkspaceKey: (() => {
       if (s.activeWorkspaceKey && worktreeIdSet.has(s.activeWorkspaceKey)) {
@@ -1417,68 +1574,38 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       // Why: lineage is a focused-host refresh — fetch from the focused host and
       // host-merge so other hosts' previously fetched lineage is preserved.
-      const settings = get().settings
-      const lineage = await listWorktreeLineageForRuntime(settings)
-      const hostId = getSettingsFocusedExecutionHostId(settings)
-      set((s) => ({
-        worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
-        workspaceLineageByChildKey: mergeWorkspaceLineageForHost(
-          s,
-          hostId,
-          lineage.workspaceLineageByChildKey
-        )
-      }))
+      await refreshWorktreeLineageForSettings(get().settings, set)
     } catch (err) {
       console.error('Failed to fetch worktree lineage:', err)
     }
   },
 
   updateWorktreeLineage: async (worktreeId, args) => {
+    const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
     try {
-      const target = getActiveRuntimeTarget(settingsForWorktreeOwner(get(), worktreeId))
-      let updatedRemoteWorktree: WorktreeWithLineage | undefined
-      const lineage =
-        target.kind === 'local'
-          ? await window.api.worktrees.updateLineage({ worktreeId, ...args })
-          : await callRuntimeRpc<{ worktree: WorktreeWithLineage }>(
-              target,
-              'worktree.set',
-              {
-                worktree: toRuntimeWorktreeSelector(worktreeId),
-                ...(args.parentWorktreeId
-                  ? { parentWorktree: toRuntimeWorktreeSelector(args.parentWorktreeId) }
-                  : {}),
-                ...(args.noParent === true ? { noParent: true } : {})
-              },
-              { timeoutMs: 15_000 }
-            ).then((result) => {
-              updatedRemoteWorktree = result.worktree
-              return result.worktree.lineage ?? null
-            })
-      set((s) => {
-        const next = { ...s.worktreeLineageById }
-        if (lineage) {
-          next[worktreeId] = lineage
-        } else {
-          delete next[worktreeId]
-        }
-        return {
-          worktreeLineageById: next,
-          workspaceLineageByChildKey: projectWorktreeLineageToWorkspaceLineage(
-            worktreeId,
-            lineage,
-            s.workspaceLineageByChildKey
-          ),
-          worktreesByRepo:
-            target.kind === 'local' || !updatedRemoteWorktree
-              ? s.worktreesByRepo
-              : replaceWorktreeInRepoLists(s.worktreesByRepo, updatedRemoteWorktree),
-          sortEpoch: s.sortEpoch + 1
-        }
-      })
+      applyWorktreeLineageUpdate(
+        set,
+        worktreeId,
+        await setWorktreeLineageForRuntime(ownerSettings, worktreeId, args)
+      )
     } catch (err) {
       console.error('Failed to update worktree lineage:', err)
-      await get().fetchWorktreeLineage()
+      await refreshWorktreeLineageForSettings(ownerSettings, set)
+    }
+  },
+
+  assignWorktreeParent: async (worktreeId, args) => {
+    const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
+    try {
+      applyWorktreeLineageUpdate(
+        set,
+        worktreeId,
+        await setWorktreeLineageForRuntime(ownerSettings, worktreeId, args)
+      )
+    } catch (err) {
+      console.error('Failed to assign worktree parent:', err)
+      await refreshWorktreeLineageForSettings(ownerSettings, set)
+      throw err
     }
   },
 
@@ -2084,6 +2211,23 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             // inherits stale matches from a path that no longer exists.
             delete nextSearch[worktreeId]
             return nextSearch
+          })(),
+          // Why: these worktree-keyed maps are re-keyed on rename but were missed
+          // by both removal paths, leaking one entry per removed worktree.
+          remoteStatusesByWorktree: (() => {
+            const next = { ...s.remoteStatusesByWorktree }
+            delete next[worktreeId]
+            return next
+          })(),
+          recentlyClosedEditorTabsByWorktree: (() => {
+            const next = { ...s.recentlyClosedEditorTabsByWorktree }
+            delete next[worktreeId]
+            return next
+          })(),
+          defaultTerminalTabsAppliedByWorktreeId: (() => {
+            const next = { ...s.defaultTerminalTabsAppliedByWorktreeId }
+            delete next[worktreeId]
+            return next
           })(),
           activeWorktreeId: removedActiveWorktree ? null : s.activeWorktreeId,
           activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,

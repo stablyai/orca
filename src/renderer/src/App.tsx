@@ -1,6 +1,5 @@
 /* eslint-disable max-lines */
 import {
-  lazy,
   Suspense,
   useCallback,
   useEffect,
@@ -10,6 +9,7 @@ import {
   useState,
   type SetStateAction
 } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 
 import {
   ArrowLeft,

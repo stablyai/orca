@@ -1365,23 +1365,77 @@ function withBoundedCacheEntry<T extends { fetchedAt: number }>(
   return evictStaleEntries({ ...cache, [key]: entry })
 }
 
-// Why: prRefreshSequences only ever grows — one entry per PR cache key
-// (repo/branch/execution-host) ever observed, and branches are ephemeral and
-// unbounded over a long session. It has no `fetchedAt` to sort by, so bound it
-// by insertion order (oldest-touched keys evicted first; the writer moves each
-// touched key to the end). An evicted long-idle branch simply restarts sequence
-// comparison from 0, which is acceptable.
+// Why: the prRefresh* maps are keyed by PR cache key (repo/branch/execution-host)
+// — an ephemeral, unbounded key space over a long session. They have no
+// `fetchedAt` to sort by, so bound them by insertion order (oldest-touched keys
+// evicted first; the writers move each touched key to the end). An evicted
+// long-idle branch simply restarts from a clean state, which is acceptable.
+function capRecordByInsertionOrder<T>(
+  record: Record<string, T>,
+  maxEntries = MAX_CACHE_ENTRIES
+): Record<string, T> {
+  const keys = Object.keys(record)
+  if (keys.length <= maxEntries) {
+    return record
+  }
+  const capped: Record<string, T> = {}
+  for (const key of keys.slice(keys.length - maxEntries)) {
+    capped[key] = record[key]
+  }
+  return capped
+}
+
 function capPrRefreshSequences(
   sequences: Record<string, number>,
   maxEntries = MAX_CACHE_ENTRIES
 ): Record<string, number> {
-  const keys = Object.keys(sequences)
-  if (keys.length <= maxEntries) {
-    return sequences
+  return capRecordByInsertionOrder(sequences, maxEntries)
+}
+
+// Why: prRefreshStates backs visible status pills (refreshing/queued/paused/error)
+// so — unlike the invisible sequence guard — eviction must never drop an in-progress
+// indicator. Bound it well above any realistic tracked-branch count, and when over
+// cap evict *settled* statuses (error/skipped) first; only fall back to evicting an
+// active (in-flight/queued/paused) entry as a last-resort hard memory bound that
+// realistic usage never reaches. Evicted entries self-heal on the next refresh event.
+const MAX_PR_REFRESH_STATE_ENTRIES = 2000
+const SETTLED_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>(['error', 'skipped'])
+
+function capPrRefreshStates(
+  states: Record<string, PRRefreshState>,
+  maxEntries = MAX_PR_REFRESH_STATE_ENTRIES
+): Record<string, PRRefreshState> {
+  const keys = Object.keys(states)
+  let toEvict = keys.length - maxEntries
+  if (toEvict <= 0) {
+    return states
   }
-  const capped: Record<string, number> = {}
-  for (const key of keys.slice(keys.length - maxEntries)) {
-    capped[key] = sequences[key]
+  const evicted = new Set<string>()
+  // First pass: evict oldest settled (error/skipped) entries.
+  for (const key of keys) {
+    if (toEvict === 0) {
+      break
+    }
+    if (SETTLED_PR_REFRESH_STATUSES.has(states[key].status)) {
+      evicted.add(key)
+      toEvict--
+    }
+  }
+  // Last resort: evict oldest remaining keys to enforce the hard bound.
+  for (const key of keys) {
+    if (toEvict === 0) {
+      break
+    }
+    if (!evicted.has(key)) {
+      evicted.add(key)
+      toEvict--
+    }
+  }
+  const capped: Record<string, PRRefreshState> = {}
+  for (const key of keys) {
+    if (!evicted.has(key)) {
+      capped[key] = states[key]
+    }
   }
   return capped
 }
@@ -3523,6 +3577,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
             // longer live and would otherwise accumulate per refresh sequence.
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
           }
+          // Why: delete-then-set moves this key to the end of insertion order so
+          // capRecordByInsertionOrder evicts genuinely idle keys, not active ones.
+          delete nextStates[alias.cacheKey]
           nextStates[alias.cacheKey] = {
             status: event.status,
             reason: event.reason,
@@ -3535,7 +3592,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return changed
         ? {
             prRefreshSequences: capPrRefreshSequences(nextSequences),
-            prRefreshStates: nextStates,
+            // Why: bound prRefreshStates too (same unbounded PR-cache-key space),
+            // but with status-aware eviction so visible in-progress pills survive.
+            prRefreshStates: capPrRefreshStates(nextStates),
             prCache: nextPRCache,
             hostedReviewCache: nextHostedReviewCache
           }

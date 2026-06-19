@@ -142,6 +142,11 @@ module.exports = {
   },
   win: {
     executableName: 'Orca',
+    // Why: Windows installers are signed after electron-builder packaging by
+    // SignPath, so the packager cannot infer the updater publisherName.
+    signtoolOptions: {
+      publisherName: 'SignPath Foundation'
+    },
     extraResources: [
       ...commonExtraResources,
       winSpeechNativeResource,
