@@ -66,6 +66,10 @@ export function mergeWorktree(
     // Why: diff comments are persisted on WorktreeMeta and forwarded verbatim
     // so the renderer store mirrors on-disk state.
     diffComments: meta?.diffComments,
-    mobileDiffReview: meta?.mobileDiffReview
+    mobileDiffReview: meta?.mobileDiffReview,
+    // Why: per-terminal notes live on WorktreeMeta keyed by leafId; forward
+    // them so the renderer can surface each terminal's note. Undefined when
+    // no terminal in the worktree has a note.
+    ...(meta?.terminalComments !== undefined ? { terminalComments: meta.terminalComments } : {})
   }
 }

@@ -496,6 +496,11 @@ export type Worktree = {
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
   mobileDiffReview?: MobileDiffReviewState
+  /** Per-terminal notes keyed by stable terminal leafId. Sibling of the
+   *  worktree-level `comment`; persisted on WorktreeMeta and forwarded to the
+   *  renderer so the terminal pane and worktree card can surface a terminal's
+   *  self-declared state. Absent when no terminal in the worktree has a note. */
+  terminalComments?: Record<string, string>
   automationProvenance?: AutomationWorkspaceProvenance
 } & GitWorktreeInfo
 
@@ -606,6 +611,8 @@ export type WorktreeMeta = {
    *  them. Self-prunes when the worktree is deleted. */
   priorWorktreeIds?: string[]
   mobileDiffReview?: MobileDiffReviewState
+  /** Per-terminal notes keyed by stable terminal leafId. See {@link Worktree.terminalComments}. */
+  terminalComments?: Record<string, string>
   /** System-owned provenance for workspaces created by automation new-per-run dispatches. */
   automationProvenance?: AutomationWorkspaceProvenance
 }

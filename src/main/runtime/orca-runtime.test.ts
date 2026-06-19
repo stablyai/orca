@@ -1363,6 +1363,54 @@ describe('OrcaRuntimeService', () => {
     expect(shown.ptyId).toBe('pty-1')
   })
 
+  it('sets, surfaces, and clears a per-terminal note keyed by leafId', async () => {
+    // Why: notes persist on worktree meta keyed by leafId, so use a store that
+    // actually retains setWorktreeMeta writes (the default store is read-only).
+    const { runtimeStore } = createStaleRuntimeWorktreeStore('repo-1::/tmp/worktree-a')
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Claude',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    const { handle } = (await runtime.listTerminals('branch:feature/foo')).terminals[0]
+
+    const note = await runtime.setTerminalComment(handle, '  running tests  ')
+    // Trimmed on write so display/aggregation stay clean.
+    expect(note).toMatchObject({ leafId: 'pane:1', comment: 'running tests' })
+
+    const shown = await runtime.showTerminal(handle)
+    expect(shown.comment).toBe('running tests')
+
+    const ps = await runtime.getWorktreePs()
+    const wt = ps.worktrees.find((w) => w.worktreeId === 'repo-1::/tmp/worktree-a')
+    expect(wt?.terminals.find((t) => t.leafId === 'pane:1')?.comment).toBe('running tests')
+
+    // Clearing removes the note (and the leafId key) so it no longer surfaces.
+    const cleared = await runtime.setTerminalComment(handle, null)
+    expect(cleared.comment).toBeNull()
+    expect((await runtime.showTerminal(handle)).comment).toBeNull()
+    expect(runtimeStore.getWorktreeMeta('repo-1::/tmp/worktree-a')?.terminalComments).toEqual({})
+  })
+
   it('keeps targeted terminal lists from adopting controller PTYs for other worktrees', async () => {
     vi.mocked(listWorktrees).mockResolvedValue([
       ...MOCK_GIT_WORKTREES,
@@ -10860,8 +10908,18 @@ describe('OrcaRuntimeService', () => {
       },
       tabGroups: {
         [TEST_WORKTREE_ID]: [
-          { id: 'group-left', worktreeId: TEST_WORKTREE_ID, activeTabId: 'host-tab', tabOrder: ['host-tab'] },
-          { id: 'group-right', worktreeId: TEST_WORKTREE_ID, activeTabId: 'host-tab-2', tabOrder: ['host-tab-2'] }
+          {
+            id: 'group-left',
+            worktreeId: TEST_WORKTREE_ID,
+            activeTabId: 'host-tab',
+            tabOrder: ['host-tab']
+          },
+          {
+            id: 'group-right',
+            worktreeId: TEST_WORKTREE_ID,
+            activeTabId: 'host-tab-2',
+            tabOrder: ['host-tab-2']
+          }
         ]
       },
       tabGroupLayouts: {
@@ -12718,6 +12776,14 @@ describe('OrcaRuntimeService', () => {
           status: 'active',
           unread: false,
           liveTerminalCount: 1,
+          terminals: [
+            {
+              handle: expect.any(String),
+              leafId: 'pane:1',
+              title: 'Claude',
+              comment: null
+            }
+          ],
           hasAttachedPty: true,
           lastOutputAt: 321,
           preview: 'build green',

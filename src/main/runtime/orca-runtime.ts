@@ -216,6 +216,7 @@ import type {
   RuntimeGraphStatus,
   RuntimeRepoSearchRefs,
   RuntimeTerminalRead,
+  RuntimeTerminalNote,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
   RuntimeTerminalCreate,
@@ -1207,7 +1208,10 @@ function mergeRuntimeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
       : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,
-    mobileDiffReview: meta.mobileDiffReview
+    mobileDiffReview: meta.mobileDiffReview,
+    // Why: forward per-terminal notes (keyed by leafId) so folder workspaces
+    // surface them the same way git worktrees do. See Worktree.terminalComments.
+    ...(meta.terminalComments !== undefined ? { terminalComments: meta.terminalComments } : {})
   }
 }
 
@@ -7914,7 +7918,14 @@ export class OrcaRuntimeService {
     // PR info so mobile clients can group worktrees by PR state without making
     // expensive `gh` CLI calls. Falls back to meta.linkedPR if no cache entry exists.
     const ghCache = this.store?.getGitHubCache?.()
+    // Why: per-terminal notes live on the resolved worktree (forwarded from
+    // meta). Capture them by worktreeId so the leaf loop below can nest each
+    // terminal's note without re-resolving.
+    const terminalCommentsByWorktreeId = new Map<string, Record<string, string>>()
     for (const worktree of resolvedWorktrees) {
+      if (worktree.terminalComments) {
+        terminalCommentsByWorktreeId.set(worktree.id, worktree.terminalComments)
+      }
       const meta =
         this.store?.getWorktreeMeta?.(worktree.id) ?? this.store?.getAllWorktreeMeta()[worktree.id]
       const repo = repoById.get(worktree.repoId)
@@ -7955,6 +7966,7 @@ export class OrcaRuntimeService {
         isActive: false,
         unread: meta?.isUnread ?? false,
         liveTerminalCount: 0,
+        terminals: [],
         hasAttachedPty: false,
         lastOutputAt: null,
         preview: '',
@@ -7992,6 +8004,7 @@ export class OrcaRuntimeService {
         isActive: false,
         unread: worktree.isUnread,
         liveTerminalCount: 0,
+        terminals: [],
         hasAttachedPty: false,
         lastOutputAt: null,
         preview: '',
@@ -8015,6 +8028,12 @@ export class OrcaRuntimeService {
       }
       const previousLastOutputAt = summary.lastOutputAt
       summary.liveTerminalCount += 1
+      summary.terminals.push({
+        handle: this.issueHandle(leaf),
+        leafId: leaf.leafId,
+        title: this.tabs.get(leaf.tabId)?.title ?? null,
+        comment: terminalCommentsByWorktreeId.get(leaf.worktreeId)?.[leaf.leafId] ?? null
+      })
       summary.hasAttachedPty = summary.hasAttachedPty || leaf.connected
       summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, leaf.lastOutputAt)
       summary.status = mergeWorktreeStatus(
@@ -13743,6 +13762,35 @@ export class OrcaRuntimeService {
     return { handle, tabId: leaf.tabId, title }
   }
 
+  // Why: per-terminal notes persist on the worktree meta keyed by the stable
+  // pane leafId — the same key titles use — so a note survives reconnect with
+  // its terminal. Mirrors the worktree `comment` write path (store + notify).
+  async setTerminalComment(handle: string, comment: string | null): Promise<RuntimeTerminalNote> {
+    this.assertGraphReady()
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    const worktree = await this.resolveWorktreeSelector(`id:${leaf.worktreeId}`)
+    const existing =
+      this.store.getWorktreeMeta?.(leaf.worktreeId)?.terminalComments ??
+      this.store.getAllWorktreeMeta()[leaf.worktreeId]?.terminalComments ??
+      {}
+    const trimmed = comment?.trim() ?? ''
+    // Read-modify-write the whole record: setWorktreeMeta shallow-merges, so a
+    // partial terminalComments object would replace (not merge) the key.
+    const next = { ...existing }
+    if (trimmed.length === 0) {
+      delete next[leaf.leafId]
+    } else {
+      next[leaf.leafId] = trimmed
+    }
+    this.store.setWorktreeMeta(leaf.worktreeId, { terminalComments: next })
+    this.invalidateResolvedWorktreeCache()
+    this.notifier?.worktreesChanged(worktree.repoId)
+    return { handle, leafId: leaf.leafId, comment: trimmed.length === 0 ? null : trimmed }
+  }
+
   async createTerminal(
     worktreeSelector?: string,
     opts: {
@@ -16044,6 +16092,7 @@ export class OrcaRuntimeService {
       tabId: leaf.tabId,
       leafId: leaf.leafId,
       title: getLatestLeafTitle(leaf, tab?.title ?? null),
+      comment: worktree?.terminalComments?.[leaf.leafId] ?? null,
       connected: leaf.connected,
       writable: leaf.writable,
       lastOutputAt: leaf.lastOutputAt,
@@ -17082,6 +17131,9 @@ export class OrcaRuntimeService {
       tabId: `pty:${pty.ptyId}`,
       leafId: `pty:${pty.ptyId}`,
       title: getLatestPtyTitle(pty),
+      // Why: notes are keyed by renderer leafId; a bare PTY (no renderer leaf)
+      // has no stable leafId to key a note, so it never carries one.
+      comment: null,
       connected: pty.connected,
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,

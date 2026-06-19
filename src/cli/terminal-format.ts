@@ -3,6 +3,7 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
+  RuntimeTerminalNote,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
@@ -18,7 +19,7 @@ export function formatTerminalList(result: RuntimeTerminalListResult): string {
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  ${terminal.worktreePath}${terminal.comment ? `\nnote: ${terminal.comment}` : ''}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   return result.truncated
@@ -31,6 +32,7 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
   return [
     `handle: ${terminal.handle}`,
     `title: ${terminal.title ?? '(untitled)'}`,
+    `note: ${terminal.comment ?? '(none)'}`,
     `worktree: ${terminal.worktreePath}`,
     `branch: ${terminal.branch}`,
     `leaf: ${terminal.leafId}`,
@@ -90,6 +92,12 @@ export function formatTerminalRename(result: { rename: RuntimeTerminalRename }):
   return result.rename.title
     ? `Renamed terminal ${result.rename.handle} to "${result.rename.title}".`
     : `Cleared title for terminal ${result.rename.handle}.`
+}
+
+export function formatTerminalNote(result: { note: RuntimeTerminalNote }): string {
+  return result.note.comment
+    ? `Set note for terminal ${result.note.handle}: "${result.note.comment}".`
+    : `Cleared note for terminal ${result.note.handle}.`
 }
 
 export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
