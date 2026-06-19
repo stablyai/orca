@@ -112,6 +112,10 @@ export function useTerminalContainerFitSync({
     function finishResizeSettle(flush: boolean): void {
       clearTimer()
       clearMaxSettleTimer()
+      const hasActiveSettle = releaseResizeSettle !== null || ptyResizeHold !== null
+      if (!hasActiveSettle) {
+        return
+      }
       const manager = managerRef.current
       if (flush && manager) {
         // Why: while the outer terminal container is resizing, per-pane

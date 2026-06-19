@@ -221,6 +221,44 @@ describe('useTerminalContainerFitSync', () => {
     expect(event.detail).toEqual({ cols: 110, rows: 32 })
   })
 
+  it('does not fit twice when the quiet and max-settle timers converge', () => {
+    const paneElement = createPaneElement()
+    const container = {
+      classList: { contains: () => false },
+      querySelectorAll: () => [paneElement]
+    } as unknown as HTMLDivElement
+
+    useTerminalContainerFitSync({
+      isVisible: true,
+      isSyncFitEnabled: true,
+      managerRef: { current: { fitAllPanes: vi.fn() } as never },
+      containerRef: { current: container }
+    })
+
+    mockResizeObservers[0]?.trigger()
+    expect(queuePanePtyResizeIfHeld(paneElement, 115, 33)).toBe(true)
+
+    let elapsedMs = 0
+    const finalObservationMs =
+      TERMINAL_CONTAINER_RESIZE_MAX_SETTLE_MS - TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS
+    while (elapsedMs + TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS - 1 < finalObservationMs) {
+      vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS - 1)
+      elapsedMs += TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS - 1
+      mockResizeObservers[0]?.trigger()
+    }
+    vi.advanceTimersByTime(finalObservationMs - elapsedMs)
+    mockResizeObservers[0]?.trigger()
+
+    vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS)
+    vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS)
+
+    expect(mocks.fitPanes).toHaveBeenCalledTimes(1)
+    expect(isTerminalContainerResizeSettling()).toBe(false)
+    expect(paneElement.dispatchEvent).toHaveBeenCalledTimes(1)
+    const event = vi.mocked(paneElement.dispatchEvent).mock.calls[0]?.[0] as CustomEvent
+    expect(event.detail).toEqual({ cols: 115, rows: 33 })
+  })
+
   it('holds resize work while the window is minimized and flushes after restore settles', () => {
     const paneElement = createPaneElement()
     const container = {
