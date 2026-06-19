@@ -8,8 +8,9 @@
  * caller, so removed environments leaked their entries for the renderer session.
  * `setRuntimeEnvironments` now prunes them to the surviving environment set.
  */
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 
 vi.mock('sonner', () => ({
@@ -24,6 +25,26 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
+})
+
+// Controllable runtime RPC so a detect can be held in flight, then resolved or
+// rejected after the environment is pruned.
+const rpcControl = vi.hoisted(() => {
+  const deferreds: { resolve: (value: unknown) => void; reject: (error: unknown) => void }[] = []
+  return {
+    deferreds,
+    callRuntimeRpc: vi.fn(
+      () =>
+        new Promise((resolve, reject) => {
+          deferreds.push({ resolve, reject })
+        })
+    )
+  }
+})
+
+vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+  return { ...actual, callRuntimeRpc: rpcControl.callRuntimeRpc }
 })
 
 // @ts-expect-error -- minimal window.api stub for the store under test
@@ -66,5 +87,45 @@ describe('runtime detected-agents pruned on environment removal (leak regression
     const s = store.getState()
     expect(Object.keys(s.runtimeDetectedAgentIds)).toEqual(['b'])
     expect(Object.keys(s.isDetectingRuntimeAgents)).toEqual(['b'])
+  })
+})
+
+describe('detect resolving after the environment was pruned does not re-leak', () => {
+  beforeEach(() => {
+    rpcControl.deferreds.length = 0
+    rpcControl.callRuntimeRpc.mockClear()
+  })
+
+  it('does not re-add an entry when an in-flight detect REJECTS after pruning', async () => {
+    const store = createTestStore()
+    const pending = store.getState().ensureRuntimeDetectedAgents('env-1')
+    expect(store.getState().isDetectingRuntimeAgents['env-1']).toBe(true)
+    expect(rpcControl.deferreds).toHaveLength(1)
+
+    // Environment removed while the detect is still in flight.
+    store.getState().retainRuntimeDetectedAgents([])
+    expect(store.getState().isDetectingRuntimeAgents).not.toHaveProperty('env-1')
+
+    // The probe then fails — the unguarded .catch would re-add isDetecting=false.
+    rpcControl.deferreds[0].reject(new Error('disconnected'))
+    await pending
+
+    expect(store.getState().isDetectingRuntimeAgents).not.toHaveProperty('env-1')
+    expect(store.getState().runtimeDetectedAgentIds).not.toHaveProperty('env-1')
+  })
+
+  it('does not re-add an entry when an in-flight detect RESOLVES after pruning', async () => {
+    const store = createTestStore()
+    const pending = store.getState().ensureRuntimeDetectedAgents('env-2')
+    expect(rpcControl.deferreds).toHaveLength(1)
+
+    store.getState().retainRuntimeDetectedAgents([])
+    expect(store.getState().runtimeDetectedAgentIds).not.toHaveProperty('env-2')
+
+    rpcControl.deferreds[0].resolve([])
+    await pending
+
+    expect(store.getState().runtimeDetectedAgentIds).not.toHaveProperty('env-2')
+    expect(store.getState().isDetectingRuntimeAgents).not.toHaveProperty('env-2')
   })
 })

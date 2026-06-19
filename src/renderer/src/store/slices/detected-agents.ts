@@ -274,9 +274,15 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       .catch(() => {
         // Why: a remote runtime may be disconnected or version-incompatible.
         // Keep the menu retryable instead of pinning a failed probe forever.
-        set((s) => ({
-          isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
-        }))
+        // Same in-flight guard as the .then() above: if the environment was
+        // retained out mid-detect, don't re-add the isDetecting entry that
+        // retainRuntimeDetectedAgents just pruned (and don't clobber a freshly
+        // started detect's spinner).
+        if (runtimeDetectPromises.get(environmentId) === pending) {
+          set((s) => ({
+            isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
+          }))
+        }
         return [] as TuiAgent[]
       })
       .finally(() => {
