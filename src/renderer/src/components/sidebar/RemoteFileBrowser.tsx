@@ -30,6 +30,8 @@ type RemoteFileBrowserProps = (
 const FILE_HINT_MS = 2000
 const FILE_HINT_TEXT = "Files can't be opened as a project"
 const PATH_DEBOUNCE_MS = 300
+const REMOTE_FILE_BROWSER_INPUT_MAX_BYTES = 8 * 1024
+const remoteFileBrowserInputEncoder = new TextEncoder()
 
 type BrowseResult = { resolvedPath: string; entries: DirEntry[] }
 
@@ -362,6 +364,18 @@ export function RemoteFileBrowser({
       clearFileHint()
       setFilter(raw)
 
+      if (isRemoteFileBrowserInputTooLong(raw)) {
+        if (preview) {
+          setPreview(null)
+          previewGenRef.current++
+        }
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current)
+          debounceTimerRef.current = null
+        }
+        return
+      }
+
       if (!isPathMode(raw)) {
         // Leaving path mode: drop preview immediately so the committed
         // directory re-appears without a flicker.
@@ -423,7 +437,7 @@ export function RemoteFileBrowser({
           debounceTimerRef.current = null
         }
         const value = inputRef.current?.value ?? ''
-        if (isPathMode(value)) {
+        if (!isRemoteFileBrowserInputTooLong(value) && isPathMode(value)) {
           resolvePathInput(value)
         }
       }, 0)
@@ -573,6 +587,7 @@ export function RemoteFileBrowser({
   const isPreviewActive = preview !== null
   const showPreviewLoading = isPreviewActive && preview!.loading
   const displayEntries = isPreviewActive ? previewFilteredEntries : filteredEntries
+  const isInputTooLong = isRemoteFileBrowserInputTooLong(filter)
   const displayEmptyDirCopy = isPreviewActive
     ? `${preview!.resolvedPath} is empty`
     : 'Empty directory'
@@ -698,11 +713,16 @@ export function RemoteFileBrowser({
             // filter emptiness from directory emptiness keeps copy accurate.
             <div className="flex items-center justify-center h-full">
               <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.sidebar.RemoteFileBrowser.00c4235c10',
-                  "No matches for '{{value0}}'",
-                  { value0: isPreviewActive ? preview!.filter : filter }
-                )}
+                {isInputTooLong
+                  ? translate(
+                      'auto.components.sidebar.RemoteFileBrowser.f91a66d88f',
+                      'No matches for this long input'
+                    )
+                  : translate(
+                      'auto.components.sidebar.RemoteFileBrowser.00c4235c10',
+                      "No matches for '{{value0}}'",
+                      { value0: isPreviewActive ? preview!.filter : filter }
+                    )}
               </p>
             </div>
           ) : (
@@ -776,6 +796,13 @@ export function RemoteFileBrowser({
 function committedPrefix(raw: string): string {
   const i = raw.lastIndexOf('/')
   return i === -1 ? '' : raw.slice(0, i + 1)
+}
+
+function isRemoteFileBrowserInputTooLong(raw: string): boolean {
+  if (raw.length > REMOTE_FILE_BROWSER_INPUT_MAX_BYTES) {
+    return true
+  }
+  return remoteFileBrowserInputEncoder.encode(raw).byteLength > REMOTE_FILE_BROWSER_INPUT_MAX_BYTES
 }
 
 function requireRuntimeEnvironmentId(runtimeEnvironmentId: string | undefined): string {
