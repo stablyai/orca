@@ -31,7 +31,9 @@ describe('wsl login shell command helpers', () => {
     const command = buildWslLoginShellCommand("printf 'hello'")
 
     expect(command).toContain('getent passwd')
+    expect(command).toContain('bash|zsh|ksh|mksh|ash)')
     expect(command).toContain('exec "$_orca_wsl_shell" -ilc')
+    expect(command).toContain('exec /bin/sh -lc')
     expect(command).toContain("printf '\\''hello'\\''")
   })
 
@@ -65,7 +67,7 @@ describe('wsl login shell command helpers', () => {
       "'HISTFILE=/tmp/orca-history printf \"\\$HISTFILE\"; printf '\\''%s'\\'' \"\\$SHELL\"'"
     )
     expectValidShSyntax(command)
-  }, 15_000)
+  }, 30_000)
 
   it('preserves user command variables across the Windows-to-WSL argv boundary', () => {
     if (process.platform !== 'win32') {

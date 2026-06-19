@@ -16,11 +16,7 @@ const expectedOmpStatusExtension = posix.join(
   'extensions',
   'orca-agent-status.ts'
 )
-const expectedAttributionShimDir = join(
-  '/tmp/orca-user-data',
-  'orca-terminal-attribution',
-  isWindowsHost ? 'win32' : 'posix'
-)
+const expectedAttributionShimDir = join('/tmp/orca-user-data', 'orca-terminal-attribution', 'posix')
 
 const {
   handleMock,

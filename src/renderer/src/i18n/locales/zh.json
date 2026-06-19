@@ -523,7 +523,11 @@
       "useGlobalFileDrop": {
         "38c9f034ff": "无法上传删除的文件。",
         "d720e2f855": "部分已删除的文件无法上传。",
-        "245faa95b9": "没有可用于放置的文件的远程工作区路径。"
+        "245faa95b9": "没有可用于放置的文件的远程工作区路径。",
+        "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
+        "nativeDropTooManyPaths": "Drop contains too many files.",
+        "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
+        "nativeDropPathsTooLarge": "Drop path list is too large."
       },
       "useIpcEvents": {
         "0e3cf53060": "未找到浏览器选项卡 {{value0}}",
@@ -602,6 +606,12 @@
         "f70ac54d38": "AI 提供商账户",
         "4121f7a0a2": "管理 AI Agent、设置默认值并自定义命令。",
         "b49abbd2f7": "Agents"
+      },
+      "useAppMenuPaste": {
+        "pasteTooLarge": "Paste is too large."
+      },
+      "useLargeTextControlPaste": {
+        "pasteTooLarge": "Paste is too large."
       }
     },
     "components": {
@@ -2348,7 +2358,12 @@
                 "53f015fd85": "跳过 {{value0}} 符号链接 {{value1}}。",
                 "29c031b49a": "正在上传 {{value0}} 文件{{value1}} 到运行时...",
                 "0c77693641": "工作树尚未准备好 - 请稍后再试。",
-                "ce8248b835": "工作树路径不可用。"
+                "ce8248b835": "工作树路径不可用。",
+                "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
+                "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "b4cf68e889": "Skipped {{value0}} {{value1}}.",
+                "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
+                "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
             }
           },
@@ -3441,7 +3456,8 @@
           "f8b1deb1a4": "取消",
           "51001182e3": "空目录",
           "971d85cc84": "作为远程项目打开 · {{value0}}",
-          "00c4235c10": "没有匹配“{{value0}}”"
+          "00c4235c10": "没有匹配“{{value0}}”",
+          "f91a66d88f": "No matches for this long input"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "移除",
@@ -10697,6 +10713,9 @@
               }
             }
           }
+        },
+        "richMarkdownLargeTextPaste": {
+          "tooLarge": "Paste is too large."
         }
       },
       "diff": {
@@ -11390,7 +11409,15 @@
           "openReviewExternally": "在外部打开 {{value0}}",
           "summary": "已附加 {{value0}} 个 · 有 PR/MR {{value1}} 个 · 需注意 {{value2}} 个 · 等待中 {{value3}} 个 · 通过 {{value4}} 个 · 无 PR {{value5}} 个 · 未知 {{value6}} 个",
           "showDetails": "显示 {{value0}} 的 PR 检查详情",
-          "hideDetails": "隐藏 {{value0}} 的 PR 检查详情"
+          "hideDetails": "隐藏 {{value0}} 的 PR 检查详情",
+          "reviewChecks": "Review checks",
+          "allChecksPassing": "all checks passing",
+          "oneWorktree": "1 worktree",
+          "worktreeCount": "{{value0}} worktrees",
+          "oneFailing": "1 failing",
+          "failingCount": "{{value0}} failing",
+          "onePending": "1 pending",
+          "pendingCount": "{{value0}} pending"
         },
         "parentPrChecks": {
           "rowSummary": {

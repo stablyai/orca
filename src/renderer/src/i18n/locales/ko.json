@@ -523,7 +523,11 @@
       "useGlobalFileDrop": {
         "38c9f034ff": "드롭한 파일을 업로드하지 못했습니다.",
         "d720e2f855": "드롭한 일부 파일을 업로드할 수 없습니다.",
-        "245faa95b9": "드롭한 파일에 사용할 수 있는 원격 워크스페이스 경로가 없습니다."
+        "245faa95b9": "드롭한 파일에 사용할 수 있는 원격 워크스페이스 경로가 없습니다.",
+        "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
+        "nativeDropTooManyPaths": "Drop contains too many files.",
+        "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
+        "nativeDropPathsTooLarge": "Drop path list is too large."
       },
       "useIpcEvents": {
         "0e3cf53060": "브라우저 탭 {{value0}}을(를) 찾을 수 없습니다",
@@ -602,6 +606,12 @@
         "f70ac54d38": "AI 제공업체 계정",
         "4121f7a0a2": "AI agents를 관리하고, 기본값을 설정하고, 명령을 사용자 정의하세요.",
         "b49abbd2f7": "Agents"
+      },
+      "useAppMenuPaste": {
+        "pasteTooLarge": "Paste is too large."
+      },
+      "useLargeTextControlPaste": {
+        "pasteTooLarge": "Paste is too large."
       }
     },
     "components": {
@@ -2348,7 +2358,12 @@
                 "53f015fd85": "{{value0}} 심볼릭 링크{{value1}}을 건너뛰었습니다.",
                 "29c031b49a": "{{value0}} 파일{{value1}}을 런타임에 업로드하는 중…",
                 "0c77693641": "Worktree가 준비되지 않았습니다. 잠시 후에 다시 시도하세요.",
-                "ce8248b835": "작업 트리 경로를 사용할 수 없습니다."
+                "ce8248b835": "작업 트리 경로를 사용할 수 없습니다.",
+                "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
+                "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "b4cf68e889": "Skipped {{value0}} {{value1}}.",
+                "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
+                "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
             }
           },
@@ -3441,7 +3456,8 @@
           "f8b1deb1a4": "취소",
           "51001182e3": "빈 디렉토리",
           "971d85cc84": "원격 프로젝트로 열립니다 · {{value0}}",
-          "00c4235c10": "'{{value0}}'과(와) 일치하는 항목이 없습니다."
+          "00c4235c10": "'{{value0}}'과(와) 일치하는 항목이 없습니다.",
+          "f91a66d88f": "No matches for this long input"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "제거",
@@ -10697,6 +10713,9 @@
               }
             }
           }
+        },
+        "richMarkdownLargeTextPaste": {
+          "tooLarge": "Paste is too large."
         }
       },
       "diff": {
@@ -11390,7 +11409,15 @@
           "openReviewExternally": "{{value0}} 외부에서 열기",
           "summary": "{{value0}}개 연결됨 · PR/MR 있음 {{value1}}개 · 주의 필요 {{value2}}개 · 대기 중 {{value3}}개 · 통과 {{value4}}개 · PR 없음 {{value5}}개 · 알 수 없음 {{value6}}개",
           "showDetails": "{{value0}} PR 검사 세부 정보 표시",
-          "hideDetails": "{{value0}} PR 검사 세부 정보 숨기기"
+          "hideDetails": "{{value0}} PR 검사 세부 정보 숨기기",
+          "reviewChecks": "Review checks",
+          "allChecksPassing": "all checks passing",
+          "oneWorktree": "1 worktree",
+          "worktreeCount": "{{value0}} worktrees",
+          "oneFailing": "1 failing",
+          "failingCount": "{{value0}} failing",
+          "onePending": "1 pending",
+          "pendingCount": "{{value0}} pending"
         },
         "parentPrChecks": {
           "rowSummary": {
