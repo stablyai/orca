@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
@@ -28,8 +29,53 @@ export type TabCreateMenuOptionsContext = {
   windowsShellEntries?: readonly { label: string; shell: BuiltInWindowsTerminalShell }[]
 }
 
+export const TAB_CREATE_MENU_QUERY_MAX_BYTES = 2 * 1024
+
+export function isTabCreateMenuQueryTooLarge(
+  query: string,
+  maxBytes = TAB_CREATE_MENU_QUERY_MAX_BYTES
+): boolean {
+  return isClipboardTextByteLengthOverLimit(query, maxBytes)
+}
+
 function normalizeQuery(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+  return foldTabCreateMenuQueryWhitespace(value).toLowerCase()
+}
+
+// Why: accepted paste-sized menu queries are still on the renderer input path;
+// collapse display whitespace without a whole-string regex replacement pass.
+function foldTabCreateMenuQueryWhitespace(value: string): string {
+  let normalized = ''
+  let pendingWhitespace = false
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (isTabCreateMenuQueryWhitespace(code)) {
+      pendingWhitespace = normalized.length > 0
+      continue
+    }
+    if (pendingWhitespace) {
+      normalized += ' '
+      pendingWhitespace = false
+    }
+    normalized += value.charAt(index)
+  }
+  return normalized
+}
+
+function isTabCreateMenuQueryWhitespace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 160 ||
+    code === 5760 ||
+    (code >= 8192 && code <= 8202) ||
+    code === 8232 ||
+    code === 8233 ||
+    code === 8239 ||
+    code === 8287 ||
+    code === 12288 ||
+    code === 65279
+  )
 }
 
 function tokenize(value: string): string[] {
@@ -207,6 +253,9 @@ export function findMatchingTabCreateMenuOptions(
   query: string,
   options: readonly TabCreateMenuOption[]
 ): TabCreateMenuOption[] {
+  if (isTabCreateMenuQueryTooLarge(query)) {
+    return []
+  }
   const normalizedQuery = normalizeQuery(query)
   if (!normalizedQuery) {
     return []

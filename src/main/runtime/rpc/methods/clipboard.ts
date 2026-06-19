@@ -2,8 +2,12 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { saveClipboardImageBufferAsTempFile } from '../../../window/clipboard-image-temp-file'
 import { randomUUID } from 'node:crypto'
+import {
+  CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
+  CLIPBOARD_IMAGE_TOO_LARGE_ERROR
+} from '../../../../shared/clipboard-image'
 
-const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = 24 * 1024 * 1024
+const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = CLIPBOARD_IMAGE_MAX_BASE64_CHARS
 export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 export const CLIPBOARD_IMAGE_UPLOAD_MAX_CONCURRENT = 8
 const CLIPBOARD_IMAGE_UPLOAD_TTL_MS = 5 * 60 * 1000
@@ -71,14 +75,29 @@ function assertValidBase64Content(value: string): void {
   }
 }
 
+function clipboardImageBase64Payload(maxChars: number, tooLargeMessage: string) {
+  return z.unknown().transform((value, ctx): string => {
+    if (typeof value !== 'string') {
+      ctx.addIssue({ code: 'custom', message: 'Missing image content' })
+      return z.NEVER
+    }
+    if (value.length > maxChars) {
+      ctx.addIssue({ code: 'custom', message: tooLargeMessage })
+      return z.NEVER
+    }
+    if (!isValidBase64(value)) {
+      ctx.addIssue({ code: 'custom', message: 'Clipboard image content must be base64' })
+      return z.NEVER
+    }
+    return value
+  })
+}
+
 const SaveImageAsTempFile = z.object({
-  contentBase64: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing image content' })
-    .refine((value) => value.length <= MAX_CLIPBOARD_IMAGE_BASE64_CHARS, {
-      message: 'Clipboard image is too large'
-    })
-    .refine(isValidBase64, 'Clipboard image content must be base64'),
+  contentBase64: clipboardImageBase64Payload(
+    MAX_CLIPBOARD_IMAGE_BASE64_CHARS,
+    CLIPBOARD_IMAGE_TOO_LARGE_ERROR
+  ),
   connectionId: z.string().min(1).nullable().optional()
 })
 
@@ -87,21 +106,17 @@ const StartImageUpload = z.object({
     .number()
     .int()
     .nonnegative()
-    .max(MAX_CLIPBOARD_IMAGE_BASE64_CHARS, 'Clipboard image is too large'),
+    .max(MAX_CLIPBOARD_IMAGE_BASE64_CHARS, CLIPBOARD_IMAGE_TOO_LARGE_ERROR),
   connectionId: z.string().min(1).nullable().optional()
 })
 
 const AppendImageUploadChunk = z.object({
   uploadId: z.string().min(1),
   offset: z.number().int().nonnegative(),
-  contentBase64: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing image content' })
-    .refine(
-      (value) => value.length <= CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
-      'Clipboard image chunk is too large'
-    )
-    .refine(isValidBase64, 'Clipboard image content must be base64')
+  contentBase64: clipboardImageBase64Payload(
+    CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS,
+    'Clipboard image chunk is too large'
+  )
 })
 
 const CommitImageUpload = z.object({

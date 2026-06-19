@@ -18,6 +18,7 @@ import {
   importCookiesFromFile,
   importCookiesFromBrowser,
   detectInstalledBrowsers,
+  summarizeCookieImportError,
   type ChromiumCookieColumnInfo,
   type DetectedBrowser
 } from './browser-cookie-import'
@@ -26,6 +27,19 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const LARGE_SAFARI_COOKIE_COUNT = 150_000
+
+describe('summarizeCookieImportError', () => {
+  it('folds a bounded error preview without full-string whitespace replacement', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const message = `Import failed\n\t${'secret-cookie-value '.repeat(20_000)}`
+
+    const summary = summarizeCookieImportError(new Error(message))
+
+    expect(summary.length).toBeLessThanOrEqual(180)
+    expect(summary).toContain('Import failed secret-cookie-value')
+    expect(replaceSpy).not.toHaveBeenCalled()
+  })
+})
 
 function buildSafariBinaryCookies(cookieCount: number): Buffer {
   const cookies: Buffer[] = []

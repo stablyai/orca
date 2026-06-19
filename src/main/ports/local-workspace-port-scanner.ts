@@ -9,6 +9,7 @@ import type {
   WorkspacePortProbe,
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
+import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
 import { WorkspacePortScanTimeoutBackoff } from './workspace-port-scan-timeout-backoff'
 
@@ -157,11 +158,10 @@ export function parseLsofListeningOutput(output: string): RawListeningPort[] {
 export function parseNetstatListeningOutput(output: string): RawListeningPort[] {
   const ports: RawListeningPort[] = []
   for (const line of output.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed.toUpperCase().startsWith('TCP')) {
+    const fields = getProcessOutputFields(line, 6)
+    if (fields[0]?.toUpperCase() !== 'TCP') {
       continue
     }
-    const fields = trimmed.split(/\s+/)
     const stateIndex = fields.findIndex((field) => field.toUpperCase() === 'LISTENING')
     if (stateIndex < 2) {
       continue
@@ -180,7 +180,7 @@ export function parseProcNetTcp(content: string): { host: string; port: number; 
   const results: { host: string; port: number; inode: number }[] = []
   const lines = content.split('\n')
   for (let i = 1; i < lines.length; i++) {
-    const fields = lines[i].trim().split(/\s+/)
+    const fields = getProcessOutputFields(lines[i], 10)
     if (fields.length < 10 || fields[3] !== '0A') {
       continue
     }

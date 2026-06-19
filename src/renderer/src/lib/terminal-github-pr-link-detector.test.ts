@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTerminalGitHubPRLinkDetector } from './terminal-github-pr-link-detector'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('createTerminalGitHubPRLinkDetector', () => {
   it('extracts GitHub pull request URLs from terminal output', () => {
@@ -95,5 +99,27 @@ describe('createTerminalGitHubPRLinkDetector', () => {
         number: 397
       }
     ])
+  })
+
+  it('scans huge terminal chunks containing pull markers without global regex iteration', () => {
+    const matchAll = vi.spyOn(String.prototype, 'matchAll')
+    const observe = createTerminalGitHubPRLinkDetector()
+    const noise = `${'/pull/not-a-url '.repeat(20_000)}\n`
+
+    expect(observe(`${noise}Created https://github.com/acme/orca/pull/42\r\n`)).toEqual([
+      {
+        url: 'https://github.com/acme/orca/pull/42',
+        slug: { owner: 'acme', repo: 'orca' },
+        number: 42
+      }
+    ])
+    expect(matchAll).not.toHaveBeenCalled()
+  })
+
+  it('drops overlong incomplete URL carry instead of retaining pasted megabytes', () => {
+    const observe = createTerminalGitHubPRLinkDetector()
+
+    expect(observe(`https://github.com/acme/orca/pull/${'4'.repeat(10_000)}`)).toEqual([])
+    expect(observe('2\r\n')).toEqual([])
   })
 })

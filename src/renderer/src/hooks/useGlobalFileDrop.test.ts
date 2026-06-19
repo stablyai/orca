@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getEditorFileDropOperationContext,
   getEditorFileDropSettingsForWorktree,
+  getNativeFileDropRejectionMessage,
   shouldUploadRemoteEditorFileDrop
 } from './useGlobalFileDrop'
 
@@ -86,5 +87,31 @@ describe('shouldUploadRemoteEditorFileDrop', () => {
       worktreePath: '/home/orca/repo-1',
       connectionId: 'ssh-1'
     })
+  })
+
+  it('formats metadata-only rejection messages for oversized native drops', () => {
+    expect(
+      getNativeFileDropRejectionMessage({
+        byteLength: 0,
+        pathCount: 999,
+        reason: 'too-many-paths',
+        target: 'rejected'
+      })
+    ).toEqual({
+      description: 'Drop 256 or fewer files at a time.',
+      title: 'Drop contains too many files.'
+    })
+
+    const message = getNativeFileDropRejectionMessage({
+      byteLength: 300_000,
+      pathCount: 2,
+      reason: 'paths-too-large',
+      target: 'rejected'
+    })
+    expect(message).toEqual({
+      description: 'Drop fewer files or use a shorter path list.',
+      title: 'Drop path list is too large.'
+    })
+    expect(JSON.stringify(message)).not.toContain('secret')
   })
 })

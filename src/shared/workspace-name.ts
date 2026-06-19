@@ -1,3 +1,8 @@
+import {
+  collectCompactWorkspaceWords,
+  foldWorkspaceNameWhitespaceToHyphen
+} from './workspace-name-text-scanner'
+
 function normalizeApostrophes(input: string): string {
   return input.replace(/[‘’]/g, "'")
 }
@@ -15,12 +20,12 @@ function stripDanglingDisplayApostrophes(input: string): string {
 }
 
 export function slugifyForWorkspaceName(input: string): string {
+  const normalized = removeIntraWordApostrophes(input)
+    .trim()
+    .toLowerCase()
+    .replace(/[\\/]+/g, '-')
   return (
-    removeIntraWordApostrophes(input)
-      .trim()
-      .toLowerCase()
-      .replace(/[\\/]+/g, '-')
-      .replace(/\s+/g, '-')
+    foldWorkspaceNameWhitespaceToHyphen(normalized)
       .replace(/[^a-z0-9._-]+/g, '-')
       .replace(/-+/g, '-')
       // Why: git check-ref-format rejects any ref containing `..`, so previews
@@ -120,17 +125,14 @@ function titleCaseWord(word: string): string {
 }
 
 function compactWords(input: string, maxWords = 4): string {
-  return stripDanglingDisplayApostrophes(input)
-    .replace(/https?:\/\/\S+/gi, ' ')
-    .replace(/[()[\]{}"]/g, ' ')
-    .replace(/[#/\\:_-]+/g, ' ')
-    .split(/\s+/)
-    .map((word) => word.trim())
-    .filter(Boolean)
-    .filter((word) => !STOP_WORDS.has(word.toLowerCase()))
-    .slice(0, maxWords)
-    .map(titleCaseWord)
-    .join(' ')
+  // Why: workspace names can be derived from pasted prompts/URLs; collect only
+  // the visible words we need instead of splitting the full text.
+  const words = collectCompactWorkspaceWords(
+    stripDanglingDisplayApostrophes(input),
+    maxWords,
+    STOP_WORDS
+  )
+  return words.map(titleCaseWord).join(' ')
 }
 
 function escapeRegExp(input: string): string {

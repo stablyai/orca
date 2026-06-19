@@ -56,7 +56,8 @@
     "zoomOut": "缩小",
     "openWorktreePalette": "打开工作树面板",
     "window": "窗口",
-    "help": "帮助"
+    "help": "帮助",
+    "paste": "Paste"
   },
   "tray": {
     "openOrca": "打开 Orca",
@@ -530,7 +531,11 @@
       "useGlobalFileDrop": {
         "38c9f034ff": "无法上传删除的文件。",
         "d720e2f855": "部分已删除的文件无法上传。",
-        "245faa95b9": "没有可用于放置的文件的远程工作区路径。"
+        "245faa95b9": "没有可用于放置的文件的远程工作区路径。",
+        "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
+        "nativeDropTooManyPaths": "Drop contains too many files.",
+        "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
+        "nativeDropPathsTooLarge": "Drop path list is too large."
       },
       "useIpcEvents": {
         "0e3cf53060": "未找到浏览器选项卡 {{value0}}",
@@ -609,6 +614,12 @@
         "f70ac54d38": "AI 提供商账户",
         "4121f7a0a2": "管理 AI Agent、设置默认值并自定义命令。",
         "b49abbd2f7": "Agents"
+      },
+      "useAppMenuPaste": {
+        "pasteTooLarge": "Paste is too large."
+      },
+      "useLargeTextControlPaste": {
+        "pasteTooLarge": "Paste is too large."
       }
     },
     "components": {
@@ -801,7 +812,8 @@
         "16c1abe76c": "标记已查看",
         "ba8e329d92": "取消标记已查看",
         "3f79ffc8b7": "打开 PR 详情以查看当前评审人。",
-        "5c1c973855": "移除评审人"
+        "5c1c973855": "移除评审人",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "重新打开",
@@ -865,7 +877,8 @@
         "40c56b95e2": "{{value0}} 批准{{value1}} 剩余",
         "3a051b8ade": "工作项目",
         "32f8bef818": "无日志输出。",
-        "4168eb2c51": "解决"
+        "4168eb2c51": "解决",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "评论",
@@ -899,7 +912,8 @@
         "54649eaeab": "+ 负责人",
         "2a829a2f00": "优先事项",
         "693be070d0": "过渡",
-        "ef21405c6d": "Jira 议题"
+        "ef21405c6d": "Jira 议题",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "Landing": {
         "76a95f7f47": "创建",
@@ -1021,7 +1035,8 @@
         "858d0630da": "关闭预览",
         "39883467f4": "Linear 议题",
         "fda549766e": "{{value0}} 发表评论",
-        "d71cd3003e": "+ 负责人"
+        "d71cd3003e": "+ 负责人",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "仅适用于本地 Git 项目。",
@@ -1076,7 +1091,8 @@
         "setupKindFolder": "文件夹",
         "setupHostExistingFolderHelp": "链接已存在的检出目录，然后在该主机上创建此工作区。",
         "importingHostSetup": "导入中...",
-        "importHostSetup": "导入"
+        "importHostSetup": "导入",
+        "notePasteTooLarge": "Paste is too large for the note field."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"
@@ -1245,7 +1261,8 @@
         "50b8fb290f": "标记已查看",
         "2b4fdb880c": "取消标记已查看",
         "56ec6eafb7": "打开 PR 详情以查看当前评审人。",
-        "7f964a365a": "移除评审人"
+        "7f964a365a": "移除评审人",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "QuickOpen": {
         "1dbd3f59ff": "手机",
@@ -1833,7 +1850,8 @@
                 "c3e829b4d9": "保存",
                 "463d030ae4": "删除",
                 "8564f58542": "编辑",
-                "5f104bf855": "还没有评论。"
+                "5f104bf855": "还没有评论。",
+                "commentTooLarge": "Comment is too large to submit safely."
               },
               "LabelsEditor": {
                 "34dd57d6c8": "加载中…",
@@ -1861,7 +1879,8 @@
           "b7e4a1c902": "粘贴、拖放或点击添加文件",
           "8f1c2d4e6a": "没有可预览的内容",
           "c91f0a2b14": "编写",
-          "d82b1e3f05": "预览"
+          "d82b1e3f05": "预览",
+          "imageUrlTooLarge": "Image URL is too large."
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "显示议题来自",
@@ -1951,7 +1970,8 @@
           "f6a7b8c9d0": "关闭议题",
           "b1c2d3e4f5": "重新打开议题",
           "0a73f59e85": "发送评论",
-          "bf43425540": "评论"
+          "bf43425540": "评论",
+          "commentTooLarge": "Comment is too large to submit safely."
         },
         "GitHubWorkItemAssigneePopoverContent": {
           "cddd9b04a7": "加载负责人",
@@ -2355,7 +2375,11 @@
                 "53f015fd85": "跳过 {{value0}} 符号链接 {{value1}}。",
                 "29c031b49a": "正在上传 {{value0}} 文件{{value1}} 到运行时...",
                 "0c77693641": "工作树尚未准备好 - 请稍后再试。",
-                "ce8248b835": "工作树路径不可用。"
+                "ce8248b835": "工作树路径不可用。",
+                "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
+                "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
+                "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
             }
           },
@@ -2530,7 +2554,8 @@
                   "097a982ee0": "正在加载文件...",
                   "5a9c83c04b": "打开任何文件、URL、Agent...",
                   "90eb94dc48": "输入 http:// 或 https:// URL。",
-                  "5553b283ce": "输入 URL 或文件路径。"
+                  "5553b283ce": "输入 URL 或文件路径。",
+                  "queryTooLarge": "Search text is too large."
                 }
               },
               "menu": {
@@ -3446,7 +3471,8 @@
           "f8b1deb1a4": "取消",
           "51001182e3": "空目录",
           "971d85cc84": "作为远程项目打开 · {{value0}}",
-          "00c4235c10": "没有匹配“{{value0}}”"
+          "00c4235c10": "没有匹配“{{value0}}”",
+          "largeInputNoMatches": "No matches for this long input"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "移除",
@@ -4367,7 +4393,8 @@
           "agentPermissionsTooltip": "Custom agent arguments stay unchanged when switching modes.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual"
+          "agentPermissionsManual": "Manual",
+          "3f1bdf3cb4": "Environment text is too large to parse safely."
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -8780,7 +8807,8 @@
                   "f49e0a21e0": "代码",
                   "542bf6a7e2": "斜体",
                   "256300f8ea": "粗体",
-                  "87aff03d63": "正在发送..."
+                  "87aff03d63": "正在发送...",
+                  "commentTooLarge": "Comment is too large to submit safely."
                 }
               }
             }
@@ -10181,6 +10209,11 @@
                 }
               }
             }
+          },
+          "useEmulatorScreenKeyboard": {
+            "pasteTooLarge": "Paste is too large for emulator keyboard input.",
+            "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
+            "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
           }
         }
       },
@@ -10432,7 +10465,8 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "在选定的文本上添加注释",
-          "fd68ae03b3": "在文件中搜索"
+          "fd68ae03b3": "在文件中搜索",
+          "largePasteTooLarge": "Paste is too large."
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "复制远程 URL",
@@ -10713,6 +10747,9 @@
               }
             }
           }
+        },
+        "richMarkdownLargeTextPaste": {
+          "tooLarge": "Paste is too large."
         }
       },
       "diff": {
@@ -10729,7 +10766,8 @@
           "DiffCommentPopover": {
             "2b3ce6d394": "取消",
             "e05063cfc1": "行 {{value0}}",
-            "c845170b3b": "行 {{value0}}-{{value1}}"
+            "c845170b3b": "行 {{value0}}-{{value1}}",
+            "commentTooLarge": "Comment is too large to submit safely."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "此注"

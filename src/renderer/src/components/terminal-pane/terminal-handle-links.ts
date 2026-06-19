@@ -30,28 +30,49 @@ type TerminalHandleLinkProviderDeps = {
   linkTooltip: HTMLElement
 }
 
-const TERMINAL_HANDLE_REGEX = /term_[A-Za-z0-9][A-Za-z0-9_-]{0,127}/g
+const TERMINAL_HANDLE_PREFIX = 'term_'
+const MAX_TERMINAL_HANDLE_BODY_LENGTH = 128
 const TERMINAL_HANDLE_BOUNDARY_CHAR = /[A-Za-z0-9_-]/
 
 export function extractTerminalHandleLinks(lineText: string): ParsedTerminalHandleLink[] {
-  if (!lineText.includes('term_')) {
+  if (!lineText.includes(TERMINAL_HANDLE_PREFIX)) {
     return []
   }
 
   const links: ParsedTerminalHandleLink[] = []
-  for (const match of lineText.matchAll(TERMINAL_HANDLE_REGEX)) {
-    const startIndex = match.index ?? 0
-    const handle = match[0]
-    const endIndex = startIndex + handle.length
+  let searchStart = 0
+  while (searchStart < lineText.length) {
+    const startIndex = lineText.indexOf(TERMINAL_HANDLE_PREFIX, searchStart)
+    if (startIndex === -1) {
+      break
+    }
+
+    const bodyStart = startIndex + TERMINAL_HANDLE_PREFIX.length
+    const tokenEnd = findTerminalHandleTokenEnd(lineText, bodyStart)
+    searchStart = Math.max(tokenEnd, bodyStart + 1)
+    const bodyLength = tokenEnd - bodyStart
+    if (bodyLength === 0 || bodyLength > MAX_TERMINAL_HANDLE_BODY_LENGTH) {
+      continue
+    }
+
+    const handle = lineText.slice(startIndex, tokenEnd)
     if (
       TERMINAL_HANDLE_BOUNDARY_CHAR.test(lineText[startIndex - 1] ?? '') ||
-      TERMINAL_HANDLE_BOUNDARY_CHAR.test(lineText[endIndex] ?? '')
+      TERMINAL_HANDLE_BOUNDARY_CHAR.test(lineText[tokenEnd] ?? '')
     ) {
       continue
     }
-    links.push({ handle, startIndex, endIndex })
+    links.push({ handle, startIndex, endIndex: tokenEnd })
   }
   return links
+}
+
+function findTerminalHandleTokenEnd(lineText: string, startIndex: number): number {
+  let index = startIndex
+  while (index < lineText.length && TERMINAL_HANDLE_BOUNDARY_CHAR.test(lineText[index])) {
+    index += 1
+  }
+  return index
 }
 
 export function findTerminalHandleTarget(

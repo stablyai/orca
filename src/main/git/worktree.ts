@@ -13,6 +13,7 @@ import type {
   LocalBaseRefUpdateSuggestion,
   RemoveWorktreeResult
 } from '../../shared/types'
+import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -148,13 +149,8 @@ function parseRemoteTrackingLocalBaseRef(
 }
 
 function parseRevListDrift(output: string): { ahead: number; behind: number } | null {
-  const [aheadStr, behindStr] = output.trim().split(/\s+/)
-  const ahead = Number(aheadStr)
-  const behind = Number(behindStr)
-  if (!Number.isFinite(ahead) || !Number.isFinite(behind) || ahead < 0 || behind < 0) {
-    return null
-  }
-  return { ahead, behind }
+  const counts = parseGitRevListAheadBehindCounts(output)
+  return counts.status === 'ok' ? { ahead: counts.ahead, behind: counts.behind } : null
 }
 
 async function evaluateLocalBaseRefRefreshability(

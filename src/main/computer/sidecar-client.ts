@@ -8,6 +8,7 @@ import type {
   ComputerSnapshotResult
 } from '../../shared/runtime-types'
 import { normalizeComputerActionResult } from './computer-action-verification-normalization'
+import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
 
 type ComputerSidecarMethod =
@@ -85,6 +86,10 @@ export async function callComputerSidecarAction(
   >,
   params: unknown
 ): Promise<ComputerActionResult> {
+  const validation = validateComputerSidecarPasteText(method, params)
+  if (validation) {
+    await validation
+  }
   return normalizeComputerActionResult(
     (await getComputerSidecar().call(method, params)) as ComputerActionResult
   )

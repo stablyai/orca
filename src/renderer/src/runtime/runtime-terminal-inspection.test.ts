@@ -5,15 +5,21 @@ import {
   sendRuntimePtyInput,
   sendRuntimePtyInputVerified
 } from './runtime-terminal-inspection'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../shared/clipboard-text'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../../shared/terminal-input'
 import { useAppStore } from '../store'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = `tab-1:${LEAF_ID}`
+
+function makeByteOversizedTerminalInput(): string {
+  return '😀'.repeat(Math.floor(TERMINAL_INPUT_MAX_BYTES / 4) + 1)
+}
 
 describe('runtime terminal owner routing', () => {
   const runtimeCall = vi.fn()
@@ -230,6 +236,117 @@ describe('runtime terminal owner routing', () => {
 
     expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', 'x')
     expect(localWrite).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized fire-and-forget local input before IPC writes', () => {
+    const text = 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1)
+
+    expect(sendRuntimePtyInput({ activeRuntimeEnvironmentId: null }, 'local-pty', text)).toBe(false)
+
+    expect(localWrite).not.toHaveBeenCalled()
+    expect(localWriteAccepted).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized fire-and-forget remote input before runtime RPC', () => {
+    const text = 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1)
+
+    expect(
+      sendRuntimePtyInput({ activeRuntimeEnvironmentId: 'env-2' }, 'remote:env-1@@terminal-1', text)
+    ).toBe(false)
+
+    expect(runtimeTransportCall).not.toHaveBeenCalled()
+    expect(localWrite).not.toHaveBeenCalled()
+  })
+
+  it('yields while validating large fire-and-forget local input before IPC writes', async () => {
+    vi.useFakeTimers()
+    try {
+      const text = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
+      expect(sendRuntimePtyInput({ activeRuntimeEnvironmentId: null }, 'local-pty', text)).toBe(
+        true
+      )
+      expect(localWrite).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(localWrite).toHaveBeenCalledWith('local-pty', text)
+      expect(localWriteAccepted).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops byte-oversized fire-and-forget input after deferred validation', async () => {
+    vi.useFakeTimers()
+    try {
+      const text = makeByteOversizedTerminalInput()
+
+      expect(sendRuntimePtyInput({ activeRuntimeEnvironmentId: null }, 'local-pty', text)).toBe(
+        true
+      )
+
+      await vi.runAllTimersAsync()
+
+      expect(localWrite).not.toHaveBeenCalled()
+      expect(runtimeTransportCall).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects oversized verified input before fallback fire-and-forget writes', async () => {
+    const text = 'x'.repeat(TERMINAL_INPUT_MAX_BYTES + 1)
+
+    await expect(
+      sendRuntimePtyInputVerified({ activeRuntimeEnvironmentId: null }, 'local-pty', text)
+    ).resolves.toBe(false)
+
+    expect(localWriteAccepted).not.toHaveBeenCalled()
+    expect(localWrite).not.toHaveBeenCalled()
+  })
+
+  it('yields while validating large verified local input before IPC writes', async () => {
+    vi.useFakeTimers()
+    localWriteAccepted.mockResolvedValue(true)
+    try {
+      const text = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+      const accepted = sendRuntimePtyInputVerified(
+        { activeRuntimeEnvironmentId: null },
+        'local-pty',
+        text
+      )
+
+      expect(localWriteAccepted).not.toHaveBeenCalled()
+
+      await vi.advanceTimersByTimeAsync(0)
+
+      await expect(accepted).resolves.toBe(true)
+      expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', text)
+      expect(localWrite).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects byte-oversized verified input after deferred validation', async () => {
+    vi.useFakeTimers()
+    try {
+      const text = makeByteOversizedTerminalInput()
+      const accepted = sendRuntimePtyInputVerified(
+        { activeRuntimeEnvironmentId: null },
+        'local-pty',
+        text
+      )
+
+      await vi.runAllTimersAsync()
+
+      await expect(accepted).resolves.toBe(false)
+      expect(localWriteAccepted).not.toHaveBeenCalled()
+      expect(localWrite).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('records accepted runtime input against the owning pane key', async () => {

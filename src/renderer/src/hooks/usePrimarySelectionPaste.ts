@@ -38,6 +38,17 @@ function suppressEvent(event: Event): void {
   event.stopImmediatePropagation()
 }
 
+function isPrimarySelectionPasteTargetCurrent(
+  target: EditablePrimarySelectionPasteTarget
+): boolean {
+  const activeElement = target.ownerDocument.activeElement
+  return (
+    target.isConnected &&
+    activeElement instanceof Node &&
+    (activeElement === target || target.contains(activeElement))
+  )
+}
+
 export function usePrimarySelectionPaste(enabled: boolean): void {
   useEffect(() => {
     setPrimarySelectionEnabled(enabled)
@@ -51,21 +62,12 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
       return target === pendingMiddleTarget || pendingMiddleTarget.contains(target)
     }
 
-    const rememberPendingTarget = (
-      event: MouseEvent,
-      options?: { allowNativeLinuxPaste?: boolean }
-    ): boolean => {
+    const rememberPendingTarget = (event: MouseEvent): boolean => {
       if (event.button !== 1) {
         return false
       }
       const target = findEditablePrimarySelectionPasteTarget(event.target)
       if (!target) {
-        return false
-      }
-      if (options?.allowNativeLinuxPaste && isLinuxUserAgent()) {
-        // Why: Chromium already implements X11 primary paste for editable DOM
-        // controls. Suppressing that native path can turn a working OS paste
-        // into a no-op before Orca's async fallback runs.
         return false
       }
       pendingMiddleTarget = target
@@ -142,7 +144,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
     }
 
     const onMouseDown = (event: MouseEvent): void => {
-      rememberPendingTarget(event, { allowNativeLinuxPaste: true })
+      rememberPendingTarget(event)
     }
 
     const onMouseUp = (event: MouseEvent): void => {
@@ -159,10 +161,12 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         clientY: event.clientY
       }
       void readPrimarySelectionText().then((text) => {
-        if (!text) {
+        // Why: async primary-selection reads can resolve after focus moved;
+        // do not refocus and mutate a stale middle-click target.
+        if (!text || !isPrimarySelectionPasteTargetCurrent(target)) {
           return
         }
-        pastePrimarySelectionTextIntoTarget(target, text, point)
+        void pastePrimarySelectionTextIntoTarget(target, text, point).catch(() => {})
       })
     }
 
@@ -171,7 +175,7 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         return
       }
       const target = findEditablePrimarySelectionPasteTarget(event.target)
-      if (!target || isLinuxUserAgent()) {
+      if (!target) {
         return
       }
       suppressEvent(event)
