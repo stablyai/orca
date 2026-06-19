@@ -121,15 +121,7 @@ export function buildAgentStartupPlan(args: {
 }): AgentStartupPlan | null {
   const { agent, prompt, cmdOverrides, platform, allowEmptyPromptLaunch = false } = args
   const shell = resolveStartupShell(platform, args.shell)
-  // Why: the prompt is embedded in a shell command written to the PTY after
-  // the shell is ready. Windows shells (PowerShell, cmd) parse embedded
-  // newlines unreliably, so collapse CR/LF to spaces to stay on one physical
-  // line. On POSIX we normalize CRLF/CR to LF so line endings are stable and
-  // do not surprise the shell.
-  const trimmedPrompt =
-    shell === 'powershell' || shell === 'cmd'
-      ? prompt.trim().replace(/[\r\n]+/g, ' ')
-      : prompt.trim().replace(/\r\n?/g, '\n')
+  const trimmedPrompt = prompt.trim()
   const config = TUI_AGENT_CONFIG[agent]
   const baseCommand = resolveBaseCommand({
     agent,
@@ -154,54 +146,69 @@ export function buildAgentStartupPlan(args: {
     }
   }
 
-  const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
+  // Why: Windows shells (PowerShell, cmd) parse embedded newlines
+  // unreliably, so collapse CR/LF to spaces to stay on one physical line.
+  // On POSIX we normalize CRLF/CR to LF so line endings are stable and do
+  // not surprise the shell.
+  const shellNormalizedPrompt =
+    shell === 'powershell' || shell === 'cmd'
+      ? trimmedPrompt.replace(/[\r\n]+/g, ' ')
+      : trimmedPrompt.replace(/\r\n?/g, '\n')
+  const quotedPrompt = quoteStartupArg(shellNormalizedPrompt, shell)
 
-  if (config.promptInjectionMode === 'argv') {
-    return {
-      agent,
-      launchCommand: `${baseCommand.command} ${quotedPrompt}`,
-      expectedProcess: config.expectedProcess,
-      followupPrompt: null,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
-  }
-
-  if (config.promptInjectionMode === 'flag-prompt') {
-    return {
-      agent,
-      launchCommand: `${baseCommand.command} --prompt ${quotedPrompt}`,
-      expectedProcess: config.expectedProcess,
-      followupPrompt: null,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
-  }
-
-  if (config.promptInjectionMode === 'flag-prompt-interactive') {
-    return {
-      agent,
-      launchCommand: `${baseCommand.command} --prompt-interactive ${quotedPrompt}`,
-      expectedProcess: config.expectedProcess,
-      followupPrompt: null,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
-  }
-
-  if (config.promptInjectionMode === 'flag-interactive') {
-    return {
-      agent,
-      launchCommand: `${baseCommand.command} -i ${quotedPrompt}`,
-      expectedProcess: config.expectedProcess,
-      followupPrompt: null,
-      ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
-    }
-  }
-
-  return {
-    agent,
-    launchCommand: baseCommand.command,
-    expectedProcess: config.expectedProcess,
-    followupPrompt: trimmedPrompt,
-    ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+  switch (config.promptInjectionMode) {
+    case 'stdin-after-start':
+      // Why: stdin-after-start prompts are written directly to the PTY after
+      // the agent starts — they are never parsed by a shell. Normalize
+      // CRLF/CR to LF on all platforms so multiline prompts reach the PTY
+      // intact.
+      return {
+        agent,
+        launchCommand: baseCommand.command,
+        expectedProcess: config.expectedProcess,
+        followupPrompt: trimmedPrompt.replace(/\r\n?/g, '\n'),
+        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      }
+    case 'argv':
+      return {
+        agent,
+        launchCommand: `${baseCommand.command} ${quotedPrompt}`,
+        expectedProcess: config.expectedProcess,
+        followupPrompt: null,
+        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      }
+    case 'flag-prompt':
+      return {
+        agent,
+        launchCommand: `${baseCommand.command} --prompt ${quotedPrompt}`,
+        expectedProcess: config.expectedProcess,
+        followupPrompt: null,
+        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      }
+    case 'flag-prompt-interactive':
+      return {
+        agent,
+        launchCommand: `${baseCommand.command} --prompt-interactive ${quotedPrompt}`,
+        expectedProcess: config.expectedProcess,
+        followupPrompt: null,
+        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      }
+    case 'flag-interactive':
+      return {
+        agent,
+        launchCommand: `${baseCommand.command} -i ${quotedPrompt}`,
+        expectedProcess: config.expectedProcess,
+        followupPrompt: null,
+        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      }
+    default:
+      return {
+        agent,
+        launchCommand: baseCommand.command,
+        expectedProcess: config.expectedProcess,
+        followupPrompt: shellNormalizedPrompt,
+        ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+      }
   }
 }
 

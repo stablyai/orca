@@ -353,4 +353,33 @@ describe('tui agent startup plans', () => {
       "codex \"$(printf '%s\\n' 'Review this function:' '' '```ts' 'const x = 1' '```')\""
     )
   })
+
+  it('escapes apostrophes in multiline POSIX printf command substitution', () => {
+    // Why: each line is individually single-quoted inside printf. An apostrophe
+    // must become '\'' — end the surronding quote, append an escaped single
+    // quote, then resume quoting — matching the existing single-line escaping
+    // rules applied per-line.
+    const plan = buildAgentStartupPlan({
+      agent: 'droid',
+      prompt: "Bob's change\nsecond line",
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+    expect(plan?.launchCommand).toBe("droid \"$(printf '%s\\n' 'Bob'\\''s change' 'second line')\"")
+  })
+
+  it('preserves multiline follow-up prompts on Windows for stdin-after-start agents', () => {
+    // Why: stdin-after-start prompts are written directly to the PTY after
+    // the agent starts — they are never parsed by PowerShell or cmd.
+    // Collapsing newlines here would silently corrupt the intended multiline
+    // prompt structure.
+    const plan = buildAgentStartupPlan({
+      agent: 'aider',
+      prompt: 'line one\nline two',
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+    expect(plan?.launchCommand).toBe('aider')
+    expect(plan?.followupPrompt).toBe('line one\nline two')
+  })
 })
