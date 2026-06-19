@@ -40,4 +40,10 @@ describe('getProcessOutputFields', () => {
 
     expect(fields).toEqual(['x'.repeat(PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS)])
   })
+
+  it('keeps a field that ends exactly at the scan boundary', () => {
+    const boundaryField = 'x'.repeat(PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS)
+
+    expect(getProcessOutputFields(boundaryField, 1)).toEqual([boundaryField])
+  })
 })

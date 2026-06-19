@@ -1,5 +1,6 @@
 import type {
   CreateWorktreeResult,
+  CreateWorktreeArgs,
   CreateSparseCheckoutRequest,
   DetectedWorktree,
   DetectedWorktreeListResult,
@@ -147,7 +148,10 @@ export type WorktreeSlice = {
     linkedBitbucketPR?: number | null,
     linkedAzureDevOpsPR?: number | null,
     linkedGiteaPR?: number | null,
-    compareBaseRef?: string
+    compareBaseRef?: string,
+    // Why: reserved for automation-dispatch flows so host-side provenance can
+    // be minted securely; regular create callers should omit this.
+    options?: { automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest'] }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
   CLIPBOARD_TEXT_TOO_LARGE_ERROR,
   CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR,
   assertClipboardTextWriteWithinLimit,
@@ -51,6 +52,20 @@ describe('clipboard text limits', () => {
     expect(yieldToEventLoop).toHaveBeenCalled()
   })
 
+  it('uses the default 256k code-unit yield cadence for accepted large clipboard text', async () => {
+    const yieldToEventLoop = vi.fn(async () => {})
+
+    const measurement = await measureClipboardTextByteLengthWithYield(
+      'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS * 2 + 1),
+      {
+        yieldToEventLoop
+      }
+    )
+
+    expect(measurement.exceededLimit).toBe(false)
+    expect(yieldToEventLoop).toHaveBeenCalledTimes(2)
+  })
+
   it('yields while checking multibyte clipboard limits before rejecting', async () => {
     const yieldToEventLoop = vi.fn(async () => {})
 
@@ -75,6 +90,24 @@ describe('clipboard text limits', () => {
       CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
     )
     expect(codePointAt).not.toHaveBeenCalled()
+  })
+
+  it('lets each clipboard consumer override the shared default byte limits', async () => {
+    expect(assertClipboardTextWithinLimit('abc', { maxBytes: 3 })).toBe('abc')
+    expect(() => assertClipboardTextWithinLimit('abc', { maxBytes: 2 })).toThrow(
+      CLIPBOARD_TEXT_TOO_LARGE_ERROR
+    )
+    expect(assertClipboardTextWriteWithinLimit('copy', { maxBytes: 4 })).toBe('copy')
+    expect(() => assertClipboardTextWriteWithinLimit('copy', { maxBytes: 3 })).toThrow(
+      CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
+    )
+
+    await expect(assertClipboardTextWithinLimitWithYield('async', { maxBytes: 5 })).resolves.toBe(
+      'async'
+    )
+    await expect(
+      assertClipboardTextWriteWithinLimitWithYield('async', { maxBytes: 4 })
+    ).rejects.toThrow(CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR)
   })
 
   it('rejects oversized text with a metadata-only error', () => {

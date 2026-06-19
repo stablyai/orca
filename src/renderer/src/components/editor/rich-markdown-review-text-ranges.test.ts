@@ -64,6 +64,14 @@ describe('findRichMarkdownSelectedTextRanges', () => {
     expect(ranges).toEqual([{ from: 7, to: 7 + selectedText.length }])
   })
 
+  it('matches after overlapping prefix fallback', () => {
+    const editor = editorWithTextNodes([{ isText: true, text: 'xxabababaca' }])
+
+    expect(findRichMarkdownSelectedTextRanges({ editor, selectedText: 'ababaca' })).toEqual([
+      { from: 4, to: 11 }
+    ])
+  })
+
   it('stops reading later text nodes after the selected text is found', () => {
     const unreadNode = { isText: true, size: 10 } as FakeTextNode
     Object.defineProperty(unreadNode, 'text', {

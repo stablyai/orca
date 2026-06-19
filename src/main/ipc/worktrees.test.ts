@@ -669,6 +669,41 @@ describe('registerWorktreeHandlers', () => {
     expect(result).toMatchObject({ comment: 'keep me', isPinned: true })
   })
 
+  it('does not trust renderer-authored automation provenance during local create', async () => {
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      automationProvenance: {
+        kind: 'created-by-automation',
+        automationId: 'automation-1',
+        automationNameSnapshot: 'Forged',
+        automationRunId: 'run-1',
+        automationRunTitleSnapshot: 'Forged run',
+        createdAt: 123,
+        executionTargetType: 'local',
+        executionTargetId: 'local',
+        projectId: 'repo-1'
+      }
+    })
+
+    const persistedMeta = store.setWorktreeMeta.mock.calls.find(
+      ([worktreeId]) => worktreeId === 'repo-1::/workspace/improve-dashboard'
+    )?.[1]
+    expect(persistedMeta).toBeDefined()
+    expect(persistedMeta).not.toHaveProperty('automationProvenance')
+  })
+
   it('auto-suffixes the branch name when the first choice collides with a remote branch', async () => {
     // Why: new-workspace flow should silently try improve-dashboard-2, -3, ...
     // rather than failing and forcing the user back to the name picker.
