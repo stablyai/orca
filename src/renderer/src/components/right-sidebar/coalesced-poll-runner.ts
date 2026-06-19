@@ -62,6 +62,9 @@ export function createCoalescedPollRunner(
             // reruns can keep the renderer and IPC paths hot indefinitely.
             trailingTimeout = setTimeoutFn(() => {
               trailingTimeout = null
+              // Consume the delayed rerun request before starting it; new ticks
+              // during this run can still set rerun=true for one later pass.
+              rerun = false
               run()
             }, delayMs)
             return
