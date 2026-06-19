@@ -1,10 +1,27 @@
+/* eslint-disable max-lines -- Why: filesystem mutation IPC handlers stay centralized so
+authorization, SSH routing, and external import behavior remain audited together. */
 import { ipcMain } from 'electron'
-import { copyFile, lstat, mkdir, readdir, rename, writeFile } from 'fs/promises'
-import { basename, dirname, join, resolve } from 'path'
+import { constants } from 'fs'
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  unlink,
+  writeFile
+} from 'fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path'
+import { pipeline } from 'stream/promises'
 import type { Store } from '../persistence'
 import { authorizeExternalPath, resolveAuthorizedPath, isENOENT } from './filesystem-auth'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
+import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 
 /**
  * Re-throw filesystem errors with user-friendly messages.
@@ -55,10 +72,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:createFile',
     async (_event, args: { filePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
-        }
+        const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.createFile(args.filePath)
       }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
@@ -76,10 +90,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:createDir',
     async (_event, args: { dirPath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
-        }
+        const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.createDir(args.dirPath)
       }
       const dirPath = await resolveAuthorizedPath(args.dirPath, store)
@@ -98,11 +109,8 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       args: { oldPath: string; newPath: string; connectionId?: string }
     ): Promise<void> => {
       if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        if (!provider) {
-          throw new Error(`No filesystem provider for connection "${args.connectionId}"`)
-        }
-        return provider.rename(args.oldPath, args.newPath)
+        const provider = requireSshFilesystemProvider(args.connectionId)
+        return provider.renameNoClobber(args.oldPath, args.newPath)
       }
       // Why: rename() operates on directory entries, not file contents. If
       // oldPath is a symlink, we must rename the link itself rather than
@@ -112,8 +120,31 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // accidentally write into a symlinked destination name.
       const oldPath = await resolveAuthorizedPath(args.oldPath, store, { preserveSymlink: true })
       const newPath = await resolveAuthorizedPath(args.newPath, store, { preserveSymlink: true })
-      await assertNotExists(newPath)
+      await assertNoClobberRenameDestinationAvailable(oldPath, newPath)
       await rename(oldPath, newPath)
+    }
+  )
+
+  ipcMain.handle(
+    'fs:copy',
+    async (
+      _event,
+      args: { sourcePath: string; destinationPath: string; connectionId?: string }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        const provider = requireSshFilesystemProvider(args.connectionId)
+        return provider.copy(args.sourcePath, args.destinationPath)
+      }
+      const sourcePath = await resolveAuthorizedPath(args.sourcePath, store, {
+        preserveSymlink: true
+      })
+      const destinationPath = await resolveAuthorizedPath(args.destinationPath, store, {
+        preserveSymlink: true
+      })
+      await mkdir(dirname(destinationPath), { recursive: true })
+      // Why: duplicate/copy callers deconflict before copying. COPYFILE_EXCL
+      // keeps a late race from silently overwriting an existing file.
+      await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL)
     }
   )
 
@@ -121,10 +152,12 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:importExternalPaths',
     async (
       _event,
-      args: { sourcePaths: string[]; destDir: string; connectionId?: string }
+      args: { sourcePaths: string[]; destDir: string; connectionId?: string; ensureDir?: boolean }
     ): Promise<{ results: ImportItemResult[] }> => {
       if (args.connectionId) {
-        return importExternalPathsSsh(args.sourcePaths, args.destDir, args.connectionId)
+        return importExternalPathsSsh(args.sourcePaths, args.destDir, args.connectionId, {
+          ensureDir: args.ensureDir
+        })
       }
 
       // Why: destDir must be authorized before any copy work begins. If the
@@ -148,6 +181,20 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
+  ipcMain.handle(
+    'fs:stageExternalPathsForRuntimeUpload',
+    async (
+      _event,
+      args: { sourcePaths: string[] }
+    ): Promise<{ sources: StagedExternalImportSource[] }> => {
+      const sources: StagedExternalImportSource[] = []
+      for (const sourcePath of args.sourcePaths) {
+        sources.push(await stageOneSourceForRuntimeUpload(sourcePath))
+      }
+      return { sources }
+    }
+  )
+
   // Why: terminal drag-and-drop resolver. Local worktrees pass paths through
   // unchanged (reference-in-place; preserves zero-latency drop). SSH worktrees
   // upload each path into `${worktreePath}/.orca/drops/` and return remote
@@ -163,7 +210,11 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // Why: `== null` (not `!args.connectionId`) so an empty string is
       // treated as a renderer error, not silently routed to the local branch.
       if (args.connectionId == null) {
-        return { resolvedPaths: args.paths, skipped: [], failed: [] }
+        return {
+          resolvedPaths: resolveLocalDroppedPathsForAgent(args.paths, args.worktreePath),
+          skipped: [],
+          failed: []
+        }
       }
       const worktreePath = args.worktreePath.replace(/\/+$/, '')
       const destDir = `${worktreePath}/.orca/drops`
@@ -216,6 +267,34 @@ export type ImportItemResult =
       status: 'failed'
       reason: string
     }
+
+export type StagedExternalImportSource =
+  | {
+      sourcePath: string
+      status: 'staged'
+      name: string
+      kind: 'file' | 'directory'
+      entries: StagedExternalImportEntry[]
+    }
+  | {
+      sourcePath: string
+      status: 'skipped'
+      reason: ImportSkipReason
+    }
+  | {
+      sourcePath: string
+      status: 'failed'
+      reason: string
+    }
+
+export type StagedExternalImportEntry =
+  | { relativePath: string; kind: 'directory' }
+  | { relativePath: string; kind: 'file'; contentBase64: string }
+
+const REMOTE_IMPORT_MAX_FILE_BYTES = 25 * 1024 * 1024
+const REMOTE_IMPORT_MAX_TOTAL_BYTES = 100 * 1024 * 1024
+
+class RuntimeUploadSymlinkError extends Error {}
 
 // ─── External Import Implementation ─────────────────────────────────
 
@@ -288,8 +367,13 @@ async function importOneSource(
   const renamed = finalName !== originalName
 
   try {
-    await (isDir ? recursiveCopyDir(resolvedSource, destPath) : copyFile(resolvedSource, destPath))
+    await (isDir
+      ? recursiveCopyDir(resolvedSource, destPath)
+      : copyLocalFileNoFollow(resolvedSource, destPath))
   } catch (error) {
+    if (isDir) {
+      await rm(destPath, { recursive: true, force: true }).catch(() => {})
+    }
     return {
       sourcePath,
       status: 'failed',
@@ -304,6 +388,206 @@ async function importOneSource(
     kind: isDir ? 'directory' : 'file',
     renamed
   }
+}
+
+async function stageOneSourceForRuntimeUpload(
+  sourcePath: string
+): Promise<StagedExternalImportSource> {
+  const resolvedSource = resolve(sourcePath)
+
+  // Why: runtime uploads read client-local paths in the client main process;
+  // authorize before lstat/readFile just like local copy imports.
+  authorizeExternalPath(resolvedSource)
+
+  let sourceStat: Awaited<ReturnType<typeof lstat>>
+  try {
+    sourceStat = await lstat(resolvedSource)
+  } catch (error) {
+    if (isENOENT(error)) {
+      return { sourcePath, status: 'skipped', reason: 'missing' }
+    }
+    if (
+      error instanceof Error &&
+      'code' in error &&
+      ((error as NodeJS.ErrnoException).code === 'EACCES' ||
+        (error as NodeJS.ErrnoException).code === 'EPERM')
+    ) {
+      return { sourcePath, status: 'skipped', reason: 'permission-denied' }
+    }
+    return {
+      sourcePath,
+      status: 'failed',
+      reason: error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  if (sourceStat.isSymbolicLink()) {
+    return { sourcePath, status: 'skipped', reason: 'symlink' }
+  }
+  if (!sourceStat.isFile() && !sourceStat.isDirectory()) {
+    return { sourcePath, status: 'skipped', reason: 'unsupported' }
+  }
+  try {
+    const entries = sourceStat.isDirectory()
+      ? await stageDirectoryEntries(resolvedSource)
+      : [(await stageFileEntry(resolvedSource, '')).entry]
+    return {
+      sourcePath,
+      status: 'staged',
+      name: basename(resolvedSource),
+      kind: sourceStat.isDirectory() ? 'directory' : 'file',
+      entries
+    }
+  } catch (error) {
+    if (error instanceof RuntimeUploadSymlinkError) {
+      return { sourcePath, status: 'skipped', reason: 'symlink' }
+    }
+    return {
+      sourcePath,
+      status: 'failed',
+      reason: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+async function stageDirectoryEntries(rootPath: string): Promise<StagedExternalImportEntry[]> {
+  const entries: StagedExternalImportEntry[] = [{ relativePath: '', kind: 'directory' }]
+  let totalBytes = 0
+  const rootRealPath = await realpath(rootPath)
+
+  async function visit(dirPath: string): Promise<void> {
+    const dirStat = await lstat(dirPath)
+    if (dirStat.isSymbolicLink()) {
+      throw new RuntimeUploadSymlinkError(
+        `Symlink not allowed in '${normalizeRelativeUploadPath(relative(rootPath, dirPath))}'`
+      )
+    }
+    if (!dirStat.isDirectory()) {
+      throw new Error(
+        `Unsupported file type in '${normalizeRelativeUploadPath(relative(rootPath, dirPath))}'`
+      )
+    }
+    await assertRealPathInsideRoot(
+      rootRealPath,
+      dirPath,
+      normalizeRelativeUploadPath(relative(rootPath, dirPath))
+    )
+    const dirEntries = await readdir(dirPath, { withFileTypes: true })
+    for (const entry of dirEntries) {
+      const childPath = join(dirPath, entry.name)
+      const childRelativePath = normalizeRelativeUploadPath(relative(rootPath, childPath))
+      if (entry.isSymbolicLink()) {
+        throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${childRelativePath}'`)
+      }
+      if (entry.isDirectory()) {
+        entries.push({ relativePath: childRelativePath, kind: 'directory' })
+        await visit(childPath)
+        continue
+      }
+      if (!entry.isFile()) {
+        throw new Error(`Unsupported file type in '${childRelativePath}'`)
+      }
+      const stagedFile = await stageFileEntry(childPath, childRelativePath, {
+        rootRealPath,
+        totalBytesBefore: totalBytes
+      })
+      totalBytes += stagedFile.byteLength
+      entries.push(stagedFile.entry)
+    }
+  }
+
+  await visit(rootPath)
+  return entries
+}
+
+async function stageFileEntry(
+  filePath: string,
+  relativePath: string,
+  options?: { rootRealPath?: string; totalBytesBefore?: number }
+): Promise<{ entry: StagedExternalImportEntry; byteLength: number }> {
+  const statResult = await lstat(filePath)
+  const displayPath = normalizeRelativeUploadPath(relativePath)
+  if (statResult.isSymbolicLink()) {
+    throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${displayPath}'`)
+  }
+  if (!statResult.isFile()) {
+    throw new Error(`Unsupported file type in '${displayPath}'`)
+  }
+  if (options?.rootRealPath) {
+    await assertRealPathInsideRoot(options.rootRealPath, filePath, displayPath)
+  }
+  const initialTotalBytes =
+    options?.totalBytesBefore === undefined
+      ? statResult.size
+      : options.totalBytesBefore + statResult.size
+  assertRemoteUploadBudget(relativePath, statResult.size, initialTotalBytes)
+  const fileHandle = await open(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    const openedStat = await fileHandle.stat()
+    if (!openedStat.isFile()) {
+      throw new Error(`Unsupported file type in '${displayPath}'`)
+    }
+    if (
+      openedStat.size !== statResult.size ||
+      (statResult.ino !== 0 && openedStat.ino !== 0 && openedStat.ino !== statResult.ino) ||
+      (statResult.dev !== 0 && openedStat.dev !== 0 && openedStat.dev !== statResult.dev)
+    ) {
+      throw new Error(`File changed during upload staging: '${displayPath}'`)
+    }
+    const totalBytes =
+      options?.totalBytesBefore === undefined
+        ? openedStat.size
+        : options.totalBytesBefore + openedStat.size
+    assertRemoteUploadBudget(relativePath, openedStat.size, totalBytes)
+    const buffer = await fileHandle.readFile()
+    const afterReadStat = await fileHandle.stat()
+    if (afterReadStat.size !== openedStat.size) {
+      throw new Error(`File changed during upload staging: '${displayPath}'`)
+    }
+    return {
+      entry: {
+        relativePath: displayPath,
+        kind: 'file',
+        contentBase64: buffer.toString('base64')
+      },
+      byteLength: openedStat.size
+    }
+  } finally {
+    await fileHandle.close()
+  }
+}
+
+async function assertRealPathInsideRoot(
+  rootRealPath: string,
+  candidatePath: string,
+  displayPath: string
+): Promise<void> {
+  const candidateRealPath = await realpath(candidatePath)
+  const relativeToRoot = relative(rootRealPath, candidateRealPath)
+  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  if (
+    relativeToRoot !== '' &&
+    (relativeToRoot === '..' || relativeToRoot.startsWith(`..${sep}`) || isAbsolute(relativeToRoot))
+  ) {
+    throw new Error(`Path escaped upload root during staging: '${displayPath}'`)
+  }
+}
+
+function assertRemoteUploadBudget(
+  relativePath: string,
+  fileBytes: number,
+  totalBytes: number
+): void {
+  if (fileBytes > REMOTE_IMPORT_MAX_FILE_BYTES) {
+    throw new Error(`'${relativePath}' is too large for remote import`)
+  }
+  if (totalBytes > REMOTE_IMPORT_MAX_TOTAL_BYTES) {
+    throw new Error('Remote import is too large')
+  }
+}
+
+function normalizeRelativeUploadPath(path: string): string {
+  return path.replace(/[\\/]+/g, '/').replace(/^\/+/, '')
 }
 
 /**
@@ -332,12 +616,72 @@ async function preScanForSymlinks(dirPath: string): Promise<boolean> {
  * buffering entire files into memory.
  */
 async function recursiveCopyDir(srcDir: string, destDir: string): Promise<void> {
-  await mkdir(destDir, { recursive: true })
+  await mkdir(destDir, { recursive: false })
   const entries = await readdir(srcDir, { withFileTypes: true })
   for (const entry of entries) {
     const srcPath = join(srcDir, entry.name)
     const dstPath = join(destDir, entry.name)
-    await (entry.isDirectory() ? recursiveCopyDir(srcPath, dstPath) : copyFile(srcPath, dstPath))
+    const statResult = await lstat(srcPath)
+    if (statResult.isSymbolicLink()) {
+      throw new Error(`Symlink not allowed in '${entry.name}'`)
+    }
+    if (statResult.isDirectory()) {
+      await recursiveCopyDir(srcPath, dstPath)
+      continue
+    }
+    if (!statResult.isFile()) {
+      throw new Error(`Unsupported file type in '${entry.name}'`)
+    }
+    await copyLocalFileNoFollow(srcPath, dstPath, statResult)
+  }
+}
+
+async function copyLocalFileNoFollow(
+  srcPath: string,
+  dstPath: string,
+  statResult?: Awaited<ReturnType<typeof lstat>>
+): Promise<void> {
+  const beforeOpenStat = statResult ?? (await lstat(srcPath))
+  if (beforeOpenStat.isSymbolicLink()) {
+    throw new Error(`Symlink not allowed in '${basename(srcPath)}'`)
+  }
+  if (!beforeOpenStat.isFile()) {
+    throw new Error(`Unsupported file type in '${basename(srcPath)}'`)
+  }
+
+  let destinationCreated = false
+  const sourceHandle = await open(srcPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  let destinationHandle: Awaited<ReturnType<typeof open>> | null = null
+  try {
+    const openedStat = await sourceHandle.stat()
+    if (
+      !openedStat.isFile() ||
+      (typeof beforeOpenStat.size === 'number' && openedStat.size !== beforeOpenStat.size) ||
+      (typeof beforeOpenStat.ino === 'number' &&
+        beforeOpenStat.ino !== 0 &&
+        openedStat.ino !== 0 &&
+        openedStat.ino !== beforeOpenStat.ino) ||
+      (typeof beforeOpenStat.dev === 'number' &&
+        beforeOpenStat.dev !== 0 &&
+        openedStat.dev !== 0 &&
+        openedStat.dev !== beforeOpenStat.dev)
+    ) {
+      throw new Error(`File changed during import: '${basename(srcPath)}'`)
+    }
+    // Why: copyFile(path, path) would follow a source symlink if the source is
+    // swapped after validation. Streaming from an O_NOFOLLOW handle keeps the
+    // authorized file identity pinned for the copy.
+    destinationHandle = await open(dstPath, 'wx')
+    destinationCreated = true
+    await pipeline(sourceHandle.createReadStream(), destinationHandle.createWriteStream())
+  } catch (error) {
+    if (destinationCreated) {
+      await unlink(dstPath).catch(() => {})
+    }
+    throw error
+  } finally {
+    await sourceHandle.close().catch(() => {})
+    await destinationHandle?.close().catch(() => {})
   }
 }
 

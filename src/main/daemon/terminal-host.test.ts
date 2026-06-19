@@ -8,6 +8,7 @@ function createMockSubprocess(): SubprocessHandle {
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 99999,
+    getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => {
@@ -158,7 +159,9 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onDataCb?.('\r\nuser@host $ ')
       await new Promise((r) => setTimeout(r, 40))
-      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\n')
+      expect(lastSubprocess.write).toHaveBeenCalledWith(
+        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
+      )
     })
   })
 
@@ -234,6 +237,22 @@ describe('TerminalHost', () => {
       expect(host.isKilled('session-1')).toBe(true)
     })
 
+    it('force-kills immediately when requested', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      host.kill('session-1', { immediate: true })
+
+      expect(lastSubprocess.kill).not.toHaveBeenCalled()
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+      expect(lastSubprocess.dispose).toHaveBeenCalled()
+      expect(host.isKilled('session-1')).toBe(true)
+    })
+
     it('throws for non-existent session', () => {
       expect(() => host.kill('missing')).toThrow('Session not found')
     })
@@ -299,7 +318,10 @@ describe('TerminalHost', () => {
 
   describe('tombstones', () => {
     it('caps tombstones at limit', async () => {
-      for (let i = 0; i < 1005; i++) {
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn, maxTombstones: 3 })
+
+      for (let i = 0; i < 5; i++) {
         await host.createOrAttach({
           sessionId: `session-${i}`,
           cols: 80,
@@ -311,7 +333,7 @@ describe('TerminalHost', () => {
 
       // Oldest tombstones should be evicted
       expect(host.isKilled('session-0')).toBe(false)
-      expect(host.isKilled('session-1004')).toBe(true)
+      expect(host.isKilled('session-4')).toBe(true)
     })
   })
 

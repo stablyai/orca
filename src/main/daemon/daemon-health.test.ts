@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { createServer, connect, type Server } from 'net'
 import { DaemonServer } from './daemon-server'
-import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
+import { getDaemonPidPath, getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
   getProcessStartedAtMs,
   healthCheckDaemon,
@@ -17,6 +17,7 @@ import type { SubprocessHandle } from './session'
 function createMockSubprocess(): SubprocessHandle {
   return {
     pid: 55555,
+    getForegroundProcess: () => null,
     write() {},
     resize() {},
     kill() {},
@@ -64,7 +65,7 @@ describe('daemon health', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-health-test-'))
-    socketPath = join(dir, 'daemon.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'daemon.token')
   })
 
@@ -73,15 +74,36 @@ describe('daemon health', () => {
   })
 
   it('passes when a daemon answers ping', async () => {
+    const ptySpawnHealthCheck = vi.fn(async () => {})
     const server = new DaemonServer({
       socketPath,
       tokenPath,
+      ptySpawnHealthCheck,
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
 
     try {
       await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(true)
+      expect(ptySpawnHealthCheck).toHaveBeenCalledOnce()
+    } finally {
+      await server.shutdown()
+    }
+  })
+
+  it('fails when a protocol-healthy daemon cannot spawn PTYs', async () => {
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      ptySpawnHealthCheck: vi.fn(async () => {
+        throw new Error('stale node-pty helper')
+      }),
+      spawnSubprocess: () => createMockSubprocess()
+    })
+    await server.start()
+
+    try {
+      await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
     } finally {
       await server.shutdown()
     }
@@ -121,20 +143,23 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 
-  it('parses JSON pid files with entryPath', () => {
+  it('parses JSON pid files with launch metadata', () => {
     const serialized = serializeDaemonPidFile({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: '/repo/out/main/daemon-entry.js'
+      entryPath: '/repo/out/main/daemon-entry.js',
+      appVersion: '1.2.3'
     })
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
-      entryPath: '/repo/out/main/daemon-entry.js'
+      entryPath: '/repo/out/main/daemon-entry.js',
+      appVersion: '1.2.3'
     })
   })
 
@@ -144,7 +169,8 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile('{"pid":9999}')).toEqual({
       pid: 9999,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 
@@ -155,12 +181,14 @@ describe('parseDaemonPidFile', () => {
     expect(parseDaemonPidFile('12345')).toEqual({
       pid: 12345,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
     expect(parseDaemonPidFile('  12345\n')).toEqual({
       pid: 12345,
       startedAtMs: null,
-      entryPath: null
+      entryPath: null,
+      appVersion: null
     })
   })
 

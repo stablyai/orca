@@ -5,8 +5,8 @@
  *
  * Why this module exists (design doc: docs/design/share-quick-open-file-listing.md):
  * Before extraction, the local and relay listFiles implementations had diverged
- * on blocklist, .env* handling, nested-worktree exclusions, timeout strategy,
- * and buffering. A home-dir worktree over SSH would descend into $HOME dotfile
+ * on blocklist, ignored-file handling, nested-worktree exclusions, timeout
+ * strategy, and buffering. A home-dir worktree over SSH would descend into $HOME dotfile
  * caches, hit a 10s timeout, and silently resolve with a partial result —
  * Quick Open showed "No matching files" even though the scan was incomplete.
  * Centralizing the policy prevents future drift.
@@ -44,9 +44,22 @@ export const HIDDEN_DIR_BLOCKLIST: ReadonlySet<string> = new Set([
   '.gvfs'
 ])
 
+// `.local` itself can contain user-authored files; only the generated desktop
+// runtime subtree is part of the home-root failure blocklist.
+const HIDDEN_PATH_BLOCKLIST: readonly string[] = ['.local/share']
+
 // Kept separate from HIDDEN_DIR_BLOCKLIST because node_modules is not a
 // dotfile dir, but it must still be pruned from every traversal.
 const NON_DOTTED_PRUNE = 'node_modules'
+
+function containsBlockedRelPath(path: string, blockedPath: string): boolean {
+  return (
+    path === blockedPath ||
+    path.startsWith(`${blockedPath}/`) ||
+    path.endsWith(`/${blockedPath}`) ||
+    path.includes(`/${blockedPath}/`)
+  )
+}
 
 /**
  * Returns true if `relPath` (a `/`-separated, root-relative path) does not
@@ -59,6 +72,11 @@ const NON_DOTTED_PRUNE = 'node_modules'
  * files.
  */
 export function shouldIncludeQuickOpenPath(path: string): boolean {
+  for (const blockedPath of HIDDEN_PATH_BLOCKLIST) {
+    if (containsBlockedRelPath(path, blockedPath)) {
+      return false
+    }
+  }
   let start = 0
   const len = path.length
   while (start < len) {
@@ -132,7 +150,7 @@ export function buildExcludePathPrefixes(rootPath: string, excludePaths?: unknow
       : // Fall back to path-flavor relative so we do not accidentally use the
         // local OS's semantics on remote paths.
         flavor.relative(trimmedRoot, raw).replace(/\\/g, '/')
-    if (!rel || rel.startsWith('..') || rel.startsWith('/')) {
+    if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
       continue
     }
     // Strip any trailing slash so boundary checks are unambiguous.
@@ -189,6 +207,11 @@ function escapeGlobPath(relPath: string): string {
   return relPath.split('/').map(escapeGlob).join('/')
 }
 
+function isParentRelativePath(relPath: string): boolean {
+  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  return relPath === '..' || relPath.startsWith('../')
+}
+
 // ─── rg traversal-pruning globs ──────────────────────────────────────
 
 /**
@@ -203,6 +226,9 @@ export function buildHiddenDirExcludeGlobs(): string[] {
   const out: string[] = []
   for (const name of names) {
     out.push('--glob', `!**/${escapeGlob(name)}`)
+  }
+  for (const blockedPath of HIDDEN_PATH_BLOCKLIST) {
+    out.push('--glob', `!**/${escapeGlobPath(blockedPath)}`)
   }
   return out
 }
@@ -223,8 +249,8 @@ export type RgArgsOptions = {
 export type RgArgs = {
   /** Main pass: all non-ignored files, hidden dotfiles included. */
   primary: string[]
-  /** Second pass: gitignored .env* files. */
-  envPass: string[]
+  /** Second pass: ignored files, hidden dotfiles included. */
+  ignoredPass: string[]
 }
 
 /**
@@ -258,25 +284,19 @@ export function buildRgArgsForQuickOpen(opts: RgArgsOptions): RgArgs {
     opts.searchRoot
   ]
 
-  // .env* pass: must include --no-ignore-vcs so rg surfaces gitignored .env
-  // files, which is the whole reason the second pass exists. Two positive
-  // globs (root-level and nested) because rg treats any positive --glob as a
-  // whitelist; no preceding negative pattern is needed.
-  const envPass = [
+  // Ignored pass: --no-ignore-vcs broadens traversal to gitignored and
+  // parent/global ignored files; blocklist globs remain the guardrail.
+  const ignoredPass = [
     '--files',
     '--hidden',
     '--no-ignore-vcs',
     ...sepArgs,
-    '--glob',
-    '.env*',
-    '--glob',
-    '**/.env*',
     ...hiddenDirGlobs,
     ...excludeGlobs,
     opts.searchRoot
   ]
 
-  return { primary, envPass }
+  return { primary, ignoredPass }
 }
 
 // ─── rg stdout line normalization ────────────────────────────────────
@@ -311,7 +331,7 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
     } else if (rel === '.') {
       return null
     }
-    if (!rel || rel.startsWith('/') || rel.startsWith('..')) {
+    if (!rel || rel.startsWith('/') || isParentRelativePath(rel)) {
       return null
     }
     return rel
@@ -322,7 +342,11 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
   // into single-slash POSIX-looking paths that no rg output can match.
   const normalizedRoot = `${outputMode.rootPath.replace(/\\/g, '/').replace(/\/+$/, '')}/`
   if (normalized.startsWith(normalizedRoot)) {
-    return normalized.substring(normalizedRoot.length)
+    const rel = normalized.substring(normalizedRoot.length)
+    if (!rel || isParentRelativePath(rel) || rel.startsWith('/')) {
+      return null
+    }
+    return rel
   }
   return null
 }
@@ -331,7 +355,7 @@ export function normalizeQuickOpenRgLine(rawLine: string, outputMode: RgOutputMo
 
 export type GitLsFilesArgs = {
   primary: string[]
-  envPass: string[]
+  ignoredPass: string[]
 }
 
 /**
@@ -340,9 +364,8 @@ export type GitLsFilesArgs = {
  * prepended so exclude-only pathspecs do not depend on git's edge-case
  * defaults.
  *
- * The `.env*` pass uses BOTH `.env*` (root-level) and `**\/.env*` (nested)
- * because the `**\/` prefix alone does not match a root-level `.env` file —
- * this was the silent bug in the prior local implementation.
+ * The ignored pass asks git for ignored untracked files. Non-git roots keep
+ * their existing non-git fallback limits in the callers.
  */
 export function buildGitLsFilesArgsForQuickOpen(
   excludePathPrefixes: readonly string[] = []
@@ -354,18 +377,9 @@ export function buildGitLsFilesArgsForQuickOpen(
   }
   const trailingPathspecs = excludeSpecs.length > 0 ? ['--', '.', ...excludeSpecs] : []
 
-  const primary = ['--cached', '--others', '--exclude-standard', ...trailingPathspecs]
-  // Second pass: untracked AND ignored .env* files. Do not pass
-  // --exclude-standard — that would re-hide gitignored .env files, which is
-  // the whole reason this pass exists.
-  // Why :(glob): default git pathspec uses fnmatch, where `*` crossing `/` is
-  // implementation-dependent. `:(glob)` pins the semantics explicitly so
-  // `**/.env*` reliably surfaces nested `.env` files across git versions.
-  const nestedEnvSpec = ':(glob)**/.env*'
-  const envPassPathspecs =
-    excludeSpecs.length > 0
-      ? ['--', '.env*', nestedEnvSpec, ...excludeSpecs]
-      : ['--', '.env*', nestedEnvSpec]
-  const envPass = ['--others', ...envPassPathspecs]
-  return { primary, envPass }
+  // Why: newline output C-quotes tabs/newlines, which makes Quick Open return
+  // fake paths when rg is unavailable. NUL output preserves real Git paths.
+  const primary = ['-z', '--cached', '--others', '--exclude-standard', ...trailingPathspecs]
+  const ignoredPass = ['-z', '--others', '--ignored', '--exclude-standard', ...trailingPathspecs]
+  return { primary, ignoredPass }
 }

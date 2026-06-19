@@ -96,6 +96,47 @@ export function isSingleEmptyTopLevelOrderedList(editor: Editor): boolean {
   )
 }
 
+export function exitTrailingEmptyOrderedListItem(editor: Editor): boolean {
+  const context = getEmptyListItemContext(editor)
+  if (!context) {
+    return false
+  }
+
+  const { state, view } = editor
+  const { schema } = state
+  const { $from } = state.selection
+  const list = $from.node(context.listDepth)
+  const listItem = $from.node(context.listItemDepth)
+  const parentDepth = context.listDepth - 1
+  const childIndex = $from.index(context.listDepth)
+
+  if (
+    list.type.name !== 'orderedList' ||
+    list.childCount <= 1 ||
+    childIndex !== list.childCount - 1 ||
+    listItem.childCount !== 1 ||
+    (parentDepth >= 0 && $from.node(parentDepth).type.name === 'listItem')
+  ) {
+    return false
+  }
+
+  const paragraphType = schema.nodes.paragraph
+  if (!paragraphType) {
+    return false
+  }
+
+  const remainingList = list.copy(list.content.cut(0, list.content.size - listItem.nodeSize))
+  const continuationParagraph = paragraphType.create()
+  const from = $from.before(context.listDepth)
+  const to = $from.after(context.listDepth)
+  const tr = state.tr.replaceWith(from, to, [remainingList, continuationParagraph])
+  // Why: loaded markdown can contain a trailing empty numbered item. Enter on
+  // that caret target should continue as body text, not keep extending the list.
+  tr.setSelection(TextSelection.create(tr.doc, from + remainingList.nodeSize + 1))
+  view.dispatch(tr.scrollIntoView())
+  return true
+}
+
 export function collapseEmptyListContinuationParagraph(editor: Editor): boolean {
   const context = getEmptyListItemContext(editor)
   if (!context) {

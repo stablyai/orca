@@ -7,14 +7,6 @@ export function makeResponse(body: unknown, status = 200): Response {
   } as Response
 }
 
-export function makeDirent(name: string, isDir: boolean) {
-  return {
-    name,
-    isDirectory: () => isDir,
-    isFile: () => !isDir
-  }
-}
-
 export const authJsonGoogle = {
   google: {
     type: 'oauth',
@@ -44,11 +36,6 @@ export const expiredCreds = {
   refresh_token: 'refresh-token',
   expiry_date: new Date('2026-04-24T11:00:00.000Z').getTime()
 }
-
-export const oauth2JsContent = `
-  const OAUTH_CLIENT_ID = 'client-id-123';
-  const OAUTH_CLIENT_SECRET = 'client-secret-456';
-`
 
 export const quotaResponse = [
   { remainingFraction: 0.75, resetTime: '2026-04-24T13:00:00.000Z', modelId: 'gemini-2.5-pro' },

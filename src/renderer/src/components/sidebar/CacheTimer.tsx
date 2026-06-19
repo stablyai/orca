@@ -1,15 +1,32 @@
-import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { Timer } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { usePromptCacheCountdownNow } from './prompt-cache-countdown-clock'
+import { getMostUrgentPromptCacheStartedAt } from './prompt-cache-timer-selection'
+import { translate } from '@/i18n/i18n'
 
 /**
- * Per-worktree prompt-cache countdown, shown in the sidebar worktree card.
+ * The most-urgent cache start time when a countdown should show, else null.
+ * The worktree card uses it to both gate its metadata row and feed CacheTimer,
+ * so neither the card nor the timer subscribes twice to the same store slices.
  *
- * When a worktree has multiple Claude tabs, the timer shows the *most urgent*
- * (shortest remaining) countdown — if any tab's cache is about to expire, the
+ * When a worktree has multiple Claude tabs, this resolves the *most urgent*
+ * (shortest remaining) start time — if any tab's cache is about to expire, the
  * user should know.
+ */
+export function usePromptCacheCountdownStartedAt(worktreeId: string): number | null {
+  const enabled = useAppStore((s) => s.settings?.promptCacheTimerEnabled ?? false)
+  const ttlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
+  const startedAt = useAppStore((s) =>
+    getMostUrgentPromptCacheStartedAt(s.tabsByWorktree[worktreeId], s.cacheTimerByKey)
+  )
+  return enabled && ttlMs > 0 && startedAt != null ? startedAt : null
+}
+
+/**
+ * Per-worktree prompt-cache countdown, shown in the sidebar worktree card. The
+ * card renders this only once a cache is active, so it's a pure countdown view.
  *
  * Why: prompt caching (Anthropic API / Bedrock) has a TTL (default 5 min).
  * When the cache expires, the next request re-sends the full conversation as
@@ -17,59 +34,14 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
  * users decide whether to resume interaction before the cache drops.
  */
 export default function CacheTimer({
-  worktreeId
+  startedAt,
+  ttlMs
 }: {
-  worktreeId: string
-}): React.JSX.Element | null {
-  const enabled = useAppStore((s) => s.settings?.promptCacheTimerEnabled ?? false)
-  const ttlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
-
-  // Find the most urgent (minimum remaining) cache timer across all panes in this worktree.
-  const mostUrgentStartedAt = useAppStore((s) => {
-    const tabs = s.tabsByWorktree[worktreeId]
-    if (!tabs) {
-      return null
-    }
-    let oldest: number | null = null
-    for (const tab of tabs) {
-      // Why: cache timer keys are `${tabId}:${paneId}` composites, so we check
-      // all keys that belong to this tab's panes.
-      for (const key of Object.keys(s.cacheTimerByKey)) {
-        if (!key.startsWith(`${tab.id}:`)) {
-          continue
-        }
-        const ts = s.cacheTimerByKey[key]
-        if (ts != null && (oldest === null || ts < oldest)) {
-          // Why: smaller startedAt = started earlier = more elapsed time = less remaining = more urgent.
-          oldest = ts
-        }
-      }
-    }
-    return oldest
-  })
-
-  const [remainingMs, setRemainingMs] = useState<number | null>(null)
-
-  useEffect(() => {
-    if (!enabled || !mostUrgentStartedAt || ttlMs <= 0) {
-      setRemainingMs(null)
-      return
-    }
-
-    const tick = (): void => {
-      const elapsed = Date.now() - mostUrgentStartedAt
-      const remaining = Math.max(0, ttlMs - elapsed)
-      setRemainingMs(remaining)
-    }
-
-    tick()
-    const interval = setInterval(tick, 1000)
-    return () => clearInterval(interval)
-  }, [enabled, mostUrgentStartedAt, ttlMs])
-
-  if (remainingMs === null) {
-    return null
-  }
+  startedAt: number
+  ttlMs: number
+}): React.JSX.Element {
+  const now = usePromptCacheCountdownNow(true)
+  const remainingMs = Math.max(0, ttlMs - (now - startedAt))
 
   const totalSeconds = Math.ceil(remainingMs / 1000)
   const minutes = Math.floor(totalSeconds / 60)
@@ -93,7 +65,11 @@ export default function CacheTimer({
           )}
         >
           <Timer className="size-2.5" />
-          <span>{expired ? 'expired' : label}</span>
+          <span>
+            {expired
+              ? translate('auto.components.sidebar.CacheTimer.07729cc155', 'expired')
+              : label}
+          </span>
         </div>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>

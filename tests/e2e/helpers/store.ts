@@ -166,58 +166,43 @@ export async function waitForSessionReady(page: Page, timeoutMs = 30_000): Promi
 
 /** Wait until a worktree is active and return its ID. */
 export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Promise<string> {
-  const existingId = await getActiveWorktreeId(page)
-  if (existingId) {
-    return existingId
-  }
-
-  const activatedFromStore = await page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      return false
-    }
-
-    const state = store.getState()
-    if (state.activeWorktreeId) {
-      return true
-    }
-
-    const firstWorktree = Object.values(state.worktreesByRepo).flat()[0]
-    if (!firstWorktree) {
-      return false
-    }
-
-    // Why: the sidebar no longer guarantees a role="option" worktree row
-    // during hydration, so DOM-click fallback can miss the only selectable
-    // worktree and leave fresh E2E sessions stuck with activeWorktreeId=null.
-    // Activating the first loaded worktree through the store matches the app's
-    // real selection path and keeps setup independent from sidebar markup.
-    state.setActiveWorktree(firstWorktree.id)
-    return true
-  })
-
-  if (!activatedFromStore) {
-    const primaryWorktreeOption = page.getByRole('option', { name: /primary/i }).first()
-    const anyWorktreeOption = page.getByRole('option').first()
-    const optionToClick =
-      (await primaryWorktreeOption.count()) > 0 ? primaryWorktreeOption : anyWorktreeOption
-
-    if ((await optionToClick.count()) > 0) {
-      // Why: isolated E2E sessions can finish hydrating with worktrees loaded but
-      // no selection restored. Clicking the sidebar option matches the real user
-      // path and drives the same activation logic the app relies on in production.
-      await optionToClick.click()
-    }
-  }
-
+  let activeWorktreeId: string | null = null
   await expect
-    .poll(async () => getActiveWorktreeId(page), {
-      timeout: timeoutMs,
-      message: 'activeWorktreeId did not become available'
-    })
+    .poll(
+      async () => {
+        activeWorktreeId = await page.evaluate(() => {
+          const store = window.__store
+          if (!store) {
+            return null
+          }
+
+          let state = store.getState()
+          if (state.activeWorktreeId) {
+            return state.activeWorktreeId
+          }
+
+          const firstWorktree = Object.values(state.worktreesByRepo).flat()[0]
+          if (!firstWorktree) {
+            return null
+          }
+
+          // Why: isolated E2E sessions can hydrate worktree rows without
+          // restoring a selection. Re-try store activation as worktrees load
+          // instead of relying on sidebar option click hit targets.
+          state.setActiveWorktree(firstWorktree.id)
+          state = store.getState()
+          return state.activeWorktreeId
+        })
+        return activeWorktreeId
+      },
+      {
+        timeout: timeoutMs,
+        message: 'activeWorktreeId did not become available'
+      }
+    )
     .not.toBeNull()
 
-  return (await getActiveWorktreeId(page))!
+  return activeWorktreeId!
 }
 
 /** Get all worktree IDs across all repos. */
@@ -277,26 +262,6 @@ export async function switchToWorktree(page: Page, worktreeId: string): Promise<
  * hidden-window mode and avoids racing that initial auto-create step.
  */
 export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Promise<void> {
-  await page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      return
-    }
-
-    const state = store.getState()
-    if (state.activeWorktreeId) {
-      const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
-      if (tabs.length === 0) {
-        // Why: fresh isolated E2E profiles may not have finished the UI-driven
-        // auto-create effect yet. Use the same store action to create the first
-        // terminal tab so terminal-focused specs start from a stable baseline.
-        state.createTab(state.activeWorktreeId)
-      }
-    }
-    if (state.activeTabType !== 'terminal') {
-      state.setActiveTabType('terminal')
-    }
-  })
   await expect
     .poll(
       async () =>
@@ -305,12 +270,41 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
           if (!store) {
             return false
           }
-          const state = store.getState()
-          if (state.activeTabType !== 'terminal' || !state.activeWorktreeId) {
+          let state = store.getState()
+          let worktreeId = state.activeWorktreeId
+          if (!worktreeId) {
+            const firstWorktree = Object.values(state.worktreesByRepo).flat()[0]
+            if (!firstWorktree) {
+              return false
+            }
+            // Why: reload-based specs can briefly clear the active worktree
+            // after session readiness while worktrees are already loaded.
+            state.setActiveWorktree(firstWorktree.id)
+            state = store.getState()
+            worktreeId = state.activeWorktreeId ?? firstWorktree.id
+          }
+
+          const tabs = state.tabsByWorktree[worktreeId] ?? []
+          const activeTab =
+            tabs.find((tab) => tab.id === state.activeTabIdByWorktree[worktreeId]) ??
+            tabs.find((tab) => tab.id === state.activeTabId) ??
+            tabs[0] ??
+            // Why: fresh isolated E2E profiles may not have finished the UI-driven
+            // auto-create effect yet. Use the same store action to create the first
+            // terminal tab so terminal-focused specs start from a stable baseline.
+            state.createTab(worktreeId)
+          state.setActiveTab(activeTab.id)
+          if (state.activeTabType !== 'terminal') {
+            state.setActiveTabType('terminal')
+          }
+
+          state = store.getState()
+          if (state.activeTabType !== 'terminal' || state.activeWorktreeId !== worktreeId) {
             return false
           }
-          const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
-          return tabs.some((tab) => tab.id === state.activeTabId)
+          return (state.tabsByWorktree[worktreeId] ?? []).some(
+            (tab) => tab.id === state.activeTabId
+          )
         }),
       { timeout: timeoutMs, message: 'No active terminal tab found for current worktree' }
     )

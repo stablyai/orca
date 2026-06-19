@@ -1,17 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
+import { Platform } from 'react-native'
 import {
   HostProfileSchema,
   StoredHostProfileSchema,
   type HostProfile,
   type StoredHostProfile
 } from './types'
+import { getNextHostNameFromHosts } from './host-names'
 
 const STORAGE_KEY = 'orca:hosts'
 // Why: SecureStore keys must match [A-Za-z0-9._-]; colons are rejected.
 // Use dots as the separator so the key shape stays readable while
 // satisfying the validator.
 const TOKEN_KEY_PREFIX = 'orca.host-token.'
+const WEB_TOKEN_KEY_PREFIX = 'orca:web-host-token:'
 
 // Why: WHEN_UNLOCKED_THIS_DEVICE_ONLY keeps the pairing token off
 // iCloud Keychain and out of iCloud/iTunes backup restores onto a
@@ -23,6 +26,35 @@ const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
 
 function tokenKey(hostId: string): string {
   return `${TOKEN_KEY_PREFIX}${hostId}`
+}
+
+function webTokenKey(hostId: string): string {
+  return `${WEB_TOKEN_KEY_PREFIX}${hostId}`
+}
+
+async function readDeviceToken(hostId: string): Promise<string | null> {
+  // Why: Expo SecureStore has no working web backend; keep this fallback
+  // web-only so native builds still keep pairing tokens in the keychain.
+  if (Platform.OS === 'web') {
+    return AsyncStorage.getItem(webTokenKey(hostId))
+  }
+  return SecureStore.getItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
+}
+
+async function writeDeviceToken(hostId: string, token: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    await AsyncStorage.setItem(webTokenKey(hostId), token)
+    return
+  }
+  await SecureStore.setItemAsync(tokenKey(hostId), token, KEYCHAIN_OPTIONS)
+}
+
+async function deleteDeviceToken(hostId: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    await AsyncStorage.removeItem(webTokenKey(hostId))
+    return
+  }
+  await SecureStore.deleteItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
 }
 
 // Why: SecureStore reads on Android Keystore can take 50-200ms each, and
@@ -38,7 +70,9 @@ let inflightLoad: Promise<HostProfile[]> | null = null
 export async function loadHosts(): Promise<HostProfile[]> {
   // Why: deduplicate concurrent loadHosts() calls so multiple screens
   // mounting simultaneously share one Keychain read pass.
-  if (inflightLoad) return inflightLoad
+  if (inflightLoad) {
+    return inflightLoad
+  }
   inflightLoad = doLoadHosts().finally(() => {
     inflightLoad = null
   })
@@ -47,14 +81,18 @@ export async function loadHosts(): Promise<HostProfile[]> {
 
 async function doLoadHosts(): Promise<HostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  if (!raw) return []
+  if (!raw) {
+    return []
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   } catch {
     return []
   }
-  if (!Array.isArray(parsed)) return []
+  if (!Array.isArray(parsed)) {
+    return []
+  }
 
   const out: HostProfile[] = []
   for (const item of parsed) {
@@ -66,13 +104,15 @@ async function doLoadHosts(): Promise<HostProfile[]> {
       continue
     }
     const stored = StoredHostProfileSchema.safeParse(item)
-    if (!stored.success) continue
+    if (!stored.success) {
+      continue
+    }
 
     let token = tokenCache.get(stored.data.id)
     if (!token) {
       let fetched: string | null
       try {
-        fetched = await SecureStore.getItemAsync(tokenKey(stored.data.id), KEYCHAIN_OPTIONS)
+        fetched = await readDeviceToken(stored.data.id)
       } catch {
         // Why: a transient Keychain failure for one entry (e.g.
         // errSecInteractionNotAllowed while the device is briefly locked,
@@ -96,14 +136,20 @@ async function doLoadHosts(): Promise<HostProfile[]> {
 
 async function loadStoredHosts(): Promise<StoredHostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  if (!raw) return []
+  if (!raw) {
+    return []
+  }
   try {
     const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
+    if (!Array.isArray(parsed)) {
+      return []
+    }
     return parsed.flatMap((item) => {
       // Why: same drop-old-records rule as loadHosts; keeps internal
       // mutators from re-persisting pre-v0.0.3 entries.
-      if (item && typeof item === 'object' && 'deviceToken' in item) return []
+      if (item && typeof item === 'object' && 'deviceToken' in item) {
+        return []
+      }
       const result = StoredHostProfileSchema.safeParse(item)
       return result.success ? [result.data] : []
     })
@@ -138,7 +184,7 @@ export async function saveHost(host: HostProfile): Promise<void> {
   // the latter would persist forever since removeHost only deletes by hostId
   // from current metadata.
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(hosts))
-  await SecureStore.setItemAsync(tokenKey(stored.id), validated.deviceToken, KEYCHAIN_OPTIONS)
+  await writeDeviceToken(stored.id, validated.deviceToken)
   tokenCache.set(stored.id, validated.deviceToken)
 }
 
@@ -146,7 +192,7 @@ export async function removeHost(hostId: string): Promise<void> {
   const hosts = await loadStoredHosts()
   const filtered = hosts.filter((h) => h.id !== hostId)
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
-  await SecureStore.deleteItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
+  await deleteDeviceToken(hostId)
   tokenCache.delete(hostId)
 }
 
@@ -161,14 +207,7 @@ export async function renameHost(hostId: string, newName: string): Promise<void>
 
 export async function getNextHostName(): Promise<string> {
   const hosts = await loadStoredHosts()
-  const existingNumbers = hosts
-    .map((h) => {
-      const match = h.name.match(/^Host (\d+)$/)
-      return match ? parseInt(match[1]!, 10) : 0
-    })
-    .filter((n) => n > 0)
-  const next = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1
-  return `Host ${next}`
+  return getNextHostNameFromHosts(hosts)
 }
 
 export async function updateLastConnected(hostId: string): Promise<void> {

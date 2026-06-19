@@ -1,7 +1,12 @@
+/* eslint-disable max-lines -- Why: Claude PTY usage scraping keeps prompt
+driving, parser, timers, and teardown in one state machine; splitting it would
+make the lifecycle harder to audit. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { applyClaudeEnvPatch } from '../claude-accounts/environment'
+import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
+import { cleanupHiddenRateLimitPty } from './hidden-pty-cleanup'
 
 const PTY_TIMEOUT_MS = 25_000
 const MAX_OUTPUT_LENGTH = 100_000 // 100KB buffer limit
@@ -17,6 +22,14 @@ const SESSION_RE = /current\s*session/i
 const WEEKLY_RE = /current\s*week/i
 const PERCENT_RE = /(\d{1,3})(?:\.\d+)?\s*%\s*(used|left|remaining|available)/i
 const RESET_LINE_RE = /resets?\s+(?:at\s+|in\s+)?(.+)/i
+const ESC = String.fromCharCode(27)
+const BEL = String.fromCharCode(7)
+const OSC_SEQUENCE_RE = new RegExp(`${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)`, 'g')
+const CSI_SEQUENCE_RE = new RegExp(`${ESC}\\[[0-9;?]*[ -/]*[@-~]`, 'g')
+
+function stripTerminalControlSequences(output: string): string {
+  return output.replace(OSC_SEQUENCE_RE, '').replace(CSI_SEQUENCE_RE, '')
+}
 
 /**
  * Extract percent-left from lines following a label match.
@@ -60,7 +73,7 @@ function parsePtyUsage(output: string): {
   session: RateLimitWindow | null
   weekly: RateLimitWindow | null
 } {
-  const lines = output.split(/\r?\n/)
+  const lines = output.split(/\r\n|\n|\r/)
 
   const sessionPct = extractPercentAfterLabel(lines, SESSION_RE)
   const weeklyPct = extractPercentAfterLabel(lines, WEEKLY_RE)
@@ -110,8 +123,15 @@ const COMMAND_PALETTE_RE = /show plan|usage limits/i
 const TRUST_PROMPT_RE = /do you trust|trust the files|safety check/i
 const RATE_LIMITED_RE = /rate limited\.?\s+please try again later/i
 const LOAD_FAILED_RE = /failed to load usage data/i
+const CLAUDE_21_USAGE_TABS_RE = /settings?\s+status?\s+config\s+usage\s+stats/i
+const CLAUDE_21_SESSION_STATS_RE = /total\s*cost|total\s*duration|usage:\s*\d+\s*input/i
 const STARTUP_DELAY_MS = 2_000
 const SETTLE_AFTER_STOP_MS = 2_000
+const SETTLE_AFTER_CLAUDE_21_USAGE_MS = 8_000
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
 
 function describeClaudeUsageFailure(output: string): string {
   if (RATE_LIMITED_RE.test(output)) {
@@ -120,6 +140,10 @@ function describeClaudeUsageFailure(output: string): string {
 
   if (LOAD_FAILED_RE.test(output)) {
     return 'Claude usage is unavailable right now.'
+  }
+
+  if (CLAUDE_21_USAGE_TABS_RE.test(output) || CLAUDE_21_SESSION_STATS_RE.test(output)) {
+    return 'Claude plan usage is unavailable for this Claude CLI session.'
   }
 
   // Why: parser failures are an implementation detail of Orca's PTY fallback.
@@ -138,6 +162,10 @@ export async function fetchViaPty(options?: {
     let resolved = false
     let sentUsage = false
     let stopDetected = false
+    let claude21UsageDetected = false
+    let startupDelayTimer: ReturnType<typeof setTimeout> | null = null
+    let stopSettleTimer: ReturnType<typeof setTimeout> | null = null
+    let claude21UsageSettleTimer: ReturnType<typeof setTimeout> | null = null
 
     const claudeCommand = resolveClaudeCommand()
 
@@ -145,14 +173,34 @@ export async function fetchViaPty(options?: {
     // those need cmd.exe as an interpreter. Always route through cmd.exe on win32
     // and ensure the command path is properly quoted if it contains spaces.
     const isWin32 = process.platform === 'win32'
-    const spawnFile = isWin32 ? 'cmd.exe' : claudeCommand
-    const spawnArgs = isWin32 ? ['/c', `"${claudeCommand}"`] : []
-
     const spawnEnv = applyClaudeEnvPatch(
       { ...process.env, TERM: 'xterm-256color' } as Record<string, string>,
       options?.authPreparation?.envPatch ?? {},
       { stripAuthEnv: options?.authPreparation?.stripAuthEnv ?? false }
     )
+    const authPreparation = options?.authPreparation
+    const wslConfig =
+      authPreparation?.runtime === 'wsl' &&
+      authPreparation.wslDistro &&
+      authPreparation.wslLinuxConfigDir
+        ? {
+            distro: authPreparation.wslDistro,
+            linuxConfigDir: authPreparation.wslLinuxConfigDir
+          }
+        : null
+    const spawnFile = wslConfig ? 'wsl.exe' : isWin32 ? 'cmd.exe' : claudeCommand
+    const spawnArgs = wslConfig
+      ? [
+          '-d',
+          wslConfig.distro,
+          '--',
+          'bash',
+          '-lc',
+          `export CLAUDE_CONFIG_DIR=${shellQuote(wslConfig.linuxConfigDir)}; exec claude`
+        ]
+      : isWin32
+        ? ['/c', `"${claudeCommand}"`]
+        : []
 
     const term = pty.spawn(spawnFile, spawnArgs, {
       name: 'xterm-256color',
@@ -161,23 +209,34 @@ export async function fetchViaPty(options?: {
       env: spawnEnv
     })
     const termDisposables: { dispose: () => void }[] = []
-    const disposeTermListeners = (): void => {
-      for (const disposable of termDisposables.splice(0)) {
-        disposable.dispose()
+    let enterInterval: ReturnType<typeof setInterval> | null = null
+
+    function clearFollowupTimers(): void {
+      if (startupDelayTimer) {
+        clearTimeout(startupDelayTimer)
+        startupDelayTimer = null
+      }
+      if (stopSettleTimer) {
+        clearTimeout(stopSettleTimer)
+        stopSettleTimer = null
+      }
+      if (claude21UsageSettleTimer) {
+        clearTimeout(claude21UsageSettleTimer)
+        claude21UsageSettleTimer = null
+      }
+      if (enterInterval) {
+        clearInterval(enterInterval)
+        enterInterval = null
       }
     }
 
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
-        // Why: node-pty's NAPI callbacks can outlive the Electron JS
-        // environment if we kill the hidden PTY without disposing them first,
-        // which matches Orca's documented SIGABRT failure mode on shutdown.
-        disposeTermListeners()
-        term.kill()
+        clearFollowupTimers()
+        cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
         // Even on timeout, try to parse whatever we collected
-        // eslint-disable-next-line no-control-regex
-        const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+        const clean = stripTerminalControlSequences(output)
         const { session, weekly } = parsePtyUsage(clean)
         if (session || weekly) {
           resolve({
@@ -194,7 +253,12 @@ export async function fetchViaPty(options?: {
             session: null,
             weekly: null,
             updatedAt: Date.now(),
-            error: 'PTY timeout — /usage panel did not render',
+            error: withMacTailscaleDnsHint(
+              CLAUDE_21_USAGE_TABS_RE.test(clean) || CLAUDE_21_SESSION_STATS_RE.test(clean)
+                ? describeClaudeUsageFailure(clean)
+                : 'PTY timeout — /usage panel did not render',
+              clean
+            ),
             status: 'error'
           })
         }
@@ -203,8 +267,6 @@ export async function fetchViaPty(options?: {
 
     // Why: the Claude TUI may have scrollable panels or prompts.
     // Sending Enter every 0.8s advances through them.
-    let enterInterval: ReturnType<typeof setInterval> | null = null
-
     function startEnterPresses(): void {
       if (enterInterval) {
         return
@@ -222,14 +284,10 @@ export async function fetchViaPty(options?: {
       }
       resolved = true
       clearTimeout(timeout)
-      if (enterInterval) {
-        clearInterval(enterInterval)
-      }
-      disposeTermListeners()
-      term.kill()
+      clearFollowupTimers()
+      cleanupHiddenRateLimitPty(term, termDisposables, { kill: true })
 
-      // eslint-disable-next-line no-control-regex
-      const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      const clean = stripTerminalControlSequences(output)
       const { session, weekly } = parsePtyUsage(clean)
 
       if (!session && !weekly) {
@@ -238,7 +296,7 @@ export async function fetchViaPty(options?: {
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: describeClaudeUsageFailure(clean),
+          error: withMacTailscaleDnsHint(describeClaudeUsageFailure(clean), clean),
           status: 'error'
         })
       } else {
@@ -255,7 +313,8 @@ export async function fetchViaPty(options?: {
 
     // Why: wait 2s for the CLI to initialize, then send `/usage\r`
     // directly without detecting the prompt character (see comment above).
-    setTimeout(() => {
+    startupDelayTimer = setTimeout(() => {
+      startupDelayTimer = null
       if (resolved) {
         return
       }
@@ -271,8 +330,7 @@ export async function fetchViaPty(options?: {
         output = output.slice(-MAX_OUTPUT_LENGTH)
       }
 
-      // eslint-disable-next-line no-control-regex
-      const cleanChunk = data.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      const cleanChunk = stripTerminalControlSequences(data)
 
       // Why: the Claude CLI may prompt for first-run setup (trust files,
       // workspace directory). Auto-accept so we can reach /usage.
@@ -290,14 +348,27 @@ export async function fetchViaPty(options?: {
 
       // Check if we've hit a stop substring indicating the panel rendered
       if (sentUsage && !stopDetected) {
-        // eslint-disable-next-line no-control-regex
-        const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+        const clean = stripTerminalControlSequences(output)
+        if (
+          !claude21UsageDetected &&
+          (CLAUDE_21_USAGE_TABS_RE.test(clean) || CLAUDE_21_SESSION_STATS_RE.test(clean))
+        ) {
+          claude21UsageDetected = true
+          if (enterInterval) {
+            clearInterval(enterInterval)
+            enterInterval = null
+          }
+          // Why: Claude 2.1 may render session stats without subscription
+          // plan windows. Give async usage loading a grace period, then finish
+          // with a user-facing unavailable state instead of a false PTY timeout.
+          claude21UsageSettleTimer = setTimeout(finalize, SETTLE_AFTER_CLAUDE_21_USAGE_MS)
+        }
         for (const sub of STOP_SUBSTRINGS) {
           if (clean.includes(sub)) {
             stopDetected = true
             // Why: 2.0s settle time after detecting the stop substring
             // allows the full panel to finish rendering.
-            setTimeout(finalize, SETTLE_AFTER_STOP_MS)
+            stopSettleTimer = setTimeout(finalize, SETTLE_AFTER_STOP_MS)
             break
           }
         }
@@ -308,22 +379,22 @@ export async function fetchViaPty(options?: {
     }
 
     const onExitDisposable = term.onExit(() => {
-      disposeTermListeners()
-      if (enterInterval) {
-        clearInterval(enterInterval)
-      }
+      cleanupHiddenRateLimitPty(term, termDisposables, { kill: false })
+      clearFollowupTimers()
       if (!resolved) {
         resolved = true
         clearTimeout(timeout)
-        // eslint-disable-next-line no-control-regex
-        const clean = output.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+        const clean = stripTerminalControlSequences(output)
         const { session, weekly } = parsePtyUsage(clean)
         resolve({
           provider: 'claude',
           session,
           weekly,
           updatedAt: Date.now(),
-          error: session || weekly ? null : 'CLI exited before /usage rendered',
+          error:
+            session || weekly
+              ? null
+              : withMacTailscaleDnsHint('CLI exited before /usage rendered', clean),
           status: session || weekly ? 'ok' : 'error'
         })
       }

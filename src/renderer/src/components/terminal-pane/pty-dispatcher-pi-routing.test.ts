@@ -11,13 +11,19 @@ const BEL = '\x07'
 const workingFrame = (frame: string): string => `${ESC}]0;${frame} π - cwd${BEL}`
 const idleTitle = (): string => `${ESC}]0;π - cwd${BEL}`
 
+function flushPtySideEffects(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
 
   // The singleton dispatcher subscribes a SINGLE global `window.api.pty.onData`
   // callback on first `ensurePtyDispatcher()`. We simulate the main process
   // delivering IPC events by invoking that captured callback directly.
-  let dispatcherCallback: ((payload: { id: string; data: string }) => void) | null = null
+  let dispatcherCallback:
+    | ((payload: { id: string; data: string; rawLength?: number }) => void)
+    | null = null
 
   beforeEach(() => {
     vi.resetModules()
@@ -32,17 +38,20 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
           write: vi.fn(),
           resize: vi.fn(),
           kill: vi.fn(),
-          onData: vi.fn((cb: (payload: { id: string; data: string }) => void) => {
-            // Only the first subscriber wins in production — the dispatcher
-            // calls onData exactly once (ensurePtyDispatcher guards with the
-            // `ptyDispatcherAttached` flag). Subsequent transport calls go
-            // through the same cached subscription, so we capture the first
-            // one and ignore the rest.
-            if (!dispatcherCallback) {
-              dispatcherCallback = cb
+          ackData: vi.fn(),
+          onData: vi.fn(
+            (cb: (payload: { id: string; data: string; rawLength?: number }) => void) => {
+              // Only the first subscriber wins in production — the dispatcher
+              // calls onData exactly once (ensurePtyDispatcher guards with the
+              // `ptyDispatcherAttached` flag). Subsequent transport calls go
+              // through the same cached subscription, so we capture the first
+              // one and ignore the rest.
+              if (!dispatcherCallback) {
+                dispatcherCallback = cb
+              }
+              return () => {}
             }
-            return () => {}
-          }),
+          ),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn(() => () => {})
         }
@@ -56,6 +65,20 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     } else {
       delete (globalThis as { window?: typeof window }).window
     }
+  })
+
+  it('ACKs PTY data after dispatcher consumers accept the chunk', async () => {
+    const { ensurePtyDispatcher, ptyDataHandlers } = await import('./pty-dispatcher')
+    const handler = vi.fn()
+
+    ensurePtyDispatcher()
+    ptyDataHandlers.set('pty-pi', handler)
+
+    dispatcherCallback?.({ id: 'pty-pi', data: 'chunk', rawLength: 10 } as never)
+
+    expect(handler).toHaveBeenCalledWith('chunk', { rawLength: 10 })
+    expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-pi', 10)
+    ptyDataHandlers.delete('pty-pi')
   })
 
   it('routes Pi OSC title frames from pty:data → onTitleChange via the dispatcher', async () => {
@@ -74,6 +97,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠋') })
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠙') })
     dispatcherCallback?.({ id: 'pty-pi', data: idleTitle() })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     expect(seenTitles).toContain('⠋ Pi')
@@ -96,6 +120,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
       id: 'pty-pi',
       data: `assistant output line 1\r\n${workingFrame('⠋')}more body text`
     })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     expect(seenTitles).toContain('⠋ Pi')
@@ -121,6 +146,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     onTitleChange.mockClear()
 
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠋') })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     expect(seenTitles).toContain('⠋ Pi')
@@ -143,6 +169,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠋') })
     dispatcherCallback?.({ id: 'pty-pi', data: workingFrame('⠙') })
     dispatcherCallback?.({ id: 'pty-pi', data: idleTitle() })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     const workingIdx = seenTitles.findIndex((t) => t === '⠋ Pi')
@@ -177,6 +204,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;⠙ Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor Agent${BEL}` })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     // The two bare "Cursor Agent" titles must NOT reach the title-change
@@ -200,10 +228,29 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;⠋ Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor Agent${BEL}` })
     dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Cursor ready${BEL}${BEL}` })
+    await flushPtySideEffects()
 
     const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
     expect(seenTitles).toContain('⠋ Cursor Agent')
     expect(seenTitles).toContain('Cursor ready')
+
+    transport.disconnect()
+  })
+
+  it('surfaces synthesized "Codex ready" idle titles after Codex spinner titles', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+
+    const transport = createIpcPtyTransport({ onTitleChange })
+    await transport.connect({ url: '', callbacks: {} })
+
+    dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;\u280b Codex${BEL}` })
+    dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Codex ready${BEL}` })
+    await flushPtySideEffects()
+
+    const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
+    expect(seenTitles).toContain('\u280b Codex')
+    expect(seenTitles).toContain('Codex ready')
 
     transport.disconnect()
   })

@@ -1,0 +1,195 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { gitExecFileAsyncMock, sshExecMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  sshExecMock: vi.fn()
+}))
+
+vi.mock('../git/runner', () => ({
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+import {
+  _getAzureDevOpsRepoRefCacheSize,
+  _resetAzureDevOpsRepoRefCache,
+  getAzureDevOpsRepoRefForRemote,
+  parseAzureDevOpsRepoRef
+} from './repository-ref'
+import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+
+describe('parseAzureDevOpsRepoRef', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    sshExecMock.mockReset()
+    unregisterSshGitProvider('conn-1')
+    _resetAzureDevOpsRepoRefCache()
+  })
+
+  afterEach(() => {
+    unregisterSshGitProvider('conn-1')
+    _resetAzureDevOpsRepoRefCache()
+  })
+
+  it('parses dev.azure.com HTTPS remotes', () => {
+    expect(
+      parseAzureDevOpsRepoRef('https://dev.azure.com/acme/Project%20One/_git/repo-name')
+    ).toEqual({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      project: 'Project One',
+      repository: 'repo-name',
+      apiBaseUrl: 'https://dev.azure.com/acme/Project%20One',
+      webBaseUrl: 'https://dev.azure.com/acme/Project%20One/_git/repo-name'
+    })
+  })
+
+  it('strips trailing slashes after .git suffixes', () => {
+    expect(parseAzureDevOpsRepoRef('https://dev.azure.com/acme/Project/_git/repo.git/')).toEqual({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://dev.azure.com/acme/Project',
+      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+    })
+    expect(parseAzureDevOpsRepoRef('git@ssh.dev.azure.com:v3/acme/Project/repo.git/')).toEqual({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://dev.azure.com/acme/Project',
+      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+    })
+  })
+
+  it('parses legacy visualstudio.com HTTPS remotes', () => {
+    expect(parseAzureDevOpsRepoRef('https://acme.visualstudio.com/Project/_git/repo.git')).toEqual({
+      host: 'acme.visualstudio.com',
+      organization: 'acme',
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://acme.visualstudio.com/Project',
+      webBaseUrl: 'https://acme.visualstudio.com/Project/_git/repo'
+    })
+  })
+
+  it('parses Azure DevOps Services SSH remotes', () => {
+    expect(parseAzureDevOpsRepoRef('git@ssh.dev.azure.com:v3/acme/Project/repo')).toEqual({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://dev.azure.com/acme/Project',
+      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+    })
+  })
+
+  it('parses Azure DevOps Server HTTPS remotes from the _git path convention', () => {
+    expect(
+      parseAzureDevOpsRepoRef('https://ado.example.com/tfs/DefaultCollection/Project/_git/repo.git')
+    ).toEqual({
+      host: 'ado.example.com',
+      organization: null,
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://ado.example.com/tfs/DefaultCollection/Project',
+      webBaseUrl: 'https://ado.example.com/tfs/DefaultCollection/Project/_git/repo'
+    })
+  })
+
+  it('ignores non-Azure remotes', () => {
+    expect(parseAzureDevOpsRepoRef('git@github.com:stablyai/orca.git')).toBeNull()
+  })
+
+  it('resolves repository refs through the SSH git provider for connected repos', async () => {
+    sshExecMock.mockResolvedValueOnce({
+      stdout: 'git@ssh.dev.azure.com:v3/acme/Project/repo\n',
+      stderr: ''
+    })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin', 'conn-1')).resolves.toEqual({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://dev.azure.com/acme/Project',
+      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+    })
+
+    expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps local host and local WSL repository-ref cache entries separate', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: 'https://dev.azure.com/acme/Host/_git/repo.git\n',
+        stderr: ''
+      })
+      .mockResolvedValueOnce({
+        stdout: 'https://dev.azure.com/acme/Wsl/_git/repo.git\n',
+        stderr: ''
+      })
+
+    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin')).resolves.toMatchObject({
+      project: 'Host',
+      repository: 'repo'
+    })
+    await expect(
+      getAzureDevOpsRepoRefForRemote('/repo', 'origin', null, { wslDistro: 'Ubuntu' })
+    ).resolves.toMatchObject({
+      project: 'Wsl',
+      repository: 'repo'
+    })
+    await expect(
+      getAzureDevOpsRepoRefForRemote('/repo', 'origin', null, { wslDistro: 'Ubuntu' })
+    ).resolves.toMatchObject({
+      project: 'Wsl',
+      repository: 'repo'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu'
+    })
+  })
+
+  it('bounds cached repository refs for distinct repo paths', async () => {
+    sshExecMock.mockResolvedValue({
+      stdout: 'git@ssh.dev.azure.com:v3/acme/Project/repo\n',
+      stderr: ''
+    })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    for (let i = 0; i < 513; i += 1) {
+      await getAzureDevOpsRepoRefForRemote(`/repo-${i}`, 'origin', 'conn-1')
+    }
+
+    expect(_getAzureDevOpsRepoRefCacheSize()).toBe(512)
+  })
+
+  it('does not cache transient SSH provider failures as unsupported repos', async () => {
+    sshExecMock.mockRejectedValueOnce(new Error('connection closed')).mockResolvedValueOnce({
+      stdout: 'git@ssh.dev.azure.com:v3/acme/Project/repo\n',
+      stderr: ''
+    })
+    registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
+
+    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin', 'conn-1')).resolves.toBeNull()
+    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin', 'conn-1')).resolves.toEqual({
+      host: 'dev.azure.com',
+      organization: 'acme',
+      project: 'Project',
+      repository: 'repo',
+      apiBaseUrl: 'https://dev.azure.com/acme/Project',
+      webBaseUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+    })
+
+    expect(sshExecMock).toHaveBeenCalledTimes(2)
+  })
+})

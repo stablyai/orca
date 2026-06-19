@@ -1,8 +1,5 @@
 import { execFile as execFileCb } from 'child_process'
 import { readlink } from 'fs/promises'
-import { promisify } from 'util'
-
-const execFile = promisify(execFileCb)
 
 /**
  * Resolve the current working directory of a local process by pid.
@@ -22,6 +19,7 @@ const execFile = promisify(execFileCb)
  * after its own timeout.
  */
 const CACHE_TTL_MS = 1500
+const CACHE_MAX_ENTRIES = 256
 const LSOF_TIMEOUT_MS = 1500
 
 type CacheEntry = { value: string; at: number }
@@ -34,14 +32,10 @@ export async function resolveProcessCwd(pid: number): Promise<string> {
   // return the previous process's cwd — acceptable because our callers
   // (getCwd on an active pty/session) can't outlive their pid.
   const now = Date.now()
+  sweepExpiredResultCache(now)
   const cached = resultCache.get(pid)
   if (cached && now - cached.at < CACHE_TTL_MS) {
     return cached.value
-  }
-  if (cached) {
-    // Evict stale entry on read so the map can't grow unbounded across a
-    // long-lived daemon session.
-    resultCache.delete(pid)
   }
   const existing = inflight.get(pid)
   if (existing) {
@@ -51,12 +45,33 @@ export async function resolveProcessCwd(pid: number): Promise<string> {
   // (including any second caller that joined via `inflight`) observes the
   // result through the same write, rather than racing on a post-await set.
   const promise = doResolve(pid).then((value) => {
-    resultCache.set(pid, { value, at: Date.now() })
+    rememberResult(pid, value, Date.now())
     inflight.delete(pid)
     return value
   })
   inflight.set(pid, promise)
   return promise
+}
+
+function sweepExpiredResultCache(now: number): void {
+  for (const [cachedPid, entry] of resultCache) {
+    if (now - entry.at >= CACHE_TTL_MS) {
+      resultCache.delete(cachedPid)
+    }
+  }
+}
+
+function rememberResult(pid: number, value: string, now: number): void {
+  resultCache.set(pid, { value, at: now })
+  // Why: terminals can churn through many OS PIDs in one app session. A short
+  // TTL only helps if the old PID is queried again, so also bound unique keys.
+  while (resultCache.size > CACHE_MAX_ENTRIES) {
+    const oldest = resultCache.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    resultCache.delete(oldest)
+  }
 }
 
 async function doResolve(pid: number): Promise<string> {
@@ -74,10 +89,7 @@ async function doResolve(pid: number): Promise<string> {
     // and emits cwd records for every process on the system, so the n-line
     // scan below picks up the first unrelated process (often pid ~391 with
     // cwd `/`) and returns `/` regardless of the target pid's real cwd.
-    const { stdout } = await execFile('lsof', ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'], {
-      encoding: 'utf-8',
-      timeout: LSOF_TIMEOUT_MS
-    })
+    const stdout = await readCwdWithLsof(pid)
     for (const line of stdout.split('\n')) {
       if (line.startsWith('n') && line.includes('/')) {
         // Why: lsof -d cwd is authoritative — don't second-guess it with
@@ -92,4 +104,50 @@ async function doResolve(pid: number): Promise<string> {
   }
 
   return ''
+}
+
+function readCwdWithLsof(pid: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let child: ReturnType<typeof execFileCb> | undefined
+    const timer = setTimeout(() => {
+      if (settled) {
+        return
+      }
+      settled = true
+      child?.kill()
+      reject(new Error(`lsof timed out after ${LSOF_TIMEOUT_MS}ms`))
+    }, LSOF_TIMEOUT_MS)
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+
+    // Why: execFile's timeout only signals lsof; a missing callback would
+    // otherwise leave the shared per-pid cwd lookup promise cached forever.
+    try {
+      child = execFileCb(
+        'lsof',
+        ['-a', '-p', String(pid), '-d', 'cwd', '-Fn'],
+        {
+          encoding: 'utf-8',
+          timeout: LSOF_TIMEOUT_MS
+        },
+        (error, stdout) => {
+          if (error) {
+            settle(() => reject(error))
+            return
+          }
+          settle(() => resolve(String(stdout)))
+        }
+      )
+    } catch (error) {
+      settle(() => reject(error))
+    }
+  })
 }

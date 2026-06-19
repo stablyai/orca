@@ -22,7 +22,33 @@ export type Osc52ParseResult =
   | { kind: 'query' }
   | { kind: 'invalid'; reason: string }
 
+export type Osc52ClipboardRequestOptions = {
+  allowClipboardWrite: boolean
+  writeClipboardText: (text: string) => Promise<void>
+  onBlockedWrite?: () => void
+}
+
 const MAX_OSC52_BYTES = 128 * 1024
+
+export function handleOsc52ClipboardRequest(
+  data: string,
+  options: Osc52ClipboardRequestOptions
+): boolean {
+  const parsed = parseOsc52(data)
+  if (parsed.kind !== 'write') {
+    return true
+  }
+
+  if (!options.allowClipboardWrite) {
+    options.onBlockedWrite?.()
+    return true
+  }
+
+  void options.writeClipboardText(parsed.text).catch(() => {
+    /* ignore clipboard write failures */
+  })
+  return true
+}
 
 export function parseOsc52(data: string): Osc52ParseResult {
   const semi = data.indexOf(';')

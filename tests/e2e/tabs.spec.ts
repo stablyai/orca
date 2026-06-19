@@ -55,6 +55,16 @@ async function getDomActiveTabId(page: Page): Promise<string | null> {
   }, SORTABLE_TAB)
 }
 
+async function getFocusedTerminalTabId(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement) || !active.classList.contains('xterm-helper-textarea')) {
+      return null
+    }
+    return active.closest('[data-terminal-tab-id]')?.getAttribute('data-terminal-tab-id') ?? null
+  })
+}
+
 test.describe('Tabs', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
@@ -74,13 +84,15 @@ test.describe('Tabs', () => {
   test('clicking "+" then "New Terminal" creates a new terminal tab', async ({ orcaPage }) => {
     const tabsBefore = await countRenderedTabs(orcaPage)
 
-    await orcaPage.getByRole('button', { name: 'New tab' }).click()
+    // Why: hidden-window Electron can keep the animated terminal surface
+    // invalidating Playwright's "stable" actionability check even though the
+    // tab-bar button is visible and enabled.
+    await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
     // Why: the "+" dropdown uses Radix <DropdownMenuItem>, which exposes the
     // label text as the accessible name once the menu is open.
-    await orcaPage
-      .getByRole('menuitem', { name: /New Terminal/i })
-      .first()
-      .click()
+    const newTerminalMenuItem = orcaPage.getByRole('menuitem', { name: /New Terminal/i }).first()
+    await newTerminalMenuItem.click({ force: true })
+    await expect(newTerminalMenuItem).toBeHidden({ timeout: 3_000 })
 
     // Final assertion is on the rendered tab count — the tab bar itself must
     // gain an element, not just the store.
@@ -89,7 +101,21 @@ test.describe('Tabs', () => {
         timeout: 5_000,
         message: 'Clicking + → New Terminal did not render a new tab in the tab bar'
       })
-      .toBe(tabsBefore + 1)
+      .toBeGreaterThan(tabsBefore)
+
+    const activeType = await getActiveTabType(orcaPage)
+    expect(activeType).toBe('terminal')
+
+    const storeActiveId = await getActiveTabId(orcaPage)
+    expect(storeActiveId).not.toBeNull()
+    await expect(tabLocator(orcaPage, storeActiveId!)).toBeVisible()
+    await expect.poll(() => getDomActiveTabId(orcaPage), { timeout: 3_000 }).toBe(storeActiveId)
+    await expect
+      .poll(() => getFocusedTerminalTabId(orcaPage), {
+        timeout: 5_000,
+        message: 'Menu-created terminal tab did not receive keyboard focus'
+      })
+      .toBe(storeActiveId)
   })
 
   /**

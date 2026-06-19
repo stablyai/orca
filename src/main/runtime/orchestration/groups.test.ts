@@ -8,6 +8,7 @@ function makeSummary(
 ): RuntimeTerminalSummary {
   return {
     handle,
+    ptyId: opts.ptyId ?? handle,
     worktreeId: opts.worktreeId ?? 'wt_default',
     worktreePath: opts.worktreePath ?? '/tmp/wt',
     branch: opts.branch ?? 'main',
@@ -28,6 +29,7 @@ describe('isGroupAddress', () => {
     expect(isGroupAddress('@all')).toBe(true)
     expect(isGroupAddress('@idle')).toBe(true)
     expect(isGroupAddress('@claude')).toBe(true)
+    expect(isGroupAddress('@droid')).toBe(true)
     expect(isGroupAddress('@worktree:wt_1')).toBe(true)
   })
 
@@ -103,6 +105,25 @@ describe('resolveGroupAddress', () => {
       expect(result).toEqual(['term_b'])
     })
 
+    it('matches @openclaude by terminal title', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'OpenClaude' }),
+        makeSummary('term_b', { title: 'OpenClaude running' }),
+        makeSummary('term_c', { title: 'Claude Code' })
+      ]
+      const result = resolveGroupAddress('@openclaude', 'term_a', terminals, noStatus)
+      expect(result).toEqual(['term_b'])
+    })
+
+    it('does not match OpenClaude titles through @claude', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'Claude Code' }),
+        makeSummary('term_b', { title: 'OpenClaude running' })
+      ]
+      const result = resolveGroupAddress('@claude', 'term_a', terminals, noStatus)
+      expect(result).toEqual([])
+    })
+
     it('matches @codex by terminal title', () => {
       const terminals = [
         makeSummary('term_a', { title: 'Codex CLI' }),
@@ -110,6 +131,27 @@ describe('resolveGroupAddress', () => {
       ]
       const result = resolveGroupAddress('@codex', 'term_a', terminals, noStatus)
       expect(result).toEqual(['term_b'])
+    })
+
+    it('matches @droid by terminal title and excludes sender', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'Droid ready' }),
+        makeSummary('term_b', { title: 'Droid ready' }),
+        makeSummary('term_c', { title: 'Droid - action required' })
+      ]
+      const result = resolveGroupAddress('@droid', 'term_a', terminals, noStatus)
+      expect(result).toEqual(['term_b', 'term_c'])
+    })
+
+    it('does not match Android, path, or hyphenated tokens through @droid', () => {
+      const terminals = [
+        makeSummary('term_a', { title: 'Codex CLI' }),
+        makeSummary('term_b', { title: 'Android build' }),
+        makeSummary('term_c', { title: '/tmp/android' }),
+        makeSummary('term_d', { title: 'my-droid-worker' })
+      ]
+      const result = resolveGroupAddress('@droid', 'term_a', terminals, noStatus)
+      expect(result).toEqual([])
     })
 
     it('is case-insensitive for group address', () => {

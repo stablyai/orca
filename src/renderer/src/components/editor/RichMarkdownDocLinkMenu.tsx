@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/react'
 import { cn } from '@/lib/utils'
 import { commitRow } from './rich-markdown-commands'
 import type { DocLinkMenuRow, DocLinkMenuState } from './rich-markdown-commands'
+import { translate } from '@/i18n/i18n'
 
 type RichMarkdownDocLinkMenuProps = {
   editor: Editor | null
@@ -25,10 +26,18 @@ export function RichMarkdownDocLinkMenu({
       className="rich-markdown-doc-link-menu"
       style={{ left: menu.left, top: menu.top }}
       role="listbox"
-      aria-label="Markdown document links"
+      aria-label={translate(
+        'auto.components.editor.RichMarkdownDocLinkMenu.0e8489bc11',
+        'Markdown document links'
+      )}
     >
       {rows.length === 0 ? (
-        <div className="rich-markdown-doc-link-item is-empty">No documents found</div>
+        <div className="rich-markdown-doc-link-item is-empty">
+          {translate(
+            'auto.components.editor.RichMarkdownDocLinkMenu.63ced7cb9b',
+            'No documents found'
+          )}
+        </div>
       ) : (
         rows.map((row, index) => {
           const rowKey = row.kind === 'document' ? row.document.filePath : row.id
@@ -59,11 +68,17 @@ export function RichMarkdownDocLinkMenu({
       )}
       {overflow ? (
         <div className="rich-markdown-doc-link-footer">
-          Showing {rows.length} of {totalMatches}
+          {translate('auto.components.editor.RichMarkdownDocLinkMenu.2aaf7d9678', 'Showing')}
+          {rows.length}{' '}
+          {translate('auto.components.editor.RichMarkdownDocLinkMenu.90c5f0e1e4', 'of')}
+          {totalMatches}
         </div>
       ) : null}
       <div className="rich-markdown-doc-link-hint">
-        ↑↓ navigate&nbsp;&nbsp;↵ select&nbsp;&nbsp;esc dismiss
+        {translate(
+          'auto.components.editor.RichMarkdownDocLinkMenu.e17b987473',
+          '↑↓ navigate&nbsp;&nbsp;↵ select&nbsp;&nbsp;esc dismiss'
+        )}
       </div>
     </div>
   )

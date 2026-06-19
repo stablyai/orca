@@ -13,7 +13,17 @@ import {
   type RpcRequest,
   type RpcResponse
 } from './core'
-import { errorResponse, mapBrowserError, mapRuntimeError, successResponse } from './errors'
+import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
+import type { FeatureInteractionId } from '../../../shared/feature-interactions'
+import { isBrowserPaneUiRuntimeRpcParams } from '../../../shared/runtime-rpc-feature-interaction-source'
+import {
+  computerErrorData,
+  errorResponse,
+  mapBrowserError,
+  mapEmulatorError,
+  mapRuntimeError,
+  successResponse
+} from './errors'
 import { ALL_RPC_METHODS } from './methods'
 import type { OrcaRuntimeService } from '../orca-runtime'
 
@@ -65,6 +75,7 @@ export class RpcDispatcher {
         runtime: this.runtime,
         signal: options?.signal
       })
+      this.recordRuntimeFeatureInteraction(request.method, result, undefined, request.params)
       return successResponse(request.id, meta, result)
     } catch (error) {
       return this.mapError(request, meta, error)
@@ -77,7 +88,16 @@ export class RpcDispatcher {
   async dispatchStreaming(
     request: RpcRequest,
     reply: (response: string) => void,
-    options?: { connectionId?: string }
+    options?: {
+      connectionId?: string
+      signal?: AbortSignal
+      clientId?: string
+      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+      registerBinaryStreamHandler?: (
+        streamId: number,
+        handler: (frame: TerminalStreamFrame) => void
+      ) => () => void
+    }
   ): Promise<void> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
@@ -100,8 +120,14 @@ export class RpcDispatcher {
       try {
         const result = await method.handler(parsedParams.value, {
           runtime: this.runtime,
-          connectionId: options?.connectionId
+          signal: options?.signal,
+          requestId: request.id,
+          connectionId: options?.connectionId,
+          clientId: options?.clientId,
+          sendBinary: options?.sendBinary,
+          registerBinaryStreamHandler: options?.registerBinaryStreamHandler
         })
+        this.recordRuntimeFeatureInteraction(request.method, result, undefined, request.params)
         reply(JSON.stringify(successResponse(request.id, meta, result)))
       } catch (error) {
         reply(JSON.stringify(this.mapError(request, meta, error)))
@@ -109,17 +135,38 @@ export class RpcDispatcher {
       return
     }
 
+    const recordedStreamingFeatureInteractions = new Set<FeatureInteractionId>()
     const emit = (result: unknown): void => {
+      this.recordRuntimeFeatureInteraction(
+        request.method,
+        result,
+        recordedStreamingFeatureInteractions,
+        request.params
+      )
       const response = successResponse(request.id, meta, result)
       response.streaming = true
       reply(JSON.stringify(response))
     }
 
     try {
-      await method.handler(
+      const result = await method.handler(
         parsedParams.value,
-        { runtime: this.runtime, connectionId: options?.connectionId },
+        {
+          runtime: this.runtime,
+          signal: options?.signal,
+          requestId: request.id,
+          connectionId: options?.connectionId,
+          clientId: options?.clientId,
+          sendBinary: options?.sendBinary,
+          registerBinaryStreamHandler: options?.registerBinaryStreamHandler
+        },
         emit
+      )
+      this.recordRuntimeFeatureInteraction(
+        request.method,
+        result,
+        recordedStreamingFeatureInteractions,
+        request.params
       )
     } catch (error) {
       reply(JSON.stringify(this.mapError(request, meta, error)))
@@ -138,7 +185,7 @@ export class RpcDispatcher {
     const result = method.params.safeParse(rawParams)
     if (!result.success) {
       return {
-        error: errorResponse(request.id, meta, 'invalid_argument', formatZodError(result.error))
+        error: this.invalidArgumentResponse(request, meta, formatZodError(result.error))
       }
     }
     return { value: result.data }
@@ -152,13 +199,98 @@ export class RpcDispatcher {
     if (request.method.startsWith('browser.')) {
       return mapBrowserError(request.id, meta, error)
     }
+    if (request.method.startsWith('emulator.')) {
+      return mapEmulatorError(request.id, meta, error)
+    }
     if (error instanceof ZodError) {
-      return errorResponse(request.id, meta, 'invalid_argument', formatZodError(error))
+      return this.invalidArgumentResponse(request, meta, formatZodError(error))
     }
     return mapRuntimeError(request.id, meta, error)
+  }
+
+  private invalidArgumentResponse(
+    request: RpcRequest,
+    meta: RpcEnvelopeMeta,
+    message: string
+  ): RpcResponse {
+    return errorResponse(
+      request.id,
+      meta,
+      'invalid_argument',
+      message,
+      request.method.startsWith('computer.') ? computerErrorData('invalid_argument') : undefined
+    )
   }
 
   private meta(): RpcEnvelopeMeta {
     return { runtimeId: this.runtime.getRuntimeId() }
   }
+
+  private recordRuntimeFeatureInteraction(
+    method: string,
+    result: unknown,
+    alreadyRecorded?: Set<FeatureInteractionId>,
+    rawParams?: unknown
+  ): void {
+    const id = getRuntimeFeatureInteractionId(method, result, rawParams)
+    if (!id) {
+      return
+    }
+    if (alreadyRecorded?.has(id)) {
+      return
+    }
+    try {
+      this.runtime.recordFeatureInteraction(id)
+      alreadyRecorded?.add(id)
+    } catch {
+      // Best-effort education state must not break runtime tools.
+    }
+  }
+}
+
+function getRuntimeFeatureInteractionId(
+  method: string,
+  result: unknown,
+  rawParams?: unknown
+): FeatureInteractionId | null {
+  if (method === 'browser.profileImportFromBrowser') {
+    return hasBooleanResult(result, 'ok') ? 'cookie-import' : null
+  }
+  if (method === 'browser.profileClearDefaultCookies') {
+    return hasBooleanResult(result, 'cleared') ? 'cookie-import' : null
+  }
+  if (method === 'browser.screencast.unsubscribe') {
+    return null
+  }
+  if (method.startsWith('browser.') && isBrowserPaneUiRuntimeRpcParams(rawParams)) {
+    return null
+  }
+  if (method.startsWith('browser.') && !method.startsWith('browser.profile')) {
+    return 'agent-browser-use'
+  }
+  if (method.startsWith('emulator.')) {
+    // Emulator commands are allowed from terminal/CLI (workspace-scoped, like other automation).
+    // Return null to indicate no special feature-interaction restriction (or add 'emulator-use' later).
+    return null
+  }
+  if (method === 'computer.permissions') {
+    return 'computer-use-setup'
+  }
+  if (
+    method.startsWith('computer.') &&
+    method !== 'computer.capabilities' &&
+    method !== 'computer.permissionsStatus'
+  ) {
+    return 'computer-use'
+  }
+  if (method.startsWith('orchestration.')) {
+    return 'agent-orchestration'
+  }
+  return null
+}
+
+function hasBooleanResult(value: unknown, key: string): boolean {
+  return (
+    value !== null && typeof value === 'object' && (value as Record<string, unknown>)[key] === true
+  )
 }

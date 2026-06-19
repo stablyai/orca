@@ -1,4 +1,15 @@
 import { win32 as pathWin32 } from 'path'
+import { isWindowsGitBashShellPath } from '../git-bash'
+import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
+import {
+  buildWslInteractiveLoginShellCommand,
+  escapeWslShCommandForWindows,
+  quotePosixShell
+} from '../../shared/wsl-login-shell-command'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap
+} from '../powershell-osc133-bootstrap'
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
@@ -20,19 +31,37 @@ export type WindowsShellLaunchArgs = {
   validationCwd: string
 }
 
+export type WindowsShellWslContext = {
+  distro: string
+  treatPosixCwdAsWsl?: boolean
+}
+
+function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
+  const setupCommand = [
+    `cd ${quotePosixShell(linuxCwd)}`,
+    'export PATH="$HOME/.local/bin:$PATH"',
+    buildWslInteractiveLoginShellCommand()
+  ].join(' && ')
+  // Why: WSL users often customize zsh rather than bash; launch the distro's
+  // login shell so terminal PATH matches the environment Orca detects.
+  const shellArgs = ['--', 'sh', '-c', escapeWslShCommandForWindows(setupCommand)]
+  return distro ? ['-d', distro, ...shellArgs] : shellArgs
+}
+
 /** Build the argv + effective cwd for a Windows shell launch.
  *
  *  - cmd.exe: `/K chcp 65001 > nul` so multi-byte CJK output renders correctly.
  *  - powershell.exe / pwsh.exe: dot-source $PROFILE and force UTF-8 I/O so
  *    oh-my-posh / starship / PSReadLine keep working. `-NoExit` alone would
  *    skip the profile.
- *  - wsl.exe: translate the Windows cwd to /mnt/<drive>/... and enter a login
- *    bash inside the default distro.
+ *  - wsl.exe: translate the Windows cwd to /mnt/<drive>/... and enter the
+ *    distro user's login shell.
  *  - anything else: no args, same cwd. */
 export function resolveWindowsShellLaunchArgs(
   shellPath: string,
   cwd: string,
-  defaultCwd: string
+  defaultCwd: string,
+  wslContext?: WindowsShellWslContext
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
 
@@ -45,28 +74,48 @@ export function resolveWindowsShellLaunchArgs(
   }
 
   if (shellBasename === 'powershell.exe' || shellBasename === 'pwsh.exe') {
-    // Why: PowerShell profiles run after the spawn env is set and may re-export
-    // user defaults; restore Orca's PTY-scoped overlays after the profile.
-    const command = [
-      'try { . $PROFILE } catch {}',
-      'if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }',
-      'if ($env:ORCA_PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR = $env:ORCA_PI_CODING_AGENT_DIR }',
-      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
-      '[Console]::InputEncoding = [System.Text.Encoding]::UTF8'
-    ].join('; ')
+    // Why: foreground-process status on Windows depends on OSC 133 C/D, and
+    // PowerShell needs a prompt/readline bootstrap after profiles finish.
     return {
-      shellArgs: ['-NoExit', '-Command', command],
+      shellArgs: [
+        '-NoLogo',
+        '-NoExit',
+        '-EncodedCommand',
+        encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+      ],
+      effectiveCwd: cwd,
+      validationCwd: cwd
+    }
+  }
+
+  if (isWindowsGitBashShellPath(shellPath)) {
+    return {
+      shellArgs: ['--login', '-i'],
       effectiveCwd: cwd,
       validationCwd: cwd
     }
   }
 
   if (shellBasename === 'wsl.exe') {
+    const wslInfo = parseWslPath(cwd)
+    if (wslInfo) {
+      return {
+        shellArgs: buildWslShellArgs(wslInfo.linuxPath, wslInfo.distro),
+        effectiveCwd: defaultCwd,
+        validationCwd: cwd
+      }
+    }
+    if (wslContext?.treatPosixCwdAsWsl && cwd.startsWith('/')) {
+      return {
+        shellArgs: buildWslShellArgs(cwd, wslContext.distro),
+        effectiveCwd: defaultCwd,
+        validationCwd: toWindowsWslPath(cwd, wslContext.distro)
+      }
+    }
     const driveMatch = cwd.replace(/\\/g, '/').match(/^([A-Za-z]):\/?(.*)$/)
-    const linuxCwd = driveMatch ? `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2]}` : '/mnt/c'
-    const escapedLinuxCwd = linuxCwd.replace(/'/g, "'\\''")
+    const linuxCwd = driveMatch ? toLinuxPath(cwd) : '/mnt/c'
     return {
-      shellArgs: ['--', 'bash', '-c', `cd '${escapedLinuxCwd}' && exec bash -l`],
+      shellArgs: buildWslShellArgs(linuxCwd, wslContext?.distro),
       effectiveCwd: defaultCwd,
       validationCwd: cwd
     }

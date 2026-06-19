@@ -1,12 +1,22 @@
+/* eslint-disable max-lines -- Why: autosave behavior depends on event wiring,
+   dirty drafts, remote routing, quiesce, and failure cleanup in one harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
 import type { AppState } from '@/store'
-import { ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT } from '../../../../shared/editor-save-events'
+import {
+  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
+  ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
+} from '../../../../shared/editor-save-events'
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import { __clearSelfWriteRegistryForTests, hasRecentSelfWrite } from './editor-self-write-registry'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 type WindowStub = {
   addEventListener: Window['addEventListener']
@@ -17,6 +27,12 @@ type WindowStub = {
   api: {
     fs: {
       writeFile: ReturnType<typeof vi.fn>
+    }
+    runtimeEnvironments?: {
+      call: ReturnType<typeof vi.fn>
+    }
+    session?: {
+      setSync: ReturnType<typeof vi.fn>
     }
   }
 }
@@ -52,6 +68,60 @@ async function requestDirtyFileSave(): Promise<void> {
       resolve()
     }
   })
+}
+
+async function requestEditorHotExitBackup(): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let claimed = false
+    window.dispatchEvent(
+      new CustomEvent(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, {
+        detail: {
+          claim: () => {
+            claimed = true
+          },
+          resolve,
+          reject: (message: string) => reject(new Error(message))
+        }
+      })
+    )
+
+    if (!claimed) {
+      resolve()
+    }
+  })
+}
+
+function makeSessionReadyState(): Partial<AppState> {
+  return {
+    workspaceSessionReady: true,
+    hydrationSucceeded: true,
+    activeRepoId: 'repo-1',
+    activeTabId: 'tab-1',
+    tabsByWorktree: {
+      'wt-1': [{ id: 'tab-1', title: 'shell', ptyId: null, worktreeId: 'wt-1' } as never]
+    },
+    ptyIdsByTabId: { 'tab-1': [] },
+    terminalLayoutsByTabId: {
+      'tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
+    },
+    activeTabIdByWorktree: { 'wt-1': 'tab-1' },
+    activeFileIdByWorktree: {},
+    activeTabTypeByWorktree: {},
+    browserTabsByWorktree: {},
+    browserPagesByWorkspace: {},
+    activeBrowserTabIdByWorktree: {},
+    browserUrlHistory: [],
+    unifiedTabsByWorktree: {},
+    groupsByWorktree: {},
+    layoutByWorktree: {},
+    activeGroupIdByWorktree: {},
+    sshConnectionStates: new Map(),
+    repos: [],
+    worktreesByRepo: {},
+    lastKnownRelayPtyIdByTabId: {},
+    lastVisitedAtByWorktreeId: {},
+    defaultTerminalTabsAppliedByWorktreeId: {}
+  } as Partial<AppState>
 }
 
 describe('attachEditorAutosaveController', () => {
@@ -102,6 +172,70 @@ describe('attachEditorAutosaveController', () => {
       })
       expect(store.getState().openFiles[0]?.isDirty).toBe(false)
       expect(store.getState().editorDrafts).toEqual({})
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('saves remote files through the owning runtime environment', async () => {
+    clearRuntimeCompatibilityCacheForTests()
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const runtimeCall = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'runtime-env-1' }
+    })
+    const runtimeTransportCall = vi.fn((args: RuntimeEnvironmentCallRequest) => {
+      return (
+        createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-env-1') ?? runtimeCall(args)
+      )
+    })
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: { writeFile },
+        runtimeEnvironments: { call: runtimeTransportCall }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.setState({
+      settings: {
+        editorAutoSave: true,
+        editorAutoSaveDelayMs: 1000,
+        activeRuntimeEnvironmentId: 'env-2'
+      } as never,
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' }] as never
+      }
+    })
+    store.getState().openFile({
+      filePath: '/remote/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: 'env-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/remote/repo/file.ts', 'edited')
+    store.getState().markFileDirty('/remote/repo/file.ts', true)
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await requestDirtyFileSave()
+
+      expect(runtimeCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.write',
+        params: { worktree: 'id:wt-1', relativePath: 'file.ts', content: 'edited' },
+        timeoutMs: 15_000
+      })
+      expect(writeFile).not.toHaveBeenCalled()
     } finally {
       cleanup()
     }
@@ -188,6 +322,154 @@ describe('attachEditorAutosaveController', () => {
       expect(writeFile).not.toHaveBeenCalled()
       expect(store.getState().openFiles[0]?.isDirty).toBe(true)
       expect(store.getState().editorDrafts['/repo/file.ts']).toBe('edited')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('backs up dirty editor drafts for hot exit without writing files', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const setSync = vi.fn()
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        },
+        session: {
+          setSync
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.setState(makeSessionReadyState())
+    store.getState().openFile({
+      filePath: '/repo/file.md',
+      relativePath: 'file.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().setEditorDraft('/repo/file.md', '')
+    store.getState().markFileDirty('/repo/file.md', true)
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await requestEditorHotExitBackup()
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(writeFile).not.toHaveBeenCalled()
+      expect(setSync).toHaveBeenCalledTimes(1)
+      expect(setSync.mock.calls[0][0].openFilesByWorktree['wt-1'][0]).toEqual(
+        expect.objectContaining({
+          filePath: '/repo/file.md',
+          dirtyDraftContent: ''
+        })
+      )
+      expect(store.getState().openFiles[0]?.isDirty).toBe(true)
+      expect(store.getState().editorDrafts['/repo/file.md']).toBe('')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('rejects hot exit for dirty non-edit files that cannot be restored', async () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const setSync = vi.fn()
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        },
+        session: {
+          setSync
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.setState(makeSessionReadyState())
+    store.getState().openFile({
+      filePath: '/repo/file.md',
+      relativePath: 'file.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'diff',
+      diffSource: 'unstaged'
+    } as never)
+    store.getState().setEditorDraft('/repo/file.md', 'diff edit')
+    store.getState().markFileDirty('/repo/file.md', true)
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      await expect(requestEditorHotExitBackup()).rejects.toThrow(
+        'Some unsaved editor changes cannot be backed up before restart.'
+      )
+      expect(setSync).not.toHaveBeenCalled()
+      expect(writeFile).not.toHaveBeenCalled()
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('skips the open-file scan for unrelated store mutations', () => {
+    const writeFile = vi.fn().mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: {
+        fs: {
+          writeFile
+        }
+      }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    const openFiles = store.getState().openFiles
+    const originalMap = openFiles.map.bind(openFiles)
+    let mapCalls = 0
+    Object.defineProperty(openFiles, 'map', {
+      configurable: true,
+      value: (...args: Parameters<typeof openFiles.map>) => {
+        mapCalls += 1
+        return originalMap(...args)
+      }
+    })
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      expect(mapCalls).toBe(1)
+      mapCalls = 0
+
+      store.setState({ activeWorktreeId: 'wt-2' } as Partial<AppState>)
+      expect(mapCalls).toBe(0)
+
+      store.getState().setEditorDraft('/repo/file.ts', 'edited')
+      expect(mapCalls).toBe(1)
     } finally {
       cleanup()
     }

@@ -1,5 +1,5 @@
 import { defineMethod, type RpcMethod } from '../core'
-import { BrowserTarget } from '../schemas'
+import { BrowserTarget, OptionalFiniteNumber } from '../schemas'
 import {
   ClipboardWrite,
   CookieDelete,
@@ -20,6 +20,8 @@ import {
   StorageKeyValue,
   Viewport
 } from './browser-schemas'
+
+const MouseClick = MouseXY.merge(MouseButton).extend({ radius: OptionalFiniteNumber })
 
 export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
   defineMethod({
@@ -71,6 +73,11 @@ export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
     name: 'browser.mouseDown',
     params: MouseButton,
     handler: async (params, { runtime }) => runtime.browserMouseDown(params)
+  }),
+  defineMethod({
+    name: 'browser.mouseClick',
+    params: MouseClick,
+    handler: async (params, { runtime }) => runtime.browserMouseClick(params)
   }),
   defineMethod({
     name: 'browser.mouseUp',

@@ -1,16 +1,23 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
-import { basename, join } from 'path'
+import { join } from 'path'
 import { app } from 'electron'
+import { createHash } from 'crypto'
 import {
   ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
   getPiAgentStatusExtensionSource
 } from './agent-status-extension-source'
 import {
+  ORCA_PI_PREFILL_EXTENSION_FILE,
+  getPiPrefillExtensionSource
+} from './prefill-extension-source'
+export { ORCA_OMP_PREFILL_ENV_VAR, ORCA_PI_PREFILL_ENV_VAR } from './prefill-extension-source'
+import { ORCA_PI_EXTENSION_FILE, getPiTitlebarExtensionSource } from './titlebar-extension-source'
+import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,
-  mirrorEntry,
   safeRemoveOverlay
 } from '../pty/overlay-mirror'
+import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
 // Why: the Pi test suite imports `isSafeDescendCandidate` from this module's
 // public surface to lock in the Windows-junction ordering invariant against
@@ -18,214 +25,166 @@ import {
 // keeps holding after the helper moved to src/main/pty/overlay-mirror.ts.
 export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 
-const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
-const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
-const PI_AGENT_DIR_NAME = '.pi'
 const PI_AGENT_SUBDIR = 'agent'
-const PI_OVERLAY_DIR_NAME = 'pi-agent-overlays'
+const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
 
-// Why: env-var name read by the prefill extension. Mirrors Claude's
-// `--prefill <text>` semantics for pi — the editor mounts with the text
-// already in its input box but unsubmitted, so the user can review/edit
-// before sending. Used by the new-workspace draft-launch flow to drop a
-// linked GitHub/Linear issue URL into pi without racing pi's lengthy
-// startup output (banner + skills + extensions) against the bracketed-
-// paste readiness detector.
-export const ORCA_PI_PREFILL_ENV_VAR = 'ORCA_PI_PREFILL'
+type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
 
-// Why: pi exposes `pi.ui.setEditorText(text)` from inside an extension's
-// session_start handler — that's the equivalent of Claude's `--prefill`.
-// We can't use a CLI flag (pi has none) and bracketed-paste-after-ready
-// races against pi's startup output, so we ship a tiny extension that
-// reads ORCA_PI_PREFILL on session_start and types it into the editor.
-// The env var is consumed (deleted from process.env) so /new in the same
-// session doesn't re-prefill.
-function getPiPrefillExtensionSource(): string {
-  return [
-    'export default function (pi) {',
-    "  pi.on('session_start', async (event, ctx) => {",
-    "    if (event.reason !== 'startup') return",
-    `    const prefill = process.env.${ORCA_PI_PREFILL_ENV_VAR}`,
-    '    if (!prefill) return',
-    `    delete process.env.${ORCA_PI_PREFILL_ENV_VAR}`,
-    '    try {',
-    '      ctx.ui.setEditorText(prefill)',
-    '    } catch {}',
-    '  })',
-    '}',
-    ''
-  ].join('\n')
+type PiManagedExtensionEnv = {
+  extensionDir?: string
+  sourceAgentDir: string
+  statusExtensionPath?: string
 }
 
-function getPiTitlebarExtensionSource(): string {
-  return [
-    'const BRAILLE_FRAMES = [',
-    "  '\\u280b',",
-    "  '\\u2819',",
-    "  '\\u2839',",
-    "  '\\u2838',",
-    "  '\\u283c',",
-    "  '\\u2834',",
-    "  '\\u2826',",
-    "  '\\u2827',",
-    "  '\\u2807',",
-    "  '\\u280f'",
-    ']',
-    '',
-    'function getBaseTitle(pi) {',
-    '  const cwd = process.cwd().split(/[\\\\/]/).filter(Boolean).at(-1) || process.cwd()',
-    '  const session = pi.getSessionName()',
-    '  return session ? `\\u03c0 - ${session} - ${cwd}` : `\\u03c0 - ${cwd}`',
-    '}',
-    '',
-    'export default function (pi) {',
-    '  let timer = null',
-    '  let frameIndex = 0',
-    '',
-    '  function stopAnimation(ctx) {',
-    '    if (timer) {',
-    '      clearInterval(timer)',
-    '      timer = null',
-    '    }',
-    '    frameIndex = 0',
-    '    ctx.ui.setTitle(getBaseTitle(pi))',
-    '  }',
-    '',
-    '  function startAnimation(ctx) {',
-    '    stopAnimation(ctx)',
-    '    timer = setInterval(() => {',
-    '      const frame = BRAILLE_FRAMES[frameIndex % BRAILLE_FRAMES.length]',
-    '      const cwd = process.cwd().split(/[\\\\/]/).filter(Boolean).at(-1) || process.cwd()',
-    '      const session = pi.getSessionName()',
-    '      const title = session ? `${frame} \\u03c0 - ${session} - ${cwd}` : `${frame} \\u03c0 - ${cwd}`',
-    '      ctx.ui.setTitle(title)',
-    '      frameIndex++',
-    '    }, 80)',
-    '  }',
-    '',
-    "  pi.on('agent_start', async (_event, ctx) => {",
-    '    startAnimation(ctx)',
-    '  })',
-    '',
-    "  pi.on('agent_end', async (_event, ctx) => {",
-    '    stopAnimation(ctx)',
-    '  })',
-    '',
-    "  pi.on('session_shutdown', async (_event, ctx) => {",
-    '    stopAnimation(ctx)',
-    '  })',
-    '}',
-    ''
-  ].join('\n')
+// Why: old Orca versions used per-kind overlay roots. Keep the names so
+// upgrade-time cleanup can remove stale PTY-scoped Pi/OMP overlay dirs without
+// guessing which agent a terminated pane launched.
+const OVERLAY_ROOT_DIR_NAME: Record<PiAgentKind, string> = {
+  pi: 'pi-agent-overlays',
+  omp: 'omp-agent-overlays'
 }
 
-function getDefaultPiAgentDir(): string {
-  return join(homedir(), PI_AGENT_DIR_NAME, PI_AGENT_SUBDIR)
+// Why: the managed extension target is chosen by which agent is being launched, NOT
+// by which `~/.<agent>/agent` dir happens to exist on disk first. A
+// cross-agent fallback (Pi -> OMP or vice versa) silently shadows the other
+// agent's user extensions when both are installed and the user picks the
+// shadowed one in Orca's per-launch agent picker.
+const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
+  pi: '.pi',
+  omp: '.omp'
+}
+
+function getDefaultPiAgentDir(kind: PiAgentKind): string {
+  return join(homedir(), AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
+}
+
+function toSafeOverlayDirName(ptyId: string): string {
+  return createHash('sha256').update(ptyId).digest('hex').slice(0, 32)
+}
+
+function withOrcaManagedExtensionMarker(source: string): string {
+  return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
+    ? source
+    : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
 }
 
 export class PiTitlebarExtensionService {
-  private getOverlayRoot(): string {
-    return join(app.getPath('userData'), PI_OVERLAY_DIR_NAME)
+  private getOverlayRoot(kind: PiAgentKind): string {
+    return join(app.getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
   }
 
-  private getOverlayDir(ptyId: string): string {
-    return join(this.getOverlayRoot(), ptyId)
+  private getPtyOverlayDir(ptyId: string, kind: PiAgentKind): string {
+    // Why: old Orca versions used PTY-scoped hashed overlays. Keep resolving
+    // that path so new spawns/teardowns can clean stale pre-migration dirs.
+    return join(this.getOverlayRoot(kind), toSafeOverlayDirName(ptyId))
+  }
+
+  private getLegacyOverlayDir(ptyId: string, kind: PiAgentKind): string {
+    return join(this.getOverlayRoot(kind), ptyId)
   }
 
   // Why: overlay teardown must use the shared safeRemoveOverlay so the
   // Windows-junction guard from issue #1083 stays in lock-step across all
   // overlay consumers (Pi here, OpenCode in src/main/opencode/hook-service.ts).
-  private safeRemoveOverlay(overlayDir: string): void {
-    safeRemoveOverlay(overlayDir, this.getOverlayRoot())
+  private safeRemoveOverlay(overlayDir: string, kind: PiAgentKind): void {
+    safeRemoveOverlay(overlayDir, this.getOverlayRoot(kind))
   }
 
-  private mirrorAgentDir(sourceAgentDir: string, overlayDir: string): void {
-    if (!existsSync(sourceAgentDir)) {
-      return
-    }
-
-    for (const entry of readdirSync(sourceAgentDir, { withFileTypes: true })) {
-      const sourcePath = join(sourceAgentDir, entry.name)
-
-      if (entry.name === 'extensions' && entry.isDirectory()) {
-        const overlayExtensionsDir = join(overlayDir, 'extensions')
-        mkdirSync(overlayExtensionsDir, { recursive: true })
-        for (const extensionEntry of readdirSync(sourcePath, { withFileTypes: true })) {
-          mirrorEntry(
-            join(sourcePath, extensionEntry.name),
-            join(overlayExtensionsDir, extensionEntry.name)
-          )
-        }
-        continue
-      }
-
-      // Why: PI_CODING_AGENT_DIR controls Pi's entire state tree, not just
-      // extension discovery. Mirror the user's top-level Pi resources into the
-      // overlay so enabling Orca's titlebar extension preserves auth, sessions,
-      // skills, prompts, themes, and any future files Pi stores there.
-      mirrorEntry(sourcePath, join(overlayDir, basename(sourcePath)))
-    }
-  }
-
-  buildPtyEnv(ptyId: string, existingAgentDir: string | undefined): Record<string, string> {
-    const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir()
-    const overlayDir = this.getOverlayDir(ptyId)
-
+  private canOverwriteManagedExtension(path: string): boolean {
     try {
-      this.safeRemoveOverlay(overlayDir)
+      return readFileSync(path, 'utf8').includes(ORCA_MANAGED_EXTENSION_MARKER)
     } catch {
-      // Why: on Windows the overlay directory can be locked by another process
-      // (e.g. antivirus, indexer, or a previous Orca session that didn't clean up).
-      // If we can't remove the stale overlay, fall back to the user's own Pi agent
-      // dir so the terminal still spawns — the titlebar spinner is not worth
-      // blocking the PTY.
-      return existingAgentDir ? { PI_CODING_AGENT_DIR: existingAgentDir } : {}
+      return true
+    }
+  }
+
+  private writeManagedExtension(path: string, source: string): ManagedExtensionWriteResult {
+    if (existsSync(path) && !this.canOverwriteManagedExtension(path)) {
+      return 'skipped-user-owned'
     }
 
     try {
-      mkdirSync(overlayDir, { recursive: true })
-      this.mirrorAgentDir(sourceAgentDir, overlayDir)
+      writeFileSync(path, source)
+      return 'written'
+    } catch {
+      return 'failed'
+    }
+  }
 
-      const extensionsDir = join(overlayDir, 'extensions')
+  private installManagedExtensions(
+    sourceAgentDir: string,
+    kind: PiAgentKind
+  ): PiManagedExtensionEnv {
+    const extensionsDir = join(sourceAgentDir, 'extensions')
+    try {
       mkdirSync(extensionsDir, { recursive: true })
-      // Why: Pi auto-loads global extensions from PI_CODING_AGENT_DIR/extensions.
-      // Add Orca's titlebar extension alongside the user's existing extensions
-      // instead of replacing that directory, otherwise Orca terminals would
-      // silently disable the user's Pi customization inside Orca only.
-      writeFileSync(join(extensionsDir, ORCA_PI_EXTENSION_FILE), getPiTitlebarExtensionSource())
-      writeFileSync(
-        join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE),
-        getPiPrefillExtensionSource()
-      )
-      // Why: bundled status extension that bridges pi's in-process event API
-      // to the unified /hook/pi endpoint. Without this, pi panes would have
-      // no entry in agentStatusByPaneKey and the dashboard would fall back
-      // to terminal-title heuristics like any uninstrumented CLI.
-      writeFileSync(
-        join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE),
-        getPiAgentStatusExtensionSource()
-      )
     } catch {
-      // Why: overlay creation is best-effort — permission errors (EPERM/EACCES)
-      // on Windows can occur when the userData directory is restricted or when
-      // symlink/junction creation fails without developer mode. Fall back to the
-      // user's Pi agent dir so the terminal spawns without the Orca extension.
-      this.clearPty(ptyId)
-      return existingAgentDir ? { PI_CODING_AGENT_DIR: existingAgentDir } : {}
+      return { sourceAgentDir }
     }
+
+    this.writeManagedExtension(
+      join(extensionsDir, ORCA_PI_EXTENSION_FILE),
+      withOrcaManagedExtensionMarker(getPiTitlebarExtensionSource())
+    )
+    this.writeManagedExtension(
+      join(extensionsDir, ORCA_PI_PREFILL_EXTENSION_FILE),
+      withOrcaManagedExtensionMarker(getPiPrefillExtensionSource(kind))
+    )
+    const statusExtensionPath = join(extensionsDir, ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
+    const statusResult = this.writeManagedExtension(
+      statusExtensionPath,
+      withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource(kind))
+    )
 
     return {
-      PI_CODING_AGENT_DIR: overlayDir
+      extensionDir: extensionsDir,
+      sourceAgentDir,
+      statusExtensionPath: statusResult === 'written' ? statusExtensionPath : undefined
     }
+  }
+
+  buildPtyEnv(
+    ptyId: string,
+    existingAgentDir: string | undefined,
+    kind: PiAgentKind
+  ): Record<string, string> {
+    const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind)
+    try {
+      this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
+      this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
+    } catch {
+      // Why: old per-PTY overlay cleanup is best-effort; a locked stale
+      // directory should not prevent the terminal from starting.
+    }
+
+    const installed = this.installManagedExtensions(sourceAgentDir, kind)
+    const env: Record<string, string> = {}
+    if (kind === 'omp') {
+      env.ORCA_OMP_SOURCE_AGENT_DIR = installed.sourceAgentDir
+      if (installed.statusExtensionPath) {
+        env.ORCA_OMP_STATUS_EXTENSION = installed.statusExtensionPath
+      }
+    } else {
+      env.ORCA_PI_SOURCE_AGENT_DIR = installed.sourceAgentDir
+    }
+    return env
   }
 
   clearPty(ptyId: string): void {
-    try {
-      this.safeRemoveOverlay(this.getOverlayDir(ptyId))
-    } catch {
-      // Why: on Windows the overlay dir can be locked (EPERM/EBUSY) by antivirus
-      // or indexers. Overlay cleanup is best-effort — a stale directory in userData
-      // is harmless and will be overwritten on the next PTY spawn attempt.
+    // Why: PTY teardown doesn't know which kind was launched (the daemon
+    // exit path discards the launch command). Sweep both old PTY-scoped
+    // overlay roots for migration cleanup. Source-scoped legacy overlays are
+    // deliberately left in place so upgrades never delete user runtime state.
+    for (const kind of Object.keys(OVERLAY_ROOT_DIR_NAME) as PiAgentKind[]) {
+      try {
+        this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
+        this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
+      } catch {
+        // Why: on Windows the overlay dir can be locked (EPERM/EBUSY) by
+        // antivirus or indexers. Overlay cleanup is best-effort - a stale
+        // old PTY-scoped directory in userData is harmless and will be
+        // retried on the next PTY spawn/teardown.
+      }
     }
   }
 }

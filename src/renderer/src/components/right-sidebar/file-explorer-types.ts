@@ -3,6 +3,7 @@ export type TreeNode = {
   path: string
   relativePath: string
   isDirectory: boolean
+  isSymlink?: boolean
   depth: number
 }
 

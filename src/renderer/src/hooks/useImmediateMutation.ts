@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { useMountedRef } from './useMountedRef'
 
 /**
  * Wraps an immediate mutation (no undo delay) with loading/error state
@@ -7,6 +8,7 @@ import { useCallback, useRef, useState } from 'react'
 export function useImmediateMutation() {
   const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set())
   const pendingRef = useRef(pendingKeys)
+  const mountedRef = useMountedRef()
   pendingRef.current = pendingKeys
 
   const isPending = useCallback((key: string) => pendingKeys.has(key), [pendingKeys])
@@ -40,14 +42,16 @@ export function useImmediateMutation() {
         opts.onRevert?.()
         opts.onError?.(err instanceof Error ? err.message : 'Update failed')
       } finally {
-        setPendingKeys((prev) => {
-          const next = new Set(prev)
-          next.delete(key)
-          return next
-        })
+        if (mountedRef.current) {
+          setPendingKeys((prev) => {
+            const next = new Set(prev)
+            next.delete(key)
+            return next
+          })
+        }
       }
     },
-    []
+    [mountedRef]
   )
 
   return { isPending, run }

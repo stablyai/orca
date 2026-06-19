@@ -49,10 +49,10 @@ export async function sendRequest<TResult>(
       settled = true
       clearTimeout(timeout)
       socket.end()
-      if (result.ok) {
-        resolve(result.response)
-      } else {
+      if (result.ok === false) {
         reject(result.error)
+      } else {
+        resolve(result.response)
       }
     }
 
@@ -63,6 +63,19 @@ export async function sendRequest<TResult>(
         error: new RuntimeClientError(
           'runtime_unavailable',
           'Could not connect to the running Orca app. Restart Orca and try again.'
+        )
+      })
+    })
+    // Why: a clean peer close (FIN, no 'error') before a terminal frame never
+    // settles the promise, so the call would otherwise hang until the full
+    // timeout fires. Reject promptly. finish() guards double-settle, so this
+    // no-ops on the normal success/error paths that already called socket.end().
+    socket.once('close', () => {
+      finish({
+        ok: false,
+        error: new RuntimeClientError(
+          'runtime_unavailable',
+          'The Orca runtime closed the connection before responding. Restart Orca and try again.'
         )
       })
     })

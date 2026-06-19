@@ -6,25 +6,35 @@
  *
  * Why: when Orca needs to inject a startup command (e.g. issue command runner),
  * it must wait until the shell has fully initialized before writing. This module
- * provides shell wrapper rcfiles that emit an OSC 133;A marker after startup,
+ * provides shell wrapper rcfiles that emit an OSC 777 marker after startup,
  * and a data scanner that detects that marker so the command can be written at
  * the right time.
  */
-import { basename } from 'path'
-import { mkdirSync, writeFileSync, chmodSync } from 'fs'
+import { tmpdir } from 'os'
+import { basename, win32 as pathWin32 } from 'path'
+import { mkdirSync, writeFileSync, chmodSync, existsSync } from 'fs'
 import { app } from 'electron'
 import type * as pty from 'node-pty'
+import {
+  encodePowerShellCommand,
+  getPowerShellOsc133Bootstrap,
+  isPowerShellExecutableName
+} from '../powershell-osc133-bootstrap'
+import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
+import {
+  getZshEnvTemplate,
+  getZshFinalZdotdirRestoreBlock,
+  getZshShellReadyMarkerRegistrationBlock,
+  getZshStartupFileSourceBlock
+} from '../shell-templates'
 
 let didEnsureShellReadyWrappers = false
 
-function quotePosixSingle(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
 const STARTUP_COMMAND_READY_MAX_WAIT_MS = 1500
-const OSC_133_A = '\x1b]133;A'
+const SHELL_READY_MARKER = '\x1b]777;orca-shell-ready'
+const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
 
-// ── OSC 133;A scanner ───────────────────────────────────────────────
+// ── OSC 777 shell-ready scanner ─────────────────────────────────────
 
 export type ShellReadyScanState = {
   matchPos: number
@@ -43,15 +53,15 @@ export function scanForShellReady(
 
   for (let i = 0; i < data.length; i += 1) {
     const ch = data[i] as string
-    if (state.matchPos < OSC_133_A.length) {
-      if (ch === OSC_133_A[state.matchPos]) {
+    if (state.matchPos < SHELL_READY_MARKER.length) {
+      if (ch === SHELL_READY_MARKER[state.matchPos]) {
         state.heldBytes += ch
         state.matchPos += 1
       } else {
         output += state.heldBytes
         state.heldBytes = ''
         state.matchPos = 0
-        if (ch === OSC_133_A[0]) {
+        if (ch === SHELL_READY_MARKER[0]) {
           state.heldBytes = ch
           state.matchPos = 1
         } else {
@@ -74,7 +84,22 @@ export function scanForShellReady(
 // ── Shell wrapper files ─────────────────────────────────────────────
 
 function getShellReadyWrapperRoot(): string {
-  return `${app.getPath('userData')}/shell-ready`
+  const userDataPath = app?.getPath?.('userData') ?? process.env.ORCA_USER_DATA_PATH ?? tmpdir()
+  return `${userDataPath}/shell-ready`
+}
+
+function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
+  return [
+    `${root}/zsh/.zshenv`,
+    `${root}/zsh/.zprofile`,
+    `${root}/zsh/.zshrc`,
+    `${root}/zsh/.zlogin`,
+    `${root}/bash/rcfile`
+  ]
+}
+
+function shellReadyWrappersExist(): boolean {
+  return getRequiredShellReadyWrapperPaths().every((path) => existsSync(path))
 }
 
 // Why: if our own process inherited ZDOTDIR from a parent shell that was
@@ -114,6 +139,10 @@ function resolveOriginalZdotdir(): string {
   )
 }
 
+function resolveOriginalZshenvSourceDir(): string {
+  return normalizeOriginalZdotdirCandidate(process.env.ZDOTDIR) || process.env.HOME || ''
+}
+
 export function getBashShellReadyRcfileContent(): string {
   return `# Orca bash shell-ready wrapper
 [[ -f /etc/profile ]] && source /etc/profile
@@ -135,33 +164,162 @@ __orca_restore_attribution_path() {
   export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
 }
 __orca_restore_attribution_path
+__orca_restore_agent_teams_path() {
+  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+}
+__orca_restore_agent_teams_path
 # Why: user startup files may set the default OpenCode config after Orca's
-# spawn env; restore the PTY-scoped overlay before the first prompt.
+# spawn env; restore the Orca-managed config dir before the first prompt.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-# Why: PI_CODING_AGENT_DIR is also a single-root env var users may re-export.
-[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
+${getPosixOmpShellWrapper()}
+# Why: Codex must keep using Orca's runtime CODEX_HOME after profile scripts.
+[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+# Why: emit OSC 133 C/D so terminal-command-lifecycle can drop stale agent
+# status when the foreground command (e.g. an interrupted Claude/Codex CLI)
+# exits — mirrors the zsh wrapper. Without this, bash users (default on most
+# Linux distros) keep a stuck 'working' spinner for up to 30 min after the
+# CLI exits without sending a Stop/SessionEnd hook.
+__orca_osc133_precmd() {
+  local exit_code=$?
+  __orca_in_prompt_command=1
+  if [[ -n "\${__orca_in_command:-}" ]]; then
+    printf "\\033]133;D;%s\\007" "$exit_code"
+    unset __orca_in_command
+  fi
+  printf "\\033]133;A\\007"
+}
+__orca_osc133_prompt_done() {
+  unset __orca_in_prompt_command
+}
+__orca_run_user_debug_trap() {
+  if [[ -n "\${__orca_user_debug_trap:-}" ]]; then
+    eval "$__orca_user_debug_trap" || true
+  fi
+}
+__orca_osc133_preexec() {
+  __orca_run_user_debug_trap
+  [[ -z "\${__orca_in_prompt_command:-}" ]] || return
+  # Why: bash DEBUG fires for every simple command, including PROMPT_COMMAND
+  # bodies. Skip our own prompt-time helpers so they don't mark the shell as
+  # "in command" before the prompt has even drawn.
+  case "$BASH_COMMAND" in
+    *__orca_osc133_precmd*|*__orca_osc133_prompt_done*|*__orca_prompt_mark*) return ;;
+  esac
+  printf "\\033]133;C\\007"
+  __orca_in_command=1
+}
+# Why: prepend so we capture $? before the user's PROMPT_COMMAND chain mutates it.
+__orca_normalize_prompt_command() {
+  local __orca_joined="" __orca_prompt_part
+  if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
+    for __orca_prompt_part in "\${PROMPT_COMMAND[@]}"; do
+      [[ -n "$__orca_prompt_part" ]] || continue
+      if [[ -n "$__orca_joined" ]]; then
+        __orca_joined="$__orca_joined;$__orca_prompt_part"
+      else
+        __orca_joined="$__orca_prompt_part"
+      fi
+    done
+    PROMPT_COMMAND="$__orca_joined"
+  fi
+}
+__orca_prepend_prompt_command() {
+  __orca_normalize_prompt_command
+  PROMPT_COMMAND="__orca_osc133_precmd\${PROMPT_COMMAND:+;\${PROMPT_COMMAND}}"
+}
+__orca_append_prompt_command() {
+  local command="$1"
+  __orca_normalize_prompt_command
+  if [[ -n "\${PROMPT_COMMAND:-}" ]]; then
+    PROMPT_COMMAND="\${PROMPT_COMMAND};$command"
+  else
+    PROMPT_COMMAND="$command"
+  fi
+}
+__orca_prepend_prompt_command
 # Why: append the marker through PROMPT_COMMAND so it fires after the login
 # startup files have rebuilt the prompt, without re-running user rc files.
 if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
   __orca_prompt_mark() {
-    printf "\\033]133;A\\007"
+    printf "${SHELL_READY_MARKER_ESCAPED}"
   }
-  if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
-    PROMPT_COMMAND=("\${PROMPT_COMMAND[@]}" "__orca_prompt_mark")
-  else
-    _orca_prev_prompt_command="\${PROMPT_COMMAND}"
-    if [[ -n "\${_orca_prev_prompt_command}" ]]; then
-      PROMPT_COMMAND="\${_orca_prev_prompt_command};__orca_prompt_mark"
-    else
-      PROMPT_COMMAND="__orca_prompt_mark"
-    fi
+  __orca_append_prompt_command "__orca_prompt_mark"
+fi
+__orca_append_prompt_command "__orca_osc133_prompt_done"
+__orca_debug_trap_spec="$(trap -p DEBUG)"
+if [[ -n "$__orca_debug_trap_spec" ]]; then
+  __orca_debug_trap_command="\${__orca_debug_trap_spec#trap -- }"
+  __orca_debug_trap_command="\${__orca_debug_trap_command% DEBUG}"
+  eval "__orca_user_debug_trap=$__orca_debug_trap_command"
+fi
+unset __orca_debug_trap_spec __orca_debug_trap_command
+unset -f __orca_normalize_prompt_command __orca_prepend_prompt_command __orca_append_prompt_command
+# Why: arm DEBUG after wrapper setup; otherwise bash treats our own rcfile
+# commands as a foreground command and emits a fake C/D before the first prompt.
+trap '__orca_osc133_preexec' DEBUG
+`
+}
+
+export function getZshShellReadyRcfileContent(): string {
+  return `# Orca zsh shell-ready wrapper
+${getZshStartupFileSourceBlock({
+  fileName: '.zshrc',
+  interactiveOnly: true,
+  skipWhenHomeIsCurrentZdotdir: true
+})}
+__orca_restore_attribution_path() {
+  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
+}
+[[ ! -o login ]] && __orca_restore_attribution_path
+__orca_restore_agent_teams_path() {
+  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+}
+[[ ! -o login ]] && __orca_restore_agent_teams_path
+if [[ ! -o login ]]; then
+  # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
+  [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
+  ${getPosixOmpShellWrapper()}
+  # Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
+  [[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+fi
+__orca_osc133_precmd() {
+  local exit_code=$?
+  if [[ -n "\${__orca_in_command:-}" ]]; then
+    printf "\\033]133;D;%s\\007" "$exit_code"
+    unset __orca_in_command
   fi
+  printf "\\033]133;A\\007"
+}
+__orca_osc133_preexec() {
+  printf "\\033]133;C\\007"
+  __orca_in_command=1
+}
+# Why: prepend so Orca captures $? before user prompt hooks can overwrite it.
+precmd_functions=(__orca_osc133_precmd \${precmd_functions[@]})
+preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})
+if [[ ! -o login ]]; then
+${getZshFinalZdotdirRestoreBlock()}
 fi
 `
 }
 
 function ensureShellReadyWrappers(): void {
-  if (didEnsureShellReadyWrappers || process.platform === 'win32') {
+  if (process.platform === 'win32') {
+    return
+  }
+  if (didEnsureShellReadyWrappers && shellReadyWrappersExist()) {
     return
   }
   didEnsureShellReadyWrappers = true
@@ -170,52 +328,13 @@ function ensureShellReadyWrappers(): void {
   const zshDir = `${root}/zsh`
   const bashDir = `${root}/bash`
 
-  const zshEnv = `# Orca zsh shell-ready wrapper
-export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${ORCA_ORIG_ZDOTDIR%/}" in
-  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
-esac
-[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
-export ZDOTDIR=${quotePosixSingle(zshDir)}
-`
+  const zshEnv = getZshEnvTemplate(zshDir)
   const zshProfile = `# Orca zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-[[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
+${getZshStartupFileSourceBlock({ fileName: '.zprofile' })}
 `
-  const zshRc = `# Orca zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-if [[ -o interactive && -f "$_orca_home/.zshrc" ]]; then
-  source "$_orca_home/.zshrc"
-fi
-__orca_restore_attribution_path() {
-  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
-}
-if [[ ! -o login ]]; then
-  __orca_restore_attribution_path
-  # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
-  [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-  # Why: PI_CODING_AGENT_DIR must keep the same PTY-scoped overlay after rc files.
-  [[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-fi
-`
+  const zshRc = getZshShellReadyRcfileContent()
   const zshLogin = `# Orca zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
-  source "$_orca_home/.zlogin"
-fi
+${getZshStartupFileSourceBlock({ fileName: '.zlogin', interactiveOnly: true })}
 __orca_restore_attribution_path() {
   [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -224,19 +343,20 @@ __orca_restore_attribution_path() {
   export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
 }
 __orca_restore_attribution_path
+__orca_restore_agent_teams_path() {
+  [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+  case "$PATH" in
+    "\${ORCA_AGENT_TEAMS_SHIM_DIR}"|"\${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+  esac
+  export PATH="\${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+}
+__orca_restore_agent_teams_path
 # Why: .zlogin is the final login startup file before the prompt is shown.
 [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-[[ -n "\${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="\${ORCA_PI_CODING_AGENT_DIR}"
-# Why: zsh precmd runs before the prompt is drawn and before zle owns input,
-# which can double-echo startup commands. line-init fires when zle is ready.
-if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
-  __orca_prompt_mark() {
-    printf "\\033]133;A\\007"
-  }
-  autoload -Uz add-zle-hook-widget
-  zle -N __orca_prompt_mark
-  add-zle-hook-widget line-init __orca_prompt_mark
-fi
+${getPosixOmpShellWrapper()}
+[[ -n "\${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="\${ORCA_CODEX_HOME}"
+${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
+${getZshFinalZdotdirRestoreBlock()}
 `
   const bashRc = getBashShellReadyRcfileContent()
 
@@ -248,11 +368,26 @@ fi
     [`${bashDir}/rcfile`, bashRc]
   ] as const
 
-  for (const [path, content] of files) {
-    const dir = path.slice(0, path.lastIndexOf('/'))
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(path, content, 'utf8')
-    chmodSync(path, 0o644)
+  try {
+    for (const [path, content] of files) {
+      const dir = path.slice(0, path.lastIndexOf('/'))
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(path, content, 'utf8')
+      chmodSync(path, 0o644)
+    }
+  } catch (error) {
+    // Why: wrapper file creation can fail due to read-only filesystems, permission
+    // issues, or disk space. Rather than crashing, log the error and continue.
+    // The shell will launch without the wrapper, which means no shell-ready marker
+    // but at least the PTY is usable.
+    const errorMessage =
+      error instanceof Error
+        ? `${error.message} (${(error as NodeJS.ErrnoException).code || 'unknown'})`
+        : String(error)
+    console.error(`[shell-ready] Failed to create wrapper files in ${root}: ${errorMessage}`)
+    console.error('[shell-ready] Shell will launch without wrapper (no shell-ready marker)')
+    // Reset the flag so next attempt will try again
+    didEnsureShellReadyWrappers = false
   }
 }
 
@@ -268,7 +403,7 @@ function getWrappedShellLaunchConfig(
   shellPath: string,
   options: { emitReadyMarker: boolean }
 ): ShellReadyLaunchConfig {
-  const shellName = basename(shellPath).toLowerCase()
+  const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
 
   if (shellName === 'zsh') {
     ensureShellReadyWrappers()
@@ -276,6 +411,7 @@ function getWrappedShellLaunchConfig(
       args: ['-l'],
       env: {
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
+        ORCA_ZSHENV_SOURCE_DIR: resolveOriginalZshenvSourceDir(),
         ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
         ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },
@@ -291,6 +427,19 @@ function getWrappedShellLaunchConfig(
         ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
       },
       supportsReadyMarker: options.emitReadyMarker
+    }
+  }
+
+  if (isPowerShellExecutableName(shellName)) {
+    return {
+      args: [
+        '-NoLogo',
+        '-NoExit',
+        '-EncodedCommand',
+        encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+      ],
+      env: {},
+      supportsReadyMarker: false
     }
   }
 
@@ -365,7 +514,7 @@ export function writeStartupCommandWhenShellReady(
     if (sent) {
       return
     }
-    // Why: the shell-ready marker (OSC 133;A) fires from precmd/PROMPT_COMMAND,
+    // Why: the shell-ready marker fires from precmd/PROMPT_COMMAND,
     // before the prompt is drawn and before zle/readline switches the PTY into
     // raw mode. Writing the command while the kernel still has ECHO enabled
     // causes the characters to be echoed once by the kernel and then redisplayed

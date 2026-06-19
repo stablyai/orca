@@ -1,7 +1,8 @@
 /* oxlint-disable max-lines */
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Globe, Plus, Server, ServerOff } from 'lucide-react'
+import { Globe, Plus, Server, ServerOff, Smartphone } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, useAllWorktrees } from '@/store/selectors'
 import {
@@ -13,10 +14,11 @@ import {
 } from '@/components/ui/command'
 import { branchName } from '@/lib/git-utils'
 import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/github-links'
-import { getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
+import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { isDefaultBranchWorkspace } from '@/components/sidebar/visible-worktrees'
+import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
@@ -24,10 +26,19 @@ import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/worktree-status
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import {
+  getWorktreePaletteSearchScope,
   searchWorktrees,
   type MatchRange,
   type PaletteSearchResult
 } from '@/lib/worktree-palette-search'
+import {
+  CREATE_WORKTREE_ITEM_ID,
+  createWorktreePaletteRequestGuard,
+  getNextWorktreePaletteSelection,
+  getWorktreePaletteSelectionItemIds,
+  getWorktreePaletteCreateActionState
+} from '@/lib/worktree-palette-create-action'
+import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import {
   isBlankBrowserUrl,
   searchBrowserPages,
@@ -35,11 +46,51 @@ import {
   type SearchableBrowserPage
 } from '@/lib/browser-palette-search'
 import {
+  buildSearchableSimulatorTabs,
+  searchSimulatorTabs,
+  type SearchableSimulatorTab,
+  type SimulatorPaletteSearchResult
+} from '@/lib/simulator-palette-search'
+import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest
 } from '@/components/browser-pane/browser-focus'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
+import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
+import { getPaletteHostBadge, type PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
+import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
+import {
+  buildCmdJActionResults,
+  buildCmdJSettingsResults,
+  rankCmdJMiddleResults,
+  type CmdJActionResult,
+  type CmdJSettingsResult
+} from '@/components/cmd-j/palette-results'
+import {
+  buildCmdJQuickActionContext,
+  captureCmdJActiveGroupSnapshot,
+  getUnavailableQuickActionMessage,
+  type CmdJActiveGroupSnapshot
+} from '@/components/cmd-j/quick-action-context'
+import {
+  getCmdJQuickActions,
+  CREATE_WORKSPACE_QUICK_ACTION_ID
+} from '@/components/cmd-j/quick-actions'
+import {
+  getComposerEligibleRepos,
+  resolveComposerGitRepoId
+} from '@/lib/new-workspace-composer-repo'
+import {
+  lookupGitHubWorkItemByOwnerRepoForSource,
+  lookupGitHubWorkItemForSource
+} from '@/lib/github-work-item-source-lookup'
+import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
+import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
+import { translate } from '@/i18n/i18n'
 
 type WorktreePaletteItem = {
   id: string
@@ -54,6 +105,24 @@ type BrowserPaletteItem = {
   result: BrowserPaletteSearchResult
 }
 
+type SimulatorPaletteItem = {
+  id: string
+  type: 'simulator-tab'
+  result: SimulatorPaletteSearchResult
+}
+
+type SettingsPaletteItem = {
+  id: string
+  type: 'settings'
+  result: CmdJSettingsResult
+}
+
+type QuickActionPaletteItem = {
+  id: string
+  type: 'quick-action'
+  result: CmdJActionResult
+}
+
 type SectionHeader = {
   id: string
   type: 'section-header'
@@ -66,9 +135,46 @@ type HintRow = {
   label: string
 }
 
-type PaletteItem = WorktreePaletteItem | BrowserPaletteItem
+type CreateWorktreePaletteItem = {
+  id: typeof CREATE_WORKTREE_ITEM_ID
+  type: 'create-worktree'
+}
 
-type PaletteListEntry = PaletteItem | SectionHeader | HintRow
+// Why: Cmd+J is a fast intent surface, not a dump of every setup button.
+// Keep future quick actions curated; route one-time setup flows through Settings.
+type PaletteItem =
+  | WorktreePaletteItem
+  | SettingsPaletteItem
+  | QuickActionPaletteItem
+  | BrowserPaletteItem
+  | SimulatorPaletteItem
+
+type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
+
+const CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID = `quick-action:${CREATE_WORKSPACE_QUICK_ACTION_ID}`
+
+function getComposerPrefetchRepoId(
+  state: ReturnType<typeof useAppStore.getState>,
+  initialRepoId?: string
+): string | null {
+  return resolveComposerGitRepoId({
+    eligibleRepos: getComposerEligibleRepos(state.repos),
+    initialRepoId,
+    activeRepoId: state.activeRepoId,
+    focusedHostScope: state.workspaceHostScope
+  })
+}
+
+function appendPaletteListEntries(
+  target: PaletteListEntry[],
+  source: readonly PaletteItem[]
+): void {
+  // Why: query mode can expose generated-size workspace/tab result lists.
+  // Avoid the function argument limit from `push(...source)`.
+  for (const entry of source) {
+    target.push(entry)
+  }
+}
 
 type BrowserSelection = {
   worktree: Worktree
@@ -115,6 +221,29 @@ function FooterKey({ children }: { children: React.ReactNode }): React.JSX.Eleme
   )
 }
 
+function PaletteHostBadgeChip({
+  badge
+}: {
+  badge: PaletteHostBadge | null
+}): React.JSX.Element | null {
+  if (!badge) {
+    return null
+  }
+  // Host labels come from the registry and are intentionally not translated.
+  return (
+    <span
+      aria-label={translate(
+        'auto.components.WorktreeJumpPalette.paletteHostBadge',
+        'Host: {{value0}}',
+        { value0: badge.label }
+      )}
+      className="max-w-[140px] truncate rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88"
+    >
+      {badge.label}
+    </span>
+  )
+}
+
 function findBrowserSelection(
   pageId: string,
   workspaceId: string,
@@ -138,10 +267,27 @@ function findBrowserSelection(
   return { page, workspace, worktree }
 }
 
+function getSettingsTargetFromSectionId(sectionId: string): {
+  pane: SettingsNavTarget
+  repoId: string | null
+  sectionId?: string
+} {
+  if (sectionId.startsWith('repo-')) {
+    return { pane: 'repo', repoId: sectionId.slice('repo-'.length) }
+  }
+  return { pane: sectionId as SettingsNavTarget, repoId: null }
+}
+
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
+  // Why: subscribe this palette to language changes; translated memo contents
+  // recompute on the rerender without using i18n.language as a fake dependency.
+  useTranslation()
   const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
   const closeModal = useAppStore((s) => s.closeModal)
   const openModal = useAppStore((s) => s.openModal)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const allWorktrees = useAllWorktrees()
   const repos = useAppStore((s) => s.repos)
@@ -156,44 +302,89 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   // tab.ptyId is a wake-hint sessionId, not a liveness signal) and the jump
   // palette dot would lie green even though the sidebar dot is correctly grey.
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
+  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeTabType = useAppStore((s) => s.activeTabType)
   const activeBrowserTabId = useAppStore((s) => s.activeBrowserTabId)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const browserPagesByWorkspace = useAppStore((s) => s.browserPagesByWorkspace)
+  const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
+  const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
+  const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
+  const settings = useAppStore((s) => s.settings)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
+  const workspacePortScan = useAppStore((s) => s.workspacePortScan?.result ?? null)
+  const openNewBrowserTabInActiveWorkspace = useAppStore(
+    (s) => s.openNewBrowserTabInActiveWorkspace
+  )
+  const openNewMarkdownInActiveWorkspace = useAppStore((s) => s.openNewMarkdownInActiveWorkspace)
+  const openNewTerminalTabInActiveWorkspace = useAppStore(
+    (s) => s.openNewTerminalTabInActiveWorkspace
+  )
+  const settingsSections = useSettingsNavigationMetadata()
 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [selectedItemId, setSelectedItemId] = useState('')
   const previousWorktreeIdRef = useRef<string | null>(null)
-  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal'>('terminal')
+  const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal' | 'simulator'>(
+    'terminal'
+  )
   const previousBrowserPageIdRef = useRef<string | null>(null)
   const previousBrowserFocusTargetRef = useRef<'webview' | 'address-bar'>('webview')
+  const activeGroupSnapshotRef = useRef<CmdJActiveGroupSnapshot | null>(null)
   const wasVisibleRef = useRef(false)
   const skipRestoreFocusRef = useRef(false)
-  const prevQueryRef = useRef('')
   const listRef = useRef<HTMLDivElement>(null)
+  const fallbackFocusOuterFrameRef = useRef<number | null>(null)
+  const fallbackFocusInnerFrameRef = useRef<number | null>(null)
+  const createLookupGuard = useMemo(() => createWorktreePaletteRequestGuard(), [])
+  const preserveCreateLookupOnCloseRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
-  const canCreateWorktree = useMemo(() => repos.some((repo) => isGitRepoKind(repo)), [repos])
+  const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+  // Why: host badges only appear when more than one execution host exists; reuse
+  // the same registry the sidebar host-scope strip builds so labels stay in sync.
+  const hostOptions = useMemo(
+    () =>
+      buildSidebarHostOptions({
+        repos,
+        sshTargetLabels,
+        sshConnectionStates,
+        settings,
+        runtimeEnvironments,
+        runtimeStatusByEnvironmentId,
+        hostLabelOverrides
+      }),
+    [
+      repos,
+      sshTargetLabels,
+      sshConnectionStates,
+      settings,
+      runtimeEnvironments,
+      runtimeStatusByEnvironmentId,
+      hostLabelOverrides
+    ]
+  )
+  const canCreateWorktree = repos.length > 0
 
   const hasQuery = deferredQuery.trim().length > 0
+  const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
 
-  // Why: keep the jump palette aligned with the sidebar. If the user
-  // opted to hide the default-branch workspace, surfacing it here via
-  // Cmd+J would reintroduce the entry they asked to remove.
-  // Drift warning: this check must stay in lockstep with the sidebar's
-  // filter in computeVisibleWorktreeIds (visible-worktrees.ts). Both
-  // surfaces share isDefaultBranchWorkspace so the predicate can't drift,
-  // but adding a new filter axis (e.g. a second toggle) here would need
-  // the matching change in the sidebar pipeline — otherwise Cmd+J and
-  // the sidebar will show different lists.
-  const visibleWorktrees = useMemo(
+  // Why: the empty-query palette mirrors sidebar filters so opening Search
+  // starts from the same quiet list. Typed search switches to the global
+  // non-archived scope below.
+  const emptyQueryVisibleWorktrees = useMemo(
     () =>
       allWorktrees.filter((worktree) => {
         if (worktree.isArchived) {
@@ -202,9 +393,22 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
           return false
         }
+        if (
+          !showSleepingWorkspaces &&
+          isInactiveWorkspace(worktree.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+        ) {
+          return false
+        }
         return true
       }),
-    [allWorktrees, hideDefaultBranchWorkspace]
+    [
+      allWorktrees,
+      browserTabsByWorktree,
+      hideDefaultBranchWorkspace,
+      ptyIdsByTabId,
+      showSleepingWorkspaces,
+      tabsByWorktree
+    ]
   )
 
   // Why: empty-query rows use focus-recency (lastVisitedAtByWorktreeId) with
@@ -217,11 +421,21 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const { visibleWorktreesForState, switchableWorktreesForRows } = useMemo(
     () =>
       orderEmptyQueryWorktrees({
-        visibleWorktrees,
+        visibleWorktrees: emptyQueryVisibleWorktrees,
         activeWorktreeId,
         lastVisitedAtByWorktreeId
       }),
-    [visibleWorktrees, activeWorktreeId, lastVisitedAtByWorktreeId]
+    [emptyQueryVisibleWorktrees, activeWorktreeId, lastVisitedAtByWorktreeId]
+  )
+
+  const searchScopeWorktrees = useMemo(
+    () =>
+      getWorktreePaletteSearchScope({
+        hasQuery,
+        allWorktrees,
+        emptyQueryWorktrees: switchableWorktreesForRows
+      }),
+    [allWorktrees, hasQuery, switchableWorktreesForRows]
   )
 
   // Why: typed queries still route through sortWorktreesSmart — switcher
@@ -230,22 +444,26 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     () =>
       hasQuery
         ? sortWorktreesSmart(
-            visibleWorktrees,
+            searchScopeWorktrees,
             tabsByWorktree,
             repoMap,
-            prCache,
-            undefined,
-            ptyIdsByTabId
+            agentStatusByPaneKey,
+            runtimePaneTitlesByTabId,
+            ptyIdsByTabId,
+            migrationUnsupportedByPtyId,
+            terminalLayoutsByTabId
           )
-        : switchableWorktreesForRows,
+        : searchScopeWorktrees,
     [
       hasQuery,
-      visibleWorktrees,
-      switchableWorktreesForRows,
+      searchScopeWorktrees,
       tabsByWorktree,
       repoMap,
-      prCache,
-      ptyIdsByTabId
+      agentStatusByPaneKey,
+      runtimePaneTitlesByTabId,
+      ptyIdsByTabId,
+      migrationUnsupportedByPtyId,
+      terminalLayoutsByTabId
     ]
   )
 
@@ -260,11 +478,22 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       allWorktrees,
       tabsByWorktree,
       repoMap,
-      prCache,
-      undefined,
-      ptyIdsByTabId
+      agentStatusByPaneKey,
+      runtimePaneTitlesByTabId,
+      ptyIdsByTabId,
+      migrationUnsupportedByPtyId,
+      terminalLayoutsByTabId
     )
-  }, [allWorktrees, tabsByWorktree, repoMap, prCache, ptyIdsByTabId])
+  }, [
+    allWorktrees,
+    tabsByWorktree,
+    repoMap,
+    agentStatusByPaneKey,
+    runtimePaneTitlesByTabId,
+    ptyIdsByTabId,
+    migrationUnsupportedByPtyId,
+    terminalLayoutsByTabId
+  ])
 
   // Why: browser rows need worktree lookups for repo badge colors, and browser
   // search intentionally includes archived worktrees. This map must cover all
@@ -283,8 +512,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
 
   const worktreeMatches = useMemo(
-    () => searchWorktrees(sortedWorktrees, deferredQuery.trim(), repoMap, prCache, issueCache),
-    [sortedWorktrees, deferredQuery, repoMap, prCache, issueCache]
+    () =>
+      searchWorktrees(
+        sortedWorktrees,
+        deferredQuery.trim(),
+        repoMap,
+        prCache,
+        issueCache,
+        getWorkspacePortsByWorktreeId(workspacePortScan)
+      ),
+    [sortedWorktrees, deferredQuery, repoMap, prCache, issueCache, workspacePortScan]
   )
 
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
@@ -325,6 +562,33 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [browserPageEntries, deferredQuery]
   )
 
+  const simulatorTabEntries = useMemo<SearchableSimulatorTab[]>(() => {
+    return buildSearchableSimulatorTabs({
+      worktrees: browserSortedWorktrees,
+      repoMap,
+      worktreeOrder,
+      unifiedTabsByWorktree,
+      activeGroupIdByWorktree,
+      groupsByWorktree,
+      activeWorktreeId,
+      activeTabType
+    })
+  }, [
+    activeGroupIdByWorktree,
+    activeTabType,
+    activeWorktreeId,
+    browserSortedWorktrees,
+    groupsByWorktree,
+    repoMap,
+    unifiedTabsByWorktree,
+    worktreeOrder
+  ])
+
+  const simulatorMatches = useMemo(
+    () => searchSimulatorTabs(simulatorTabEntries, deferredQuery.trim()),
+    [simulatorTabEntries, deferredQuery]
+  )
+
   const worktreeItems = useMemo<WorktreePaletteItem[]>(
     () =>
       worktreeMatches
@@ -354,95 +618,253 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [browserMatches]
   )
 
-  // Why: on empty query we cap the worktree section (not browser tabs) so the
-  // BROWSER TABS header + ≥1 page row stays visible above the fold — users
-  // with 30+ worktrees would otherwise never see browser pages. The cap is
+  const simulatorItems = useMemo<SimulatorPaletteItem[]>(
+    () =>
+      simulatorMatches.map((result) => ({
+        id: `simulator-tab:${result.tabId}`,
+        type: 'simulator-tab' as const,
+        result
+      })),
+    [simulatorMatches]
+  )
+
+  const openTabItems = useMemo<(BrowserPaletteItem | SimulatorPaletteItem)[]>(
+    () =>
+      [...browserItems, ...simulatorItems].sort((a, b) => {
+        if (a.result.score !== b.result.score) {
+          return a.result.score - b.result.score
+        }
+        return a.id.localeCompare(b.id)
+      }),
+    [browserItems, simulatorItems]
+  )
+
+  const settingsResults = useMemo(
+    () => buildCmdJSettingsResults(settingsSections),
+    [settingsSections]
+  )
+  const actionResults = useMemo(() => buildCmdJActionResults(getCmdJQuickActions()), [])
+
+  const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
+    const state = useAppStore.getState()
+    const repoIdForComposer = getComposerPrefetchRepoId(state, initialRepoId)
+    if (!repoIdForComposer) {
+      return
+    }
+    void state.prefetchWorktreeCreateBase(repoIdForComposer)
+  }, [])
+
+  const openCreateWorkspaceAction = useCallback(() => {
+    prefetchCreateWorkspaceBaseForComposer()
+    queueMicrotask(() =>
+      openModal('new-workspace-composer', { telemetrySource: 'command_palette' })
+    )
+  }, [openModal, prefetchCreateWorkspaceBaseForComposer])
+
+  const deleteActiveWorkspaceAction = useCallback(() => {
+    const { activeView, activeWorktreeId } = useAppStore.getState()
+    if (activeView !== 'terminal' || !activeWorktreeId) {
+      return
+    }
+    // Why: the delete confirmation is also a modal; let the palette close
+    // before mounting it so Radix focus teardown cannot fight the new dialog.
+    queueMicrotask(() => runWorktreeDelete(activeWorktreeId))
+  }, [])
+
+  const openAddQuickCommandAction = useCallback(() => {
+    openSettingsTarget({ pane: 'quick-commands', repoId: null, intent: 'add-quick-command' })
+    openSettingsPage()
+  }, [openSettingsPage, openSettingsTarget])
+
+  const buildQuickActionContext = useCallback(
+    () =>
+      buildCmdJQuickActionContext({
+        state: useAppStore.getState(),
+        activeGroupSnapshot: activeGroupSnapshotRef.current,
+        openNewBrowserTab: openNewBrowserTabInActiveWorkspace,
+        openNewMarkdownFile: openNewMarkdownInActiveWorkspace,
+        openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
+        openCreateWorkspace: openCreateWorkspaceAction,
+        deleteActiveWorkspace: deleteActiveWorkspaceAction,
+        openAddQuickCommand: openAddQuickCommandAction
+      }),
+    [
+      deleteActiveWorkspaceAction,
+      openAddQuickCommandAction,
+      openCreateWorkspaceAction,
+      openNewBrowserTabInActiveWorkspace,
+      openNewMarkdownInActiveWorkspace,
+      openNewTerminalTabInActiveWorkspace
+    ]
+  )
+
+  const quickActionContext = buildQuickActionContext()
+
+  const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(
+    () =>
+      rankCmdJMiddleResults({
+        query: deferredQuery,
+        settingsResults,
+        actionResults: actionResults.filter(
+          (action) => action.isAvailable(quickActionContext).available
+        )
+      }).map((result) =>
+        result.kind === 'settings'
+          ? { id: result.id, type: 'settings' as const, result }
+          : { id: `quick-action:${result.id}`, type: 'quick-action' as const, result }
+      ),
+    [actionResults, deferredQuery, quickActionContext, settingsResults]
+  )
+
+  // Why: on empty query we cap the worktree section (not open tabs) so the
+  // OPEN TABS header + ≥1 tab row stays visible above the fold — users
+  // with 30+ worktrees would otherwise never see open tabs. The cap is
   // paired with a "Type to see all N worktrees" hint row so the full list is
   // one keystroke away. Typing lifts both caps. Cap size is tied to the
   // palette's max-h-[min(460px,62vh)] viewport math: ~60px/row, ~32px/header,
-  // leaves room for BROWSER TABS header + one page row at default window size.
+  // leaves room for OPEN TABS header + one tab row at default window size.
   // Revisit if row heights or max-h change.
   const EMPTY_QUERY_WORKTREE_CAP = 5
-  const EMPTY_QUERY_BROWSER_CAP = 5
+  const EMPTY_QUERY_OPEN_TAB_CAP = 5
+
+  const paletteSections = useMemo(() => {
+    // Why: the worktree cap only earns its keep when there are open tabs to
+    // protect above-the-fold. With zero open tabs, capping would force
+    // the user to type for no reason — uncap so the recent list fills the
+    // viewport naturally.
+    const worktreeCap = !hasQuery && openTabItems.length > 0 ? EMPTY_QUERY_WORKTREE_CAP : Infinity
+    const visibleWorktreeItems = hasQuery ? worktreeItems : worktreeItems.slice(0, worktreeCap)
+    const visibleMiddleItems = hasQuery ? middleItems : []
+    const visibleOpenTabItems = hasQuery
+      ? openTabItems
+      : openTabItems.slice(0, EMPTY_QUERY_OPEN_TAB_CAP)
+    const showWorktreeHint = !hasQuery && worktreeItems.length > worktreeCap
+
+    return {
+      visibleWorktreeItems,
+      visibleMiddleItems,
+      visibleOpenTabItems,
+      showWorktreeHint
+    }
+  }, [worktreeItems, middleItems, openTabItems, hasQuery])
+
+  const selectableItems = useMemo<PaletteItem[]>(
+    () => [
+      ...paletteSections.visibleWorktreeItems,
+      ...paletteSections.visibleMiddleItems,
+      ...paletteSections.visibleOpenTabItems
+    ],
+    [paletteSections]
+  )
+
+  const { createWorktreeName, showCreateAction } = useMemo(
+    () =>
+      getWorktreePaletteCreateActionState({
+        canCreateWorktree,
+        query: deferredQuery
+      }),
+    [canCreateWorktree, deferredQuery]
+  )
 
   const listEntries = useMemo<PaletteListEntry[]>(() => {
     const entries: PaletteListEntry[] = []
-
-    // Why: the worktree cap only earns its keep when there are browser tabs
-    // to protect above-the-fold. With zero browser pages, capping would force
-    // the user to type for no reason — uncap so the recent list fills the
-    // viewport naturally.
-    const worktreeCap = !hasQuery && browserItems.length > 0 ? EMPTY_QUERY_WORKTREE_CAP : Infinity
-    const visibleWorktreeItems = hasQuery ? worktreeItems : worktreeItems.slice(0, worktreeCap)
-    const visibleBrowserItems = hasQuery
-      ? browserItems
-      : browserItems.slice(0, EMPTY_QUERY_BROWSER_CAP)
+    const { visibleWorktreeItems, visibleMiddleItems, visibleOpenTabItems, showWorktreeHint } =
+      paletteSections
+    const visibleWorkspaceItemCount = visibleWorktreeItems.length + (showCreateAction ? 1 : 0)
+    const populatedSectionCount = [
+      visibleWorkspaceItemCount,
+      visibleMiddleItems.length,
+      visibleOpenTabItems.length
+    ].filter((count) => count > 0).length
 
     // Header rule: on empty query each section is categorically distinct
-    // (worktrees vs. tabs), so a lone header is a useful signpost. On query,
+    // (worktrees vs. open tabs), so a lone header is a useful signpost. On query,
     // suppress headers unless both sections are populated — otherwise a lone
     // header above one list is noise.
     const showWorktreeHeader = hasQuery
-      ? visibleWorktreeItems.length > 0 && visibleBrowserItems.length > 0
+      ? visibleWorkspaceItemCount > 0 && populatedSectionCount > 1
       : visibleWorktreeItems.length > 0
-    const showBrowserHeader = hasQuery
-      ? visibleWorktreeItems.length > 0 && visibleBrowserItems.length > 0
-      : visibleBrowserItems.length > 0
+    const showOpenTabsHeader = hasQuery
+      ? visibleOpenTabItems.length > 0 && populatedSectionCount > 1
+      : visibleOpenTabItems.length > 0
+    const showMiddleHeader = hasQuery && visibleMiddleItems.length > 0 && populatedSectionCount > 1
 
-    // Why: only surface the hint when there's actually something hidden,
-    // otherwise the row would be a lie.
-    const showWorktreeHint = !hasQuery && worktreeItems.length > worktreeCap
-
-    if (visibleWorktreeItems.length > 0) {
+    if (visibleWorkspaceItemCount > 0) {
       if (showWorktreeHeader) {
         entries.push({
           id: '__header_worktrees__',
           type: 'section-header',
-          label: hasQuery ? 'Worktrees' : 'Recent Worktrees'
+          label: hasQuery
+            ? translate('auto.components.WorktreeJumpPalette.worktreesHeader', 'Worktrees')
+            : translate(
+                'auto.components.WorktreeJumpPalette.recentWorktreesHeader',
+                'Recent Worktrees'
+              )
         })
       }
-      entries.push(...visibleWorktreeItems)
+      appendPaletteListEntries(entries, visibleWorktreeItems)
+      if (showCreateAction) {
+        // Why: the typed create affordance is workspace-scoped, so keep it
+        // directly under workspace matches instead of after actions/tabs.
+        entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
+      }
       if (showWorktreeHint) {
         entries.push({
           id: '__hint_worktree_cap__',
           type: 'hint',
-          label: `Type to see all ${worktreeItems.length} worktrees`
+          label: translate(
+            'auto.components.WorktreeJumpPalette.dabd819ca1',
+            'Type to see all {{value0}} worktrees',
+            { value0: worktreeItems.length }
+          )
         })
       }
     }
-    if (visibleBrowserItems.length > 0) {
-      if (showBrowserHeader) {
+    if (visibleMiddleItems.length > 0) {
+      if (showMiddleHeader) {
         entries.push({
-          id: '__header_browser__',
+          id: '__header_actions_settings__',
           type: 'section-header',
-          label: 'Browser Tabs'
+          label: translate('auto.components.WorktreeJumpPalette.088d66d980', 'Actions & Settings')
         })
       }
-      entries.push(...visibleBrowserItems)
+      appendPaletteListEntries(entries, visibleMiddleItems)
+    }
+    if (visibleOpenTabItems.length > 0) {
+      if (showOpenTabsHeader) {
+        entries.push({
+          id: '__header_open_tabs__',
+          type: 'section-header',
+          label: translate('auto.components.WorktreeJumpPalette.50a1d11d5b', 'Open Tabs')
+        })
+      }
+      appendPaletteListEntries(entries, visibleOpenTabItems)
     }
     return entries
-  }, [worktreeItems, browserItems, hasQuery])
+  }, [hasQuery, paletteSections, showCreateAction, worktreeItems.length])
 
-  const selectableItems = useMemo<PaletteItem[]>(
-    () =>
-      listEntries.filter((e): e is PaletteItem => e.type !== 'section-header' && e.type !== 'hint'),
+  const selectionItemIds = useMemo(
+    () => getWorktreePaletteSelectionItemIds(listEntries),
     [listEntries]
   )
 
-  const createWorktreeName = deferredQuery.trim()
-  const showCreateAction =
-    canCreateWorktree && createWorktreeName.length > 0 && worktreeItems.length === 0
-
-  const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
   // Why: empty-state / "has any worktrees?" uses the full visible list
   // (including current) so the palette never claims to be empty just
   // because the only visible worktree is the currently active one.
   // See docs/cmd-j-empty-query-ordering.md.
   const hasAnyWorktrees = visibleWorktreesForState.length > 0
-  const hasAnyBrowserPages = browserPageEntries.length > 0
+  const hasAnySearchableWorktrees = hasQuery ? searchScopeWorktrees.length > 0 : hasAnyWorktrees
+  const hasAnyOpenTabs = browserPageEntries.length > 0 || simulatorTabEntries.length > 0
+  const hasAnyMiddleResults = middleItems.length > 0
 
   useEffect(() => {
     if (visible && !wasVisibleRef.current) {
+      recordFeatureInteraction('cmd-j')
+      createLookupGuard.invalidate()
+      activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(
+        useAppStore.getState(),
+        activeWorktreeId
+      )
       previousWorktreeIdRef.current = activeWorktreeId
       previousActiveTabTypeRef.current = activeTabType
       previousBrowserPageIdRef.current =
@@ -461,53 +883,77 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           ? 'address-bar'
           : 'webview'
       skipRestoreFocusRef.current = false
-      prevQueryRef.current = ''
       setQuery('')
       setSelectedItemId('')
+      listRef.current?.scrollTo(0, 0)
+    }
+
+    if (!visible && wasVisibleRef.current) {
+      if (preserveCreateLookupOnCloseRef.current) {
+        // Why: create intentionally closes the palette before GH resolves;
+        // reopening still invalidates the pending lookup above.
+        preserveCreateLookupOnCloseRef.current = false
+      } else {
+        createLookupGuard.invalidate()
+      }
+      activeGroupSnapshotRef.current = null
     }
 
     wasVisibleRef.current = visible
-  }, [activeBrowserTabId, activeTabType, activeWorktreeId, browserTabsByWorktree, visible])
+  }, [
+    activeBrowserTabId,
+    activeTabType,
+    activeWorktreeId,
+    browserTabsByWorktree,
+    createLookupGuard,
+    recordFeatureInteraction,
+    visible
+  ])
+
+  const commandSelectedItemId = getNextWorktreePaletteSelection({
+    currentSelectedItemId: selectedItemId,
+    queryChanged: false,
+    selectableItemIds: selectionItemIds,
+    showCreateAction
+  })
 
   useEffect(() => {
-    if (!visible) {
+    const isCreateWorkspaceHighlighted =
+      commandSelectedItemId === CREATE_WORKTREE_ITEM_ID ||
+      commandSelectedItemId === CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID
+    if (!visible || !isCreateWorkspaceHighlighted) {
       return
     }
-    const queryChanged = deferredQuery !== prevQueryRef.current
-    prevQueryRef.current = deferredQuery
+    // Why: Cmd+J opens the composer after selection; warming the same default
+    // repo here buys time while the user is still on the highlighted row.
+    prefetchCreateWorkspaceBaseForComposer()
+  }, [commandSelectedItemId, prefetchCreateWorkspaceBaseForComposer, visible])
 
-    const firstSelectableId = showCreateAction ? '__create_worktree__' : null
+  const handleQueryChange = useCallback((nextQuery: string) => {
+    setQuery(nextQuery)
+    setSelectedItemId('')
+    listRef.current?.scrollTo(0, 0)
+  }, [])
 
-    if (queryChanged) {
-      if (selectableItems.length > 0) {
-        setSelectedItemId(selectableItems[0].id)
-      } else {
-        setSelectedItemId(firstSelectableId ?? '')
-      }
-      listRef.current?.scrollTo(0, 0)
-      return
+  const cancelFallbackFocusFrames = useCallback((): void => {
+    if (fallbackFocusOuterFrameRef.current !== null) {
+      cancelAnimationFrame(fallbackFocusOuterFrameRef.current)
+      fallbackFocusOuterFrameRef.current = null
     }
-
-    if (selectableItems.length === 0) {
-      setSelectedItemId(firstSelectableId ?? '')
-      return
+    if (fallbackFocusInnerFrameRef.current !== null) {
+      cancelAnimationFrame(fallbackFocusInnerFrameRef.current)
+      fallbackFocusInnerFrameRef.current = null
     }
+  }, [])
 
-    if (selectedItemId === '__create_worktree__' && showCreateAction) {
-      return
-    }
-
-    if (
-      !selectableItems.some((item) => item.id === selectedItemId) &&
-      selectedItemId !== firstSelectableId
-    ) {
-      setSelectedItemId(firstSelectableId ?? selectableItems[0].id)
-    }
-  }, [deferredQuery, selectedItemId, showCreateAction, visible, selectableItems])
+  useEffect(() => cancelFallbackFocusFrames, [cancelFallbackFocusFrames])
 
   const focusFallbackSurface = useCallback(() => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
+    cancelFallbackFocusFrames()
+    fallbackFocusOuterFrameRef.current = requestAnimationFrame(() => {
+      fallbackFocusOuterFrameRef.current = null
+      fallbackFocusInnerFrameRef.current = requestAnimationFrame(() => {
+        fallbackFocusInnerFrameRef.current = null
         const xterm = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
         if (xterm) {
           xterm.focus()
@@ -519,7 +965,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
       })
     })
-  }, [])
+  }, [cancelFallbackFocusFrames])
 
   const requestBrowserFocus = useCallback(
     (detail: { pageId: string; target: 'webview' | 'address-bar' }) => {
@@ -563,16 +1009,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     (worktreeId: string) => {
       const worktree = findWorktreeById(useAppStore.getState().worktreesByRepo, worktreeId)
       if (!worktree) {
-        toast.error('Worktree no longer exists')
+        toast.error(
+          translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
+        )
         return
       }
       activateAndRevealWorktree(worktreeId)
+      recordFeatureInteraction('cmd-j-workspace-open')
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
       focusFallbackSurface()
     },
-    [closeModal, focusFallbackSurface]
+    [closeModal, focusFallbackSurface, recordFeatureInteraction]
   )
 
   const handleSelectBrowserPage = useCallback(
@@ -580,7 +1029,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       const { pageId, workspaceId, worktreeId } = result
       const selection = findBrowserSelection(pageId, workspaceId, worktreeId)
       if (!selection) {
-        toast.error('Browser page no longer exists')
+        toast.error(
+          translate(
+            'auto.components.WorktreeJumpPalette.d7d496a451',
+            'Browser page no longer exists'
+          )
+        )
         return
       }
       // Why: capture the workspace and page info before activateAndRevealWorktree
@@ -589,13 +1043,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       const { worktree, workspace, page } = selection
       const activated = activateAndRevealWorktree(worktree.id)
       if (!activated) {
-        toast.error('Worktree no longer exists')
+        toast.error(
+          translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
+        )
         return
       }
 
       const state = useAppStore.getState()
       state.setActiveBrowserTab(workspace.id)
       state.setActiveBrowserPage(workspace.id, pageId)
+      recordFeatureInteraction('cmd-j-browser-page-open')
       skipRestoreFocusRef.current = true
       closeModal()
       setSelectedItemId('')
@@ -604,18 +1061,102 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         target: isBlankBrowserUrl(page.url) ? 'address-bar' : 'webview'
       })
     },
-    [closeModal, requestBrowserFocus]
+    [closeModal, recordFeatureInteraction, requestBrowserFocus]
+  )
+
+  const handleSelectSimulatorTab = useCallback(
+    (result: SimulatorPaletteSearchResult) => {
+      const state = useAppStore.getState()
+      const tab = (state.unifiedTabsByWorktree[result.worktreeId] ?? []).find(
+        (candidate) => candidate.id === result.tabId && candidate.contentType === 'simulator'
+      )
+      if (!tab) {
+        toast.error(
+          translate(
+            'auto.components.WorktreeJumpPalette.7726ce9970',
+            'Mobile emulator tab no longer exists'
+          )
+        )
+        return
+      }
+      const activated = activateAndRevealWorktree(result.worktreeId)
+      if (!activated) {
+        toast.error(
+          translate('auto.components.WorktreeJumpPalette.2c38630a01', 'Workspace no longer exists')
+        )
+        return
+      }
+
+      const nextState = useAppStore.getState()
+      nextState.focusGroup(result.worktreeId, tab.groupId)
+      nextState.activateTab(tab.id)
+      nextState.setActiveTab(tab.id)
+      nextState.setActiveTabType('simulator')
+      skipRestoreFocusRef.current = true
+      closeModal()
+      setSelectedItemId('')
+    },
+    [closeModal]
+  )
+
+  const handleSelectSettings = useCallback(
+    (result: CmdJSettingsResult) => {
+      const target = getSettingsTargetFromSectionId(result.sectionId)
+      if (result.targetSectionId) {
+        target.sectionId = result.targetSectionId
+      }
+      skipRestoreFocusRef.current = true
+      closeModal()
+      setSelectedItemId('')
+      openSettingsTarget(target)
+      openSettingsPage()
+      recordFeatureInteraction('cmd-j-settings-open')
+    },
+    [closeModal, openSettingsPage, openSettingsTarget, recordFeatureInteraction]
+  )
+
+  const handleSelectQuickAction = useCallback(
+    (action: CmdJActionResult) => {
+      skipRestoreFocusRef.current = true
+      closeModal()
+      setSelectedItemId('')
+      const ctx = buildQuickActionContext()
+      void action.run(ctx).then((result) => {
+        if (result.status === 'unavailable') {
+          toast.error(getUnavailableQuickActionMessage(action.title, result.reason))
+          return
+        }
+        if (action.id === 'create-workspace') {
+          recordFeatureInteraction('cmd-j-create-workspace')
+          return
+        }
+        recordFeatureInteraction('cmd-j-quick-action')
+      })
+    },
+    [buildQuickActionContext, closeModal, recordFeatureInteraction]
   )
 
   const handleSelectItem = useCallback(
     (item: PaletteItem) => {
       if (item.type === 'worktree') {
         handleSelectWorktree(item.worktree.id)
-      } else {
+      } else if (item.type === 'browser-page') {
         handleSelectBrowserPage(item.result)
+      } else if (item.type === 'simulator-tab') {
+        handleSelectSimulatorTab(item.result)
+      } else if (item.type === 'settings') {
+        handleSelectSettings(item.result)
+      } else {
+        handleSelectQuickAction(item.result)
       }
     },
-    [handleSelectBrowserPage, handleSelectWorktree]
+    [
+      handleSelectBrowserPage,
+      handleSelectQuickAction,
+      handleSelectSettings,
+      handleSelectSimulatorTab,
+      handleSelectWorktree
+    ]
   )
 
   const handleCreateWorktree = useCallback(() => {
@@ -625,7 +1166,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     const ghNumber = parseGitHubIssueOrPRNumber(trimmed)
 
     const openComposer = (data: Record<string, unknown>): void => {
+      prefetchCreateWorkspaceBaseForComposer(
+        typeof data.initialRepoId === 'string' ? data.initialRepoId : undefined
+      )
       closeModal()
+      recordFeatureInteraction('cmd-j-create-workspace')
       // Why: defer opening so Radix fully unmounts the palette's dialog before
       // the composer modal mounts, avoiding focus churn between the two.
       queueMicrotask(() =>
@@ -649,6 +1194,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       if (activeMatch) {
         closeModal()
         activateAndRevealWorktree(activeMatch.id)
+        recordFeatureInteraction('cmd-j-workspace-open')
         return
       }
 
@@ -662,13 +1208,32 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
 
+      prefetchCreateWorkspaceBaseForComposer(repoForLookup.id)
+      const sourceContext = buildTaskSourceContextFromRepo({
+        provider: 'github',
+        projectId: repoForLookup.id,
+        repo: repoForLookup
+      })
       // Why: awaiting inside the user gesture would leave the palette open
       // indefinitely on slow networks. Close immediately and populate the
       // composer once the lookup returns.
+      const lookupToken = createLookupGuard.start()
+      preserveCreateLookupOnCloseRef.current = true
+      recordFeatureInteraction('cmd-j-create-workspace')
       closeModal()
-      void window.api.gh
-        .workItem({ repoPath: repoForLookup.path, number })
+      void lookupGitHubWorkItemByOwnerRepoForSource({
+        repoPath: repoForLookup.path,
+        repoId: repoForLookup.id,
+        sourceContext,
+        owner: slug.owner,
+        repo: slug.repo,
+        number,
+        type: ghLink.type
+      })
         .then((item) => {
+          if (!createLookupGuard.isCurrent(lookupToken)) {
+            return
+          }
           const data: Record<string, unknown> = { initialRepoId: repoForLookup.id }
           if (item) {
             const linkedWorkItem: LinkedWorkItemSummary = {
@@ -678,7 +1243,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               url: item.url
             }
             data.linkedWorkItem = linkedWorkItem
-            data.prefilledName = getLinkedWorkItemSuggestedName({ title: item.title })
+            data.prefilledName =
+              getLinkedWorkItemWorkspaceName(linkedWorkItem)?.seedName ??
+              getLinkedWorkItemSuggestedName({ title: item.title })
           } else {
             // Fallback: we couldn't resolve the URL, just seed the name.
             data.prefilledName = `${slug.owner}-${slug.repo}-${number}`
@@ -688,6 +1255,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           )
         })
         .catch(() => {
+          if (!createLookupGuard.isCurrent(lookupToken)) {
+            return
+          }
           queueMicrotask(() =>
             openModal('new-workspace-composer', {
               initialRepoId: repoForLookup.id,
@@ -708,6 +1278,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       if (activeMatch) {
         closeModal()
         activateAndRevealWorktree(activeMatch.id)
+        recordFeatureInteraction('cmd-j-workspace-open')
         return
       }
 
@@ -719,10 +1290,26 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
 
+      prefetchCreateWorkspaceBaseForComposer(repoForLookup.id)
+      const sourceContext = buildTaskSourceContextFromRepo({
+        provider: 'github',
+        projectId: repoForLookup.id,
+        repo: repoForLookup
+      })
+      const lookupToken = createLookupGuard.start()
+      preserveCreateLookupOnCloseRef.current = true
+      recordFeatureInteraction('cmd-j-create-workspace')
       closeModal()
-      void window.api.gh
-        .workItem({ repoPath: repoForLookup.path, number: ghNumber })
+      void lookupGitHubWorkItemForSource({
+        repoPath: repoForLookup.path,
+        repoId: repoForLookup.id,
+        sourceContext,
+        number: ghNumber
+      })
         .then((item) => {
+          if (!createLookupGuard.isCurrent(lookupToken)) {
+            return
+          }
           const data: Record<string, unknown> = { initialRepoId: repoForLookup.id }
           if (item) {
             const linkedWorkItem: LinkedWorkItemSummary = {
@@ -732,7 +1319,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               url: item.url
             }
             data.linkedWorkItem = linkedWorkItem
-            data.prefilledName = getLinkedWorkItemSuggestedName({ title: item.title })
+            data.prefilledName =
+              getLinkedWorkItemWorkspaceName(linkedWorkItem)?.seedName ??
+              getLinkedWorkItemSuggestedName({ title: item.title })
           } else {
             data.prefilledName = trimmed
           }
@@ -741,6 +1330,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           )
         })
         .catch(() => {
+          if (!createLookupGuard.isCurrent(lookupToken)) {
+            return
+          }
           queueMicrotask(() =>
             openModal('new-workspace-composer', {
               initialRepoId: repoForLookup.id,
@@ -754,7 +1346,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
     // Case 3: plain name — open composer prefilled.
     openComposer(trimmed ? { prefilledName: trimmed } : {})
-  }, [allWorktrees, closeModal, createWorktreeName, openModal, repoMap])
+  }, [
+    allWorktrees,
+    closeModal,
+    createLookupGuard,
+    createWorktreeName,
+    openModal,
+    prefetchCreateWorkspaceBaseForComposer,
+    recordFeatureInteraction,
+    repoMap
+  ])
 
   const handleCloseAutoFocus = useCallback((e: Event) => {
     e.preventDefault()
@@ -767,25 +1368,43 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const resultCount = selectableItems.length
   const emptyState = (() => {
-    if ((hasAnyWorktrees || hasAnyBrowserPages) && hasQuery) {
+    if ((hasAnySearchableWorktrees || hasAnyMiddleResults || hasAnyOpenTabs) && hasQuery) {
       return {
-        title: 'No results match your search',
-        subtitle: 'Try a name, branch, repo, comment, PR, page title, or URL.'
+        title: translate(
+          'auto.components.WorktreeJumpPalette.dbd9d87eec',
+          'No results match your search'
+        ),
+        subtitle: translate(
+          'auto.components.WorktreeJumpPalette.c4afa68159',
+          'Try a worktree, setting, action, page title, emulator, URL, PR, or port.'
+        )
       }
     }
     // Why: empty-query rows exclude the current worktree, so a single-worktree
     // setup has hasAnyWorktrees=true but zero switchable rows. Without this
     // branch the palette would claim "No active worktrees" while one is open
     // — misleading. See docs/cmd-j-empty-query-ordering.md.
-    if (!hasQuery && hasAnyWorktrees && !hasAnyBrowserPages) {
+    if (!hasQuery && hasAnyWorktrees && !hasAnyOpenTabs) {
       return {
-        title: 'No other worktrees to switch to',
-        subtitle: 'Type to search or create a new worktree.'
+        title: translate(
+          'auto.components.WorktreeJumpPalette.f60f8730be',
+          'No other worktrees to switch to'
+        ),
+        subtitle: translate(
+          'auto.components.WorktreeJumpPalette.b781ae05e3',
+          'Type to search worktrees, settings, tabs, and actions.'
+        )
       }
     }
     return {
-      title: 'No active worktrees or browser tabs',
-      subtitle: 'Create a worktree or open a page in Orca to get started.'
+      title: translate(
+        'auto.components.WorktreeJumpPalette.1628fd7dfa',
+        'No active worktrees, settings, actions, or open tabs'
+      ),
+      subtitle: translate(
+        'auto.components.WorktreeJumpPalette.f7fda8d562',
+        'Create a worktree or open a tab in Orca to get started.'
+      )
     }
   })()
 
@@ -796,30 +1415,42 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       shouldFilter={false}
       onOpenAutoFocus={handleOpenAutoFocus}
       onCloseAutoFocus={handleCloseAutoFocus}
-      title="Jump to..."
-      description="Search worktrees and browser tabs"
+      title={translate('auto.components.WorktreeJumpPalette.4ee378034d', 'Jump to...')}
+      description={translate(
+        'auto.components.WorktreeJumpPalette.4e4ff044d5',
+        'Search worktrees, settings, tabs, and actions'
+      )}
       overlayClassName="bg-black/55 backdrop-blur-[2px]"
       contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
       commandProps={{
         loop: true,
-        value: selectedItemId,
+        value: commandSelectedItemId,
         onValueChange: setSelectedItemId,
         className: 'bg-transparent'
       }}
     >
       <CommandInput
-        placeholder={'Jump to worktree or browser tab\u2026  try "repo/worktree"'}
+        placeholder={translate(
+          'auto.components.WorktreeJumpPalette.1ebe225fee',
+          'Search worktrees, settings, tabs, and actions...'
+        )}
         value={query}
-        onValueChange={setQuery}
+        onValueChange={handleQueryChange}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 text-[14px] placeholder:text-muted-foreground/75"
       />
       <CommandList ref={listRef} className="max-h-[min(460px,62vh)] px-2.5 pb-2.5 pt-2">
-        {isLoading ? (
+        {isLoading && selectableItems.length === 0 && !showCreateAction ? (
           <PaletteState
-            title="Loading jump targets"
-            subtitle="Gathering your recent worktrees and open browser pages."
+            title={translate(
+              'auto.components.WorktreeJumpPalette.ff908adfe9',
+              'Loading jump targets'
+            )}
+            subtitle={translate(
+              'auto.components.WorktreeJumpPalette.684e8d7bc2',
+              'Gathering your recent worktrees and open tabs.'
+            )}
           />
         ) : selectableItems.length === 0 && !showCreateAction ? (
           <CommandEmpty className="py-0">
@@ -852,6 +1483,30 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 )
               }
 
+              if (entry.type === 'create-worktree') {
+                return (
+                  <CommandItem
+                    key={entry.id}
+                    value={CREATE_WORKTREE_ITEM_ID}
+                    onSelect={handleCreateWorktree}
+                    className="group mx-0.5 mt-1 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-1.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground"
+                  >
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
+                      <Plus size={13} aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                        {translate(
+                          'auto.components.WorktreeJumpPalette.95be6587d3',
+                          'Create worktree "{{value0}}"',
+                          { value0: createWorktreeName }
+                        )}
+                      </div>
+                    </div>
+                  </CommandItem>
+                )
+              }
+
               if (entry.type === 'worktree') {
                 const worktree = entry.worktree
                 const repo = repoMap.get(worktree.repoId)
@@ -870,6 +1525,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
                   : null
                 const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
+                const hostBadge = getPaletteHostBadge(repo, hostOptions)
 
                 return (
                   <CommandItem
@@ -892,7 +1548,17 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                           <div className="flex min-w-0 items-center gap-2">
                             {sshConnectionId && (
                               <span
-                                aria-label={isSshDisconnected ? 'SSH disconnected' : 'SSH remote'}
+                                aria-label={
+                                  isSshDisconnected
+                                    ? translate(
+                                        'auto.components.WorktreeJumpPalette.63c2be1914',
+                                        'SSH disconnected'
+                                      )
+                                    : translate(
+                                        'auto.components.WorktreeJumpPalette.34c8fbb46e',
+                                        'SSH remote'
+                                      )
+                                }
                                 className="shrink-0 inline-flex items-center"
                               >
                                 {isSshDisconnected ? (
@@ -917,12 +1583,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             </span>
                             {isCurrentWorktree && (
                               <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                                Current
+                                {translate(
+                                  'auto.components.WorktreeJumpPalette.556e7232ca',
+                                  'Current'
+                                )}
                               </span>
                             )}
                             {worktree.isMainWorktree && (
                               <span className="shrink-0 self-center rounded border border-muted-foreground/30 bg-muted-foreground/5 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground">
-                                primary
+                                {translate(
+                                  'auto.components.WorktreeJumpPalette.739bda980c',
+                                  'primary'
+                                )}
                               </span>
                             )}
                             <span className="shrink-0 text-muted-foreground/45">·</span>
@@ -938,9 +1610,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             </span>
                           </div>
                           {entry.match.supportingText && (
-                            <div className="mt-1.5 flex min-w-0 items-start gap-2 text-[12px] leading-5 text-muted-foreground/88">
-                              <span className="shrink-0 rounded-full border border-border/45 bg-background/45 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.12em] text-muted-foreground/75">
-                                {entry.match.supportingText.label}
+                            <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[12px] leading-5 text-muted-foreground/88">
+                              <span className="inline-flex h-[18px] shrink-0 items-center rounded border border-border bg-foreground/[0.04] px-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                {getPaletteSupportingTextLabel(
+                                  entry.match.supportingText.labelKind
+                                )}
                               </span>
                               <span className="truncate">
                                 <HighlightedText
@@ -951,18 +1625,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                             </div>
                           )}
                         </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <PaletteHostBadgeChip badge={hostBadge} />
                           {repoName && (
                             <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                              <span
-                                aria-hidden="true"
-                                className="size-1.5 shrink-0 rounded-full"
-                                style={
-                                  repo?.badgeColor
-                                    ? { backgroundColor: repo.badgeColor }
-                                    : undefined
-                                }
-                              />
+                              <RepoBadgeMark color={repo?.badgeColor} />
                               <span className="truncate">
                                 {entry.match.repoRange ? (
                                   <HighlightedText
@@ -982,10 +1649,129 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 )
               }
 
+              if (entry.type === 'settings' || entry.type === 'quick-action') {
+                const result = entry.result
+                const Icon = result.icon
+                const kindLabel =
+                  entry.type === 'settings'
+                    ? translate('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings')
+                    : translate('auto.components.WorktreeJumpPalette.actionBadge', 'Action')
+                return (
+                  <CommandItem
+                    key={entry.id}
+                    value={entry.id}
+                    onSelect={() => handleSelectItem(entry)}
+                    className={cn(
+                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
+                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
+                    )}
+                  >
+                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                      <Icon className="size-3.5" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                          {result.title}
+                        </span>
+                        <span className="shrink-0 rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                          {kindLabel}
+                        </span>
+                      </div>
+                      <div className="mt-1 truncate text-[12px] leading-5 text-muted-foreground/88">
+                        {result.description}
+                      </div>
+                    </div>
+                  </CommandItem>
+                )
+              }
+
+              if (entry.type === 'simulator-tab') {
+                const result = entry.result
+                const simulatorWorktree = worktreeMap.get(result.worktreeId)
+                const simulatorRepo = simulatorWorktree
+                  ? repoMap.get(simulatorWorktree.repoId)
+                  : undefined
+                const simulatorRepoName = simulatorRepo?.displayName ?? result.repoName
+                const simulatorHostBadge = getPaletteHostBadge(simulatorRepo, hostOptions)
+
+                return (
+                  <CommandItem
+                    key={entry.id}
+                    value={entry.id}
+                    onSelect={() => handleSelectItem(entry)}
+                    className={cn(
+                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
+                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
+                    )}
+                  >
+                    <div className="flex w-4 shrink-0 items-center justify-center self-start pt-0.5 text-muted-foreground/85">
+                      <Smartphone className="size-3.5" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="max-w-[40%] shrink-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground">
+                              <HighlightedText text={result.title} matchRange={result.titleRange} />
+                            </span>
+                            {result.isCurrentTab && (
+                              <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                                {translate(
+                                  'auto.components.WorktreeJumpPalette.52404f8096',
+                                  'Current Tab'
+                                )}
+                              </span>
+                            )}
+                            {!result.isCurrentTab && result.isCurrentWorktree && (
+                              <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
+                                {translate(
+                                  'auto.components.WorktreeJumpPalette.c5081f2814',
+                                  'Current Worktree'
+                                )}
+                              </span>
+                            )}
+                            <span className="shrink-0 text-muted-foreground/45">·</span>
+                            <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
+                              <HighlightedText
+                                text={result.secondaryText}
+                                matchRange={result.secondaryRange}
+                              />
+                            </span>
+                            <span className="shrink-0 text-muted-foreground/45">·</span>
+                            <span className="shrink-0 text-[12px] font-medium text-muted-foreground/92">
+                              <HighlightedText
+                                text={result.worktreeName}
+                                matchRange={result.worktreeRange}
+                              />
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <PaletteHostBadgeChip badge={simulatorHostBadge} />
+                          {simulatorRepoName && (
+                            <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
+                              <RepoBadgeMark color={simulatorRepo?.badgeColor} />
+                              <span className="truncate">
+                                <HighlightedText
+                                  text={simulatorRepoName}
+                                  matchRange={result.repoRange}
+                                />
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </CommandItem>
+                )
+              }
+
               const result = entry.result
               const browserWorktree = worktreeMap.get(result.worktreeId)
               const browserRepo = browserWorktree ? repoMap.get(browserWorktree.repoId) : undefined
               const browserRepoName = browserRepo?.displayName ?? result.repoName
+              const browserHostBadge = getPaletteHostBadge(browserRepo, hostOptions)
 
               return (
                 <CommandItem
@@ -1009,12 +1795,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                           </span>
                           {result.isCurrentPage && (
                             <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                              Current Tab
+                              {translate(
+                                'auto.components.WorktreeJumpPalette.52404f8096',
+                                'Current Tab'
+                              )}
                             </span>
                           )}
                           {!result.isCurrentPage && result.isCurrentWorktree && (
                             <span className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                              Current Worktree
+                              {translate(
+                                'auto.components.WorktreeJumpPalette.c5081f2814',
+                                'Current Worktree'
+                              )}
                             </span>
                           )}
                           <span className="shrink-0 text-muted-foreground/45">·</span>
@@ -1033,18 +1825,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                           </span>
                         </div>
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <PaletteHostBadgeChip badge={browserHostBadge} />
                         {browserRepoName && (
                           <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                            <span
-                              aria-hidden="true"
-                              className="size-1.5 shrink-0 rounded-full"
-                              style={
-                                browserRepo?.badgeColor
-                                  ? { backgroundColor: browserRepo.badgeColor }
-                                  : undefined
-                              }
-                            />
+                            <RepoBadgeMark color={browserRepo?.badgeColor} />
                             <span className="truncate">
                               <HighlightedText
                                 text={browserRepoName}
@@ -1059,43 +1844,57 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                 </CommandItem>
               )
             })}
-            {showCreateAction && (
-              // Why: render the create action last so cmdk does not briefly
-              // auto-select it before our effect promotes the first real match
-              // when the query only matches browser pages.
-              <CommandItem
-                value="__create_worktree__"
-                onSelect={handleCreateWorktree}
-                className="group mx-0.5 mt-1 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-1.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-neutral-100 data-[selected=true]:text-foreground dark:data-[selected=true]:bg-neutral-800"
-              >
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
-                  <Plus size={13} aria-hidden="true" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                    {`Create worktree "${createWorktreeName}"`}
-                  </div>
-                </div>
-              </CommandItem>
-            )}
           </>
         )}
       </CommandList>
       <div className="flex items-center justify-end border-t border-border/60 px-3.5 py-2.5 text-[11px] text-muted-foreground/82">
         <div className="flex items-center gap-2">
-          <FooterKey>Enter</FooterKey>
-          <span>Open</span>
-          <FooterKey>Esc</FooterKey>
-          <span>Close</span>
+          <FooterKey>
+            {translate('auto.components.WorktreeJumpPalette.f65d992a11', 'Enter')}
+          </FooterKey>
+          <span>{translate('auto.components.WorktreeJumpPalette.45def60329', 'Open')}</span>
+          <FooterKey>
+            {translate('auto.components.WorktreeJumpPalette.66b5a67bee', 'Esc')}
+          </FooterKey>
+          <span>{translate('auto.components.WorktreeJumpPalette.75499e01d9', 'Close')}</span>
           <FooterKey>↑↓</FooterKey>
-          <span>Move</span>
+          <span>{translate('auto.components.WorktreeJumpPalette.ac037cfac2', 'Move')}</span>
         </div>
       </div>
       <div aria-live="polite" className="sr-only">
         {deferredQuery.trim()
-          ? `${resultCount} results found${showCreateAction ? ', create new worktree action available' : ''}`
-          : `${resultCount} items available${showCreateAction ? ', create new worktree action available' : ''}`}
+          ? translate(
+              'auto.components.WorktreeJumpPalette.bb72c08e63',
+              '{{value0}} results found{{value1}}',
+              {
+                value0: resultCount,
+                value1: showCreateAction ? ', create worktree action available' : ''
+              }
+            )
+          : translate(
+              'auto.components.WorktreeJumpPalette.20af998bff',
+              '{{value0}} items available{{value1}}',
+              {
+                value0: resultCount,
+                value1: showCreateAction ? ', create worktree action available' : ''
+              }
+            )}
       </div>
     </CommandDialog>
   )
+}
+
+function getPaletteSupportingTextLabel(
+  labelKind: NonNullable<PaletteSearchResult['supportingText']>['labelKind']
+): string {
+  switch (labelKind) {
+    case 'comment':
+      return translate('worktreeJumpPalette.matchLabel.comment', 'Comment')
+    case 'issue':
+      return translate('worktreeJumpPalette.matchLabel.issue', 'Issue')
+    case 'port':
+      return translate('worktreeJumpPalette.matchLabel.port', 'Port')
+    case 'pr':
+      return translate('worktreeJumpPalette.matchLabel.pr', 'PR')
+  }
 }

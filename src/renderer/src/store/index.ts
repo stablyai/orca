@@ -7,13 +7,19 @@ import { createTerminalSlice } from './slices/terminals'
 import { createTabsSlice } from './slices/tabs'
 import { createUISlice } from './slices/ui'
 import { createSettingsSlice } from './slices/settings'
+import { createKeybindingsSlice } from './slices/keybindings'
 import { createGitHubSlice } from './slices/github'
+import { createHostedReviewSlice } from './slices/hosted-review'
 import { createLinearSlice } from './slices/linear'
+import { createPreflightSlice } from './slices/preflight'
+import { createJiraSlice } from './slices/jira'
 import { createEditorSlice } from './slices/editor'
 import { createStatsSlice } from './slices/stats'
 import { createMemorySlice } from './slices/memory'
+import { createWorkspaceSpaceSlice } from './slices/workspace-space'
 import { createClaudeUsageSlice } from './slices/claude-usage'
 import { createCodexUsageSlice } from './slices/codex-usage'
+import { createOpenCodeUsageSlice } from './slices/opencode-usage'
 import { createBrowserSlice } from './slices/browser'
 import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
@@ -21,6 +27,12 @@ import { createAgentStatusSlice } from './slices/agent-status'
 import { createDiffCommentsSlice } from './slices/diffComments'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
+import { createDictationSlice } from './slices/dictation'
+import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup'
+import { createRuntimeStatusSlice } from './slices/runtime-status'
+import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
+import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
+import { createPinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
 import { e2eConfig } from '@/lib/e2e-config'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
@@ -32,20 +44,32 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createTabsSlice(...a),
   ...createUISlice(...a),
   ...createSettingsSlice(...a),
+  ...createKeybindingsSlice(...a),
   ...createGitHubSlice(...a),
+  ...createHostedReviewSlice(...a),
   ...createLinearSlice(...a),
+  ...createPreflightSlice(...a),
+  ...createJiraSlice(...a),
   ...createEditorSlice(...a),
   ...createStatsSlice(...a),
   ...createMemorySlice(...a),
+  ...createWorkspaceSpaceSlice(...a),
   ...createClaudeUsageSlice(...a),
   ...createCodexUsageSlice(...a),
+  ...createOpenCodeUsageSlice(...a),
   ...createBrowserSlice(...a),
   ...createRateLimitSlice(...a),
   ...createSshSlice(...a),
   ...createAgentStatusSlice(...a),
   ...createDiffCommentsSlice(...a),
   ...createDetectedAgentsSlice(...a),
-  ...createWorktreeNavHistorySlice(...a)
+  ...createWorktreeNavHistorySlice(...a),
+  ...createDictationSlice(...a),
+  ...createWorkspaceCleanupSlice(...a),
+  ...createRuntimeStatusSlice(...a),
+  ...createPullRequestGenerationSlice(...a),
+  ...createCommitMessageGenerationSlice(...a),
+  ...createPinnedTabCloseConfirmSlice(...a)
 }))
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())

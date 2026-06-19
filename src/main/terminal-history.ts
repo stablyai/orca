@@ -19,6 +19,9 @@ const HISTORY_DIR_NAME_WSL = 'terminal-history-wsl'
 
 type ShellKind = 'zsh' | 'bash' | 'fish' | 'pwsh' | 'powershell' | 'cmd' | 'unknown'
 
+let scheduledHistoryGcTimer: ReturnType<typeof setTimeout> | null = null
+let historyGcRunning = false
+
 // ─── Shell Detection ───────────────────────────────────────────────
 
 /** Resolve the shell kind from a shell binary path.
@@ -62,7 +65,11 @@ function historyFilename(shell: ShellKind): string | null {
     case 'bash':
       return 'bash_history'
     // Phase 2: fish and PowerShell use different mechanisms
-    default:
+    case 'fish':
+    case 'pwsh':
+    case 'powershell':
+    case 'cmd':
+    case 'unknown':
       return null
   }
 }
@@ -125,7 +132,8 @@ export function injectHistoryEnv(
   spawnEnv: Record<string, string>,
   worktreeId: string,
   shellPath: string,
-  cwd: string
+  cwd: string,
+  options: { wslDistro?: string | null } = {}
 ): HistoryInjectionResult {
   const shell = resolveShellKind(shellPath)
   const result: HistoryInjectionResult = { shell, histFile: null }
@@ -147,7 +155,8 @@ export function injectHistoryEnv(
   // WSL: store under a separate root keyed by distro, and convert the
   // HISTFILE path to a Linux-visible /mnt/... path for the inner shell.
   const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
-  const histDir = ensureHistoryDir(worktreeHash, wslInfo?.distro)
+  const wslDistro = wslInfo?.distro ?? options.wslDistro?.trim()
+  const histDir = ensureHistoryDir(worktreeHash, wslDistro)
   if (!histDir) {
     // Directory creation failed — degrade gracefully to shared history.
     return result
@@ -158,7 +167,7 @@ export function injectHistoryEnv(
   const histFilePath = join(histDir, filename)
 
   // For WSL, convert the Windows path to a Linux-visible path.
-  spawnEnv.HISTFILE = wslInfo ? toLinuxPath(histFilePath) : histFilePath
+  spawnEnv.HISTFILE = wslDistro ? toLinuxPath(histFilePath) : histFilePath
 
   result.histFile = spawnEnv.HISTFILE
   return result
@@ -349,9 +358,16 @@ export function runHistoryGc(liveWorktreeIds: Set<string>): void {
 /** Schedule GC after a delay so it runs after workspace hydration completes.
  *  `getLiveWorktreeIds` should use already-known IDs, not probe repo paths. */
 export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>): void {
+  // Why: main-window services can reattach during reload/reactivation; one
+  // pending/running disk GC is enough and avoids duplicate startup I/O.
+  if (scheduledHistoryGcTimer !== null || historyGcRunning) {
+    return
+  }
   // Why 10s: avoids competing with startup-critical I/O while still running
   // early enough to clean up before the user notices disk usage (§7.6).
-  setTimeout(async () => {
+  scheduledHistoryGcTimer = setTimeout(async () => {
+    scheduledHistoryGcTimer = null
+    historyGcRunning = true
     try {
       const liveIds = await getLiveWorktreeIds()
       runHistoryGc(liveIds)
@@ -359,6 +375,8 @@ export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>
       console.warn(
         `[pty:history:gc] Failed to enumerate live worktrees for GC: ${err instanceof Error ? err.message : String(err)}`
       )
+    } finally {
+      historyGcRunning = false
     }
   }, 10_000)
 }

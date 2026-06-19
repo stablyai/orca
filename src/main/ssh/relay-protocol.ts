@@ -22,12 +22,8 @@ export const MessageType = {
 export const KEEPALIVE_SEND_MS = 5_000
 export const TIMEOUT_MS = 20_000
 
-/** PTY flow control watermarks (VS Code FlowControlConstants). */
-export const PTY_FLOW_HIGH_WATERMARK = 100_000
-export const PTY_FLOW_LOW_WATERMARK = 5_000
-
 /** Reconnection grace period (default, overridable by relay --grace-time). */
-export const DEFAULT_GRACE_TIME_MS = 5 * 60 * 1000 // 5 minutes
+export const DEFAULT_GRACE_TIME_MS = 3 * 60 * 60 * 1000 // 3 hours
 
 // ── Relay error codes ───────────────────────────────────────────────
 
@@ -36,8 +32,26 @@ export const RelayErrorCode = {
   PermissionDenied: -33002,
   PathNotFound: -33003,
   PtyAllocationFailed: -33004,
-  DiskFull: -33005
+  DiskFull: -33005,
+  TooManyStreams: -33006,
+  StreamProtocolError: -33007
 } as const
+
+export const JsonRpcErrorCode = {
+  MethodNotFound: -32601
+} as const
+
+// ── Streaming constants (see docs/relay-file-stream-design.md) ─────
+
+/** Per-chunk payload size for fs.readFileStream. Mirrors VS Code's
+ * `bufferSize: 256 * 1024` (vs/platform/files/node/diskFileSystemProvider.ts).
+ * 256KB raw → ~340KB base64, well under MAX_MESSAGE_SIZE. */
+export const STREAM_CHUNK_SIZE = 256 * 1024
+
+/** Cap on concurrent in-flight streams per relay; mirrors fs.watch's
+ * 20-watcher cap idiom. Prevents file-descriptor exhaustion from a buggy
+ * client. */
+export const MAX_CONCURRENT_STREAMS = 16
 
 // ── JSON-RPC types ──────────────────────────────────────────────────
 
@@ -178,7 +192,13 @@ export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
 
 // ── Supported platforms ─────────────────────────────────────────────
 
-export type RelayPlatform = 'linux-x64' | 'linux-arm64' | 'darwin-x64' | 'darwin-arm64'
+export type RelayPlatform =
+  | 'linux-x64'
+  | 'linux-arm64'
+  | 'darwin-x64'
+  | 'darwin-arm64'
+  | 'win32-x64'
+  | 'win32-arm64'
 
 export function parseUnameToRelayPlatform(os: string, arch: string): RelayPlatform | null {
   const normalizedOs = os.toLowerCase().trim()
@@ -189,10 +209,17 @@ export function parseUnameToRelayPlatform(os: string, arch: string): RelayPlatfo
     relayOs = 'linux'
   } else if (normalizedOs === 'darwin') {
     relayOs = 'darwin'
+  } else if (
+    normalizedOs === 'windows' ||
+    normalizedOs === 'win32' ||
+    normalizedOs.startsWith('mingw') ||
+    normalizedOs.startsWith('msys')
+  ) {
+    relayOs = 'win32'
   }
 
   let relayArch: string | null = null
-  if (normalizedArch === 'x86_64' || normalizedArch === 'amd64') {
+  if (normalizedArch === 'x86_64' || normalizedArch === 'amd64' || normalizedArch === 'x64') {
     relayArch = 'x64'
   } else if (normalizedArch === 'aarch64' || normalizedArch === 'arm64') {
     relayArch = 'arm64'

@@ -1,124 +1,181 @@
 import React from 'react'
-import { Github, List, Search } from 'lucide-react'
+import { Bell, CalendarClock, Search, Smartphone } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useRepoMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
-import { LinearIcon } from '@/components/icons/LinearIcon'
+import type { GlobalSettings } from '../../../../shared/types'
+import { useActivityUnreadCount } from '@/components/activity/useActivityUnreadCount'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useMobileSidebarOnboardingBadge } from './mobile-sidebar-onboarding-badge'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
+import { SidebarTaskNavButton } from './SidebarTaskNavButton'
+import { HideSidebarMenu } from './sidebar-nav-controls'
+import { translate } from '@/i18n/i18n'
 
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+export { getSetupGuideSidebarEntryReady, shouldShowSetupGuideEntry } from './SetupGuideSidebarEntry'
+
+export function shouldShowAgentsButton(
+  settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined
+): boolean {
+  return settings?.experimentalActivity === true
+}
+
+export function shouldShowMobileButton(
+  settings: Pick<GlobalSettings, 'showMobileButton'> | null | undefined
+): boolean {
+  return settings?.showMobileButton !== false
+}
+
+export function shouldShowAutomationsButton(
+  settings: Pick<GlobalSettings, 'showAutomationsButton'> | null | undefined
+): boolean {
+  return settings?.showAutomationsButton !== false
+}
 
 const SidebarNav = React.memo(function SidebarNav() {
-  const openTaskPage = useAppStore((s) => s.openTaskPage)
+  const worktreePaletteShortcut = useShortcutLabel('worktree.palette')
+  const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
+  const openActivityPage = useAppStore((s) => s.openActivityPage)
+  const openMobilePage = useAppStore((s) => s.openMobilePage)
   const openModal = useAppStore((s) => s.openModal)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const activeView = useAppStore((s) => s.activeView)
-  const repos = useAppStore((s) => s.repos)
-  const repoMap = useRepoMap()
-  const canBrowseTasks = repos.some((repo) => isGitRepoKind(repo))
-  // Why: the setting is opt-out (default true). `!== false` keeps the button
-  // visible for users whose persisted settings predate this field.
-  const showTasksButton = useAppStore((s) => s.settings?.showTasksButton !== false)
+  const showAgentsButton = useAppStore((s) => shouldShowAgentsButton(s.settings))
+  const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
+  const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
 
-  // Why: warm the GitHub work-item cache on hover/focus so by the time the
-  // user's click finishes the round-trip has either completed or is already
-  // in-flight. Shaves ~200–600ms off perceived page-load latency.
-  const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
-  const activeRepoId = useAppStore((s) => s.activeRepoId)
-  const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
-  const handlePrefetch = React.useCallback(() => {
-    if (!canBrowseTasks) {
-      return
-    }
-    const activeRepo = activeRepoId ? (repoMap.get(activeRepoId) ?? null) : null
-    const activeGitRepo = activeRepo && isGitRepoKind(activeRepo) ? activeRepo : null
-    const firstGitRepo = activeGitRepo ?? repos.find((r) => isGitRepoKind(r))
-    if (firstGitRepo?.path) {
-      // Why: warm the exact cache key the page will read on mount — must
-      // match TaskPage's `initialTaskQuery` derived from the same default
-      // preset, otherwise the prefetch lands in a key the page never reads
-      // and we pay the full round-trip after click.
-      prefetchWorkItems(
-        firstGitRepo.id,
-        firstGitRepo.path,
-        PER_REPO_FETCH_LIMIT,
-        getTaskPresetQuery(defaultTaskViewPreset)
-      )
-    }
-  }, [activeRepoId, canBrowseTasks, defaultTaskViewPreset, prefetchWorkItems, repoMap, repos])
-
-  const tasksActive = activeView === 'tasks'
+  const automationsActive = activeView === 'automations'
+  const activityActive = activeView === 'activity'
+  const mobileActive = activeView === 'mobile'
+  const activityUnreadCount = useActivityUnreadCount(showAgentsButton, 'sidebar-badge')
+  const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
+  const hideAutomationsButton = React.useCallback(() => {
+    void updateSettings({ showAutomationsButton: false })
+  }, [updateSettings])
+  const hideMobileButton = React.useCallback(() => {
+    void updateSettings({ showMobileButton: false })
+  }, [updateSettings])
 
   return (
-    <div className="flex flex-col gap-0.5 px-2 pt-2 pb-1">
-      {showTasksButton ? (
+    <div
+      className="flex flex-col gap-0.5 px-2 pt-2 pb-1"
+      data-contextual-tour-target="sidebar-navigation"
+    >
+      <SetupGuideSidebarEntry />
+      <SidebarTaskNavButton />
+      {showAutomationsButton ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={openAutomationsPage}
+              aria-current={automationsActive ? 'page' : undefined}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+                automationsActive
+                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                  : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+              )}
+            >
+              <CalendarClock
+                className={cn(
+                  'size-4 shrink-0',
+                  !automationsActive && 'text-worktree-sidebar-foreground/30'
+                )}
+                strokeWidth={automationsActive ? 2.25 : 1.75}
+              />
+              <span className="flex-1">
+                {translate('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')}
+              </span>
+            </button>
+          </ContextMenuTrigger>
+          <HideSidebarMenu onHide={hideAutomationsButton} />
+        </ContextMenu>
+      ) : null}
+      {showAgentsButton ? (
         <button
           type="button"
-          onClick={() => {
-            if (!canBrowseTasks) {
-              return
-            }
-            openTaskPage()
-          }}
-          onPointerEnter={handlePrefetch}
-          onFocus={handlePrefetch}
-          disabled={!canBrowseTasks}
-          aria-current={tasksActive ? 'page' : undefined}
+          onClick={openActivityPage}
+          aria-current={activityActive ? 'page' : undefined}
           className={cn(
             'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-            tasksActive
-              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8',
-            !canBrowseTasks && 'cursor-not-allowed opacity-50 hover:bg-transparent'
+            activityActive
+              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+              : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
           )}
         >
-          <List
-            className={cn('size-4 shrink-0', !tasksActive && 'text-sidebar-foreground/30')}
-            strokeWidth={tasksActive ? 2.25 : 1.75}
+          <Bell
+            className={cn(
+              'size-4 shrink-0',
+              !activityActive && 'text-worktree-sidebar-foreground/30'
+            )}
+            strokeWidth={activityActive ? 2.25 : 1.75}
           />
-          <span className="flex-1">Tasks</span>
-          <span className="flex items-center gap-1">
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!canBrowseTasks) {
-                  return
-                }
-                openTaskPage({ taskSource: 'github' })
-              }}
-              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-            >
-              <Github className="size-3.5" aria-hidden />
-            </span>
-            <span
-              role="button"
-              tabIndex={-1}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!canBrowseTasks) {
-                  return
-                }
-                openTaskPage({ taskSource: 'linear' })
-              }}
-              className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-            >
-              <LinearIcon className="size-3.5" />
-            </span>
+          <span className="flex-1">
+            {translate('auto.components.sidebar.SidebarNav.9c95e1ce91', 'Agents')}
           </span>
+          {activityUnreadCount > 0 ? (
+            <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
+              {activityUnreadCount}
+            </span>
+          ) : null}
         </button>
+      ) : null}
+      {showMobileButton ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={() => {
+                mobileOnboardingBadge.dismiss()
+                openMobilePage()
+              }}
+              aria-current={mobileActive ? 'page' : undefined}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+                mobileActive
+                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                  : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
+              )}
+            >
+              <Smartphone
+                className={cn(
+                  'size-4 shrink-0',
+                  !mobileActive && 'text-worktree-sidebar-foreground/30'
+                )}
+                strokeWidth={mobileActive ? 2.25 : 1.75}
+              />
+              <span className="flex-1">
+                {translate('auto.components.sidebar.SidebarNav.1b5c41caee', 'Orca Mobile')}
+              </span>
+              {mobileOnboardingBadge.visible ? (
+                <span className="rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
+                  {translate('auto.components.sidebar.SidebarNav.c86d83b5c3', 'New')}
+                </span>
+              ) : null}
+            </button>
+          </ContextMenuTrigger>
+          <HideSidebarMenu onHide={hideMobileButton} />
+        </ContextMenu>
       ) : null}
       <button
         type="button"
         onClick={() => openModal('worktree-palette')}
-        aria-label="Search worktrees and browser tabs"
-        className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-sidebar-foreground/60 transition-colors hover:bg-sidebar-foreground/8"
+        aria-label={translate(
+          'auto.components.sidebar.SidebarNav.0c3395fd32',
+          'Search worktrees and browser tabs'
+        )}
+        className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-worktree-sidebar-foreground/60 transition-colors hover:bg-worktree-sidebar-foreground/8"
       >
-        <Search className="size-4 shrink-0 text-sidebar-foreground/30" strokeWidth={1.75} />
-        <span className="flex-1">Search</span>
+        <Search
+          className="size-4 shrink-0 text-worktree-sidebar-foreground/30"
+          strokeWidth={1.75}
+        />
+        <span className="flex-1">
+          {translate('auto.components.sidebar.SidebarNav.80611a8b10', 'Search')}
+        </span>
         <kbd className="hidden rounded border border-border/60 bg-background/40 px-1.5 py-px font-mono text-[10px] font-medium text-muted-foreground group-hover:inline-flex items-center">
-          {isMac ? '⌘J' : 'Ctrl+Shift+J'}
+          {worktreePaletteShortcut}
         </kbd>
       </button>
     </div>

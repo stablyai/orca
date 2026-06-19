@@ -1,0 +1,20 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "jsPlugins": [{ "name": "react-doctor", "specifier": "oxlint-plugin-react-doctor" }],
+  "rules": {
+    "react-doctor/no-adjust-state-on-prop-change": "warn",
+    "react-doctor/no-derived-state-effect": "warn",
+    "react-doctor/no-initialize-state": "warn"
+  },
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
+}

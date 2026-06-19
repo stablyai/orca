@@ -18,6 +18,7 @@ export {
   normalizeTerminalTitle,
   isGeminiTerminalTitle,
   isClaudeAgent,
+  isClaudeManagementTitle,
   getAgentLabel
 } from '../../../shared/agent-detection'
 import {
@@ -111,12 +112,23 @@ export function getWorkingAgentsPerWorktree({
 
 const WELL_KNOWN_LABELS: Record<string, string> = {
   claude: 'Claude',
+  openclaude: 'OpenClaude',
   codex: 'Codex',
   gemini: 'Gemini',
+  antigravity: 'Antigravity',
+  amp: 'Amp',
+  copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
   cursor: 'Cursor',
   aider: 'Aider',
-  pi: 'Pi'
+  pi: 'Pi',
+  omp: 'OMP',
+  droid: 'Droid',
+  'command-code': 'Command Code',
+  grok: 'Grok',
+  hermes: 'Hermes',
+  devin: 'Devin',
+  ante: 'Ante'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
@@ -142,11 +154,15 @@ export function formatAgentTypeLabel(agentType: AgentType | null | undefined): s
 // would silently accept a subset of the union.
 const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   claude: true,
+  'claude-agent-teams': true,
+  openclaude: true,
   codex: true,
   autohand: true,
   opencode: true,
   pi: true,
+  omp: true,
   gemini: true,
+  antigravity: true,
   aider: true,
   goose: true,
   amp: true,
@@ -156,6 +172,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   aug: true,
   cline: true,
   codebuff: true,
+  'command-code': true,
   continue: true,
   cursor: true,
   droid: true,
@@ -164,7 +181,11 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   'qwen-code': true,
   rovo: true,
   hermes: true,
-  copilot: true
+  openclaw: true,
+  copilot: true,
+  grok: true,
+  devin: true,
+  ante: true
 }
 
 export function agentTypeToIconAgent(agentType: AgentType | null | undefined): TuiAgent | null {

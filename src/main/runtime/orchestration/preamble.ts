@@ -1,11 +1,10 @@
 export type PreambleParams = {
   taskId: string
-  // Why: the heartbeat payload attributes liveness to a specific dispatch
-  // context (not just a task). A retried task has multiple dispatch_contexts
-  // rows; keying heartbeats on dispatchId prevents a straggler heartbeat from
-  // a previously-failed dispatch from masking a hung retry. Both call sites
-  // already have this value in scope (coordinator.ts dispatch.id, rpc
-  // orchestration.ts ctx.id).
+  // Why: completion and heartbeat payloads attribute activity to a specific
+  // dispatch context (not just a task). A retried task has multiple
+  // dispatch_contexts rows; keying worker_done/heartbeat on dispatchId
+  // prevents stale messages from a previously-failed dispatch from completing
+  // or refreshing the retry.
   dispatchId: string
   taskSpec: string
   coordinatorHandle: string
@@ -60,10 +59,14 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   #
   # RULE: send worker_done exactly once. Failure is still a worker_done
   # with subject like "Failed: <reason>" — never silently exit.
+  # Include BOTH taskId and dispatchId in the payload so a late completion
+  # from a failed retry cannot complete the current dispatch.
   ${cli} orchestration send --to ${params.coordinatorHandle} \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
-    --payload '{"taskId":"${params.taskId}","filesModified":["path/a","path/b"],"reportPath":"<optional: path to the full artifact>"}'
+    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} \\
+    --files-modified "path/a,path/b" \\
+    --report-path "<optional: path to the full artifact>"
 
   # BEHAVIOR RULE: send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
   # while actively working on the task. The coordinator uses this to
@@ -77,7 +80,8 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # cannot mask a hung retry.
   ${cli} orchestration send --to ${params.coordinatorHandle} \\
     --type heartbeat --subject "alive" \\
-    --payload '{"taskId":"${params.taskId}","dispatchId":"${params.dispatchId}","phase":"<short: investigating|implementing|reviewing|waiting>"}'
+    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} \\
+    --phase "<short: investigating|implementing|reviewing|waiting>"
 
   # Ask the coordinator a question and block until it answers.
   #
@@ -101,7 +105,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   ${cli} orchestration send --to ${params.coordinatorHandle} \\
     --type escalation --subject "Blocked: <reason>" \\
     --body "<details>" \\
-    --payload '{"taskId":"${params.taskId}"}'
+    --task-id ${params.taskId}
 
   # Check for messages from the coordinator:
   ${cli} orchestration check

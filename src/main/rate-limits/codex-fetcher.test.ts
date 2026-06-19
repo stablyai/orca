@@ -1,13 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
+const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
+  readFileMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
   ptySpawnMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -18,10 +25,31 @@ vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
 
+// Default to signed-in so the spawn paths under test still run; the auth gate
+// itself is covered by codex-auth-presence.test.ts and the no-auth case below.
+vi.mock('./codex-auth-presence', () => ({
+  codexAuthExists: vi.fn(() => true)
+}))
+
 import { fetchCodexRateLimits } from './codex-fetcher'
+import { codexAuthExists } from './codex-auth-presence'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
+}
+
+function makeRpcChild() {
+  const child = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter
+    stderr: EventEmitter
+    stdin: { write: ReturnType<typeof vi.fn> }
+    kill: ReturnType<typeof vi.fn>
+  }
+  child.stdout = new EventEmitter()
+  child.stderr = new EventEmitter()
+  child.stdin = { write: vi.fn() }
+  child.kill = vi.fn()
+  return child
 }
 
 describe('fetchCodexRateLimits', () => {
@@ -29,11 +57,34 @@ describe('fetchCodexRateLimits', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
+    vi.mocked(codexAuthExists).mockReturnValue(true)
+    readFileMock.mockRejectedValue(new Error('no auth fixture'))
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('does not spawn Codex when the user is not signed in', async () => {
+    vi.mocked(codexAuthExists).mockReturnValue(false)
+
+    await expect(fetchCodexRateLimits()).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'unavailable',
+      error: 'Codex not signed in'
+    })
+
+    expect(childSpawnMock).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
   it('disposes node-pty listeners before killing the PTY fallback on timeout', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
+    const killMock = vi.fn()
 
     childSpawnMock.mockImplementation(() => {
       throw new Error('rpc unavailable')
@@ -42,19 +93,377 @@ describe('fetchCodexRateLimits', () => {
       onData: vi.fn(() => onDataDisposable),
       onExit: vi.fn(() => onExitDisposable),
       write: vi.fn(),
-      kill: vi.fn()
+      kill: killMock
     })
 
     const resultPromise = fetchCodexRateLimits()
     await vi.advanceTimersByTimeAsync(15_000)
     await resultPromise
 
-    const term = ptySpawnMock.mock.results[0]?.value as { kill: ReturnType<typeof vi.fn> }
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      term.kill.mock.invocationCallOrder[0]
+      killMock.mock.invocationCallOrder[0]
     )
     expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      term.kill.mock.invocationCallOrder[0]
+      killMock.mock.invocationCallOrder[0]
     )
+  })
+
+  it('falls back to the PTY status reader when RPC exits before returning usage', async () => {
+    const rpcChild = makeRpcChild()
+    const ptyHandlers: { onData?: (data: string) => void } = {}
+
+    childSpawnMock.mockReturnValue(rpcChild)
+    ptySpawnMock.mockReturnValue({
+      onData: vi.fn((callback) => {
+        ptyHandlers.onData = callback
+        return makeDisposable()
+      }),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      kill: vi.fn()
+    })
+
+    const resultPromise = fetchCodexRateLimits()
+    rpcChild.emit('close')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(ptySpawnMock).toHaveBeenCalled()
+    const onPtyData = ptyHandlers.onData
+    if (!onPtyData) {
+      throw new Error('PTY data handler was not registered')
+    }
+    onPtyData('>')
+    onPtyData('5h limit: 7%\nWeekly limit: 12%\n')
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: { usedPercent: 7 },
+      weekly: { usedPercent: 12 },
+      status: 'ok',
+      error: null
+    })
+  })
+
+  it('does not start the PTY fallback when disabled for background account previews', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    rpcChild.emit('close')
+    await vi.advanceTimersByTimeAsync(0)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'error'
+    })
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('removes RPC listeners when the app-server timeout settles', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'error',
+      error: 'RPC timeout'
+    })
+    expect(rpcChild.kill).toHaveBeenCalledTimes(1)
+    expect(rpcChild.stdout.listenerCount('data')).toBe(0)
+    expect(rpcChild.stderr.listenerCount('data')).toBe(0)
+    expect(rpcChild.listenerCount('error')).toBe(0)
+    expect(rpcChild.listenerCount('close')).toBe(0)
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('normalizes Codex RPC remaining-minute windows to fixed display durations', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: {
+                  rateLimits: {
+                    primary: { usedPercent: 0, windowDurationMins: 299 },
+                    secondary: { usedPercent: 0, windowDurationMins: 10079 }
+                  }
+                }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await resultPromise
+
+    expect(result.session?.windowMinutes).toBe(300)
+    expect(result.weekly?.windowMinutes).toBe(10080)
+  })
+
+  it('fills reset-credit count from the backend when the installed app-server omits it', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: {
+          access_token: 'access-token',
+          account_id: 'account-id'
+        }
+      })
+    )
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ rate_limit_reset_credits: { available_count: 2 } })
+    } as Response)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: {
+                  rateLimits: {
+                    primary: { usedPercent: 3 },
+                    secondary: { usedPercent: 4 }
+                  }
+                }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    const resultPromise = fetchCodexRateLimits({ codexHomePath: '/managed/codex-home' })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await resultPromise
+
+    expect(result.rateLimitResetCredits).toEqual({ availableCount: 2 })
+    expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'), 'utf8')
+    expect(fetch).toHaveBeenCalledWith(
+      'https://chatgpt.com/backend-api/wham/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer access-token',
+          'ChatGPT-Account-Id': 'account-id'
+        })
+      })
+    )
+  })
+
+  it('uses reset-credit count from newer app-server responses without backend fallback', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: {
+                  rateLimits: { primary: { usedPercent: 5 } },
+                  rateLimitResetCredits: { availableCount: 1 }
+                }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await resultPromise
+
+    expect(result.rateLimitResetCredits).toEqual({ availableCount: 1 })
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('runs rate-limit RPC through WSL when the Codex home is a WSL managed account', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: { rateLimits: { primary: { usedPercent: 11 } } }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    try {
+      const resultPromise = fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
+      })
+      await vi.advanceTimersByTimeAsync(1)
+      await vi.advanceTimersByTimeAsync(1)
+      await resultPromise
+
+      expect(childSpawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        [
+          '-d',
+          'Ubuntu',
+          '--',
+          'bash',
+          '-lc',
+          "export CODEX_HOME='/home/alice/.local/share/orca/account/home'; exec codex '-s' 'read-only' '-a' 'untrusted' 'app-server'"
+        ],
+        expect.objectContaining({
+          env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
+        })
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('runs rate-limit PTY fallback through WSL when RPC cannot read usage', async () => {
+    const originalPlatform = process.platform
+    const originalCodexHome = process.env.CODEX_HOME
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    process.env.CODEX_HOME = 'C:\\Users\\alice\\.codex'
+
+    const rpcChild = makeRpcChild()
+    const ptyHandlers: { onData?: (data: string) => void } = {}
+    childSpawnMock.mockReturnValue(rpcChild)
+    ptySpawnMock.mockReturnValue({
+      onData: vi.fn((callback) => {
+        ptyHandlers.onData = callback
+        return makeDisposable()
+      }),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      kill: vi.fn()
+    })
+
+    try {
+      const resultPromise = fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
+      })
+      rpcChild.emit('close')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(ptySpawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        [
+          '-d',
+          'Ubuntu',
+          '--',
+          'bash',
+          '-lc',
+          "export CODEX_HOME='/home/alice/.local/share/orca/account/home'; exec codex "
+        ],
+        expect.objectContaining({
+          env: expect.not.objectContaining({ CODEX_HOME: expect.anything() })
+        })
+      )
+
+      const onPtyData = ptyHandlers.onData
+      if (!onPtyData) {
+        throw new Error('PTY data handler was not registered')
+      }
+      onPtyData('>')
+      onPtyData('5h limit: 17%\nWeekly limit: 23%\n')
+      await vi.advanceTimersByTimeAsync(500)
+
+      await expect(resultPromise).resolves.toMatchObject({
+        session: { usedPercent: 17 },
+        weekly: { usedPercent: 23 },
+        status: 'ok'
+      })
+    } finally {
+      if (originalCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = originalCodexHome
+      }
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
   })
 })

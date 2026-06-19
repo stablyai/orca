@@ -1,21 +1,248 @@
 /* eslint-disable max-lines -- Why: these small settings form primitives and controls
 co-locate shared layout and keyboard interaction logic, which keeps the settings
 panel wiring simple even though the file exceeds the default line limit. */
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import type React from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ScrollArea } from '../ui/scroll-area'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
-import { BUILTIN_TERMINAL_THEME_NAMES, normalizeColor } from '@/lib/terminal-theme'
+import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
+import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
+
+type SettingsSwitchProps = {
+  checked: boolean
+  onChange: () => void
+  ariaLabel?: string
+  ariaLabelledBy?: string
+  disabled?: boolean
+}
+
+export function SettingsSwitch({
+  checked,
+  onChange,
+  ariaLabel,
+  ariaLabelledBy,
+  disabled
+}: SettingsSwitchProps): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy}
+      disabled={disabled}
+      onClick={onChange}
+      className={cn(
+        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+        checked ? 'bg-foreground' : 'bg-muted-foreground/30'
+      )}
+    >
+      <span
+        className={cn(
+          'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
+          checked ? 'translate-x-4' : 'translate-x-0.5'
+        )}
+      />
+    </button>
+  )
+}
+
+type SettingsRowProps = {
+  label: React.ReactNode
+  description?: React.ReactNode
+  control: React.ReactNode
+  /** Optional id applied to the label so the control can reference it via aria-labelledby. */
+  labelId?: string
+  /** When true, top-align label/description and control. Useful for tall control columns. */
+  alignTop?: boolean
+}
+
+/** Two-column row grammar: left min-w-0 label+description, right shrink-0 control. */
+export function SettingsRow({
+  label,
+  description,
+  control,
+  labelId,
+  alignTop
+}: SettingsRowProps): React.JSX.Element {
+  return (
+    <div
+      className={cn('flex gap-4 py-2', alignTop ? 'items-start' : 'items-center justify-between')}
+    >
+      <div className="min-w-0 flex-1 space-y-0.5">
+        <Label id={labelId}>{label}</Label>
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      <div className="shrink-0">{control}</div>
+    </div>
+  )
+}
+
+type SettingsSwitchRowProps = {
+  label: React.ReactNode
+  description?: React.ReactNode
+  checked: boolean
+  onChange: () => void
+  ariaLabel?: string
+}
+
+export function SettingsSwitchRow({
+  label,
+  description,
+  checked,
+  onChange,
+  ariaLabel
+}: SettingsSwitchRowProps): React.JSX.Element {
+  return (
+    <SettingsRow
+      label={label}
+      description={description}
+      control={
+        <SettingsSwitch
+          checked={checked}
+          onChange={onChange}
+          ariaLabel={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
+        />
+      }
+    />
+  )
+}
+
+type SegmentedOption<T extends string | number> = {
+  value: T
+  label: React.ReactNode
+  disabled?: boolean
+  ariaLabel?: string
+}
+
+type SettingsSegmentedControlProps<T extends string | number> = {
+  value: T
+  onChange: (value: T) => void
+  options: readonly SegmentedOption<T>[]
+  ariaLabel?: string
+  size?: 'sm' | 'md'
+  equalWidth?: boolean
+}
+
+/** Canonical segmented control for theme/ligatures/cursor/shell/etc. */
+export function SettingsSegmentedControl<T extends string | number>({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+  size = 'md',
+  equalWidth = false
+}: SettingsSegmentedControlProps<T>): React.JSX.Element {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={ariaLabel}
+      className={cn(
+        'inline-flex items-center rounded-md border border-border bg-background/50 p-0.5',
+        equalWidth && 'w-full'
+      )}
+    >
+      {options.map((opt) => {
+        const active = opt.value === value
+        return (
+          <button
+            key={String(opt.value)}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            aria-label={opt.ariaLabel}
+            disabled={opt.disabled}
+            onClick={() => {
+              if (!opt.disabled) {
+                onChange(opt.value)
+              }
+            }}
+            className={cn(
+              'rounded-sm text-center outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              size === 'sm' ? 'px-2.5 py-0.5 text-xs' : 'px-3 py-1 text-sm',
+              equalWidth && 'flex-1',
+              active
+                ? 'bg-accent font-medium text-accent-foreground'
+                : opt.disabled
+                  ? 'cursor-not-allowed text-muted-foreground/50'
+                  : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+type SettingsBadgeProps = {
+  tone?: 'neutral' | 'accent' | 'muted'
+  children: React.ReactNode
+  className?: string
+}
+
+/** Tokenized badge for status pills inside settings (e.g. Detected, Not installed). */
+export function SettingsBadge({
+  tone = 'neutral',
+  children,
+  className
+}: SettingsBadgeProps): React.JSX.Element {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium',
+        tone === 'accent'
+          ? 'border-foreground/20 bg-foreground/10 text-foreground'
+          : tone === 'muted'
+            ? 'border-border/40 bg-muted/30 text-muted-foreground'
+            : 'border-border/50 bg-background/50 text-foreground/80',
+        className
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+type SettingsSubsectionHeaderProps = {
+  title: React.ReactNode
+  description?: React.ReactNode
+  action?: React.ReactNode
+}
+
+/** Consistent subsection header: h3 text-sm font-semibold + optional muted description. */
+export function SettingsSubsectionHeader({
+  title,
+  description,
+  action
+}: SettingsSubsectionHeaderProps): React.JSX.Element {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  )
+}
 
 type ThemePickerProps = {
   label: string
   description: string
   selectedTheme: string
+  themeOptions: TerminalThemeOption[]
   query: string
   onQueryChange: (value: string) => void
   onSelectTheme: (theme: string) => void
+  /** Bumps when themes are imported; scrolls the Imported group into view and
+   *  briefly highlights it so freshly-imported themes are easy to find. */
+  importedHighlightSignal?: number
 }
 
 type ColorFieldProps = {
@@ -43,20 +270,60 @@ type FontAutocompleteProps = {
   suggestions: string[]
   onChange: (value: string) => void
   placeholder?: string
+  /** Fires with whichever option the user is currently highlighting in the
+   *  dropdown (via mouse hover or keyboard arrow), or null when nothing is
+   *  highlighted / the dropdown is closed. Lets a consumer show a live
+   *  preview of the font without committing the selection. */
+  onPreviewFontFamily?: (font: string | null) => void
 }
 
 export function ThemePicker({
   label,
   description,
   selectedTheme,
+  themeOptions,
   query,
   onQueryChange,
-  onSelectTheme
+  onSelectTheme,
+  importedHighlightSignal
 }: ThemePickerProps): React.JSX.Element {
+  const importedGroupRef = useRef<HTMLDivElement | null>(null)
+  const [highlightImported, setHighlightImported] = useState(false)
+
+  // Why: imported themes render below the built-in list inside a fixed-height
+  // scroll area, so after an import they sit off-screen. On each import signal,
+  // scroll the Imported group into view and flash a highlight so it's easy to spot.
+  useEffect(() => {
+    if (!importedHighlightSignal) {
+      return
+    }
+    importedGroupRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    setHighlightImported(true)
+    const timer = setTimeout(() => setHighlightImported(false), 2000)
+    return () => clearTimeout(timer)
+  }, [importedHighlightSignal])
+
   const normalizedQuery = query.trim().toLowerCase()
-  const filteredThemes = BUILTIN_TERMINAL_THEME_NAMES.filter((theme) =>
-    theme.toLowerCase().includes(normalizedQuery)
-  ).slice(0, MAX_THEME_RESULTS)
+  const matchingThemes = themeOptions.filter((theme) =>
+    `${theme.label} ${theme.sourceLabel ?? ''}`.toLowerCase().includes(normalizedQuery)
+  )
+  const selectedThemeLabel =
+    themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
+  const groupedThemes = [
+    {
+      label: translate('auto.components.settings.SettingsFormControls.builtin_themes', 'Built-in'),
+      themes: matchingThemes
+        .filter((theme) => theme.group === 'built-in')
+        .slice(0, MAX_THEME_RESULTS)
+    },
+    {
+      label: translate('auto.components.settings.SettingsFormControls.imported_themes', 'Imported'),
+      themes: matchingThemes
+        .filter((theme) => theme.group === 'imported')
+        .slice(0, MAX_THEME_RESULTS)
+    }
+  ].filter((group) => group.themes.length > 0)
+  const visibleThemeCount = groupedThemes.reduce((sum, group) => sum + group.themes.length, 0)
 
   return (
     <div className="space-y-3">
@@ -67,40 +334,122 @@ export function ThemePicker({
       <Input
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
-        placeholder="Search builtin themes"
+        placeholder={translate(
+          'auto.components.settings.SettingsFormControls.search_terminal_themes',
+          'Search terminal themes'
+        )}
       />
       <div className="rounded-lg border border-border/50">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
-          <span>Selected: {selectedTheme}</span>
           <span>
-            Showing {filteredThemes.length}
+            {translate('auto.components.settings.SettingsFormControls.fbb428db98', 'Selected:')}{' '}
+            {selectedThemeLabel}
+          </span>
+          <span>
+            {translate('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
+            {visibleThemeCount}
             {normalizedQuery
-              ? ` matching "${query.trim()}"`
-              : ` of ${BUILTIN_TERMINAL_THEME_NAMES.length}`}
+              ? translate(
+                  'auto.components.settings.SettingsFormControls.c822571b2e',
+                  ' matching "{{value0}}"',
+                  { value0: query.trim() }
+                )
+              : translate(
+                  'auto.components.settings.SettingsFormControls.cb330ef7f8',
+                  ' of {{value0}}',
+                  { value0: themeOptions.length }
+                )}
           </span>
         </div>
         <ScrollArea className="h-64">
           <div className="space-y-1 p-2">
-            {filteredThemes.map((theme) => (
-              <button
-                key={theme}
-                onClick={() => onSelectTheme(theme)}
-                className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                  selectedTheme === theme
-                    ? 'bg-accent font-medium text-accent-foreground'
-                    : 'hover:bg-muted/60'
-                }`}
-              >
-                <span className="truncate">{theme}</span>
-                {selectedTheme === theme ? (
-                  <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
-                    Current
-                  </span>
-                ) : null}
-              </button>
-            ))}
-            {filteredThemes.length === 0 ? (
-              <div className="px-3 py-6 text-sm text-muted-foreground">No themes found.</div>
+            {groupedThemes.map((group) => {
+              const isImported =
+                group.label ===
+                translate(
+                  'auto.components.settings.SettingsFormControls.imported_themes',
+                  'Imported'
+                )
+              return (
+                <div
+                  key={group.label}
+                  ref={isImported ? importedGroupRef : undefined}
+                  className={cn(
+                    'space-y-1 rounded-md transition-colors duration-500',
+                    isImported && highlightImported && 'bg-accent/40 ring-1 ring-accent'
+                  )}
+                >
+                  <p className="px-3 pt-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                    {group.label}
+                  </p>
+                  {group.themes.map((theme) => (
+                    <button
+                      key={theme.value}
+                      onClick={() => onSelectTheme(theme.value)}
+                      className={cn(
+                        'flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors',
+                        selectedTheme === theme.value
+                          ? 'bg-accent font-medium text-accent-foreground'
+                          : 'hover:bg-accent'
+                      )}
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{theme.label}</span>
+                        {theme.sourceLabel ? (
+                          <span className="block truncate text-[11px] font-normal text-muted-foreground">
+                            {translate(
+                              'auto.components.settings.SettingsFormControls.imported_from',
+                              'Imported from {{value0}}',
+                              { value0: theme.sourceLabel }
+                            )}
+                            {theme.mode && theme.mode !== 'unknown' ? ` · ${theme.mode}` : ''}
+                          </span>
+                        ) : null}
+                      </span>
+                      {/* Why: hide swatches on the current row so the color grid
+                        doesn't shift left to make room for the "Current" label. */}
+                      {theme.group === 'imported' &&
+                      theme.previewTheme &&
+                      selectedTheme !== theme.value ? (
+                        <span className="flex shrink-0 overflow-hidden rounded-sm border border-border/60">
+                          {[
+                            theme.previewTheme.black,
+                            theme.previewTheme.red,
+                            theme.previewTheme.green,
+                            theme.previewTheme.yellow,
+                            theme.previewTheme.blue,
+                            theme.previewTheme.magenta,
+                            theme.previewTheme.cyan,
+                            theme.previewTheme.white
+                          ].map((color, index) => (
+                            <span
+                              key={index}
+                              className="h-3 w-2"
+                              style={{ backgroundColor: color ?? 'transparent' }}
+                            />
+                          ))}
+                        </span>
+                      ) : null}
+                      {selectedTheme === theme.value ? (
+                        <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
+                          {translate(
+                            'auto.components.settings.SettingsFormControls.9119fb2268',
+                            'Current'
+                          )}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              )
+            })}
+            {visibleThemeCount === 0 ? (
+              <div className="px-3 py-6 text-sm text-muted-foreground">
+                {translate(
+                  'auto.components.settings.SettingsFormControls.ceefb9d7f1',
+                  'No themes found.'
+                )}
+              </div>
             ) : null}
           </div>
         </ScrollArea>
@@ -119,26 +468,26 @@ export function ColorField({
   const normalized = normalizeColor(value, fallback)
 
   return (
-    <div className="space-y-2">
-      <div className="space-y-1">
-        <Label>{label}</Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <div className="flex items-center gap-3">
-        <input
-          type="color"
-          value={normalized}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-9 w-12 rounded-md border border-input bg-transparent p-1"
-        />
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={fallback}
-          className="max-w-xs text-xs"
-        />
-      </div>
-    </div>
+    <SettingsRow
+      label={label}
+      description={description}
+      control={
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={normalized}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-8 w-10 rounded-md border border-input bg-transparent p-1"
+          />
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={fallback}
+            className="w-32 text-xs"
+          />
+        </div>
+      }
+    />
   )
 }
 
@@ -181,34 +530,40 @@ export function NumberField({
   }
 
   return (
-    <div className="space-y-2">
-      <div className="space-y-1">
-        <Label>{label}</Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <div className="flex items-center gap-3">
-        <Input
-          type="number"
-          min={min}
-          max={max}
-          step={step}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              commit()
-            }
-          }}
-          className="number-input-clean w-28 tabular-nums"
-        />
-        {suffix ? <span className="text-xs text-muted-foreground">{suffix}</span> : null}
-      </div>
-      <p className="text-[11px] text-muted-foreground">
-        Current: {value}
-        {defaultValue !== undefined ? ` · Default: ${defaultValue}` : ''}
-      </p>
-    </div>
+    <SettingsRow
+      label={label}
+      description={
+        <>
+          {description}
+          {defaultValue !== undefined ? (
+            <span className="ml-1 text-muted-foreground/70">
+              {translate('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
+              {defaultValue}
+            </span>
+          ) : null}
+        </>
+      }
+      control={
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={min}
+            max={max}
+            step={step}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                commit()
+              }
+            }}
+            className="number-input-clean w-24 tabular-nums"
+          />
+          {suffix ? <span className="shrink-0 text-xs text-muted-foreground">{suffix}</span> : null}
+        </div>
+      }
+    />
   )
 }
 
@@ -216,7 +571,8 @@ export function FontAutocomplete({
   value,
   suggestions,
   onChange,
-  placeholder = 'SF Mono'
+  placeholder = 'SF Mono',
+  onPreviewFontFamily
 }: FontAutocompleteProps): React.JSX.Element {
   const [query, setQuery] = useState(value)
   const [prevValue, setPrevValue] = useState(value)
@@ -224,8 +580,19 @@ export function FontAutocomplete({
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const optionRefs = useRef(new Map<string, HTMLButtonElement>())
+  const previewFontFamilyRef = useRef(onPreviewFontFamily)
   const listboxId = useId()
+
+  previewFontFamilyRef.current = onPreviewFontFamily
+
+  const setRootNode = useCallback((element: HTMLDivElement | null): void => {
+    rootRef.current = element
+    if (!element) {
+      // Why: settings search can unmount this control while a hover preview is
+      // active; the consumer must not keep rendering that transient font.
+      previewFontFamilyRef.current?.(null)
+    }
+  }, [])
 
   if (value !== prevValue) {
     setPrevValue(value)
@@ -280,18 +647,19 @@ export function FontAutocomplete({
     }
   }
 
+  // Why: notify the consumer of the currently-highlighted font so it can
+  // render a live preview. Closing the dropdown or moving past all options
+  // clears the preview back to the committed value.
   useEffect(() => {
+    if (!onPreviewFontFamily) {
+      return
+    }
     if (!open || highlightedIndex < 0) {
+      onPreviewFontFamily(null)
       return
     }
-
-    const highlightedFont = filteredSuggestions[highlightedIndex]
-    if (!highlightedFont) {
-      return
-    }
-
-    optionRefs.current.get(highlightedFont)?.scrollIntoView({ block: 'nearest' })
-  }, [filteredSuggestions, highlightedIndex, open])
+    onPreviewFontFamily(filteredSuggestions[highlightedIndex] ?? null)
+  }, [filteredSuggestions, highlightedIndex, onPreviewFontFamily, open])
 
   const commitValue = (nextValue: string): void => {
     setQuery(nextValue)
@@ -304,7 +672,7 @@ export function FontAutocomplete({
   }
 
   return (
-    <div ref={rootRef} className="relative max-w-sm">
+    <div ref={setRootNode} className="relative max-w-sm">
       <div className="relative">
         <Input
           ref={inputRef}
@@ -377,8 +745,11 @@ export function FontAutocomplete({
                 focusInput()
               }}
               className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="Clear font selection"
-              title="Clear"
+              aria-label={translate(
+                'auto.components.settings.SettingsFormControls.a4ff6143f8',
+                'Clear font selection'
+              )}
+              title={translate('auto.components.settings.SettingsFormControls.74bcecd5ec', 'Clear')}
             >
               <CircleX className="size-3.5" />
             </button>
@@ -394,8 +765,11 @@ export function FontAutocomplete({
               }
             }}
             className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Toggle font suggestions"
-            title="Fonts"
+            aria-label={translate(
+              'auto.components.settings.SettingsFormControls.c766f8ac75',
+              'Toggle font suggestions'
+            )}
+            title={translate('auto.components.settings.SettingsFormControls.b55371ea18', 'Fonts')}
           >
             <ChevronsUpDown className="size-3.5" />
           </button>
@@ -415,11 +789,9 @@ export function FontAutocomplete({
                     role="option"
                     aria-selected={index === highlightedIndex}
                     ref={(element) => {
-                      if (element) {
-                        optionRefs.current.set(font, element)
-                        return
+                      if (element && index === highlightedIndex) {
+                        element.scrollIntoView({ block: 'nearest' })
                       }
-                      optionRefs.current.delete(font)
                     }}
                     onMouseDown={(e) => e.preventDefault()}
                     onMouseEnter={() => setHighlightedIndex(index)}
@@ -435,7 +807,12 @@ export function FontAutocomplete({
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-3 text-sm text-muted-foreground">No matching fonts.</div>
+                <div className="px-3 py-3 text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SettingsFormControls.42a4d15a30',
+                    'No matching fonts.'
+                  )}
+                </div>
               )}
             </div>
           </ScrollArea>

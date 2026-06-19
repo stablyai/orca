@@ -2,8 +2,8 @@
   "expo": {
     "name": "Orca",
     "slug": "orca-mobile",
-    "version": "0.0.6",
-    "orientation": "portrait",
+    "version": "0.0.14",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "scheme": "orca",
@@ -14,15 +14,37 @@
       "backgroundColor": "#111111"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.stably.orca.mobile",
       "buildNumber": "1",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your local network.",
+        "NSMicrophoneUsageDescription": "Allow Orca to record voice dictation and transcribe it on your paired desktop.",
+        "NSPhotoLibraryUsageDescription": "Allow Orca to attach photos from your library to a terminal session on your paired desktop.",
         "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true
+          "NSAllowsLocalNetworking": true,
+          "NSExceptionDomains": {
+            "100.64.0.0/10": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            },
+            "fd7a:115c:a1e0::/48": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            }
+          }
         },
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
       },
       "privacyManifests": {
         "NSPrivacyTracking": false,
@@ -51,11 +73,13 @@
       },
       "usesCleartextTraffic": true,
       "allowBackup": false,
+      "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"],
       "package": "com.stably.orca.mobile",
       "versionCode": 1
     },
     "plugins": [
       "expo-router",
+      "./plugins/android-respect-rotation-lock.js",
       [
         "expo-splash-screen",
         {
@@ -67,13 +91,22 @@
         "expo-camera",
         {
           "cameraPermission": "Allow Orca to use the camera for QR code scanning.",
-          "microphonePermission": false,
+          "microphonePermission": "Allow Orca to use your microphone for voice dictation sent to your paired desktop for transcription.",
           "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Orca to attach photos from your library to a terminal session on your paired desktop."
         }
       ],
       [
         "expo-build-properties",
         {
+          "ios": {
+            "buildReactNativeFromSource": true
+          },
           "android": {
             "usesCleartextTraffic": true
           }

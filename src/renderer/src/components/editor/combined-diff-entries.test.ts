@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getCombinedUncommittedEntries } from './combined-diff-entries'
-import type { GitStatusEntry } from '../../../../shared/types'
+import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
+import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
 
 describe('getCombinedUncommittedEntries', () => {
   it('filters unresolved conflicts from live entries', () => {
@@ -42,5 +42,19 @@ describe('getCombinedUncommittedEntries', () => {
       { path: 'src/staged.ts', status: 'modified', area: 'staged' },
       { path: 'src/unstaged.ts', status: 'modified', area: 'unstaged' }
     ])
+  })
+})
+
+describe('getCombinedBranchEntries', () => {
+  it('uses an explicitly empty snapshot instead of falling back to live entries', () => {
+    const liveEntries: GitBranchChangeEntry[] = [{ path: 'src/live.ts', status: 'modified' }]
+
+    expect(getCombinedBranchEntries([], liveEntries)).toEqual([])
+  })
+
+  it('falls back to live entries when no snapshot exists', () => {
+    const liveEntries: GitBranchChangeEntry[] = [{ path: 'src/live.ts', status: 'modified' }]
+
+    expect(getCombinedBranchEntries(undefined, liveEntries)).toEqual(liveEntries)
   })
 })

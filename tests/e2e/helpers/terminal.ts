@@ -1,5 +1,54 @@
+/* eslint-disable max-lines -- Terminal E2E helpers share one PaneManager-backed path for PTY IO, split actions, and stable pane identity snapshots. */
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
+
+export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+
+export type PaneIdentitySnapshot = {
+  tabId: string
+  activeLeafId: string | null
+  panes: {
+    numericPaneId: number
+    leafId: string
+    stablePaneId: string
+    datasetLeafId: string | null
+    ptyId: string | null
+  }[]
+  ptyIdsByLeafId: Record<string, string>
+}
+
+export type ActivePaneHookDescriptor = {
+  paneKey: string
+  worktreeId: string
+}
+
+// Why: typing-latency specs must type into xterm's helper textarea, not the
+// page body — keyboard.type only reaches the PTY when that textarea has focus.
+export async function focusActiveTerminalInput(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const state = window.__store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('No active terminal pane to focus')
+    }
+    pane.terminal.focus()
+    const textarea = pane.container.querySelector(
+      '.xterm-helper-textarea'
+    ) as HTMLTextAreaElement | null
+    if (!textarea) {
+      throw new Error('Active terminal has no xterm helper textarea')
+    }
+    textarea.focus()
+  })
+}
 
 // Why: worktree restoration can render the terminal surface before the legacy
 // global activeTabId settles. Prefer the active worktree's saved terminal tab
@@ -105,6 +154,82 @@ export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Pr
   return ptyId
 }
 
+export async function waitForActivePaneHookDescriptor(
+  page: Page,
+  timeoutMs = 15_000
+): Promise<ActivePaneHookDescriptor> {
+  let descriptor: ActivePaneHookDescriptor | null = null
+  await expect
+    .poll(
+      async () => {
+        const tabId = await resolveActiveTabId(page)
+        if (!tabId) {
+          descriptor = null
+          return false
+        }
+        descriptor = await page.evaluate((tabId) => {
+          const layoutHasLeaf = (node: unknown, targetLeafId: string): boolean => {
+            if (!node || typeof node !== 'object') {
+              return false
+            }
+            const record = node as {
+              type?: unknown
+              leafId?: unknown
+              first?: unknown
+              second?: unknown
+            }
+            if (record.type === 'leaf') {
+              return record.leafId === targetLeafId
+            }
+            return (
+              layoutHasLeaf(record.first, targetLeafId) ||
+              layoutHasLeaf(record.second, targetLeafId)
+            )
+          }
+
+          const store = window.__store
+          const manager = window.__paneManagers?.get(tabId)
+          if (!store || !manager) {
+            return null
+          }
+          const state = store.getState()
+          const worktreeId = state.activeWorktreeId
+          if (
+            !worktreeId ||
+            !(state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
+          ) {
+            return null
+          }
+
+          const activePane = manager.getActivePane?.() ?? manager.getPanes?.()[0]
+          const leafId = activePane?.leafId ?? null
+          const layout = state.terminalLayoutsByTabId[tabId]
+          if (
+            !leafId ||
+            !layoutHasLeaf(layout?.root, leafId) ||
+            layout?.ptyIdsByLeafId?.[leafId] !== activePane?.container?.dataset?.ptyId
+          ) {
+            return null
+          }
+          return { paneKey: `${tabId}:${leafId}`, worktreeId }
+        }, tabId)
+        return descriptor !== null
+      },
+      {
+        timeout: timeoutMs,
+        // Why: hook IPC routing drops statuses for pane keys before the store
+        // layout knows that leaf, even if the terminal DOM already has a PTY.
+        message: 'Active terminal pane did not become routable for hook status IPC'
+      }
+    )
+    .toBe(true)
+
+  if (!descriptor) {
+    throw new Error('Active terminal pane descriptor disappeared after routing wait')
+  }
+  return descriptor
+}
+
 // Why: PTY IDs are opaque integers not exposed in the DOM. Probe each
 // candidate with a unique marker and read back via SerializeAddon.
 export async function discoverActivePtyId(page: Page): Promise<string> {
@@ -141,8 +266,10 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
 
   await page.evaluate(
     ({ marker, candidateIds }) => {
-      for (const id of candidateIds) {
-        window.api.pty.write(String(id), `\x03\x15echo ${marker}_${id}\r`)
+      // Why: daemon PTY IDs can contain path separators and shell metacharacters.
+      // Echo a numeric probe index, then map it back to the opaque ID in Node.
+      for (const [index, id] of candidateIds.entries()) {
+        window.api.pty.write(String(id), `\x03\x15echo ${marker}_${index}\r`)
       }
     },
     { marker, candidateIds }
@@ -156,7 +283,8 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
         const markerRe = new RegExp(`${marker}_(\\d+)`, 'g')
         const matches = [...content.matchAll(markerRe)]
         if (matches.length > 0) {
-          foundPtyId = matches.at(-1)?.[1] ?? null
+          const index = Number(matches.at(-1)?.[1] ?? Number.NaN)
+          foundPtyId = Number.isInteger(index) ? (candidateIds[index] ?? null) : null
           return true
         }
         return false
@@ -170,6 +298,117 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
   }
 
   return foundPtyId
+}
+
+export async function readPaneIdentitySnapshot(page: Page): Promise<PaneIdentitySnapshot | null> {
+  const tabId = await resolveActiveTabId(page)
+  if (!tabId) {
+    return null
+  }
+
+  return page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    const store = window.__store
+    if (!manager || !store) {
+      return null
+    }
+
+    const activePane = manager.getActivePane?.() ?? null
+    return {
+      tabId,
+      activeLeafId: activePane?.leafId ?? null,
+      panes: manager.getPanes().map((pane) => ({
+        numericPaneId: pane.id,
+        leafId: pane.leafId,
+        stablePaneId: pane.stablePaneId,
+        datasetLeafId: pane.container.dataset.leafId ?? null,
+        ptyId: pane.container.dataset.ptyId ?? null
+      })),
+      ptyIdsByLeafId: store.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+    }
+  }, tabId)
+}
+
+export async function waitForPaneIdentitySnapshot(
+  page: Page,
+  paneCount: number
+): Promise<PaneIdentitySnapshot> {
+  await expect
+    .poll(
+      async () => {
+        const snapshot = await readPaneIdentitySnapshot(page)
+        return Boolean(
+          snapshot &&
+          snapshot.panes.length === paneCount &&
+          snapshot.panes.every(
+            (pane) =>
+              UUID_RE.test(pane.leafId) &&
+              pane.stablePaneId === pane.leafId &&
+              pane.datasetLeafId === pane.leafId &&
+              pane.ptyId !== null &&
+              snapshot.ptyIdsByLeafId[pane.leafId] === pane.ptyId
+          )
+        )
+      },
+      {
+        timeout: 15_000,
+        message: 'Split terminal panes did not settle with UUID leaf-keyed PTY bindings'
+      }
+    )
+    .toBe(true)
+
+  const snapshot = await readPaneIdentitySnapshot(page)
+  if (!snapshot) {
+    throw new Error('Pane identity snapshot disappeared after settling')
+  }
+  return snapshot
+}
+
+export async function readTerminalPaneDomLeafOrder(page: Page): Promise<string[]> {
+  const snapshot = await readPaneIdentitySnapshot(page)
+  if (!snapshot) {
+    return []
+  }
+
+  return page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    if (!manager) {
+      return []
+    }
+    const paneElements = new Set(manager.getPanes().map((pane) => pane.container))
+    return Array.from(document.querySelectorAll<HTMLElement>('.pane[data-leaf-id]'))
+      .filter((element) => paneElements.has(element))
+      .map((element) => element.dataset.leafId ?? '')
+      .filter((leafId) => leafId.length > 0)
+  }, snapshot.tabId)
+}
+
+export async function moveTerminalPaneByLeafId(
+  page: Page,
+  sourceLeafId: string,
+  targetLeafId: string,
+  zone: 'top' | 'bottom' | 'left' | 'right'
+): Promise<void> {
+  const snapshot = await readPaneIdentitySnapshot(page)
+  if (!snapshot) {
+    throw new Error('moveTerminalPaneByLeafId: no active terminal tab')
+  }
+
+  await page.evaluate(
+    ({ tabId, sourceLeafId, targetLeafId, zone }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      if (!manager) {
+        throw new Error('moveTerminalPaneByLeafId: active pane manager not ready')
+      }
+      const sourcePaneId = manager.getNumericIdForLeaf(sourceLeafId)
+      const targetPaneId = manager.getNumericIdForLeaf(targetLeafId)
+      if (sourcePaneId == null || targetPaneId == null) {
+        throw new Error('moveTerminalPaneByLeafId: source or target leaf is not mounted')
+      }
+      manager.movePane(sourcePaneId, targetPaneId, zone)
+    },
+    { tabId: snapshot.tabId, sourceLeafId, targetLeafId, zone }
+  )
 }
 
 export async function sendToTerminal(page: Page, ptyId: string, text: string): Promise<void> {
@@ -321,10 +560,11 @@ export async function countVisibleTerminalPanes(page: Page): Promise<number> {
 export async function waitForTerminalOutput(
   page: Page,
   expected: string,
-  timeoutMs = 10_000
+  timeoutMs = 10_000,
+  charLimit = 4000
 ): Promise<void> {
   await expect
-    .poll(async () => (await getTerminalContent(page)).includes(expected), {
+    .poll(async () => (await getTerminalContent(page, charLimit)).includes(expected), {
       timeout: timeoutMs,
       message: `Terminal did not contain "${expected}"`
     })

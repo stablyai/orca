@@ -1,9 +1,15 @@
 import { useCallback } from 'react'
-import { toast } from 'sonner'
 import type { Editor } from '@tiptap/react'
-import { extractIpcErrorMessage, getImageCopyDestination } from './rich-markdown-image-utils'
+import { toast } from 'sonner'
+import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
+import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
 
-export function useLocalImagePick(editor: Editor | null, filePath: string): () => Promise<void> {
+export function useLocalImagePick(
+  editor: Editor | null,
+  filePath: string,
+  worktreeId: string | null,
+  runtimeEnvironmentId?: string | null
+): () => Promise<void> {
   return useCallback(async () => {
     if (!editor) {
       return
@@ -18,22 +24,16 @@ export function useLocalImagePick(editor: Editor | null, filePath: string): () =
       if (!srcPath) {
         return
       }
-      // Why: copy the image next to the markdown file and insert a relative path
-      // so the markdown stays portable and doesn't bloat with base64 data.
-      const { imageName, destPath } = await getImageCopyDestination(filePath, srcPath)
-      if (srcPath !== destPath) {
-        await window.api.shell.copyFile({ srcPath, destPath })
-      }
-      // Why: insertContentAt places the image at the exact saved position
-      // regardless of where focus lands after the native file dialog closes,
-      // whereas setTextSelection can be overridden by ProseMirror's focus logic.
-      editor
-        .chain()
-        .focus()
-        .insertContentAt(insertPos, { type: 'image', attrs: { src: imageName } })
-        .run()
+      await insertRichMarkdownImageFromPath({
+        editor,
+        filePath,
+        sourcePath: srcPath,
+        worktreeId,
+        runtimeEnvironmentId,
+        insertPos
+      })
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
     }
-  }, [editor, filePath])
+  }, [editor, filePath, runtimeEnvironmentId, worktreeId])
 }

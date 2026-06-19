@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
 import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt } from './e2ee-crypto'
+import { generateKeyPair, deriveSharedKey, encrypt, decrypt, encryptBytes } from './e2ee-crypto'
 
 function publicKeyToBase64(key: Uint8Array): string {
   return Buffer.from(key).toString('base64')
@@ -180,6 +180,20 @@ describe('E2EEChannel', () => {
       const replyEncrypted = ctx.ws.sent[2]!
       const replyPlain = decrypt(replyEncrypted, sharedKey)
       expect(replyPlain).toBe('{"id":"rpc-1","ok":true}')
+    })
+
+    it('decrypts and forwards binary messages after authentication', () => {
+      const ctx = setup()
+      const sharedKey = doHandshake(ctx)
+      const received: Uint8Array<ArrayBufferLike>[] = []
+
+      ctx.channel.onBinaryMessage((bytes) => {
+        received.push(bytes)
+      })
+
+      ctx.channel.handleRawMessage(encryptBytes(new Uint8Array([1, 2, 3]), sharedKey))
+
+      expect([...received[0]!]).toEqual([1, 2, 3])
     })
 
     it('silently drops messages with wrong key', () => {

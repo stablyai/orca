@@ -1,4 +1,5 @@
 import type { PaneStyleOptions, ManagedPaneInternal } from './pane-manager-types'
+import { holdPtyResizesForPaneSubtrees } from './pane-pty-resize-hold'
 
 // ---------------------------------------------------------------------------
 // Divider creation & drag-to-resize
@@ -14,6 +15,61 @@ export function getDividerHitSize(styleOptions: PaneStyleOptions): number {
 type DividerCallbacks = {
   refitPanesUnder: (el: HTMLElement) => void
   onLayoutChanged?: () => void
+}
+
+type DividerFlexFrameScheduler = {
+  schedule: (prevFlex: number, nextFlex: number) => void
+  flush: () => void
+  cancel: () => void
+}
+
+const dividerDragCleanups = new WeakMap<HTMLElement, () => void>()
+
+export function createDividerFlexFrameScheduler({
+  apply,
+  requestFrame = requestAnimationFrame,
+  cancelFrame = cancelAnimationFrame
+}: {
+  apply: (prevFlex: number, nextFlex: number) => void
+  requestFrame?: (callback: FrameRequestCallback) => number
+  cancelFrame?: (handle: number) => void
+}): DividerFlexFrameScheduler {
+  let frameId: number | null = null
+  let pending: { prevFlex: number; nextFlex: number } | null = null
+
+  const applyPending = (): void => {
+    frameId = null
+    const next = pending
+    pending = null
+    if (!next) {
+      return
+    }
+    apply(next.prevFlex, next.nextFlex)
+  }
+
+  return {
+    schedule(prevFlex, nextFlex) {
+      pending = { prevFlex, nextFlex }
+      if (frameId !== null) {
+        return
+      }
+      frameId = requestFrame(applyPending)
+    },
+    flush() {
+      if (frameId !== null) {
+        cancelFrame(frameId)
+        frameId = null
+      }
+      applyPending()
+    },
+    cancel() {
+      if (frameId !== null) {
+        cancelFrame(frameId)
+        frameId = null
+      }
+      pending = null
+    }
+  }
 }
 
 export function createDivider(
@@ -42,6 +98,22 @@ export function createDivider(
   return divider
 }
 
+export function disposeDivider(divider: HTMLElement): void {
+  const cleanup = dividerDragCleanups.get(divider)
+  if (!cleanup) {
+    return
+  }
+  cleanup()
+  dividerDragCleanups.delete(divider)
+}
+
+export function disposeDividersIn(root: HTMLElement): void {
+  const dividers = root.querySelectorAll('.pane-divider')
+  for (const divider of dividers) {
+    disposeDivider(divider as HTMLElement)
+  }
+}
+
 function attachDividerDrag(
   divider: HTMLElement,
   isVertical: boolean,
@@ -57,10 +129,23 @@ function attachDividerDrag(
   let totalSize = 0
   let prevEl: HTMLElement | null = null
   let nextEl: HTMLElement | null = null
+  let activePointerId: number | null = null
+  let releasePtyResizeHold: { flush: () => void; cancel: () => void } | null = null
+  const flexScheduler = createDividerFlexFrameScheduler({
+    apply: (newPrev, newNext) => {
+      if (!prevEl || !nextEl) {
+        return
+      }
+      prevEl.style.flex = `${newPrev} 1 0%`
+      nextEl.style.flex = `${newNext} 1 0%`
+    }
+  })
 
   const onPointerDown = (e: PointerEvent): void => {
     e.preventDefault()
+    flexScheduler.cancel()
     divider.setPointerCapture(e.pointerId)
+    activePointerId = e.pointerId
     divider.classList.add('is-dragging')
     dragging = true
     didMove = false
@@ -74,6 +159,9 @@ function attachDividerDrag(
     if (!prevEl || !nextEl) {
       return
     }
+    // Why: shells redraw prompts on every PTY SIGWINCH. During a divider drag
+    // we still fit xterm locally, but forward only the final PTY size on drop.
+    releasePtyResizeHold = holdPtyResizesForPaneSubtrees([prevEl, nextEl])
 
     const prevRect = prevEl.getBoundingClientRect()
     const nextRect = nextEl.getBoundingClientRect()
@@ -108,11 +196,9 @@ function attachDividerDrag(
       newPrev = totalSize - MIN_PANE_SIZE
     }
 
-    // Why: keep drag-time work to flex layout only; pane-local ResizeObservers
-    // schedule the terminal fit on the next frame so the divider stays smooth.
-    // Use flex-grow proportionally
-    prevEl.style.flex = `${newPrev} 1 0%`
-    nextEl.style.flex = `${newNext} 1 0%`
+    // Why: pointermove can outpace paint during split resizing. Coalescing the
+    // flex writes keeps drag reflow to one update per frame.
+    flexScheduler.schedule(newPrev, newNext)
   }
 
   const onPointerUp = (e: PointerEvent): void => {
@@ -120,7 +206,11 @@ function attachDividerDrag(
       return
     }
     dragging = false
-    divider.releasePointerCapture(e.pointerId)
+    flexScheduler.flush()
+    activePointerId = null
+    if (divider.hasPointerCapture(e.pointerId)) {
+      divider.releasePointerCapture(e.pointerId)
+    }
     divider.classList.remove('is-dragging')
     // Final refit at the exact drop position.
     if (prevEl) {
@@ -129,6 +219,8 @@ function attachDividerDrag(
     if (nextEl) {
       callbacks.refitPanesUnder(nextEl)
     }
+    releasePtyResizeHold?.flush()
+    releasePtyResizeHold = null
     prevEl = null
     nextEl = null
 
@@ -154,10 +246,59 @@ function attachDividerDrag(
     callbacks.onLayoutChanged?.()
   }
 
+  const cancelActiveDrag = (): void => {
+    dragging = false
+    flexScheduler.cancel()
+    releasePtyResizeHold?.cancel()
+    releasePtyResizeHold = null
+    activePointerId = null
+    prevEl = null
+    nextEl = null
+    divider.classList.remove('is-dragging')
+  }
+
+  const onPointerCancel = (): void => {
+    cancelActiveDrag()
+  }
+
+  const onLostPointerCapture = (): void => {
+    if (!dragging) {
+      return
+    }
+    cancelActiveDrag()
+  }
+
   divider.addEventListener('pointerdown', onPointerDown)
   divider.addEventListener('pointermove', onPointerMove)
   divider.addEventListener('pointerup', onPointerUp)
+  divider.addEventListener('pointercancel', onPointerCancel)
+  divider.addEventListener('lostpointercapture', onLostPointerCapture)
   divider.addEventListener('dblclick', onDoubleClick)
+  dividerDragCleanups.set(divider, () => {
+    flexScheduler.cancel()
+    releasePtyResizeHold?.cancel()
+    releasePtyResizeHold = null
+    if (activePointerId !== null) {
+      try {
+        if (divider.hasPointerCapture(activePointerId)) {
+          divider.releasePointerCapture(activePointerId)
+        }
+      } catch {
+        // Best effort: the captured pointer may already be gone during teardown.
+      }
+    }
+    activePointerId = null
+    dragging = false
+    prevEl = null
+    nextEl = null
+    divider.classList.remove('is-dragging')
+    divider.removeEventListener('pointerdown', onPointerDown)
+    divider.removeEventListener('pointermove', onPointerMove)
+    divider.removeEventListener('pointerup', onPointerUp)
+    divider.removeEventListener('pointercancel', onPointerCancel)
+    divider.removeEventListener('lostpointercapture', onLostPointerCapture)
+    divider.removeEventListener('dblclick', onDoubleClick)
+  })
 }
 
 export function applyDividerStyles(root: HTMLElement, styleOptions: PaneStyleOptions): void {

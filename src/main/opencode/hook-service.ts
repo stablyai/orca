@@ -7,19 +7,26 @@ import { join } from 'path'
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   realpathSync,
-  rmSync,
   statSync,
   unlinkSync,
   writeFileSync
 } from 'fs'
 import { createHash } from 'crypto'
-import { mirrorEntry, safeRemoveOverlay } from '../pty/overlay-mirror'
+import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
 const OPENCODE_OVERLAY_DIR = 'opencode-config-overlays'
+const OPENCODE_SHARED_CONFIG_DIR = 'shared'
+const OPENCODE_OVERLAY_MANIFEST_FILE = '.orca-opencode-overlay-manifest.json'
+
+type OpenCodeOverlayManifest = {
+  topLevelEntries: string[]
+  pluginEntries: string[]
+}
 
 // Why: the id passed in by pty.ts's daemon path is a sessionId shaped like
 // "<worktreeId>@@<uuid>" where worktreeId itself contains "::" and a
@@ -153,6 +160,57 @@ function getOpenCodePluginSource(): string {
     'let lastStatus = "idle";',
     'const childSessionById = new Map();',
     '',
+    '// Why: message.part.updated re-sends the FULL accumulated text of the part',
+    '// after every streamed append, so posting each event forwards O(n^2) bytes',
+    '// per turn through Orca (loopback HTTP -> main JSON parse -> status compare',
+    '// -> IPC -> renderer store update -> React commit). On Windows that flood',
+    '// saturated both event loops and froze the whole UI a few seconds into a',
+    '// streaming reply. The dashboard only needs a bounded preview at a human',
+    '// cadence: cap the text and trailing-edge coalesce assistant parts.',
+    'const MESSAGE_PART_THROTTLE_MS = 250;',
+    'const MESSAGE_PART_MAX_CHARS = 4000;',
+    'let pendingAssistantPart = null;',
+    'let assistantPartFlushTimer = null;',
+    'let lastAssistantPartPostAt = 0;',
+    '',
+    'function capMessagePartText(text) {',
+    '  return text.length > MESSAGE_PART_MAX_CHARS ? text.slice(0, MESSAGE_PART_MAX_CHARS) : text;',
+    '}',
+    '',
+    'async function flushPendingAssistantPart() {',
+    '  if (assistantPartFlushTimer) {',
+    '    clearTimeout(assistantPartFlushTimer);',
+    '    assistantPartFlushTimer = null;',
+    '  }',
+    '  const pending = pendingAssistantPart;',
+    '  pendingAssistantPart = null;',
+    '  if (!pending) return;',
+    '  lastAssistantPartPostAt = Date.now();',
+    '  await post("MessagePart", {',
+    '    role: pending.role,',
+    '    text: capMessagePartText(pending.text),',
+    '    messageID: pending.messageID,',
+    '    sessionID: pending.sessionID,',
+    '  });',
+    '}',
+    '',
+    'function queueAssistantPart(part) {',
+    '  // Why: keep only the latest snapshot — each event already contains the',
+    '  // full accumulated text, so intermediate snapshots are pure waste.',
+    '  pendingAssistantPart = part;',
+    '  const sinceLastPost = Date.now() - lastAssistantPartPostAt;',
+    '  if (sinceLastPost >= MESSAGE_PART_THROTTLE_MS) {',
+    '    void flushPendingAssistantPart();',
+    '    return;',
+    '  }',
+    '  if (!assistantPartFlushTimer) {',
+    '    assistantPartFlushTimer = setTimeout(() => {',
+    '      void flushPendingAssistantPart();',
+    '    }, MESSAGE_PART_THROTTLE_MS - sinceLastPost);',
+    '    if (assistantPartFlushTimer.unref) assistantPartFlushTimer.unref();',
+    '  }',
+    '}',
+    '',
     '// Why: message.part.updated fires for every Part (text, tool, reasoning)',
     '// but does not include the message role — that lives on the parent',
     '// message.updated event. Cache the role per messageID so the plugin can',
@@ -171,8 +229,8 @@ function getOpenCodePluginSource(): string {
     '// Why: oh-my-opencode style tools spawn child sessions that emit their',
     '// own session.idle / message events. Those child completions must not',
     '// flip the root Orca pane to done or overwrite the parent turn preview.',
-    '// Match Superset by checking `parentID` via client.session.list(), cache',
-    '// the result per session, and fail closed (assume child) on lookup errors',
+    '// Detect child sessions by checking `parentID` via client.session.list(),',
+    '// cache the result per session, and fail closed (assume child) on lookup errors',
     '// so a transient SDK failure cannot create false "done" transitions.',
     'async function isChildSession(client, sessionID) {',
     '  if (!sessionID) return true;',
@@ -305,23 +363,33 @@ function getOpenCodePluginSource(): string {
     '      if (!part || part.type !== "text" || !part.text) return;',
     '      const role = messageRoleById.get(part.messageID);',
     '      if (!role) return;',
-    '      await post("MessagePart", { role, text: part.text });',
+    '      if (role === "user") {',
+    '        // Why: user prompts arrive as a single event, not a stream — post',
+    '        // immediately (still capped) so the throttle slot stays free for',
+    '        // the assistant reply that follows within the same window.',
+    '        await post("MessagePart", { role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID });',
+    '        return;',
+    '      }',
+    '      queueAssistantPart({ role, text: part.text, messageID: part.messageID, sessionID });',
     '      return;',
     '    }',
     '',
     '    if (event.type === "session.idle" || event.type === "session.error") {',
-    '      await setStatus("idle");',
+    '      // Why: flush the coalesced final reply snapshot before the idle',
+    '      // transition so the done-state preview shows the completed message.',
+    '      await flushPendingAssistantPart();',
+    '      await setStatus("idle", { sessionID });',
     '      return;',
     '    }',
     '',
     '    if (event.type === "session.status") {',
     '      const statusType = getStatusType(event);',
     '      if (statusType === "busy" || statusType === "retry") {',
-    '        await setStatus("busy");',
+    '        await setStatus("busy", { sessionID });',
     '        return;',
     '      }',
     '      if (statusType === "idle") {',
-    '        await setStatus("idle");',
+    '        await setStatus("idle", { sessionID });',
     '      }',
     '    }',
     '  },',
@@ -339,24 +407,14 @@ function getOpenCodePluginSource(): string {
 // agent-hooks server (/hook/opencode), so OpenCode rides the same status
 // pipeline as Claude/Codex/Gemini.
 export class OpenCodeHookService {
-  clearPty(ptyId: string): void {
-    if (!isUsableId(ptyId)) {
-      return
-    }
-    // Why: a PTY with this id may have been spawned under either regime —
-    // overlay (user had OPENCODE_CONFIG_DIR set) or legacy per-PTY (no user
-    // value). Both roots use the same hashed name, so try the overlay first
-    // via the safe-descend teardown that never follows symlinks/junctions
-    // into the user's source dir, then sweep any legacy directory left over
-    // from a prior code path.
-    safeRemoveOverlay(this.getOverlayDir(ptyId), this.getOverlayRoot())
-    try {
-      rmSync(this.getLegacyConfigDir(ptyId), { recursive: true, force: true })
-    } catch {
-      // Why: best-effort cleanup of the no-OPENCODE_CONFIG_DIR-set regime;
-      // there are no symlinks/junctions in this tree (Orca-only files), so
-      // rmSync recursive is safe here.
-    }
+  clearPty(_ptyId: string): void {
+    // Why: OpenCode can materialize thousands of plugin runtime files under
+    // OPENCODE_CONFIG_DIR. This teardown runs on Electron's main process hot
+    // path, so recursive deletion here can freeze the whole app on Windows
+    // while Node, antivirus, or indexing still holds file handles.
+    //
+    // Current builds use app/source-scoped config dirs, not PTY-scoped dirs,
+    // so there is no live PTY-owned OpenCode filesystem state to remove.
   }
 
   buildPtyEnv(ptyId: string, existingConfigDir?: string | undefined): Record<string, string> {
@@ -368,10 +426,9 @@ export class OpenCodeHookService {
     }
 
     if (!existingConfigDir) {
-      // Why: no user value to mirror — keep the original per-PTY behavior so
-      // a manually launched `opencode` outside Orca's command templates picks
-      // up the status plugin via OPENCODE_CONFIG_DIR injection alone.
-      const configDir = this.writeLegacyPluginConfig(ptyId)
+      // Why: OpenCode may install plugin dependencies under this root. Sharing
+      // it prevents per-terminal node_modules churn and teardown freezes.
+      const configDir = this.writeSharedPluginConfig()
       if (!configDir) {
         return {}
       }
@@ -379,15 +436,14 @@ export class OpenCodeHookService {
     }
 
     // Why: do NOT `mkdir -p` the user's typoed path — overriding it with an
-    // Orca-owned dir is the exact failure mode we reject Superset's wrapper
-    // for in docs/opencode-config-dir-collision.md. Let OpenCode surface the
-    // typo on its own; we only forfeit our status plugin for this pane.
+    // Orca-owned dir is the exact config-replacement failure mode documented in
+    // docs/opencode-config-dir-collision.md. Let OpenCode surface the typo on
+    // its own; we only forfeit our status plugin for this pane.
     if (!existsSync(existingConfigDir)) {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
 
-    const overlayDir = this.getOverlayDir(ptyId)
-    safeRemoveOverlay(overlayDir, this.getOverlayRoot())
+    const overlayDir = this.getSourceOverlayDir(existingConfigDir)
 
     try {
       mkdirSync(overlayDir, { recursive: true })
@@ -399,7 +455,6 @@ export class OpenCodeHookService {
       // locked-down corporate machines, etc. In every case, preserve the
       // user's OPENCODE_CONFIG_DIR — a missing status plugin is a vastly
       // smaller harm than silently dropping the user's auth/models/keymap.
-      this.clearPty(ptyId)
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
 
@@ -410,14 +465,47 @@ export class OpenCodeHookService {
     return join(app.getPath('userData'), OPENCODE_OVERLAY_DIR)
   }
 
-  private getOverlayDir(ptyId: string): string {
-    // Why: the overlay root is distinct from the legacy hooks root so the
-    // two regimes are easy to tell apart on disk during debugging.
-    return join(this.getOverlayRoot(), toSafeDirName(ptyId))
+  private getSourceOverlayDir(sourceConfigDir: string): string {
+    return join(this.getOverlayRoot(), toSafeDirName(`source:${sourceConfigDir}`))
   }
 
-  private getLegacyConfigDir(ptyId: string): string {
-    return join(app.getPath('userData'), OPENCODE_LEGACY_HOOKS_DIR, toSafeDirName(ptyId))
+  private getSharedConfigDir(): string {
+    return join(app.getPath('userData'), OPENCODE_LEGACY_HOOKS_DIR, OPENCODE_SHARED_CONFIG_DIR)
+  }
+
+  private readOverlayManifest(overlayDir: string): OpenCodeOverlayManifest {
+    try {
+      const parsed = JSON.parse(
+        readFileSync(join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE), 'utf8')
+      ) as Partial<OpenCodeOverlayManifest>
+      return {
+        topLevelEntries: Array.isArray(parsed.topLevelEntries) ? parsed.topLevelEntries : [],
+        pluginEntries: Array.isArray(parsed.pluginEntries) ? parsed.pluginEntries : []
+      }
+    } catch {
+      return { topLevelEntries: [], pluginEntries: [] }
+    }
+  }
+
+  private writeOverlayManifest(overlayDir: string, manifest: OpenCodeOverlayManifest): void {
+    writeFileSync(
+      join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE),
+      `${JSON.stringify(manifest, null, 2)}\n`
+    )
+  }
+
+  private clearManifestEntries(overlayDir: string, manifest: OpenCodeOverlayManifest): void {
+    for (const entryName of manifest.topLevelEntries) {
+      safeRemoveTree(join(overlayDir, entryName))
+    }
+
+    const overlayPluginsDir = join(overlayDir, 'plugins')
+    for (const entryName of manifest.pluginEntries) {
+      if (entryName === ORCA_OPENCODE_PLUGIN_FILE) {
+        continue
+      }
+      safeRemoveTree(join(overlayPluginsDir, entryName))
+    }
   }
 
   // Why: walks the user's OPENCODE_CONFIG_DIR top-level entries. The
@@ -427,6 +515,14 @@ export class OpenCodeHookService {
   // top-level entry via symlink/junction so user edits propagate live on
   // POSIX (and on Windows-with-developer-mode) without copying files.
   private mirrorUserConfig(sourceDir: string, overlayDir: string): void {
+    const previousManifest = this.readOverlayManifest(overlayDir)
+    // Why: source-scoped overlays persist across terminals. Only remove paths
+    // Orca previously mirrored, so deleted/replaced user config cannot stay
+    // stale while OpenCode-owned runtime dirs such as node_modules survive.
+    this.clearManifestEntries(overlayDir, previousManifest)
+
+    const nextManifest: OpenCodeOverlayManifest = { topLevelEntries: [], pluginEntries: [] }
+
     for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
       const sourcePath = join(sourceDir, entry.name)
 
@@ -475,13 +571,17 @@ export class OpenCodeHookService {
               join(resolvedSource, pluginEntry.name),
               join(overlayPluginsDir, pluginEntry.name)
             )
+            nextManifest.pluginEntries.push(pluginEntry.name)
           }
           continue
         }
       }
 
       mirrorEntry(sourcePath, join(overlayDir, entry.name))
+      nextManifest.topLevelEntries.push(entry.name)
     }
+
+    this.writeOverlayManifest(overlayDir, nextManifest)
   }
 
   // Why: write Orca's status plugin into the overlay's plugins/ dir. The
@@ -504,8 +604,8 @@ export class OpenCodeHookService {
     writeFileSync(pluginPath, getOpenCodePluginSource())
   }
 
-  private writeLegacyPluginConfig(ptyId: string): string | null {
-    const configDir = this.getLegacyConfigDir(ptyId)
+  private writeSharedPluginConfig(): string | null {
+    const configDir = this.getSharedConfigDir()
     const pluginsDir = join(configDir, 'plugins')
     try {
       mkdirSync(pluginsDir, { recursive: true })

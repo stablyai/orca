@@ -1,12 +1,17 @@
-import { readFileSync, existsSync } from 'fs'
 import { spawn, type ChildProcess } from 'child_process'
-import { homedir } from 'os'
-import { join } from 'path'
 import { Duplex } from 'stream'
 import type { Socket as NetSocket } from 'net'
 import type { ConnectConfig } from 'ssh2'
 import type { SshTarget, SshConnectionState } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
+import {
+  resolveAgentConfigValue,
+  resolveAgentSocket,
+  resolvePrivateKey,
+  resolveUnencryptedExplicitPrivateKey
+} from './ssh-auth-resolution'
+
+export { findDefaultKeyFile, resolveAgentSocket } from './ssh-auth-resolution'
 
 export type SshCredentialKind = 'passphrase' | 'password'
 
@@ -43,8 +48,13 @@ export function isAuthError(err: Error): boolean {
   return (
     msg.includes('all configured authentication methods failed') ||
     msg.includes('authentication failed') ||
+    msg.includes('too many authentication failures') ||
     (err as { level?: string }).level === 'client-authentication'
   )
+}
+
+export function isAgentFallbackError(err: Error): boolean {
+  return isAuthError(err) || (err as { level?: string }).level === 'agent'
 }
 
 export function isTransientError(err: Error): boolean {
@@ -64,6 +74,16 @@ export function isTransientError(err: Error): boolean {
   return false
 }
 
+const SYSTEM_SSH_FALLBACK_ERROR_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH'])
+
+export function isSystemSshFallbackError(err: Error): boolean {
+  const code = (err as NodeJS.ErrnoException).code
+  if (code && SYSTEM_SSH_FALLBACK_ERROR_CODES.has(code)) {
+    return true
+  }
+  return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -72,46 +92,35 @@ export function shellEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`
 }
 
+export function wrapRemoteCommandForPosixShell(command: string): string {
+  // Why: sshd asks the user's login shell to parse exec commands. Orca emits
+  // POSIX sh snippets; `exec` avoids leaving that shell around for relay bridges.
+  return `exec /bin/sh -c ${shellEscape(command)}`
+}
+
+export type SshExecOptions = {
+  wrapCommand?: boolean
+}
+
 function cmdEscape(s: string): string {
   return `"${s.replace(/"/g, '""')}"`
 }
 
-// Why: ssh2 only tries keys that are explicitly provided. Users with keys in
-// standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
-// fail to authenticate. Probing default paths matches VS Code's _findDefaultKeyFile.
-const DEFAULT_KEY_NAMES = ['id_ed25519', 'id_rsa', 'id_ecdsa', 'id_dsa', 'id_xmss']
-
-const DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => `~/.ssh/${name}`)
-
-// Why: parseSshGOutput expands ~ to homedir(), so resolved identityFile
-// paths won't match the ~/... form in DEFAULT_KEY_PATHS. Pre-expand for
-// the comparison in buildConnectConfig.
-const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => join(homedir(), '.ssh', name))
-
-export function findDefaultKeyFile(): { path: string; contents: Buffer } | undefined {
-  for (const keyPath of DEFAULT_KEY_PATHS) {
-    const resolved = keyPath.replace(/^~/, homedir())
-    try {
-      if (!existsSync(resolved)) {
-        continue
-      }
-      const contents = readFileSync(resolved)
-      return { path: keyPath, contents }
-    } catch {
-      continue
-    }
-  }
-  return undefined
+type BuildConnectConfigOptions = {
+  includeAgent?: boolean
+  includePrivateKey?: boolean
 }
 
-// Why: matches VS Code's _connectSSH auth method selection (lines 606-611, 727-758).
-// ssh2 handles the auth negotiation natively — no custom authHandler needed.
+// Why: ssh2 tries privateKey before agent, but parses encrypted privateKey
+// values before any agent auth can run. Keep unencrypted explicit keys first
+// while deferring encrypted keys until the post-agent passphrase path.
 export function buildConnectConfig(
   target: SshTarget,
-  resolved: SshResolvedConfig | null
+  resolved: SshResolvedConfig | null,
+  options: BuildConnectConfigOptions = {}
 ): ConnectConfig {
-  const effectiveHost = target.host || resolved?.hostname || target.label
-  const effectivePort = target.port || resolved?.port || 22
+  const effectiveHost = resolveEffectiveHost(target, resolved)
+  const effectivePort = resolveEffectivePort(target, resolved)
   const effectiveUser = target.username || resolved?.user || ''
 
   const config: Record<string, unknown> = {
@@ -122,35 +131,51 @@ export function buildConnectConfig(
     keepaliveInterval: 15_000
   }
 
-  // Why: always provide agent when available. Unlike VS Code (which has a
-  // passphrase prompt UI), we can't decrypt passphrase-protected keys at
-  // runtime. The agent holds decrypted keys, so it must always be a
-  // fallback even when an explicit key file is also provided.
-  if (process.env.SSH_AUTH_SOCK) {
-    config.agent = process.env.SSH_AUTH_SOCK
+  const shouldIncludeAgent = options.includeAgent ?? true
+  const agentSocket = shouldIncludeAgent ? resolveAgentSocket(target, resolved) : undefined
+  const agent = agentSocket ? resolveAgentConfigValue(agentSocket, target, resolved) : undefined
+
+  if (agent) {
+    config.agent = agent
   }
 
-  const resolvedIdentity = resolved?.identityFile?.[0]
-  const explicitKey =
-    target.identityFile ||
-    (resolvedIdentity && !EXPANDED_DEFAULT_KEY_PATHS.includes(resolvedIdentity)
-      ? resolvedIdentity
-      : undefined)
+  if (agent && resolved?.forwardAgent) {
+    config.agentForward = true
+  }
 
-  if (explicitKey) {
-    try {
-      config.privateKey = readFileSync(explicitKey.replace(/^~/, homedir()))
-    } catch {
-      // Key unreadable — agent will handle auth if available
-    }
-  } else {
-    const fallback = findDefaultKeyFile()
-    if (fallback) {
-      config.privateKey = fallback.contents
-    }
+  const key =
+    (options.includePrivateKey ?? !agent)
+      ? resolvePrivateKey(target, resolved)
+      : resolveUnencryptedExplicitPrivateKey(target, resolved)
+  if (key) {
+    config.privateKey = key.contents
   }
 
   return config as ConnectConfig
+}
+
+function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {
+  if (shouldUseResolvedEndpoint(target, resolved)) {
+    return resolved!.hostname
+  }
+  return target.host || resolved?.hostname || target.label
+}
+
+function resolveEffectivePort(target: SshTarget, resolved: SshResolvedConfig | null): number {
+  // Why: imported config aliases store 22 as the schema default even when an
+  // included/wildcard OpenSSH rule later resolves a different effective Port.
+  if (target.configHost && target.port === 22 && resolved?.port) {
+    return resolved.port
+  }
+  return target.port || resolved?.port || 22
+}
+
+function shouldUseResolvedEndpoint(target: SshTarget, resolved: SshResolvedConfig | null): boolean {
+  if (!target.configHost || !resolved?.hostname) {
+    return false
+  }
+  const host = target.host.trim()
+  return host === '' || host === target.configHost || host === target.label
 }
 
 // Why: ProxyJump and jumpHost are syntactic sugar for ProxyCommand.
@@ -200,7 +225,9 @@ export function spawnProxyCommand(
     proxy.kind === 'jump-host'
       ? // Why: ProxyJump is structured input, not a shell snippet. Spawn ssh
         // directly so jump-host values cannot escape through shell parsing.
-        spawn('ssh', ['-W', `${host}:${port}`, '--', proxy.jumpHost], { stdio: ['pipe', 'pipe', 'pipe'] })
+        spawn('ssh', ['-W', `${host}:${port}`, '--', proxy.jumpHost], {
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
       : (() => {
           const escape = process.platform === 'win32' ? cmdEscape : shellEscape
           const expanded = proxy.command
@@ -213,16 +240,43 @@ export function spawnProxyCommand(
 
   // Why: a single PassThrough for both directions creates a feedback loop.
   // Reads come from the proxy's stdout; writes go to its stdin.
+  let cleanedUp = false
+  const cleanup = (): void => {
+    if (cleanedUp) {
+      return
+    }
+    cleanedUp = true
+    proc.stdout!.off('data', onStdoutData)
+    proc.stdout!.off('end', onStdoutEnd)
+    proc.stdin!.off('error', onInputError)
+    proc.off('error', onProcessError)
+  }
+  const onStdoutData = (data: Buffer): void => {
+    stream.push(data)
+  }
+  const onStdoutEnd = (): void => {
+    stream.push(null)
+  }
+  const onInputError = (err: Error): void => {
+    stream.destroy(err)
+  }
+  const onProcessError = (err: Error): void => {
+    stream.destroy(err)
+  }
   const stream = new Duplex({
     read() {},
     write(chunk, _encoding, cb) {
       proc.stdin!.write(chunk, cb)
+    },
+    destroy(err, cb) {
+      cleanup()
+      cb(err)
     }
   })
-  proc.stdout!.on('data', (data) => stream.push(data))
-  proc.stdout!.on('end', () => stream.push(null))
-  proc.stdin!.on('error', (err) => stream.destroy(err))
-  proc.on('error', (err) => stream.destroy(err))
+  proc.stdout!.on('data', onStdoutData)
+  proc.stdout!.on('end', onStdoutEnd)
+  proc.stdin!.on('error', onInputError)
+  proc.on('error', onProcessError)
 
   return { process: proc, sock: stream as unknown as NetSocket }
 }

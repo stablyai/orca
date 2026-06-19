@@ -1,3 +1,10 @@
+import {
+  filesystemPathHrefToFileUri,
+  filesystemPathToFileUri,
+  fileUriToFilesystemPath
+} from '../../../../shared/file-uri-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+
 // Pure classifier for markdown link targets. Called by the link-activation
 // dispatcher (activateMarkdownLink slice action) from three call sites —
 // MarkdownPreview, RichMarkdownEditor Cmd-click, RichMarkdownLinkBubble open —
@@ -15,7 +22,14 @@ export type MarkdownLinkTarget =
       line?: number
       column?: number
     }
-  | { kind: 'file'; uri: string }
+  | {
+      kind: 'file'
+      uri: string
+      absolutePath: string
+      relativePath?: string
+      line?: number
+      column?: number
+    }
 
 // Why: renderer runs with sandbox + contextIsolation, so process.platform is
 // unavailable. navigator.userAgent is the portable fallback (AGENTS.md).
@@ -31,26 +45,11 @@ export function absolutePathToFileUri(filePath: string): string {
 }
 
 function toFileUrl(filePath: string): string {
-  const normalizedPath = filePath.replaceAll('\\', '/')
-  const segments = normalizedPath.split('/').map((segment, index) => {
-    if (index === 0 && /^[A-Za-z]:$/.test(segment)) {
-      return segment
-    }
-    return encodeURIComponent(segment)
-  })
-  if (normalizedPath.startsWith('/')) {
-    return `file://${segments.join('/')}`
-  }
-  return `file:///${segments.join('/')}`
+  return filesystemPathToFileUri(filePath)
 }
 
-function fileUrlToAbsolutePath(url: URL): string {
-  let absolutePath = decodeURIComponent(url.pathname)
-  // Windows: "/C:/foo" → "C:/foo"
-  if (/^\/[A-Za-z]:\//.test(absolutePath)) {
-    absolutePath = absolutePath.slice(1)
-  }
-  return absolutePath
+function fileUrlToAbsolutePath(url: URL): string | null {
+  return fileUriToFilesystemPath(url)
 }
 
 function normalizePathForCompare(p: string): string {
@@ -114,6 +113,11 @@ function extractHashLineCol(hash: string): { line?: number; column?: number } {
 
 function resolveRelativeToSource(rawHref: string, sourceFilePath: string): URL | null {
   try {
+    if (isWindowsAbsolutePathLike(rawHref)) {
+      // Why: URL treats `C:\...` as a custom `c:` scheme unless the Windows
+      // absolute path is first converted to the file URL form used downstream.
+      return new URL(filesystemPathHrefToFileUri(rawHref))
+    }
     return new URL(rawHref, toFileUrl(sourceFilePath))
   } catch {
     return null
@@ -168,6 +172,9 @@ export function resolveMarkdownLinkTarget(
   }
 
   const rawAbsolutePath = fileUrlToAbsolutePath(resolved)
+  if (rawAbsolutePath === null) {
+    return null
+  }
 
   // Why: hash-based line anchor takes precedence; fall back to trailing
   // `:line:col` syntax only if no hash anchor was found.
@@ -200,12 +207,22 @@ export function resolveMarkdownLinkTarget(
     }
   }
 
+  const relativePath =
+    worktreeRoot !== null && isDescendantOf(pathForClassification, worktreeRoot)
+      ? computeRelativePath(pathForClassification, worktreeRoot)
+      : undefined
+
   // Rebuild a file: URI without the line anchor so the OS handler gets a
   // clean path. Use the original resolved URL minus the hash as an
   // approximation; for trailing-colon paths there's no clean URL form,
   // so we reconstruct from the stripped absolute path.
-  if (line === undefined) {
-    return { kind: 'file', uri: resolved.toString() }
+  const cleanUri = line === undefined ? resolved.toString() : toFileUrl(pathForClassification)
+  return {
+    kind: 'file',
+    uri: cleanUri,
+    absolutePath: pathForClassification,
+    relativePath,
+    line,
+    column
   }
-  return { kind: 'file', uri: toFileUrl(pathForClassification) }
 }

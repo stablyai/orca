@@ -10,11 +10,17 @@ type DebuggerListener = (...args: unknown[]) => void
 
 function createMockWebContents() {
   const listeners = new Map<string, DebuggerListener[]>()
+  let debuggerAttached = false
+  let destroyed = false
 
   const debuggerObj = {
-    isAttached: vi.fn(() => false),
-    attach: vi.fn(),
-    detach: vi.fn(),
+    isAttached: vi.fn(() => debuggerAttached),
+    attach: vi.fn(() => {
+      debuggerAttached = true
+    }),
+    detach: vi.fn(() => {
+      debuggerAttached = false
+    }),
     sendCommand: vi.fn(async () => ({})),
     on: vi.fn((event: string, handler: DebuggerListener) => {
       const arr = listeners.get(event) ?? []
@@ -33,12 +39,15 @@ function createMockWebContents() {
   return {
     webContents: {
       debugger: debuggerObj,
-      isDestroyed: () => false,
+      isDestroyed: () => destroyed,
       focus: vi.fn(),
       getTitle: vi.fn(() => 'Example'),
       getURL: vi.fn(() => 'https://example.com')
     },
     listeners,
+    destroy() {
+      destroyed = true
+    },
     emit(event: string, ...args: unknown[]) {
       for (const handler of listeners.get(event) ?? []) {
         handler(...args)
@@ -85,6 +94,14 @@ describe('CdpWsProxy', () => {
     expect(proxy.getPort()).toBeGreaterThan(0)
   })
 
+  it('does not retain an extra startup server error listener after binding', () => {
+    const server = (
+      proxy as unknown as { httpServer: { listenerCount: (event: string) => number } }
+    ).httpServer
+
+    expect(server.listenerCount('error')).toBeLessThanOrEqual(1)
+  })
+
   it('attaches debugger on start', () => {
     expect(mock.webContents.debugger.attach).toHaveBeenCalledWith('1.3')
   })
@@ -119,6 +136,29 @@ describe('CdpWsProxy', () => {
 
     expect(response.id).toBe(7)
     expect(response.error).toEqual({ code: -32000, message: 'Node not found' })
+    client.close()
+  })
+
+  it('returns an error instead of crashing when a command arrives after tab destruction', async () => {
+    const client = await connect()
+    mock.destroy()
+
+    const response = await sendAndReceive(client, {
+      id: 8,
+      method: 'Runtime.evaluate',
+      params: { expression: 'location.href' }
+    })
+
+    expect(response.id).toBe(8)
+    expect(response.error).toEqual({
+      code: -32000,
+      message: 'Browser tab is no longer available'
+    })
+    expect(mock.webContents.debugger.sendCommand).not.toHaveBeenCalledWith(
+      'Runtime.evaluate',
+      expect.anything(),
+      expect.anything()
+    )
     client.close()
   })
 
@@ -288,6 +328,28 @@ describe('CdpWsProxy', () => {
         resolve()
       }
     })
+  })
+
+  it('detaches client websocket listeners after client close', async () => {
+    const client = await connect()
+    const serverClient = (proxy as unknown as { client: WebSocket | null }).client
+    expect(serverClient).toBeTruthy()
+    const offSpy = vi.spyOn(serverClient!, 'off')
+
+    client.close()
+
+    const start = Date.now()
+    while (
+      (proxy as unknown as { client: WebSocket | null }).client &&
+      Date.now() - start < 2_000
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+
+    expect((proxy as unknown as { client: WebSocket | null }).client).toBeNull()
+    const removedEvents = offSpy.mock.calls.map(([event]) => event)
+    expect(removedEvents).toEqual(expect.arrayContaining(['message', 'close']))
+    offSpy.mockRestore()
   })
 
   it('rejects inflight requests on stop', async () => {

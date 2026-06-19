@@ -23,9 +23,21 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
     }
   }
 
+  if (file.mode === 'check-details') {
+    const label = file.checkRunDetails?.check.name ?? 'Check details'
+    return {
+      copyText: null,
+      copyToastLabel: 'Check details copied',
+      pathLabel: label,
+      pathTitle: label
+    }
+  }
+
   const isCombinedDiff =
     file.mode === 'diff' &&
-    (file.diffSource === 'combined-uncommitted' || file.diffSource === 'combined-branch')
+    (file.diffSource === 'combined-uncommitted' ||
+      file.diffSource === 'combined-branch' ||
+      file.diffSource === 'combined-commit')
 
   if (isCombinedDiff) {
     return {
@@ -55,7 +67,8 @@ export function getEditorHeaderOpenFileState(
     file.mode === 'diff' &&
     file.diffSource !== undefined &&
     file.diffSource !== 'combined-uncommitted' &&
-    file.diffSource !== 'combined-branch'
+    file.diffSource !== 'combined-branch' &&
+    file.diffSource !== 'combined-commit'
 
   if (!isSingleDiff) {
     return { canOpen: false }
@@ -63,6 +76,9 @@ export function getEditorHeaderOpenFileState(
 
   if (file.diffSource === 'branch') {
     return { canOpen: branchEntry?.status !== 'deleted' || !branchEntry }
+  }
+  if (file.diffSource === 'commit') {
+    return { canOpen: false }
   }
 
   // Why: diff tabs can outlive the current Source Control snapshot. If the

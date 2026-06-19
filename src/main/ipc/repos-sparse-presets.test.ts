@@ -8,7 +8,7 @@ const { handleMock, randomUUIDMock, mockStore } = vi.hoisted(() => ({
   mockStore: {
     getRepos: vi.fn().mockReturnValue([]),
     addRepo: vi.fn(),
-    removeRepo: vi.fn(),
+    removeProject: vi.fn(),
     getRepo: vi.fn(),
     updateRepo: vi.fn(),
     getSparsePresets: vi.fn(),

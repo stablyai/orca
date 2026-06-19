@@ -114,7 +114,9 @@ function formatResponse(response: RpcResponse): string {
 }
 
 async function chooseWorktree(ws: WebSocket): Promise<string> {
-  if (worktreeSelector) return worktreeSelector
+  if (worktreeSelector) {
+    return worktreeSelector
+  }
 
   const response = await send(ws, 'worktree.ps')
   if (!response.ok) {
@@ -267,8 +269,17 @@ ws.on('open', () => {
 })
 
 ws.on('message', (data) => {
-  const plaintext = decrypt(data.toString())
-  if (!plaintext) return
+  let plaintext: string | null = null
+  try {
+    plaintext = decrypt(data.toString())
+  } catch {
+    // Plaintext handshake/control frames such as e2ee_ready are handled by the
+    // connect flow above. The global listener only cares about encrypted RPC.
+    return
+  }
+  if (!plaintext) {
+    return
+  }
   const response = JSON.parse(plaintext) as RpcResponse
   if (response._meta?.runtimeId) {
     runtimeId = response._meta.runtimeId

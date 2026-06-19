@@ -3,8 +3,16 @@ import type {
   TerminalPaneLayoutNode,
   TerminalPaneSplitDirection
 } from '../../../../shared/types'
+import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
+import { getLeftmostLeafId, normalizeTerminalLayoutSnapshot } from './terminal-layout-leaf-ids'
+
+export {
+  collectLeafIdsInOrder,
+  collectLeafIdsInReplayCreationOrder,
+  normalizeTerminalLayoutSnapshot
+} from './terminal-layout-leaf-ids'
 
 export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
   root: null,
@@ -24,6 +32,9 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 // so replayed mode bits do not leak into the fresh shell. ghostty achieves
 // the same end by not restoring state at all.
 //
+//   0 SP q              — DECSCUSR cursor style/blink reset (raw replay can
+//                         carry a stale steady cursor override; reset to the
+//                         user's configured xterm cursor)
 //   25                  — DECTCEM cursor visibility (SerializeAddon captures
 //                         `?25l` when the cursor was hidden at snapshot time;
 //                         without an explicit `?25h` here the cursor stays
@@ -31,13 +42,26 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 //   1000/1002/1003/1006 — mouse reporting variants
 //   1004                — focus event reporting (the actual bug source)
 //   2004                — bracketed paste
-export const POST_REPLAY_MODE_RESET =
-  '\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l'
+//   <99u/=0u            — Kitty keyboard flags pushed by TUIs such as Codex
+export const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
+export const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
+
+export const POST_REPLAY_MODE_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l`
+
+// Why: hidden-output recovery replays a snapshot of the same live renderer
+// session. Keep cursor/focus cleanup, but preserve Kitty keyboard flags that
+// the still-running foreground TUI may rely on.
+export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1004l`
 
 // Why: daemon snapshot restore reattaches to a live session, so we avoid the
 // full POST_REPLAY_MODE_RESET bundle there — a still-running TUI may still
-// rely on mouse or bracketed-paste modes. Two exceptions are safe to reset:
+// rely on mouse or bracketed-paste modes. Four exceptions are safe to reset:
 //
+//   0 q  — DECSCUSR cursor style/blink reset: raw replay can contain a stale
+//          steady cursor override, while SerializeAddon does not preserve an
+//          authoritative current cursor style. Reset to the user's configured
+//          xterm cursor; the post-reattach SIGWINCH lets live TUIs repaint if
+//          they need a different cursor.
 //   25   — DECTCEM cursor visibility: SerializeAddon bakes `?25l` into the
 //          snapshot when the cursor was hidden at capture time. Without `?25h`
 //          here the cursor stays invisible after reattach. If a TUI is still
@@ -47,55 +71,9 @@ export const POST_REPLAY_MODE_RESET =
 //   1004 — focus event reporting: preserving `?1004h` makes restored shells
 //          ring BEL on pane focus/blur (shells like zsh treat `\e[I`/`\e[O`
 //          as unbound key input).
-export const POST_REPLAY_FOCUS_REPORTING_RESET = '\x1b[?25h\x1b[?1004l'
-
-export function paneLeafId(paneId: number): string {
-  return `pane:${paneId}`
-}
-
-export function collectLeafIdsInOrder(node: TerminalPaneLayoutNode | null | undefined): string[] {
-  if (!node) {
-    return []
-  }
-  if (node.type === 'leaf') {
-    return [node.leafId]
-  }
-  return [...collectLeafIdsInOrder(node.first), ...collectLeafIdsInOrder(node.second)]
-}
-
-function getLeftmostLeafId(node: TerminalPaneLayoutNode): string {
-  return node.type === 'leaf' ? node.leafId : getLeftmostLeafId(node.first)
-}
-
-function collectReplayCreatedPaneLeafIds(
-  node: Extract<TerminalPaneLayoutNode, { type: 'split' }>,
-  leafIdsInReplayCreationOrder: string[]
-): void {
-  // Why: replayTerminalLayout() creates one new pane per split and assigns it
-  // to the split's second subtree before recursing, so the new pane maps to
-  // the leftmost leaf reachable within that second subtree.
-  leafIdsInReplayCreationOrder.push(getLeftmostLeafId(node.second))
-
-  if (node.first.type === 'split') {
-    collectReplayCreatedPaneLeafIds(node.first, leafIdsInReplayCreationOrder)
-  }
-  if (node.second.type === 'split') {
-    collectReplayCreatedPaneLeafIds(node.second, leafIdsInReplayCreationOrder)
-  }
-}
-
-export function collectLeafIdsInReplayCreationOrder(
-  node: TerminalPaneLayoutNode | null | undefined
-): string[] {
-  if (!node) {
-    return []
-  }
-  const leafIdsInReplayCreationOrder = [getLeftmostLeafId(node)]
-  if (node.type === 'split') {
-    collectReplayCreatedPaneLeafIds(node, leafIdsInReplayCreationOrder)
-  }
-  return leafIdsInReplayCreationOrder
-}
+//   <99u/=0u — Kitty keyboard mode is renderer-side xterm state; stale copies
+//              can make the next Ctrl+C encode as CSI-u after reattach.
+export const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1004l`
 
 // Cross-platform monospace fallback chain ensures the terminal always has a
 // usable font regardless of OS.  macOS-only fonts like SF Mono and Menlo are
@@ -156,11 +134,11 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
   }
 
   if (node.classList.contains('pane')) {
-    const paneId = Number(node.dataset.paneId ?? '')
-    if (!Number.isFinite(paneId)) {
+    const leafId = node.dataset.leafId
+    if (!leafId || !isTerminalLeafId(leafId)) {
       return null
     }
-    return { type: 'leaf', leafId: paneLeafId(paneId) }
+    return { type: 'leaf', leafId }
   }
 
   if (!node.classList.contains('pane-split')) {
@@ -201,29 +179,19 @@ export function serializePaneTree(node: HTMLElement | null): TerminalPaneLayoutN
 export function serializeTerminalLayout(
   root: HTMLDivElement | null,
   activePaneId: number | null,
-  expandedPaneId: number | null
+  expandedPaneId: number | null,
+  leafIdByPaneId?: ReadonlyMap<number, string>
 ): TerminalLayoutSnapshot {
   const rootNode = serializePaneTree(
     root?.firstElementChild instanceof HTMLElement ? root.firstElementChild : null
   )
+  const activeLeafId = activePaneId === null ? null : leafIdByPaneId?.get(activePaneId)
+  const expandedLeafId = expandedPaneId === null ? null : leafIdByPaneId?.get(expandedPaneId)
   return {
     root: rootNode,
-    activeLeafId: activePaneId === null ? null : paneLeafId(activePaneId),
-    expandedLeafId: expandedPaneId === null ? null : paneLeafId(expandedPaneId)
+    activeLeafId: activeLeafId && isTerminalLeafId(activeLeafId) ? activeLeafId : null,
+    expandedLeafId: expandedLeafId && isTerminalLeafId(expandedLeafId) ? expandedLeafId : null
   }
-}
-
-function collectLeafIds(
-  node: TerminalPaneLayoutNode,
-  paneByLeafId: Map<string, number>,
-  paneId: number
-): void {
-  if (node.type === 'leaf') {
-    paneByLeafId.set(node.leafId, paneId)
-    return
-  }
-  collectLeafIds(node.first, paneByLeafId, paneId)
-  collectLeafIds(node.second, paneByLeafId, paneId)
 }
 
 /**
@@ -289,9 +257,12 @@ export function replayTerminalLayout(
 ): Map<string, number> {
   const paneByLeafId = new Map<string, number>()
 
-  const initialPane = manager.createInitialPane({ focus: focusInitialPane })
+  const normalized = normalizeTerminalLayoutSnapshot(snapshot)
+  snapshot = normalized.snapshot
+  const initialLeafId = snapshot.root ? getLeftmostLeafId(snapshot.root) : undefined
+  const initialPane = manager.createInitialPane({ focus: focusInitialPane, leafId: initialLeafId })
   if (!snapshot?.root) {
-    paneByLeafId.set(paneLeafId(initialPane.id), initialPane.id)
+    paneByLeafId.set(initialPane.leafId, initialPane.id)
     return paneByLeafId
   }
 
@@ -302,10 +273,11 @@ export function replayTerminalLayout(
     }
 
     const createdPane = manager.splitPane(paneId, node.direction as TerminalPaneSplitDirection, {
-      ratio: node.ratio
+      ratio: node.ratio,
+      leafId: getLeftmostLeafId(node.second)
     })
     if (!createdPane) {
-      collectLeafIds(node, paneByLeafId, paneId)
+      restoreNode(node.first, paneId)
       return
     }
 

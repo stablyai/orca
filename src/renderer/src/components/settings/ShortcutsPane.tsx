@@ -1,319 +1,422 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
+import {
+  findKeybindingConflicts,
+  formatKeybindingList,
+  getEffectiveKeybindingsForAction,
+  getKeybindingDefinition,
+  isKeybindingAllowedInTerminal,
+  isKeybindingPotentialTerminalConflict,
+  keybindingFromInputForAction,
+  keybindingIsActiveInContext,
+  normalizeKeybindingListForAction,
+  type KeybindingActionId,
+  type KeybindingDefinition,
+  type KeybindingInput,
+  type KeybindingOverrides,
+  type TerminalShortcutPolicy
+} from '../../../../shared/keybindings'
+import {
+  EMPTY_DISABLED_TUI_AGENTS,
+  disabledAgentTabActionIds,
+  groupDefinitions
+} from './shortcut-groups'
 import { useAppStore } from '../../store'
-import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
-import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { KeybindingsFileActions } from './KeybindingsFileActions'
+import { SettingsSubsectionHeader } from './SettingsFormControls'
+import type { ShortcutTerminalStatus } from './ShortcutBindingRow'
+import {
+  getShortcutSearchEntry,
+  matchesShortcutFilter,
+  matchesShortcutLocalSearch,
+  ShortcutFilterRail,
+  type ShortcutFilter,
+  type ShortcutRowsByGroup
+} from './ShortcutFilterRail'
+import { ShortcutRowsList } from './ShortcutRowsList'
+import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
+import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
+import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { clearRecordingActionForShortcutMutation } from './shortcut-recording-state'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
 
-type ShortcutItem = {
-  action: string
-  keys: string[]
+const isMac = navigator.userAgent.includes('Mac')
+const platform: NodeJS.Platform = isMac
+  ? 'darwin'
+  : navigator.userAgent.includes('Windows')
+    ? 'win32'
+    : 'linux'
+
+function sameBindings(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((binding, index) => binding === b[index])
 }
 
-type ShortcutGroup = {
-  title: string
-  items: ShortcutItem[]
+function hasOwnBindingOverride(
+  overrides: KeybindingOverrides,
+  actionId: KeybindingActionId
+): boolean {
+  return Object.prototype.hasOwnProperty.call(overrides, actionId)
 }
 
-type ShortcutDefinition = {
-  action: string
-  searchKeywords: string[]
-  keys: (labels: { mod: string; shift: string; enter: string }) => string[]
+function removeBindingOverride(
+  overrides: KeybindingOverrides,
+  actionId: KeybindingActionId
+): KeybindingOverrides {
+  const next = { ...overrides }
+  delete next[actionId]
+  return next
 }
 
-type ShortcutGroupDefinition = {
-  title: string
-  items: ShortcutDefinition[]
+function hasCommonBindingOverride(
+  snapshot: ReturnType<typeof useAppStore.getState>['keybindingSnapshot'],
+  actionId: KeybindingActionId
+): boolean {
+  return hasOwnBindingOverride(snapshot?.commonOverrides ?? {}, actionId)
 }
 
-const SHORTCUT_GROUP_DEFINITIONS: ShortcutGroupDefinition[] = [
-  {
-    title: 'Global',
-    items: [
-      {
-        action: 'Go to File',
-        searchKeywords: ['shortcut', 'global', 'file'],
-        keys: ({ mod }) => [mod, 'P']
-      },
-      {
-        action: 'Switch worktree',
-        searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
-        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, 'J'] : [mod, shift, 'J'])
-      },
-      {
-        action: 'Create worktree',
-        searchKeywords: ['shortcut', 'global', 'worktree'],
-        keys: ({ mod }) => [mod, 'N']
-      },
-      {
-        action: 'Toggle Sidebar',
-        searchKeywords: ['shortcut', 'sidebar'],
-        keys: ({ mod }) => [mod, 'B']
-      },
-      {
-        action: 'Toggle Right Sidebar',
-        searchKeywords: ['shortcut', 'sidebar', 'right'],
-        keys: ({ mod }) => [mod, 'L']
-      },
-      {
-        action: 'Move up worktree',
-        searchKeywords: ['shortcut', 'global', 'worktree', 'move'],
-        keys: ({ mod, shift }) => [mod, shift, '↑']
-      },
-      {
-        action: 'Move down worktree',
-        searchKeywords: ['shortcut', 'global', 'worktree', 'move'],
-        keys: ({ mod, shift }) => [mod, shift, '↓']
-      },
-      {
-        action: 'Toggle File Explorer',
-        searchKeywords: ['shortcut', 'file explorer'],
-        keys: ({ mod, shift }) => [mod, shift, 'E']
-      },
-      {
-        action: 'Toggle Search',
-        searchKeywords: ['shortcut', 'search'],
-        keys: ({ mod, shift }) => [mod, shift, 'F']
-      },
-      {
-        action: 'Toggle Source Control',
-        searchKeywords: ['shortcut', 'source control'],
-        keys: ({ mod, shift }) => [mod, shift, 'G']
-      },
-      {
-        action: 'Zoom In',
-        searchKeywords: ['shortcut', 'zoom', 'in', 'scale'],
-        keys: ({ mod, shift }) => (mod === 'Ctrl' ? [mod, shift, '+'] : [mod, '+'])
-      },
-      {
-        action: 'Zoom Out',
-        searchKeywords: ['shortcut', 'zoom', 'out', 'scale'],
-        keys: ({ mod, shift }) => (mod === 'Ctrl' ? [mod, shift, '-'] : [mod, '-'])
-      },
-      {
-        action: 'Reset Size',
-        searchKeywords: ['shortcut', 'zoom', 'reset', 'size', 'actual'],
-        keys: ({ mod }) => [mod, '0']
-      },
-      {
-        action: 'Force Reload',
-        searchKeywords: ['shortcut', 'reload', 'refresh', 'force'],
-        keys: ({ mod, shift }) => [mod, shift, 'R']
-      }
-    ]
-  },
-  {
-    title: 'Tabs',
-    items: [
-      {
-        action: 'New terminal tab',
-        searchKeywords: ['shortcut', 'tab', 'terminal', 'new'],
-        keys: ({ mod }) => [mod, 'T']
-      },
-      {
-        action: 'New browser tab',
-        searchKeywords: ['shortcut', 'tab', 'browser', 'new'],
-        keys: ({ mod, shift }) => [mod, shift, 'B']
-      },
-      {
-        action: 'New markdown tab',
-        searchKeywords: ['shortcut', 'tab', 'markdown', 'file', 'new'],
-        keys: ({ mod, shift }) => [mod, shift, 'M']
-      },
-      {
-        action: 'Close active tab / pane',
-        searchKeywords: ['shortcut', 'close', 'tab', 'pane'],
-        keys: ({ mod }) => [mod, 'W']
-      },
-      {
-        action: 'Reopen closed tab',
-        searchKeywords: ['shortcut', 'tab', 'reopen', 'restore', 'closed'],
-        keys: ({ mod, shift }) => [mod, shift, 'T']
-      }
-    ]
-  },
-  {
-    title: 'Tab Navigation',
-    items: [
-      {
-        action: 'Next tab (same type)',
-        searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle'],
-        keys: ({ mod, shift }) => [mod, shift, ']']
-      },
-      {
-        action: 'Previous tab (same type)',
-        searchKeywords: ['shortcut', 'tab', 'previous', 'switch', 'cycle'],
-        keys: ({ mod, shift }) => [mod, shift, '[']
-      },
-      {
-        action: 'Next tab (all types)',
-        searchKeywords: ['shortcut', 'tab', 'next', 'switch', 'cycle', 'all', 'any'],
-        keys: ({ mod }) => [mod, mod === '⌘' ? '⌥' : 'Alt', ']']
-      },
-      {
-        action: 'Previous tab (all types)',
-        searchKeywords: ['shortcut', 'tab', 'previous', 'switch', 'cycle', 'all', 'any'],
-        keys: ({ mod }) => [mod, mod === '⌘' ? '⌥' : 'Alt', '[']
-      },
-      {
-        action: 'Next terminal tab',
-        searchKeywords: ['shortcut', 'tab', 'terminal', 'next', 'switch'],
-        keys: () => ['Ctrl', 'PageDown']
-      },
-      {
-        action: 'Previous terminal tab',
-        searchKeywords: ['shortcut', 'tab', 'terminal', 'previous', 'switch'],
-        keys: () => ['Ctrl', 'PageUp']
-      }
-    ]
-  },
-  {
-    title: 'Terminal Panes',
-    items: [
-      {
-        action: 'Split terminal right',
-        searchKeywords: ['shortcut', 'pane', 'split'],
-        // Why: on Windows/Linux, Ctrl+D must pass through as EOF (#586),
-        // so split-right requires Shift on non-Mac platforms.
-        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, 'D'] : [mod, shift, 'D'])
-      },
-      {
-        action: 'Split terminal down',
-        searchKeywords: ['shortcut', 'pane', 'split'],
-        // Why: on Windows/Linux, Ctrl+Shift+D is taken by split-right (#586),
-        // so split-down uses Alt+Shift+D following Windows Terminal convention.
-        keys: ({ mod, shift }) => (mod === '⌘' ? [mod, shift, 'D'] : ['Alt', shift, 'D'])
-      },
-      {
-        action: 'Close pane (EOF)',
-        searchKeywords: ['shortcut', 'pane', 'close', 'eof'],
-        keys: () => ['Ctrl', 'D']
-      },
-      {
-        action: 'Focus next pane',
-        searchKeywords: ['shortcut', 'pane', 'focus', 'next'],
-        keys: ({ mod }) => [mod, ']']
-      },
-      {
-        action: 'Focus previous pane',
-        searchKeywords: ['shortcut', 'pane', 'focus', 'previous'],
-        keys: ({ mod }) => [mod, '[']
-      },
-      {
-        action: 'Clear active pane',
-        searchKeywords: ['shortcut', 'pane', 'clear'],
-        keys: ({ mod }) => [mod, 'K']
-      },
-      {
-        action: 'Expand / collapse pane',
-        searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
-        keys: ({ mod, shift, enter }) => [mod, shift, enter]
-      }
-    ]
-  },
-  {
-    title: 'Editors',
-    items: [
-      {
-        action: 'Show Markdown Preview',
-        searchKeywords: ['shortcut', 'editor', 'markdown', 'preview'],
-        keys: ({ mod, shift }) => [mod, shift, 'V']
-      }
-    ]
+function getShortcutTerminalStatus(
+  definition: KeybindingDefinition,
+  terminalShortcutPolicy: TerminalShortcutPolicy,
+  hasEffectiveBinding: boolean
+): ShortcutTerminalStatus | undefined {
+  if (!hasEffectiveBinding) {
+    return undefined
   }
-]
-
-// Why: search is supposed to stay in lockstep with the rendered shortcuts. Deriving
-// both from one definition prevents the registry drift regression this branch introduced.
-export const SHORTCUTS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] =
-  SHORTCUT_GROUP_DEFINITIONS.flatMap((group) =>
-    group.items.map((item) => ({
-      title: item.action,
-      description: `${group.title} shortcut`,
-      keywords: item.searchKeywords
-    }))
-  )
+  if (definition.scope === 'terminal') {
+    return {
+      label: translate('auto.components.settings.ShortcutsPane.cb02e00202', 'Terminal'),
+      description: translate(
+        'auto.components.settings.ShortcutsPane.781cb74d22',
+        'Runs from terminal panes.'
+      )
+    }
+  }
+  if (isKeybindingAllowedInTerminal(definition)) {
+    return {
+      label: translate('auto.components.settings.ShortcutsPane.25b0004fbf', 'Terminal active'),
+      description: translate(
+        'auto.components.settings.ShortcutsPane.3c0fac059a',
+        'Still runs while a terminal has keyboard focus.'
+      )
+    }
+  }
+  if (!isKeybindingPotentialTerminalConflict(definition)) {
+    return undefined
+  }
+  const activeInTerminal = keybindingIsActiveInContext(definition, {
+    context: 'terminal',
+    terminalShortcutPolicy
+  })
+  return activeInTerminal
+    ? {
+        label: translate('auto.components.settings.ShortcutsPane.2a0e8aeccf', 'Orca first'),
+        description: translate(
+          'auto.components.settings.ShortcutsPane.dfa8ff612f',
+          'Also runs while a terminal or TUI has keyboard focus.'
+        )
+      }
+    : {
+        label: translate('auto.components.settings.ShortcutsPane.5c65d5db9d', 'Terminal first'),
+        description: translate(
+          'auto.components.settings.ShortcutsPane.f0b35b0b2e',
+          'Disabled while a terminal or TUI has keyboard focus.'
+        )
+      }
+}
 
 export function ShortcutsPane(): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const isMac = navigator.userAgent.includes('Mac')
-  const mod = isMac ? '⌘' : 'Ctrl'
-  const shift = isMac ? '⇧' : 'Shift'
-  const enter = isMac ? '↵' : 'Enter'
-
-  const groups = useMemo<ShortcutGroup[]>(
-    () =>
-      SHORTCUT_GROUP_DEFINITIONS.map((group) => ({
-        title: group.title,
-        items: group.items.map((item) => ({
-          action: item.action,
-          keys: item.keys({ mod, shift, enter })
-        }))
-      })),
-    [mod, shift, enter]
+  const terminalShortcutPolicy = useAppStore(
+    (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
   )
+  const updateSettings = useAppStore((state) => state.updateSettings)
+  const keybindings = useAppStore((state) => state.keybindings)
+  const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
+  const disabledTuiAgents = useAppStore(
+    (state) => state.settings?.disabledTuiAgents ?? EMPTY_DISABLED_TUI_AGENTS
+  )
+  const setKeybindingOverride = useAppStore((state) => state.setKeybindingOverride)
+  const resetKeybindingOverride = useAppStore((state) => state.resetKeybindingOverride)
+  const disableKeybindingAction = useAppStore((state) => state.disableKeybindingAction)
+  const mountedRef = useMountedRef()
+  const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
+  const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
+  const [shortcutQuery, setShortcutQuery] = useState('')
+  const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
 
-  // Why: keywords here must match the ones used by SHORTCUTS_PANE_SEARCH_ENTRIES
-  // (which uses searchKeywords from SHORTCUT_GROUP_DEFINITIONS). Using item.keys
-  // (rendered key labels like ['Cmd', 'P']) would cause a mismatch where sidebar-level
-  // search finds a shortcut but the inner SearchableSetting hides it.
-  const groupEntries = useMemo<Record<string, SettingsSearchEntry[]>>(
-    () =>
-      Object.fromEntries(
-        SHORTCUT_GROUP_DEFINITIONS.map((groupDef) => [
-          groupDef.title,
-          groupDef.items.map((defItem) => ({
-            title: defItem.action,
-            description: `${groupDef.title} shortcut`,
-            keywords: defItem.searchKeywords
-          }))
+  const groups = useMemo(() => groupDefinitions(disabledTuiAgents), [disabledTuiAgents])
+  const ignoredConflictActionIds = useMemo(
+    () => disabledAgentTabActionIds(disabledTuiAgents),
+    [disabledTuiAgents]
+  )
+  const conflictByAction = useMemo(() => {
+    const result = new Map<KeybindingActionId, string[]>()
+    for (const conflict of findKeybindingConflicts(platform, keybindings, {
+      ignoredActionIds: ignoredConflictActionIds
+    })) {
+      const labels = conflict.actionIds
+        .map((id) => getKeybindingDefinition(id)?.title ?? id)
+        .join(', ')
+      for (const actionId of conflict.actionIds) {
+        result.set(actionId, [
+          ...(result.get(actionId) ?? []),
+          `${formatKeybindingList([conflict.binding], platform)} conflicts with ${labels}.`
         ])
-      ),
-    []
+      }
+    }
+    return result
+  }, [ignoredConflictActionIds, keybindings])
+  const shortcutGroups = useMemo<ShortcutRowsByGroup[]>(
+    () =>
+      groups.map((group) => ({
+        title: group.title,
+        rows: group.items.map((item) => {
+          const effective = getEffectiveKeybindingsForAction(item.id, platform, keybindings)
+          const modified = hasOwnBindingOverride(keybindings, item.id)
+          const warnings = conflictByAction.get(item.id) ?? []
+          return {
+            item,
+            groupTitle: group.title,
+            effective,
+            modified,
+            warnings,
+            terminalStatus: getShortcutTerminalStatus(
+              item,
+              terminalShortcutPolicy,
+              effective.length > 0
+            )
+          }
+        })
+      })),
+    [conflictByAction, groups, keybindings, terminalShortcutPolicy]
   )
+  const shortcutSearchQuery = normalizeSettingsSearchQuery(shortcutQuery)
+  const shortcutRows = shortcutGroups.flatMap((group) => group.rows)
+  const baseVisibleRows = shortcutRows.filter(
+    (row) =>
+      matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
+      matchesShortcutLocalSearch(row, shortcutSearchQuery, platform)
+  )
+  const filterCounts: Record<ShortcutFilter, number> = {
+    all: baseVisibleRows.length,
+    modified: baseVisibleRows.filter((row) => row.modified).length,
+    unassigned: baseVisibleRows.filter((row) => row.effective.length === 0).length,
+    conflicts: baseVisibleRows.filter((row) => row.warnings.length > 0).length
+  }
+  const visibleShortcutGroups = shortcutGroups
+    .map((group) => ({
+      title: group.title,
+      rows: group.rows.filter(
+        (row) =>
+          matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
+          matchesShortcutLocalSearch(row, shortcutSearchQuery, platform) &&
+          matchesShortcutFilter(row, shortcutFilter)
+      )
+    }))
+    .filter((group) => group.rows.length > 0)
+  const visibleShortcutCount = visibleShortcutGroups.reduce(
+    (sum, group) => sum + group.rows.length,
+    0
+  )
+
+  const saveBindings = async (
+    actionId: KeybindingActionId,
+    normalized: string[]
+  ): Promise<boolean> => {
+    const normalizedResult = normalizeKeybindingListForAction(actionId, normalized.join(', '))
+    if (!Array.isArray(normalizedResult)) {
+      setErrors((prev) => ({
+        ...prev,
+        [actionId]: normalizedResult.ok ? 'Unable to parse shortcut.' : normalizedResult.error
+      }))
+      return false
+    }
+
+    const defaults = getEffectiveKeybindingsForAction(actionId, platform, {})
+    const next =
+      sameBindings(normalizedResult, defaults) ||
+      (normalizedResult.length === 0 && defaults.length === 0)
+        ? removeBindingOverride(keybindings, actionId)
+        : { ...keybindings, [actionId]: normalizedResult }
+    const blockingConflict = findKeybindingConflicts(platform, next, {
+      ignoredActionIds: ignoredConflictActionIds
+    }).find((conflict) => conflict.actionIds.includes(actionId))
+    if (blockingConflict) {
+      const labels = blockingConflict.actionIds
+        .filter((id) => id !== actionId)
+        .map((id) => getKeybindingDefinition(id)?.title ?? id)
+        .join(', ')
+      setErrors((prev) => ({
+        ...prev,
+        [actionId]: `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with ${labels}.`
+      }))
+      return false
+    }
+
+    setErrors((prev) => ({ ...prev, [actionId]: undefined }))
+    try {
+      const matchesDefault =
+        sameBindings(normalizedResult, defaults) ||
+        (normalizedResult.length === 0 && defaults.length === 0)
+      await (matchesDefault && !hasCommonBindingOverride(keybindingSnapshot, actionId)
+        ? resetKeybindingOverride(actionId)
+        : setKeybindingOverride(actionId, normalizedResult))
+      return true
+    } catch (error) {
+      if (mountedRef.current) {
+        setErrors((prev) => ({
+          ...prev,
+          [actionId]: error instanceof Error ? error.message : 'Failed to save shortcut.'
+        }))
+      }
+      return false
+    }
+  }
+
+  const captureBinding = async (
+    actionId: KeybindingActionId,
+    input: KeybindingInput
+  ): Promise<void> => {
+    const captured = keybindingFromInputForAction(actionId, input, platform)
+    if (!captured.ok) {
+      setErrors((prev) => ({ ...prev, [actionId]: captured.error }))
+      return
+    }
+
+    // Why: the visual editor records one chord at a time; users can still
+    // manage multi-binding arrays directly in keybindings.json.
+    if ((await saveBindings(actionId, [captured.value])) && mountedRef.current) {
+      setRecordingActionId(null)
+    }
+  }
+
+  const resetBinding = async (actionId: KeybindingActionId): Promise<void> => {
+    setErrors((prev) => ({ ...prev, [actionId]: undefined }))
+    try {
+      await (hasCommonBindingOverride(keybindingSnapshot, actionId)
+        ? setKeybindingOverride(actionId, getEffectiveKeybindingsForAction(actionId, platform, {}))
+        : resetKeybindingOverride(actionId))
+    } catch (error) {
+      if (mountedRef.current) {
+        setErrors((prev) => ({
+          ...prev,
+          [actionId]: error instanceof Error ? error.message : 'Failed to reset shortcut.'
+        }))
+      }
+    }
+  }
+
+  const disableBinding = async (actionId: KeybindingActionId): Promise<void> => {
+    setErrors((prev) => ({ ...prev, [actionId]: undefined }))
+    try {
+      await disableKeybindingAction(actionId)
+    } catch (error) {
+      if (mountedRef.current) {
+        setErrors((prev) => ({
+          ...prev,
+          [actionId]: error instanceof Error ? error.message : 'Failed to disable shortcut.'
+        }))
+      }
+    }
+  }
+
+  const clearError = (actionId: KeybindingActionId): void => {
+    setErrors((prev) => ({ ...prev, [actionId]: undefined }))
+  }
+
+  const clearRecordingForAction = (actionId: KeybindingActionId): void => {
+    // Why: disable/reset are final shortcut edits; the next keypress must not
+    // be captured into the shortcut the user just removed or restored.
+    setRecordingActionId((current) => clearRecordingActionForShortcutMutation(current, actionId))
+  }
+
+  const showPolicy = matchesSettingsSearch(searchQuery, getTerminalShortcutPolicySearchEntry())
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-4">
-        <div className="space-y-1">
-          <h2 className="text-sm font-semibold">Keyboard Shortcuts</h2>
-          <p className="text-xs text-muted-foreground">
-            View common hotkeys used across the application. Shortcuts customization is not
-            currently supported.
-          </p>
-        </div>
+    <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
+      <section className="flex min-h-0 flex-1 flex-col space-y-3">
+        {showPolicy ? (
+          <ShortcutTerminalPolicyControl
+            terminalShortcutPolicy={terminalShortcutPolicy}
+            keywords={getTerminalShortcutPolicySearchEntry().keywords}
+            updateSettings={updateSettings}
+          />
+        ) : null}
 
-        <div className="grid gap-8">
-          {groups
-            .filter((group) => matchesSettingsSearch(searchQuery, groupEntries[group.title] ?? []))
-            .map((group) => (
-              <div key={group.title} className="space-y-3">
-                <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">
-                  {group.title}
-                </h3>
-                <div className="grid gap-2">
-                  {group.items.map((item, idx) => {
-                    // Why: look up the definition's searchKeywords so the inner
-                    // SearchableSetting matches the same terms as the sidebar search.
-                    const defGroup = SHORTCUT_GROUP_DEFINITIONS.find((g) => g.title === group.title)
-                    const defItem = defGroup?.items.find((d) => d.action === item.action)
-                    const keywords = defItem?.searchKeywords ?? item.keys
+        <SettingsSubsectionHeader
+          title={translate(
+            'auto.components.settings.ShortcutsPane.47f8f7aef9',
+            'Keyboard Shortcuts'
+          )}
+          description={
+            <>
+              {translate(
+                'auto.components.settings.ShortcutsPane.38e86e206a',
+                'Customize shortcuts visually or edit'
+              )}{' '}
+              <span className="font-mono text-[11px]">
+                {keybindingSnapshot?.path ??
+                  translate(
+                    'auto.components.settings.ShortcutsPane.d8c988dab4',
+                    '~/.orca/keybindings.json'
+                  )}
+              </span>{' '}
+              {translate('auto.components.settings.ShortcutsPane.4b7ae34062', 'directly.')}
+            </>
+          }
+          action={<KeybindingsFileActions />}
+        />
 
-                    return (
-                      <SearchableSetting
-                        key={idx}
-                        title={item.action}
-                        description={`${group.title} shortcut`}
-                        keywords={keywords}
-                        className="flex items-center justify-between py-1"
-                      >
-                        <span className="text-sm text-foreground">{item.action}</span>
-                        <ShortcutKeyCombo keys={item.keys} />
-                      </SearchableSetting>
-                    )
-                  })}
-                </div>
-              </div>
+        {keybindingSnapshot?.diagnostics.length ? (
+          <div className="space-y-1">
+            {keybindingSnapshot.diagnostics.map((diagnostic, index) => (
+              <p
+                key={`${diagnostic.section ?? 'root'}-${diagnostic.actionId ?? index}`}
+                className={
+                  diagnostic.severity === 'error'
+                    ? 'text-xs text-destructive'
+                    : 'text-xs text-muted-foreground'
+                }
+              >
+                {diagnostic.message}
+              </p>
             ))}
+          </div>
+        ) : null}
+
+        <div className="grid min-h-0 flex-1 gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
+          <ShortcutFilterRail
+            query={shortcutQuery}
+            onQueryChange={setShortcutQuery}
+            filter={shortcutFilter}
+            onFilterChange={setShortcutFilter}
+            filterCounts={filterCounts}
+            visibleCount={visibleShortcutCount}
+            totalCount={shortcutRows.length}
+          />
+
+          <ShortcutRowsList
+            className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1 scrollbar-sleek"
+            groups={visibleShortcutGroups}
+            platform={platform}
+            errors={errors}
+            recordingActionId={recordingActionId}
+            onStartRecording={(actionId) => {
+              setRecordingActionId(actionId)
+              clearError(actionId)
+            }}
+            onCancelRecording={() => setRecordingActionId(null)}
+            onCapture={(actionId, input) => void captureBinding(actionId, input)}
+            onClearError={clearError}
+            onDisable={(actionId) => {
+              clearRecordingForAction(actionId)
+              void disableBinding(actionId)
+            }}
+            onReset={(actionId) => {
+              clearRecordingForAction(actionId)
+              void resetBinding(actionId)
+            }}
+          />
         </div>
       </section>
     </div>

@@ -1,12 +1,20 @@
 import { branchName } from '@/lib/git-utils'
+import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import type { Repo, Worktree } from '../../../shared/types'
 
 export type MatchRange = { start: number; end: number }
 
-export type PaletteMatchedField = 'displayName' | 'branch' | 'repo' | 'comment' | 'pr' | 'issue'
+export type PaletteMatchedField =
+  | 'displayName'
+  | 'branch'
+  | 'repo'
+  | 'comment'
+  | 'pr'
+  | 'issue'
+  | 'port'
 
 export type PaletteSupportingText = {
-  label: 'Comment' | 'PR' | 'Issue'
+  labelKind: 'comment' | 'pr' | 'issue' | 'port'
   text: string
   matchRange: MatchRange | null
 }
@@ -18,6 +26,20 @@ export type PaletteSearchResult = {
   branchRange: MatchRange | null
   repoRange: MatchRange | null
   supportingText: PaletteSupportingText | null
+}
+
+export function getWorktreePaletteSearchScope(args: {
+  hasQuery: boolean
+  allWorktrees: readonly Worktree[]
+  emptyQueryWorktrees: readonly Worktree[]
+}): Worktree[] {
+  if (!args.hasQuery) {
+    return [...args.emptyQueryWorktrees]
+  }
+
+  // Why: sidebar filters keep the default list quiet, but explicit search is
+  // a recovery path for sleeping/default-branch workspaces hidden by filters.
+  return args.allWorktrees.filter((worktree) => !worktree.isArchived)
 }
 
 type PRCacheEntry = { data?: { number: number; title: string } | null } | undefined
@@ -76,7 +98,8 @@ export function searchWorktrees(
   query: string,
   repoMap: Map<string, Repo>,
   prCache: Record<string, PRCacheEntry> | null,
-  issueCache: Record<string, IssueCacheEntry> | null
+  issueCache: Record<string, IssueCacheEntry> | null,
+  workspacePortsByWorktreeId?: Map<string, { port: number; processName?: string }[]>
 ): PaletteSearchResult[] {
   if (!query) {
     return worktrees.map((worktree) => makeResult(worktree.id, null))
@@ -160,7 +183,7 @@ export function searchWorktrees(
         results.push(
           makeResult(worktree.id, 'comment', {
             supportingText: {
-              label: 'Comment',
+              labelKind: 'comment',
               text: snippet.text,
               matchRange: snippet.matchRange
             }
@@ -171,6 +194,33 @@ export function searchWorktrees(
     }
 
     if (!numericQuery) {
+      continue
+    }
+
+    const workspacePorts = workspacePortsByWorktreeId?.get(worktree.id) ?? []
+    let matchedPort = false
+    for (const port of workspacePorts) {
+      const portText = String(port.port)
+      const portIndex = portText.indexOf(numericQuery)
+      if (portIndex !== -1) {
+        const label = port.processName ? `${portText} · ${port.processName}` : portText
+        results.push(
+          makeResult(worktree.id, 'port', {
+            supportingText: {
+              labelKind: 'port',
+              text: label,
+              matchRange: {
+                start: portIndex,
+                end: portIndex + numericQuery.length
+              }
+            }
+          })
+        )
+        matchedPort = true
+        break
+      }
+    }
+    if (matchedPort) {
       continue
     }
 
@@ -185,7 +235,7 @@ export function searchWorktrees(
         results.push(
           makeResult(worktree.id, 'pr', {
             supportingText: {
-              label: 'PR',
+              labelKind: 'pr',
               text: prText,
               matchRange: {
                 start: 'PR #'.length + prNumberIndex,
@@ -202,7 +252,7 @@ export function searchWorktrees(
         results.push(
           makeResult(worktree.id, 'pr', {
             supportingText: {
-              label: 'PR',
+              labelKind: 'pr',
               text: pr.title,
               matchRange: { start: prTitleIndex, end: prTitleIndex + q.length }
             }
@@ -217,7 +267,7 @@ export function searchWorktrees(
         results.push(
           makeResult(worktree.id, 'pr', {
             supportingText: {
-              label: 'PR',
+              labelKind: 'pr',
               text: prText,
               matchRange: {
                 start: 'PR #'.length + prNumberIndex,
@@ -240,7 +290,7 @@ export function searchWorktrees(
       results.push(
         makeResult(worktree.id, 'issue', {
           supportingText: {
-            label: 'Issue',
+            labelKind: 'issue',
             text: issueText,
             matchRange: {
               start: 'Issue #'.length + issueNumberIndex,
@@ -252,7 +302,16 @@ export function searchWorktrees(
       continue
     }
 
-    const issueKey = repo ? `${repo.path}::${worktree.linkedIssue}` : ''
+    const issueKey = repo
+      ? getIssueCacheKey(
+          repo.path,
+          repo.id,
+          worktree.linkedIssue,
+          undefined,
+          repo.connectionId,
+          repo.executionHostId
+        )
+      : ''
     const issue = issueKey && issueCache ? issueCache[issueKey]?.data : undefined
     if (!issue?.title) {
       continue
@@ -263,7 +322,7 @@ export function searchWorktrees(
       results.push(
         makeResult(worktree.id, 'issue', {
           supportingText: {
-            label: 'Issue',
+            labelKind: 'issue',
             text: issue.title,
             matchRange: { start: issueTitleIndex, end: issueTitleIndex + q.length }
           }

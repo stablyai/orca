@@ -3,8 +3,11 @@ import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-typ
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
 
 function createPane(): ManagedPaneInternal {
+  const leafId = '11111111-1111-4111-8111-111111111111' as never
   return {
     id: 1,
+    leafId,
+    stablePaneId: leafId,
     terminal: {
       cols: 80,
       rows: 24
@@ -59,9 +62,27 @@ describe('applyTerminalGpuAcceleration', () => {
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
   })
 
-  it('returns complex-script panes to DOM when switching from forced WebGL back to auto', () => {
+  it('keeps complex-script panes on WebGL when switching from forced WebGL back to auto', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'MacIntel',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)'
+    })
     const pane = createPane()
     pane.hasComplexScriptOutput = true
+    const options: PaneManagerOptions = { terminalGpuAcceleration: 'on' }
+
+    applyTerminalGpuAcceleration([pane], options, 'auto')
+
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+  })
+
+  it('returns Linux panes to DOM when switching from forced WebGL back to auto without a safe renderer', () => {
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    const pane = createPane()
     const options: PaneManagerOptions = { terminalGpuAcceleration: 'on' }
 
     applyTerminalGpuAcceleration([pane], options, 'auto')

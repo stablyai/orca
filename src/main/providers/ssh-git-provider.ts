@@ -1,20 +1,73 @@
+/* eslint-disable max-lines -- Why: this provider mirrors IGitProvider one
+   method per RPC call (~16 methods). Splitting it would only add
+   indirection — every method is a 1:1 forwarder to a relay RPC plus a
+   small amount of param plumbing. */
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IGitProvider } from './types'
-import hostedGitInfo from 'hosted-git-info'
 import type {
   GitStatusResult,
   GitDiffResult,
   GitBranchCompareResult,
+  GitCommitCompareResult,
   GitConflictOperation,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
+  GitPushTarget,
   GitUpstreamStatus,
-  GitWorktreeInfo
+  GitWorktreeInfo,
+  RemoveWorktreeResult
 } from '../../shared/types'
+import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
+import { JsonRpcErrorCode } from '../ssh/relay-protocol'
+import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
+import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import {
+  describeMaxBufferOverflowError,
+  isMaxBufferOverflowError
+} from '../git/max-buffer-overflow'
+
+type NonInteractiveExecQueueEntry = {
+  started: boolean
+  canceled: boolean
+  done: Promise<void>
+  release: () => void
+}
+
+function isJsonRpcMethodNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  return (error as { code?: unknown }).code === JsonRpcErrorCode.MethodNotFound
+}
+
+function formatStatusEntriesForCleanCheck(entries: GitStatusResult['entries']): string | undefined {
+  if (entries.length === 0) {
+    return undefined
+  }
+  return entries.map((entry) => `${entry.area} ${entry.status}: ${entry.path}`).join('\n')
+}
+
+function filterUntrackedPorcelainStatus(stdout: string | undefined): string | undefined {
+  const trackedLines = (stdout ?? '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0 && !line.startsWith('?? '))
+  return trackedLines.length > 0 ? trackedLines.join('\n') : undefined
+}
 
 export class SshGitProvider implements IGitProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
+  private nonInteractiveExecQueues = new Map<string, NonInteractiveExecQueueEntry[]>()
+  private loggedWorktreeIsCleanFallback = false
 
-  constructor(connectionId: string, mux: SshChannelMultiplexer) {
+  constructor(
+    connectionId: string,
+    mux: SshChannelMultiplexer,
+    private readonly hostPlatform: RemoteHostPlatform | null = null
+  ) {
     this.connectionId = connectionId
     this.mux = mux
   }
@@ -23,8 +76,36 @@ export class SshGitProvider implements IGitProvider {
     return this.connectionId
   }
 
-  async getStatus(worktreePath: string): Promise<GitStatusResult> {
-    return (await this.mux.request('git.status', { worktreePath })) as GitStatusResult
+  getHostPlatform(): RemoteHostPlatform | null {
+    return this.hostPlatform
+  }
+
+  async getStatus(
+    worktreePath: string,
+    options?: { includeIgnored?: boolean }
+  ): Promise<GitStatusResult> {
+    const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
+    return (await this.mux.request('git.status', {
+      worktreePath,
+      ...includeIgnoredArgs
+    })) as GitStatusResult
+  }
+
+  async checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]> {
+    return (await this.mux.request('git.checkIgnored', {
+      worktreePath,
+      paths: relativePaths
+    })) as string[]
+  }
+
+  async getHistory(
+    worktreePath: string,
+    options: GitHistoryOptions = {}
+  ): Promise<GitHistoryResult> {
+    return (await this.mux.request('git.history', {
+      worktreePath,
+      ...options
+    })) as GitHistoryResult
   }
 
   async commit(
@@ -35,6 +116,199 @@ export class SshGitProvider implements IGitProvider {
       worktreePath,
       message
     })) as { success: boolean; error?: string }
+  }
+
+  async getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null> {
+    const branchPromise = this.exec(['branch', '--show-current'], worktreePath).catch(() => ({
+      stdout: ''
+    }))
+    const [branchResult, summaryResult] = await Promise.all([
+      branchPromise,
+      this.exec(['diff', '--cached', '--name-status'], worktreePath)
+    ])
+    const stagedSummary = summaryResult.stdout.trim()
+    if (!stagedSummary) {
+      return null
+    }
+    let stagedPatch = ''
+    try {
+      const patchResult = await this.exec(
+        ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+        worktreePath
+      )
+      stagedPatch = patchResult.stdout
+    } catch (error) {
+      if (!isMaxBufferOverflowError(error)) {
+        throw error
+      }
+      // Why: a very large staged diff can overflow the remote exec buffer. The
+      // patch is optional context (truncated later anyway), so degrade to the
+      // file-name summary instead of failing commit-message generation.
+      console.warn(
+        '[ssh-git] Staged patch too large to read; using file summary only:',
+        describeMaxBufferOverflowError(error)
+      )
+    }
+    return {
+      branch: branchResult.stdout.trim() || null,
+      stagedSummary,
+      stagedPatch
+    }
+  }
+
+  async executeCommitMessagePlan(
+    plan: CommitMessagePlan,
+    cwd: string,
+    timeoutMs: number,
+    operation = 'commit-message'
+  ): Promise<RemoteCommitMessageExecResult> {
+    return this.runQueuedNonInteractiveExec(
+      cwd,
+      {
+        binary: plan.binary,
+        args: plan.args,
+        cwd,
+        stdin: plan.stdinPayload,
+        timeoutMs,
+        operation
+      },
+      undefined,
+      operation
+    )
+  }
+
+  async execNonInteractive(
+    binary: string,
+    args: string[],
+    cwd: string,
+    timeoutMs: number,
+    signal?: AbortSignal,
+    env?: Record<string, string>
+  ): Promise<RemoteCommitMessageExecResult> {
+    return this.runQueuedNonInteractiveExec(
+      cwd,
+      {
+        binary,
+        args,
+        cwd,
+        stdin: null,
+        timeoutMs,
+        ...(env ? { env } : {})
+      },
+      signal
+    )
+  }
+
+  async cancelNonInteractiveExec(cwd: string, operation?: string): Promise<void> {
+    const queue = this.nonInteractiveExecQueues.get(this.nonInteractiveLaneKey(cwd, operation))
+    const queuedEntry = queue?.find((entry) => !entry.started && !entry.canceled)
+    if (queuedEntry) {
+      queuedEntry.canceled = true
+      return
+    }
+    await this.cancelActiveNonInteractiveExec(cwd, operation)
+  }
+
+  private async cancelActiveNonInteractiveExec(cwd: string, operation?: string): Promise<void> {
+    try {
+      await this.mux.request('agent.cancelExec', {
+        cwd,
+        ...(operation ? { operation } : {})
+      })
+    } catch {
+      // Best-effort: callers are already unwinding after cancellation.
+    }
+  }
+
+  async cancelGenerateCommitMessage(
+    worktreePath: string,
+    operation = 'commit-message'
+  ): Promise<void> {
+    // Why: best-effort — the relay returns `{canceled: false}` when there is
+    // nothing in flight. Callers should not block UI updates on this.
+    await this.cancelNonInteractiveExec(worktreePath, operation)
+  }
+
+  private nonInteractiveLaneKey(cwd: string, operation?: string): string {
+    return JSON.stringify([operation || 'default', cwd])
+  }
+
+  private async runQueuedNonInteractiveExec(
+    cwd: string,
+    payload: {
+      binary: string
+      args: string[]
+      cwd: string
+      stdin: string | null
+      timeoutMs: number
+      env?: Record<string, string>
+      operation?: string
+    },
+    signal?: AbortSignal,
+    operation?: string
+  ): Promise<RemoteCommitMessageExecResult> {
+    const laneKey = this.nonInteractiveLaneKey(cwd, operation)
+    const queue = this.nonInteractiveExecQueues.get(laneKey) ?? []
+    const previous = queue.at(-1)?.done ?? Promise.resolve()
+    let releaseEntry!: () => void
+    const entry: NonInteractiveExecQueueEntry = {
+      started: false,
+      canceled: false,
+      done: previous
+        .catch(() => {})
+        .then(
+          () =>
+            new Promise<void>((resolve) => {
+              releaseEntry = resolve
+            })
+        ),
+      release: () => releaseEntry()
+    }
+    queue.push(entry)
+    this.nonInteractiveExecQueues.set(laneKey, queue)
+    const abortEntry = (): void => {
+      if (!entry.started) {
+        entry.canceled = true
+        return
+      }
+      void this.cancelActiveNonInteractiveExec(cwd, operation)
+    }
+    if (signal?.aborted) {
+      entry.canceled = true
+    } else {
+      signal?.addEventListener('abort', abortEntry, { once: true })
+    }
+
+    // Why: the SSH relay tracks children per operation; serialize only matching
+    // lanes so commit-message and PR-field generation can coexist.
+    await previous.catch(() => {})
+    try {
+      if (entry.canceled) {
+        return {
+          stdout: '',
+          stderr: '',
+          exitCode: null,
+          timedOut: false,
+          canceled: true
+        }
+      }
+      entry.started = true
+      return (await this.mux.request(
+        'agent.execNonInteractive',
+        payload
+      )) as RemoteCommitMessageExecResult
+    } finally {
+      signal?.removeEventListener('abort', abortEntry)
+      entry.release()
+      const currentQueue = this.nonInteractiveExecQueues.get(laneKey)
+      const entryIndex = currentQueue?.indexOf(entry) ?? -1
+      if (entryIndex >= 0) {
+        currentQueue?.splice(entryIndex, 1)
+      }
+      if (currentQueue?.length === 0) {
+        this.nonInteractiveExecQueues.delete(laneKey)
+      }
+    }
   }
 
   async getDiff(
@@ -71,10 +345,35 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.discard', { worktreePath, filePath })
   }
 
+  async bulkDiscardChanges(worktreePath: string, filePaths: string[]): Promise<void> {
+    await this.mux.request('git.bulkDiscard', { worktreePath, filePaths })
+  }
+
   async detectConflictOperation(worktreePath: string): Promise<GitConflictOperation> {
     return (await this.mux.request('git.conflictOperation', {
       worktreePath
     })) as GitConflictOperation
+  }
+
+  async abortMerge(worktreePath: string): Promise<void> {
+    await this.mux.request('git.abortMerge', { worktreePath })
+  }
+
+  async abortRebase(worktreePath: string): Promise<void> {
+    await this.mux.request('git.abortRebase', { worktreePath })
+  }
+
+  async checkoutBranch(worktreePath: string, branch: string): Promise<void> {
+    await this.mux.request('git.checkout', { worktreePath, branch })
+  }
+
+  async listLocalBranches(
+    worktreePath: string
+  ): Promise<{ current: string | null; branches: string[] }> {
+    return (await this.mux.request('git.localBranches', { worktreePath })) as {
+      current: string | null
+      branches: string[]
+    }
   }
 
   async getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult> {
@@ -84,22 +383,90 @@ export class SshGitProvider implements IGitProvider {
     })) as GitBranchCompareResult
   }
 
-  async getUpstreamStatus(worktreePath: string): Promise<GitUpstreamStatus> {
+  async getCommitCompare(worktreePath: string, commitId: string): Promise<GitCommitCompareResult> {
+    return (await this.mux.request('git.commitCompare', {
+      worktreePath,
+      commitId
+    })) as GitCommitCompareResult
+  }
+
+  async getUpstreamStatus(
+    worktreePath: string,
+    pushTarget?: GitPushTarget
+  ): Promise<GitUpstreamStatus> {
     return (await this.mux.request('git.upstreamStatus', {
-      worktreePath
+      worktreePath,
+      ...(pushTarget ? { pushTarget } : {})
     })) as GitUpstreamStatus
   }
 
-  async pushBranch(worktreePath: string, publish = false): Promise<void> {
-    await this.mux.request('git.push', { worktreePath, publish })
+  async pushBranch(
+    worktreePath: string,
+    publish = false,
+    pushTarget?: GitPushTarget,
+    options: { forceWithLease?: boolean } = {}
+  ): Promise<void> {
+    await this.mux.request('git.push', {
+      worktreePath,
+      publish,
+      pushTarget,
+      ...(options.forceWithLease === true ? { forceWithLease: true } : {})
+    })
   }
 
-  async pullBranch(worktreePath: string): Promise<void> {
-    await this.mux.request('git.pull', { worktreePath })
+  async pullBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
+    await this.mux.request('git.pull', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
   }
 
-  async fetchRemote(worktreePath: string): Promise<void> {
-    await this.mux.request('git.fetch', { worktreePath })
+  async fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
+    await this.mux.request('git.fastForward', {
+      worktreePath,
+      ...(pushTarget ? { pushTarget } : {})
+    })
+  }
+
+  async rebaseFromBase(worktreePath: string, baseRef: string): Promise<void> {
+    await this.mux.request('git.rebaseFromBase', { worktreePath, baseRef })
+  }
+
+  async fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
+    await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
+  }
+
+  async syncForkDefaultBranch(
+    worktreePath: string,
+    expectedUpstream: GitForkSyncExpectedUpstream
+  ): Promise<GitForkSyncResult> {
+    return (await this.mux.request('git.forkSync', {
+      worktreePath,
+      ...(expectedUpstream ? { expectedUpstream } : {})
+    })) as GitForkSyncResult
+  }
+
+  async fetchRemoteTrackingRef(
+    worktreePath: string,
+    remote: string,
+    branch: string,
+    ref: string
+  ): Promise<void> {
+    await this.mux.request('git.fetchRemoteTrackingRef', {
+      worktreePath,
+      remote,
+      branch,
+      ref
+    })
+  }
+
+  async fetchGitLabMergeRequestHead(
+    worktreePath: string,
+    remote: string,
+    mrIid: number
+  ): Promise<void> {
+    await this.mux.request('git.fetchGitLabMergeRequestHead', {
+      worktreePath,
+      remote,
+      mrIid
+    })
   }
 
   async getBranchDiff(
@@ -114,17 +481,34 @@ export class SshGitProvider implements IGitProvider {
     })) as GitDiffResult[]
   }
 
-  async listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
-    return (await this.mux.request('git.listWorktrees', {
-      repoPath
-    })) as GitWorktreeInfo[]
+  async getCommitDiff(
+    worktreePath: string,
+    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
+  ): Promise<GitDiffResult> {
+    return (await this.mux.request('git.commitDiff', {
+      worktreePath,
+      ...args
+    })) as GitDiffResult
+  }
+
+  async listWorktrees(
+    repoPath: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<GitWorktreeInfo[]> {
+    return (await this.mux.request(
+      'git.listWorktrees',
+      {
+        repoPath
+      },
+      { signal: options?.signal }
+    )) as GitWorktreeInfo[]
   }
 
   async addWorktree(
     repoPath: string,
     branchName: string,
     targetDir: string,
-    options?: { base?: string; track?: boolean }
+    options?: { base?: string; checkoutExistingBranch?: boolean; noCheckout?: boolean }
   ): Promise<void> {
     await this.mux.request('git.addWorktree', {
       repoPath,
@@ -134,14 +518,129 @@ export class SshGitProvider implements IGitProvider {
     })
   }
 
-  async removeWorktree(worktreePath: string, force?: boolean): Promise<void> {
-    await this.mux.request('git.removeWorktree', { worktreePath, force })
+  async removeWorktree(
+    worktreePath: string,
+    force?: boolean,
+    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
+  ): Promise<RemoveWorktreeResult> {
+    return ((await this.mux.request('git.removeWorktree', {
+      worktreePath,
+      force,
+      ...options
+    })) ?? {}) as RemoveWorktreeResult
   }
 
-  async exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
-    return (await this.mux.request('git.exec', { args, cwd })) as {
+  async worktreeIsClean(
+    worktreePath: string,
+    options: { includeUntracked?: boolean } = {}
+  ): Promise<{ clean: boolean; stdout?: string }> {
+    try {
+      const result = (await this.mux.request('git.worktreeIsClean', {
+        worktreePath,
+        ...(options.includeUntracked === false ? { includeUntracked: false } : {})
+      })) as {
+        clean: boolean
+        stdout?: string
+      }
+      if (options.includeUntracked === false) {
+        if (!result.clean && result.stdout === undefined) {
+          return result
+        }
+        const trackedStdout = filterUntrackedPorcelainStatus(result.stdout)
+        return { clean: !trackedStdout, ...(trackedStdout ? { stdout: trackedStdout } : {}) }
+      }
+      return result
+    } catch (error) {
+      if (!isJsonRpcMethodNotFoundError(error)) {
+        throw error
+      }
+      if (!this.loggedWorktreeIsCleanFallback) {
+        this.loggedWorktreeIsCleanFallback = true
+        console.warn(
+          '[ssh-git] Relay does not implement git.worktreeIsClean; falling back to git.status clean check'
+        )
+      }
+      // Why: existing SSH relays may predate git.worktreeIsClean, but git.status
+      // is a narrow relay RPC and avoids the generic git.exec allowlist.
+      const status = await this.getStatus(worktreePath)
+      const entries =
+        options.includeUntracked === false
+          ? status.entries.filter((entry) => entry.area !== 'untracked')
+          : status.entries
+      const clean = entries.length === 0
+      return { clean, stdout: formatStatusEntriesForCleanCheck(entries) }
+    }
+  }
+
+  async refreshLocalBaseRefForWorktreeCreate(args: {
+    repoPath: string
+    fullRef: string
+    remoteTrackingRef: string
+    ownerWorktreePath?: string
+    checkOnly?: boolean
+  }): Promise<void> {
+    await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
+  }
+
+  async renameCurrentBranch(worktreePath: string, newBranch: string): Promise<void> {
+    await this.mux.request('git.renameCurrentBranch', { worktreePath, newBranch })
+  }
+
+  async exec(
+    args: string[],
+    cwd: string,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): Promise<{ stdout: string; stderr: string }> {
+    const result = options
+      ? await this.mux.request('git.exec', { args, cwd }, options)
+      : await this.mux.request('git.exec', { args, cwd })
+    return result as {
       stdout: string
       stderr: string
+    }
+  }
+
+  async clone(
+    args: string[],
+    cwd: string,
+    options?: {
+      signal?: AbortSignal
+      timeoutMs?: number
+      onProgress?: (progress: { phase: string; percent: number }) => void
+    }
+  ): Promise<{ stdout: string; stderr: string }> {
+    const progressId = `clone-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const unsubscribe = options?.onProgress
+      ? this.mux.onNotificationByMethod('git.cloneProgress', (params) => {
+          if (params.progressId !== progressId) {
+            return
+          }
+          const phase = params.phase
+          const percent = params.percent
+          if (typeof phase === 'string' && typeof percent === 'number') {
+            options.onProgress?.({ phase, percent })
+          }
+        })
+      : undefined
+    try {
+      const result = await this.mux.request(
+        'git.clone',
+        { args, cwd, progressId },
+        { signal: options?.signal, timeoutMs: options?.timeoutMs }
+      )
+      return result as {
+        stdout: string
+        stderr: string
+      }
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        throw new Error(
+          'SSH clone support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+        )
+      }
+      throw error
+    } finally {
+      unsubscribe?.()
     }
   }
 
@@ -160,27 +659,24 @@ export class SshGitProvider implements IGitProvider {
     return true
   }
 
-  // Why: the local getRemoteFileUrl uses hosted-git-info which requires the
-  // remote URL from .git/config. For SSH connections we must fetch the remote
-  // URL from the relay, then apply the same hosted-git-info logic locally.
+  // Why: SSH worktrees need the remote URL from the relay-side .git/config
+  // before local code can map it to a hosted source link.
+  private async readOriginRemoteUrl(worktreePath: string): Promise<string | null> {
+    try {
+      const result = await this.exec(['remote', 'get-url', 'origin'], worktreePath)
+      return result.stdout.trim() || null
+    } catch {
+      return null
+    }
+  }
+
   async getRemoteFileUrl(
     worktreePath: string,
     relativePath: string,
     line: number
   ): Promise<string | null> {
-    let remoteUrl: string
-    try {
-      const result = await this.exec(['remote', 'get-url', 'origin'], worktreePath)
-      remoteUrl = result.stdout.trim()
-    } catch {
-      return null
-    }
+    const remoteUrl = await this.readOriginRemoteUrl(worktreePath)
     if (!remoteUrl) {
-      return null
-    }
-
-    const info = hostedGitInfo.fromUrl(remoteUrl)
-    if (!info) {
       return null
     }
 
@@ -198,13 +694,14 @@ export class SshGitProvider implements IGitProvider {
       // Fall back to 'main'
     }
 
-    const browseUrl = info.browseFile(relativePath, { committish: defaultBranch })
-    if (!browseUrl) {
+    return buildHostedRemoteFileUrl(remoteUrl, relativePath, defaultBranch, line)
+  }
+
+  async getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null> {
+    const remoteUrl = await this.readOriginRemoteUrl(worktreePath)
+    if (!remoteUrl) {
       return null
     }
-
-    // Why: hosted-git-info lowercases the fragment, but GitHub convention
-    // uses uppercase L for line links (e.g. #L42). Append manually.
-    return `${browseUrl}#L${line}`
+    return buildHostedRemoteCommitUrl(remoteUrl, sha)
   }
 }

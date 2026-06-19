@@ -9,7 +9,5 @@ export function getSourceControlActions(area: GitStagingArea): SourceControlActi
     case 'unstaged':
     case 'untracked':
       return ['discard', 'stage']
-    default:
-      return []
   }
 }

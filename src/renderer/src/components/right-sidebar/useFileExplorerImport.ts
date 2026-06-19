@@ -1,15 +1,17 @@
 import { useEffect, useRef } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { translate } from '@/i18n/i18n'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 type UseFileExplorerImportParams = {
   worktreePath: string | null
   activeWorktreeId: string | null
   refreshDir: (dirPath: string) => Promise<void>
   clearNativeDragState: () => void
-  setSelectedPath: Dispatch<SetStateAction<string | null>>
+  setSelectedPath: (path: string | null) => void
 }
 
 /**
@@ -61,21 +63,25 @@ export function useFileExplorerImport({
 
       void (async () => {
         try {
-          const { results } = await window.api.fs.importExternalPaths({
-            sourcePaths: paths,
-            destDir: destinationDir,
-            connectionId
-          })
+          const { results } = await importExternalPathsToRuntime(
+            {
+              settings: getRightSidebarWorktreeRuntimeSettings(wtId),
+              worktreeId: wtId,
+              worktreePath: worktreePathRef.current,
+              connectionId
+            },
+            paths,
+            destinationDir
+          )
 
           // Refresh the destination directory once per gesture
           await refreshDirRef.current(destinationDir)
 
           // Why: only select (highlight) the first imported file — don't trigger
-          // the full reveal machinery (scrollToIndex + flash) because the user
-          // already knows where they dropped the file. The reveal's aggressive
-          // scroll-to-center races with FS watcher refreshes and can snap the
-          // viewport back to the top of the tree.
+          // the full reveal machinery because watcher refreshes can otherwise
+          // snap the tree viewport away from the user's drop target.
           const imported = results.filter((r) => r.status === 'imported')
+          const skipped = results.filter((r) => r.status === 'skipped')
           const failed = results.filter((r) => r.status === 'failed')
 
           if (imported.length > 0) {
@@ -84,7 +90,22 @@ export function useFileExplorerImport({
 
           if (failed.length > 0) {
             const noun = failed.length === 1 ? 'file' : 'files'
-            toast.error(`Failed to import ${failed.length} ${noun}.`)
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.useFileExplorerImport.132fd0e1e9',
+                'Failed to import {{value0}} {{value1}}.',
+                { value0: failed.length, value1: noun }
+              )
+            )
+          } else if (skipped.length > 0 && imported.length === 0) {
+            const noun = skipped.length === 1 ? 'file' : 'files'
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.useFileExplorerImport.25919b2050',
+                'Skipped {{value0}} {{value1}}.',
+                { value0: skipped.length, value1: noun }
+              )
+            )
           }
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, 'Failed to import files.'))

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import { ChevronRight, Copy } from 'lucide-react'
 import { basename, dirname } from '@/lib/path'
 import { cn } from '@/lib/utils'
+import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -10,7 +11,9 @@ import {
   ContextMenuContent,
   ContextMenuItem
 } from '@/components/ui/context-menu'
+import { normalizeSearchFileMatchCount } from '../../../../shared/search-match-count'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 // ─── Toggle Button ────────────────────────────────────────
 export function ToggleButton({
@@ -61,6 +64,8 @@ export function FileResultRow({
   const fileName = basename(fileResult.relativePath)
   const parentDir = dirname(fileResult.relativePath)
   const dirPath = parentDir === '.' ? '' : parentDir
+  const FileIcon = getFileTypeIcon(fileResult.relativePath)
+  const matchCount = normalizeSearchFileMatchCount(fileResult)
 
   return (
     <div className="pt-1.5">
@@ -82,6 +87,7 @@ export function FileResultRow({
                       !collapsed && 'rotate-90'
                     )}
                   />
+                  <FileIcon className="size-3.5 flex-shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1 text-xs">
                     <span className="min-w-0 block truncate">
                       <span className="text-foreground">{fileName}</span>
@@ -91,7 +97,7 @@ export function FileResultRow({
                     </span>
                   </div>
                   <span className="text-[10px] text-muted-foreground flex-shrink-0 bg-muted/80 rounded-full px-1.5">
-                    {fileResult.matches.length}
+                    {matchCount}
                   </span>
                 </Button>
               </TooltipTrigger>
@@ -101,7 +107,10 @@ export function FileResultRow({
                 onClick={() => window.api.ui.writeClipboardText(fileResult.relativePath)}
               >
                 <Copy className="size-3.5" />
-                Copy Path
+                {translate(
+                  'auto.components.right.sidebar.SearchResultItems.3596b9668d',
+                  'Copy Path'
+                )}
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
@@ -197,7 +206,10 @@ export function MatchResultRow({
           onClick={() => window.api.ui.writeClipboardText(`${relativePath}#L${match.line}`)}
         >
           <Copy className="size-3.5" />
-          Copy Line Path
+          {translate(
+            'auto.components.right.sidebar.SearchResultItems.cc06595a3b',
+            'Copy Line Path'
+          )}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

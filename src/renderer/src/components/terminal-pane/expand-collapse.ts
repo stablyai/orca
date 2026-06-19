@@ -10,6 +10,7 @@ type ExpandCollapseState = {
   managerRef: React.RefObject<PaneManager | null>
   setExpandedPaneId: (paneId: number | null) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
+  pendingPaneSizeRefreshFrameIdsRef: React.MutableRefObject<number[]>
   tabId: string
   persistLayoutSnapshot: () => void
 }
@@ -81,6 +82,36 @@ export function applyExpandedLayoutTo(
   return true
 }
 
+export function cancelPendingPaneSizeRefreshFrames(
+  state: Pick<ExpandCollapseState, 'pendingPaneSizeRefreshFrameIdsRef'>
+): void {
+  for (const frameId of state.pendingPaneSizeRefreshFrameIdsRef.current) {
+    cancelAnimationFrame(frameId)
+  }
+  state.pendingPaneSizeRefreshFrameIdsRef.current = []
+}
+
+function requestPaneSizeRefreshFrame(
+  state: ExpandCollapseState,
+  callback: FrameRequestCallback
+): void {
+  let completed = false
+  let frameId: number | undefined
+  frameId = requestAnimationFrame((timestamp) => {
+    completed = true
+    if (frameId !== undefined) {
+      state.pendingPaneSizeRefreshFrameIdsRef.current =
+        state.pendingPaneSizeRefreshFrameIdsRef.current.filter(
+          (pendingFrameId) => pendingFrameId !== frameId
+        )
+    }
+    callback(timestamp)
+  })
+  if (!completed) {
+    state.pendingPaneSizeRefreshFrameIdsRef.current.push(frameId)
+  }
+}
+
 export function createExpandCollapseActions(state: ExpandCollapseState) {
   const setExpandedPane = (paneId: number | null): void => {
     state.expandedPaneIdRef.current = paneId
@@ -96,12 +127,10 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
   // Why: expand/collapse flips inline display/flex styles on ancestor panes
   // synchronously. The rAF here lets layout settle so FitAddon's
   // proposeDimensions reads the final rects, not the pre-toggle ones.
-  // xterm preserves viewportY natively across resize (see
-  // scroll-reflow.test.ts "reference: undisturbed"), so a bare fit() is
-  // enough — the content-hash capture/restore we used to do here jumped to
-  // the wrong duplicate scrollback line in long sessions.
+  // safeFit owns scroll preservation; content matching here jumped to the
+  // wrong duplicate scrollback line in long sessions.
   const refreshPaneSizes = (focusActive: boolean): void => {
-    requestAnimationFrame(() => {
+    requestPaneSizeRefreshFrame(state, () => {
       const manager = state.managerRef.current
       if (!manager) {
         return

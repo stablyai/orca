@@ -1,4 +1,5 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
+import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-foreground-render-settle'
 
 // Why: xterm.js auto-responds to terminal query sequences (DA1 `CSI c`,
 // DECRQM `CSI ? Ps $ p`, OSC 10/11 color queries, focus events, CPR) by
@@ -44,13 +45,20 @@ export function replayIntoTerminal(
   }
   const map = replayingPanesRef.current
   map.set(pane.id, (map.get(pane.id) ?? 0) + 1)
-  pane.terminal.write(data, () => {
+  const onParsed = (): void => {
     const remaining = (map.get(pane.id) ?? 1) - 1
     if (remaining <= 0) {
       map.delete(pane.id)
     } else {
       map.set(pane.id, remaining)
     }
+  }
+  // Why: hidden/snapshot replay bypasses the live foreground write path, but
+  // WebGL/canvas renderers still need a post-parse repaint to drop stale cells.
+  writeForegroundTerminalChunk(pane.terminal, data, {
+    forceViewportRefresh: true,
+    followupViewportRefresh: true,
+    onParsed
   })
 }
 
@@ -65,14 +73,18 @@ export function replayIntoTerminalAsync(
   const map = replayingPanesRef.current
   map.set(pane.id, (map.get(pane.id) ?? 0) + 1)
   return new Promise((resolve) => {
-    pane.terminal.write(data, () => {
-      const remaining = (map.get(pane.id) ?? 1) - 1
-      if (remaining <= 0) {
-        map.delete(pane.id)
-      } else {
-        map.set(pane.id, remaining)
+    writeForegroundTerminalChunk(pane.terminal, data, {
+      forceViewportRefresh: true,
+      followupViewportRefresh: true,
+      onParsed: () => {
+        const remaining = (map.get(pane.id) ?? 1) - 1
+        if (remaining <= 0) {
+          map.delete(pane.id)
+        } else {
+          map.set(pane.id, remaining)
+        }
+        resolve()
       }
-      resolve()
     })
   })
 }

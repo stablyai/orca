@@ -23,12 +23,24 @@ describe('validateGitExecArgs', () => {
       [['symbolic-ref', 'HEAD']],
       [['symbolic-ref', '--short', 'HEAD']],
       [['merge-base', 'main', 'HEAD']],
+      [['diff', '--cached', '--name-status']],
+      [['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff']],
       [['ls-files', '--error-unmatch', 'foo.txt']],
       [['config', '--get', 'user.name']],
       [['config', '--get-all', 'remote.origin.url']],
       [['config', '--list']],
       [['config', '-l']],
-      [['config', '--get-regexp', 'user']]
+      [['config', '--get-regexp', 'user']],
+      [['check-ref-format', '--branch', 'feature/ssh-pr-head']],
+      [['for-each-ref', '--format=%(refname)', 'refs/remotes']],
+      [
+        [
+          'for-each-ref',
+          '--format=%(refname)%00%(refname:short)',
+          '--sort=-committerdate',
+          'refs/heads/*foo*'
+        ]
+      ]
     ])('allows %j', (args) => {
       expectAllowed(args)
     })
@@ -42,7 +54,6 @@ describe('validateGitExecArgs', () => {
     it.each([
       'push',
       'pull',
-      'commit',
       'checkout',
       'reset',
       'rebase',
@@ -76,7 +87,13 @@ describe('validateGitExecArgs', () => {
       [['log', '-o', '/tmp/leak']],
       [['rev-parse', '--exec-path=/evil']],
       [['log', '--work-tree=/other']],
-      [['log', '--git-dir=/other/.git']]
+      [['log', '--git-dir=/other/.git']],
+      // Pin global-deny coverage on for-each-ref so a future allowlist
+      // refactor that bypassed GLOBAL_DENIED_FLAGS for this subcommand fails
+      // loudly. The first round of for-each-ref enablement omitted these.
+      [['for-each-ref', '--git-dir=/other/.git', '--format=%(refname)']],
+      [['for-each-ref', '--output=/tmp/leak', '--format=%(refname)']],
+      [['for-each-ref', '--work-tree=/other']]
     ])('rejects %j', (args) => {
       expectBlocked(args, 'Dangerous git flags are not allowed')
     })
@@ -172,6 +189,58 @@ describe('validateGitExecArgs', () => {
 
     it('catches --delete=value compound syntax', () => {
       expectBlocked(['symbolic-ref', '--delete=HEAD'], 'git symbolic-ref write operations')
+    })
+  })
+
+  describe('git diff', () => {
+    it('rejects unstaged diff reads', () => {
+      expectBlocked(['diff', '--name-status'], 'restricted to staged changes')
+    })
+
+    it('rejects arbitrary refs and pathspecs', () => {
+      expectBlocked(['diff', '--cached', 'HEAD~1'], 'git diff flag not allowed')
+      expectBlocked(['diff', '--cached', '--', 'src/file.ts'], 'git diff flag not allowed')
+    })
+
+    it('rejects no-index reads', () => {
+      expectBlocked(['diff', '--cached', '--no-index', '/etc/passwd'], 'git diff flag not allowed')
+    })
+  })
+
+  describe('git clone', () => {
+    it('allows only the project setup clone shape', () => {
+      expectAllowed(['clone', '--', 'https://github.com/stablyai/orca.git', 'orca'])
+      expectAllowed(['clone', '--progress', '--', 'git@github.com:stablyai/orca.git', 'orca'])
+    })
+
+    it.each([
+      [['clone', 'https://github.com/stablyai/orca.git']],
+      [['clone', 'https://github.com/stablyai/orca.git', 'orca']],
+      [['clone', '--depth=1', '--', 'https://github.com/stablyai/orca.git', 'orca']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', '.']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', '..']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', 'nested/orca']],
+      [['clone', '--', 'https://github.com/stablyai/orca.git', 'nested\\orca']]
+    ])('rejects unsafe clone args %j', (args) => {
+      expectBlocked(args, 'git clone')
+    })
+  })
+
+  describe('git init and empty commit', () => {
+    it('allows only the SSH create-project init and empty commit shapes', () => {
+      expectAllowed(['init'])
+      expectAllowed(['commit', '--allow-empty', '-m', 'Initial commit'])
+    })
+
+    it.each([
+      [['init', '--bare']],
+      [['init', '/tmp/other']],
+      [['commit']],
+      [['commit', '-am', 'message']],
+      [['commit', '--allow-empty']],
+      [['commit', '--allow-empty', '-m', '']]
+    ])('rejects unsafe create-project write args %j', (args) => {
+      expectBlocked(args, 'via exec is restricted')
     })
   })
 })

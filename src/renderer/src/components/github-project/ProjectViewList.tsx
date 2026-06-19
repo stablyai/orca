@@ -1,14 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown, Columns3 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import ColumnResizeHandle from './ColumnResizeHandle'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRow from './ProjectRow'
-import { groupRows, sortRows } from './group-sort'
+import { groupRows, sortRows } from '../../../../shared/github-project-group-sort'
 import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
 import {
-  buildGridTemplate,
+  ACTION_COLUMN_WIDTH,
   loadColumnWidths,
   MIN_COLUMN_WIDTH,
   resolveWidth,
@@ -22,8 +22,28 @@ import type {
   GitHubProjectSortDirection,
   GitHubProjectTable
 } from '../../../../shared/github-project-types'
+import type { GlobalSettings } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type SortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
+
+const PROJECT_FROZEN_COLUMN_HEADER_SURFACE_CLASS =
+  '[background:color-mix(in_srgb,var(--background)_95%,var(--muted))]'
+
+function buildProjectGridTemplate(
+  fields: GitHubProjectField[],
+  widths: Readonly<Record<string, number>>
+): string {
+  // Why: the first two columns are frozen during horizontal scroll, so their
+  // actual widths must be deterministic for the second sticky offset.
+  const cols = fields.map((field, index) =>
+    index < 2
+      ? `${resolveWidth(field, widths)}px`
+      : `minmax(${MIN_COLUMN_WIDTH}px, ${resolveWidth(field, widths)}fr)`
+  )
+  cols.push(`${ACTION_COLUMN_WIDTH}px`)
+  return cols.join(' ')
+}
 
 type Props = {
   table: GitHubProjectTable
@@ -38,6 +58,7 @@ type Props = {
   onEditIssueType?: (row: GitHubProjectRow, issueType: GitHubIssueType | null) => void
   onStartWork?: (row: GitHubProjectRow) => void
   onOpenInBrowser?: (row: GitHubProjectRow) => void
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 }
 
 export default function ProjectViewList({
@@ -48,7 +69,8 @@ export default function ProjectViewList({
   onEditLabels,
   onEditIssueType,
   onStartWork,
-  onOpenInBrowser
+  onOpenInBrowser,
+  sourceSettings
 }: Props): React.JSX.Element {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
   // Why: column-header clicks override the view's saved sortByFields locally
@@ -63,49 +85,61 @@ export default function ProjectViewList({
     () => getAvailableColumns(table.selectedView),
     [table.selectedView]
   )
-  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => loadHiddenColumns(scopeKey))
-  useEffect(() => {
-    setHidden(loadHiddenColumns(scopeKey))
-  }, [scopeKey])
+  // Why: switching project views should not paint one commit with the
+  // previous view's local column preferences before an Effect catches up.
+  const persistedHidden = useMemo(() => loadHiddenColumns(scopeKey), [scopeKey])
+  const [hiddenByScope, setHiddenByScope] = useState<
+    Readonly<Record<string, ReadonlySet<string> | undefined>>
+  >({})
+  const hidden = hiddenByScope[scopeKey] ?? persistedHidden
   const fields = useMemo(
     () => availableFields.filter((f) => !hidden.has(f.id)),
     [availableFields, hidden]
   )
 
-  const [widths, setWidths] = useState<Readonly<Record<string, number>>>(() =>
-    loadColumnWidths(scopeKey)
-  )
-  useEffect(() => {
-    setWidths(loadColumnWidths(scopeKey))
-  }, [scopeKey])
+  const persistedWidths = useMemo(() => loadColumnWidths(scopeKey), [scopeKey])
+  const [widthsByScope, setWidthsByScope] = useState<
+    Readonly<Record<string, Readonly<Record<string, number>> | undefined>>
+  >({})
+  const widths = widthsByScope[scopeKey] ?? persistedWidths
 
   const setColumnPair = useCallback(
     (fieldId: string, width: number, nextFieldId: string, nextWidth: number): void => {
-      setWidths((prev) => {
+      setWidthsByScope((prev) => {
+        const currentWidths = prev[scopeKey] ?? persistedWidths
         const updated = {
-          ...prev,
+          ...currentWidths,
           [fieldId]: Math.max(MIN_COLUMN_WIDTH, Math.round(width)),
           [nextFieldId]: Math.max(MIN_COLUMN_WIDTH, Math.round(nextWidth))
         }
         saveColumnWidths(scopeKey, updated)
-        return updated
+        return { ...prev, [scopeKey]: updated }
       })
     },
-    [scopeKey]
+    [persistedWidths, scopeKey]
   )
 
-  const gridTemplate = useMemo(() => buildGridTemplate(fields, widths), [fields, widths])
+  const gridTemplate = useMemo(() => buildProjectGridTemplate(fields, widths), [fields, widths])
+
+  const handleListScroll = useCallback((event: React.UIEvent<HTMLDivElement>): void => {
+    // Why: frozen columns need the horizontal offset, but piping every scroll
+    // tick through React state rerenders the entire project row set.
+    event.currentTarget.style.setProperty(
+      '--project-scroll-left',
+      `${event.currentTarget.scrollLeft}px`
+    )
+  }, [])
 
   const toggleColumn = (fieldId: string): void => {
-    setHidden((prev) => {
-      const next = new Set(prev)
+    setHiddenByScope((prev) => {
+      const next = new Set(prev[scopeKey] ?? persistedHidden)
       if (next.has(fieldId)) {
         next.delete(fieldId)
       } else {
         next.add(fieldId)
       }
       saveHiddenColumns(scopeKey, next)
-      return next
+      return { ...prev, [scopeKey]: next }
     })
   }
 
@@ -149,7 +183,10 @@ export default function ProjectViewList({
   if (table.rows.length === 0) {
     return (
       <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
-        No items match this view&apos;s filter.
+        {translate(
+          'auto.components.github.project.ProjectViewList.4f57d2e0b1',
+          "No items match this view's filter."
+        )}
       </div>
     )
   }
@@ -167,7 +204,11 @@ export default function ProjectViewList({
       : null
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto scrollbar-sleek"
+      style={{ '--project-scroll-left': '0px' } as React.CSSProperties}
+      onScroll={handleListScroll}
+    >
       <ProjectHeaderRow
         fields={fields}
         availableFields={availableFields}
@@ -217,6 +258,7 @@ export default function ProjectViewList({
                     onEditIssueType={(issueType) => onEditIssueType?.(row, issueType)}
                     onStartWork={() => onStartWork?.(row)}
                     onOpenInBrowser={() => onOpenInBrowser?.(row)}
+                    sourceSettings={sourceSettings}
                   />
                 ))
               : null}
@@ -265,8 +307,24 @@ function ProjectHeaderRow({
         // user-resizable pair set), so omit its handle to keep the total
         // table width invariant.
         const next = fields[idx + 1]
+        const frozen = idx < 2
         return (
-          <div key={f.id} className="relative flex min-w-0 items-center">
+          <div
+            key={f.id}
+            className={cn(
+              'flex min-w-0 items-center',
+              !frozen && 'relative',
+              frozen &&
+                cn(
+                  'relative z-20 backdrop-blur before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+                  PROJECT_FROZEN_COLUMN_HEADER_SURFACE_CLASS
+                ),
+              idx === 1 && 'border-r border-border/50'
+            )}
+            style={
+              frozen ? { transform: 'translateX(var(--project-scroll-left, 0px))' } : undefined
+            }
+          >
             <button
               type="button"
               onClick={() => onSortClick(f.id)}
@@ -274,7 +332,11 @@ function ProjectHeaderRow({
                 'group flex min-w-0 flex-1 items-center gap-1 truncate text-left uppercase tracking-wide hover:text-foreground',
                 isActive && 'text-foreground'
               )}
-              aria-label={`Sort by ${f.name}`}
+              aria-label={translate(
+                'auto.components.github.project.ProjectViewList.eddfc7a794',
+                'Sort by {{value0}}',
+                { value0: f.name }
+              )}
             >
               <span className="truncate">{f.name}</span>
               <Icon
@@ -301,7 +363,10 @@ function ProjectHeaderRow({
           <PopoverTrigger asChild>
             <button
               type="button"
-              aria-label="Configure columns"
+              aria-label={translate(
+                'auto.components.github.project.ProjectViewList.f949f5b2b7',
+                'Configure columns'
+              )}
               className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <Columns3 className="size-3.5" />
@@ -309,7 +374,7 @@ function ProjectHeaderRow({
           </PopoverTrigger>
           <PopoverContent align="end" className="w-56 p-1">
             <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Columns
+              {translate('auto.components.github.project.ProjectViewList.989f81dc2a', 'Columns')}
             </div>
             {availableFields.map((f) => {
               // Why: TITLE is the only column that anchors the row's identity

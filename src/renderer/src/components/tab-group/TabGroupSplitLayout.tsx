@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { DndContext, DragOverlay } from '@dnd-kit/core'
 import type { TabGroupLayoutNode } from '../../../../shared/types'
 import { useAppStore } from '../../store'
@@ -11,13 +11,23 @@ const MAX_RATIO = 0.85
 
 function ResizeHandle({
   direction,
+  onResizeStart,
   onRatioChange
 }: {
   direction: 'horizontal' | 'vertical'
+  onResizeStart: () => void
   onRatioChange: (ratio: number) => void
 }): React.JSX.Element {
   const isHorizontal = direction === 'horizontal'
   const [dragging, setDragging] = useState(false)
+  const activeResizeCleanupRef = useRef<((updateDragging?: boolean) => void) | null>(null)
+
+  useEffect(
+    () => () => {
+      activeResizeCleanupRef.current?.(false)
+    },
+    []
+  )
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -27,6 +37,8 @@ function ResizeHandle({
       if (!container) {
         return
       }
+      activeResizeCleanupRef.current?.()
+      onResizeStart()
       setDragging(true)
       handle.setPointerCapture(event.pointerId)
 
@@ -41,15 +53,29 @@ function ResizeHandle({
         onRatioChange(Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio)))
       }
 
-      const cleanup = (): void => {
-        setDragging(false)
-        if (handle.hasPointerCapture(event.pointerId)) {
-          handle.releasePointerCapture(event.pointerId)
+      let cleaned = false
+      const cleanup = (updateDragging = true): void => {
+        if (cleaned) {
+          return
+        }
+        cleaned = true
+        if (updateDragging) {
+          setDragging(false)
+        }
+        try {
+          if (handle.hasPointerCapture(event.pointerId)) {
+            handle.releasePointerCapture(event.pointerId)
+          }
+        } catch {
+          // Best effort: unmount cleanup can run after Chromium has already dropped capture.
         }
         handle.removeEventListener('pointermove', onPointerMove)
         handle.removeEventListener('pointerup', onPointerUp)
         handle.removeEventListener('pointercancel', onPointerCancel)
         handle.removeEventListener('lostpointercapture', onLostPointerCapture)
+        if (activeResizeCleanupRef.current === cleanup) {
+          activeResizeCleanupRef.current = null
+        }
       }
 
       const onPointerUp = (): void => {
@@ -68,8 +94,9 @@ function ResizeHandle({
       handle.addEventListener('pointerup', onPointerUp)
       handle.addEventListener('pointercancel', onPointerCancel)
       handle.addEventListener('lostpointercapture', onLostPointerCapture)
+      activeResizeCleanupRef.current = cleanup
     },
-    [isHorizontal, onRatioChange]
+    [isHorizontal, onRatioChange, onResizeStart]
   )
 
   return (
@@ -112,13 +139,13 @@ function SplitNode({
   hoveredTabInsertion: HoveredTabInsertion | null
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   if (node.type === 'leaf') {
     return (
       <TabGroupPanel
         groupId={node.groupId}
         worktreeId={worktreeId}
-        isWorktreeActive={isWorktreeActive}
         // Why: hidden worktrees stay mounted so their PTYs and split layouts
         // survive worktree switches, but only the visible worktree may own the
         // global terminal shortcuts. If an offscreen group's pane stays
@@ -165,6 +192,7 @@ function SplitNode({
       </div>
       <ResizeHandle
         direction={node.direction}
+        onResizeStart={() => recordFeatureInteraction('terminal-panes')}
         onRatioChange={(nextRatio) => setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)}
       />
       <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${1 - ratio} 1 0%` }}>
@@ -234,7 +262,10 @@ export default function TabGroupSplitLayout({
           state. The leftmost pane suppresses its own `border-l` via
           `touchesLeftEdge`, so the seam is always exactly 1px — previously
           both painted and stacked into a 2px bar below the drag strip. */}
-      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border">
+      <div
+        ref={dragSplit.setDragRootNode}
+        className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
+      >
         <div
           className="h-[4px] shrink-0 bg-card"
           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}

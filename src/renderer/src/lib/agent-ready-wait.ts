@@ -1,6 +1,8 @@
 import { detectAgentStatusFromTitle } from '../../../shared/agent-detection'
-import { isShellProcess } from '@/lib/tui-agent-startup'
+import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+import { isShellProcess } from './tui-agent-startup'
 import { useAppStore } from '@/store'
+import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
 
 // Why: agent CLIs vary widely in how they signal readiness. Title-based
 // detection (OSC titles parsed by detectAgentStatusFromTitle) is the tightest
@@ -89,12 +91,9 @@ export async function waitForAgentReady(
     }
 
     try {
-      const foreground = (await window.api.pty.getForegroundProcess(ptyId))?.toLowerCase() ?? ''
-      if (
-        foreground === expectedProcess ||
-        foreground.startsWith(`${expectedProcess}.`) ||
-        foreground.endsWith(`/${expectedProcess}`)
-      ) {
+      const process = await inspectRuntimeTerminalProcess(useAppStore.getState().settings, ptyId)
+      const foreground = process.foregroundProcess?.toLowerCase() ?? ''
+      if (isExpectedAgentProcess(foreground, expectedProcess)) {
         return { ready: true, reason: 'foreground-match' }
       }
 
@@ -103,8 +102,7 @@ export async function waitForAgentReady(
       // polls so the shell's own startup children don't spoof readiness on
       // cold-start. Never accept it while the foreground is still a shell.
       if (attempt >= 4 && !isShellProcess(foreground)) {
-        const hasChildProcesses = await window.api.pty.hasChildProcesses(ptyId)
-        if (hasChildProcesses) {
+        if (process.hasChildProcesses) {
           return { ready: true, reason: 'child-process' }
         }
       }

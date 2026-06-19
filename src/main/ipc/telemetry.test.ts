@@ -156,6 +156,64 @@ describe('telemetry IPC handlers', () => {
     })
   })
 
+  it('drops main-owned events from renderer telemetry IPC', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'app_starred_orca', { source: 'settings' })
+    handler({}, 'star_nag_outcome', {
+      outcome: 'shown',
+      source: 'threshold',
+      mode: 'gh',
+      threshold: 35,
+      agents_since_baseline: 35,
+      agents_since_baseline_bucket: '35-69'
+    })
+    handler({}, 'feature_interaction_usage_bucket_reached', {
+      feature_id: 'tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_1',
+      bucket_source: 'crossed_now'
+    })
+    expect(trackMock).not.toHaveBeenCalled()
+    expect(getCohortAtEmitMock).not.toHaveBeenCalled()
+  })
+
+  it('injects cohort for setup script prompt events', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 3 })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'setup_script_prompt_shown', {
+      mode: 'import_available',
+      provider: 'codex',
+      file_count_bucket: '1',
+      unsupported_field_count_bucket: '0',
+      has_shared_hooks: false
+    })
+    handler({}, 'setup_script_prompt_action', {
+      action: 'configure_clicked',
+      mode: 'configure_needed',
+      file_count_bucket: '0',
+      unsupported_field_count_bucket: '0',
+      has_shared_hooks: true
+    })
+    expect(trackMock).toHaveBeenCalledWith('setup_script_prompt_shown', {
+      mode: 'import_available',
+      provider: 'codex',
+      file_count_bucket: '1',
+      unsupported_field_count_bucket: '0',
+      has_shared_hooks: false,
+      nth_repo_added: 3
+    })
+    expect(trackMock).toHaveBeenCalledWith('setup_script_prompt_action', {
+      action: 'configure_clicked',
+      mode: 'configure_needed',
+      file_count_bucket: '0',
+      unsupported_field_count_bucket: '0',
+      has_shared_hooks: true,
+      nth_repo_added: 3
+    })
+  })
+
   // Fail-soft: a degraded classifier returns `{ nth_repo_added: undefined }`.
   // The schemas declare the field optional, so the event still validates.
   it('forwards undefined cohort when the classifier returns undefined', () => {
@@ -185,9 +243,10 @@ describe('telemetry IPC handlers', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     getOnboardingCohortAtEmitMock.mockReturnValue({ cohort: 'fresh_install' })
     const handler = handlers.get('telemetry:track')!
-    handler({}, 'onboarding_step_viewed', { step: 1 })
+    handler({}, 'onboarding_step_viewed', { step: 1, value_kind: 'agent' })
     expect(trackMock).toHaveBeenCalledWith('onboarding_step_viewed', {
       step: 1,
+      value_kind: 'agent',
       cohort: 'fresh_install'
     })
   })

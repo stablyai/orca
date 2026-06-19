@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { collectStaleWorktreePtyIds, dismissStaleWorktreePtyIds } from './CodexRestartChip'
+import {
+  collectStalePtyIdsForTabs,
+  collectStaleWorktreePtyIds,
+  dismissStaleWorktreePtyIds
+} from './CodexRestartChip'
 
 describe('CodexRestartChip helpers', () => {
   it('collects all stale PTY ids for tabs in a worktree', () => {
@@ -37,6 +41,22 @@ describe('CodexRestartChip helpers', () => {
         worktreeId: 'wt1'
       })
     ).toEqual([])
+  })
+
+  it('collects from one worktree tab slice without scanning the whole tab map', () => {
+    expect(
+      collectStalePtyIdsForTabs({
+        tabs: [{ id: 'tab-1' }],
+        ptyIdsByTabId: {
+          'tab-1': ['pty-1'],
+          'tab-2': ['pty-2']
+        },
+        codexRestartNoticeByPtyId: {
+          'pty-1': { previousAccountLabel: 'a', nextAccountLabel: 'b' },
+          'pty-2': { previousAccountLabel: 'a', nextAccountLabel: 'b' }
+        }
+      })
+    ).toEqual(['pty-1'])
   })
 
   it('dismisses every stale PTY notice in the worktree prompt', () => {

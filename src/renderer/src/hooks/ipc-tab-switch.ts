@@ -6,6 +6,7 @@ import {
   getNextTabWithinActiveType,
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
+import { sanitizeRecentTabIds } from '../store/slices/tab-group-state'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -57,7 +58,7 @@ function resolveCycleContext(): CycleContext | null {
  * branches so that when the same entity is open in multiple splits, the
  * correct tab instance is focused.
  */
-function applyNextTab(store: AppStoreState, next: TypeCyclableTab): void {
+export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab): void {
   if (next.type === 'terminal') {
     store.setActiveTab(next.id)
     store.setActiveTabType('terminal')
@@ -67,6 +68,12 @@ function applyNextTab(store: AppStoreState, next: TypeCyclableTab): void {
       store.activateTab?.(next.tabId)
     }
     store.setActiveTabType('browser')
+  } else if (next.type === 'simulator') {
+    store.setActiveTab(next.tabId ?? next.id)
+    if (next.tabId) {
+      store.activateTab?.(next.tabId)
+    }
+    store.setActiveTabType('simulator')
   } else {
     // Why: `setActiveFile` targets the file entity (its implicit activateTab
     // picks the first matching tab in the active group); `activateTab(tabId)`
@@ -102,7 +109,7 @@ export function handleSwitchTab(direction: number): boolean {
   if (!next) {
     return false
   }
-  applyNextTab(store, next)
+  activateCyclableTab(store, next)
   return true
 }
 
@@ -134,7 +141,45 @@ export function handleSwitchTabAcrossAllTypes(direction: number): boolean {
   if (!next) {
     return false
   }
-  applyNextTab(store, next)
+  activateCyclableTab(store, next)
+  return true
+}
+
+/**
+ * Handle Ctrl+Tab MRU quick-toggle across every visible tab in the active group.
+ * Returns true if a tab switch occurred, false otherwise.
+ */
+export function handleSwitchRecentTab(): boolean {
+  const ctx = resolveCycleContext()
+  if (!ctx) {
+    return false
+  }
+  const { store, worktreeId, allTabIds, groupTabIdInNav } = ctx
+  if (!groupTabIdInNav) {
+    return false
+  }
+  const groupId = store.activeGroupIdByWorktree[worktreeId]
+  const group = groupId
+    ? (store.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === groupId)
+    : undefined
+  if (!group?.recentTabIds) {
+    return false
+  }
+
+  const visibleTabIds = allTabIds.flatMap((entry) => (entry.tabId ? [entry.tabId] : []))
+  const recentTabIds = sanitizeRecentTabIds(group.recentTabIds, visibleTabIds)
+  const currentIndex = recentTabIds.lastIndexOf(groupTabIdInNav)
+  if (currentIndex <= 0) {
+    return false
+  }
+
+  const previousRecentTabId = recentTabIds[currentIndex - 1]
+  const next = allTabIds.find((entry) => entry.tabId === previousRecentTabId)
+  if (!next) {
+    return false
+  }
+
+  activateCyclableTab(store, next)
   return true
 }
 

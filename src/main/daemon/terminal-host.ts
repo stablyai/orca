@@ -1,10 +1,15 @@
 import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
 import { resolveProcessCwd } from '../providers/process-cwd'
-import type { SessionInfo, TerminalSnapshot, ShellReadyState } from './types'
+import type {
+  SessionInfo,
+  TakePendingOutputResult,
+  TerminalSnapshot,
+  ShellReadyState
+} from './types'
 import { SessionNotFoundError } from './types'
 
-const MAX_TOMBSTONES = 1000
+const DEFAULT_MAX_TOMBSTONES = 1000
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -12,14 +17,17 @@ export type CreateOrAttachOptions = {
   rows: number
   cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   /** Explicit shell the renderer asked for (e.g. 'wsl.exe' for "New WSL
    *  terminal" from the "+" menu). Forwarded to the subprocess spawner so the
    *  daemon path honors per-tab shell selection the same way LocalPtyProvider
    *  does. */
   shellOverride?: string
+  terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
+  shellReadyTimeoutMs?: number
   streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
 }
 
@@ -38,14 +46,19 @@ export type TerminalHostOptions = {
     rows: number
     cwd?: string
     env?: Record<string, string>
+    envToDelete?: string[]
     command?: string
     shellOverride?: string
+    terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   }) => SubprocessHandle
   // Why: on graceful shutdown, the host writes final checkpoints for all live
   // sessions before killing them. This bypasses the RPC round-trip — the daemon
   // writes checkpoints in-process, guaranteeing completion before teardown.
   onFinalCheckpoint?: (sessionId: string, snapshot: TerminalSnapshot) => void
+  // Why: production keeps a large cap, but tests need a small deterministic cap
+  // without spawning thousands of full terminal sessions.
+  maxTombstones?: number
 }
 
 export class TerminalHost {
@@ -53,10 +66,12 @@ export class TerminalHost {
   private killedTombstones = new Map<string, number>()
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
+  private maxTombstones: number
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
     this.onFinalCheckpoint = opts.onFinalCheckpoint
+    this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
   }
 
   async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
@@ -96,8 +111,10 @@ export class TerminalHost {
       rows: size.rows,
       cwd: opts.cwd,
       env: opts.env,
+      envToDelete: opts.envToDelete,
       command: opts.command,
       shellOverride: opts.shellOverride,
+      terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
     })
 
@@ -106,7 +123,10 @@ export class TerminalHost {
       cols: size.cols,
       rows: size.rows,
       subprocess,
-      shellReadySupported: opts.shellReadySupported ?? false
+      shellReadySupported: opts.shellReadySupported ?? false,
+      ...(opts.shellReadyTimeoutMs !== undefined
+        ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
+        : {})
     })
 
     this.sessions.set(opts.sessionId, session)
@@ -144,9 +164,13 @@ export class TerminalHost {
     this.getAliveSession(sessionId).resize(cols, rows)
   }
 
-  kill(sessionId: string): void {
+  kill(sessionId: string, opts: { immediate?: boolean } = {}): void {
     const session = this.getAliveSession(sessionId)
     this.recordTombstone(sessionId)
+    if (opts.immediate) {
+      session.forceKillAndDisposeSubprocess()
+      return
+    }
     session.kill()
   }
 
@@ -174,6 +198,16 @@ export class TerminalHost {
     return resolved || null
   }
 
+  // Why: returns null (not throws) for a dead/missing session — this is fetched
+  // for the tab-bar icon, so a vanished pane should quietly yield "no agent".
+  getForegroundProcess(sessionId: string): string | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.getForegroundProcess()
+  }
+
   clearScrollback(sessionId: string): void {
     this.getAliveSession(sessionId).clearScrollback()
   }
@@ -187,6 +221,16 @@ export class TerminalHost {
       return null
     }
     return session.getSnapshot()
+  }
+
+  // Why: same null-not-throw semantics as getSnapshot — incremental
+  // checkpoints are best-effort against sessions that may have just exited.
+  takePendingOutput(sessionId: string, includeSnapshot: boolean): TakePendingOutputResult | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.takePendingOutput(includeSnapshot)
   }
 
   isKilled(sessionId: string): boolean {
@@ -266,7 +310,7 @@ export class TerminalHost {
     this.killedTombstones.delete(sessionId)
     this.killedTombstones.set(sessionId, Date.now())
 
-    if (this.killedTombstones.size > MAX_TOMBSTONES) {
+    if (this.killedTombstones.size > this.maxTombstones) {
       const oldest = this.killedTombstones.keys().next().value
       if (oldest) {
         this.killedTombstones.delete(oldest)

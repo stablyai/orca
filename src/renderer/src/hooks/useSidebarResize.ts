@@ -8,6 +8,7 @@ type UseSidebarResizeOptions = {
   deltaSign: 1 | -1
   renderedExtraWidth?: number
   setWidth: (width: number) => void
+  onDraftWidthChange?: (width: number) => void
 }
 
 type UseSidebarResizeResult<T extends HTMLElement> = {
@@ -54,7 +55,8 @@ export function useSidebarResize<T extends HTMLElement>({
   maxWidth,
   deltaSign,
   renderedExtraWidth = 0,
-  setWidth
+  setWidth,
+  onDraftWidthChange
 }: UseSidebarResizeOptions): UseSidebarResizeResult<T> {
   const containerRef = useRef<T | null>(null)
   const isResizingRef = useRef(false)
@@ -102,7 +104,8 @@ export function useSidebarResize<T extends HTMLElement>({
 
     draftWidthRef.current = width
     applyRenderedWidth(width)
-  }, [applyRenderedWidth, width])
+    onDraftWidthChange?.(width)
+  }, [applyRenderedWidth, onDraftWidthChange, width])
 
   const stopResize = useCallback(() => {
     if (!isResizingRef.current) {
@@ -121,10 +124,11 @@ export function useSidebarResize<T extends HTMLElement>({
 
     const finalWidth = draftWidthRef.current
     applyRenderedWidth(finalWidth)
+    onDraftWidthChange?.(finalWidth)
     if (finalWidth !== width) {
       setWidth(finalWidth)
     }
-  }, [applyRenderedWidth, resetDocumentStyles, setWidth, width])
+  }, [applyRenderedWidth, onDraftWidthChange, resetDocumentStyles, setWidth, width])
 
   const handleMouseMove = useCallback(
     (event: MouseEvent) => {
@@ -152,9 +156,10 @@ export function useSidebarResize<T extends HTMLElement>({
       frameRef.current = window.requestAnimationFrame(() => {
         frameRef.current = null
         applyRenderedWidth(draftWidthRef.current)
+        onDraftWidthChange?.(draftWidthRef.current)
       })
     },
-    [applyRenderedWidth, deltaSign, maxWidth, minWidth]
+    [applyRenderedWidth, deltaSign, maxWidth, minWidth, onDraftWidthChange]
   )
 
   useEffect(() => {
@@ -185,6 +190,7 @@ export function useSidebarResize<T extends HTMLElement>({
       startXRef.current = event.clientX
       startWidthRef.current = width
       draftWidthRef.current = width
+      onDraftWidthChange?.(width)
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
 
@@ -205,7 +211,7 @@ export function useSidebarResize<T extends HTMLElement>({
         overlayRef.current = overlay
       }
     },
-    [width]
+    [onDraftWidthChange, width]
   )
 
   return { containerRef, isResizing, onResizeStart }

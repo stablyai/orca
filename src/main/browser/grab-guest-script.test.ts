@@ -97,6 +97,7 @@ describe('buildGuestOverlayScript', () => {
   it('teardown script cancels pending awaitClick', () => {
     const script = buildGuestOverlayScript('teardown')
     expect(script).toContain('cancelAwait')
+    expect(buildGuestOverlayScript('awaitClick')).toContain('__orcaCancelled')
   })
 
   it('arm script uses full-viewport overlay as click catcher', () => {
@@ -118,5 +119,30 @@ describe('buildGuestOverlayScript', () => {
     const script = buildGuestOverlayScript('arm')
     // The catch block should return '' not the raw URL
     expect(script).toContain("return '';")
+  })
+
+  it('arm script rejects executable and embedded URL schemes', () => {
+    const script = buildGuestOverlayScript('arm')
+
+    expect(script).toContain('SAFE_URL_PROTOCOLS')
+    expect(script).toContain('!SAFE_URL_PROTOCOLS.has(u.protocol)')
+  })
+
+  it('arm script slices text nodes before normalizing bounded text', () => {
+    const script = buildGuestOverlayScript('arm')
+
+    expect(script).toContain("normalizeText((node.nodeValue || '').slice(0, remaining))")
+    expect(script).toContain('value = value.slice(start, end)')
+    expect(script).not.toContain('normalizeText(node.nodeValue ||')
+    expect(script).not.toContain("(el.textContent || '').trim()")
+    expect(script).not.toContain('ref.textContent')
+  })
+
+  it('arm script walks nearby siblings without materializing sibling arrays', () => {
+    const script = buildGuestOverlayScript('arm')
+
+    expect(script).toContain('previousElementSibling')
+    expect(script).toContain('nextElementSibling')
+    expect(script).not.toContain('Array.from(parent.children)')
   })
 })

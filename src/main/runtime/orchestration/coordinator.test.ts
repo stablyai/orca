@@ -65,6 +65,34 @@ function createMockRuntime(): CoordinatorRuntime & {
   return mock
 }
 
+function insertWorkerDone(
+  db: OrchestrationDb,
+  params: {
+    taskId: string
+    to?: string
+    from?: string
+    dispatchId?: string
+    filesModified?: string[]
+  }
+): void {
+  const dispatch = db.getDispatchContext(params.taskId)
+  const dispatchId = params.dispatchId ?? dispatch?.id
+  if (!dispatchId) {
+    throw new Error(`No dispatch for task ${params.taskId}`)
+  }
+  db.insertMessage({
+    from: params.from ?? dispatch?.assignee_handle ?? 'term_unknown',
+    to: params.to ?? 'coord',
+    subject: 'Done',
+    type: 'worker_done',
+    payload: JSON.stringify({
+      taskId: params.taskId,
+      dispatchId,
+      ...(params.filesModified ? { filesModified: params.filesModified } : {})
+    })
+  })
+}
+
 describe('Coordinator', () => {
   let db: OrchestrationDb
 
@@ -105,13 +133,7 @@ describe('Coordinator', () => {
     })
 
     // Simulate the worker completing
-    db.insertMessage({
-      from: 'term_a',
-      to: 'coord',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, filesModified: ['a.ts'] })
-    })
+    insertWorkerDone(db, { taskId: task.id, filesModified: ['a.ts'] })
 
     const result = await runPromise
     expect(result.status).toBe('completed')
@@ -140,13 +162,7 @@ describe('Coordinator', () => {
     expect(runtime.createdTerminals.length).toBe(1)
 
     // Complete the task
-    db.insertMessage({
-      from: runtime.createdTerminals[0],
-      to: 'coord',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id })
-    })
+    insertWorkerDone(db, { taskId: task.id, from: runtime.createdTerminals[0] })
 
     const result = await runPromise
     expect(result.status).toBe('completed')
@@ -263,13 +279,7 @@ describe('Coordinator', () => {
       setTimeout(r, 200)
     })
 
-    db.insertMessage({
-      from: 'term_a',
-      to: 'coord',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id })
-    })
+    insertWorkerDone(db, { taskId: task.id })
 
     const result = await runPromise
     expect(result.status).toBe('completed')
@@ -303,13 +313,7 @@ describe('Coordinator', () => {
     expect(db.getTask(t2.id)?.status).toBe('pending')
 
     // Complete t1
-    db.insertMessage({
-      from: 'term_a',
-      to: 'coord',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: t1.id })
-    })
+    insertWorkerDone(db, { taskId: t1.id })
 
     // Wait for t2 to be promoted and dispatched
     await new Promise((r) => {
@@ -321,13 +325,7 @@ describe('Coordinator', () => {
     expect(t2Status === 'dispatched' || t2Status === 'ready').toBe(true)
 
     // Complete t2
-    db.insertMessage({
-      from: 'term_a',
-      to: 'coord',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: t2.id })
-    })
+    insertWorkerDone(db, { taskId: t2.id })
 
     const result = await runPromise
     expect(result.status).toBe('completed')
@@ -367,13 +365,7 @@ describe('Coordinator', () => {
 
     // Complete all tasks
     for (const task of [t1, t2, t3]) {
-      db.insertMessage({
-        from: 'term_a',
-        to: 'coord',
-        subject: 'Done',
-        type: 'worker_done',
-        payload: JSON.stringify({ taskId: task.id })
-      })
+      insertWorkerDone(db, { taskId: task.id })
       await new Promise((r) => {
         setTimeout(r, 100)
       })
@@ -453,16 +445,97 @@ describe('Coordinator', () => {
     expect(db.getDispatchContext(task.id)?.last_heartbeat_at).toBeTruthy()
 
     // Complete the task so the coordinator run finishes cleanly.
-    db.insertMessage({
-      from: 'term_a',
-      to: 'coord',
-      subject: 'Done',
-      type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id })
-    })
+    insertWorkerDone(db, { taskId: task.id })
 
     const result = await runPromise
     expect(result.status).toBe('completed')
+  })
+
+  it('ignores stale worker_done from a failed retry before accepting the active dispatch', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    const logs: string[] = []
+
+    const task = db.createTask({ spec: 'retry-sensitive work' })
+    const staleCtx = db.createDispatchContext(task.id, 'term_old')
+    db.failDispatch(staleCtx.id, 'retry elsewhere')
+    const activeCtx = db.createDispatchContext(task.id, 'term_current')
+
+    db.insertMessage({
+      from: 'term_old',
+      to: 'coord',
+      subject: 'Late done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: staleCtx.id })
+    })
+
+    const staleCoordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 20,
+      onLog: (m) => logs.push(m)
+    })
+    const staleRun = staleCoordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 80)
+    })
+    staleCoordinator.stop()
+    await staleRun
+
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(db.getDispatchContextById(staleCtx.id)?.status).toBe('failed')
+    expect(db.getDispatchContextById(activeCtx.id)?.status).toBe('dispatched')
+    expect(logs.some((m) => m.includes('inactive dispatch'))).toBe(true)
+
+    insertWorkerDone(db, {
+      taskId: task.id,
+      from: 'term_current',
+      dispatchId: activeCtx.id
+    })
+    const completionCoordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 20
+    })
+    const result = await completionCoordinator.run()
+
+    expect(result.status).toBe('completed')
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getDispatchContextById(activeCtx.id)?.status).toBe('completed')
+  })
+
+  it('ignores worker_done sent by a terminal that does not own the dispatch', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    const logs: string[] = []
+
+    const task = db.createTask({ spec: 'owned work' })
+    const ctx = db.createDispatchContext(task.id, 'term_owner')
+
+    db.insertMessage({
+      from: 'term_intruder',
+      to: 'coord',
+      subject: 'Spoofed done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id })
+    })
+
+    const coordinator = new Coordinator(db, runtime, {
+      spec: 'go',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 20,
+      onLog: (m) => logs.push(m)
+    })
+    const runPromise = coordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 80)
+    })
+    coordinator.stop()
+    await runPromise
+
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(db.getDispatchContextById(ctx.id)?.status).toBe('dispatched')
+    expect(logs.some((m) => m.includes('expected term_owner'))).toBe(true)
   })
 
   it('can be stopped', async () => {
@@ -512,13 +585,7 @@ describe('Coordinator', () => {
         setTimeout(r, 100)
       })
 
-      db.insertMessage({
-        from: 'term_a',
-        to: 'coord',
-        subject: 'Done',
-        type: 'worker_done',
-        payload: JSON.stringify({ taskId: task.id })
-      })
+      insertWorkerDone(db, { taskId: task.id })
 
       const result = await runPromise
       expect(result.status).toBe('completed')
@@ -594,13 +661,7 @@ allow-stale-base: true`
         setTimeout(r, 100)
       })
 
-      db.insertMessage({
-        from: 'term_a',
-        to: 'coord',
-        subject: 'Done',
-        type: 'worker_done',
-        payload: JSON.stringify({ taskId: task.id })
-      })
+      insertWorkerDone(db, { taskId: task.id })
 
       const result = await runPromise
       expect(result.status).toBe('completed')
@@ -633,13 +694,7 @@ allow-stale-base: true`
         setTimeout(r, 100)
       })
 
-      db.insertMessage({
-        from: 'term_a',
-        to: 'coord',
-        subject: 'Done',
-        type: 'worker_done',
-        payload: JSON.stringify({ taskId: task.id })
-      })
+      insertWorkerDone(db, { taskId: task.id })
 
       const result = await runPromise
       expect(result.status).toBe('completed')
@@ -669,13 +724,7 @@ allow-stale-base: true`
         setTimeout(r, 100)
       })
 
-      db.insertMessage({
-        from: 'term_a',
-        to: 'coord',
-        subject: 'Done',
-        type: 'worker_done',
-        payload: JSON.stringify({ taskId: task.id })
-      })
+      insertWorkerDone(db, { taskId: task.id })
 
       const result = await runPromise
       expect(result.status).toBe('completed')
@@ -705,13 +754,7 @@ allow-stale-base: true`
         setTimeout(r, 100)
       })
 
-      db.insertMessage({
-        from: 'term_a',
-        to: 'coord',
-        subject: 'Done',
-        type: 'worker_done',
-        payload: JSON.stringify({ taskId: task.id })
-      })
+      insertWorkerDone(db, { taskId: task.id })
 
       const result = await runPromise
       expect(result.status).toBe('completed')

@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process'
+import { parseWslUncPath } from '../shared/wsl-paths'
 
 export type WslPathInfo = {
   distro: string
@@ -19,19 +20,7 @@ export function parseWslPath(windowsPath: string): WslPathInfo | null {
     return null
   }
 
-  // Normalize backslashes to forward slashes for uniform matching
-  const normalized = windowsPath.replace(/\\/g, '/')
-
-  // Match //wsl.localhost/Distro/... or //wsl$/Distro/...
-  const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/)
-  if (!match) {
-    return null
-  }
-
-  return {
-    distro: match[2],
-    linuxPath: match[3] || '/'
-  }
+  return parseWslUncPath(windowsPath)
 }
 
 export function isWslPath(path: string): boolean {
@@ -86,6 +75,57 @@ export function toWindowsWslPath(linuxPath: string, distro: string): string {
 // ─── WSL home directory resolution ──────────────────────────────────
 
 const wslHomeCache = new Map<string, string>()
+let wslDistroCache: string[] | null = null
+
+function normalizeWslListOutput(output: string): string[] {
+  // Why: wsl.exe can emit UTF-16-looking NUL bytes when inherited through
+  // some Windows shells; strip them before line parsing.
+  return output
+    .replaceAll(String.fromCharCode(0), '')
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^\*\s*/, ''))
+    .filter(Boolean)
+}
+
+function isUserWslDistro(distro: string): boolean {
+  return !distro.toLowerCase().startsWith('docker-desktop')
+}
+
+export function listWslDistros(): string[] {
+  if (wslDistroCache) {
+    return wslDistroCache
+  }
+
+  if (process.platform !== 'win32') {
+    wslDistroCache = []
+    return wslDistroCache
+  }
+
+  try {
+    const output = execFileSync('wsl.exe', ['--list', '--quiet'], {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000
+    })
+    wslDistroCache = normalizeWslListOutput(output).filter(isUserWslDistro)
+    return wslDistroCache
+  } catch {
+    wslDistroCache = []
+    return wslDistroCache
+  }
+}
+
+export function hasCachedWslDistros(): boolean {
+  return wslDistroCache !== null
+}
+
+export function getCachedWslDistros(): string[] | null {
+  return wslDistroCache
+}
+
+export function getDefaultWslDistro(): string | null {
+  return listWslDistros()[0] ?? null
+}
 
 /**
  * Get the home directory for a WSL distro, returned as a Windows UNC path.
@@ -147,4 +187,26 @@ export function isWslAvailable(): boolean {
   }
 
   return wslAvailableCache
+}
+
+export function hasCachedWslAvailability(): boolean {
+  return wslAvailableCache !== null
+}
+
+export function getCachedWslAvailability(): boolean | null {
+  return wslAvailableCache
+}
+
+export function _resetWslCachesForTests(): void {
+  wslHomeCache.clear()
+  wslDistroCache = null
+  wslAvailableCache = null
+}
+
+export function _setWslCachesForTests(args: {
+  available?: boolean | null
+  distros?: string[] | null
+}): void {
+  wslAvailableCache = args.available ?? null
+  wslDistroCache = args.distros ?? null
 }

@@ -1,8 +1,16 @@
-import type { Worktree, Repo, TerminalTab } from '../../../../shared/types'
+import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../shared/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
-import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
+import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  getRepoExecutionHostId,
+  getSettingsFocusedExecutionHostId,
+  type ExecutionHostId,
+  type ExecutionHostScope
+} from '../../../../shared/execution-host'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the
@@ -17,11 +25,12 @@ export function isDefaultBranchWorkspace(worktree: Worktree): boolean {
   return worktree.isMainWorktree && worktree.branch.trim() !== ''
 }
 
-/** Inputs describing every sidebar filter that can leave the list empty. */
+/** Inputs describing sidebar filter settings that the Clear Filters path owns. */
 export type SidebarFilterState = {
-  showActiveOnly: boolean
+  showSleepingWorkspaces: boolean
   filterRepoIds: readonly string[]
   hideDefaultBranchWorkspace: boolean
+  visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
 }
 
 /**
@@ -31,18 +40,24 @@ export type SidebarFilterState = {
  *
  * Why include hideDefaultBranchWorkspace here: without it, a user whose only
  * worktree is the default-branch row and who toggles hide-on would see the
- * "No worktrees found" message with no in-sidebar recovery path.
+ * "No workspaces found" message with no in-sidebar recovery path.
  */
 export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
-  return state.showActiveOnly || state.filterRepoIds.length > 0 || state.hideDefaultBranchWorkspace
+  return (
+    state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES ||
+    state.filterRepoIds.length > 0 ||
+    state.hideDefaultBranchWorkspace ||
+    state.visibleWorkspaceHostIds != null
+  )
 }
 
 /** Describes which mutators the Clear Filters button must invoke, separated
  *  from the mutators themselves so the decision logic is testable. */
 export type ClearFilterActions = {
-  resetShowActiveOnly: boolean
+  resetShowSleepingWorkspaces: boolean
   resetFilterRepoIds: boolean
   resetHideDefaultBranchWorkspace: boolean
+  resetVisibleWorkspaceHostIds: boolean
 }
 
 /**
@@ -57,9 +72,10 @@ export type ClearFilterActions = {
  */
 export function computeClearFilterActions(state: SidebarFilterState): ClearFilterActions {
   return {
-    resetShowActiveOnly: state.showActiveOnly,
+    resetShowSleepingWorkspaces: state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES,
     resetFilterRepoIds: state.filterRepoIds.length > 0,
-    resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace
+    resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
+    resetVisibleWorkspaceHostIds: state.visibleWorkspaceHostIds != null
   }
 }
 
@@ -78,17 +94,20 @@ export function computeVisibleWorktreeIds(
   sortedIds: string[],
   opts: {
     filterRepoIds: string[]
-    showActiveOnly: boolean
-    tabsByWorktree: Record<string, TerminalTab[]> | null
+    showSleepingWorkspaces: boolean
+    tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
     ptyIdsByTabId: Record<string, string[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
-    activeWorktreeId?: string | null
     // Why required: every caller (WorktreeList, getVisibleWorktreeIds
     // fallback, tests) reads the flag from the UI store. Making the field
     // required prevents a future caller from silently dropping the filter by
     // forgetting to pass it.
     hideDefaultBranchWorkspace: boolean
     repoMap: Map<string, Repo>
+    workspaceHostScope: ExecutionHostScope
+    visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
+    defaultHostId: ExecutionHostId
+    worktreeLineageById: Record<string, WorktreeLineage>
   }
 ): string[] {
   let all: Worktree[] = getAllWorktreesFromState({ worktreesByRepo })
@@ -96,8 +115,30 @@ export function computeVisibleWorktreeIds(
   // Filter archived
   all = all.filter((w) => !w.isArchived)
 
+  // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
+  // every other valid ancestor can bypass filters so children never orphan.
+  const lineageAncestorById = new Map(all.map((w) => [w.id, w]))
+
   if (opts.hideDefaultBranchWorkspace) {
     all = all.filter((w) => !isDefaultBranchWorkspace(w))
+  }
+
+  const visibleHostIds =
+    opts.visibleWorkspaceHostIds ??
+    (opts.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [opts.workspaceHostScope])
+  if (visibleHostIds) {
+    const visibleHostIdSet = new Set(visibleHostIds)
+    all = all.filter((w) => {
+      const repo = opts.repoMap.get(w.repoId)
+      if (!repo) {
+        return false
+      }
+      const hostId =
+        repo.connectionId || repo.executionHostId
+          ? getRepoExecutionHostId(repo)
+          : opts.defaultHostId
+      return visibleHostIdSet.has(hostId)
+    })
   }
 
   // Filter by repo
@@ -106,20 +147,16 @@ export function computeVisibleWorktreeIds(
     all = all.filter((w) => selectedRepoIds.has(w.repoId))
   }
 
-  // Filter active only
-  if (opts.showActiveOnly) {
-    all = all.filter((w) => {
-      const tabs = opts.tabsByWorktree?.[w.id] ?? []
-      const hasLiveTerminal = tabs.some((tab) =>
-        opts.ptyIdsByTabId ? tabHasLivePty(opts.ptyIdsByTabId, tab.id) : false
-      )
-      const hasBrowserTabs = (opts.browserTabsByWorktree?.[w.id] ?? []).length > 0
-      // Why: "Active only" should reflect the surfaces Orca can actually
-      // restore into, not just PTY-backed terminals. A browser-tab worktree is
-      // still active from the user's point of view even if it has no live PTY,
-      // and the currently selected worktree should never vanish from the list.
-      return hasLiveTerminal || hasBrowserTabs || opts.activeWorktreeId === w.id
-    })
+  if (!opts.showSleepingWorkspaces) {
+    all = all.filter(
+      (w) =>
+        !isInactiveWorkspace(
+          w.id,
+          opts.tabsByWorktree,
+          opts.ptyIdsByTabId,
+          opts.browserTabsByWorktree
+        )
+    )
   }
 
   // Apply cached sort order. Items not yet in the cache (e.g. brand-new
@@ -131,7 +168,53 @@ export function computeVisibleWorktreeIds(
     return ai - bi
   })
 
-  return all.map((w) => w.id)
+  return addVisibleLineageAncestors(
+    all.map((w) => w.id),
+    lineageAncestorById,
+    opts.worktreeLineageById
+  )
+}
+
+function addVisibleLineageAncestors(
+  ids: string[],
+  worktreeById: Map<string, Worktree>,
+  lineageById: Record<string, WorktreeLineage>
+): string[] {
+  const result: string[] = []
+  const included = new Set<string>()
+  const visiting = new Set<string>()
+
+  const addWithAncestors = (id: string): void => {
+    if (included.has(id) || visiting.has(id)) {
+      return
+    }
+    const worktree = worktreeById.get(id)
+    if (!worktree) {
+      return
+    }
+    visiting.add(id)
+    const lineage = lineageById[id]
+    const parent = lineage ? worktreeById.get(lineage.parentWorktreeId) : undefined
+    if (
+      parent &&
+      worktree.instanceId === lineage.worktreeInstanceId &&
+      parent.instanceId === lineage.parentWorktreeInstanceId
+    ) {
+      // Why: sidebar lineage is structural. If a filtered child is visible,
+      // its valid parent must be rendered too so the hierarchy remains legible.
+      addWithAncestors(parent.id)
+    }
+    visiting.delete(id)
+    if (!included.has(id)) {
+      included.add(id)
+      result.push(id)
+    }
+  }
+
+  for (const id of ids) {
+    addWithAncestors(id)
+  }
+  return result
 }
 
 /**
@@ -184,36 +267,32 @@ export function getVisibleWorktreeIds(): string[] {
       allWorktrees,
       state.tabsByWorktree,
       repoMap,
-      state.prCache,
       state.agentStatusByPaneKey,
-      state.ptyIdsByTabId
+      state.runtimePaneTitlesByTabId,
+      state.ptyIdsByTabId,
+      state.migrationUnsupportedByPtyId,
+      state.terminalLayoutsByTabId
     ).map((w) => w.id)
   } else {
+    // Why empty map: non-smart branches don't read attentionByWorktree, but
+    // the param is required to keep smart-mode callers honest at the type level.
     const sorted = [...allWorktrees].sort(
-      buildWorktreeComparator(
-        state.sortBy,
-        state.tabsByWorktree,
-        repoMap,
-        state.prCache,
-        Date.now(),
-        null,
-        state.agentStatusByPaneKey,
-        undefined,
-        undefined,
-        state.ptyIdsByTabId
-      )
+      buildWorktreeComparator(state.sortBy, repoMap, Date.now(), new Map())
     )
     sortedIds = sorted.map((w) => w.id)
   }
 
   return computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
     filterRepoIds: state.filterRepoIds,
-    showActiveOnly: state.showActiveOnly,
+    showSleepingWorkspaces: state.showSleepingWorkspaces,
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
     browserTabsByWorktree: state.browserTabsByWorktree,
-    activeWorktreeId: state.activeWorktreeId,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
-    repoMap
+    repoMap,
+    workspaceHostScope: state.workspaceHostScope,
+    visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
+    defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
+    worktreeLineageById: state.worktreeLineageById
   })
 }

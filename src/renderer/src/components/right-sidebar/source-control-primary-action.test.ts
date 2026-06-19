@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
+import {
+  resolveCommitAreaPrimaryAction,
+  resolvePrimaryAction,
+  type PrimaryActionInputs
+} from './source-control-primary-action'
 
 // Why: a shared defaults object keeps each case row terse while making the
 // "this is the one knob that differs from the baseline" intent obvious.
@@ -7,6 +11,8 @@ function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInpu
   return {
     stagedCount: 0,
     hasUnstagedChanges: false,
+    hasStageableChanges: false,
+    hasPartiallyStagedChanges: false,
     hasMessage: false,
     hasUnresolvedConflicts: false,
     isCommitting: false,
@@ -124,6 +130,22 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
+  it('mirrors an in-flight Force Push on the push primary slot', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        isRemoteOperationActive: true,
+        upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
+        inFlightRemoteOpKind: 'force_push'
+      })
+    )
+    expect(result).toEqual({
+      kind: 'push',
+      label: 'Force Push',
+      title: 'Force Push in progress…',
+      disabled: true
+    })
+  })
+
   it('blocks commits while unresolved conflicts exist', () => {
     const result = resolvePrimaryAction(
       inputs({ hasUnresolvedConflicts: true, stagedCount: 2, hasMessage: true })
@@ -172,7 +194,7 @@ describe('resolvePrimaryAction', () => {
 
   it('returns Publish Branch on a clean tree when no upstream exists', () => {
     const result = resolvePrimaryAction(
-      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 } })
+      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, branchCommitsAhead: 1 })
     )
     expect(result).toEqual({
       kind: 'publish',
@@ -180,6 +202,77 @@ describe('resolvePrimaryAction', () => {
       title: 'Publish this branch to origin',
       disabled: false
     })
+  })
+
+  it('returns Push when no upstream exists but an open linked review already owns the branch', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 1,
+        prState: 'open',
+        canPushLinkedReviewWithoutUpstream: true
+      })
+    )
+    expect(result).toEqual({
+      kind: 'push',
+      label: 'Push',
+      title: 'Push updates to the linked review branch',
+      disabled: false
+    })
+  })
+
+  it('does not push an open linked review when its branch target is unavailable', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 1,
+        prState: 'open'
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Linked review branch target is unavailable.',
+      disabled: true
+    })
+  })
+
+  it('does not offer Publish Branch when HEAD is detached', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 4,
+        hasCurrentBranch: false
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Check out a branch before publishing commits.',
+      disabled: true
+    })
+  })
+
+  it('does not offer Publish Branch when an unpublished branch has no commits ahead', () => {
+    const result = resolvePrimaryAction(
+      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, branchCommitsAhead: 0 })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Nothing to commit. Branch has no changes to publish.',
+      disabled: true
+    })
+  })
+
+  it.each([
+    [{ prState: 'merged' as const }, 'Nothing to commit. PR is already merged.'],
+    [{ isPRStateLoading: true }, 'Checking PR status…']
+  ])('does not offer Publish Branch when linked PR state blocks it', (overrides, title) => {
+    const result = resolvePrimaryAction(
+      inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, ...overrides })
+    )
+    expect(result).toEqual({ kind: 'commit', label: 'Commit', title, disabled: true })
   })
 
   it('returns Sync when clean + tracked + diverged both ways', () => {
@@ -190,6 +283,28 @@ describe('resolvePrimaryAction', () => {
       kind: 'sync',
       label: 'Sync',
       title: 'Pull 3, push 2',
+      disabled: false
+    })
+  })
+
+  it('returns Force Push when remote-only commits are patch-equivalent after a rebase', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        branchCommitsAhead: 4,
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'origin/feature',
+          ahead: 14,
+          behind: 3,
+          behindCommitsArePatchEquivalent: true
+        }
+      })
+    )
+    expect(result).toEqual({
+      kind: 'push',
+      label: 'Force Push',
+      title:
+        'Remote only has older copies of local commits. Force push 4 branch commits with lease to update origin/feature.',
       disabled: false
     })
   })
@@ -233,66 +348,154 @@ describe('resolvePrimaryAction', () => {
   })
 
   // Why: dirty trees (no staged, has unstaged/untracked) must surface a
-  // 'Stage Files' primary regardless of upstream state. Pulling/syncing on
+  // 'Stage All' primary regardless of upstream state. Pulling/syncing on
   // a dirty tree fails ("Please commit or stash them"), and pushing skips
   // the immediate user need (prepare a commit), so the staging rung
   // intercepts before any remote rung fires.
-  it('returns Stage Files on a dirty tree that is behind upstream', () => {
+  it('returns Stage All on a dirty tree that is behind upstream', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 }
       })
     )
     expect(result).toEqual({
       kind: 'stage',
-      label: 'Stage Files',
+      label: 'Stage All',
       title: 'Stage all changes',
       disabled: false
     })
   })
 
-  it('returns Stage Files on a dirty tree that is ahead of upstream', () => {
+  it('returns Stage All on a dirty tree that is ahead of upstream', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 }
       })
     )
     expect(result.kind).toBe('stage')
-    expect(result.label).toBe('Stage Files')
+    expect(result.label).toBe('Stage All')
     expect(result.disabled).toBe(false)
   })
 
-  it('returns Stage Files on a dirty tree with no upstream branch', () => {
+  it('returns Stage All on a dirty tree with no upstream branch', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
       })
     )
     expect(result.kind).toBe('stage')
   })
 
-  it('returns Stage Files on a dirty tree while upstream status is still loading', () => {
+  it('returns Stage All on a dirty tree while upstream status is still loading', () => {
     const result = resolvePrimaryAction(
-      inputs({ hasUnstagedChanges: true, upstreamStatus: undefined })
+      inputs({ hasUnstagedChanges: true, hasStageableChanges: true, upstreamStatus: undefined })
     )
     expect(result.kind).toBe('stage')
     expect(result.disabled).toBe(false)
   })
 
-  it('still resolves to Commit when both staged and unstaged exist (staged wins)', () => {
+  it('returns Stage All when a staged file also has unstaged changes', () => {
     const result = resolvePrimaryAction(
       inputs({
         stagedCount: 1,
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
+        hasPartiallyStagedChanges: true,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
+    expect(result.kind).toBe('stage')
+    expect(result.label).toBe('Stage All')
+    expect(result.disabled).toBe(false)
+  })
+
+  it('keeps Stage All available in the commit area when Create PR intent is additive', () => {
+    const input = inputs({
+      stagedCount: 0,
+      hasUnstagedChanges: true,
+      hasStageableChanges: true,
+      hasPartiallyStagedChanges: false,
+      hasMessage: false,
+      upstreamStatus: upstreamInSync,
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'dirty',
+        nextAction: 'commit'
+      }
+    })
+
+    expect(resolvePrimaryAction(input).kind).toBe('create_pr_intent')
+    expect(resolveCommitAreaPrimaryAction(input)).toEqual({
+      kind: 'stage',
+      label: 'Stage All',
+      title: 'Stage all changes',
+      disabled: false
+    })
+  })
+
+  it('keeps the partial-staging reason on the additive commit-area Stage All action', () => {
+    const input = inputs({
+      stagedCount: 1,
+      hasUnstagedChanges: true,
+      hasStageableChanges: true,
+      hasPartiallyStagedChanges: true,
+      hasMessage: true,
+      upstreamStatus: upstreamInSync,
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'dirty',
+        nextAction: 'commit'
+      }
+    })
+
+    expect(resolvePrimaryAction(input).kind).toBe('create_pr_intent')
+    expect(resolveCommitAreaPrimaryAction(input)).toEqual({
+      kind: 'stage',
+      label: 'Stage All',
+      title: 'Stage all changes before committing partially staged files',
+      disabled: false
+    })
+  })
+
+  it('still resolves to Commit when staged and unrelated unstaged files exist', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        stagedCount: 1,
+        hasUnstagedChanges: true,
+        hasPartiallyStagedChanges: false,
         hasMessage: true,
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
     expect(result.kind).toBe('commit')
     expect(result.disabled).toBe(false)
+  })
+
+  it('does not return Stage All when dirty rows cannot be staged from the parent repo', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        hasUnstagedChanges: true,
+        hasStageableChanges: false,
+        upstreamStatus: upstreamInSync
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Stage at least one file to commit',
+      disabled: true
+    })
   })
 
   it('still disables Commit (needs message) when staged+dirty without a message', () => {
@@ -304,13 +507,17 @@ describe('resolvePrimaryAction', () => {
     expect(result.title).toBe('Enter a commit message to commit')
   })
 
-  it('returns Stage Files when unstaged changes exist on an in-sync branch', () => {
+  it('returns Stage All when unstaged changes exist on an in-sync branch', () => {
     const result = resolvePrimaryAction(
-      inputs({ hasUnstagedChanges: true, upstreamStatus: upstreamInSync })
+      inputs({
+        hasUnstagedChanges: true,
+        hasStageableChanges: true,
+        upstreamStatus: upstreamInSync
+      })
     )
     expect(result).toEqual({
       kind: 'stage',
-      label: 'Stage Files',
+      label: 'Stage All',
       title: 'Stage all changes',
       disabled: false
     })
@@ -325,4 +532,70 @@ describe('resolvePrimaryAction', () => {
       disabled: true
     })
   })
+
+  it('returns Create PR when a clean tracked branch is eligible for review creation', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: upstreamInSync,
+        hostedReviewCreation: {
+          provider: 'github',
+          review: null,
+          canCreate: true,
+          blockedReason: null,
+          nextAction: null
+        }
+      })
+    )
+    expect(result).toEqual({
+      kind: 'create_pr',
+      label: 'Create PR',
+      title: 'Create a pull request for this branch',
+      disabled: false
+    })
+  })
+
+  it('returns Create MR when a clean tracked GitLab branch is eligible for review creation', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: upstreamInSync,
+        hostedReviewCreation: {
+          provider: 'gitlab',
+          review: null,
+          canCreate: true,
+          blockedReason: null,
+          nextAction: null
+        }
+      })
+    )
+    expect(result).toEqual({
+      kind: 'create_pr',
+      label: 'Create MR',
+      title: 'Create a merge request for this branch',
+      disabled: false
+    })
+  })
+
+  it.each(['azure-devops', 'gitea'] as const)(
+    'returns Create PR when a clean tracked %s branch is eligible for review creation',
+    (provider) => {
+      const result = resolvePrimaryAction(
+        inputs({
+          upstreamStatus: upstreamInSync,
+          hostedReviewCreation: {
+            provider,
+            review: null,
+            canCreate: true,
+            blockedReason: null,
+            nextAction: null
+          }
+        })
+      )
+      expect(result).toEqual({
+        kind: 'create_pr',
+        label: 'Create PR',
+        title: 'Create a pull request for this branch',
+        disabled: false
+      })
+    }
+  )
 })

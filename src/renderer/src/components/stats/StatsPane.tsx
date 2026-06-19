@@ -1,32 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Bot, Clock, GitPullRequest } from 'lucide-react'
+import { BarChart3, Bot, Check, ChevronDown, Clock, GitPullRequest } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { StatCard } from './StatCard'
 import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
-import type { SettingsSearchEntry } from '../settings/settings-search'
-import { cn } from '@/lib/utils'
-
-export const STATS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Stats & Usage',
-    description:
-      'Orca stats plus Claude and Codex usage analytics, tokens, cache, models, and sessions.',
-    keywords: [
-      'stats',
-      'usage',
-      'statistics',
-      'agents',
-      'prs',
-      'time',
-      'tracking',
-      'claude',
-      'codex',
-      'tokens',
-      'cache'
-    ]
-  }
-]
+import { OpenCodeUsagePane } from './OpenCodeUsagePane'
+import { UsageOverviewPane } from './UsageOverviewPane'
+import { Button } from '../ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '../ui/dropdown-menu'
+import { AgentIcon } from '@/lib/agent-catalog'
+import { translate } from '@/i18n/i18n'
+export { getStatsPaneSearchEntries } from './stats-search'
 
 function formatDuration(ms: number): string {
   if (ms <= 0) {
@@ -56,14 +45,55 @@ function formatTrackingSince(timestamp: number | null): string {
   return `Tracking since ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
 }
 
+type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode'
+
+const USAGE_ANALYTICS_OPTIONS = [
+  {
+    id: 'overview',
+    get label() {
+      return translate('auto.components.stats.StatsPane.b2cf4310ce', 'Overview')
+    }
+  },
+  {
+    id: 'claude',
+    get label() {
+      return translate('auto.components.stats.StatsPane.85457c02fe', 'Claude')
+    }
+  },
+  {
+    id: 'codex',
+    get label() {
+      return translate('auto.components.stats.StatsPane.7d26110cea', 'Codex')
+    }
+  },
+  {
+    id: 'opencode',
+    get label() {
+      return translate('auto.components.stats.StatsPane.1e696db2f6', 'OpenCode')
+    }
+  }
+] as const satisfies readonly { id: UsageTab; label: string }[]
+
+function UsageAnalyticsOptionIcon({ tab }: { tab: UsageTab }): React.JSX.Element {
+  if (tab === 'overview') {
+    return <BarChart3 className="size-3.5 text-muted-foreground" />
+  }
+  return <AgentIcon agent={tab} size={14} />
+}
+
 export function StatsPane(): React.JSX.Element {
   const summary = useAppStore((s) => s.statsSummary)
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
-  const [activeUsageTab, setActiveUsageTab] = useState<'claude' | 'codex'>('claude')
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('overview')
+  const activeUsageOption =
+    USAGE_ANALYTICS_OPTIONS.find((option) => option.id === activeUsageTab) ??
+    USAGE_ANALYTICS_OPTIONS[0]
 
   useEffect(() => {
+    recordFeatureInteraction('usage-tracking')
     void fetchStatsSummary()
-  }, [fetchStatsSummary])
+  }, [fetchStatsSummary, recordFeatureInteraction])
 
   return (
     <div className="space-y-5">
@@ -71,23 +101,29 @@ export function StatsPane(): React.JSX.Element {
         <div className="space-y-3">
           {summary.totalAgentsSpawned === 0 && summary.totalPRsCreated === 0 ? (
             <div className="flex min-h-[8rem] items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
-              Start your first agent to begin tracking
+              {translate(
+                'auto.components.stats.StatsPane.73ed07859c',
+                'Start your first agent to begin tracking'
+              )}
             </div>
           ) : (
             <>
               <div className="grid grid-cols-3 gap-3">
                 <StatCard
-                  label="Agents spawned"
+                  label={translate('auto.components.stats.StatsPane.9dbec9e675', 'Agents spawned')}
                   value={summary.totalAgentsSpawned.toLocaleString()}
                   icon={<Bot className="size-4" />}
                 />
                 <StatCard
-                  label="Time agents worked"
+                  label={translate(
+                    'auto.components.stats.StatsPane.1c96f433e2',
+                    'Time agents worked'
+                  )}
                   value={formatDuration(summary.totalAgentTimeMs)}
                   icon={<Clock className="size-4" />}
                 />
                 <StatCard
-                  label="PRs created"
+                  label={translate('auto.components.stats.StatsPane.a58aba506f', 'PRs created')}
                   value={summary.totalPRsCreated.toLocaleString()}
                   icon={<GitPullRequest className="size-4" />}
                 />
@@ -104,35 +140,63 @@ export function StatsPane(): React.JSX.Element {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-foreground">Usage Analytics</h3>
-          <div
-            role="group"
-            aria-label="Usage analytics provider"
-            className="inline-flex w-fit items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground"
-          >
-            {(['claude', 'codex'] as const).map((tab) => (
-              <button
-                key={tab}
+          <h3 className="text-sm font-semibold text-foreground">
+            {translate('auto.components.stats.StatsPane.c79f073d4c', 'Usage Analytics')}
+          </h3>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
                 type="button"
-                aria-pressed={activeUsageTab === tab}
-                onClick={() => setActiveUsageTab(tab)}
-                className={cn(
-                  'inline-flex h-8 items-center justify-center rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-all',
-                  activeUsageTab === tab
-                    ? 'bg-background text-foreground shadow-sm dark:border-input dark:bg-input/30'
-                    : 'text-foreground/60 hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground'
+                variant="outline"
+                size="sm"
+                data-testid="usage-provider-select"
+                aria-label={translate(
+                  'auto.components.stats.StatsPane.42d3e0bdf7',
+                  'Usage analytics provider: {{value0}}',
+                  { value0: activeUsageOption.label }
                 )}
+                className="min-w-36 justify-between"
               >
-                {tab === 'claude' ? 'Claude' : 'Codex'}
-              </button>
-            ))}
-          </div>
+                <span className="flex min-w-0 items-center gap-2">
+                  <UsageAnalyticsOptionIcon tab={activeUsageOption.id} />
+                  <span className="truncate">{activeUsageOption.label}</span>
+                </span>
+                <ChevronDown className="ml-1 size-3.5 text-muted-foreground" aria-hidden />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {USAGE_ANALYTICS_OPTIONS.map((option) => (
+                <DropdownMenuItem key={option.id} onSelect={() => setActiveUsageTab(option.id)}>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <UsageAnalyticsOptionIcon tab={option.id} />
+                    <span className="truncate">{option.label}</span>
+                  </span>
+                  <Check
+                    className={`ml-auto size-3.5 ${
+                      activeUsageTab === option.id ? 'opacity-100' : 'opacity-0'
+                    }`}
+                    aria-hidden
+                  />
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Why: the Stats section lives inside the scroll-tracked settings page. Keeping only the
             active panel mounted avoids hidden tab-content layout/focus churn that produced a visible
             vertical jitter below the usage card when switching disabled providers. */}
-        <div>{activeUsageTab === 'claude' ? <ClaudeUsagePane /> : <CodexUsagePane />}</div>
+        <div>
+          {activeUsageTab === 'overview' ? (
+            <UsageOverviewPane />
+          ) : activeUsageTab === 'claude' ? (
+            <ClaudeUsagePane />
+          ) : activeUsageTab === 'codex' ? (
+            <CodexUsagePane />
+          ) : (
+            <OpenCodeUsagePane />
+          )}
+        </div>
       </div>
     </div>
   )

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { MIN_COLUMN_WIDTH } from './column-widths'
+import { translate } from '@/i18n/i18n'
 
 type Props = {
   fieldId: string
@@ -74,7 +75,10 @@ export default function ColumnResizeHandle({
       ref={handleRef}
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize column"
+      aria-label={translate(
+        'auto.components.github.project.ColumnResizeHandle.1304289353',
+        'Resize column'
+      )}
       onMouseDown={(e) => {
         if (e.button !== 0) {
           return

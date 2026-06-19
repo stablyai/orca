@@ -1,16 +1,20 @@
+/* eslint-disable max-lines -- Why: this proxy owns HTTP discovery, websocket client lifecycle, and CDP debugger forwarding together. */
 import { WebSocketServer, WebSocket } from 'ws'
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http'
 import type { WebContents } from 'electron'
 import { captureScreenshot } from './cdp-screenshot'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
+import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 
 export class CdpWsProxy {
   private httpServer: Server | null = null
   private wss: WebSocketServer | null = null
   private client: WebSocket | null = null
+  private detachClientListeners: (() => void) | null = null
   private port = 0
   private debuggerMessageHandler: ((...args: unknown[]) => void) | null = null
   private debuggerDetachHandler: ((...args: unknown[]) => void) | null = null
+  private debuggerLease: ElectronDebuggerLease | null = null
   private attached = false
   // Why: agent-browser filters events by sessionId from Target.attachToTarget.
   private clientSessionId: string | undefined = undefined
@@ -22,37 +26,60 @@ export class CdpWsProxy {
     return new Promise<string>((resolve, reject) => {
       this.httpServer = createServer((req, res) => this.handleHttpRequest(req, res))
       this.wss = new WebSocketServer({ server: this.httpServer })
+      const failStart = (error: Error): void => {
+        this.httpServer?.removeListener('error', onListenError)
+        this.wss?.close()
+        this.wss = null
+        this.httpServer?.close()
+        this.httpServer = null
+        // Why: a bind failure happens after debugger attach; release it here
+        // because callers cannot safely call stop() on a failed start.
+        this.detachDebugger()
+        reject(error)
+      }
+      const onListenError = (error: Error): void => {
+        failStart(error)
+      }
       this.wss.on('connection', (ws) => {
-        if (this.client) {
-          this.client.close()
-        }
+        this.closeClient()
         this.client = ws
-        ws.on('message', (data) => this.handleClientMessage(ws, data.toString()))
-        ws.on('close', () => {
+        const onMessage = (data: WebSocket.RawData): void => {
+          this.handleClientMessage(ws, data.toString())
+        }
+        const onClose = (): void => {
+          detach()
           if (this.client === ws) {
             this.client = null
           }
-        })
+        }
+        const detach = (): void => {
+          ws.off('message', onMessage)
+          ws.off('close', onClose)
+          if (this.detachClientListeners === detach) {
+            this.detachClientListeners = null
+          }
+        }
+        this.detachClientListeners = detach
+        ws.on('message', onMessage)
+        ws.on('close', onClose)
       })
       this.httpServer.listen(0, '127.0.0.1', () => {
+        this.httpServer?.removeListener('error', onListenError)
         const addr = this.httpServer!.address()
         if (typeof addr === 'object' && addr) {
           this.port = addr.port
           resolve(`ws://127.0.0.1:${this.port}`)
         } else {
-          reject(new Error('Failed to bind proxy server'))
+          failStart(new Error('Failed to bind proxy server'))
         }
       })
-      this.httpServer.on('error', reject)
+      this.httpServer.once('error', onListenError)
     })
   }
 
   async stop(): Promise<void> {
     this.detachDebugger()
-    if (this.client) {
-      this.client.close()
-      this.client = null
-    }
+    this.closeClient()
     if (this.wss) {
       this.wss.close()
       this.wss = null
@@ -65,6 +92,14 @@ export class CdpWsProxy {
 
   getPort(): number {
     return this.port
+  }
+
+  private closeClient(): void {
+    const client = this.client
+    this.detachClientListeners?.()
+    this.detachClientListeners = null
+    this.client = null
+    client?.close()
   }
 
   private send(payload: unknown, client = this.client): void {
@@ -133,12 +168,10 @@ export class CdpWsProxy {
     if (this.attached) {
       return
     }
-    if (!this.webContents.debugger.isAttached()) {
-      try {
-        this.webContents.debugger.attach('1.3')
-      } catch {
-        throw new Error('Could not attach debugger. DevTools may already be open for this tab.')
-      }
+    try {
+      this.debuggerLease = acquireElectronDebugger(this.webContents)
+    } catch {
+      throw new Error('Could not attach debugger. DevTools may already be open for this tab.')
     }
     this.attached = true
 
@@ -171,6 +204,9 @@ export class CdpWsProxy {
     }
     this.debuggerDetachHandler = () => {
       this.attached = false
+      const lease = this.debuggerLease
+      this.debuggerLease = null
+      lease?.release()
       this.stop()
     }
     this.webContents.debugger.on('message', this.debuggerMessageHandler as never)
@@ -186,14 +222,10 @@ export class CdpWsProxy {
       this.webContents.debugger.removeListener('detach', this.debuggerDetachHandler as never)
       this.debuggerDetachHandler = null
     }
-    if (this.attached) {
-      try {
-        this.webContents.debugger.detach()
-      } catch {
-        /* already detached */
-      }
-      this.attached = false
-    }
+    const lease = this.debuggerLease
+    this.debuggerLease = null
+    lease?.release()
+    this.attached = false
   }
 
   private handleClientMessage(client: WebSocket, raw: string): void {
@@ -280,16 +312,23 @@ export class CdpWsProxy {
     params: Record<string, unknown>,
     msgSessionId?: string
   ): void {
+    if (this.webContents.isDestroyed()) {
+      this.sendError(clientId, 'Browser tab is no longer available', client)
+      return
+    }
     const sessionId =
       msgSessionId && msgSessionId !== this.clientSessionId ? msgSessionId : undefined
-    this.webContents.debugger
-      .sendCommand(method, params, sessionId)
-      .then((result) => {
-        this.sendResult(clientId, result, client)
-      })
-      .catch((err: Error) => {
-        this.sendError(clientId, err.message, client)
-      })
+    try {
+      Promise.resolve(this.webContents.debugger.sendCommand(method, params, sessionId))
+        .then((result) => {
+          this.sendResult(clientId, result, client)
+        })
+        .catch((err: Error) => {
+          this.sendError(clientId, err.message, client)
+        })
+    } catch (err) {
+      this.sendError(clientId, err instanceof Error ? err.message : String(err), client)
+    }
   }
 
   private async navigateWithLifecycleEnsured(

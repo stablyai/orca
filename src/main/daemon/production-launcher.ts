@@ -32,27 +32,53 @@ export function createProductionLauncher(opts: ProductionLauncherOptions): Daemo
 
 function waitForReady(child: ChildProcess): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      child.kill('SIGTERM')
-      reject(new Error('Daemon failed to signal readiness within timeout'))
-    }, READY_TIMEOUT_MS)
-
-    child.on('message', (msg: unknown) => {
-      if (msg && typeof msg === 'object' && (msg as Record<string, unknown>).type === 'ready') {
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    let settled = false
+    function cleanupStartupListeners(): void {
+      if (timeout) {
         clearTimeout(timeout)
+      }
+      child.off('message', onMessage)
+      child.off('error', onError)
+      child.off('exit', onExit)
+    }
+    function fail(error: Error, killChild = false): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanupStartupListeners()
+      if (killChild) {
+        child.kill('SIGTERM')
+      }
+      reject(error)
+    }
+    function onMessage(msg: unknown): void {
+      if (msg && typeof msg === 'object' && (msg as Record<string, unknown>).type === 'ready') {
+        if (settled) {
+          return
+        }
+        settled = true
+        // Why: the daemon is detached after readiness, so startup listeners
+        // must not keep the child process closure alive for the daemon lifetime.
+        cleanupStartupListeners()
         resolve()
       }
-    })
+    }
+    function onError(err: Error): void {
+      fail(new Error(`Daemon process error: ${err.message}`))
+    }
+    function onExit(code: number | null): void {
+      fail(new Error(`Daemon process exited prematurely with code ${code}`))
+    }
 
-    child.on('error', (err) => {
-      clearTimeout(timeout)
-      reject(new Error(`Daemon process error: ${err.message}`))
-    })
+    timeout = setTimeout(() => {
+      fail(new Error('Daemon failed to signal readiness within timeout'), true)
+    }, READY_TIMEOUT_MS)
 
-    child.on('exit', (code) => {
-      clearTimeout(timeout)
-      reject(new Error(`Daemon process exited prematurely with code ${code}`))
-    })
+    child.on('message', onMessage)
+    child.on('error', onError)
+    child.on('exit', onExit)
   })
 }
 
@@ -63,16 +89,28 @@ function shutdownChild(child: ChildProcess): Promise<void> {
       return
     }
 
-    const timeout = setTimeout(() => {
-      child.kill('SIGKILL')
+    let settled = false
+    let timeout: ReturnType<typeof setTimeout>
+    function finish(): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      child.off('exit', onExit)
       resolve()
+    }
+
+    function onExit(): void {
+      finish()
+    }
+
+    timeout = setTimeout(() => {
+      child.kill('SIGKILL')
+      finish()
     }, 5000)
 
-    child.once('exit', () => {
-      clearTimeout(timeout)
-      resolve()
-    })
-
+    child.once('exit', onExit)
     child.kill('SIGTERM')
   })
 }

@@ -1,15 +1,125 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeGitHubLinkQuery, parseGitHubIssueOrPRNumber } from './github-links'
+import {
+  buildGitHubRepoUrl,
+  normalizeGitHubLinkQuery,
+  parseGitHubIssueOrPRLink,
+  parseGitHubIssueOrPRNumber
+} from './github-links'
+
+describe('buildGitHubRepoUrl', () => {
+  it('builds a GitHub repository URL from an owner/repo slug', () => {
+    expect(buildGitHubRepoUrl({ owner: 'stablyai', repo: 'orca' })).toBe(
+      'https://github.com/stablyai/orca'
+    )
+  })
+
+  it('encodes path segments', () => {
+    expect(buildGitHubRepoUrl({ owner: 'stably ai', repo: 'orca/tools' })).toBe(
+      'https://github.com/stably%20ai/orca%2Ftools'
+    )
+  })
+})
 
 describe('parseGitHubIssueOrPRNumber', () => {
   it('parses plain issue numbers and GitHub pull request URLs', () => {
     expect(parseGitHubIssueOrPRNumber('42')).toBe(42)
     expect(parseGitHubIssueOrPRNumber('#42')).toBe(42)
     expect(parseGitHubIssueOrPRNumber('https://github.com/stablyai/orca/pull/123')).toBe(123)
+    expect(parseGitHubIssueOrPRNumber('https://github.com/stablyai/orca/issues/923')).toBe(923)
+    expect(parseGitHubIssueOrPRNumber('https://github.my-company.net/MyOrg/my_repo/pull/395')).toBe(
+      395
+    )
   })
 
-  it('rejects non-GitHub URLs', () => {
-    expect(parseGitHubIssueOrPRNumber('https://example.com/stablyai/orca/pull/123')).toBeNull()
+  it('parses GitHub item URLs with trailing page segments', () => {
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/1965/changes')).toBe(1965)
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/1965/files')).toBe(1965)
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/1965/commits')).toBe(1965)
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/issues/923/comments')).toBe(923)
+  })
+
+  it('parses trailing segments with query, fragment, and repeated slashes', () => {
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/1965/changes?diff=split')).toBe(
+      1965
+    )
+    expect(
+      parseGitHubIssueOrPRNumber('https://github.com/o/r/issues/923/comments#issuecomment-1')
+    ).toBe(923)
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/1965//changes///')).toBe(1965)
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/issues/923///')).toBe(923)
+  })
+
+  it('rejects invalid GitHub item URLs', () => {
+    expect(
+      parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/not-a-number/changes')
+    ).toBeNull()
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/pull/')).toBeNull()
+    expect(parseGitHubIssueOrPRNumber('https://github.com/o/r/issues/123abc')).toBeNull()
+    expect(parseGitHubIssueOrPRNumber('https://github.com/owner/repo/pulls/123')).toBeNull()
+  })
+})
+
+describe('parseGitHubIssueOrPRLink', () => {
+  it('parses slug, number, and type for direct item URLs', () => {
+    expect(parseGitHubIssueOrPRLink('https://github.com/stablyai/orca/pull/123')).toEqual({
+      slug: { owner: 'stablyai', repo: 'orca' },
+      number: 123,
+      type: 'pr'
+    })
+
+    expect(
+      parseGitHubIssueOrPRLink('https://github.my-company.net/MyOrg/my_repo/pull/395')
+    ).toEqual({
+      slug: { owner: 'MyOrg', repo: 'my_repo' },
+      number: 395,
+      type: 'pr'
+    })
+
+    expect(parseGitHubIssueOrPRLink('https://git.corp.com/MyOrg/my_repo/pull/395')).toEqual({
+      slug: { owner: 'MyOrg', repo: 'my_repo' },
+      number: 395,
+      type: 'pr'
+    })
+    expect(parseGitHubIssueOrPRLink('https://github.com/stablyai/orca/issues/923')).toEqual({
+      slug: { owner: 'stablyai', repo: 'orca' },
+      number: 923,
+      type: 'issue'
+    })
+  })
+
+  it('derives item type from the route segment when trailing segments are present', () => {
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/1965/changes')).toEqual({
+      slug: { owner: 'o', repo: 'r' },
+      number: 1965,
+      type: 'pr'
+    })
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/issues/923/comments')).toEqual({
+      slug: { owner: 'o', repo: 'r' },
+      number: 923,
+      type: 'issue'
+    })
+  })
+
+  it('accepts query, fragment, and repeated trailing slashes', () => {
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/1965/files?plain=1#diff')).toEqual(
+      {
+        slug: { owner: 'o', repo: 'r' },
+        number: 1965,
+        type: 'pr'
+      }
+    )
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/issues/923/comments///')).toEqual({
+      slug: { owner: 'o', repo: 'r' },
+      number: 923,
+      type: 'issue'
+    })
+  })
+
+  it('rejects non-GitHub and malformed item URLs', () => {
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/not-a-number/changes')).toBeNull()
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/')).toBeNull()
+    expect(parseGitHubIssueOrPRLink('https://github.com/o/r/issues/123abc')).toBeNull()
+    expect(parseGitHubIssueOrPRLink('https://github.com/owner/repo/pulls/123')).toBeNull()
   })
 })
 

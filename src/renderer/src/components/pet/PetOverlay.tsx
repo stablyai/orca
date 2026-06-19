@@ -1,10 +1,12 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { usePetUrl } from './usePetUrl'
 import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
 import type { CustomPet } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import { selectPetAnimationName, type PetAnimationName } from './pet-agent-state'
+import { translate } from '@/i18n/i18n'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -66,7 +68,13 @@ function SpriteFrame({
   const duration = Math.max(0.1, frames / Math.max(0.1, sprite.fps))
   return (
     <>
-      <style>{`@keyframes pet-${animKeyframesId} { from { background-position: ${startX}px ${startY}px; } to { background-position: ${endX}px ${startY}px; } }`}</style>
+      <style>
+        {translate(
+          'auto.components.pet.PetOverlay.4712d196c6',
+          '@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }',
+          { value0: animKeyframesId, value1: startX, value2: startY, value3: endX, value4: startY }
+        )}
+      </style>
       <div
         style={{
           width: renderedW,
@@ -176,43 +184,35 @@ function useDocumentVisible(): boolean {
   return visible
 }
 
-function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return false
-    }
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  })
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
-      return
-    }
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const onChange = (event: MediaQueryListEvent): void => setReduced(event.matches)
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
-  return reduced
-}
-
 // Why: keep a default for the cached helpers below; the live size now comes
 // from the store so the user can resize from the status-bar menu.
 const SIZE = 180
 const POSITION_STORAGE_KEY = 'pet-overlay-position'
 const LEGACY_POSITION_STORAGE_KEY = 'sidekick-overlay-position'
 
-type Position = { x: number; y: number }
+export type Position = { x: number; y: number }
+
+export function clampPositionToViewport(
+  pos: Position,
+  size: number,
+  viewport: { width: number; height: number }
+): Position {
+  const maxX = Math.max(0, viewport.width - size)
+  const maxY = Math.max(0, viewport.height - size)
+  return {
+    x: Math.min(Math.max(0, pos.x), maxX),
+    y: Math.min(Math.max(0, pos.y), maxY)
+  }
+}
 
 function clampToViewport(pos: Position, size: number = SIZE): Position {
   if (typeof window === 'undefined') {
     return pos
   }
-  const maxX = Math.max(0, window.innerWidth - size)
-  const maxY = Math.max(0, window.innerHeight - size)
-  return {
-    x: Math.min(Math.max(0, pos.x), maxX),
-    y: Math.min(Math.max(0, pos.y), maxY)
-  }
+  return clampPositionToViewport(pos, size, {
+    width: window.innerWidth,
+    height: window.innerHeight
+  })
 }
 
 function loadStoredPosition(size: number = SIZE): Position | null {
@@ -268,14 +268,39 @@ export function PetOverlay(): React.JSX.Element {
   const { url, sprite, detected } = usePetUrl()
   const size = useAppStore((s) => s.petSize)
 
-  const [position, setPosition] = useState<Position>(() => {
+  const [positionState, setPositionState] = useState<{
+    size: number
+    position: Position
+  }>(() => {
     // Why: read the persisted size eagerly via getState so the initial clamp
     // uses the user's last pet size — useState's lazy initializer runs
     // before the `size` prop binding settles, and `loadStoredPosition` would
     // otherwise default to SIZE and clip a previously-saved position.
     const currentSize = useAppStore.getState().petSize ?? SIZE
-    return loadStoredPosition(currentSize) ?? defaultPosition(currentSize)
+    return {
+      size: currentSize,
+      position: loadStoredPosition(currentSize) ?? defaultPosition(currentSize)
+    }
   })
+  let position = positionState.position
+  if (positionState.size !== size) {
+    position = clampToViewport(positionState.position, size)
+    setPositionState({ size, position })
+  }
+  const setPosition = useCallback(
+    (nextPosition: Position | ((current: Position) => Position)): void => {
+      setPositionState((current) => {
+        const currentPosition =
+          current.size === size ? current.position : clampToViewport(current.position, size)
+        return {
+          size,
+          position:
+            typeof nextPosition === 'function' ? nextPosition(currentPosition) : nextPosition
+        }
+      })
+    },
+    [size]
+  )
   const [dragging, setDragging] = useState(false)
   const dragOffsetRef = useRef<Position>({ x: 0, y: 0 })
 
@@ -283,13 +308,7 @@ export function PetOverlay(): React.JSX.Element {
     const onResize = (): void => setPosition((prev) => clampToViewport(prev, size))
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
-  }, [size])
-
-  // Why: when the user shrinks/grows the overlay, re-clamp so the box never
-  // overflows the viewport edges (which would otherwise leave it un-draggable).
-  useEffect(() => {
-    setPosition((prev) => clampToViewport(prev, size))
-  }, [size])
+  }, [setPosition, size])
 
   useEffect(() => {
     if (dragging) {
@@ -371,9 +390,10 @@ export function PetOverlay(): React.JSX.Element {
         }}
       >
         <style>
-          {
+          {translate(
+            'auto.components.pet.PetOverlay.de932b0e8f',
             '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
-          }
+          )}
         </style>
         {sprite ? (
           <SpriteFrame

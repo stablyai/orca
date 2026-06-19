@@ -2,7 +2,7 @@
 injection, fallback patching, WSL translation, cleanup, and GC with a TOCTOU age
 guard — covering each path in one test file keeps assertions co-located with the
 shared mock harness rather than splitting across files. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   existsSyncMock,
@@ -57,10 +57,15 @@ import {
   injectHistoryEnv,
   updateHistFileForFallback,
   deleteWorktreeHistoryDir,
-  runHistoryGc
+  runHistoryGc,
+  scheduleHistoryGc
 } from './terminal-history'
 
 describe('terminal-history', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     getPathMock.mockReturnValue('/fake/userData')
@@ -132,7 +137,7 @@ describe('terminal-history', () => {
     it('creates directory with mode 0o700', () => {
       ensureHistoryDir('abcdef0123456789')
       expect(mkdirSyncMock).toHaveBeenCalledWith(
-        '/fake/userData/terminal-history/abcdef0123456789',
+        expect.stringMatching(/[\\/]fake[\\/]userData[\\/]terminal-history[\\/]abcdef0123456789$/),
         { recursive: true, mode: 0o700 }
       )
     })
@@ -274,6 +279,19 @@ describe('terminal-history', () => {
   })
 
   describe('runHistoryGc', () => {
+    it('coalesces duplicate scheduled startup GC calls', async () => {
+      vi.useFakeTimers()
+      existsSyncMock.mockReturnValue(false)
+      const getLiveWorktreeIds = vi.fn().mockResolvedValue(new Set<string>())
+
+      scheduleHistoryGc(getLiveWorktreeIds)
+      scheduleHistoryGc(getLiveWorktreeIds)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      expect(getLiveWorktreeIds).toHaveBeenCalledTimes(1)
+    })
+
     it('prunes orphaned directories', () => {
       existsSyncMock.mockImplementation((p: string) => {
         // WSL root doesn't exist, so GC skips it
@@ -389,9 +407,37 @@ describe('terminal-history', () => {
         )
 
         expect(mkdirSyncMock).toHaveBeenCalledWith(
-          expect.stringContaining('terminal-history-wsl/Ubuntu'),
+          expect.stringMatching(/[\\/]terminal-history-wsl[\\/]Ubuntu[\\/]/),
           expect.any(Object)
         )
+      } finally {
+        Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      }
+    })
+
+    it('uses the project WSL distro hint when cwd is a Windows path', () => {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      try {
+        parseWslPathMock.mockReturnValue(null)
+        toLinuxPathMock.mockImplementation((p: string) => p.replace(/^C:\\/i, '/mnt/c/'))
+        mkdirSyncMock.mockReturnValue(undefined)
+        existsSyncMock.mockReturnValue(true)
+        getPathMock.mockReturnValue('C:\\Users\\alice\\AppData\\Roaming\\Orca')
+
+        const env: Record<string, string> = {}
+        const result = injectHistoryEnv(env, 'repo-1::C:\\repo', '/bin/bash', 'C:\\repo', {
+          wslDistro: 'Ubuntu'
+        })
+
+        expect(mkdirSyncMock).toHaveBeenCalledWith(
+          expect.stringMatching(/[\\/]terminal-history-wsl[\\/]Ubuntu[\\/]/),
+          expect.any(Object)
+        )
+        expect(toLinuxPathMock).toHaveBeenCalled()
+        expect(result.histFile).toMatch(/^\/mnt\/c\//)
+        expect(env.HISTFILE).toBe(result.histFile)
       } finally {
         Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
       }

@@ -11,6 +11,7 @@ import type {
   RuntimeTerminalWait
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
+import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
 import {
   formatTerminalClose,
   formatTerminalCreate,
@@ -74,7 +75,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     }
     const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
       terminal: await getTerminalHandle(flags, cwd, client),
-      ...(cursor !== undefined ? { cursor } : {})
+      ...(cursor !== undefined ? { cursor } : {}),
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
     printResult(result, json, formatTerminalRead)
   },
@@ -83,7 +85,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       terminal: await getTerminalHandle(flags, cwd, client),
       text: getOptionalStringFlag(flags, 'text'),
       enter: flags.get('enter') === true,
-      interrupt: flags.get('interrupt') === true
+      interrupt: flags.get('interrupt') === true,
+      client: { id: 'orca-cli', type: 'desktop' }
     })
     printResult(result, json, formatTerminalSend)
   },
@@ -101,6 +104,11 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       }
     )
     printResult(result, json, formatTerminalWait)
+    if (result.result.wait.satisfied === false) {
+      // Why: callers commonly chain `terminal wait && terminal send`; a
+      // structured blocked result is still an unsatisfied wait condition.
+      process.exitCode = 1
+    }
   },
   'terminal stop': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ stopped: number }>('terminal.stop', {
@@ -116,10 +124,25 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTerminalRename)
   },
   'terminal create': async ({ flags, client, cwd, json }) => {
+    if (client.isRemote && !flags.has('worktree')) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Remote terminal create requires --worktree because the client cwd cannot identify a server worktree.'
+      )
+    }
+    const command = getOptionalStringFlag(flags, 'command')
+    const useRendererBackedInteractiveTerminal =
+      !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
+    const focus = flags.get('focus') === true
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
-      command: getOptionalStringFlag(flags, 'command'),
-      title: getOptionalStringFlag(flags, 'title')
+      command,
+      title: getOptionalStringFlag(flags, 'title'),
+      // Why: interactive local agent TUIs need the renderer-backed terminal
+      // path for browser-side features, but CLI creates must stay backgrounded
+      // unless the caller explicitly asks for focus.
+      focus,
+      ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
     })
     printResult(result, json, formatTerminalCreate)
   },

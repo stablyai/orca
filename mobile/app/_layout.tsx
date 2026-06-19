@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { View, StyleSheet } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
@@ -8,6 +8,9 @@ import * as Linking from 'expo-linking'
 import { colors } from '../src/theme/mobile-theme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
+import { getNotificationNavigationPath } from '../src/notifications/notification-routing'
+import { loadHosts } from '../src/transport/host-store'
+import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -28,47 +31,100 @@ Notifications.setNotificationHandler({
   })
 })
 
-// Why: extract the path+payload that follows the orca://pair anchor so we
-// can route it to the confirm screen. Accept either a hash payload
-// (`orca://pair#<base64>`, the QR / shared form) or a query param
-// (`orca://pair?code=<...>`, future-proof for share sheets that strip
-// fragments).
-function extractPairCode(url: string): string | null {
-  if (!url.startsWith('orca://pair')) return null
-  const hashIndex = url.indexOf('#')
-  if (hashIndex !== -1) {
-    return url.slice(hashIndex + 1) || null
-  }
-  const queryIndex = url.indexOf('?')
-  if (queryIndex !== -1) {
-    const params = new URLSearchParams(url.slice(queryIndex + 1))
-    return params.get('code')
-  }
-  return null
-}
-
 export default function RootLayout() {
   const router = useRouter()
+  const handledNotificationIdsRef = useRef<Set<string>>(new Set())
 
-  // Why: route `orca://pair#<code>` deep links to the confirm screen so
+  // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
   // paste, AirDrop, Messages, or `xcrun simctl openurl`. getInitialURL
   // covers cold-start (link tapped while app was closed); the listener
   // covers warm-start (link tapped while app is in memory).
   useEffect(() => {
     function handleUrl(url: string) {
-      const code = extractPairCode(url)
+      const code = extractPairingCodeFromUrl(url)
       if (code) {
-        router.push({ pathname: '/pair-confirm', params: { code } })
+        // Why: Android camera launches can leave Expo Router's unmatched
+        // `orca://pair` route underneath this screen; replacing keeps cancel
+        // and edge-back from revealing the router error page.
+        router.replace({ pathname: '/pair-confirm', params: { code } })
       }
     }
 
     void Linking.getInitialURL().then((url) => {
-      if (url) handleUrl(url)
+      if (url) {
+        handleUrl(url)
+      }
     })
 
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url))
     return () => sub.remove()
+  }, [router])
+
+  // Why: iOS delivers local notification taps through expo-notifications,
+  // not Linking. Route both cold-start and warm-start responses to the host
+  // and worktree that scheduled the notification.
+  useEffect(() => {
+    let disposed = false
+
+    function clearLastNotificationResponse() {
+      try {
+        Notifications.clearLastNotificationResponse()
+      } catch {
+        // Older native shells may not expose the clear API; duplicate guards
+        // still protect the current JS runtime.
+      }
+    }
+
+    function getInitialNotificationResponse(): Notifications.NotificationResponse | null {
+      try {
+        return Notifications.getLastNotificationResponse()
+      } catch {
+        return null
+      }
+    }
+
+    async function getNavigationPath(data: unknown): Promise<string | null> {
+      const hosts = await loadHosts().catch(() => null)
+      return getNotificationNavigationPath(data, {
+        knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined
+      })
+    }
+
+    async function handleNotificationResponse(response: Notifications.NotificationResponse) {
+      if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
+        clearLastNotificationResponse()
+        return
+      }
+
+      const notificationId = response.notification.request.identifier
+      if (handledNotificationIdsRef.current.has(notificationId)) {
+        return
+      }
+      handledNotificationIdsRef.current.add(notificationId)
+
+      const path = await getNavigationPath(response.notification.request.content.data)
+      clearLastNotificationResponse()
+      if (disposed) {
+        return
+      }
+      if (path) {
+        router.push(path)
+      }
+    }
+
+    const initialResponse = getInitialNotificationResponse()
+    if (initialResponse) {
+      void handleNotificationResponse(initialResponse)
+    }
+
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      void handleNotificationResponse(response)
+    })
+    return () => {
+      disposed = true
+      sub.remove()
+    }
   }, [router])
 
   // Why: hide the native splash only once the navigation Stack has been laid
@@ -90,6 +146,11 @@ export default function RootLayout() {
             headerTitleStyle: { fontSize: 16, fontWeight: '600' },
             contentStyle: { backgroundColor: colors.bgBase },
             headerShadowVisible: false
+            // Why: deliberately no `orientation` screenOption. react-native-screens
+            // has no value that respects the device rotation lock — even 'default'
+            // calls setRequestedOrientation(UNSPECIFIED) at runtime, overriding the
+            // manifest. Leaving it unset lets the manifest's "fullUser" (set by the
+            // android-respect-rotation-lock config plugin) honor the auto-rotate lock.
           }}
         >
           <Stack.Screen
@@ -100,9 +161,12 @@ export default function RootLayout() {
             }}
           />
           <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
+          <Stack.Screen name="pair" options={{ headerShown: false }} />
           <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
+          <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
           <Stack.Screen name="about" options={{ headerShown: false }} />

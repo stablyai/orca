@@ -1,10 +1,5 @@
-/* eslint-disable max-lines -- Why: this module deliberately co-locates the
-   renderer-local view-model types, the merge function, and its supporting
-   string-manipulation helpers because they exist solely to feed the popover
-   in ResourceUsageStatusSegment.tsx. Splitting would scatter logic that has
-   exactly one consumer. See docs/resource-usage-merge-spec.md. */
 /**
- * Resource Usage popover merge helper.
+ * Resource Manager popover merge helper.
  *
  * Produces a single grouped list (repo → worktree → session) by unifying:
  *
@@ -22,104 +17,29 @@
  * See docs/resource-usage-merge-spec.md for the full design.
  */
 
+import type { MemorySnapshot, SessionMemory, WorktreeMemory } from '../../../../shared/types'
+import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
+import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  getRepoIdFromWorktreeId,
+  getWorktreePathBasenameFromId
+} from '../../../../shared/worktree-id'
 import type {
-  MemorySnapshot,
-  SessionMemory,
-  TerminalTab,
-  WorktreeMemory
-} from '../../../../shared/types'
-import { parsePtySessionId, WORKTREE_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
-
-// ─── View-model types (renderer-local) ──────────────────────────────
-
-/** `null` === "no local sample" (e.g. SSH PTY); UI renders as em-dash. */
-export type Metric = number | null
-
-export type DaemonSession = {
-  id: string
-  cwd: string
-  title: string
-}
-
-export type UnifiedSessionRow = {
-  sessionId: string
-  paneKey: string | null
-  pid: number
-  label: string
-  bound: boolean
-  tabId: string | null
-  cpu: Metric
-  memory: Metric
-  hasLocalSamples: boolean
-}
-
-export type UnifiedWorktreeRow = {
-  worktreeId: string
-  worktreeName: string
-  repoId: string
-  repoName: string
-  cpu: Metric
-  memory: Metric
-  history: number[]
-  hasLocalSamples: boolean
-  /** Why: the chip in ResourceUsageStatusSegment now keys on this — the repo
-   *  has an SSH connectionId — instead of `!hasLocalSamples`, which used to
-   *  mislabel warm-reattached *local* PTYs as REMOTE. */
-  isRemote: boolean
-  sessions: UnifiedSessionRow[]
-}
-
-export type UnifiedRepoGroup = {
-  repoId: string
-  repoName: string
-  cpu: Metric
-  memory: Metric
-  /** Why: renamed in spirit but kept as `hasRemoteChildren` for callsite
-   *  stability — the repo-level chip predicate is now "the repo's
-   *  connectionId is non-null", which is the only way a repo can have
-   *  remote children. */
-  hasRemoteChildren: boolean
-  worktrees: UnifiedWorktreeRow[]
-}
-
-// ─── Inputs that the renderer already has on hand ───────────────────
-
-export type MergeContext = {
-  /** From useAppStore: maps tabId → worktreeId for tab-walk resolution. */
-  tabsByWorktree: Record<string, TerminalTab[]>
-  /** From useAppStore: maps tabId → ptyIds[] for the bound check. */
-  ptyIdsByTabId: Record<string, string[]>
-  /** From useAppStore: per-tab live pane titles (for label resolution). */
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  /** From useAppStore: false until the renderer has booted enough state to
-   *  trust the bound/orphan distinction. Mirrors the existing gate. */
-  workspaceSessionReady: boolean
-  /** Repo display names by repo id. Used for new groups synthesized from
-   *  daemon sessions whose repo isn't in the snapshot (typical SSH case). */
-  repoDisplayNameById: Map<string, string>
-  /** Repo connectionId by repo id (null/missing == local). Drives the
-   *  `· remote` chip predicate, decoupling label from data-coverage. */
-  repoConnectionIdById: Map<string, string | null>
-}
+  DaemonSession,
+  MergeContext,
+  UnifiedProjectGroup,
+  UnifiedSessionRow,
+  UnifiedWorktreeRow
+} from './resource-usage-merge-types'
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
 function deriveRepoIdFromWorktreeId(worktreeId: string): string {
-  const sep = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
-  return sep > 0 ? worktreeId.slice(0, sep) : worktreeId
+  return getRepoIdFromWorktreeId(worktreeId)
 }
 
 function deriveWorktreeNameFromWorktreeId(worktreeId: string): string {
-  const sep = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
-  if (sep <= 0) {
-    return worktreeId
-  }
-  const path = worktreeId.slice(sep + WORKTREE_ID_SEPARATOR.length)
-  if (!path) {
-    return worktreeId
-  }
-  const parts = path.split(/[\\/]+/).filter(Boolean)
-  return parts.at(-1) ?? worktreeId
+  return getWorktreePathBasenameFromId(worktreeId) ?? worktreeId
 }
 
 function shortCwd(cwd: string): string {
@@ -131,19 +51,12 @@ function shortCwd(cwd: string): string {
   return parts.length > 2 ? parts.slice(-2).join(sep) : cwd
 }
 
-function parsePaneKey(paneKey: string | null): { tabId: string; paneRuntimeId: number } | null {
+function parsePaneKey(paneKey: string | null): { tabId: string; leafId: string } | null {
   if (!paneKey) {
     return null
   }
-  const sepIdx = paneKey.indexOf(':')
-  if (sepIdx <= 0) {
-    return null
-  }
-  const paneRuntimeId = Number(paneKey.slice(sepIdx + 1))
-  if (!Number.isFinite(paneRuntimeId)) {
-    return null
-  }
-  return { tabId: paneKey.slice(0, sepIdx), paneRuntimeId }
+  const parsed = parseStablePaneKey(paneKey)
+  return parsed ? { tabId: parsed.tabId, leafId: parsed.leafId } : null
 }
 
 function resolveSnapshotSessionLabel(
@@ -160,10 +73,6 @@ function resolveSnapshotSessionLabel(
       const custom = tab.customTitle?.trim()
       if (custom) {
         return custom
-      }
-      const runtime = ctx.runtimePaneTitlesByTabId[parsed.tabId]?.[parsed.paneRuntimeId]?.trim()
-      if (runtime) {
-        return runtime
       }
       return tab.defaultTitle?.trim() || tab.title?.trim() || `Terminal ${tabIndex + 1}`
     }
@@ -252,8 +161,8 @@ export function mergeSnapshotAndSessions(
   snapshot: MemorySnapshot | null,
   daemonSessions: readonly DaemonSession[],
   ctx: MergeContext
-): UnifiedRepoGroup[] {
-  const repos = new Map<string, UnifiedRepoGroup>()
+): UnifiedProjectGroup[] {
+  const repos = new Map<string, UnifiedProjectGroup>()
   const seenSessionIds = new Set<string>()
   const index = buildMergeIndex(ctx)
   // Why: bound = the daemon session id appears as a pty id under some tab.
@@ -276,12 +185,12 @@ export function mergeSnapshotAndSessions(
     repoId: string,
     repoName: string,
     initiallyHasRemoteChildren = false
-  ): UnifiedRepoGroup {
+  ): UnifiedProjectGroup {
     const existing = repos.get(repoId)
     if (existing) {
       return existing
     }
-    const next: UnifiedRepoGroup = {
+    const next: UnifiedProjectGroup = {
       repoId,
       repoName,
       cpu: null,
@@ -294,7 +203,7 @@ export function mergeSnapshotAndSessions(
   }
 
   function findWorktreeRow(
-    repo: UnifiedRepoGroup,
+    repo: UnifiedProjectGroup,
     worktreeId: string
   ): UnifiedWorktreeRow | undefined {
     return repo.worktrees.find((w) => w.worktreeId === worktreeId)

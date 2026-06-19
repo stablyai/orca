@@ -2,16 +2,16 @@ import path from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
-const { handleMock, lstatMock, mkdirMock, renameMock, writeFileMock, realpathMock } = vi.hoisted(
-  () => ({
+const { handleMock, copyFileMock, lstatMock, mkdirMock, renameMock, writeFileMock, realpathMock } =
+  vi.hoisted(() => ({
     handleMock: vi.fn(),
+    copyFileMock: vi.fn(),
     lstatMock: vi.fn(),
     mkdirMock: vi.fn(),
     renameMock: vi.fn(),
     writeFileMock: vi.fn(),
     realpathMock: vi.fn()
-  })
-)
+  }))
 
 vi.mock('electron', () => ({
   ipcMain: { handle: handleMock }
@@ -23,11 +23,15 @@ vi.mock('fs/promises', () => ({
   rename: renameMock,
   writeFile: writeFileMock,
   realpath: realpathMock,
-  copyFile: vi.fn(),
+  copyFile: copyFileMock,
   readdir: vi.fn()
 }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
+import {
+  registerSshFilesystemProvider,
+  unregisterSshFilesystemProvider
+} from '../providers/ssh-filesystem-dispatch'
 
 // Why: paths are resolved via path.resolve() in production code, so test
 // data must use resolved paths to avoid Unix-vs-Windows mismatches.
@@ -54,10 +58,15 @@ function mockRealpath(mapping: Record<string, string>) {
   })
 }
 
+function mockStats(dev: number, ino: number) {
+  return { dev, ino, isDirectory: () => false }
+}
+
 describe('registerFilesystemMutationHandlers', () => {
   beforeEach(() => {
     handlers.clear()
     handleMock.mockReset()
+    copyFileMock.mockReset()
     lstatMock.mockReset()
     mkdirMock.mockReset()
     renameMock.mockReset()
@@ -74,6 +83,7 @@ describe('registerFilesystemMutationHandlers', () => {
     mkdirMock.mockResolvedValue(undefined)
     writeFileMock.mockResolvedValue(undefined)
     renameMock.mockResolvedValue(undefined)
+    copyFileMock.mockResolvedValue(undefined)
 
     registerFilesystemMutationHandlers(store as never)
   })
@@ -156,21 +166,74 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
   })
 
-  it('rejects rename when destination already exists', async () => {
+  it('rejects rename when destination already exists as a true collision', async () => {
+    const oldPath = path.resolve('/workspace/repo/old.ts')
     const resolvedNewPath = path.resolve('/workspace/repo/new.ts')
     lstatMock.mockImplementation(async (p: string) => {
+      if (p === oldPath) {
+        return mockStats(1, 10)
+      }
       if (p === resolvedNewPath) {
-        return { isDirectory: () => false }
+        return mockStats(1, 11)
       }
       throw enoent()
     })
 
     await expect(
       handlers.get('fs:rename')!(null, {
-        oldPath: path.resolve('/workspace/repo/old.ts'),
+        oldPath,
         newPath: resolvedNewPath
       })
     ).rejects.toThrow("A file or folder named 'new.ts' already exists in this location")
+
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('allows case-only rename when destination is the same entry in the same parent', async () => {
+    const oldPath = path.resolve('/workspace/repo/README.md')
+    const newPath = path.resolve('/workspace/repo/readme.md')
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === oldPath || p === newPath) {
+        return mockStats(2, 20)
+      }
+      throw enoent()
+    })
+
+    await handlers.get('fs:rename')!(null, { oldPath, newPath })
+
+    expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
+  })
+
+  it('rejects hard-link alias rename collisions even when dev and ino match', async () => {
+    const oldPath = path.resolve('/workspace/repo/README.md')
+    const newPath = path.resolve('/workspace/repo/README-hardlink.md')
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === oldPath || p === newPath) {
+        return mockStats(3, 30)
+      }
+      throw enoent()
+    })
+
+    await expect(handlers.get('fs:rename')!(null, { oldPath, newPath })).rejects.toThrow(
+      "A file or folder named 'README-hardlink.md' already exists in this location"
+    )
+
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects cross-parent case-only rename collisions even when dev and ino match', async () => {
+    const oldPath = path.resolve('/workspace/repo/src/README.md')
+    const newPath = path.resolve('/workspace/repo/docs/readme.md')
+    lstatMock.mockImplementation(async (p: string) => {
+      if (p === oldPath || p === newPath) {
+        return mockStats(4, 40)
+      }
+      throw enoent()
+    })
+
+    await expect(handlers.get('fs:rename')!(null, { oldPath, newPath })).rejects.toThrow(
+      "A file or folder named 'readme.md' already exists in this location"
+    )
 
     expect(renameMock).not.toHaveBeenCalled()
   })
@@ -208,6 +271,73 @@ describe('registerFilesystemMutationHandlers', () => {
     await handlers.get('fs:rename')!(null, { oldPath, newPath })
 
     expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
+  })
+
+  it('routes rename through the SSH no-clobber filesystem provider when a connection is present', async () => {
+    const renameNoClobber = vi.fn().mockResolvedValue(undefined)
+    registerSshFilesystemProvider('ssh-1', { renameNoClobber } as never)
+
+    try {
+      await handlers.get('fs:rename')!(null, {
+        oldPath: '/home/me/repo/old.ts',
+        newPath: '/home/me/repo/new.ts',
+        connectionId: 'ssh-1'
+      })
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(renameNoClobber).toHaveBeenCalledWith('/home/me/repo/old.ts', '/home/me/repo/new.ts')
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  it('propagates SSH no-clobber rename failures', async () => {
+    const renameNoClobber = vi.fn().mockRejectedValue(new Error('destination exists'))
+    registerSshFilesystemProvider('ssh-1', { renameNoClobber } as never)
+
+    try {
+      await expect(
+        handlers.get('fs:rename')!(null, {
+          oldPath: '/home/me/repo/old.ts',
+          newPath: '/home/me/repo/new.ts',
+          connectionId: 'ssh-1'
+        })
+      ).rejects.toThrow('destination exists')
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(renameMock).not.toHaveBeenCalled()
+  })
+
+  // ── fs:copy ────────────────────────────────────────────────────
+
+  it('copies a file without overwriting an existing destination', async () => {
+    const sourcePath = path.resolve('/workspace/repo/source.ts')
+    const destinationPath = path.resolve('/workspace/repo/source copy.ts')
+
+    await handlers.get('fs:copy')!(null, { sourcePath, destinationPath })
+
+    expect(mkdirMock).toHaveBeenCalledWith(path.resolve('/workspace/repo'), { recursive: true })
+    expect(copyFileMock).toHaveBeenCalledWith(sourcePath, destinationPath, expect.any(Number))
+  })
+
+  it('routes copy through the SSH filesystem provider when a connection is present', async () => {
+    const copy = vi.fn().mockResolvedValue(undefined)
+    registerSshFilesystemProvider('ssh-1', { copy } as never)
+
+    try {
+      await handlers.get('fs:copy')!(null, {
+        sourcePath: '/home/me/repo/source.ts',
+        destinationPath: '/home/me/repo/source copy.ts',
+        connectionId: 'ssh-1'
+      })
+    } finally {
+      unregisterSshFilesystemProvider('ssh-1')
+    }
+
+    expect(copy).toHaveBeenCalledWith('/home/me/repo/source.ts', '/home/me/repo/source copy.ts')
+    expect(copyFileMock).not.toHaveBeenCalled()
   })
 
   // ── Edge cases ─────────────────────────────────────────────────

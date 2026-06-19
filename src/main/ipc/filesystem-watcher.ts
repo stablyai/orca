@@ -12,6 +12,7 @@ import { isWslPath } from '../wsl'
 import { createWslWatcher } from './filesystem-watcher-wsl'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
 
 // ── Ignore patterns ──────────────────────────────────────────────────
 // Why: high-churn directories are suppressed at the native watcher level
@@ -48,12 +49,26 @@ const watchedRoots = new Map<string, WatchedRoot>()
 // @parcel/watcher's ReadDirectoryChangesW doesn't work) are cached so
 // we don't retry on every worktree switch and spam the console with
 // repeated "Failed to read changes" / "watchman not found" errors.
+const UNWATCHABLE_ROOT_CACHE_MAX = 256
 const unwatchableRoots = new Set<string>()
 
-// Why: the `destroyed` listener was previously registered per-root on the
-// same WebContents.  With 11+ worktrees, this exceeded Node's default
-// MaxListeners of 10.  Track which senders already have a single cleanup
-// listener so we register exactly once per sender.
+function rememberUnwatchableRoot(rootKey: string): void {
+  // Why: missing/deleted worktrees can churn through unique paths during a long
+  // session; keep retry suppression useful without retaining every failed path.
+  unwatchableRoots.delete(rootKey)
+  unwatchableRoots.add(rootKey)
+  while (unwatchableRoots.size > UNWATCHABLE_ROOT_CACHE_MAX) {
+    const oldest = unwatchableRoots.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    unwatchableRoots.delete(oldest)
+  }
+}
+
+// Why: watcher cleanup is keyed to the renderer WebContents, not to a specific
+// watched root. One listener per sender avoids MaxListeners warnings when a
+// workspace has many local and SSH-backed worktrees open.
 const senderCleanupRegistered = new Set<number>()
 
 // Why: on Windows, tearing down and recreating @parcel/watcher subscriptions
@@ -63,6 +78,39 @@ const senderCleanupRegistered = new Set<number>()
 // Key: rootKey, Value: pending teardown timer.
 const WATCHER_TEARDOWN_GRACE_MS = 30_000
 const pendingTeardowns = new Map<string, ReturnType<typeof setTimeout>>()
+// Why: @parcel/watcher unsubscribe completes native async work. Sender-destroy
+// cleanup can start it before app shutdown, so will-quit must still await it.
+const pendingLocalUnsubscribes = new Set<Promise<void>>()
+type LocalWatcherInstallToken = {
+  cancelled: boolean
+  listeners: Map<number, WebContents>
+}
+type LocalWatcherInstallResult = 'installed' | 'unavailable' | 'cancelled'
+// Why: native watcher creation is async. Concurrent local watch requests for
+// the same root must share one install or later resolves can orphan listeners.
+const inFlightLocalInstalls = new Map<string, LocalWatcherInstallToken>()
+const pendingLocalInstallPromises = new Map<string, Promise<LocalWatcherInstallResult>>()
+
+function addInFlightLocalInstallListener(
+  token: LocalWatcherInstallToken,
+  sender: WebContents
+): void {
+  if (sender.isDestroyed()) {
+    return
+  }
+  token.listeners.set(sender.id, sender)
+  token.cancelled = false
+  registerSenderCleanup(sender)
+}
+
+function cleanupInFlightLocalInstallsForSender(senderId: number): void {
+  for (const token of inFlightLocalInstalls.values()) {
+    token.listeners.delete(senderId)
+    if (token.listeners.size === 0) {
+      token.cancelled = true
+    }
+  }
+}
 
 // ── Path normalization ───────────────────────────────────────────────
 
@@ -157,12 +205,33 @@ async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined
 
 // ── Flush and emit ───────────────────────────────────────────────────
 
+function emitOverflowPayload(rootKey: string, root: WatchedRoot): void {
+  const payload: FsChangedPayload = {
+    worktreePath: rootKey,
+    events: [{ kind: 'overflow', absolutePath: rootKey }]
+  }
+  for (const [, wc] of root.listeners) {
+    if (!wc.isDestroyed()) {
+      wc.send('fs:changed', payload)
+    }
+  }
+}
+
 async function flushBatch(rootKey: string, root: WatchedRoot): Promise<void> {
+  const overflowed = root.batch.overflowed
   const rawEvents = root.batch.events.splice(0)
+  root.batch.overflowed = false
   root.batch.timer = null
   root.batch.firstEventAt = 0
 
-  if (rawEvents.length === 0 || root.listeners.size === 0) {
+  if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
+    return
+  }
+
+  if (overflowed || rawEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
+    // Why: deletion storms can be valid but too large to coalesce/stat/send
+    // per path. One overflow asks the renderer for the same conservative refresh.
+    emitOverflowPayload(rootKey, root)
     return
   }
 
@@ -229,7 +298,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
-    batch: { events: [], timer: null, firstEventAt: 0 }
+    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 }
   }
 
   try {
@@ -239,6 +308,14 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
     // therefore never unsubscribed), leaking a native file-watcher handle.
     let errorCleanedUp = false
 
+    const watcherOptions = {
+      ignore: WATCHER_IGNORE_DIRS,
+      // Why: Parcel checks Watchman before the native Windows backend by
+      // default, and Windows prints a shell-level "watchman not recognized"
+      // error for that probe. Pinning the backend keeps local watches quiet.
+      ...(process.platform === 'win32' ? { backend: 'windows' as const } : {})
+    }
+
     root.subscription = await watcher.subscribe(
       rootPath,
       (err, events) => {
@@ -247,15 +324,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           // as overflow so the renderer conservatively refreshes all visible
           // tree state rather than trusting possibly-invalid caches (§7.2, §7.3).
           console.error(`[filesystem-watcher] error for ${rootKey}:`, err)
-          const overflowPayload: FsChangedPayload = {
-            worktreePath: rootKey,
-            events: [{ kind: 'overflow', absolutePath: rootKey }]
-          }
-          for (const [, wc] of root.listeners) {
-            if (!wc.isDestroyed()) {
-              wc.send('fs:changed', overflowPayload)
-            }
-          }
+          emitOverflowPayload(rootKey, root)
           // Why: after a watcher error the native subscription may be invalid
           // (e.g. watched root was deleted). Tear down the dead watcher so we
           // don't leave a dangling subscription for a root that no longer
@@ -268,21 +337,17 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
           // is deleted or inaccessible at startup).  Guard against null so
           // the cleanup path doesn't crash the main process.
           if (root.subscription) {
-            void root.subscription.unsubscribe().catch(() => {
-              // Already errored — ignore cleanup failures
-            })
+            void trackLocalUnsubscribe(rootKey, root)
           }
           errorCleanedUp = true
           watchedRoots.delete(rootKey)
           return
         }
 
-        root.batch.events.push(...events)
+        queueWatcherEvents(root.batch, events)
         scheduleBatchFlush(rootKey, root)
       },
-      {
-        ignore: WATCHER_IGNORE_DIRS
-      }
+      watcherOptions
     )
 
     // Why: if the error callback already fired and cleaned up watchedRoots
@@ -290,7 +355,7 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
     // orphaned.  Unsubscribe it immediately to avoid leaking a native
     // file-watcher handle that no code path would ever clean up.
     if (errorCleanedUp) {
-      void root.subscription.unsubscribe().catch(() => {})
+      void trackLocalUnsubscribe(rootKey, root)
       throw new Error(`Watcher for ${rootKey} errored during subscribe`)
     }
   } catch (err) {
@@ -305,11 +370,71 @@ async function createWatcher(rootKey: string, rootPath: string): Promise<Watched
 
 // ── Subscribe / Unsubscribe ──────────────────────────────────────────
 
+function cleanupLocalWatchersForSender(senderId: number): void {
+  cleanupInFlightLocalInstallsForSender(senderId)
+  for (const [key, watchedRoot] of watchedRoots) {
+    if (watchedRoot.listeners.has(senderId)) {
+      watchedRoot.listeners.delete(senderId)
+      if (watchedRoot.listeners.size === 0) {
+        // Cancel any pending grace-period teardown for this root.
+        const pending = pendingTeardowns.get(key)
+        if (pending) {
+          clearTimeout(pending)
+          pendingTeardowns.delete(key)
+        }
+        if (watchedRoot.batch.timer) {
+          clearTimeout(watchedRoot.batch.timer)
+        }
+        trackLocalUnsubscribe(key, watchedRoot)
+        watchedRoots.delete(key)
+      }
+    }
+  }
+}
+
+function trackLocalUnsubscribe(rootKey: string, root: WatchedRoot): Promise<void> {
+  const unsubscribePromise = Promise.resolve()
+    .then(() => root.subscription.unsubscribe())
+    .catch((err: unknown) => {
+      console.error(`[filesystem-watcher] unsubscribe error for ${rootKey}:`, err)
+    })
+    .finally(() => {
+      pendingLocalUnsubscribes.delete(unsubscribePromise)
+    })
+  pendingLocalUnsubscribes.add(unsubscribePromise)
+  return unsubscribePromise
+}
+
+function registerSenderCleanup(sender: WebContents): void {
+  if (senderCleanupRegistered.has(sender.id)) {
+    return
+  }
+  senderCleanupRegistered.add(sender.id)
+  sender.once('destroyed', () => {
+    senderCleanupRegistered.delete(sender.id)
+    cleanupLocalWatchersForSender(sender.id)
+    cleanupRemoteWatchersForSender(sender.id)
+  })
+}
+
+function addLocalWatchListener(rootKey: string, sender: WebContents): void {
+  const root = watchedRoots.get(rootKey)
+  if (!root || sender.isDestroyed()) {
+    return
+  }
+  root.listeners.set(sender.id, sender)
+  registerSenderCleanup(sender)
+}
+
 async function subscribe(worktreePath: string, sender: WebContents): Promise<void> {
   const rootKey = normalizeRootPath(worktreePath)
+  if (sender.isDestroyed()) {
+    return
+  }
 
   // Don't retry roots that already failed — avoids repeated error spam.
   if (unwatchableRoots.has(rootKey)) {
+    rememberUnwatchableRoot(rootKey)
     return
   }
 
@@ -322,78 +447,112 @@ async function subscribe(worktreePath: string, sender: WebContents): Promise<voi
     pendingTeardowns.delete(rootKey)
   }
 
-  if (!root) {
-    // Verify root exists and is a directory
-    try {
-      const s = await stat(rootKey)
-      if (!s.isDirectory()) {
-        console.warn(`[filesystem-watcher] not a directory: ${rootKey}`)
-        unwatchableRoots.add(rootKey)
-        return
-      }
-    } catch {
-      console.warn(`[filesystem-watcher] cannot stat root: ${rootKey}`)
-      unwatchableRoots.add(rootKey)
-      return
-    }
-
-    try {
-      // Why: WSL paths use inotifywait inside the Linux distro where
-      // inotify works natively; native Windows paths use @parcel/watcher.
-      root = isWslPath(worktreePath)
-        ? await createWslWatcher(rootKey, worktreePath, {
-            ignoreDirs: WATCHER_IGNORE_DIRS,
-            scheduleBatchFlush,
-            watchedRoots
-          })
-        : await createWatcher(rootKey, rootKey)
-    } catch {
-      // Why: createWatcher / createWslWatcher already logged the error.
-      // Swallow it here so the renderer's watchWorktree call resolves
-      // without crashing the main process.
-      unwatchableRoots.add(rootKey)
-      return
-    }
-    watchedRoots.set(rootKey, root)
+  if (root) {
+    addLocalWatchListener(rootKey, sender)
+    return
   }
 
-  root.listeners.set(sender.id, sender)
-
-  // Why: register a single `destroyed` listener per sender (not per-root).
-  // The old code registered one listener per root, so 11+ worktrees would
-  // exceed Node's default MaxListeners of 10 on the same WebContents.  A
-  // single listener that iterates all roots avoids the warning and is
-  // equivalent — `destroyed` fires once when the renderer process exits.
-  if (!senderCleanupRegistered.has(sender.id)) {
-    senderCleanupRegistered.add(sender.id)
-    sender.once('destroyed', () => {
-      senderCleanupRegistered.delete(sender.id)
-      for (const [key, watchedRoot] of watchedRoots) {
-        if (watchedRoot.listeners.has(sender.id)) {
-          watchedRoot.listeners.delete(sender.id)
-          if (watchedRoot.listeners.size === 0) {
-            // Cancel any pending grace-period teardown for this root.
-            const pending = pendingTeardowns.get(key)
-            if (pending) {
-              clearTimeout(pending)
-              pendingTeardowns.delete(key)
-            }
-            if (watchedRoot.batch.timer) {
-              clearTimeout(watchedRoot.batch.timer)
-            }
-            void watchedRoot.subscription.unsubscribe().catch((err: unknown) => {
-              console.error(`[filesystem-watcher] unsubscribe error for ${key}:`, err)
-            })
-            watchedRoots.delete(key)
-          }
-        }
-      }
-    })
+  const pendingInstall = pendingLocalInstallPromises.get(rootKey)
+  if (pendingInstall) {
+    const inFlight = inFlightLocalInstalls.get(rootKey)
+    if (inFlight) {
+      // Why: an unwatch may cancel an install while another renderer is still
+      // awaiting the same root; a new live listener should keep it alive.
+      addInFlightLocalInstallListener(inFlight, sender)
+    }
+    const result = await pendingInstall
+    if (
+      result === 'installed' &&
+      watchedRoots.has(rootKey) &&
+      !sender.isDestroyed() &&
+      (!inFlight || inFlight.listeners.has(sender.id))
+    ) {
+      addLocalWatchListener(rootKey, sender)
+    }
+    return
   }
+
+  const cancelToken: LocalWatcherInstallToken = { cancelled: false, listeners: new Map() }
+  inFlightLocalInstalls.set(rootKey, cancelToken)
+  addInFlightLocalInstallListener(cancelToken, sender)
+  const installPromise = doInstallLocalWatcher(rootKey, worktreePath, cancelToken)
+  pendingLocalInstallPromises.set(rootKey, installPromise)
+  try {
+    await installPromise
+  } finally {
+    if (pendingLocalInstallPromises.get(rootKey) === installPromise) {
+      pendingLocalInstallPromises.delete(rootKey)
+    }
+  }
+}
+
+async function doInstallLocalWatcher(
+  rootKey: string,
+  worktreePath: string,
+  cancelToken: LocalWatcherInstallToken
+): Promise<LocalWatcherInstallResult> {
+  let root: WatchedRoot
+  try {
+    const s = await stat(rootKey)
+    if (!s.isDirectory()) {
+      console.warn(`[filesystem-watcher] not a directory: ${rootKey}`)
+      rememberUnwatchableRoot(rootKey)
+      return 'unavailable'
+    }
+  } catch {
+    console.warn(`[filesystem-watcher] cannot stat root: ${rootKey}`)
+    rememberUnwatchableRoot(rootKey)
+    return 'unavailable'
+  }
+
+  try {
+    // Why: WSL paths use inotifywait inside the Linux distro where
+    // inotify works natively; native Windows paths use @parcel/watcher.
+    root = isWslPath(worktreePath)
+      ? await createWslWatcher(rootKey, worktreePath, {
+          ignoreDirs: WATCHER_IGNORE_DIRS,
+          scheduleBatchFlush,
+          watchedRoots
+        })
+      : await createWatcher(rootKey, rootKey)
+  } catch {
+    // Why: createWatcher / createWslWatcher already logged the error. Swallow
+    // it here so the renderer's watchWorktree call resolves without crashing.
+    rememberUnwatchableRoot(rootKey)
+    return 'unavailable'
+  } finally {
+    if (inFlightLocalInstalls.get(rootKey) === cancelToken) {
+      inFlightLocalInstalls.delete(rootKey)
+    }
+  }
+
+  const liveListeners = new Map(
+    Array.from(cancelToken.listeners.entries()).filter(([, listener]) => !listener.isDestroyed())
+  )
+  if (cancelToken.cancelled || liveListeners.size === 0) {
+    if (root.batch.timer) {
+      clearTimeout(root.batch.timer)
+    }
+    void trackLocalUnsubscribe(rootKey, root)
+    return 'cancelled'
+  }
+
+  root.listeners = liveListeners
+  watchedRoots.set(rootKey, root)
+  for (const listener of liveListeners.values()) {
+    registerSenderCleanup(listener)
+  }
+  return 'installed'
 }
 
 function unsubscribe(worktreePath: string, senderId: number): void {
   const rootKey = normalizeRootPath(worktreePath)
+  const inFlight = inFlightLocalInstalls.get(rootKey)
+  if (inFlight) {
+    inFlight.listeners.delete(senderId)
+    inFlight.cancelled = inFlight.listeners.size === 0
+  }
+
   const root = watchedRoots.get(rootKey)
   if (!root) {
     return
@@ -408,6 +567,12 @@ function unsubscribe(worktreePath: string, senderId: number): void {
       clearTimeout(root.batch.timer)
     }
 
+    // Why: duplicate renderer cleanup can call unwatch more than once for a
+    // root; keep one tracked grace timer instead of leaking overwritten timers.
+    if (pendingTeardowns.has(rootKey)) {
+      return
+    }
+
     const teardownTimer = setTimeout(() => {
       pendingTeardowns.delete(rootKey)
       // Re-check: a new listener may have arrived during the grace period.
@@ -415,9 +580,7 @@ function unsubscribe(worktreePath: string, senderId: number): void {
       if (!currentRoot || currentRoot.listeners.size > 0) {
         return
       }
-      void currentRoot.subscription.unsubscribe().catch((err: unknown) => {
-        console.error(`[filesystem-watcher] unsubscribe error for ${rootKey}:`, err)
-      })
+      void trackLocalUnsubscribe(rootKey, currentRoot)
       watchedRoots.delete(rootKey)
     }, WATCHER_TEARDOWN_GRACE_MS)
 
@@ -425,29 +588,110 @@ function unsubscribe(worktreePath: string, senderId: number): void {
   }
 }
 
-// ── Remote watcher state ─────────────────────────────────────────────
-// Key: `${connectionId}:${worktreePath}`, Value: unwatch function
-const remoteWatchers = new Map<string, () => void>()
+export async function closeLocalWatcherForWorktreePath(worktreePath: string): Promise<void> {
+  const rootKey = normalizeRootPath(worktreePath)
+  const pendingTeardown = pendingTeardowns.get(rootKey)
+  if (pendingTeardown) {
+    clearTimeout(pendingTeardown)
+    pendingTeardowns.delete(rootKey)
+  }
+
+  const inFlight = inFlightLocalInstalls.get(rootKey)
+  if (inFlight) {
+    // Why: Windows keeps watched directories locked; deletion must be able to
+    // cancel an in-flight subscription before Git tries to remove the tree.
+    inFlight.listeners.clear()
+    inFlight.cancelled = true
+  }
+  await pendingLocalInstallPromises.get(rootKey)?.catch(() => undefined)
+
+  const root = watchedRoots.get(rootKey)
+  if (!root) {
+    return
+  }
+  if (root.batch.timer) {
+    clearTimeout(root.batch.timer)
+  }
+  watchedRoots.delete(rootKey)
+  await trackLocalUnsubscribe(rootKey, root)
+}
+
+// Remote watcher state
+type RemoteWatcherState = {
+  unwatch: () => void
+  listeners: Map<number, WebContents>
+}
+
+type RemoteWatcherInstallToken = {
+  cancelled: boolean
+  listeners: Map<number, WebContents>
+}
+
+// Key: `${connectionId}:${worktreePath}`, Value: shared remote watch state.
+const remoteWatchers = new Map<string, RemoteWatcherState>()
 const loggedUnavailableRemoteWatchers = new Set<string>()
 const pendingRemoteWatcherRetries = new Map<string, ReturnType<typeof setTimeout>>()
 // Why: track in-flight `provider.watch()` calls so an unwatch/shutdown that
 // arrives while a watch is still resolving can mark the install cancelled.
 // Without this, the awaited unwatch handle would be installed after the
 // renderer thinks the watch is gone, leaking a native watcher.
-const inFlightRemoteInstalls = new Map<string, { cancelled: boolean }>()
+const inFlightRemoteInstalls = new Map<string, RemoteWatcherInstallToken>()
+// Why: dedupe concurrent installRemoteWatcher calls for the same key so
+// overlapping fs:watchWorktree IPCs share one native watcher and one listener
+// map, instead of each call independently invoking provider.watch() and
+// overwriting the per-key state on resolution.
+const pendingRemoteInstallPromises = new Map<string, Promise<RemoteWatcherInstallResult>>()
 const REMOTE_WATCH_RETRY_MS = 1_000
 const REMOTE_WATCH_RETRY_TIMEOUT_MS = 60_000
 
-function replaceRemoteWatcher(key: string, unwatch: () => void): void {
-  const previous = remoteWatchers.get(key)
-  if (previous) {
-    // Why: SSH reconnect swaps in a fresh filesystem provider, but the
-    // renderer keeps watching the same worktree path. Replacing the existing
-    // unwatch callback here ensures a post-reconnect watch request rebinds to
-    // the new provider instead of early-returning forever on stale state.
-    previous()
+function addInFlightRemoteInstallListener(
+  token: RemoteWatcherInstallToken,
+  sender: WebContents
+): void {
+  if (sender.isDestroyed()) {
+    return
   }
-  remoteWatchers.set(key, unwatch)
+  token.listeners.set(sender.id, sender)
+  token.cancelled = false
+  registerSenderCleanup(sender)
+}
+
+function cleanupInFlightRemoteInstallsForSender(senderId: number): void {
+  for (const token of inFlightRemoteInstalls.values()) {
+    token.listeners.delete(senderId)
+    if (token.listeners.size === 0) {
+      token.cancelled = true
+    }
+  }
+}
+
+function addRemoteWatchListener(key: string, sender: WebContents): void {
+  const state = remoteWatchers.get(key)
+  if (!state) {
+    return
+  }
+  state.listeners.set(sender.id, sender)
+  registerSenderCleanup(sender)
+}
+
+function releaseRemoteWatchListener(key: string, senderId: number): void {
+  const state = remoteWatchers.get(key)
+  if (!state) {
+    return
+  }
+  state.listeners.delete(senderId)
+  if (state.listeners.size > 0) {
+    return
+  }
+  state.unwatch()
+  remoteWatchers.delete(key)
+}
+
+function cleanupRemoteWatchersForSender(senderId: number): void {
+  cleanupInFlightRemoteInstallsForSender(senderId)
+  for (const key of Array.from(remoteWatchers.keys())) {
+    releaseRemoteWatchListener(key, senderId)
+  }
 }
 
 type RemoteWatcherInstallResult = 'installed' | 'unavailable' | 'cancelled'
@@ -463,24 +707,85 @@ async function installRemoteWatcher(
   }
 
   const key = `${connectionId}:${worktreePath}`
-  const cancelToken = { cancelled: false }
+  const existing = remoteWatchers.get(key)
+  if (existing) {
+    addRemoteWatchListener(key, sender)
+    return 'installed'
+  }
+  // Why: a second concurrent fs:watchWorktree for the same key must share the
+  // first call's provider.watch() instead of starting its own. Without this,
+  // both calls would create distinct native watchers and the second's resolve
+  // would overwrite the per-key state, dropping the first's unwatch handle
+  // and erasing its sender from the listener map.
+  const pendingInstall = pendingRemoteInstallPromises.get(key)
+  if (pendingInstall) {
+    const inFlight = inFlightRemoteInstalls.get(key)
+    if (inFlight) {
+      // Why: a new watcher can join after all previous pending listeners
+      // unwatched but before provider.watch() resolves; revive that install
+      // instead of inheriting the stale cancellation.
+      addInFlightRemoteInstallListener(inFlight, sender)
+    }
+    const result = await pendingInstall
+    if (
+      result === 'installed' &&
+      remoteWatchers.has(key) &&
+      !sender.isDestroyed() &&
+      (!inFlight || inFlight.listeners.has(sender.id))
+    ) {
+      addRemoteWatchListener(key, sender)
+    }
+    return result
+  }
+  const cancelToken: RemoteWatcherInstallToken = { cancelled: false, listeners: new Map() }
   inFlightRemoteInstalls.set(key, cancelToken)
+  addInFlightRemoteInstallListener(cancelToken, sender)
+  const installPromise = doInstallRemoteWatcher(provider, key, worktreePath, cancelToken)
+  pendingRemoteInstallPromises.set(key, installPromise)
+  try {
+    return await installPromise
+  } finally {
+    if (pendingRemoteInstallPromises.get(key) === installPromise) {
+      pendingRemoteInstallPromises.delete(key)
+    }
+  }
+}
+
+async function doInstallRemoteWatcher(
+  provider: NonNullable<ReturnType<typeof getSshFilesystemProvider>>,
+  key: string,
+  worktreePath: string,
+  cancelToken: RemoteWatcherInstallToken
+): Promise<RemoteWatcherInstallResult> {
   let unwatch: () => void
   try {
     unwatch = await provider.watch(worktreePath, (events) => {
-      if (!sender.isDestroyed()) {
-        sender.send('fs:changed', {
+      const state = remoteWatchers.get(key)
+      if (!state) {
+        return
+      }
+      for (const listener of state.listeners.values()) {
+        if (listener.isDestroyed()) {
+          continue
+        }
+        listener.send('fs:changed', {
           worktreePath,
           events
         } satisfies FsChangedPayload)
       }
     })
+  } catch (err) {
+    console.warn(`[filesystem-watcher] SSH watcher unavailable for ${key}:`, err)
+    return 'unavailable'
   } finally {
     if (inFlightRemoteInstalls.get(key) === cancelToken) {
       inFlightRemoteInstalls.delete(key)
     }
   }
-  if (cancelToken.cancelled || sender.isDestroyed()) {
+  const liveListeners = new Map(
+    Array.from(cancelToken.listeners.entries()).filter(([, listener]) => !listener.isDestroyed())
+  )
+  if (cancelToken.cancelled || liveListeners.size === 0) {
     try {
       unwatch()
     } catch (err) {
@@ -488,21 +793,11 @@ async function installRemoteWatcher(
     }
     return 'cancelled'
   }
-  replaceRemoteWatcher(key, unwatch)
+  remoteWatchers.set(key, { unwatch, listeners: liveListeners })
+  for (const listener of liveListeners.values()) {
+    registerSenderCleanup(listener)
+  }
   loggedUnavailableRemoteWatchers.delete(key)
-
-  sender.once('destroyed', () => {
-    const unwatchFn = remoteWatchers.get(key)
-    if (unwatchFn) {
-      unwatchFn()
-      remoteWatchers.delete(key)
-    }
-    const retryTimer = pendingRemoteWatcherRetries.get(key)
-    if (retryTimer) {
-      clearTimeout(retryTimer)
-      pendingRemoteWatcherRetries.delete(key)
-    }
-  })
   return 'installed'
 }
 
@@ -600,14 +895,11 @@ export function registerFilesystemWatcherHandlers(): void {
         // of leaving the renderer with a watcher it asked to stop.
         const inFlight = inFlightRemoteInstalls.get(key)
         if (inFlight) {
-          inFlight.cancelled = true
+          inFlight.listeners.delete(_event.sender.id)
+          inFlight.cancelled = inFlight.listeners.size === 0
         }
         loggedUnavailableRemoteWatchers.delete(key)
-        const unwatchFn = remoteWatchers.get(key)
-        if (unwatchFn) {
-          unwatchFn()
-          remoteWatchers.delete(key)
-        }
+        releaseRemoteWatchListener(key, _event?.sender?.id ?? 0)
         return
       }
       const senderId = _event.sender.id
@@ -618,6 +910,9 @@ export function registerFilesystemWatcherHandlers(): void {
 
 /** Tear down all watchers on app shutdown. */
 export async function closeAllWatchers(): Promise<void> {
+  senderCleanupRegistered.clear()
+  unwatchableRoots.clear()
+
   // Cancel any pending grace-period teardowns — we're tearing down everything.
   for (const timer of pendingTeardowns.values()) {
     clearTimeout(timer)
@@ -634,26 +929,27 @@ export async function closeAllWatchers(): Promise<void> {
   for (const token of inFlightRemoteInstalls.values()) {
     token.cancelled = true
   }
+  for (const token of inFlightLocalInstalls.values()) {
+    token.listeners.clear()
+    token.cancelled = true
+  }
 
   for (const [rootKey, root] of watchedRoots) {
     if (root.batch.timer) {
       clearTimeout(root.batch.timer)
     }
-    try {
-      await root.subscription.unsubscribe()
-    } catch (err) {
-      console.error(`[filesystem-watcher] shutdown unsubscribe error for ${rootKey}:`, err)
-    }
+    await trackLocalUnsubscribe(rootKey, root)
   }
   watchedRoots.clear()
+  await Promise.allSettled(Array.from(pendingLocalUnsubscribes))
 
   // Why: remote watchers are tracked separately from local @parcel/watcher
   // subscriptions. Without cleaning them up here, their unwatch callbacks
   // would never fire, leaving the relay polling for FS changes after the
   // app has shut down.
-  for (const [key, unwatchFn] of remoteWatchers) {
+  for (const [key, state] of remoteWatchers) {
     try {
-      unwatchFn()
+      state.unwatch()
     } catch (err) {
       console.error(`[filesystem-watcher] remote unwatch error for ${key}:`, err)
     }

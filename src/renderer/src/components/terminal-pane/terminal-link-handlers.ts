@@ -1,17 +1,46 @@
-import type { IDisposable, ILink, ILinkProvider } from '@xterm/xterm'
-import { detectLanguage } from '@/lib/language-detect'
+import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
 import {
+  extractTerminalFileLinkCandidates,
   extractTerminalFileLinks,
-  isPathInsideWorktree,
-  resolveTerminalFileLink,
-  toWorktreeRelativePath
+  resolveTerminalFileLink
 } from '@/lib/terminal-links'
-import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
-import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { openHttpLink } from '@/lib/http-link-routing'
+import { isRemoteRuntimeFileOperation, runtimePathExists } from '@/runtime/runtime-file-client'
+import {
+  buildCandidateLogicalLinesForBufferPosition,
+  dedupeLogicalLines,
+  openFilePathLinkAtBufferPosition
+} from './terminal-file-link-hit-testing'
+import {
+  getTerminalFileContext,
+  isHtmlFilePath,
+  openDetectedFilePath,
+  shouldOpenTerminalFileWithSystemDefault
+} from './terminal-file-open-routing'
+import {
+  buildHardWrappedPathLogicalLineCandidates,
+  buildWrappedLogicalLine,
+  rangeForParsedFileLink,
+  type WrappedLogicalLine
+} from './wrapped-terminal-link-ranges'
+import {
+  getTerminalPathExistsCacheKey,
+  readTerminalPathExistsCache,
+  writeTerminalPathExistsCache
+} from './terminal-path-exists-cache'
+import {
+  getTerminalHtmlFileOpenHint,
+  getTerminalOrcaFileOpenHint,
+  getTerminalWorktreePathOpenHint,
+  getTerminalFileOpenHint,
+  getTerminalUrlOpenHint,
+  isMacPlatform
+} from './terminal-link-open-hints'
+import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
+
+export { openDetectedFilePath } from './terminal-file-open-routing'
+export { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
+export { getTerminalFileOpenHint, getTerminalHtmlFileOpenHint, getTerminalUrlOpenHint }
 
 export type LinkHandlerDeps = {
   worktreeId: string
@@ -20,120 +49,41 @@ export type LinkHandlerDeps = {
   managerRef: React.RefObject<PaneManager | null>
   linkProviderDisposablesRef: React.RefObject<Map<number, IDisposable>>
   pathExistsCache: Map<string, boolean>
+  runtimeEnvironmentId?: string | null
+  terminalHomePath?: string | null
+  getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
 }
 
-type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
-  Partial<Pick<MouseEvent, 'shiftKey' | 'preventDefault' | 'stopPropagation'>>
-
-function isMacPlatform(): boolean {
-  return navigator.userAgent.includes('Mac')
+type ProvidedFileLink = {
+  link: ILink
+  logicalLine: WrappedLogicalLine
 }
 
-export function getTerminalFileOpenHint(): string {
-  return isMacPlatform() ? '⌘+click to open' : 'Ctrl+click to open'
+function rangesOverlap(left: ILink['range'], right: ILink['range']): boolean {
+  const leftStartsAfterRightEnds =
+    left.start.y > right.end.y || (left.start.y === right.end.y && left.start.x > right.end.x)
+  const rightStartsAfterLeftEnds =
+    right.start.y > left.end.y || (right.start.y === left.end.y && right.start.x > left.end.x)
+  return !leftStartsAfterRightEnds && !rightStartsAfterLeftEnds
 }
 
-// Why: .html/.htm files are routed straight into Orca's embedded browser rather
-// than the Monaco editor (which would just show the source), matching the
-// standalone "Open Preview to the Side" entry point. Advertise the different
-// behavior in the hover tooltip so users know a click will render the page.
-export function getTerminalHtmlFileOpenHint(): string {
-  return isMacPlatform() ? '⌘+click to open in browser' : 'Ctrl+click to open in browser'
-}
-
-export function getTerminalUrlOpenHint(): string {
-  return isMacPlatform()
-    ? '⌘+click to open or ⇧⌘+click for system browser'
-    : 'Ctrl+click to open or Shift+Ctrl+click for system browser'
-}
-
-function isHtmlFilePath(filePath: string): boolean {
-  return /\.html?$/i.test(filePath)
-}
-
-function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
-  const store = useAppStore.getState()
-  if (worktreeId) {
-    // Why: following an HTML file link changes which worktree is foregrounded,
-    // so it must record a history visit before opening the browser tab.
-    activateAndRevealWorktree(worktreeId)
+function preferLongestNonOverlappingLinks(links: ProvidedFileLink[]): ProvidedFileLink[] {
+  const selected: ProvidedFileLink[] = []
+  const byLengthDescending = [...links].sort(
+    (a, b) =>
+      b.link.text.length - a.link.text.length ||
+      a.link.range.start.y - b.link.range.start.y ||
+      a.link.range.start.x - b.link.range.start.x
+  )
+  for (const link of byLengthDescending) {
+    if (!selected.some((existing) => rangesOverlap(existing.link.range, link.link.range))) {
+      selected.push(link)
+    }
   }
-  const fileUrl = absolutePathToFileUri(filePath)
-  const title = filePath.split(/[/\\]/).pop() ?? filePath
-  store.createBrowserTab(worktreeId, fileUrl, { title, activate: true })
-}
-
-export function openDetectedFilePath(
-  filePath: string,
-  line: number | null,
-  column: number | null,
-  deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'>
-): void {
-  const { worktreeId, worktreePath } = deps
-
-  void (async () => {
-    let statResult
-    try {
-      const connectionId = getConnectionId(deps.worktreeId ?? null) ?? undefined
-      // Why: remote paths don't need local auth — the relay is the security boundary.
-      if (!connectionId) {
-        await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-      }
-      statResult = await window.api.fs.stat({ filePath, connectionId })
-    } catch {
-      return
-    }
-
-    if (statResult.isDirectory) {
-      await window.api.shell.openFilePath(filePath)
-      return
-    }
-
-    // Why: .html/.htm files render in Orca's embedded browser instead of opening
-    // as source in Monaco — ⌘/Ctrl+click on an HTML path in the terminal should
-    // feel like clicking an http link and render the page, not dump HTML source.
-    // Mirrors the editor's "Open Preview to the Side" action.
-    if (isHtmlFilePath(filePath)) {
-      openHtmlFileInBrowser(filePath, worktreeId)
-      return
-    }
-
-    let relativePath = filePath
-    if (worktreePath && isPathInsideWorktree(filePath, worktreePath)) {
-      const maybeRelative = toWorktreeRelativePath(filePath, worktreePath)
-      if (maybeRelative !== null && maybeRelative.length > 0) {
-        relativePath = maybeRelative
-      }
-    }
-
-    const store = useAppStore.getState()
-    if (worktreeId) {
-      // Why: terminal file links can jump across worktrees. Reusing the shared
-      // activation path keeps those jumps in the same history stack as sidebar
-      // and palette navigation before the editor opens the destination file.
-      activateAndRevealWorktree(worktreeId)
-    }
-
-    store.openFile({
-      filePath,
-      relativePath,
-      worktreeId: worktreeId || '',
-      language: detectLanguage(filePath),
-      mode: 'edit'
-    })
-
-    if (line !== null) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.dispatchEvent(
-            new CustomEvent('orca:editor-reveal-location', {
-              detail: { filePath, line, column }
-            })
-          )
-        })
-      })
-    }
-  })()
+  return selected.sort(
+    (a, b) =>
+      a.link.range.start.y - b.link.range.start.y || a.link.range.start.x - b.link.range.start.x
+  )
 }
 
 export function createFilePathLinkProvider(
@@ -151,74 +101,215 @@ export function createFilePathLinkProvider(
         return
       }
 
-      const bufferLine = pane.terminal.buffer.active.getLine(bufferLineNumber - 1)
-      const lineText = bufferLine?.translateToString(true)
-      if (!lineText) {
+      const buffer = pane.terminal.buffer.active
+      const softWrappedLogicalLine = buildWrappedLogicalLine(buffer, bufferLineNumber)
+      const logicalLines = dedupeLogicalLines([
+        ...buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber),
+        ...(softWrappedLogicalLine ? [softWrappedLogicalLine] : [])
+      ])
+      if (logicalLines.every((logicalLine) => !logicalLine.text)) {
         callback(undefined)
         return
       }
 
-      const fileLinks = extractTerminalFileLinks(lineText)
-      if (fileLinks.length === 0) {
+      if (
+        logicalLines.every((logicalLine) => extractTerminalFileLinks(logicalLine.text).length === 0)
+      ) {
         callback(undefined)
         return
       }
 
       void Promise.all(
-        fileLinks.map(async (parsed): Promise<ILink | null> => {
-          const resolved = startupCwd ? resolveTerminalFileLink(parsed, startupCwd) : null
-          if (!resolved) {
-            return null
-          }
-
-          const cachedExists = pathExistsCache.get(resolved.absolutePath)
-          const exists = cachedExists ?? (await window.api.shell.pathExists(resolved.absolutePath))
-          pathExistsCache.set(resolved.absolutePath, exists)
-          if (!exists) {
-            return null
-          }
-
-          return {
-            range: {
-              // Why: xterm's IBufferRange uses 1-based *inclusive* coords on
-              // both ends (the hit-test is `x >= start.x && x <= end.x`),
-              // but `parsed.endIndex` is the exclusive string-slice end.
-              // Converting start = +1 but end = +0 maps correctly so the
-              // underline stops on the last filename cell instead of bleeding
-              // into the trailing whitespace of column-padded `ls` output.
-              start: { x: parsed.startIndex + 1, y: bufferLineNumber },
-              end: { x: parsed.endIndex, y: bufferLineNumber }
-            },
-            text: parsed.displayText,
-            activate: (event) => {
-              if (!isTerminalLinkActivation(event)) {
-                return
+        logicalLines.flatMap((logicalLine) =>
+          extractTerminalFileLinkCandidates(logicalLine.text).map(
+            async (parsed): Promise<ProvidedFileLink | null> => {
+              const resolved = startupCwd
+                ? resolveTerminalFileLink(parsed, startupCwd, deps.terminalHomePath)
+                : null
+              if (!resolved) {
+                return null
               }
-              openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
+              const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+              if (!range) {
+                return null
+              }
+
+              const runtimeEnvironmentId =
+                deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
+              const fileContext = getTerminalFileContext(
                 worktreeId,
-                worktreePath
+                worktreePath,
+                runtimeEnvironmentId
+              )
+              const isRemoteRuntimePath = isRemoteRuntimeFileOperation(
+                fileContext,
+                resolved.absolutePath
+              )
+              const cacheKey = getTerminalPathExistsCacheKey({
+                absolutePath: resolved.absolutePath,
+                connectionId: fileContext.connectionId,
+                isRemoteRuntimePath,
+                runtimeEnvironmentId
               })
-            },
-            hover: () => {
-              // Why: HTML files get a distinct hint because ⌘/Ctrl+click opens
-              // them rendered in the embedded browser, not as source in the
-              // editor — parallels the "open in system browser" affordance
-              // shown for http URLs.
-              const hint = isHtmlFilePath(resolved.absolutePath)
-                ? getTerminalHtmlFileOpenHint()
-                : openLinkHint
-              linkTooltip.textContent = `${resolved.absolutePath} (${hint})`
-              linkTooltip.style.display = ''
-            },
-            leave: () => {
-              linkTooltip.style.display = 'none'
+              const worktreeRootLink = resolveKnownWorktreeRootPathLink(resolved.absolutePath)
+              if (/[\\/]$/.test(parsed.pathText) && !worktreeRootLink) {
+                return null
+              }
+              // Why: exact known workspace roots must stay clickable for SSH or
+              // stale local paths even when filesystem probing says "missing".
+              if (!worktreeRootLink) {
+                const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
+                const exists =
+                  cachedExists ??
+                  (fileContext.connectionId || isRemoteRuntimePath
+                    ? await runtimePathExists(fileContext, resolved.absolutePath)
+                    : await window.api.shell.pathExists(resolved.absolutePath))
+                writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
+                if (!exists) {
+                  return null
+                }
+              }
+
+              return {
+                logicalLine,
+                link: {
+                  range,
+                  text: parsed.displayText,
+                  activate: (event) => {
+                    if (!isTerminalLinkActivation(event)) {
+                      return
+                    }
+                    openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
+                      worktreeId,
+                      worktreePath,
+                      runtimeEnvironmentId,
+                      openWithSystemDefault: Boolean(event.shiftKey)
+                    })
+                  },
+                  hover: () => {
+                    // Why: only local paths can offer the Shift+modifier system
+                    // default escape hatch; remote paths may not exist locally.
+                    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
+                      fileContext,
+                      resolved.absolutePath
+                    )
+                    const hint = worktreeRootLink
+                      ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault)
+                      : canOpenWithSystemDefault
+                        ? isHtmlFilePath(resolved.absolutePath)
+                          ? getTerminalHtmlFileOpenHint()
+                          : openLinkHint
+                        : getTerminalOrcaFileOpenHint()
+                    linkTooltip.textContent = `${resolved.absolutePath} (${hint})`
+                    linkTooltip.style.display = ''
+                  },
+                  leave: () => {
+                    linkTooltip.style.display = 'none'
+                  }
+                }
+              }
             }
-          }
-        })
+          )
+        )
       ).then((resolvedLinks) => {
-        const links = resolvedLinks.filter((link): link is ILink => link !== null)
+        const latestFingerprints = new Set(
+          buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
+            (logicalLine) => logicalLine.fingerprint
+          )
+        )
+        const providedLinks = resolvedLinks.filter(
+          (link): link is ProvidedFileLink => link !== null
+        )
+        const links = preferLongestNonOverlappingLinks(providedLinks)
+          .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
+          .map(({ link }) => link)
+        if (providedLinks.length > 0 && links.length === 0) {
+          return
+        }
         callback(links.length > 0 ? links : undefined)
       })
+    }
+  }
+}
+
+function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
+  return terminal.element?.querySelector('.xterm-screen') ?? null
+}
+
+function getBufferPositionForTerminalMouseEvent(
+  terminal: Terminal,
+  event: MouseEvent
+): { x: number; y: number } | null {
+  const screenElement = getTerminalScreenElement(terminal)
+  if (!screenElement || terminal.cols <= 0 || terminal.rows <= 0) {
+    return null
+  }
+
+  const rect = screenElement.getBoundingClientRect()
+  const relativeX = event.clientX - rect.left
+  const relativeY = event.clientY - rect.top
+  if (relativeX < 0 || relativeY < 0 || relativeX >= rect.width || relativeY >= rect.height) {
+    return null
+  }
+
+  const cellWidth = rect.width / terminal.cols
+  const cellHeight = rect.height / terminal.rows
+  if (cellWidth <= 0 || cellHeight <= 0) {
+    return null
+  }
+
+  return {
+    x: Math.floor(relativeX / cellWidth) + 1,
+    y: Math.floor(relativeY / cellHeight) + terminal.buffer.active.viewportY + 1
+  }
+}
+
+export function installFilePathLinkClickFallback(
+  paneId: number,
+  terminal: Terminal,
+  deps: LinkHandlerDeps
+): IDisposable {
+  const mouseUpListenerOptions = { capture: true }
+  const handleMouseUp = (event: MouseEvent): void => {
+    if (event.button !== 0 || !isTerminalLinkActivation(event)) {
+      return
+    }
+
+    const position = getBufferPositionForTerminalMouseEvent(terminal, event)
+    if (!position) {
+      return
+    }
+    const runtimeEnvironmentId =
+      deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
+    // Why: xterm can show a wrapped provider link as active while still missing
+    // activation for the clicked wrapped row. Always retry file-path hit testing
+    // on modifier mouseup; openDetectedFilePath coalesces duplicate opens.
+    const opened = openFilePathLinkAtBufferPosition(
+      terminal.buffer.active,
+      position,
+      terminal.cols,
+      {
+        startupCwd: deps.startupCwd,
+        terminalHomePath: deps.terminalHomePath,
+        worktreeId: deps.worktreeId,
+        worktreePath: deps.worktreePath,
+        runtimeEnvironmentId,
+        pathExistsCache: deps.pathExistsCache,
+        openWithSystemDefault: Boolean(event.shiftKey)
+      }
+    )
+    if (opened) {
+      event.preventDefault()
+      event.stopPropagation()
+      terminal.clearSelection()
+    }
+  }
+
+  const terminalElement = terminal.element
+  terminalElement?.addEventListener('mouseup', handleMouseUp, mouseUpListenerOptions)
+  return {
+    dispose: () => {
+      terminalElement?.removeEventListener('mouseup', handleMouseUp, mouseUpListenerOptions)
     }
   }
 }
@@ -228,58 +319,4 @@ export function isTerminalLinkActivation(
 ): boolean {
   const isMac = isMacPlatform()
   return isMac ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
-}
-
-export function handleOscLink(
-  rawText: string,
-  event: TerminalLinkEvent | undefined,
-  deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'>
-): void {
-  if (!isTerminalLinkActivation(event)) {
-    return
-  }
-
-  // Why: xterm renders URL links as clickable anchors. Once Orca decides to
-  // handle a modified click itself, we must suppress the browser's default
-  // anchor navigation or Electron will still launch the system browser.
-  // Note: we intentionally do NOT stopPropagation here — xterm's
-  // SelectionService listens for mouseup on ownerDocument to clear the
-  // pending drag-select state initiated by the mousedown of the same click.
-  // Stopping propagation leaves SelectionService's mousemove/mouseup handlers
-  // attached, so returning focus to the terminal and moving the mouse (even
-  // without holding a button) extends a selection until the next click/Esc.
-  event?.preventDefault?.()
-
-  let parsed: URL
-  try {
-    parsed = new URL(rawText)
-  } catch {
-    return
-  }
-
-  if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-    openHttpLink(parsed.toString(), {
-      worktreeId: deps.worktreeId,
-      forceSystemBrowser: Boolean(event?.shiftKey)
-    })
-    return
-  }
-
-  if (parsed.protocol === 'file:') {
-    // Why: file:// URIs should open inside Orca, not via the OS default editor
-    // (shell.openPath). We extract the path from the URI and route it through
-    // the same openDetectedFilePath logic used for detected file-path links.
-    // Only local files are supported — remote hosts (file://remote/…) are rejected
-    // because we cannot open them as local paths.
-    if (parsed.hostname && parsed.hostname !== 'localhost') {
-      return
-    }
-    let filePath = decodeURIComponent(parsed.pathname)
-    // Why: on Windows, file:///C:/foo yields pathname "/C:/foo". The leading
-    // slash must be stripped to produce a valid Windows path ("C:/foo").
-    if (/^\/[A-Za-z]:/.test(filePath)) {
-      filePath = filePath.slice(1)
-    }
-    openDetectedFilePath(filePath, null, null, deps)
-  }
 }

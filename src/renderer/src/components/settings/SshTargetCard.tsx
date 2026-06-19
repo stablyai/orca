@@ -1,11 +1,23 @@
-import { useState } from 'react'
-import { Loader2, MonitorSmartphone, Pencil, Server, ServerOff, Trash2 } from 'lucide-react'
+import { useCallback, useRef, useState } from 'react'
+import {
+  CircleStop,
+  Loader2,
+  MonitorSmartphone,
+  Pencil,
+  RotateCcw,
+  Server,
+  ServerOff,
+  Trash2
+} from 'lucide-react'
 import type {
   SshTarget,
   SshConnectionState,
   SshConnectionStatus
 } from '../../../../shared/ssh-types'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
+import { translate } from '@/i18n/i18n'
 
 // ── Shared status helpers ────────────────────────────────────────────
 
@@ -17,7 +29,9 @@ export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
   connected: 'Connected',
   reconnecting: 'Reconnecting\u2026',
   'reconnection-failed': 'Reconnection failed',
-  error: 'Error'
+  get error() {
+    return translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
+  }
 }
 
 export function statusColor(status: SshConnectionStatus): string {
@@ -32,13 +46,9 @@ export function statusColor(status: SshConnectionStatus): string {
     case 'reconnection-failed':
     case 'error':
       return 'bg-red-500'
-    default:
+    case 'disconnected':
       return 'bg-muted-foreground/40'
   }
-}
-
-export function isConnecting(status: SshConnectionStatus): boolean {
-  return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
 }
 
 // ── SshTargetCard ────────────────────────────────────────────────────
@@ -47,9 +57,12 @@ type SshTargetCardProps = {
   target: SshTarget
   state: SshConnectionState | undefined
   testing: boolean
-  onConnect: (targetId: string) => void
-  onDisconnect: (targetId: string) => void
-  onTest: (targetId: string) => void
+  busyAction?: SshTargetBusyAction
+  onConnect: (targetId: string) => void | Promise<void>
+  onDisconnect: (targetId: string) => void | Promise<void>
+  onTerminateSessions: (targetId: string) => void | Promise<void>
+  onResetRelay: (targetId: string) => void | Promise<void>
+  onTest: (targetId: string) => void | Promise<void>
   onEdit: (target: SshTarget) => void
   onRemove: (targetId: string) => void
 }
@@ -58,21 +71,46 @@ export function SshTargetCard({
   target,
   state,
   testing,
+  busyAction,
   onConnect,
   onDisconnect,
+  onTerminateSessions,
+  onResetRelay,
   onTest,
   onEdit,
   onRemove
 }: SshTargetCardProps): React.JSX.Element {
   const status: SshConnectionStatus = state?.status ?? 'disconnected'
-  const [actionInFlight, setActionInFlight] = useState<'connect' | 'disconnect' | null>(null)
+  const [actionInFlight, setActionInFlight] = useState<
+    'connect' | 'disconnect' | 'terminate' | 'reset' | null
+  >(null)
+  const hasActionInFlight = actionInFlight !== null || busyAction !== undefined
+  const terminateInFlight = actionInFlight === 'terminate' || busyAction === 'terminate'
+  const resetInFlight = actionInFlight === 'reset' || busyAction === 'reset'
+  const removeInFlight = busyAction === 'remove'
+  const mountedRef = useRef(true)
+  const endpoint = target.username
+    ? `${target.username}@${target.host}:${target.port}`
+    : `${target.host}:${target.port}`
+
+  const handleCardRef = useCallback((node: HTMLDivElement | null): void => {
+    // Why: SSH target actions can resolve after the card is removed; the root
+    // ref gives async completions the same stale-write guard without an Effect.
+    mountedRef.current = node !== null
+  }, [])
+
+  const clearActionInFlight = (): void => {
+    if (mountedRef.current) {
+      setActionInFlight(null)
+    }
+  }
 
   const handleConnect = (): void => {
     if (actionInFlight) {
       return
     }
     setActionInFlight('connect')
-    Promise.resolve(onConnect(target.id)).finally(() => setActionInFlight(null))
+    void Promise.resolve(onConnect(target.id)).finally(clearActionInFlight)
   }
 
   const handleDisconnect = (): void => {
@@ -80,11 +118,147 @@ export function SshTargetCard({
       return
     }
     setActionInFlight('disconnect')
-    Promise.resolve(onDisconnect(target.id)).finally(() => setActionInFlight(null))
+    void Promise.resolve(onDisconnect(target.id)).finally(clearActionInFlight)
   }
 
+  const handleTerminateSessions = (): void => {
+    if (actionInFlight) {
+      return
+    }
+    setActionInFlight('terminate')
+    void Promise.resolve(onTerminateSessions(target.id)).finally(clearActionInFlight)
+  }
+
+  const handleResetRelay = (): void => {
+    if (actionInFlight) {
+      return
+    }
+    setActionInFlight('reset')
+    void Promise.resolve(onResetRelay(target.id)).finally(clearActionInFlight)
+  }
+
+  const renderEndRemoteTerminalsButton = (): React.JSX.Element => (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleTerminateSessions}
+          className="size-7 text-muted-foreground hover:text-red-400"
+          disabled={hasActionInFlight}
+          aria-label={
+            terminateInFlight
+              ? translate(
+                  'auto.components.settings.SshTargetCard.c77f1abfe3',
+                  'Ending remote terminals'
+                )
+              : translate(
+                  'auto.components.settings.SshTargetCard.da16e108e6',
+                  'End remote terminals'
+                )
+          }
+        >
+          {terminateInFlight ? (
+            <Loader2 className="size-3 animate-spin" />
+          ) : (
+            <CircleStop className="size-3" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {translate('auto.components.settings.SshTargetCard.da16e108e6', 'End remote terminals')}
+      </TooltipContent>
+    </Tooltip>
+  )
+
+  const renderResetRelayButton = (): React.JSX.Element => (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleResetRelay}
+          className="size-7 text-muted-foreground hover:text-red-400"
+          disabled={hasActionInFlight}
+          aria-label={
+            resetInFlight
+              ? translate(
+                  'auto.components.settings.SshTargetCard.97dea4e8cf',
+                  'Resetting remote relay'
+                )
+              : translate('auto.components.settings.SshTargetCard.762a48c662', 'Reset remote relay')
+          }
+        >
+          {resetInFlight ? (
+            <Loader2 className="size-3 animate-spin" />
+          ) : (
+            <RotateCcw className="size-3" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {translate('auto.components.settings.SshTargetCard.762a48c662', 'Reset remote relay')}
+      </TooltipContent>
+    </Tooltip>
+  )
+
+  const renderSecondaryIconActions = (includeEndRemoteTerminals: boolean): React.JSX.Element => (
+    <div className="flex items-center gap-1">
+      {includeEndRemoteTerminals ? renderEndRemoteTerminalsButton() : null}
+      {isSshTargetConnecting(status) ? null : renderResetRelayButton()}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onEdit(target)}
+            className="size-7"
+            disabled={hasActionInFlight}
+            aria-label={translate(
+              'auto.components.settings.SshTargetCard.3d8af2949f',
+              'Edit target'
+            )}
+          >
+            <Pencil className="size-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {translate('auto.components.settings.SshTargetCard.3d8af2949f', 'Edit target')}
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onRemove(target.id)}
+            className="size-7 text-muted-foreground hover:text-red-400"
+            disabled={hasActionInFlight}
+            aria-label={
+              removeInFlight
+                ? translate('auto.components.settings.SshTargetCard.3d21a22d0e', 'Removing target')
+                : translate('auto.components.settings.SshTargetCard.7f7b3d7ab4', 'Remove target')
+            }
+          >
+            {removeInFlight ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <Trash2 className="size-3" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {translate('auto.components.settings.SshTargetCard.7f7b3d7ab4', 'Remove target')}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
+
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-card/40 px-4 py-3">
+    <div
+      ref={handleCardRef}
+      className="flex items-center gap-3 rounded-lg border border-border/50 bg-card/40 px-4 py-3"
+    >
       <Server className="size-4 shrink-0 text-muted-foreground" />
 
       <div className="min-w-0 flex-1">
@@ -94,7 +268,7 @@ export function SshTargetCard({
           <span className="text-[11px] text-muted-foreground">{STATUS_LABELS[status]}</span>
         </div>
         <p className="truncate text-xs text-muted-foreground">
-          {target.username}@{target.host}:{target.port}
+          {endpoint}
           {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
         </p>
         {state?.error ? (
@@ -104,42 +278,35 @@ export function SshTargetCard({
 
       <div className="flex shrink-0 items-center gap-1">
         {status === 'connected' ? (
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={handleDisconnect}
-            className="gap-1.5"
-            disabled={actionInFlight !== null}
-          >
-            <ServerOff className="size-3" />
-            Disconnect
-          </Button>
-        ) : isConnecting(status) ? (
-          <Button variant="ghost" size="xs" disabled className="gap-1.5">
-            <Loader2 className="size-3 animate-spin" />
-            Connecting
-          </Button>
-        ) : (
           <>
+            {renderSecondaryIconActions(true)}
             <Button
               variant="ghost"
               size="xs"
-              onClick={handleConnect}
+              onClick={handleDisconnect}
               className="gap-1.5"
-              disabled={actionInFlight !== null}
+              disabled={hasActionInFlight}
             >
-              {actionInFlight === 'connect' ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Server className="size-3" />
-              )}
-              Connect
+              <ServerOff className="size-3" />
+              {translate('auto.components.settings.SshTargetCard.4c86f30877', 'Disconnect')}
             </Button>
+          </>
+        ) : isSshTargetConnecting(status) ? (
+          <>
+            {renderSecondaryIconActions(false)}
+            <Button variant="ghost" size="xs" disabled className="gap-1.5">
+              <Loader2 className="size-3 animate-spin" />
+              {translate('auto.components.settings.SshTargetCard.1810b51482', 'Connecting')}
+            </Button>
+          </>
+        ) : (
+          <>
+            {renderSecondaryIconActions(true)}
             <Button
               variant="ghost"
               size="xs"
               onClick={() => onTest(target.id)}
-              disabled={testing}
+              disabled={testing || hasActionInFlight}
               className="gap-1.5"
             >
               {testing ? (
@@ -147,29 +314,24 @@ export function SshTargetCard({
               ) : (
                 <MonitorSmartphone className="size-3" />
               )}
-              Test
+              {translate('auto.components.settings.SshTargetCard.0e53e9f8e8', 'Test')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={handleConnect}
+              className="gap-1.5"
+              disabled={hasActionInFlight}
+            >
+              {actionInFlight === 'connect' ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Server className="size-3" />
+              )}
+              {translate('auto.components.settings.SshTargetCard.ec6543cee9', 'Connect')}
             </Button>
           </>
         )}
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onEdit(target)}
-          className="size-7"
-          aria-label="Edit target"
-        >
-          <Pencil className="size-3" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onRemove(target.id)}
-          className="size-7 text-muted-foreground hover:text-red-400"
-          aria-label="Remove target"
-        >
-          <Trash2 className="size-3" />
-        </Button>
       </div>
     </div>
   )

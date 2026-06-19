@@ -19,7 +19,7 @@ describe('normalizeBranchName', () => {
 describe('syncPRChecksStatus', () => {
   const baseState = {
     prCache: {
-      '/repo::main': {
+      'repo-id::main': {
         fetchedAt: 0,
         data: { checksStatus: 'neutral' as const }
       }
@@ -27,14 +27,21 @@ describe('syncPRChecksStatus', () => {
   } as unknown as AppState
 
   it('returns null for undefined branch', () => {
-    expect(syncPRChecksStatus(baseState, '/repo', undefined, [])).toBeNull()
+    expect(syncPRChecksStatus(baseState, '/repo', 'repo-id', undefined, [])).toBeNull()
   })
 
   it('returns null for empty string branch', () => {
-    expect(syncPRChecksStatus(baseState, '/repo', '', [])).toBeNull()
+    expect(syncPRChecksStatus(baseState, '/repo', 'repo-id', '', [])).toBeNull()
   })
 
   it('returns null for refs/heads/ only (normalizes to empty)', () => {
-    expect(syncPRChecksStatus(baseState, '/repo', 'refs/heads/', [])).toBeNull()
+    expect(syncPRChecksStatus(baseState, '/repo', 'repo-id', 'refs/heads/', [])).toBeNull()
+  })
+
+  it('uses repoId-scoped key when syncing status', () => {
+    const result = syncPRChecksStatus(baseState, '/repo', 'repo-id', 'main', [
+      { name: 'build', status: 'completed', conclusion: 'success', url: null }
+    ])
+    expect(result?.prCache?.['repo-id::main']?.data?.checksStatus).toBe('success')
   })
 })

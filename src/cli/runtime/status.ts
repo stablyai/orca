@@ -1,4 +1,5 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import { findTransport } from '../../shared/runtime-bootstrap'
 import { tryReadMetadata } from './metadata'
 import { sendRequest } from './transport'
 import { RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
@@ -7,7 +8,8 @@ export async function getCliStatus(
   userDataPath: string
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
   const metadata = tryReadMetadata(userDataPath)
-  if (!metadata?.transports?.length || !metadata.authToken) {
+  const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
+  if (!transport || !metadata?.authToken) {
     return buildCliStatusResponse({
       app: {
         running: false,
@@ -29,7 +31,7 @@ export async function getCliStatus(
 
   try {
     const response = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
-    if (!response.ok) {
+    if (response.ok === false) {
       throw new RuntimeRpcFailureError(response)
     }
     const graphState = response.result.graphStatus

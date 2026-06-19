@@ -28,9 +28,11 @@ import {
   type ListSessionsResult
 } from './types'
 import {
+  getMacDaemonSystemResolverHealth,
   getDaemonLaunchIdentity,
   getProcessStartedAtMs,
   healthCheckDaemon,
+  isDaemonStaleForCurrentBundle,
   killStaleDaemon
 } from './daemon-health'
 import {
@@ -38,6 +40,16 @@ import {
   unbindLocalProviderListeners,
   rebindLocalProviderListeners
 } from '../ipc/pty'
+import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
+
+// Why: daemon init runs concurrently with window load, so harness-side stderr
+// arrival times are useless — in-process `t` lets the startup benchmark derive
+// how long the daemon cold-start path actually took.
+function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
+  if (isStartupDiagnosticsEnabled()) {
+    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
+  }
+}
 
 let spawner: DaemonSpawner | null = null
 let adapter: DaemonPtyRouter | DaemonPtyAdapter | null = null
@@ -65,6 +77,10 @@ function getDaemonEntryPath(): string {
   // execute it from disk. In packaged apps app.getAppPath() points at
   // app.asar, so redirect to the unpacked sibling before joining the script.
   const basePath = app.isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
+  const directEntryPath = join(basePath, 'daemon-entry.js')
+  if (existsSync(directEntryPath)) {
+    return directEntryPath
+  }
   return join(basePath, 'out', 'main', 'daemon-entry.js')
 }
 
@@ -78,20 +94,81 @@ function probeSocket(socketPath: string): Promise<boolean> {
       return
     }
     const sock = connect({ path: socketPath })
-    const timer = setTimeout(() => {
-      sock.destroy()
-      resolve(false)
+    let settled = false
+    let timer: ReturnType<typeof setTimeout>
+    function finish(alive: boolean, options?: { destroy?: boolean }): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      sock.removeListener('connect', onConnect)
+      sock.removeListener('error', onError)
+      if (options?.destroy) {
+        sock.destroy()
+      }
+      resolve(alive)
+    }
+
+    function onConnect(): void {
+      finish(true, { destroy: true })
+    }
+
+    function onError(): void {
+      finish(false)
+    }
+
+    timer = setTimeout(() => {
+      finish(false, { destroy: true })
     }, 1000)
-    sock.on('connect', () => {
-      clearTimeout(timer)
-      sock.destroy()
-      resolve(true)
-    })
-    sock.on('error', () => {
-      clearTimeout(timer)
-      resolve(false)
-    })
+    sock.on('connect', onConnect)
+    sock.on('error', onError)
   })
+}
+
+async function getAliveDaemonSessionCount(
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion = PROTOCOL_VERSION
+): Promise<number | null> {
+  const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
+  try {
+    await client.ensureConnected()
+    const result = await client.request<ListSessionsResult>('listSessions', undefined)
+    return result.sessions.filter((session) => session.isAlive).length
+  } catch {
+    return null
+  } finally {
+    client.disconnect()
+  }
+}
+
+function createPreservedDaemonHandle(
+  runtimeDir: string,
+  protocolVersion = PROTOCOL_VERSION
+): { shutdown(): Promise<void> } {
+  return {
+    shutdown: async () => {
+      await cleanupDaemonForProtocol(runtimeDir, protocolVersion)
+    }
+  }
+}
+
+async function shouldPreserveDaemonWithLiveSessions(
+  socketPath: string,
+  tokenPath: string,
+  replacementLabel: string
+): Promise<boolean> {
+  const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+  if (liveSessionCount === 0) {
+    return false
+  }
+  console.warn(
+    liveSessionCount === null
+      ? `[daemon] Preserving daemon ${replacementLabel} because live session state could not be verified`
+      : `[daemon] Preserving daemon ${replacementLabel} because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+  )
+  return true
 }
 
 function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
@@ -99,24 +176,62 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     const entryPath = getDaemonEntryPath()
     const healthy = await healthCheckDaemon(socketPath, tokenPath)
     if (healthy) {
-      // Why: dev worktrees share the same orca-dev userData, so a daemon from
-      // a deleted sibling checkout can pass protocol health checks while still
-      // pointing at missing native modules. Packaged app paths are stable and
-      // should preserve existing warm daemon reuse semantics.
-      const identity = app.isPackaged
-        ? 'match'
-        : getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
-      if (identity === 'mismatch') {
-        console.warn('[daemon] Replacing daemon launched from a different app path')
+      const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
+      if (resolverHealth === 'unhealthy') {
+        const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+        if (liveSessionCount !== 0) {
+          console.warn(
+            liveSessionCount === null
+              ? '[daemon] Preserving daemon with unavailable macOS system resolver because live session state could not be verified'
+              : `[daemon] Preserving daemon with unavailable macOS system resolver because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+          )
+          return createPreservedDaemonHandle(runtimeDir)
+        }
+        console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
         await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
       } else {
-        // Why: daemon is already running from a previous app session and
-        // responded to a protocol-level ping. Safe to reuse.
-        return {
-          shutdown: async () => {
-            await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+        // Why: a protocol-healthy daemon can outlive the app bundle that
+        // launched it. In dev this happens after deleting/rebuilding a
+        // worktree; in packaged apps it happens when the stable
+        // /Applications/Orca.app path is replaced during update.
+        const identity = await getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
+        const stalePackagedBundle =
+          app.isPackaged &&
+          (await isDaemonStaleForCurrentBundle(runtimeDir, socketPath, tokenPath, app.getVersion()))
+        if (identity === 'mismatch' || stalePackagedBundle) {
+          // Why: replacing a healthy daemon kills its child PTYs; defer code
+          // freshness until no live terminal sessions would be lost.
+          const replacementLabel = stalePackagedBundle
+            ? 'launched before the current app bundle was installed'
+            : 'launched from a different app path'
+          if (await shouldPreserveDaemonWithLiveSessions(socketPath, tokenPath, replacementLabel)) {
+            return createPreservedDaemonHandle(runtimeDir)
           }
+          console.warn(
+            stalePackagedBundle
+              ? '[daemon] Replacing daemon launched before the current app bundle was installed'
+              : '[daemon] Replacing daemon launched from a different app path'
+          )
+          await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+        } else {
+          // Why: daemon is already running from a previous app session and
+          // responded to a protocol-level ping. Safe to reuse.
+          return createPreservedDaemonHandle(runtimeDir)
         }
+      }
+    } else {
+      // Why: a busy machine (e.g. right after an update) can time out the
+      // health check while the daemon is alive and owning terminals. Killing
+      // it would destroy every live session, so re-verify with a session list
+      // first. Only a verified non-empty list preserves: a daemon that cannot
+      // even list sessions cannot serve terminals, and replacing it is the
+      // only recovery.
+      const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+      if (liveSessionCount !== null && liveSessionCount > 0) {
+        console.warn(
+          `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+        )
+        return createPreservedDaemonHandle(runtimeDir)
       }
     }
 
@@ -126,6 +241,9 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
 
     const userDataPath = app.getPath('userData')
     const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
+      // Why: detached daemons can outlive dev worktrees. Starting from
+      // userData keeps process.cwd() valid after a repo/worktree is deleted.
+      cwd: userDataPath,
       // Why: detached + unref lets the daemon outlive the Electron process.
       // stdio 'ignore' prevents the child from holding the parent's stdout
       // open, which would prevent Electron from exiting cleanly.
@@ -146,8 +264,22 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
 
     // Wait for the daemon to signal readiness via IPC
     await new Promise<void>((resolve, reject) => {
-      const fail = (error: Error): void => {
-        clearTimeout(timer)
+      let timer: ReturnType<typeof setTimeout> | undefined
+      let settled = false
+      function cleanupStartupListeners(): void {
+        if (timer) {
+          clearTimeout(timer)
+        }
+        child.off('message', onReadyMessage)
+        child.off('error', onStartupError)
+        child.off('exit', onStartupExit)
+      }
+      function fail(error: Error): void {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupStartupListeners()
         if (child.pid) {
           try {
             process.kill(child.pid, 'SIGTERM')
@@ -157,13 +289,15 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
         reject(error)
       }
-      const timer = setTimeout(() => {
-        fail(new Error('Daemon startup timed out'))
-      }, 10000)
-
-      child.on('message', (msg: unknown) => {
+      function onReadyMessage(msg: unknown): void {
         if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
-          clearTimeout(timer)
+          if (settled) {
+            return
+          }
+          settled = true
+          // Why: the daemon process is detached after readiness; leaving
+          // startup listeners attached retains this launch promise closure.
+          cleanupStartupListeners()
           if (child.pid) {
             // Why: JSON pid file carries pid + process start time so later
             // killStaleDaemon() can verify the pid still belongs to the daemon
@@ -174,7 +308,8 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
               serializeDaemonPidFile({
                 pid: child.pid,
                 startedAtMs: getProcessStartedAtMs(child.pid),
-                entryPath
+                entryPath,
+                appVersion: app.getVersion()
               }),
               { mode: 0o600 }
             )
@@ -185,15 +320,23 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           child.unref()
           resolve()
         }
-      })
+      }
 
-      child.on('error', (err) => {
+      function onStartupError(err: Error): void {
         fail(err)
-      })
+      }
 
-      child.on('exit', (code) => {
+      function onStartupExit(code: number | null): void {
         fail(new Error(`Daemon exited during startup with code ${code}`))
-      })
+      }
+
+      timer = setTimeout(() => {
+        fail(new Error('Daemon startup timed out'))
+      }, 10000)
+
+      child.on('message', onReadyMessage)
+      child.on('error', onStartupError)
+      child.on('exit', onStartupExit)
     })
 
     return {
@@ -210,7 +353,16 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
   }
 }
 
-export async function initDaemonPtyProvider(): Promise<void> {
+export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void> {
+  logDaemonMilestone('daemon-init-start')
+  // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init
+  // that deterministically outlasts the first-window timeout. Real triggers
+  // (stale-daemon cleanup, legacy probes on a busy disk) are not controllable
+  // from a test.
+  const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
+  if (Number.isFinite(e2eInitDelayMs) && e2eInitDelayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
+  }
   const runtimeDir = getRuntimeDir()
 
   const newSpawner = new DaemonSpawner({
@@ -222,6 +374,12 @@ export async function initDaemonPtyProvider(): Promise<void> {
   // throws, a stale spawner would prevent shutdownDaemon() from cleaning up
   // correctly on retry.
   const info = await newSpawner.ensureRunning()
+  logDaemonMilestone('daemon-current-ready')
+  if (signal?.aborted) {
+    // Why: startup fail-open may already have allowed fallback LocalPtyProvider
+    // PTYs to spawn. A late daemon swap would strand those PTYs on the old owner.
+    return
+  }
 
   const newAdapter = new DaemonPtyAdapter({
     socketPath: info.socketPath,
@@ -249,10 +407,20 @@ export async function initDaemonPtyProvider(): Promise<void> {
   if (routedAdapter instanceof DaemonPtyRouter) {
     await routedAdapter.discoverLegacySessions()
   }
+  if (signal?.aborted) {
+    // Why: same late-swap guard after legacy discovery, which can also exceed
+    // the first-window startup timeout on slow or stale daemon state.
+    return
+  }
 
   spawner = newSpawner
   adapter = routedAdapter
   setLocalPtyProvider(routedAdapter)
+  // Why: desktop startup now lets the first window register PTY listeners
+  // before daemon init finishes. Rebind here so daemon PTYs still fan out
+  // data/exit events through the renderer and runtime listeners.
+  rebindLocalProviderListeners()
+  logDaemonMilestone('daemon-init-done', { legacyAdapters: legacyAdapters.length })
 }
 
 // Why: the Manage Sessions IPC handlers need read access to the current
@@ -481,6 +649,28 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
     const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
     const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
     if (!(await probeSocket(socketPath))) {
+      // Why: dead legacy daemons leave pid/token files behind forever (one per
+      // protocol bump). A stale pid eventually gets recycled by an unrelated
+      // process, turning any future identity check into a PowerShell spawn.
+      // The socket is provably dead, so remove the leftovers — mirrors what
+      // cleanupDaemonForProtocol already does for the current version.
+      for (const stalePath of [
+        getDaemonPidPath(runtimeDir, protocolVersion),
+        getDaemonTokenPath(runtimeDir, protocolVersion)
+      ]) {
+        try {
+          unlinkSync(stalePath)
+        } catch {
+          // Best-effort
+        }
+      }
+      if (process.platform !== 'win32' && existsSync(socketPath)) {
+        try {
+          unlinkSync(socketPath)
+        } catch {
+          // Best-effort
+        }
+      }
       continue
     }
     // Why: old daemon PTYs can be running long-lived agents during an app

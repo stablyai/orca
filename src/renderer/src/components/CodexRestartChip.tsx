@@ -1,6 +1,23 @@
 import { RefreshCw } from 'lucide-react'
-import { useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../store'
+import { translate } from '@/i18n/i18n'
+
+const EMPTY_TABS: { id: string }[] = []
+
+export function collectStalePtyIdsForTabs({
+  tabs,
+  ptyIdsByTabId,
+  codexRestartNoticeByPtyId
+}: {
+  tabs: { id: string }[]
+  ptyIdsByTabId: Record<string, string[]>
+  codexRestartNoticeByPtyId: Record<string, unknown>
+}): string[] {
+  return tabs.flatMap((tab) =>
+    (ptyIdsByTabId[tab.id] ?? []).filter((ptyId) => Boolean(codexRestartNoticeByPtyId[ptyId]))
+  )
+}
 
 export function collectStaleWorktreePtyIds({
   tabsByWorktree,
@@ -13,9 +30,11 @@ export function collectStaleWorktreePtyIds({
   codexRestartNoticeByPtyId: Record<string, unknown>
   worktreeId: string
 }): string[] {
-  return (tabsByWorktree[worktreeId] ?? []).flatMap((tab) =>
-    (ptyIdsByTabId[tab.id] ?? []).filter((ptyId) => Boolean(codexRestartNoticeByPtyId[ptyId]))
-  )
+  return collectStalePtyIdsForTabs({
+    tabs: tabsByWorktree[worktreeId] ?? EMPTY_TABS,
+    ptyIdsByTabId,
+    codexRestartNoticeByPtyId
+  })
 }
 
 export function dismissStaleWorktreePtyIds(
@@ -35,22 +54,17 @@ export default function CodexRestartChip({
 }: {
   worktreeId: string
 }): React.JSX.Element | null {
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
+  const staleWorktreePtyIds = useAppStore(
+    useShallow((s) =>
+      collectStalePtyIdsForTabs({
+        tabs: s.tabsByWorktree[worktreeId] ?? EMPTY_TABS,
+        ptyIdsByTabId: s.ptyIdsByTabId,
+        codexRestartNoticeByPtyId: s.codexRestartNoticeByPtyId
+      })
+    )
+  )
   const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
   const clearCodexRestartNotice = useAppStore((s) => s.clearCodexRestartNotice)
-
-  const staleWorktreePtyIds = useMemo(
-    () =>
-      collectStaleWorktreePtyIds({
-        tabsByWorktree,
-        ptyIdsByTabId,
-        codexRestartNoticeByPtyId,
-        worktreeId
-      }),
-    [codexRestartNoticeByPtyId, ptyIdsByTabId, tabsByWorktree, worktreeId]
-  )
 
   if (staleWorktreePtyIds.length === 0) {
     return null
@@ -60,7 +74,10 @@ export default function CodexRestartChip({
     <div className="pointer-events-none absolute right-3 top-3 z-20">
       <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-border/80 bg-popover/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
         <span className="text-[11px] text-muted-foreground">
-          Codex is using the previous account
+          {translate(
+            'auto.components.CodexRestartChip.9263e75f49',
+            'Codex is using the previous account'
+          )}
         </span>
         <div className="flex items-center gap-1.5">
           <button
@@ -69,14 +86,14 @@ export default function CodexRestartChip({
             className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background transition-colors hover:opacity-90"
           >
             <RefreshCw className="size-3" />
-            Restart
+            {translate('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
           </button>
           <button
             type="button"
             onClick={() => dismissStaleWorktreePtyIds(staleWorktreePtyIds, clearCodexRestartNotice)}
             className="rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
           >
-            Dismiss
+            {translate('auto.components.CodexRestartChip.9132779820', 'Dismiss')}
           </button>
         </div>
       </div>

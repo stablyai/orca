@@ -64,3 +64,12 @@ export type CodexUsageSessionRow = {
   totalTokens: number
   hasInferredPricing: boolean
 }
+
+export type CodexUsageSnapshot = {
+  scanState: CodexUsageScanState
+  summary: CodexUsageSummary
+  daily: CodexUsageDailyPoint[]
+  modelBreakdown: CodexUsageBreakdownRow[]
+  projectBreakdown: CodexUsageBreakdownRow[]
+  recentSessions: CodexUsageSessionRow[]
+}

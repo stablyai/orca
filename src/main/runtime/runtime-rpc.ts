@@ -17,9 +17,14 @@ import type { RpcMessageContext, RpcTransport } from './rpc/transport'
 import { UnixSocketTransport } from './rpc/unix-socket-transport'
 import { WebSocketTransport } from './rpc/ws-transport'
 import type { WebSocket } from 'ws'
-import { DeviceRegistry } from './device-registry'
+import { DeviceRegistry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
 import { E2EEChannel } from './rpc/e2ee-channel'
+import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import {
+  decodeTerminalStreamFrame,
+  type TerminalStreamFrame
+} from '../../shared/terminal-stream-protocol'
 
 const DEFAULT_WS_PORT = 6768
 
@@ -30,6 +35,7 @@ type OrcaRuntimeRpcServerOptions = {
   platform?: NodeJS.Platform
   enableWebSocket?: boolean
   wsPort?: number
+  webClientRoot?: string
   // Why: test-only overrides for the two time-bound constants below.
   // Production callers must not pass these — defaults are set by the design
   // doc (§3.1) and changing them in production would weaken the admission
@@ -56,17 +62,301 @@ const KEEPALIVE_INTERVAL_MS = 10_000
 // queuing. See design doc §3.1 + §7 risk #2.
 const LONG_POLL_CAP = 16
 
-// Why: a long-poll request is one whose handler blocks for an unbounded
-// amount of time waiting for an external event (today, only
-// `orchestration.check` with `wait === true`). This function is the single
-// place that classifies it — the long-poll counter, abort wiring, and
-// runtime_busy admission check all share this decision. See §3.1.
-function isLongPollRequest(request: RpcRequest): boolean {
-  if (request.method !== 'orchestration.check') {
-    return false
+function resolvePairingEndpoint(rawEndpoint: string, address: string | null | undefined): string {
+  const endpoint = new URL(rawEndpoint)
+  const override = address?.trim()
+  if (!override) {
+    endpoint.hostname = '127.0.0.1'
+    return formatWebSocketUrl(endpoint)
   }
-  const params = request.params as { wait?: unknown } | undefined
-  return params?.wait === true
+  if (/^wss?:\/\//i.test(override)) {
+    return formatWebSocketUrl(new URL(override))
+  }
+  const parsed = parsePairingAddressOverride(override)
+  endpoint.hostname = parsed.host.includes(':')
+    ? `[${parsed.host.replace(/^\[|\]$/g, '')}]`
+    : parsed.host
+  if (parsed.port) {
+    endpoint.port = parsed.port
+  }
+  return formatWebSocketUrl(endpoint)
+}
+
+function parsePairingAddressOverride(address: string): { host: string; port: string | null } {
+  if (address.startsWith('[') || address.split(':').length === 2) {
+    try {
+      const parsed = new URL(`ws://${address}`)
+      return { host: parsed.hostname.replace(/^\[|\]$/g, ''), port: parsed.port || null }
+    } catch {
+      return { host: address, port: null }
+    }
+  }
+  return { host: address, port: null }
+}
+
+function formatWebSocketUrl(url: URL): string {
+  const formatted = url.toString()
+  return url.pathname === '/' && !url.search && !url.hash ? formatted.replace(/\/$/, '') : formatted
+}
+
+function createWebClientUrl(endpoint: string, pairingUrl: string): string {
+  const url = new URL(endpoint)
+  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
+  url.pathname = webClientPathForEndpoint(url.pathname)
+  url.search = ''
+  // Why: pairing URLs include full runtime credentials. Keeping them in the
+  // fragment avoids proxy logs and Referer headers while the web app loads.
+  url.hash = `pairing=${encodeURIComponent(pairingUrl)}`
+  return url.toString()
+}
+
+function webClientPathForEndpoint(pathname: string): string {
+  if (!pathname || pathname === '/') {
+    return '/web-index.html'
+  }
+  return `${pathname.replace(/\/$/, '')}/web-index.html`
+}
+
+const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
+  'accounts.list',
+  'accounts.selectClaude',
+  'accounts.selectCodex',
+  'accounts.subscribe',
+  'accounts.unsubscribe',
+  'browser.back',
+  'browser.dialogAccept',
+  'browser.dialogDismiss',
+  'browser.forward',
+  'browser.goto',
+  'browser.keyboardInsertText',
+  'browser.keypress',
+  'browser.mouseDown',
+  'browser.mouseClick',
+  'browser.mouseMove',
+  'browser.mouseUp',
+  'browser.mouseWheel',
+  'browser.reload',
+  'browser.screencast',
+  'browser.screencast.unsubscribe',
+  'browser.tabCreate',
+  'browser.viewport',
+  'clipboard.abortImageUpload',
+  'clipboard.appendImageUploadChunk',
+  'clipboard.commitImageUpload',
+  'clipboard.saveImageAsTempFile',
+  'clipboard.startImageUpload',
+  'diagnostics.memory',
+  'files.browseServerDir',
+  'files.createFile',
+  'files.list',
+  'files.open',
+  'files.openDiff',
+  'files.read',
+  'files.readPreview',
+  'files.resolveTerminalPath',
+  'git.abortMerge',
+  'git.abortRebase',
+  'git.bulkStage',
+  'git.bulkUnstage',
+  'git.branchCompare',
+  'git.branchDiff',
+  'git.cancelGenerateCommitMessage',
+  'git.cancelGeneratePullRequestFields',
+  'git.checkout',
+  'git.commit',
+  'git.commitCompare',
+  'git.commitDiff',
+  'git.discard',
+  'git.discoverCommitMessageModels',
+  'git.diff',
+  'git.fetch',
+  'git.forkSync',
+  'git.fastForward',
+  'git.generateCommitMessage',
+  'git.generatePullRequestFields',
+  'git.history',
+  'git.localBranches',
+  'git.pull',
+  'git.push',
+  'git.rebaseFromBase',
+  'git.stage',
+  'git.status',
+  'git.unstage',
+  'git.upstreamStatus',
+  'github.createIssue',
+  'github.addIssueComment',
+  'github.addPRReviewComment',
+  'github.addPRReviewCommentReply',
+  'github.countWorkItems',
+  'github.listAssignableUsers',
+  'github.listLabels',
+  'github.listWorkItems',
+  'github.mergePR',
+  'github.setPRAutoMerge',
+  'github.requestPRReviewers',
+  'github.removePRReviewers',
+  'github.project.listAccessible',
+  'github.project.listAssignableUsersBySlug',
+  'github.project.listIssueTypesBySlug',
+  'github.project.listLabelsBySlug',
+  'github.project.listViews',
+  'github.project.resolveRef',
+  'github.project.addIssueCommentBySlug',
+  'github.project.updateIssueCommentBySlug',
+  'github.project.deleteIssueCommentBySlug',
+  'github.project.clearItemField',
+  'github.project.updateIssueBySlug',
+  'github.project.updateIssueTypeBySlug',
+  'github.project.updateItemField',
+  'github.project.updatePullRequestBySlug',
+  'github.project.viewTable',
+  'github.project.workItemDetailsBySlug',
+  'github.prForBranch',
+  'github.prFileContents',
+  'github.prChecks',
+  'github.prCheckDetails',
+  'github.rerunPRChecks',
+  'github.resolveReviewThread',
+  'github.setPRFileViewed',
+  'github.updateIssue',
+  'github.updatePR',
+  'github.updatePRTitle',
+  'github.updatePRState',
+  'github.repoSlug',
+  'github.workItem',
+  'github.workItemDetails',
+  'gitlab.createIssue',
+  'gitlab.addIssueComment',
+  'gitlab.addMRComment',
+  'gitlab.listWorkItems',
+  'gitlab.mergeMR',
+  'gitlab.resolveMRDiscussion',
+  'gitlab.todos',
+  'gitlab.updateIssue',
+  'gitlab.updateMR',
+  'gitlab.updateMRState',
+  'gitlab.workItemDetails',
+  'host.gitBash.isAvailable',
+  'host.platform',
+  'host.pwsh.isAvailable',
+  'host.wsl.isAvailable',
+  'host.wsl.listDistros',
+  'hostedReview.create',
+  'hostedReview.forBranch',
+  'hostedReview.getCreationEligibility',
+  'linear.getCustomView',
+  'linear.getIssue',
+  'linear.getProject',
+  'linear.agentSearchIssues',
+  'linear.issueContext',
+  'linear.resolveCurrentIssue',
+  'linear.addIssueComment',
+  'linear.connect',
+  'linear.createIssue',
+  'linear.createProject',
+  'linear.issueComments',
+  'linear.listCustomViewIssues',
+  'linear.listCustomViewProjects',
+  'linear.listCustomViews',
+  'linear.listIssues',
+  'linear.listProjectIssues',
+  'linear.listProjects',
+  'linear.teamLabels',
+  'linear.teamMembers',
+  'linear.listTeams',
+  'linear.searchIssues',
+  'linear.selectWorkspace',
+  'linear.status',
+  'linear.teamStates',
+  'linear.updateIssue',
+  'markdown.readTab',
+  'markdown.saveTab',
+  'notifications.subscribe',
+  'notifications.unsubscribe',
+  'preflight.check',
+  'preflight.detectAgents',
+  'preflight.detectRemoteAgents',
+  'repo.baseRefDefault',
+  'repo.gitAvailable',
+  'repo.hooks',
+  'repo.list',
+  'repo.saveSparsePreset',
+  'repo.searchRefs',
+  'repo.sparsePresets',
+  'repo.update',
+  'runtime.clientEvents.subscribe',
+  'runtime.clientEvents.unsubscribe',
+  'session.tabs.activate',
+  'session.tabs.close',
+  'session.tabs.createTerminal',
+  'session.tabs.list',
+  'session.tabs.listAll',
+  'session.tabs.move',
+  'session.tabs.subscribe',
+  'session.tabs.subscribeAll',
+  'session.tabs.unsubscribe',
+  'session.tabs.unsubscribeAll',
+  'settings.get',
+  'settings.update',
+  'ssh.connect',
+  'ssh.getState',
+  'speech.dictation.cancel',
+  'speech.dictation.chunk',
+  'speech.dictation.finish',
+  'speech.dictation.setup',
+  'speech.dictation.start',
+  'speech.models.download',
+  'speech.models.list',
+  'stats.summary',
+  'status.get',
+  'agentTeams.prepareLaunch',
+  'agentTeams.tmuxCompat',
+  'terminal.clearBuffer',
+  'terminal.close',
+  'terminal.create',
+  'terminal.focus',
+  'terminal.getAutoRestoreFit',
+  'terminal.isRunningAgent',
+  'terminal.list',
+  'terminal.multiplex',
+  'terminal.read',
+  'terminal.rename',
+  'terminal.send',
+  'terminal.setAutoRestoreFit',
+  'terminal.setDisplayMode',
+  'terminal.subscribe',
+  'terminal.unsubscribe',
+  'terminal.updateViewport',
+  'terminal.wait',
+  'ui.get',
+  'ui.recordFeatureInteraction',
+  'ui.set',
+  'worktree.activate',
+  'worktree.create',
+  'worktree.forceDeleteBranch',
+  'worktree.prefetchCreateBase',
+  'worktree.ps',
+  'worktree.show',
+  'worktree.resolveMrBase',
+  'worktree.resolvePrBase',
+  'worktree.rm',
+  'worktree.set',
+  'worktree.sleep'
+])
+
+// Why: a long-poll request is one whose handler blocks waiting for an external
+// event. This function is the single place that classifies it — the long-poll
+// counter, abort wiring, keepalives, and runtime_busy admission check all
+// share this decision. See §3.1.
+function isLongPollRequest(request: RpcRequest): boolean {
+  if (request.method === 'terminal.wait') {
+    return true
+  }
+  if (request.method === 'orchestration.check') {
+    const params = request.params as { wait?: unknown } | undefined
+    return params?.wait === true
+  }
+  return false
 }
 
 export class OrcaRuntimeRpcServer {
@@ -77,12 +367,14 @@ export class OrcaRuntimeRpcServer {
   private readonly platform: NodeJS.Platform
   private readonly enableWebSocket: boolean
   private readonly wsPort: number
+  private readonly webClientRoot: string | undefined
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly longPollCap: number
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
   private tlsFingerprint: string | null = null
+  private wsTransport: WebSocketTransport | null = null
   private activeTransports: RpcTransport[] = []
   private transports: RuntimeTransportMetadata[] = []
   // Why: each WebSocket connection has its own E2EE channel that manages the
@@ -92,6 +384,14 @@ export class OrcaRuntimeRpcServer {
   // subscriptions, so the server can reap a closing socket's subscriptions
   // without affecting other live sockets that share the same deviceToken.
   private wsConnectionIds = new Map<WebSocket, string>()
+  private readonly binaryStreamHandlers = new Map<
+    string,
+    Map<number, (frame: TerminalStreamFrame) => void>
+  >()
+  private readonly wsDispatchAbortStates = new Map<
+    WebSocket,
+    { controllers: Set<AbortController>; abortOnClose: () => void }
+  >()
   // Why: separate from Node's server.maxConnections because we need to count
   // only long-running dispatches, not every in-flight short RPC. See §3.1 +
   // §7 risk #2.
@@ -104,6 +404,7 @@ export class OrcaRuntimeRpcServer {
     platform = process.platform,
     enableWebSocket = false,
     wsPort = DEFAULT_WS_PORT,
+    webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP
   }: OrcaRuntimeRpcServerOptions) {
@@ -114,6 +415,7 @@ export class OrcaRuntimeRpcServer {
     this.platform = platform
     this.enableWebSocket = enableWebSocket
     this.wsPort = wsPort
+    this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
   }
@@ -134,9 +436,163 @@ export class OrcaRuntimeRpcServer {
     return this.e2eeKeypair
   }
 
+  revokeMobileDevice(deviceId: string): boolean {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    if (device?.scope !== 'mobile' || !this.deviceRegistry?.removeDevice(deviceId)) {
+      return false
+    }
+    this.wsTransport?.terminateClientConnections(device.token)
+    return true
+  }
+
+  revokeRuntimeAccess(deviceId: string): boolean {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    if (device?.scope !== 'runtime' || !this.deviceRegistry?.removeDevice(deviceId)) {
+      return false
+    }
+    this.wsTransport?.terminateClientConnections(device.token)
+    return true
+  }
+
   getWebSocketEndpoint(): string | null {
     const ws = this.transports.find((t) => t.kind === 'websocket')
     return ws?.endpoint ?? null
+  }
+
+  createPairingOffer(args: {
+    address?: string | null
+    name?: string
+    rotate?: boolean
+    scope?: DeviceScope
+  }):
+    | { available: false }
+    | {
+        available: true
+        pairingUrl: string
+        endpoint: string
+        deviceId: string
+        webClientUrl: string | null
+      } {
+    const rawEndpoint = this.getWebSocketEndpoint()
+    const publicKeyB64 = this.getE2EEPublicKey()
+    if (!rawEndpoint || !this.deviceRegistry || !publicKeyB64) {
+      return { available: false }
+    }
+
+    const endpoint = resolvePairingEndpoint(rawEndpoint, args.address)
+    const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
+    const scope = args.scope ?? 'runtime'
+    const device = args.rotate
+      ? this.deviceRegistry.rotatePendingDevice(deviceName, scope)
+      : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope)
+    const pairingUrl = encodePairingOffer({
+      v: PAIRING_OFFER_VERSION,
+      endpoint,
+      deviceToken: device.token,
+      publicKeyB64
+    })
+    return {
+      available: true,
+      pairingUrl,
+      endpoint,
+      deviceId: device.deviceId,
+      webClientUrl:
+        this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null
+    }
+  }
+
+  private registerBinaryStreamHandler(
+    connectionId: string | undefined,
+    streamId: number,
+    handler: (frame: TerminalStreamFrame) => void
+  ): () => void {
+    if (!connectionId || !Number.isInteger(streamId) || streamId < 0) {
+      return () => {}
+    }
+    let handlers = this.binaryStreamHandlers.get(connectionId)
+    if (!handlers) {
+      handlers = new Map()
+      this.binaryStreamHandlers.set(connectionId, handlers)
+    }
+    handlers.set(streamId, handler)
+    return () => {
+      const current = this.binaryStreamHandlers.get(connectionId)
+      if (!current || current.get(streamId) !== handler) {
+        return
+      }
+      current.delete(streamId)
+      if (current.size === 0) {
+        this.binaryStreamHandlers.delete(connectionId)
+      }
+    }
+  }
+
+  private handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
+    const connectionId = this.wsConnectionIds.get(ws)
+    if (!connectionId) {
+      return
+    }
+    const frame = decodeTerminalStreamFrame(bytes)
+    if (!frame) {
+      return
+    }
+    this.binaryStreamHandlers.get(connectionId)?.get(frame.streamId)?.(frame)
+  }
+
+  private registerWebSocketDispatchAbort(ws: WebSocket): {
+    signal: AbortSignal
+    dispose: () => void
+  } {
+    const abortController = new AbortController()
+    if (ws.readyState !== ws.OPEN) {
+      abortController.abort()
+      return { signal: abortController.signal, dispose: () => {} }
+    }
+
+    let state = this.wsDispatchAbortStates.get(ws)
+    if (!state) {
+      state = {
+        controllers: new Set(),
+        abortOnClose: () => this.abortWebSocketDispatches(ws)
+      }
+      this.wsDispatchAbortStates.set(ws, state)
+      // Why: many streaming RPCs can share one WebSocket. A single socket-level
+      // abort fan-out avoids MaxListenersExceededWarning while preserving cleanup.
+      ws.on('close', state.abortOnClose)
+      ws.on('error', state.abortOnClose)
+    }
+    state.controllers.add(abortController)
+
+    return {
+      signal: abortController.signal,
+      dispose: () => {
+        const current = this.wsDispatchAbortStates.get(ws)
+        if (!current) {
+          return
+        }
+        current.controllers.delete(abortController)
+        if (current.controllers.size > 0) {
+          return
+        }
+        this.wsDispatchAbortStates.delete(ws)
+        ws.off('close', current.abortOnClose)
+        ws.off('error', current.abortOnClose)
+      }
+    }
+  }
+
+  private abortWebSocketDispatches(ws: WebSocket): void {
+    const state = this.wsDispatchAbortStates.get(ws)
+    if (!state) {
+      return
+    }
+    this.wsDispatchAbortStates.delete(ws)
+    ws.off('close', state.abortOnClose)
+    ws.off('error', state.abortOnClose)
+    for (const controller of state.controllers) {
+      controller.abort()
+    }
+    state.controllers.clear()
   }
 
   async start(): Promise<void> {
@@ -215,8 +671,10 @@ export class OrcaRuntimeRpcServer {
 
         const wsTransport = new WebSocketTransport({
           host: '0.0.0.0',
-          port: this.wsPort
+          port: this.wsPort,
+          staticRoot: this.webClientRoot
         })
+        this.wsTransport = wsTransport
 
         // Why: each WebSocket connection gets an E2EE channel that handles the
         // handshake before any RPC messages are processed. The channel decrypts
@@ -250,9 +708,18 @@ export class OrcaRuntimeRpcServer {
                 ws.close(code, reason)
               }
             })
-            channel.onMessage((plaintext, encryptedReply) => {
-              void this.handleWebSocketMessage(plaintext, encryptedReply, wsTransport, ws)
+            channel.onMessage((plaintext, encryptedReply, encryptedBinaryReply) => {
+              const authenticatedDeviceToken = this.e2eeChannels.get(ws)?.deviceToken ?? null
+              void this.handleWebSocketMessage(
+                plaintext,
+                encryptedReply,
+                encryptedBinaryReply,
+                wsTransport,
+                ws,
+                authenticatedDeviceToken
+              )
             })
+            channel.onBinaryMessage((bytes) => this.handleWebSocketBinaryMessage(bytes, ws))
             this.e2eeChannels.set(ws, channel)
           }
           channel.handleRawMessage(msg)
@@ -265,6 +732,7 @@ export class OrcaRuntimeRpcServer {
         // so destroy the channel for THIS exact ws and skip the per-client
         // teardown when other sockets for the same token are still alive.
         wsTransport.onConnectionClose((clientId, ws, hasOtherConnections) => {
+          this.abortWebSocketDispatches(ws)
           // Why: sweep streaming subscriptions for THIS ws regardless of
           // hasOtherConnections, so per-ws listeners (notifications,
           // accounts, terminal) don't leak across reconnects. This is
@@ -272,6 +740,8 @@ export class OrcaRuntimeRpcServer {
           const connectionId = this.wsConnectionIds.get(ws)
           if (connectionId) {
             this.runtime.cleanupSubscriptionsForConnection(connectionId)
+            this.runtime.cancelMobileDictationForConnection(connectionId)
+            this.binaryStreamHandlers.delete(connectionId)
             this.wsConnectionIds.delete(ws)
           }
           const channel = this.e2eeChannels.get(ws)
@@ -279,7 +749,7 @@ export class OrcaRuntimeRpcServer {
             channel.destroy()
             this.e2eeChannels.delete(ws)
           }
-          if (!hasOtherConnections) {
+          if (clientId && !hasOtherConnections) {
             this.runtime.onClientDisconnected(clientId)
           }
         })
@@ -295,6 +765,7 @@ export class OrcaRuntimeRpcServer {
         // function if it fails to start (e.g., port in use). Log and continue
         // with Unix socket only.
         console.error('[runtime] Failed to start WebSocket transport:', error)
+        this.wsTransport = null
       }
     }
 
@@ -321,6 +792,7 @@ export class OrcaRuntimeRpcServer {
     const transports = this.activeTransports
     this.activeTransports = []
     this.transports = []
+    this.wsTransport = null
     if (transports.length === 0) {
       return
     }
@@ -411,8 +883,10 @@ export class OrcaRuntimeRpcServer {
   private async handleWebSocketMessage(
     rawMessage: string,
     reply: (response: string) => void,
+    sendBinary: (response: Uint8Array<ArrayBufferLike>) => boolean | void,
     wsTransport?: WebSocketTransport,
-    ws?: WebSocket
+    ws?: WebSocket,
+    authenticatedDeviceToken?: string | null
   ): Promise<void> {
     let request: RpcRequest
     try {
@@ -431,16 +905,36 @@ export class OrcaRuntimeRpcServer {
       return
     }
 
-    const token =
+    const requestToken =
       typeof (request as Record<string, unknown>).deviceToken === 'string'
         ? ((request as Record<string, unknown>).deviceToken as string)
         : null
+    if (authenticatedDeviceToken && requestToken && requestToken !== authenticatedDeviceToken) {
+      reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Device token mismatch')))
+      return
+    }
+    // Why: E2EE already authenticated the WebSocket channel. Use that bound
+    // identity for authorization instead of trusting a repeated request field.
+    const token = authenticatedDeviceToken ?? requestToken
     if (!token) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Missing device token')))
       return
     }
-    if (!this.deviceRegistry?.validateToken(token)) {
+    const device = this.deviceRegistry?.validateToken(token)
+    if (!device) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
+      return
+    }
+    if (device.scope === 'mobile' && !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
+      reply(
+        JSON.stringify(
+          this.buildError(
+            request.id,
+            'forbidden',
+            `Method '${request.method}' is not available to mobile clients`
+          )
+        )
+      )
       return
     }
 
@@ -450,8 +944,41 @@ export class OrcaRuntimeRpcServer {
       wsTransport.setClientId(ws, token)
     }
 
+    const longPoll = isLongPollRequest(request)
+    if (longPoll && this.activeLongPolls >= this.longPollCap) {
+      reply(
+        JSON.stringify(
+          this.buildError(
+            request.id,
+            'runtime_busy',
+            'long-poll capacity reached; retry with backoff'
+          )
+        )
+      )
+      return
+    }
+
+    const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
+    if (longPoll) {
+      this.activeLongPolls += 1
+    }
+
     const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined
-    await this.dispatcher.dispatchStreaming(request, reply, { connectionId })
+    try {
+      await this.dispatcher.dispatchStreaming(request, reply, {
+        connectionId,
+        clientId: token,
+        signal: abortRegistration?.signal,
+        sendBinary,
+        registerBinaryStreamHandler: (streamId, handler) =>
+          this.registerBinaryStreamHandler(connectionId, streamId, handler)
+      })
+    } finally {
+      abortRegistration?.dispose()
+      if (longPoll) {
+        this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
+      }
+    }
   }
 
   private buildError(id: string, code: string, message: string): RpcResponse {

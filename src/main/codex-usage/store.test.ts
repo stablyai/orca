@@ -1,6 +1,15 @@
 /* eslint-disable max-lines */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CodexUsagePersistedState } from './types'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as Fs from 'fs'
+import type {
+  CodexUsageDailyAggregate,
+  CodexUsagePersistedFile,
+  CodexUsagePersistedState,
+  CodexUsageSession
+} from './types'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
@@ -12,11 +21,54 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { CodexUsageStore, normalizePersistedState } from './store'
+vi.mock('fs', async () => {
+  const actual = await vi.importActual<typeof Fs>('fs')
+  return {
+    ...actual,
+    writeFileSync: vi.fn(actual.writeFileSync)
+  }
+})
+
+vi.mock('./scanner', () => ({
+  createWorktreeRefs: vi.fn(() => []),
+  scanCodexUsageFiles: vi.fn()
+}))
+
+import { CodexUsageStore, initCodexUsagePath, normalizePersistedState } from './store'
+import { scanCodexUsageFiles } from './scanner'
+
+type ScanResult = {
+  processedFiles: CodexUsagePersistedFile[]
+  sessions: CodexUsageSession[]
+  dailyAggregates: CodexUsageDailyAggregate[]
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
+
+function createEmptyScanResult(): ScanResult {
+  return {
+    processedFiles: [],
+    sessions: [],
+    dailyAggregates: []
+  }
+}
 
 function createStoreWithState(state: Partial<CodexUsagePersistedState>): CodexUsageStore {
   const store = new CodexUsageStore({
     getRepos: () => [],
+    getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined
   } as never)
 
@@ -39,9 +91,77 @@ function createStoreWithState(state: Partial<CodexUsagePersistedState>): CodexUs
 }
 
 describe('CodexUsageStore', () => {
+  let tempUserData: string
+
   beforeEach(() => {
+    tempUserData = mkdtempSync(join(tmpdir(), 'orca-codex-usage-store-'))
+    getPathMock.mockReturnValue(tempUserData)
+    initCodexUsagePath()
+    vi.mocked(writeFileSync).mockClear()
+    vi.mocked(scanCodexUsageFiles).mockReset()
+    vi.mocked(scanCodexUsageFiles).mockResolvedValue(createEmptyScanResult())
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-10T12:00:00.000-04:00'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    rmSync(tempUserData, { recursive: true, force: true })
+  })
+
+  it('persists a successful refresh with one compact disk write', async () => {
+    const store = createStoreWithState({
+      schemaVersion: 3,
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: null
+      }
+    })
+
+    await store.refresh(true)
+
+    expect(writeFileSync).toHaveBeenCalledTimes(1)
+    const persistedJson = readFileSync(join(tempUserData, 'orca-codex-usage.json'), 'utf-8')
+    expect(persistedJson).toBe(JSON.stringify(JSON.parse(persistedJson)))
+    expect(persistedJson).not.toContain('\n')
+    expect(JSON.parse(persistedJson).scanState).toMatchObject({
+      enabled: true,
+      lastScanStartedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
+      lastScanCompletedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
+      lastScanError: null
+    })
+  })
+
+  it('keeps scan start visible in memory while scan-start persistence is skipped', async () => {
+    const pendingScan = createDeferred<ScanResult>()
+    vi.mocked(scanCodexUsageFiles).mockReturnValueOnce(pendingScan.promise)
+    const store = createStoreWithState({
+      schemaVersion: 3,
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: null,
+        lastScanCompletedAt: null,
+        lastScanError: 'previous failure'
+      }
+    })
+
+    const refreshPromise = store.refresh(true)
+    await Promise.resolve()
+
+    expect(store.getScanState()).toMatchObject({
+      isScanning: true,
+      lastScanStartedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
+      lastScanError: null
+    })
+    expect(writeFileSync).not.toHaveBeenCalled()
+
+    pendingScan.resolve(createEmptyScanResult())
+    await refreshPromise
+
+    expect(store.getScanState().isScanning).toBe(false)
+    expect(writeFileSync).toHaveBeenCalledTimes(1)
   })
 
   it('reports no data for Orca scope when only non-Orca Codex usage exists', async () => {
@@ -233,15 +353,79 @@ describe('CodexUsageStore', () => {
     const summary = await store.getSummary('orca', '30d')
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(85.1)
+    expect(summary.estimatedCostUsd).toBeCloseTo(107.486)
     expect(breakdown.find((row) => row.key === 'gpt-5.2-codex')?.estimatedCostUsd).toBeCloseTo(
       15.925
     )
     expect(breakdown.find((row) => row.key === 'gpt-5.3-codex')?.estimatedCostUsd).toBeCloseTo(
       15.925
     )
-    expect(breakdown.find((row) => row.key === 'gpt-5.4')?.estimatedCostUsd).toBeCloseTo(17.75)
-    expect(breakdown.find((row) => row.key === 'gpt-5.5')?.estimatedCostUsd).toBeCloseTo(35.5)
+    expect(breakdown.find((row) => row.key === 'gpt-5.4')?.estimatedCostUsd).toBeCloseTo(25.212)
+    expect(breakdown.find((row) => row.key === 'gpt-5.5')?.estimatedCostUsd).toBeCloseTo(50.424)
+  })
+
+  it('normalizes Codex model variants and reasoning suffixes before pricing', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.4-mini-high',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 1_000_000,
+          cachedInputTokens: 500_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 2_000_000,
+          hasInferredPricing: false
+        },
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.3-codex-spark-xhigh',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 2_000_000,
+          cachedInputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          reasoningOutputTokens: 100_000,
+          totalTokens: 3_000_000,
+          hasInferredPricing: false
+        },
+        {
+          day: '2026-04-09',
+          model: 'gpt-5.5(xhigh)',
+          projectKey: 'worktree:repo-1::/workspace/repo',
+          projectLabel: 'Repo',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo',
+          eventCount: 1,
+          inputTokens: 100_000,
+          cachedInputTokens: 50_000,
+          outputTokens: 25_000,
+          reasoningOutputTokens: 5_000,
+          totalTokens: 125_000,
+          hasInferredPricing: false
+        }
+      ]
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-5.4-mini-high')?.estimatedCostUsd).toBeCloseTo(
+      4.9125
+    )
+    expect(
+      breakdown.find((row) => row.key === 'gpt-5.3-codex-spark-xhigh')?.estimatedCostUsd
+    ).toBeCloseTo(15.925)
+    expect(breakdown.find((row) => row.key === 'gpt-5.5(xhigh)')?.estimatedCostUsd).toBeCloseTo(
+      1.025
+    )
   })
 
   it('keeps cached input out of the full-price input bucket for GPT-5.5 totals', async () => {
@@ -267,7 +451,7 @@ describe('CodexUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(446.840002)
+    expect(summary.estimatedCostUsd).toBeCloseTo(858.929724)
   })
 
   it('counts mixed-model sessions once for each real model row in the breakdown', async () => {
@@ -584,17 +768,125 @@ describe('CodexUsageStore', () => {
     } as unknown as CodexUsagePersistedState)
 
     expect(normalized).toEqual({
-      schemaVersion: 2,
+      schemaVersion: 3,
       worktreeFingerprint: null,
       processedFiles: [],
       sessions: [],
       dailyAggregates: [],
       scanState: {
-        enabled: false,
+        enabled: true,
         lastScanStartedAt: null,
         lastScanCompletedAt: null,
         lastScanError: null
       }
     })
+  })
+
+  it('returns automation usage for a single matching worktree session', async () => {
+    const worktreeId = 'repo-1::/workspace/repo'
+    const store = createStoreWithState({
+      scanState: {
+        enabled: true,
+        lastScanStartedAt: 1,
+        lastScanCompletedAt: 2,
+        lastScanError: null
+      },
+      sessions: [
+        {
+          sessionId: 'session-1',
+          firstTimestamp: '2026-04-10T15:00:00.000Z',
+          lastTimestamp: '2026-04-10T15:05:00.000Z',
+          primaryModel: 'gpt-5',
+          hasMixedModels: false,
+          primaryProjectLabel: 'Repo',
+          hasMixedLocations: false,
+          primaryWorktreeId: worktreeId,
+          primaryRepoId: 'repo-1',
+          eventCount: 1,
+          totalInputTokens: 1000,
+          totalCachedInputTokens: 400,
+          totalOutputTokens: 250,
+          totalReasoningOutputTokens: 100,
+          totalTokens: 1250,
+          hasInferredPricing: false,
+          locationBreakdown: [
+            {
+              locationKey: `worktree:${worktreeId}`,
+              projectLabel: 'Repo',
+              repoId: 'repo-1',
+              worktreeId,
+              eventCount: 1,
+              inputTokens: 1000,
+              cachedInputTokens: 400,
+              outputTokens: 250,
+              reasoningOutputTokens: 100,
+              totalTokens: 1250,
+              hasInferredPricing: false
+            }
+          ],
+          modelBreakdown: [
+            {
+              modelKey: 'gpt-5',
+              modelLabel: 'gpt-5',
+              eventCount: 1,
+              inputTokens: 1000,
+              cachedInputTokens: 400,
+              outputTokens: 250,
+              reasoningOutputTokens: 100,
+              totalTokens: 1250,
+              hasInferredPricing: false
+            }
+          ],
+          locationModelBreakdown: [
+            {
+              locationKey: `worktree:${worktreeId}`,
+              modelKey: 'gpt-5',
+              modelLabel: 'gpt-5',
+              repoId: 'repo-1',
+              worktreeId,
+              eventCount: 1,
+              inputTokens: 1000,
+              cachedInputTokens: 400,
+              outputTokens: 250,
+              reasoningOutputTokens: 100,
+              totalTokens: 1250,
+              hasInferredPricing: false
+            }
+          ]
+        }
+      ]
+    })
+    const refreshMock = vi.fn().mockResolvedValue({
+      enabled: true,
+      isScanning: false,
+      lastScanStartedAt: 1,
+      lastScanCompletedAt: 2,
+      lastScanError: null,
+      hasAnyCodexData: true
+    })
+    ;(store as unknown as { refresh: typeof store.refresh }).refresh = refreshMock
+    const completedAt = new Date('2026-04-10T15:06:00.000Z').getTime()
+    const request = {
+      worktreeId,
+      terminalSessionId: 'tab-1',
+      startedAt: new Date('2026-04-10T14:59:00.000Z').getTime(),
+      completedAt
+    }
+
+    const usage = await store.getAutomationRunUsage(request)
+
+    expect(usage.status).toBe('known')
+    expect(usage.providerSessionId).toBe('session-1')
+    expect(usage.cacheReadTokens).toBe(400)
+    expect(usage.reasoningOutputTokens).toBe(100)
+    expect(usage.estimatedCostUsd).toBeCloseTo(0.0033)
+    expect(refreshMock).toHaveBeenCalledWith(true)
+
+    ;(store as unknown as { state: CodexUsagePersistedState }).state.scanState.lastScanCompletedAt =
+      completedAt + 1000
+    refreshMock.mockClear()
+    await store.getAutomationRunUsage(request)
+
+    expect(refreshMock).toHaveBeenCalledWith(false)
   })
 })

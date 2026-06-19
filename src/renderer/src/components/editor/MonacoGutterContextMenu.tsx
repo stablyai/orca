@@ -9,6 +9,9 @@ import {
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-client'
+import { formatPathLineReference } from './line-copy-path'
+import { translate } from '@/i18n/i18n'
 
 type MonacoGutterContextMenuProps = {
   open: boolean
@@ -38,15 +41,25 @@ export function MonacoGutterContextMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent sideOffset={0} align="start">
-        <DropdownMenuItem onSelect={() => window.api.ui.writeClipboardText(`${filePath}#L${line}`)}>
-          <Copy className="w-3.5 h-3.5 mr-1.5" />
-          Copy Path to Line
-        </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => window.api.ui.writeClipboardText(`${relativePath}#L${line}`)}
+          onSelect={() => window.api.ui.writeClipboardText(formatPathLineReference(filePath, line))}
         >
           <Copy className="w-3.5 h-3.5 mr-1.5" />
-          Copy Rel. Path to Line
+          {translate(
+            'auto.components.editor.MonacoGutterContextMenu.4eaa991bde',
+            'Copy Path to Line'
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() =>
+            window.api.ui.writeClipboardText(formatPathLineReference(relativePath, line))
+          }
+        >
+          <Copy className="w-3.5 h-3.5 mr-1.5" />
+          {translate(
+            'auto.components.editor.MonacoGutterContextMenu.2e0b1cdc05',
+            'Copy Rel. Path to Line'
+          )}
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={async () => {
@@ -60,19 +73,25 @@ export function MonacoGutterContextMenu({
               return
             }
             const connectionId = getConnectionId(activeFile?.worktreeId ?? null) ?? undefined
-            const url = await window.api.git.remoteFileUrl({
-              worktreePath: worktree.path,
-              relativePath,
-              line,
-              connectionId
-            })
+            const url = await getRuntimeGitRemoteFileUrl(
+              {
+                settings: state.settings,
+                worktreeId: activeFile.worktreeId,
+                worktreePath: worktree.path,
+                connectionId
+              },
+              { relativePath, line }
+            )
             if (url) {
               window.api.ui.writeClipboardText(url)
             }
           }}
         >
           <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-          Copy Remote URL
+          {translate(
+            'auto.components.editor.MonacoGutterContextMenu.7b57b1b468',
+            'Copy Remote URL'
+          )}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

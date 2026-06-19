@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { searchWorktrees } from './worktree-palette-search'
+import { getWorktreePaletteSearchScope, searchWorktrees } from './worktree-palette-search'
 import type { Repo, Worktree } from '../../../shared/types'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -39,6 +39,33 @@ const repoMap = new Map<string, Repo>([
 ])
 
 describe('worktree-palette-search', () => {
+  it('uses the filtered recent list for empty queries', () => {
+    const visible = makeWorktree({ id: 'visible' })
+    const hidden = makeWorktree({ id: 'hidden-by-filter' })
+
+    const scope = getWorktreePaletteSearchScope({
+      hasQuery: false,
+      allWorktrees: [visible, hidden],
+      emptyQueryWorktrees: [visible]
+    })
+
+    expect(scope.map((worktree) => worktree.id)).toEqual(['visible'])
+  })
+
+  it('uses all non-archived worktrees for typed queries', () => {
+    const visible = makeWorktree({ id: 'visible' })
+    const hiddenByFilter = makeWorktree({ id: 'hidden-by-filter' })
+    const archived = makeWorktree({ id: 'archived', isArchived: true })
+
+    const scope = getWorktreePaletteSearchScope({
+      hasQuery: true,
+      allWorktrees: [visible, hiddenByFilter, archived],
+      emptyQueryWorktrees: [visible]
+    })
+
+    expect(scope.map((worktree) => worktree.id)).toEqual(['visible', 'hidden-by-filter'])
+  })
+
   it('returns every worktree with no match metadata for an empty query', () => {
     const results = searchWorktrees([makeWorktree()], '', repoMap, null, null)
 
@@ -69,7 +96,7 @@ describe('worktree-palette-search', () => {
     )
 
     expect(results).toHaveLength(1)
-    expect(results[0].supportingText?.label).toBe('Comment')
+    expect(results[0].supportingText?.labelKind).toBe('comment')
     expect(results[0].supportingText?.text).toContain('implementation')
     expect(
       results[0].supportingText?.text.slice(
@@ -97,7 +124,7 @@ describe('worktree-palette-search', () => {
 
     expect(results).toHaveLength(1)
     expect(results[0].supportingText).toEqual({
-      label: 'PR',
+      labelKind: 'pr',
       text: 'Refresh the worktree quick jump palette',
       matchRange: { start: 21, end: 31 }
     })
@@ -182,9 +209,38 @@ describe('worktree-palette-search', () => {
 
     expect(results).toHaveLength(1)
     expect(results[0].supportingText).toEqual({
-      label: 'Issue',
+      labelKind: 'issue',
       text: 'Issue #304',
       matchRange: { start: 7, end: 10 }
+    })
+  })
+
+  it('matches workspace ports by port number before issue and PR numbers', () => {
+    const results = searchWorktrees(
+      [makeWorktree({ id: 'wt-port', linkedIssue: 3000 })],
+      '3000',
+      repoMap,
+      null,
+      null,
+      new Map([
+        [
+          'wt-port',
+          [
+            {
+              port: 3000,
+              processName: 'vite'
+            }
+          ]
+        ]
+      ])
+    )
+
+    expect(results).toHaveLength(1)
+    expect(results[0].matchedField).toBe('port')
+    expect(results[0].supportingText).toEqual({
+      labelKind: 'port',
+      text: '3000 · vite',
+      matchRange: { start: 0, end: 4 }
     })
   })
 })

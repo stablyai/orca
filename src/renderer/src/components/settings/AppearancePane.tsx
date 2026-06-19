@@ -1,416 +1,562 @@
-import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
-import { Label } from '../ui/label'
+/* eslint-disable max-lines -- Why: AppearancePane keeps theme, typography, zoom, and status-bar
+   visibility settings together so the searchable settings rows share one filtered surface. */
+import type React from 'react'
+
+import type { GlobalSettings } from '../../../../shared/types'
+
 import { Separator } from '../ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
-import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
+import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
-import { FontAutocomplete } from './SettingsFormControls'
+import { useShortcutKeyComboDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
+import {
+  FontAutocomplete,
+  SettingsRow,
+  SettingsSegmentedControl,
+  SettingsSubsectionHeader,
+  SettingsSwitchRow
+} from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
+import { normalizeAppIconId } from '../../../../shared/app-icon'
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
+import {
+  getAppIconEntries,
+  getAppearancePaneSearchEntries,
+  getLanguageEntries,
+  getLayoutEntries,
+  getLeftSidebarAppearanceEntry,
+  getSidebarEntries,
+  getStatusBarEntries,
+  getStatusBarToggles,
+  getThemeEntries,
+  getTitlebarEntries,
+  getTypographyEntries,
+  getZoomEntries
+} from './appearance-search'
+import { getTerminalAppearanceSearchEntries } from './terminal-search'
+import { TerminalAppearanceSection } from './TerminalAppearanceSection'
+import type { UseGhosttyImportReturn } from './useGhosttyImport'
+import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
+import { AppIconSelector } from './AppIconSelector'
+import { isWebClientLocation } from '@/hooks/useSettingsNavigationMetadata'
+import {
+  getUiLanguageChoiceLabel,
+  SHOW_UI_LANGUAGE_SETTING,
+  UI_LANGUAGE_CHOICES
+} from '@/i18n/supported-languages'
+import { translate } from '@/i18n/i18n'
+import type { UiLanguage } from '../../../../shared/ui-language'
+import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
+import { getWorkspaceCardLayoutEntry } from './appearance-sidebar-search'
+export { getAppearancePaneSearchEntries }
 
 type AppearancePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
+  terminalFontSuggestions: string[]
+  systemPrefersDark: boolean
+  ghostty: UseGhosttyImportReturn
+  warpThemes: UseWarpThemeImportReturn
 }
 
-const STATUS_BAR_TOGGLES: readonly {
-  id: StatusBarItem
-  title: string
-  description: string
-  keywords: string[]
-  toggleDescription: string
-}[] = [
-  {
-    id: 'claude',
-    title: 'Claude Usage',
-    description: 'Show Claude token and cost usage in the status bar.',
-    keywords: ['status bar', 'claude', 'usage', 'tokens', 'cost', 'anthropic'],
-    toggleDescription: 'Show Claude token and cost usage for the active workspace.'
-  },
-  {
-    id: 'codex',
-    title: 'Codex Usage',
-    description: 'Show Codex token and cost usage in the status bar.',
-    keywords: ['status bar', 'codex', 'usage', 'tokens', 'cost', 'openai'],
-    toggleDescription: 'Show Codex token and cost usage for the active workspace.'
-  },
-  {
-    id: 'gemini',
-    title: 'Gemini Usage',
-    description: 'Show Gemini token and cost usage in the status bar.',
-    keywords: ['status bar', 'gemini', 'usage', 'tokens', 'cost', 'google'],
-    toggleDescription: 'Show Gemini token and cost usage for the active workspace.'
-  },
-  {
-    id: 'opencode-go',
-    title: 'OpenCode Go Usage',
-    description: 'Show OpenCode Go token and cost usage in the status bar.',
-    keywords: ['status bar', 'opencode', 'opencode-go', 'usage', 'tokens', 'cost'],
-    toggleDescription: 'Show OpenCode Go token and cost usage for the active workspace.'
-  },
-  {
-    id: 'ssh',
-    title: 'SSH Status',
-    description: 'Show the active SSH connection status in the status bar.',
-    keywords: ['status bar', 'ssh', 'remote', 'connection', 'host'],
-    toggleDescription:
-      'Show the active SSH connection. Only visible once an SSH target is configured.'
-  },
-  {
-    id: 'resource-usage',
-    title: 'Resource Usage',
-    description: 'Show CPU, memory, and terminal session indicators in the status bar.',
-    keywords: [
-      'status bar',
-      'resource',
-      'usage',
-      'memory',
-      'ram',
-      'cpu',
-      'terminal',
-      'sessions',
-      'pty',
-      'monitoring',
-      'performance'
-    ],
-    toggleDescription:
-      'Show CPU, memory, and terminal session counts. Click it for a per-workspace breakdown and daemon controls.'
+function ShortcutHintList({ combos }: { combos: ShortcutKeyComboDetails[] }): React.JSX.Element {
+  if (combos.length === 0) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        {translate('auto.components.settings.AppearancePane.3057983501', 'Unassigned')}
+      </span>
+    )
   }
-]
 
-const THEME_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Theme',
-    description: 'Choose how Orca looks in the app window.',
-    keywords: ['dark', 'light', 'system']
-  }
-]
-
-const ZOOM_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'UI Zoom',
-    description: 'Scale the entire application interface.',
-    keywords: ['zoom', 'scale', 'shortcut']
-  }
-]
-
-const TYPOGRAPHY_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'IDE Font',
-    description: 'Choose the font used by the Orca interface.',
-    keywords: ['font', 'typeface', 'typography', 'ide', 'orca', 'interface', 'app', 'ui']
-  }
-]
-
-const LAYOUT_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Open Right Sidebar by Default',
-    description: 'Automatically expand the file explorer panel when creating a new worktree.',
-    keywords: ['layout', 'file explorer', 'sidebar']
-  }
-]
-
-const TITLEBAR_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Titlebar App Name',
-    description: 'Show Orca in the titlebar.',
-    keywords: ['titlebar', 'orca', 'app', 'name', 'brand']
-  }
-]
-
-const STATUS_BAR_ENTRIES: SettingsSearchEntry[] = STATUS_BAR_TOGGLES.map(
-  ({ title, description, keywords }) => ({ title, description, keywords })
-)
-
-const SIDEBAR_ENTRIES: SettingsSearchEntry[] = [
-  {
-    title: 'Show Tasks Button',
-    description: 'Show the Tasks button at the top of the left sidebar.',
-    keywords: ['tasks', 'sidebar', 'button', 'hide', 'show', 'github', 'linear']
-  }
-]
-
-export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  ...THEME_ENTRIES,
-  ...TYPOGRAPHY_ENTRIES,
-  ...ZOOM_ENTRIES,
-  ...LAYOUT_ENTRIES,
-  ...TITLEBAR_ENTRIES,
-  ...STATUS_BAR_ENTRIES,
-  ...SIDEBAR_ENTRIES
-]
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1 align-middle">
+      {combos.map((combo) => (
+        <ShortcutKeyCombo
+          key={combo.keys.join('-')}
+          keys={combo.keys}
+          doubleTap={combo.doubleTap}
+          className="inline-flex gap-0.5"
+          separatorClassName="text-[10px] text-muted-foreground"
+        />
+      ))}
+    </span>
+  )
+}
 
 export function AppearancePane({
   settings,
   updateSettings,
   applyTheme,
-  fontSuggestions
+  fontSuggestions,
+  terminalFontSuggestions,
+  systemPrefersDark,
+  ghostty,
+  warpThemes
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const isMac = navigator.userAgent.includes('Mac')
-  const zoomInLabel = isMac ? '⌘+' : 'Ctrl +'
-  const zoomOutLabel = isMac ? '⌘-' : 'Ctrl -'
+  const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
+  const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
-  const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)
-
+  const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
+  const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
+  const terminalAppearanceSearchEntries = getTerminalAppearanceSearchEntries({
+    showWarpImport: !isWebClientLocation()
+  })
+  const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
+  const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const visibleSections = [
-    matchesSettingsSearch(searchQuery, THEME_ENTRIES) ? (
-      <section key="theme" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Theme</h3>
-          <p className="text-xs text-muted-foreground">Choose how Orca looks in the app window.</p>
-        </div>
-
-        <SearchableSetting
-          title="Theme"
-          description="Choose how Orca looks in the app window."
-          keywords={['dark', 'light', 'system']}
-        >
-          <div className="flex w-fit gap-1 rounded-md border border-border/50 p-1">
-            {(['system', 'dark', 'light'] as const).map((option) => (
-              <button
-                key={option}
-                onClick={() => {
-                  updateSettings({ theme: option })
-                  applyTheme(option)
-                }}
-                className={`rounded-sm px-3 py-1 text-sm capitalize transition-colors ${
-                  settings.theme === option
-                    ? 'bg-accent font-medium text-accent-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        </SearchableSetting>
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, ZOOM_ENTRIES) ? (
-      <section key="zoom" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">UI Zoom</h3>
-          <p className="text-xs text-muted-foreground">
-            Scale the entire application interface. Use{' '}
-            <kbd className="rounded border px-1 py-0.5 text-[10px]">{zoomInLabel}</kbd> /{' '}
-            <kbd className="rounded border px-1 py-0.5 text-[10px]">{zoomOutLabel}</kbd> when not in
-            a terminal pane.
-          </p>
-        </div>
-
-        <SearchableSetting
-          title="UI Zoom"
-          description="Scale the entire application interface."
-          keywords={['zoom', 'scale', 'shortcut']}
-        >
-          <UIZoomControl />
-        </SearchableSetting>
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, TYPOGRAPHY_ENTRIES) ? (
-      <section key="typography" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Typography</h3>
-          <p className="text-xs text-muted-foreground">
-            Choose the font used by the Orca interface.
-          </p>
-        </div>
-
-        <SearchableSetting
-          title="IDE Font"
-          description="Choose the font used by the Orca interface."
-          keywords={['font', 'typeface', 'typography', 'ide', 'orca', 'interface', 'app', 'ui']}
-          className="space-y-2"
-        >
-          <Label>IDE Font</Label>
-          <FontAutocomplete
-            value={settings.appFontFamily}
-            suggestions={fontSuggestions}
-            placeholder={DEFAULT_APP_FONT_FAMILY}
-            onChange={(value) =>
-              updateSettings({ appFontFamily: value.trim() || DEFAULT_APP_FONT_FAMILY })
-            }
-          />
-        </SearchableSetting>
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, LAYOUT_ENTRIES) ? (
-      <section key="layout" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Layout</h3>
-          <p className="text-xs text-muted-foreground">
-            Default layout when creating new worktrees.
-          </p>
-        </div>
-
-        <SearchableSetting
-          title="Open Right Sidebar by Default"
-          description="Automatically expand the file explorer panel when creating a new worktree."
-          keywords={['layout', 'file explorer', 'sidebar']}
-          className="flex items-center justify-between gap-4 px-1 py-2"
-        >
-          <div className="space-y-0.5">
-            <Label>Open Right Sidebar by Default</Label>
-            <p className="text-xs text-muted-foreground">
-              Automatically expand the file explorer panel when creating a new worktree.
-            </p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={settings.rightSidebarOpenByDefault}
-            onClick={() =>
-              updateSettings({
-                rightSidebarOpenByDefault: !settings.rightSidebarOpenByDefault
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.rightSidebarOpenByDefault ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
+    matchesSettingsSearch(searchQuery, getThemeEntries()) ||
+    (SHOW_UI_LANGUAGE_SETTING && matchesSettingsSearch(searchQuery, getLanguageEntries())) ||
+    matchesSettingsSearch(searchQuery, getZoomEntries()) ||
+    matchesSettingsSearch(searchQuery, getTypographyEntries()) ? (
+      <section key="interface" className="divide-y divide-border/40">
+        {matchesSettingsSearch(searchQuery, getThemeEntries()) ? (
+          <SearchableSetting
+            title={translate('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')}
+            description={translate(
+              'auto.components.settings.AppearancePane.0f28e7b30c',
+              'Choose how Orca looks in the app window.'
+            )}
+            keywords={getThemeEntries()[0]?.keywords ?? ['dark', 'light', 'system']}
           >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.rightSidebarOpenByDefault ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </SearchableSetting>
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, TITLEBAR_ENTRIES) ? (
-      <section key="titlebar" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Titlebar</h3>
-          <p className="text-xs text-muted-foreground">
-            Control what appears in the application titlebar.
-          </p>
-        </div>
-
-        <SearchableSetting
-          title="Titlebar App Name"
-          description="Show Orca in the titlebar."
-          keywords={['titlebar', 'orca', 'app', 'name', 'brand']}
-          className="flex items-center justify-between gap-4 px-1 py-2"
-        >
-          <div className="space-y-0.5">
-            <Label>Titlebar App Name</Label>
-            <p className="text-xs text-muted-foreground">Show Orca in the titlebar.</p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={settings.showTitlebarAppName}
-            onClick={() =>
-              updateSettings({
-                showTitlebarAppName: !settings.showTitlebarAppName
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.showTitlebarAppName ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.showTitlebarAppName ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </SearchableSetting>
-      </section>
-    ) : null,
-    matchesSettingsSearch(searchQuery, STATUS_BAR_ENTRIES) ? (
-      <section key="status-bar" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Status Bar</h3>
-          <p className="text-xs text-muted-foreground">
-            Choose which indicators appear at the bottom of the window. You can also right-click the
-            status bar for the same toggles.
-          </p>
-        </div>
-
-        {visibleStatusBarToggles.map((toggle) => {
-          const enabled = statusBarItems.includes(toggle.id)
-          return (
-            <SearchableSetting
-              key={toggle.id}
-              title={toggle.title}
-              description={toggle.description}
-              keywords={toggle.keywords}
-              className="flex items-center justify-between gap-4 px-1 py-2"
-            >
-              <div className="space-y-0.5">
-                <Label>{toggle.title}</Label>
-                <p className="text-xs text-muted-foreground">{toggle.toggleDescription}</p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-label={toggle.title}
-                aria-checked={enabled}
-                onClick={() => toggleStatusBarItem(toggle.id)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                  enabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                    enabled ? 'translate-x-4' : 'translate-x-0.5'
-                  }`}
+            <SettingsRow
+              label={translate('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')}
+              description={translate(
+                'auto.components.settings.AppearancePane.0f28e7b30c',
+                'Choose how Orca looks in the app window.'
+              )}
+              control={
+                <SettingsSegmentedControl
+                  ariaLabel={translate(
+                    'auto.components.settings.AppearancePane.932ff1fbff',
+                    'Theme'
+                  )}
+                  value={settings.theme}
+                  onChange={(option) => {
+                    updateSettings({ theme: option })
+                    applyTheme(option)
+                  }}
+                  options={[
+                    {
+                      value: 'system',
+                      label: translate(
+                        'auto.components.settings.AppearancePane.fb0e0b4453',
+                        'System'
+                      )
+                    },
+                    {
+                      value: 'dark',
+                      label: translate('auto.components.settings.AppearancePane.7d26ccabe8', 'Dark')
+                    },
+                    {
+                      value: 'light',
+                      label: translate(
+                        'auto.components.settings.AppearancePane.fd89b5487c',
+                        'Light'
+                      )
+                    }
+                  ]}
                 />
-              </button>
-            </SearchableSetting>
-          )
-        })}
+              }
+            />
+          </SearchableSetting>
+        ) : null}
+
+        {SHOW_UI_LANGUAGE_SETTING && matchesSettingsSearch(searchQuery, getLanguageEntries()) ? (
+          <SearchableSetting
+            title={translate('settings.appearance.language.title', 'Language')}
+            description={translate(
+              'settings.appearance.language.description',
+              'Choose the language used by the Orca interface.'
+            )}
+            keywords={getLanguageEntries()[0]?.keywords ?? []}
+          >
+            <SettingsRow
+              label={translate('settings.appearance.language.title', 'Language')}
+              description={translate(
+                'settings.appearance.language.description',
+                'Choose the language used by the Orca interface.'
+              )}
+              control={
+                <Select
+                  value={settings.uiLanguage}
+                  onValueChange={(value) => updateSettings({ uiLanguage: value as UiLanguage })}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="min-w-[220px]"
+                    aria-label={translate('settings.appearance.language.title', 'Language')}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UI_LANGUAGE_CHOICES.map((choice) => (
+                      <SelectItem key={choice.value} value={choice.value}>
+                        {getUiLanguageChoiceLabel(choice, translate)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              }
+            />
+          </SearchableSetting>
+        ) : null}
+
+        {matchesSettingsSearch(searchQuery, getZoomEntries()) ? (
+          <SearchableSetting
+            title={translate('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
+            description={translate(
+              'auto.components.settings.AppearancePane.622e1c3465',
+              'Scale the entire application interface.'
+            )}
+            keywords={getZoomEntries()[0]?.keywords ?? ['zoom', 'scale', 'shortcut']}
+          >
+            <SettingsRow
+              label={translate('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
+              description={
+                <>
+                  {translate(
+                    'auto.components.settings.AppearancePane.f687711a9b',
+                    'Scale the entire application interface. Use'
+                  )}{' '}
+                  <ShortcutHintList combos={zoomInKeyCombos} /> /{' '}
+                  <ShortcutHintList combos={zoomOutKeyCombos} />{' '}
+                  {translate(
+                    'auto.components.settings.AppearancePane.ef89200c1f',
+                    'when not in a terminal pane.'
+                  )}
+                </>
+              }
+              control={<UIZoomControl />}
+            />
+          </SearchableSetting>
+        ) : null}
+
+        {matchesSettingsSearch(searchQuery, getTypographyEntries()) ? (
+          <SearchableSetting
+            title={translate('auto.components.settings.AppearancePane.102d6b5f9b', 'IDE Font')}
+            description={translate(
+              'auto.components.settings.AppearancePane.42554f615f',
+              'Choose the font used by the Orca interface.'
+            )}
+            keywords={getTypographyEntries()[0]?.keywords ?? ['font', 'typeface', 'typography']}
+          >
+            <SettingsRow
+              alignTop
+              label={translate('auto.components.settings.AppearancePane.102d6b5f9b', 'IDE Font')}
+              description={translate(
+                'auto.components.settings.AppearancePane.42554f615f',
+                'Choose the font used by the Orca interface.'
+              )}
+              control={
+                <FontAutocomplete
+                  value={settings.appFontFamily}
+                  suggestions={fontSuggestions}
+                  placeholder={DEFAULT_APP_FONT_FAMILY}
+                  onChange={(value) =>
+                    updateSettings({ appFontFamily: value.trim() || DEFAULT_APP_FONT_FAMILY })
+                  }
+                />
+              }
+            />
+          </SearchableSetting>
+        ) : null}
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, SIDEBAR_ENTRIES) ? (
-      <section key="sidebar" className="space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Sidebar</h3>
-        </div>
+    matchesSettingsSearch(searchQuery, terminalAppearanceSearchEntries) ? (
+      <TerminalAppearanceSection
+        key="terminal-appearance"
+        settings={settings}
+        updateSettings={updateSettings}
+        systemPrefersDark={systemPrefersDark}
+        terminalFontSuggestions={terminalFontSuggestions}
+        ghostty={ghostty}
+        warpThemes={warpThemes}
+      />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getLayoutEntries()) ? (
+      <section key="layout" className="space-y-3">
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.AppearancePane.d496901cd0', 'File Explorer')}
+        />
 
-        <SearchableSetting
-          title="Show Tasks Button"
-          description="Show the Tasks button at the top of the left sidebar."
-          keywords={['tasks', 'sidebar', 'button', 'hide', 'show', 'github', 'linear']}
-          className="flex items-center justify-between gap-4 px-1 py-2"
-        >
-          <div className="space-y-0.5">
-            <Label>Show Tasks Button</Label>
-            <p className="text-xs text-muted-foreground">
-              Show the Tasks button at the top of the left sidebar.
-            </p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={settings.showTasksButton}
-            onClick={() =>
-              updateSettings({
-                showTasksButton: !settings.showTasksButton
-              })
+        <div className="divide-y divide-border/40">
+          <SearchableSetting
+            title={
+              getLayoutEntries()[0]?.title ??
+              translate(
+                'auto.components.settings.AppearancePane.0fafabcf35',
+                'Show Git-Ignored Files'
+              )
             }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.showTasksButton ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
+            description={
+              getLayoutEntries()[0]?.description ??
+              translate(
+                'auto.components.settings.AppearancePane.75f07ab60c',
+                'Show files matched by .gitignore in the file explorer.'
+              )
+            }
+            keywords={getLayoutEntries()[0]?.keywords ?? ['git', 'gitignore', 'ignored']}
           >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.showTasksButton ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
+            <SettingsSwitchRow
+              label={translate(
+                'auto.components.settings.AppearancePane.0fafabcf35',
+                'Show Git-Ignored Files'
+              )}
+              description={translate(
+                'auto.components.settings.AppearancePane.e9f2ca5582',
+                'Turn off to hide files matched by .gitignore from the file explorer.'
+              )}
+              checked={settings.showGitIgnoredFiles ?? true}
+              onChange={() =>
+                updateSettings({ showGitIgnoredFiles: !(settings.showGitIgnoredFiles ?? true) })
+              }
             />
-          </button>
+          </SearchableSetting>
+        </div>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getTitlebarEntries()) ? (
+      <section key="titlebar" className="space-y-3">
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.AppearancePane.6a272ca553', 'Titlebar')}
+          description={translate(
+            'auto.components.settings.AppearancePane.4de76f6902',
+            'Control what appears in the application titlebar.'
+          )}
+        />
+
+        <div className="divide-y divide-border/40">
+          <SearchableSetting
+            title={translate(
+              'auto.components.settings.AppearancePane.9868f39007',
+              'Titlebar App Name'
+            )}
+            description={translate(
+              'auto.components.settings.AppearancePane.2df8f79aa5',
+              'Show Orca in the titlebar.'
+            )}
+            keywords={getTitlebarEntries()[0]?.keywords ?? ['titlebar', 'orca', 'app', 'name']}
+          >
+            <SettingsSwitchRow
+              label={translate(
+                'auto.components.settings.AppearancePane.9868f39007',
+                'Titlebar App Name'
+              )}
+              description={translate(
+                'auto.components.settings.AppearancePane.2df8f79aa5',
+                'Show Orca in the titlebar.'
+              )}
+              checked={settings.showTitlebarAppName}
+              onChange={() =>
+                updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
+              }
+            />
+          </SearchableSetting>
+        </div>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getStatusBarEntries()) ? (
+      <section key="status-bar" className="space-y-3">
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.AppearancePane.3e4175e5c6', 'Status Bar')}
+          description={translate(
+            'auto.components.settings.AppearancePane.ea943d0db0',
+            'Choose which indicators appear at the bottom of the window. You can also right-click the status bar for the same toggles.'
+          )}
+        />
+
+        <div className="divide-y divide-border/40">
+          {visibleStatusBarToggles.map((toggle) => {
+            const enabled = statusBarItems.includes(toggle.id)
+            return (
+              <SearchableSetting
+                key={toggle.id}
+                title={toggle.title}
+                description={toggle.description}
+                keywords={toggle.keywords}
+              >
+                <SettingsSwitchRow
+                  label={toggle.title}
+                  description={toggle.toggleDescription}
+                  checked={enabled}
+                  onChange={() => {
+                    if (toggle.id === 'resource-usage') {
+                      recordFeatureInteraction('resource-manager')
+                    } else if (toggle.id === 'ports') {
+                      recordFeatureInteraction('ports')
+                    } else if (toggle.id === 'ssh') {
+                      recordFeatureInteraction('ssh')
+                    } else if (
+                      toggle.id === 'claude' ||
+                      toggle.id === 'codex' ||
+                      toggle.id === 'gemini' ||
+                      toggle.id === 'opencode-go'
+                    ) {
+                      recordFeatureInteraction('usage-tracking')
+                    }
+                    toggleStatusBarItem(toggle.id)
+                  }}
+                  ariaLabel={toggle.title}
+                />
+              </SearchableSetting>
+            )
+          })}
+        </div>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getSidebarEntries()) ? (
+      <section key="sidebar" className="space-y-3">
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.AppearancePane.dc29f3cc0d', 'Sidebar')}
+        />
+
+        <div className="divide-y divide-border/40">
+          <SearchableSetting
+            title={leftSidebarAppearanceEntry.title}
+            description={leftSidebarAppearanceEntry.description}
+            keywords={leftSidebarAppearanceEntry.keywords}
+            className="space-y-2"
+          >
+            <LeftSidebarAppearanceSetting settings={settings} updateSettings={updateSettings} />
+          </SearchableSetting>
+
+          {/* Why: this setting lives with the sidebar layout controls; Settings only
+              points people to it so we do not create a second stateful control. */}
+          <SearchableSetting
+            title={workspaceCardLayoutEntry.title}
+            description={workspaceCardLayoutEntry.description}
+            keywords={workspaceCardLayoutEntry.keywords}
+          >
+            <SettingsRow
+              label={workspaceCardLayoutEntry.title}
+              description={translate(
+                'auto.components.settings.AppearancePane.workspaceCardLayoutGuidance',
+                'Use the workspace sidebar options menu > Card layout > Compact.'
+              )}
+              control={null}
+            />
+          </SearchableSetting>
+
+          <SearchableSetting
+            title={translate(
+              'auto.components.settings.AppearancePane.cf81907069',
+              'Show Tasks Button'
+            )}
+            description={translate(
+              'auto.components.settings.AppearancePane.661942ab7f',
+              'Show the Tasks button at the top of the left sidebar.'
+            )}
+            keywords={getSidebarEntries()[0]?.keywords ?? ['tasks', 'sidebar', 'button']}
+          >
+            <SettingsSwitchRow
+              label={translate(
+                'auto.components.settings.AppearancePane.cf81907069',
+                'Show Tasks Button'
+              )}
+              description={translate(
+                'auto.components.settings.AppearancePane.661942ab7f',
+                'Show the Tasks button at the top of the left sidebar.'
+              )}
+              checked={settings.showTasksButton !== false}
+              onChange={() =>
+                updateSettings({ showTasksButton: !(settings.showTasksButton !== false) })
+              }
+            />
+          </SearchableSetting>
+
+          <SearchableSetting
+            title={translate(
+              'auto.components.settings.AppearancePane.511f270ebb',
+              'Show Automations Button'
+            )}
+            description={translate(
+              'auto.components.settings.AppearancePane.fa882a3e6b',
+              'Show the Automations button at the top of the left sidebar.'
+            )}
+            keywords={getSidebarEntries()[1]?.keywords ?? ['automations', 'automation', 'schedule']}
+          >
+            <SettingsSwitchRow
+              label={translate(
+                'auto.components.settings.AppearancePane.511f270ebb',
+                'Show Automations Button'
+              )}
+              description={translate(
+                'auto.components.settings.AppearancePane.fa882a3e6b',
+                'Show the Automations button at the top of the left sidebar.'
+              )}
+              checked={settings.showAutomationsButton !== false}
+              onChange={() =>
+                updateSettings({
+                  showAutomationsButton: !(settings.showAutomationsButton !== false)
+                })
+              }
+            />
+          </SearchableSetting>
+
+          <SearchableSetting
+            title={translate(
+              'auto.components.settings.AppearancePane.9da1020447',
+              'Show Orca Mobile Button'
+            )}
+            description={translate(
+              'auto.components.settings.AppearancePane.5db6ba961f',
+              'Show the Orca Mobile button at the top of the left sidebar.'
+            )}
+            keywords={getSidebarEntries()[2]?.keywords ?? ['mobile', 'phone', 'sidebar']}
+          >
+            <SettingsSwitchRow
+              label={translate(
+                'auto.components.settings.AppearancePane.9da1020447',
+                'Show Orca Mobile Button'
+              )}
+              description={translate(
+                'auto.components.settings.AppearancePane.61d842eca0',
+                'Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.'
+              )}
+              checked={settings.showMobileButton !== false}
+              onChange={() =>
+                updateSettings({ showMobileButton: !(settings.showMobileButton !== false) })
+              }
+            />
+          </SearchableSetting>
+        </div>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAppIconEntries()) ? (
+      <section key="app-icon" className="space-y-3">
+        <SearchableSetting
+          title={translate('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
+          description={translate(
+            'auto.components.settings.AppearancePane.0cd9b8228f',
+            'Choose the app icon shown in the Dock and window switcher.'
+          )}
+          keywords={getAppIconEntries().flatMap((entry) => [
+            entry.title,
+            entry.description ?? '',
+            ...(entry.keywords ?? [])
+          ])}
+          className="max-w-none py-2"
+        >
+          <AppIconSelector
+            value={normalizeAppIconId(settings.appIcon)}
+            onChange={(appIcon) => updateSettings({ appIcon })}
+          />
         </SearchableSetting>
       </section>
     ) : null
   ].filter(Boolean)
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-8">
+        <div key={index} className="space-y-6">
           {index > 0 ? <Separator /> : null}
           {section}
         </div>

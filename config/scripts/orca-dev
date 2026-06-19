@@ -25,4 +25,12 @@ case "$(uname -s)" in
 esac
 
 export ORCA_USER_DATA_PATH="${ORCA_DEV_USER_DATA_PATH:-$default_data}"
+electron_executable="$REPO_ROOT/node_modules/.bin/electron"
+case "$(uname -s)" in
+  MINGW*|MSYS*) electron_executable="$REPO_ROOT/node_modules/electron/dist/electron.exe" ;;
+esac
+if [ -z "${ORCA_APP_EXECUTABLE:-}" ] && [ -x "$electron_executable" ]; then
+  export ORCA_APP_EXECUTABLE="$electron_executable"
+  export ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1
+fi
 exec node "$CLI_ENTRY" "$@"

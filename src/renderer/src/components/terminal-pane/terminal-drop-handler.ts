@@ -2,16 +2,51 @@ import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { isWindowsUserAgent, shellEscapePath } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
+import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { translate } from '@/i18n/i18n'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 
 type Args = {
   manager: PaneManager
   paneTransports: Map<number, PtyTransport>
   worktreeId: string
+  tabId: string
   cwd: string | undefined
-  data: { paths: string[]; target: string }
+  data: { paths: string[]; target: string; tabId?: string }
+}
+
+export type TerminalTargetShell = 'posix' | 'windows'
+
+export function getTerminalTargetShellForWorktreePath(worktreePath: string): TerminalTargetShell {
+  return isWindowsPathLike(worktreePath) ? 'windows' : 'posix'
+}
+
+export function resolveTerminalDropTargetShell({
+  activeRuntimeEnvironmentId,
+  worktreePath,
+  connectionId,
+  userAgent
+}: {
+  activeRuntimeEnvironmentId: string | null | undefined
+  worktreePath: string | null | undefined
+  connectionId: string | null | undefined
+  userAgent?: string
+}): TerminalTargetShell {
+  if (activeRuntimeEnvironmentId?.trim() && worktreePath) {
+    return getTerminalTargetShellForWorktreePath(worktreePath)
+  }
+  if (typeof connectionId === 'string') {
+    return 'posix'
+  }
+  return isWindowsUserAgent(userAgent) ? 'windows' : 'posix'
 }
 
 /**
@@ -23,7 +58,7 @@ type Args = {
  * docs/terminal-drop-ssh.md.
  */
 export async function handleTerminalFileDrop(args: Args): Promise<void> {
-  const { manager, paneTransports, worktreeId, cwd, data } = args
+  const { manager, paneTransports, worktreeId, tabId, cwd, data } = args
   if (data.paths.length === 0) {
     return
   }
@@ -36,6 +71,68 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
   if (!transport) {
     return
   }
+  const state = useAppStore.getState()
+  const settings = state.settings
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const worktreePath = resolveWorktreePath(worktreeId, cwd)
+  if (!worktreePath) {
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.drop.handler.ce8248b835',
+        'Worktree path not available.'
+      )
+    )
+    return
+  }
+
+  if (runtimeEnvironmentId) {
+    const targetShell = getTerminalTargetShellForWorktreePath(worktreePath)
+    const destinationDir = joinRuntimeDropDir(worktreePath)
+    const pending = toast.loading(
+      translate(
+        'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
+        'Uploading {{value0}} file{{value1}} to runtime…',
+        { value0: data.paths.length, value1: data.paths.length === 1 ? '' : 's' }
+      )
+    )
+    try {
+      const { results } = await importExternalPathsToRuntime(
+        {
+          // Why: drops into existing worktrees must follow the worktree owner,
+          // not the currently focused host in the sidebar.
+          settings: { ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId },
+          worktreeId,
+          worktreePath
+        },
+        data.paths,
+        destinationDir
+      )
+      const imported = results.filter((result) => result.status === 'imported')
+      const skipped = results.filter((result) => result.status === 'skipped')
+      const failed = results.filter((result) => result.status === 'failed')
+      const liveTransport = paneTransports.get(paneId)
+      if (liveTransport) {
+        let sentAnyPath = false
+        for (const result of imported) {
+          const shellPath = isWindowsPathLike(worktreePath)
+            ? result.destPath.replace(/\//g, '\\')
+            : result.destPath
+          sentAnyPath =
+            liveTransport.sendInput(`${shellEscapePath(shellPath, targetShell)} `) || sentAnyPath
+        }
+        if (sentAnyPath) {
+          recordTerminalUserInputForLeaf(tabId, pane.leafId)
+        }
+        pane.terminal.focus()
+      }
+      reportUploadSkipsAndFailures(skipped, failed)
+    } catch (err) {
+      toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
+    } finally {
+      toast.dismiss(pending)
+    }
+    return
+  }
 
   // Why: `getConnectionId` returns `string` (SSH), `null` (local repo found),
   // or `undefined` (store not hydrated / worktree not found). Treat
@@ -43,35 +140,46 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
   // silently paste local paths into a remote shell.
   const connectionId = getConnectionId(worktreeId)
   if (connectionId === undefined) {
-    toast.error('Worktree not ready — try again in a moment.')
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.drop.handler.0c77693641',
+        'Worktree not ready — try again in a moment.'
+      )
+    )
     return
   }
   const isRemote = connectionId !== null
-  const targetShell: 'posix' | 'windows' = isRemote
-    ? 'posix'
-    : isWindowsUserAgent()
-      ? 'windows'
-      : 'posix'
+  const targetShell = resolveTerminalDropTargetShell({
+    activeRuntimeEnvironmentId: null,
+    worktreePath,
+    connectionId
+  })
+  const localWslDrop = !isRemote && isWorktreeUsingLocalWslRuntime(state, worktreeId)
+  const localTargetShell = localWslDrop ? 'posix' : targetShell
 
   // Why: local fast path — no IPC round-trip, no toast — preserves today's
   // zero-latency drop behavior. Trailing space separates multiple paths in
   // the terminal input, matching standard drag-and-drop UX conventions.
   if (!isRemote) {
+    let sentAnyPath = false
     for (const p of data.paths) {
-      transport.sendInput(`${shellEscapePath(p, targetShell)} `)
+      const terminalPath = localWslDrop ? toLocalWslDropPath(p) : p
+      sentAnyPath =
+        transport.sendInput(`${shellEscapePath(terminalPath, localTargetShell)} `) || sentAnyPath
+    }
+    if (sentAnyPath) {
+      recordTerminalUserInputForLeaf(tabId, pane.leafId)
     }
     pane.terminal.focus()
     return
   }
 
-  const worktreePath = resolveWorktreePath(worktreeId, cwd)
-  if (!worktreePath) {
-    toast.error('Worktree path not available.')
-    return
-  }
-
   const pending = toast.loading(
-    `Uploading ${data.paths.length} file${data.paths.length === 1 ? '' : 's'} to remote…`
+    translate(
+      'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
+      'Uploading {{value0}} file{{value1}} to remote…',
+      { value0: data.paths.length, value1: data.paths.length === 1 ? '' : 's' }
+    )
   )
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
@@ -85,31 +193,56 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
     // acknowledged limitation — see docs/terminal-drop-ssh.md.
     const liveTransport = paneTransports.get(paneId)
     if (liveTransport) {
+      let sentAnyPath = false
       for (const p of resolvedPaths) {
-        liveTransport.sendInput(`${shellEscapePath(p, targetShell)} `)
+        sentAnyPath = liveTransport.sendInput(`${shellEscapePath(p, targetShell)} `) || sentAnyPath
+      }
+      if (sentAnyPath) {
+        recordTerminalUserInputForLeaf(tabId, pane.leafId)
       }
       pane.terminal.focus()
     }
-    if (skipped.length > 0) {
-      // Why: symlink rejection is policy, not error — show as neutral
-      // message. Mixed skips collapse to a single "items" count to avoid
-      // enumerating every reason.
-      const symlinkCount = skipped.filter((s) => s.reason === 'symlink').length
-      const noun = skipped.length === 1 ? 'item' : 'items'
-      toast.message(
-        symlinkCount === skipped.length
-          ? `Skipped ${skipped.length} symlink${skipped.length === 1 ? '' : 's'}.`
-          : `Skipped ${skipped.length} ${noun}.`
-      )
-    }
-    if (failed.length > 0) {
-      const noun = failed.length === 1 ? 'file' : 'files'
-      toast.error(`Failed to upload ${failed.length} ${noun}.`)
-    }
+    reportUploadSkipsAndFailures(skipped, failed)
   } catch (err) {
     toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
   } finally {
     toast.dismiss(pending)
+  }
+}
+
+function reportUploadSkipsAndFailures(
+  skipped: { reason: string }[],
+  failed: { reason: string }[]
+): void {
+  if (skipped.length > 0) {
+    // Why: symlink rejection is policy, not error — show as neutral
+    // message. Mixed skips collapse to a single "items" count to avoid
+    // enumerating every reason.
+    const symlinkCount = skipped.filter((s) => s.reason === 'symlink').length
+    const noun = skipped.length === 1 ? 'item' : 'items'
+    toast.message(
+      symlinkCount === skipped.length
+        ? translate(
+            'auto.components.terminal.pane.terminal.drop.handler.53f015fd85',
+            'Skipped {{value0}} symlink{{value1}}.',
+            { value0: skipped.length, value1: skipped.length === 1 ? '' : 's' }
+          )
+        : translate(
+            'auto.components.terminal.pane.terminal.drop.handler.53f015fd85',
+            'Skipped {{value0}} {{value1}}.',
+            { value0: skipped.length, value1: noun }
+          )
+    )
+  }
+  if (failed.length > 0) {
+    const noun = failed.length === 1 ? 'file' : 'files'
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
+        'Failed to upload {{value0}} {{value1}}.',
+        { value0: failed.length, value1: noun }
+      )
+    )
   }
 }
 
@@ -118,4 +251,38 @@ function resolveWorktreePath(worktreeId: string, fallbackCwd: string | undefined
   const allWorktrees = Object.values(state.worktreesByRepo ?? {}).flat()
   const worktree = allWorktrees.find((w) => w.id === worktreeId)
   return worktree?.path ?? fallbackCwd ?? null
+}
+
+function joinRuntimeDropDir(worktreePath: string): string {
+  if (isWindowsPathLike(worktreePath)) {
+    return `${worktreePath.replace(/[\\/]+$/, '').replace(/\//g, '\\')}\\.orca\\drops`
+  }
+  return `${worktreePath.replace(/[\\/]+$/, '')}/.orca/drops`
+}
+
+function isWindowsPathLike(path: string): boolean {
+  return isWindowsAbsolutePathLike(path) || path.includes('\\')
+}
+
+function isWorktreeUsingLocalWslRuntime(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string
+): boolean {
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, CLIENT_PLATFORM)
+  if (projectRuntime?.status === 'repair-required') {
+    return projectRuntime.repair.preferredRuntime.kind === 'wsl'
+  }
+  return projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
+}
+
+function toLocalWslDropPath(path: string): string {
+  const wslUnc = parseWslUncPath(path)
+  if (wslUnc) {
+    return wslUnc.linuxPath
+  }
+  if (/^[A-Za-z]:[\\/]/.test(path)) {
+    const drive = path[0].toLowerCase()
+    return `/mnt/${drive}/${path.slice(3).replace(/\\/g, '/')}`
+  }
+  return path.replace(/\\/g, '/')
 }

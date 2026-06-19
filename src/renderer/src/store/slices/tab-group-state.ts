@@ -1,4 +1,5 @@
 import type { Tab, TabContentType, TabGroup, WorkspaceSessionState } from '../../../../shared/types'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function findTabAndWorktree(
   tabsByWorktree: Record<string, Tab[]>,
@@ -69,7 +70,7 @@ export function ensureGroup(
   if (existing) {
     return { group: existing, groupsByWorktree, activeGroupIdByWorktree }
   }
-  const groupId = globalThis.crypto.randomUUID()
+  const groupId = createBrowserUuid()
   const group: TabGroup = { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }
   return {
     group,
@@ -154,7 +155,9 @@ export function updateGroup(groups: TabGroup[], updated: TabGroup): TabGroup[] {
 }
 
 export function isTransientEditorContentType(contentType: TabContentType): boolean {
-  return contentType === 'diff' || contentType === 'conflict-review'
+  return (
+    contentType === 'diff' || contentType === 'conflict-review' || contentType === 'check-details'
+  )
 }
 
 export function getPersistedEditFileIdsByWorktree(
@@ -205,6 +208,12 @@ export function patchTab(
 ): { unifiedTabsByWorktree: Record<string, Tab[]> } | null {
   const found = findTabAndWorktree(tabsByWorktree, tabId)
   if (!found) {
+    return null
+  }
+  const patchChangesTab = (Object.keys(patch) as (keyof Tab)[]).some(
+    (key) => found.tab[key] !== patch[key]
+  )
+  if (!patchChangesTab) {
     return null
   }
   const { worktreeId } = found

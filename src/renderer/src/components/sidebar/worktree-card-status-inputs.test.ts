@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
-import type { TerminalTab } from '../../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../../../shared/types'
 import {
   selectLivePtyIdsForWorktree,
+  selectTerminalLayoutRootsForWorktree,
+  selectTerminalLayoutRootsForWorktrees,
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 
 type SelectorState = Parameters<typeof selectRuntimePaneTitlesForWorktree>[0]
+type LayoutRootSelectorState = Parameters<typeof selectTerminalLayoutRootsForWorktree>[0]
 
 function makeTab(id: string, worktreeId: string): TerminalTab {
   return {
@@ -18,6 +25,15 @@ function makeTab(id: string, worktreeId: string): TerminalTab {
     color: null,
     sortOrder: 0,
     createdAt: 0
+  }
+}
+
+function makeLayout(root: TerminalPaneLayoutNode, ptyId: string): TerminalLayoutSnapshot {
+  return {
+    root,
+    activeLeafId: root.type === 'leaf' ? root.leafId : null,
+    expandedLeafId: null,
+    ptyIdsByLeafId: root.type === 'leaf' ? { [root.leafId]: ptyId } : {}
   }
 }
 
@@ -90,5 +106,43 @@ describe('worktree card status input selectors', () => {
         selectLivePtyIdsForWorktree(updated, worktreeId)
       )
     ).toBe(false)
+  })
+
+  it('stays shallow-equal when wake updates only PTY bindings inside terminal layouts', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    const root: TerminalPaneLayoutNode = {
+      type: 'leaf',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    }
+    const state: LayoutRootSelectorState = {
+      tabsByWorktree: {
+        [worktreeId]: [makeTab('tab-1', worktreeId)]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeLayout(root, 'pty-before')
+      }
+    }
+    const wakeBindingUpdate: LayoutRootSelectorState = {
+      ...state,
+      terminalLayoutsByTabId: {
+        'tab-1': makeLayout(root, 'pty-after')
+      }
+    }
+
+    // Why: waking a slept pane rewrites ptyIdsByLeafId several times. Status
+    // heuristics only need the layout root, so binding-only churn should not
+    // invalidate every sidebar card or section summary.
+    expect(
+      shallow(
+        selectTerminalLayoutRootsForWorktree(state, worktreeId),
+        selectTerminalLayoutRootsForWorktree(wakeBindingUpdate, worktreeId)
+      )
+    ).toBe(true)
+    expect(
+      shallow(
+        selectTerminalLayoutRootsForWorktrees(state, [worktreeId]),
+        selectTerminalLayoutRootsForWorktrees(wakeBindingUpdate, [worktreeId])
+      )
+    ).toBe(true)
   })
 })

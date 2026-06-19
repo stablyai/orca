@@ -20,6 +20,9 @@ function createMockSubprocess() {
     get pid() {
       return pid
     },
+    getForegroundProcess(): string | null {
+      return null
+    },
     write(data: string) {
       written.push(data)
     },
@@ -70,6 +73,7 @@ describe('Session', () => {
 
   function createSession(opts?: {
     shellReadySupported?: boolean
+    shellReadyTimeoutMs?: number
     cols?: number
     rows?: number
   }): Session {
@@ -78,7 +82,10 @@ describe('Session', () => {
       cols: opts?.cols ?? 80,
       rows: opts?.rows ?? 24,
       subprocess,
-      shellReadySupported: opts?.shellReadySupported ?? false
+      shellReadySupported: opts?.shellReadySupported ?? false,
+      ...(opts?.shellReadyTimeoutMs !== undefined
+        ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
+        : {})
     })
     return session
   }
@@ -208,6 +215,18 @@ describe('Session', () => {
 
       expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
       expect(subprocess.written).toEqual(['waiting input'])
+    })
+
+    it('honors a shorter shell-ready timeout for Codex startup sessions', () => {
+      createSession({ shellReadySupported: true, shellReadyTimeoutMs: 300 })
+      session.write('codex\n')
+
+      vi.advanceTimersByTime(299)
+      expect(subprocess.written).toEqual([])
+
+      vi.advanceTimersByTime(1)
+      expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
+      expect(subprocess.written).toEqual(['codex\n'])
     })
 
     it('detects marker split across data chunks', () => {

@@ -1,4 +1,7 @@
 import path from 'path'
+import { constants } from 'fs'
+import { EventEmitter } from 'events'
+import { Readable, Writable } from 'stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
@@ -8,10 +11,13 @@ const {
   mkdirMock,
   realpathMock,
   copyFileMock,
+  openMock,
   readdirMock,
+  unlinkMock,
   sftpExistsMock,
   uploadFileMock,
   uploadDirMock,
+  removeDirectorySftpMock,
   mkdirSftpMock,
   getConnMgrMock
 } = vi.hoisted(() => ({
@@ -20,10 +26,13 @@ const {
   mkdirMock: vi.fn(),
   realpathMock: vi.fn(),
   copyFileMock: vi.fn(),
+  openMock: vi.fn(),
   readdirMock: vi.fn(),
+  unlinkMock: vi.fn(),
   sftpExistsMock: vi.fn(),
   uploadFileMock: vi.fn(),
   uploadDirMock: vi.fn(),
+  removeDirectorySftpMock: vi.fn(),
   mkdirSftpMock: vi.fn(),
   getConnMgrMock: vi.fn()
 }))
@@ -36,12 +45,16 @@ vi.mock('fs/promises', () => ({
   writeFile: vi.fn(),
   realpath: realpathMock,
   copyFile: copyFileMock,
-  readdir: readdirMock
+  open: openMock,
+  readdir: readdirMock,
+  unlink: unlinkMock,
+  rm: vi.fn()
 }))
 vi.mock('../ssh/sftp-upload', () => ({
   sftpPathExists: sftpExistsMock,
   uploadFile: uploadFileMock,
   uploadDirectory: uploadDirMock,
+  removeDirectorySftp: removeDirectorySftpMock,
   mkdirSftp: mkdirSftpMock
 }))
 vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
@@ -62,10 +75,30 @@ const store = {
 }
 const enoent = (): Error => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
+type MockSftpWriteStream = EventEmitter & {
+  destroy: ReturnType<typeof vi.fn>
+  end: ReturnType<typeof vi.fn>
+}
+
+function createMockSftpWriteStream(): MockSftpWriteStream {
+  const stream = new EventEmitter() as MockSftpWriteStream
+  stream.destroy = vi.fn()
+  stream.end = vi.fn(() => stream.emit('close'))
+  return stream
+}
+
 describe('fs:importExternalPaths — SSH routing & connection', () => {
   const destDir = '/home/user/project/src'
   const connId = 'ssh-conn-1'
-  const mockSftp = { end: vi.fn() }
+  const sftpWriteStreams: MockSftpWriteStream[] = []
+  const mockSftp = {
+    end: vi.fn(),
+    createWriteStream: vi.fn(() => {
+      const stream = createMockSftpWriteStream()
+      sftpWriteStreams.push(stream)
+      return stream
+    })
+  }
   const makeConn = (status = 'connected') => ({
     getState: () => ({ status }),
     sftp: vi.fn().mockResolvedValue(mockSftp)
@@ -92,22 +125,52 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
       mkdirMock,
       realpathMock,
       copyFileMock,
+      openMock,
       readdirMock,
+      unlinkMock,
       sftpExistsMock,
       uploadFileMock,
       uploadDirMock,
+      removeDirectorySftpMock,
       mkdirSftpMock,
       getConnMgrMock
     ].forEach((m) => m.mockReset())
     mockSftp.end.mockReset()
+    mockSftp.createWriteStream.mockClear()
+    sftpWriteStreams.length = 0
     handleMock.mockImplementation((ch: string, h: never) => {
       handlers.set(ch, h)
     })
     realpathMock.mockImplementation(async (p: string) => p)
     lstatMock.mockRejectedValue(enoent())
+    openMock.mockImplementation(async (_p: string, flags: unknown) => {
+      if (flags === 'wx') {
+        return {
+          createWriteStream: () =>
+            new Writable({
+              write(_chunk, _encoding, callback) {
+                callback()
+              }
+            }),
+          close: vi.fn().mockResolvedValue(undefined)
+        }
+      }
+      return {
+        stat: vi.fn().mockResolvedValue({
+          size: 12,
+          ino: 1,
+          dev: 1,
+          isFile: () => true
+        }),
+        createReadStream: () => Readable.from([Buffer.from('file-content')]),
+        close: vi.fn().mockResolvedValue(undefined)
+      }
+    })
+    unlinkMock.mockResolvedValue(undefined)
     sftpExistsMock.mockResolvedValue(false)
     uploadFileMock.mockResolvedValue(undefined)
     uploadDirMock.mockResolvedValue(undefined)
+    removeDirectorySftpMock.mockResolvedValue(undefined)
     mkdirSftpMock.mockResolvedValue(undefined)
     registerFilesystemMutationHandlers(store as never)
   })
@@ -121,7 +184,12 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
       connectionId: connId
     })
     expect(results[0]).toMatchObject({ status: 'imported', kind: 'file' })
-    expect(uploadFileMock).toHaveBeenCalled()
+    expect(uploadFileMock).toHaveBeenCalledWith(
+      mockSftp,
+      path.resolve('/tmp/dropped/file.txt'),
+      `${destDir}/file.txt`,
+      { exclusive: true }
+    )
     expect(copyFileMock).not.toHaveBeenCalled()
   })
 
@@ -132,7 +200,10 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
       destDir: path.resolve('/workspace/repo/src')
     })
     expect(results[0]).toMatchObject({ status: 'imported' })
-    expect(copyFileMock).toHaveBeenCalled()
+    expect(openMock).toHaveBeenCalledWith(
+      path.resolve('/tmp/dropped/file.txt'),
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)
+    )
   })
 
   it('returns empty results without opening SFTP', async () => {
@@ -191,5 +262,22 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
     })
     expect(results[0]).toMatchObject({ status: 'failed', reason: 'disk full' })
     expect(mockSftp.end).toHaveBeenCalledOnce()
+  })
+
+  it('removes staging marker write listeners after remote stream close', async () => {
+    getConnMgrMock.mockReturnValue({ getConnection: () => makeConn() })
+    mockFile('/tmp/dropped/file.txt')
+
+    await invoke({
+      sourcePaths: ['/tmp/dropped/file.txt'],
+      destDir: '/home/user/project/.orca/drops',
+      connectionId: connId,
+      ensureDir: true
+    })
+
+    expect(mockSftp.createWriteStream).toHaveBeenCalledWith('/home/user/project/.orca/.gitignore')
+    expect(sftpWriteStreams[0]!.listenerCount('close')).toBe(0)
+    expect(sftpWriteStreams[0]!.listenerCount('error')).toBe(0)
+    expect(sftpWriteStreams[0]!.destroy).toHaveBeenCalledOnce()
   })
 })

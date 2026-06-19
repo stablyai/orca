@@ -22,8 +22,10 @@ import type { SearchResult as SharedSearchResult } from '../shared/types'
 // the old 5MB search cap would block common JSON/log files before Monaco's
 // large-file optimizations can handle them.
 export const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
-// 10MB for relayed binaries (base64 → ~13.3MB frame payload at 16MB relay cap)
-export const MAX_PREVIEWABLE_BINARY_SIZE = 10 * 1024 * 1024
+// Why: matches the local cap (src/main/ipc/filesystem.ts MAX_PREVIEWABLE_BINARY_SIZE).
+// Reads above the legacy 16MB single-frame budget go through fs.readFileStream,
+// which chunks at STREAM_CHUNK_SIZE; see docs/relay-file-stream-design.md.
+export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
 export const BINARY_PROBE_BYTES = 8192
 export const SEARCH_TIMEOUT_MS = SHARED_SEARCH_TIMEOUT_MS
 export const DEFAULT_MAX_RESULTS = 2000
@@ -114,45 +116,64 @@ export function searchWithRg(
       return
     }
 
-    const resolveOnce = (): void => {
+    let killTimeout: ReturnType<typeof setTimeout>
+
+    function resolveOnce(): void {
       if (resolved) {
         return
       }
       resolved = true
       clearTimeout(killTimeout)
+      // Why: child.kill() is advisory over SSH; detach listeners if the
+      // process ignores timeout kill so old searches cannot retain closures.
+      child.stdout!.off('data', handleStdoutData)
+      child.stderr!.off('data', handleStderrData)
+      child.off('error', handleError)
+      child.off('close', handleClose)
       resolve(finalize(acc))
     }
 
-    const processLine = (line: string): void => {
+    function processLine(line: string): void {
       const verdict = ingestRgJsonLine(line, rootPath, acc, opts.maxResults)
       if (verdict === 'stop') {
         child.kill()
       }
     }
 
-    child.stdout!.setEncoding('utf-8')
-    child.stdout!.on('data', (chunk: string) => {
+    function handleStdoutData(chunk: string): void {
       buffer += chunk
       const lines = buffer.split('\n')
       buffer = lines.pop() ?? ''
       for (const line of lines) {
         processLine(line)
       }
-    })
-    child.stderr!.on('data', () => {
+    }
+
+    function handleStderrData(): void {
       /* drain */
-    })
-    child.once('error', () => resolveOnce())
-    child.once('close', () => {
+    }
+
+    function handleError(): void {
+      resolveOnce()
+    }
+
+    function handleClose(): void {
       if (buffer) {
         processLine(buffer)
       }
       resolveOnce()
-    })
+    }
 
-    const killTimeout = setTimeout(() => {
+    child.stdout!.setEncoding('utf-8')
+    child.stdout!.on('data', handleStdoutData)
+    child.stderr!.on('data', handleStderrData)
+    child.once('error', handleError)
+    child.once('close', handleClose)
+
+    killTimeout = setTimeout(() => {
       acc.truncated = true
       child.kill()
+      resolveOnce()
     }, SEARCH_TIMEOUT_MS)
   })
 }
@@ -165,24 +186,41 @@ export function searchWithRg(
 // was uninstalled or broken mid-session. The `settled` flag below closes
 // the original race between 'error' and 'close' that the cache was added
 // to paper over, so re-checking per call is both simpler and safer.
+const RG_AVAILABILITY_TIMEOUT_MS = 5000
+
 export function checkRgAvailable(): Promise<boolean> {
   return new Promise((resolve) => {
     let settled = false
     const child = execFile('rg', ['--version'])
-    child.once('error', () => {
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const cleanup = (): void => {
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = null
+      }
+      child.off('error', onError)
+      child.off('close', onClose)
+    }
+    const settle = (available: boolean, options?: { kill?: boolean }): void => {
       if (settled) {
         return
       }
       settled = true
-      resolve(false)
-    })
-    child.once('close', (code) => {
-      if (settled) {
-        return
+      cleanup()
+      if (options?.kill) {
+        child.kill()
       }
-      settled = true
-      resolve(code === 0)
-    })
+      resolve(available)
+    }
+    const onError = (): void => settle(false)
+    const onClose = (code: number | null): void => settle(code === 0)
+
+    child.once('error', onError)
+    child.once('close', onClose)
+    timeout = setTimeout(() => settle(false, { kill: true }), RG_AVAILABILITY_TIMEOUT_MS)
+    if (typeof timeout.unref === 'function') {
+      timeout.unref()
+    }
   })
 }
 

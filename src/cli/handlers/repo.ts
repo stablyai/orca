@@ -2,15 +2,17 @@ import type { RuntimeRepoList, RuntimeRepoSearchRefs } from '../../shared/runtim
 import type { CommandHandler } from '../dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../format'
 import { getOptionalPositiveIntegerFlag, getRequiredStringFlag } from '../flags'
+import { resolveRepoPathArgument } from '../repo-path-arguments'
 
 export const REPO_HANDLERS: Record<string, CommandHandler> = {
   'repo list': async ({ client, json }) => {
     const result = await client.call<RuntimeRepoList>('repo.list')
     printResult(result, json, formatRepoList)
   },
-  'repo add': async ({ flags, client, json }) => {
+  'repo add': async ({ flags, client, cwd, json }) => {
+    const repoPath = getRequiredStringFlag(flags, 'path')
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.add', {
-      path: getRequiredStringFlag(flags, 'path')
+      path: resolveRepoPathArgument(repoPath, cwd, client.isRemote, 'Remote repo add')
     })
     printResult(result, json, formatRepoShow)
   },

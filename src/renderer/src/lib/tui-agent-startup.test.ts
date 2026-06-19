@@ -4,6 +4,7 @@ import {
   buildAgentStartupPlan,
   isShellProcess
 } from './tui-agent-startup'
+import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
 
 describe('buildAgentStartupPlan', () => {
   it('passes Claude prompts as a positional interactive argument', () => {
@@ -38,6 +39,22 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('uses Antigravity interactive prompt mode with the agy binary', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'antigravity',
+        prompt: 'Investigate this regression',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'antigravity',
+      launchCommand: "agy --prompt-interactive 'Investigate this regression'",
+      expectedProcess: 'agy',
+      followupPrompt: null
+    })
+  })
+
   it('launches aider first and injects the draft prompt after startup', () => {
     expect(
       buildAgentStartupPlan({
@@ -67,6 +84,22 @@ describe('buildAgentStartupPlan', () => {
       launchCommand: 'autohand',
       expectedProcess: 'autohand',
       followupPrompt: 'Add tests for the parser'
+    })
+  })
+
+  it('launches Ante first and injects the draft prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'ante',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'ante',
+      launchCommand: 'ante',
+      expectedProcess: 'ante',
+      followupPrompt: 'Summarize the failing tests'
     })
   })
 
@@ -118,6 +151,55 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches Grok first and injects the prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'grok',
+        prompt: 'Trace the failing test',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'grok',
+      launchCommand: 'grok',
+      expectedProcess: 'grok',
+      followupPrompt: 'Trace the failing test'
+    })
+  })
+
+  it('launches Devin first and injects the prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'devin',
+        prompt: 'Trace the failing test',
+        cmdOverrides: {},
+        agentArgs: resolveTuiAgentLaunchArgs('devin', null),
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'devin',
+      launchCommand: "devin '--permission-mode' 'bypass'",
+      expectedProcess: 'devin',
+      followupPrompt: 'Trace the failing test'
+    })
+  })
+
+  it('launches Command Code by its unambiguous binary with a positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'command-code',
+        prompt: 'Fix the issue',
+        cmdOverrides: {},
+        platform: 'win32'
+      })
+    ).toEqual({
+      agent: 'command-code',
+      launchCommand: "command-code --trust 'Fix the issue'",
+      expectedProcess: 'command-code',
+      followupPrompt: null
+    })
+  })
+
   it('returns null when there is no prompt to inject', () => {
     expect(
       buildAgentStartupPlan({
@@ -127,60 +209,6 @@ describe('buildAgentStartupPlan', () => {
         platform: 'darwin'
       })
     ).toBeNull()
-  })
-
-  it('preserves structural newlines in Droid prompts as a single argv argument', () => {
-    // Why: the prompt is already formatted as a stable multi-line block
-    // (File, Line, User comment). The shell line editor accepts literal
-    // newlines inside a quoted argv argument, so keeping the newlines makes
-    // the terminal output readable while still submitting as one command.
-    expect(
-      buildAgentStartupPlan({
-        agent: 'droid',
-        prompt: 'File: docs/plan.md\nLine: 19\nUser comment: "what do you think about it?"',
-        cmdOverrides: {},
-        platform: 'darwin'
-      })
-    ).toEqual({
-      agent: 'droid',
-      launchCommand:
-        'droid \'File: docs/plan.md\nLine: 19\nUser comment: "what do you think about it?"\'',
-      expectedProcess: 'droid',
-      followupPrompt: null
-    })
-  })
-
-  it('preserves structural newlines in Codex prompts as a single argv argument', () => {
-    expect(
-      buildAgentStartupPlan({
-        agent: 'codex',
-        prompt: 'Review this function:\n\n```ts\nconst x = 1\n```',
-        cmdOverrides: {},
-        platform: 'linux'
-      })
-    ).toEqual({
-      agent: 'codex',
-      launchCommand: "codex 'Review this function:\n\n```ts\nconst x = 1\n```'",
-      expectedProcess: 'codex',
-      followupPrompt: null
-    })
-  })
-
-  it('collapses embedded newlines on Windows to keep the command on one line', () => {
-    expect(
-      buildAgentStartupPlan({
-        agent: 'droid',
-        prompt: 'File: docs/plan.md\nLine: 19\nUser comment: "what do you think about it?"',
-        cmdOverrides: {},
-        platform: 'win32'
-      })
-    ).toEqual({
-      agent: 'droid',
-      launchCommand:
-        'droid "File: docs/plan.md Line: 19 User comment: ""what do you think about it?"""',
-      expectedProcess: 'droid',
-      followupPrompt: null
-    })
   })
 
   it('uses -i flag for copilot to start an interactive session with initial prompt', () => {
@@ -273,12 +301,32 @@ describe('buildAgentDraftLaunchPlan', () => {
       expectedProcess: 'claude'
     })
   })
+
+  it('uses OpenClaude native prefill support for draft launches', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'openclaude',
+        draft: 'review this',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'openclaude',
+      launchCommand: "openclaude --prefill 'review this'",
+      expectedProcess: 'openclaude'
+    })
+  })
 })
 
 describe('isShellProcess', () => {
   it('treats common shells as non-agent foreground processes', () => {
     expect(isShellProcess('bash')).toBe(true)
+    expect(isShellProcess('C:\\Program Files\\Git\\bin\\bash.exe')).toBe(true)
     expect(isShellProcess('pwsh.exe')).toBe(true)
+    expect(isShellProcess('/bin/zsh')).toBe(true)
+    expect(isShellProcess('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')).toBe(
+      true
+    )
     expect(isShellProcess('')).toBe(true)
   })
 

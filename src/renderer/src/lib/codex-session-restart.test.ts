@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { markLiveCodexSessionsForRestart } from './codex-session-restart'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const ACCOUNT_A = 'account-a@example.com'
 const ACCOUNT_B = 'account-b@example.com'
@@ -8,8 +13,16 @@ const ACCOUNT_C = 'account-c@example.com'
 
 describe('markLiveCodexSessionsForRestart', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
+  const runtimeEnvironmentCall = vi.fn()
+  const runtimeEnvironmentTransportCall = vi.fn()
 
   beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentCall.mockReset()
+    runtimeEnvironmentTransportCall.mockReset()
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
+    })
     useAppStore.setState({
       tabsByWorktree: {
         wt1: [
@@ -39,7 +52,12 @@ describe('markLiveCodexSessionsForRestart', () => {
         ...originalWindow?.api,
         pty: {
           ...originalWindow?.api?.pty,
-          getForegroundProcess: vi.fn()
+          getForegroundProcess: vi.fn(),
+          hasChildProcesses: vi.fn().mockResolvedValue(false)
+        },
+        runtimeEnvironments: {
+          ...originalWindow?.api?.runtimeEnvironments,
+          call: runtimeEnvironmentTransportCall
         }
       }
     } as unknown as typeof window
@@ -65,6 +83,64 @@ describe('markLiveCodexSessionsForRestart', () => {
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
+    })
+  })
+
+  it('marks every live Codex split pane and ignores non-Codex panes', async () => {
+    useAppStore.setState({
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab-1',
+            ptyId: 'pty-1',
+            worktreeId: 'wt1',
+            title: 'orca-1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          },
+          {
+            id: 'tab-2',
+            ptyId: 'pty-3',
+            worktreeId: 'wt1',
+            title: 'orca-2',
+            customTitle: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2
+          }
+        ]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1', 'pty-2'],
+        'tab-2': ['pty-3']
+      }
+    })
+    vi.mocked(window.api.pty.getForegroundProcess).mockImplementation((ptyId) => {
+      if (ptyId === 'pty-1') {
+        return Promise.resolve('codex')
+      }
+      if (ptyId === 'pty-3') {
+        return Promise.resolve('codex-aarch64-ap')
+      }
+      return Promise.resolve('zsh')
+    })
+
+    await markLiveCodexSessionsForRestart({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B
+    })
+
+    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({
+      'pty-1': {
+        previousAccountLabel: ACCOUNT_A,
+        nextAccountLabel: ACCOUNT_B
+      },
+      'pty-3': {
+        previousAccountLabel: ACCOUNT_A,
+        nextAccountLabel: ACCOUNT_B
+      }
     })
   })
 
@@ -141,6 +217,54 @@ describe('markLiveCodexSessionsForRestart', () => {
     expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_C
+    })
+  })
+
+  it('inspects remote runtime PTYs through the active runtime environment', async () => {
+    useAppStore.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab-1',
+            ptyId: 'remote:term-1',
+            worktreeId: 'wt1',
+            title: 'orca-1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['remote:term-1']
+      }
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: {
+        process: { foregroundProcess: 'codex', hasChildProcesses: true }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await markLiveCodexSessionsForRestart({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B
+    })
+
+    expect(window.api.pty.getForegroundProcess).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.inspectProcess',
+      params: { terminal: 'term-1' },
+      timeoutMs: 15_000
+    })
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['remote:term-1']).toEqual({
+      previousAccountLabel: ACCOUNT_A,
+      nextAccountLabel: ACCOUNT_B
     })
   })
 })

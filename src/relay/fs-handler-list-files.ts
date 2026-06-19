@@ -8,7 +8,7 @@
  * matching files" even though the file existed on disk. This implementation:
  *   - streams via spawn (no maxBuffer failure mode)
  *   - prunes traversal at rg level using the shared blocklist globs
- *   - runs a second --no-ignore-vcs pass for .env* files
+ *   - runs a second --no-ignore-vcs pass for ignored files
  *   - honors excludePathPrefixes for nested linked worktrees
  *   - rejects (not resolves) on timeout / spawn error / signal exit so
  *     the UI shows a load error instead of a false-empty list
@@ -32,9 +32,13 @@ export function listFilesWithRg(
   return new Promise((resolve, reject) => {
     const files = new Set<string>()
     let done = false
-    const children: ChildProcess[] = []
+    const children: {
+      child: ChildProcess
+      isDone: () => boolean
+      reject: (error: Error) => void
+    }[] = []
 
-    const { primary, envPass } = buildRgArgsForQuickOpen({
+    const { primary, ignoredPass } = buildRgArgsForQuickOpen({
       // Why: rg only applies root-relative exclude globs as traversal pruning
       // when the search target is relative to cwd. Absolute targets still
       // emit root-relative-looking paths for filters, but they do not prune.
@@ -75,22 +79,48 @@ export function listFilesWithRg(
           cwd: rootPath,
           stdio: ['ignore', 'pipe', 'pipe']
         })
-        children.push(child)
-
-        const timer = setTimeout(() => {
+        let timer: ReturnType<typeof setTimeout> | null = null
+        const cleanup = (): void => {
+          if (timer) {
+            clearTimeout(timer)
+            timer = null
+          }
+          child.stdout!.off('data', handleStdoutData)
+          child.stderr!.off('data', handleStderrData)
+          child.off('error', handleError)
+          child.off('close', handleClose)
+        }
+        const rejectPass = (error: Error): void => {
           if (passDone) {
             return
           }
           passDone = true
+          passBuf = ''
+          cleanup()
+          passReject(error)
+        }
+        const resolvePass = (): void => {
+          if (passDone) {
+            return
+          }
+          passDone = true
+          cleanup()
+          passResolve()
+        }
+        children.push({
+          child,
+          isDone: () => passDone,
+          reject: rejectPass
+        })
+
+        timer = setTimeout(() => {
           // Discard residual buffer on abnormal exit — a truncated byte
           // sequence could look like a valid path.
-          passBuf = ''
           child.kill()
-          passReject(new Error('rg list timed out'))
+          rejectPass(new Error('rg list timed out'))
         }, LIST_FILES_TIMEOUT_MS)
 
-        child.stdout!.setEncoding('utf-8')
-        child.stdout!.on('data', (chunk: string) => {
+        function handleStdoutData(chunk: string): void {
           passBuf += chunk
           let start = 0
           let idx = passBuf.indexOf('\n', start)
@@ -102,31 +132,22 @@ export function listFilesWithRg(
             idx = passBuf.indexOf('\n', start)
           }
           passBuf = start < passBuf.length ? passBuf.substring(start) : ''
-        })
-        child.stderr!.on('data', () => {
+        }
+        function handleStderrData(): void {
           /* drain to prevent backpressure stalls */
-        })
-        child.once('error', (err) => {
+        }
+        function handleError(err: Error): void {
+          rejectPass(err)
+        }
+        function handleClose(code: number | null, signal: NodeJS.Signals | null): void {
           if (passDone) {
             return
           }
-          passDone = true
-          clearTimeout(timer)
-          passBuf = ''
-          passReject(err)
-        })
-        child.once('close', (code, signal) => {
-          if (passDone) {
-            return
-          }
-          passDone = true
-          clearTimeout(timer)
           // Why signal != null is a failure: the only way spawn gets a signal
           // is if the process was killed (timeout, OOM, external SIGKILL).
           // Trusting its stdout could surface a truncated list as a success.
           if (signal) {
-            passBuf = ''
-            passReject(new Error(`rg killed by ${signal}`))
+            rejectPass(new Error(`rg killed by ${signal}`))
             return
           }
           // Flush residual line only on clean exit.
@@ -141,13 +162,19 @@ export function listFilesWithRg(
           // (bad flag, invalid glob). Only trust exit 2 when rg emitted at
           // least one parseable path — otherwise treat it as a real failure.
           if (code === 0 || code === 1) {
-            passResolve()
+            resolvePass()
           } else if (code === 2 && passFileCount > 0) {
-            passResolve()
+            resolvePass()
           } else {
-            passReject(new Error(`rg exited with code ${code}`))
+            rejectPass(new Error(`rg exited with code ${code}`))
           }
-        })
+        }
+
+        child.stdout!.setEncoding('utf-8')
+        child.stdout!.on('data', handleStdoutData)
+        child.stderr!.on('data', handleStderrData)
+        child.once('error', handleError)
+        child.once('close', handleClose)
       })
 
     const killSurvivors = (): void => {
@@ -155,14 +182,18 @@ export function listFilesWithRg(
       // but the sibling rg keeps running up to LIST_FILES_TIMEOUT_MS. Kill it
       // so repeated Quick Open opens don't pile up orphan rg processes on the
       // remote.
-      for (const child of children) {
-        if (child.exitCode === null && child.signalCode === null) {
-          child.kill()
+      for (const entry of children) {
+        if (entry.isDone()) {
+          continue
         }
+        if (entry.child.exitCode === null && entry.child.signalCode === null) {
+          entry.child.kill()
+        }
+        entry.reject(new Error('rg list canceled after sibling failure'))
       }
     }
 
-    Promise.all([runPass(primary), runPass(envPass)])
+    Promise.all([runPass(primary), runPass(ignoredPass)])
       .then(() => {
         if (done) {
           return

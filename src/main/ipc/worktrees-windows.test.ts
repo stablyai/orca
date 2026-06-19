@@ -8,9 +8,13 @@ const {
   removeWorktreeMock,
   getGitUsernameMock,
   getDefaultBaseRefMock,
+  resolveDefaultBaseRefViaExecMock,
   getBranchConflictKindMock,
   getPRForBranchMock,
+  createGitHubPullRequestMock,
   getEffectiveHooksMock,
+  getEffectiveHooksFromConfigMock,
+  getDefaultTabsLaunchMock,
   createIssueCommandRunnerScriptMock,
   createSetupRunnerScriptMock,
   shouldRunSetupForCreateMock,
@@ -27,9 +31,13 @@ const {
   removeWorktreeMock: vi.fn(),
   getGitUsernameMock: vi.fn(),
   getDefaultBaseRefMock: vi.fn(),
+  resolveDefaultBaseRefViaExecMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
   getPRForBranchMock: vi.fn(),
+  createGitHubPullRequestMock: vi.fn(),
   getEffectiveHooksMock: vi.fn(),
+  getEffectiveHooksFromConfigMock: vi.fn(),
+  getDefaultTabsLaunchMock: vi.fn(),
   createIssueCommandRunnerScriptMock: vi.fn(),
   createSetupRunnerScriptMock: vi.fn(),
   shouldRunSetupForCreateMock: vi.fn(),
@@ -64,17 +72,21 @@ vi.mock('../git/runner', () => ({
 vi.mock('../git/repo', () => ({
   getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
+  resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getBranchConflictKind: getBranchConflictKindMock
 }))
 
 vi.mock('../github/client', () => ({
-  getPRForBranch: getPRForBranchMock
+  getPRForBranch: getPRForBranchMock,
+  createGitHubPullRequest: createGitHubPullRequestMock
 }))
 
 vi.mock('../hooks', () => ({
   createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
   createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
+  getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
+  getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   loadHooks: loadHooksMock,
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock,
@@ -105,6 +117,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
   const store = {
     getRepos: vi.fn(),
     getRepo: vi.fn(),
+    getProjects: vi.fn(),
+    getProjectHostSetups: vi.fn(),
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
@@ -119,9 +133,13 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     removeWorktreeMock.mockReset()
     getGitUsernameMock.mockReset()
     getDefaultBaseRefMock.mockReset()
+    resolveDefaultBaseRefViaExecMock.mockReset()
     getBranchConflictKindMock.mockReset()
     getPRForBranchMock.mockReset()
+    createGitHubPullRequestMock.mockReset()
     getEffectiveHooksMock.mockReset()
+    getEffectiveHooksFromConfigMock.mockReset()
+    getDefaultTabsLaunchMock.mockReset()
     createIssueCommandRunnerScriptMock.mockReset()
     createSetupRunnerScriptMock.mockReset()
     shouldRunSetupForCreateMock.mockReset()
@@ -133,6 +151,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     mainWindow.webContents.send.mockReset()
     store.getRepos.mockReset()
     store.getRepo.mockReset()
+    store.getProjects.mockReset()
+    store.getProjectHostSetups.mockReset()
     store.getSettings.mockReset()
     store.getWorktreeMeta.mockReset()
     store.setWorktreeMeta.mockReset()
@@ -163,6 +183,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       addedAt: 0,
       worktreeBaseRef: null
     })
+    store.getProjects.mockReturnValue([])
+    store.getProjectHostSetups.mockReturnValue([])
     store.getSettings.mockReturnValue({
       branchPrefix: 'none',
       nestWorkspaces: false,
@@ -173,9 +195,12 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.setWorktreeMeta.mockReturnValue({})
     getGitUsernameMock.mockReturnValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
+    resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
     getBranchConflictKindMock.mockResolvedValue(null)
     getPRForBranchMock.mockResolvedValue(null)
     getEffectiveHooksMock.mockReturnValue(null)
+    getEffectiveHooksFromConfigMock.mockReturnValue(null)
+    getDefaultTabsLaunchMock.mockReturnValue(undefined)
     shouldRunSetupForCreateMock.mockReturnValue(false)
     computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
@@ -186,7 +211,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     const runtimeStub = {
       resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
       hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
-      isRemoteFetchFresh: vi.fn().mockResolvedValue(false),
+      getOrStartRemoteTrackingBaseRefresh: vi.fn().mockResolvedValue({ ok: true }),
       getOrStartRemoteFetch: vi.fn().mockResolvedValue({ ok: true }),
       fetchRemoteWithCache: vi.fn().mockResolvedValue(undefined),
       emitWorktreeBaseStatus: vi.fn(),
@@ -248,20 +273,26 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     listWorktreesMock.mockResolvedValueOnce([worktreeEntry]).mockResolvedValueOnce([worktreeEntry])
     store.setWorktreeMeta.mockReturnValue({
       lastActivityAt: 123,
-      displayName: 'Improve Dashboard'
+      displayName: 'Improve Dashboard',
+      linkedIssue: 123,
+      linkedPR: 456
     })
     store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
       worktreeId === 'repo-1::C:/workspaces/improve-dashboard'
         ? {
             lastActivityAt: 123,
-            displayName: 'Improve Dashboard'
+            displayName: 'Improve Dashboard',
+            linkedIssue: 123,
+            linkedPR: 456
           }
         : undefined
     )
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
-      name: 'Improve Dashboard'
+      name: 'Improve Dashboard',
+      linkedIssue: 123,
+      linkedPR: 456
     })
     const listed = await handlers['worktrees:list'](null, {
       repoId: 'repo-1'
@@ -271,6 +302,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       {
         id: 'repo-1::C:/workspaces/improve-dashboard',
         displayName: 'Improve Dashboard',
+        linkedIssue: 123,
+        linkedPR: 456,
         lastActivityAt: 123
       }
     ])

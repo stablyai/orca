@@ -1,10 +1,24 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 
+type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
+type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
+
+export function resolveTerminalCursorInactiveStyle(
+  cursorStyle: TerminalCursorStyle | undefined
+): TerminalCursorInactiveStyle {
+  // Why: xterm's default inactive outline turns a bar/underline cursor into
+  // extra strokes in blurred panes; only block cursors benefit from outline.
+  return (cursorStyle ?? 'block') === 'block' ? 'outline' : (cursorStyle ?? 'block')
+}
+
 export function buildDefaultTerminalOptions(): ITerminalOptions {
+  const cursorStyle: TerminalCursorStyle = 'block'
+
   return {
     allowProposedApi: true,
     cursorBlink: true,
-    cursorStyle: 'bar',
+    cursorStyle,
+    cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
     fontSize: 14,
     // Cross-platform fallback chain; keep in sync with FALLBACK_FONTS in layout-serialization.ts.
     fontFamily:
@@ -17,13 +31,21 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,
     drawBoldTextInBrightColors: true,
+    scrollbar: {
+      // Why: slim VS Code-style scrollbar (VS Code uses 14). FitAddon reserves
+      // this as a gutter, costing ~1 column per pane — accepted tradeoff so the
+      // scrollbar never covers content (evidence in PR #5051). The v1.4.51
+      // table corruption #4877 fixed by zeroing this was actually the ZWJ
+      // width bug; it stays fixed by pane-terminal-unicode-provider.ts. Width
+      // also enables the overview ruler, whose border is hidden in
+      // composeActiveTerminalTheme.
+      width: 7
+    },
     // Why: advertise kitty keyboard protocol support so CLIs that probe
-    // (CSI ? u) know Orca accepts enhanced key reporting. Without this,
-    // Orca already writes \x1b[13;2u for Shift+Enter (see
-    // terminal-shortcut-policy.ts), but programs that respect the protocol
-    // handshake fall back to legacy encodings and ignore the CSI-u byte,
-    // making chords like Shift+Enter invisible to the app — especially
-    // noticeable inside tmux. Matches VS Code's xtermTerminal.ts.
+    // (CSI ? u) know Orca accepts enhanced key reporting. Orca still writes
+    // CSI-u for Shift+Enter on non-Windows platforms; programs that respect
+    // the handshake otherwise fall back to legacy encodings and miss it.
+    // Matches VS Code's xtermTerminal.ts.
     vtExtensions: {
       kittyKeyboard: true
     }

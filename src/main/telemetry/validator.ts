@@ -34,15 +34,36 @@ export type ValidationResult<N extends EventName> =
   | { ok: false; reason: string }
 
 const WARN_WINDOW_MS = 60_000
+const WARN_CACHE_MAX_ENTRIES = 256
 const lastWarnAt = new Map<string, number>()
+
+function pruneWarnCache(now: number): void {
+  for (const [key, at] of lastWarnAt) {
+    if (now - at >= WARN_WINDOW_MS) {
+      lastWarnAt.delete(key)
+    }
+  }
+  while (lastWarnAt.size > WARN_CACHE_MAX_ENTRIES) {
+    const oldest = lastWarnAt.keys().next()
+    if (oldest.done) {
+      break
+    }
+    lastWarnAt.delete(oldest.value)
+  }
+}
 
 function warnRateLimited(key: string, message: string): void {
   const now = Date.now()
-  const prev = lastWarnAt.get(key) ?? 0
-  if (now - prev < WARN_WINDOW_MS) {
+  pruneWarnCache(now)
+  const prev = lastWarnAt.get(key)
+  if (prev !== undefined && now - prev < WARN_WINDOW_MS) {
     return
   }
+  // Why: renderer-originated event names are untrusted; keep the rate-limit
+  // table bounded even if a bad caller sends unique invalid names forever.
+  lastWarnAt.delete(key)
   lastWarnAt.set(key, now)
+  pruneWarnCache(now)
   console.warn(`[telemetry] ${message}`)
 }
 
@@ -74,6 +95,10 @@ export function validate<N extends EventName>(name: N, props: unknown): Validati
 /** Test-only reset of the warn-rate-limit cache. */
 export function _resetValidatorWarnCacheForTests(): void {
   lastWarnAt.clear()
+}
+
+export function _getValidatorWarnCacheSizeForTests(): number {
+  return lastWarnAt.size
 }
 
 // Re-exported so `client.ts` can re-validate the merged outgoing payload

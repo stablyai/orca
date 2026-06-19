@@ -1,9 +1,10 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { getRevealAncestorDirs } from './file-explorer-paths'
-import type { DirCache, TreeNode } from './file-explorer-types'
+import type { DirCache } from './file-explorer-types'
+import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 
 type UseFileExplorerRevealParams = {
   activeWorktreeId: string | null
@@ -18,10 +19,9 @@ type UseFileExplorerRevealParams = {
   expanded: Set<string>
   dirCache: Record<string, DirCache>
   rootCache: DirCache | undefined
-  rowsByPath: Map<string, TreeNode>
-  flatRows: TreeNode[]
-  loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<void>
-  setSelectedPath: Dispatch<SetStateAction<string | null>>
+  rowProjection: FileExplorerRowProjection
+  loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
+  setSelectedPath: (path: string | null) => void
   setFlashingPath: Dispatch<SetStateAction<string | null>>
   flashTimeoutRef: RefObject<number | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>
@@ -35,14 +35,35 @@ export function useFileExplorerReveal({
   expanded,
   dirCache,
   rootCache,
-  rowsByPath,
-  flatRows,
+  rowProjection,
   loadDir,
   setSelectedPath,
   setFlashingPath,
   flashTimeoutRef,
   virtualizer
-}: UseFileExplorerRevealParams): void {
+}: UseFileExplorerRevealParams): () => void {
+  const revealScrollFrameRef = useRef<number | null>(null)
+  const revealScrollTimeoutRef = useRef<number | null>(null)
+
+  const cancelRevealScroll = useCallback((): void => {
+    if (revealScrollFrameRef.current !== null) {
+      cancelAnimationFrame(revealScrollFrameRef.current)
+      revealScrollFrameRef.current = null
+    }
+    if (revealScrollTimeoutRef.current !== null) {
+      window.clearTimeout(revealScrollTimeoutRef.current)
+      revealScrollTimeoutRef.current = null
+    }
+  }, [])
+
+  const cancelRevealTimers = useCallback((): void => {
+    cancelRevealScroll()
+    if (flashTimeoutRef.current !== null) {
+      window.clearTimeout(flashTimeoutRef.current)
+      flashTimeoutRef.current = null
+    }
+  }, [cancelRevealScroll, flashTimeoutRef])
+
   const pendingRevealAncestorDirs = useMemo(() => {
     if (
       !pendingExplorerReveal ||
@@ -91,10 +112,16 @@ export function useFileExplorerReveal({
     })
 
     void (async () => {
-      await loadDir(worktreePath, -1)
+      const rootLoaded = await loadDir(worktreePath, -1)
+      if (!rootLoaded) {
+        return
+      }
 
       for (let depth = 0; depth < pendingRevealAncestorDirs.length; depth += 1) {
-        await loadDir(pendingRevealAncestorDirs[depth], depth)
+        const ancestorLoaded = await loadDir(pendingRevealAncestorDirs[depth], depth)
+        if (!ancestorLoaded) {
+          return
+        }
       }
     })()
   }, [
@@ -124,7 +151,9 @@ export function useFileExplorerReveal({
     const missingExpandedAncestor = pendingRevealAncestorDirs.find(
       (dirPath) => !expanded.has(dirPath)
     )
-    const missingAncestor = pendingRevealAncestorDirs.find((dirPath) => !rowsByPath.has(dirPath))
+    const missingAncestor = pendingRevealAncestorDirs.find(
+      (dirPath) => !rowProjection.hasPath(dirPath)
+    )
     const parentDirStillLoading =
       parentDirPath === worktreePath
         ? (rootCache?.loading ?? true)
@@ -141,8 +170,8 @@ export function useFileExplorerReveal({
       return
     }
 
-    const fallbackPath = rowsByPath.has(parentDirPath) ? parentDirPath : null
-    const revealPath = rowsByPath.has(targetPath) ? targetPath : fallbackPath
+    const fallbackPath = rowProjection.hasPath(parentDirPath) ? parentDirPath : null
+    const revealPath = rowProjection.hasPath(targetPath) ? targetPath : fallbackPath
     if (!revealPath) {
       clearPendingExplorerReveal()
       return
@@ -164,28 +193,33 @@ export function useFileExplorerReveal({
       }, 2000)
     }
 
-    requestAnimationFrame(() => {
-      window.setTimeout(() => {
-        const targetIndex = flatRows.findIndex((row) => row.path === revealPath)
-        if (targetIndex !== -1) {
+    cancelRevealScroll()
+    revealScrollFrameRef.current = requestAnimationFrame(() => {
+      revealScrollFrameRef.current = null
+      revealScrollTimeoutRef.current = window.setTimeout(() => {
+        revealScrollTimeoutRef.current = null
+        const targetIndex = rowProjection.getIndexByPath(revealPath)
+        if (targetIndex !== null) {
           virtualizer.scrollToIndex(targetIndex, { align: 'center' })
         }
       }, 0)
     })
   }, [
     activeWorktreeId,
+    cancelRevealScroll,
     clearPendingExplorerReveal,
     dirCache,
     expanded,
-    flatRows,
     pendingExplorerReveal,
     pendingRevealAncestorDirs,
+    rowProjection,
     rootCache,
-    rowsByPath,
     setFlashingPath,
     setSelectedPath,
     flashTimeoutRef,
     virtualizer,
     worktreePath
   ])
+
+  return cancelRevealTimers
 }

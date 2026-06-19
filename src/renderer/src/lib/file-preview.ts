@@ -1,8 +1,63 @@
+import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
+import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { findSiblingGroupId } from '@/store/slices/tabs'
 
 export type PreviewableLanguage = 'html'
+export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
+  'Open in Orca Browser is only available for local files.'
+
+export type WorkspaceFileBrowserOpenTarget =
+  | {
+      status: 'ready'
+      url: string
+      title: string
+    }
+  | {
+      status: 'unsupported'
+      message: string
+      reason: 'remote-worktree'
+    }
+
+export function getWorkspaceFileBrowserOpenTarget(params: {
+  filePath: string
+  worktreeId: string
+}): WorkspaceFileBrowserOpenTarget {
+  if (getConnectionId(params.worktreeId)) {
+    // Why: Chromium resolves file:// URLs on the local machine. Remote files
+    // need an Orca-served URL before the browser can render them correctly.
+    return {
+      status: 'unsupported',
+      reason: 'remote-worktree',
+      message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
+    }
+  }
+
+  return {
+    status: 'ready',
+    url: absolutePathToFileUri(params.filePath),
+    title: params.filePath.split(/[/\\]/).pop() ?? params.filePath
+  }
+}
+
+export function openFileInBrowserTab(params: {
+  filePath: string
+  worktreeId: string
+}): WorkspaceFileBrowserOpenTarget {
+  const target = getWorkspaceFileBrowserOpenTarget(params)
+  if (target.status === 'unsupported') {
+    return target
+  }
+
+  const state = useAppStore.getState()
+
+  state.createBrowserTab(params.worktreeId, target.url, {
+    title: target.title,
+    activate: true
+  })
+  return target
+}
 
 export function canPreviewLanguage(language: string): language is PreviewableLanguage {
   return language === 'html'
@@ -50,11 +105,17 @@ export function openFilePreviewToSide(params: {
     return
   }
 
-  const fileUrl = absolutePathToFileUri(params.filePath)
-  const title = params.filePath.split(/[/\\]/).pop() ?? params.filePath
+  const target = getWorkspaceFileBrowserOpenTarget({
+    filePath: params.filePath,
+    worktreeId
+  })
+  if (target.status === 'unsupported') {
+    toast.error(target.message)
+    return
+  }
 
-  state.createBrowserTab(worktreeId, fileUrl, {
-    title,
+  state.createBrowserTab(worktreeId, target.url, {
+    title: target.title,
     targetGroupId,
     activate: true
   })

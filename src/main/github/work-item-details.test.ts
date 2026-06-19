@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+type RateLimitGuardResult =
+  | { blocked: false }
+  | { blocked: true; remaining: number; limit: number; resetAt: number }
+
 const {
   ghExecFileAsyncMock,
   getOwnerRepoMock,
@@ -7,6 +11,10 @@ const {
   getWorkItemMock,
   getPRChecksMock,
   getPRCommentsMock,
+  rateLimitGuardMock,
+  noteRateLimitSpendMock,
+  ghRepoExecOptionsMock,
+  githubRepoContextMock,
   acquireMock,
   releaseMock
 } = vi.hoisted(() => ({
@@ -16,6 +24,18 @@ const {
   getWorkItemMock: vi.fn(),
   getPRChecksMock: vi.fn(),
   getPRCommentsMock: vi.fn(),
+  rateLimitGuardMock: vi.fn<() => RateLimitGuardResult>(() => ({ blocked: false })),
+  noteRateLimitSpendMock: vi.fn(),
+  ghRepoExecOptionsMock: vi.fn((context) =>
+    context.connectionId
+      ? {}
+      : { cwd: context.repoPath, ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}) }
+  ),
+  githubRepoContextMock: vi.fn((repoPath, connectionId, localGitOptions) => ({
+    repoPath,
+    connectionId: connectionId ?? null,
+    ...localGitOptions
+  })),
   acquireMock: vi.fn(),
   releaseMock: vi.fn()
 }))
@@ -24,6 +44,8 @@ vi.mock('./gh-utils', () => ({
   ghExecFileAsync: ghExecFileAsyncMock,
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
+  ghRepoExecOptions: ghRepoExecOptionsMock,
+  githubRepoContext: githubRepoContextMock,
   acquire: acquireMock,
   release: releaseMock
 }))
@@ -32,6 +54,11 @@ vi.mock('./client', () => ({
   getWorkItem: getWorkItemMock,
   getPRChecks: getPRChecksMock,
   getPRComments: getPRCommentsMock
+}))
+
+vi.mock('./rate-limit', () => ({
+  rateLimitGuard: rateLimitGuardMock,
+  noteRateLimitSpend: noteRateLimitSpendMock
 }))
 
 import { getWorkItemDetails } from './work-item-details'
@@ -44,6 +71,11 @@ describe('getWorkItemDetails', () => {
     getWorkItemMock.mockReset()
     getPRChecksMock.mockReset()
     getPRCommentsMock.mockReset()
+    rateLimitGuardMock.mockReset()
+    rateLimitGuardMock.mockReturnValue({ blocked: false })
+    noteRateLimitSpendMock.mockReset()
+    ghRepoExecOptionsMock.mockClear()
+    githubRepoContextMock.mockClear()
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
@@ -91,7 +123,7 @@ describe('getWorkItemDetails', () => {
 
     const details = await getWorkItemDetails('/repo-root', 923, 'issue')
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 923, 'issue')
+    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 923, 'issue', undefined)
     // Why: a single gh subprocess call replaces the previous REST + REST + GraphQL fan-out.
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(ghExecFileAsyncMock.mock.calls[0][0][0]).toBe('api')
@@ -143,5 +175,154 @@ describe('getWorkItemDetails', () => {
       { cwd: '/repo-root' }
     )
     expect(details?.body).toBe('Issue body')
+  })
+
+  it('skips optional GraphQL issue detail calls when the cached GraphQL budget is low', async () => {
+    rateLimitGuardMock.mockReturnValue({
+      blocked: true,
+      remaining: 3,
+      limit: 5000,
+      resetAt: 1_800_000_000
+    })
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'issue:923',
+      type: 'issue',
+      number: 923,
+      title: 'Use upstream issues',
+      state: 'open',
+      url: 'https://github.com/stablyai/orca/issues/923',
+      labels: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      author: 'octocat'
+    })
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: JSON.stringify({ body: 'Issue body', assignees: [] }) })
+      .mockResolvedValueOnce({ stdout: '[]' })
+
+    const details = await getWorkItemDetails('/repo-root', 923, 'issue')
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(ghExecFileAsyncMock.mock.calls.some((call) => call[0][1] === 'graphql')).toBe(false)
+    expect(noteRateLimitSpendMock).not.toHaveBeenCalled()
+    expect(details?.body).toBe('Issue body')
+    expect(details?.participants).toEqual([])
+  })
+
+  it('uses SSH connection context for issue details without local cwd', async () => {
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'issue:923',
+      type: 'issue',
+      number: 923,
+      title: 'Use upstream issues',
+      state: 'open',
+      url: 'https://github.com/stablyai/orca/issues/923',
+      labels: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      author: 'octocat'
+    })
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        data: {
+          repository: {
+            issue: {
+              body: 'Remote issue body',
+              assignees: { nodes: [] },
+              participants: { nodes: [] },
+              comments: { nodes: [] }
+            }
+          }
+        }
+      })
+    })
+
+    const details = await getWorkItemDetails('/home/jinwoo/orca', 923, 'issue', 'openclaw-2')
+
+    expect(getWorkItemMock).toHaveBeenCalledWith('/home/jinwoo/orca', 923, 'issue', 'openclaw-2')
+    expect(getIssueOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2')
+    expect(ghExecFileAsyncMock.mock.calls[0][1]).toEqual({})
+    expect(details?.body).toBe('Remote issue body')
+  })
+
+  it('routes local WSL PR detail fan-out through the selected distro', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'pr:42',
+      type: 'pr',
+      number: 42,
+      title: 'Review drawer WSL',
+      state: 'open',
+      url: 'https://github.com/stablyai/orca/pull/42',
+      labels: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      author: 'octocat'
+    })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    getPRCommentsMock.mockResolvedValue([])
+    getPRChecksMock.mockResolvedValue([])
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const target = args.at(-1)
+      if (target === 'repos/stablyai/orca/pulls/42') {
+        return {
+          stdout: JSON.stringify({
+            body: 'PR body',
+            head: { sha: 'head-sha' },
+            base: { sha: 'base-sha' }
+          })
+        }
+      }
+      if (target === 'repos/stablyai/orca/pulls/42/files?per_page=100') {
+        return { stdout: '[]' }
+      }
+      const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+      if (query.includes('viewerViewedState')) {
+        return {
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  id: 'PR_kwDO123',
+                  files: { pageInfo: { hasNextPage: false }, nodes: [] }
+                }
+              }
+            }
+          })
+        }
+      }
+      if (query.includes('participants(first: 100)')) {
+        return {
+          stdout: JSON.stringify({
+            data: { repository: { pullRequest: { participants: { nodes: [] } } } }
+          })
+        }
+      }
+      return { stdout: JSON.stringify({ data: {} }) }
+    })
+
+    const details = await getWorkItemDetails('/repo-root', 42, 'pr', null, localGitOptions)
+
+    expect(details?.body).toBe('PR body')
+    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 42, 'pr', null, localGitOptions)
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
+    expect(getPRCommentsMock).toHaveBeenCalledWith(
+      '/repo-root',
+      42,
+      undefined,
+      null,
+      localGitOptions
+    )
+    expect(getPRChecksMock).toHaveBeenCalledWith(
+      '/repo-root',
+      42,
+      'head-sha',
+      null,
+      undefined,
+      null,
+      localGitOptions
+    )
+    expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
+    )
   })
 })

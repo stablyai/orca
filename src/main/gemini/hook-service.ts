@@ -1,9 +1,11 @@
 import { homedir } from 'os'
 import { join } from 'path'
-import { app } from 'electron'
+import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
   createManagedCommandMatcher,
+  buildWindowsAgentHookPostCommand,
+  getSharedManagedScriptPath,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
@@ -11,6 +13,11 @@ import {
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import {
+  readHooksJsonRemote,
+  writeHooksJsonRemote,
+  writeManagedScriptRemote
+} from '../agent-hooks/installer-utils-remote'
 
 // Why: Gemini CLI fires `BeforeAgent` when a turn starts and `AfterAgent` when
 // it completes. `AfterTool` marks the resumption of model work after a tool
@@ -18,12 +25,10 @@ import {
 // (approvals flow through inline UI), so Orca cannot surface a waiting state
 // for Gemini — that is an upstream limitation, not an Orca bug.
 //
-// PreToolUse surfaces the current tool name + input preview (e.g.
-// `read_file: src/foo.ts`) so long-running tool calls aren't a silent gap
-// between BeforeAgent and AfterAgent. PostToolUse is intentionally omitted —
-// AfterTool already signals "back to working" and the tool name from
-// PreToolUse is what we show; PostToolUse would be a redundant fire.
-const GEMINI_EVENTS = ['BeforeAgent', 'AfterAgent', 'AfterTool', 'PreToolUse'] as const
+// Gemini's native pre-tool event is BeforeTool, not Claude/Codex's PreToolUse.
+// Keep installing the pre-tool status hook, but sweep stale PreToolUse entries
+// below so current Gemini CLI no longer warns about an invalid event bucket.
+const GEMINI_EVENTS = ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool'] as const
 
 function getConfigPath(): string {
   return join(homedir(), '.gemini', 'settings.json')
@@ -34,15 +39,15 @@ function getManagedScriptFileName(): string {
 }
 
 function getManagedScriptPath(): string {
-  return join(app.getPath('userData'), 'agent-hooks', getManagedScriptFileName())
+  return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32' ? scriptPath : wrapPosixHookCommand(scriptPath)
 }
 
-function getManagedScript(): string {
-  if (process.platform === 'win32') {
+function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+  if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
       'setlocal',
@@ -58,7 +63,7 @@ function getManagedScript(): string {
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
-      `powershell -NoProfile -ExecutionPolicy Bypass -Command "$inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100; Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/gemini') -Headers @{ 'Content-Type'='application/json'; 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $body | Out-Null } catch {}"`,
+      buildWindowsAgentHookPostCommand('gemini'),
       'exit /b 0',
       ''
     ].join('\r\n')
@@ -86,7 +91,9 @@ function getManagedScript(): string {
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
     // shell is not safe once a path contains quotes or newlines. Post the raw
     // hook payload plus metadata as form fields and let the receiver parse it.
+    // Timeout caps best-effort hook posts if the local listener stalls.
     'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/gemini" \\',
+    '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
@@ -168,6 +175,27 @@ export class GeminiHookService {
     // accumulate duplicate hook entries pointing at defunct scripts.
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
 
+    const managedEvents = new Set<string>(GEMINI_EVENTS)
+
+    // Why: when Orca stops subscribing to an event, install() must sweep the
+    // old managed entry out of any leftover event bucket. Otherwise a stale
+    // hook such as PreToolUse survives forever in ~/.gemini/settings.json and
+    // continues firing even though the current build no longer wants it.
+    for (const [eventName, definitions] of Object.entries(nextHooks)) {
+      if (managedEvents.has(eventName)) {
+        continue
+      }
+      if (!Array.isArray(definitions)) {
+        continue
+      }
+      const cleaned = removeManagedCommands(definitions, isManagedCommand)
+      if (cleaned.length === 0) {
+        delete nextHooks[eventName]
+      } else {
+        nextHooks[eventName] = cleaned
+      }
+    }
+
     for (const eventName of GEMINI_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
@@ -181,6 +209,83 @@ export class GeminiHookService {
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, config)
     return this.getStatus()
+  }
+
+  // Why: install Orca's managed Gemini hooks on the remote box. Mirrors
+  // ClaudeHookService.installRemote — POSIX-only, uses the same SFTP-backed
+  // primitives, and lays down the same script body the local install
+  // generates so a remote-side Gemini CLI behaves identically. See
+  // docs/design/agent-status-over-ssh.md §8.
+  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
+    const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.gemini/settings.json`
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/gemini-hook.sh`
+    try {
+      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      if (!config) {
+        return {
+          agent: 'gemini',
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: 'Could not parse remote Gemini settings.json'
+        }
+      }
+
+      const command = wrapPosixHookCommand(remoteScriptPath)
+      const nextHooks = { ...config.hooks }
+      const isManagedCommand = createManagedCommandMatcher('gemini-hook.sh')
+      const managedEvents = new Set<string>(GEMINI_EVENTS)
+
+      // Why: remote installs must sweep legacy managed event buckets too.
+      // Otherwise stale PreToolUse entries keep warning in SSH Gemini sessions.
+      for (const [eventName, definitions] of Object.entries(nextHooks)) {
+        if (managedEvents.has(eventName)) {
+          continue
+        }
+        if (!Array.isArray(definitions)) {
+          continue
+        }
+        const cleaned = removeManagedCommands(definitions, isManagedCommand)
+        if (cleaned.length === 0) {
+          delete nextHooks[eventName]
+        } else {
+          nextHooks[eventName] = cleaned
+        }
+      }
+
+      for (const eventName of GEMINI_EVENTS) {
+        const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+        const cleaned = removeManagedCommands(current, isManagedCommand)
+        const definition: HookDefinition = {
+          hooks: [{ type: 'command', command }]
+        }
+        nextHooks[eventName] = [...cleaned, definition]
+      }
+      config.hooks = nextHooks
+
+      // Why: write the script first so an interrupted install never leaves
+      // settings.json pointing at a missing script. See ClaudeHookService.
+      // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
+      // running on Windows; never derive remote script syntax from local OS.
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
+      await writeHooksJsonRemote(sftp, remoteConfigPath, config)
+
+      return {
+        agent: 'gemini',
+        state: 'installed',
+        configPath: remoteConfigPath,
+        managedHooksPresent: true,
+        detail: null
+      }
+    } catch (err) {
+      return {
+        agent: 'gemini',
+        state: 'error',
+        configPath: remoteConfigPath,
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
   }
 
   remove(): AgentHookInstallStatus {

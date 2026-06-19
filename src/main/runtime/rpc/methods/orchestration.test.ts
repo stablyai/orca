@@ -1,25 +1,39 @@
 /* eslint-disable max-lines -- Why: orchestration tests share a mock runtime factory; splitting by method would duplicate 40 lines of setup per file without improving clarity. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_METHODS } from './orchestration'
-import { buildRegistry, type RpcContext } from '../core'
+import { RpcDispatcher } from '../dispatcher'
+import { buildRegistry, type RpcContext, type RpcRequest } from '../core'
 import { OrchestrationDb } from '../../orchestration/db'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeTerminalSummary } from '../../../../shared/runtime-types'
 
+function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
+  return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
+}
+
 describe('orchestration RPC methods', () => {
   let db: OrchestrationDb
+  let dbOpen = false
   let runtime: OrcaRuntimeService
   let ctx: RpcContext
 
   function setup(): void {
     db = new OrchestrationDb(':memory:')
+    dbOpen = true
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     ctx = { runtime }
   }
 
   afterEach(() => {
-    db?.close()
+    if (!dbOpen) {
+      return
+    }
+    const currentDb = db
+    // Why: parser-only tests do not call setup(), so cleanup must not reuse
+    // the previous test's already-closed in-memory DB.
+    dbOpen = false
+    currentDb.close()
   })
 
   function findMethod(name: string) {
@@ -34,6 +48,10 @@ describe('orchestration RPC methods', () => {
     const method = findMethod(name)
     const parsed = method.params ? method.params.parse(params) : undefined
     return method.handler(parsed, ctx)
+  }
+
+  function makeRequest(method: string, params: Record<string, unknown>): RpcRequest {
+    return { id: 'req_1', authToken: 'token', method, params }
   }
 
   it('registers all expected methods', () => {
@@ -88,12 +106,77 @@ describe('orchestration RPC methods', () => {
       expect(() => method.params!.parse({ to: 'b', subject: 'hi', priority: 'medium' })).toThrow()
     })
 
+    it.each(['@all', '@idle', '@worktree:wt_1', '@codex', '@nobody'])(
+      'rejects worker_done to group recipient %s without inserting rows',
+      async (to) => {
+        setup()
+        const listTerminals = vi.spyOn(runtime, 'listTerminals')
+
+        await expect(
+          call('orchestration.send', {
+            from: 'term_worker',
+            to,
+            subject: 'done',
+            type: 'worker_done'
+          })
+        ).rejects.toThrow(lifecycleGroupRecipientError('worker_done'))
+
+        expect(db.getInbox(100)).toHaveLength(0)
+        expect(listTerminals).not.toHaveBeenCalled()
+      }
+    )
+
+    it('rejects worker_done groups before terminal listing failures can win', async () => {
+      setup()
+      const listTerminals = vi
+        .spyOn(runtime, 'listTerminals')
+        .mockRejectedValue(new Error('terminal listing failed'))
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: '@all',
+          subject: 'done',
+          type: 'worker_done'
+        })
+      ).rejects.toThrow(lifecycleGroupRecipientError('worker_done'))
+
+      expect(listTerminals).not.toHaveBeenCalled()
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('returns invalid_argument for worker_done group sends through the dispatcher', async () => {
+      setup()
+      const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+      const listTerminals = vi.spyOn(runtime, 'listTerminals')
+
+      const response = await dispatcher.dispatch(
+        makeRequest('orchestration.send', {
+          from: 'term_worker',
+          to: '@all',
+          subject: 'done',
+          type: 'worker_done'
+        })
+      )
+
+      expect(response).toMatchObject({
+        ok: false,
+        error: {
+          code: 'invalid_argument',
+          message: lifecycleGroupRecipientError('worker_done')
+        }
+      })
+      expect(listTerminals).not.toHaveBeenCalled()
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
     function makeSummary(
       handle: string,
       opts: Partial<RuntimeTerminalSummary> = {}
     ): RuntimeTerminalSummary {
       return {
         handle,
+        ptyId: opts.ptyId ?? handle,
         worktreeId: opts.worktreeId ?? 'wt_default',
         worktreePath: opts.worktreePath ?? '/tmp/wt',
         branch: opts.branch ?? 'main',
@@ -137,6 +220,55 @@ describe('orchestration RPC methods', () => {
       expect(recipients).toEqual(['term_b', 'term_c'])
     })
 
+    it('continues to fan out status messages to groups', async () => {
+      setupWithTerminals([makeSummary('term_a'), makeSummary('term_b'), makeSummary('term_c')])
+
+      const result = (await call('orchestration.send', {
+        from: 'term_a',
+        to: '@all',
+        subject: 'status broadcast',
+        type: 'status'
+      })) as { messages: { to_handle: string; type: string }[]; recipients: number }
+
+      expect(result.recipients).toBe(2)
+      expect(result.messages.map((m) => m.to_handle).sort()).toEqual(['term_b', 'term_c'])
+      expect(result.messages.every((m) => m.type === 'status')).toBe(true)
+    })
+
+    it('rejects heartbeat group sends before inserting rows', async () => {
+      setup()
+      const listTerminals = vi.spyOn(runtime, 'listTerminals')
+
+      await expect(
+        call('orchestration.send', {
+          from: 'term_worker',
+          to: '@all',
+          subject: 'alive',
+          type: 'heartbeat',
+          payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' })
+        })
+      ).rejects.toThrow(lifecycleGroupRecipientError('heartbeat'))
+
+      expect(listTerminals).not.toHaveBeenCalled()
+      expect(db.getInbox(100)).toHaveLength(0)
+    })
+
+    it('continues to send worker_done to a concrete terminal handle', async () => {
+      setup()
+
+      const result = (await call('orchestration.send', {
+        from: 'term_worker',
+        to: 'term_coord',
+        subject: 'done',
+        type: 'worker_done',
+        payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' })
+      })) as { message: { to_handle: string; type: string; payload: string | null } }
+
+      expect(result.message.to_handle).toBe('term_coord')
+      expect(result.message.type).toBe('worker_done')
+      expect(result.message.payload).toBe(JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' }))
+    })
+
     it('fans out @idle to only idle agents', async () => {
       setupWithTerminals([makeSummary('term_a'), makeSummary('term_b'), makeSummary('term_c')], {
         term_b: 'idle',
@@ -164,6 +296,23 @@ describe('orchestration RPC methods', () => {
         from: 'term_a',
         to: '@claude',
         subject: 'claude only'
+      })) as { messages: { to_handle: string }[]; recipients: number }
+
+      expect(result.recipients).toBe(1)
+      expect(result.messages[0].to_handle).toBe('term_b')
+    })
+
+    it('fans out @droid by title match', async () => {
+      setupWithTerminals([
+        makeSummary('term_a', { title: 'Codex' }),
+        makeSummary('term_b', { title: 'Droid ready' }),
+        makeSummary('term_c', { title: 'Android build' })
+      ])
+
+      const result = (await call('orchestration.send', {
+        from: 'term_a',
+        to: '@droid',
+        subject: 'droid only'
       })) as { messages: { to_handle: string }[]; recipients: number }
 
       expect(result.recipients).toBe(1)
@@ -310,6 +459,23 @@ describe('orchestration RPC methods', () => {
       expect(stillUnread).toHaveLength(1)
     })
 
+    it('--all applies type filters without marking rows as read', async () => {
+      setup()
+      db.insertMessage({ from: 'a', to: 'b', subject: 'status', type: 'status' })
+      db.insertMessage({ from: 'a', to: 'b', subject: 'dispatch', type: 'dispatch' })
+      db.insertMessage({ from: 'a', to: 'b', subject: 'done', type: 'worker_done' })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        all: true,
+        types: 'worker_done,dispatch'
+      })) as { messages: { type: string }[]; count: number }
+
+      expect(result.count).toBe(2)
+      expect(result.messages.map((m) => m.type).sort()).toEqual(['dispatch', 'worker_done'])
+      expect(db.getUnreadMessages('b')).toHaveLength(3)
+    })
+
     it('--all returns rows with delivered_at set after push-on-idle stamped them', async () => {
       setup()
       const msg = db.insertMessage({ from: 'a', to: 'b', subject: 'hi' })
@@ -347,6 +513,78 @@ describe('orchestration RPC methods', () => {
       expect(result.count).toBe(1)
 
       // Must not have marked read
+      expect(db.getUnreadMessages('b')).toHaveLength(1)
+    })
+
+    it('does not mark messages read when a waiting check is aborted', async () => {
+      setup()
+      const abortController = new AbortController()
+      ctx = { runtime, signal: abortController.signal }
+      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
+        db.insertMessage({ from: 'a', to: 'b', subject: 'arrived during close' })
+        abortController.abort()
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        wait: true,
+        timeoutMs: 100
+      })) as { messages: unknown[]; count: number }
+
+      expect(result).toEqual({ messages: [], count: 0 })
+      expect(db.getUnreadMessages('b')).toHaveLength(1)
+    })
+
+    it('keeps waiting for requested types when an unrelated heartbeat arrives', async () => {
+      setup()
+
+      const waitPromise = call('orchestration.check', {
+        terminal: 'coord',
+        wait: true,
+        timeoutMs: 5000,
+        types: 'worker_done,escalation'
+      }) as Promise<{ count: number; messages: { type: string }[] }>
+      await Promise.resolve()
+
+      await call('orchestration.send', {
+        from: 'worker',
+        to: 'coord',
+        subject: 'alive',
+        type: 'heartbeat'
+      })
+
+      const early = await Promise.race([
+        waitPromise.then(() => 'settled'),
+        Promise.resolve('pending')
+      ])
+      expect(early).toBe('pending')
+
+      await call('orchestration.send', {
+        from: 'worker',
+        to: 'coord',
+        subject: 'done',
+        type: 'worker_done'
+      })
+
+      const result = await waitPromise
+      expect(result.count).toBe(1)
+      expect(result.messages[0].type).toBe('worker_done')
+    })
+
+    it('does not mark existing messages read when the check starts aborted', async () => {
+      setup()
+      const abortController = new AbortController()
+      abortController.abort()
+      ctx = { runtime, signal: abortController.signal }
+      db.insertMessage({ from: 'a', to: 'b', subject: 'already unread' })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'b',
+        wait: true,
+        timeoutMs: 100
+      })) as { messages: unknown[]; count: number }
+
+      expect(result).toEqual({ messages: [], count: 0 })
       expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
   })
@@ -439,6 +677,16 @@ describe('orchestration RPC methods', () => {
       })) as { task: { status: string } }
 
       expect(result.task.status).toBe('pending')
+    })
+
+    it('records the caller terminal handle when creating a task', async () => {
+      setup()
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'spawn related workspace',
+        callerTerminalHandle: 'term_creator'
+      })) as { task: { id: string } }
+
+      expect(db.getTask(result.task.id)?.created_by_terminal_handle).toBe('term_creator')
     })
 
     it('rejects invalid deps JSON', async () => {
@@ -903,6 +1151,38 @@ describe('orchestration RPC methods', () => {
       expect(outbound).toBeTruthy()
     })
 
+    it('returns promptly when the RPC signal aborts while waiting', async () => {
+      setup()
+      vi.useFakeTimers()
+      const controller = new AbortController()
+      const method = findMethod('orchestration.ask')
+      const parsed = method.params!.parse({
+        from: 'term_worker',
+        to: 'term_coord',
+        question: 'still there?',
+        timeoutMs: 60_000
+      })
+
+      try {
+        const promise = method.handler(parsed, {
+          runtime,
+          signal: controller.signal
+        }) as Promise<{ timedOut: boolean }>
+
+        controller.abort()
+        const outcomePromise = Promise.race([
+          promise.then((result) => (result.timedOut ? 'aborted' : 'answered')),
+          new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0))
+        ])
+        await vi.advanceTimersByTimeAsync(0)
+        const outcome = await outcomePromise
+
+        expect(outcome).toBe('aborted')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('rejects group addresses with a dedicated error (no message persisted)', async () => {
       setup()
       await expect(
@@ -976,10 +1256,14 @@ describe('orchestration RPC methods', () => {
   })
 
   describe('orchestration.reset', () => {
-    it('resets all state', async () => {
-      setup()
+    function seedResetState(): void {
       db.insertMessage({ from: 'a', to: 'b', subject: 'test' })
       db.createTask({ spec: 'work' })
+    }
+
+    it('resets all state', async () => {
+      setup()
+      seedResetState()
 
       const result = (await call('orchestration.reset', { all: true })) as { reset: string }
       expect(result.reset).toBe('all')
@@ -989,8 +1273,7 @@ describe('orchestration RPC methods', () => {
 
     it('resets tasks only', async () => {
       setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'test' })
-      db.createTask({ spec: 'work' })
+      seedResetState()
 
       await call('orchestration.reset', { tasks: true })
       expect(db.getInbox()).toHaveLength(1)
@@ -999,10 +1282,50 @@ describe('orchestration RPC methods', () => {
 
     it('resets messages only', async () => {
       setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'test' })
-      db.createTask({ spec: 'work' })
+      seedResetState()
 
       await call('orchestration.reset', { messages: true })
+      expect(db.getInbox()).toHaveLength(0)
+      expect(db.listTasks()).toHaveLength(1)
+    })
+
+    it.each([
+      ['empty params', {}],
+      ['false-only params', { all: false }],
+      ['multi-scope task and messages params', { tasks: true, messages: true }],
+      ['multi-scope all and tasks params', { all: true, tasks: true }],
+      ['non-boolean params', { all: 'true' }]
+    ])('rejects %s without mutating state', async (_name, params) => {
+      setup()
+      seedResetState()
+
+      await expect(call('orchestration.reset', params)).rejects.toThrow()
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(1)
+    })
+
+    it('ignores false scopes when exactly one scope is true', async () => {
+      setup()
+      seedResetState()
+
+      const result = (await call('orchestration.reset', { all: false, tasks: true })) as {
+        reset: string
+      }
+
+      expect(result.reset).toBe('tasks')
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(0)
+    })
+
+    it('ignores non-boolean scopes when exactly one real boolean scope is true', async () => {
+      setup()
+      seedResetState()
+
+      const result = (await call('orchestration.reset', { all: 'true', messages: true })) as {
+        reset: string
+      }
+
+      expect(result.reset).toBe('messages')
       expect(db.getInbox()).toHaveLength(0)
       expect(db.listTasks()).toHaveLength(1)
     })

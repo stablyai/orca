@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: hydration regressions share store setup and session invariants that are easier to audit together. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -69,6 +70,22 @@ const mockApi = {
     getDaily: vi.fn().mockResolvedValue([]),
     getBreakdown: vi.fn().mockResolvedValue([]),
     getRecentSessions: vi.fn().mockResolvedValue([])
+  },
+  openCodeUsage: {
+    getScanState: vi.fn().mockResolvedValue({
+      enabled: false,
+      isScanning: false,
+      lastScanStartedAt: null,
+      lastScanCompletedAt: null,
+      lastScanError: null,
+      hasAnyOpenCodeData: false
+    }),
+    setEnabled: vi.fn().mockResolvedValue({}),
+    refresh: vi.fn().mockResolvedValue({}),
+    getSummary: vi.fn().mockResolvedValue(null),
+    getDaily: vi.fn().mockResolvedValue([]),
+    getBreakdown: vi.fn().mockResolvedValue([]),
+    getRecentSessions: vi.fn().mockResolvedValue([])
   }
 }
 
@@ -76,6 +93,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import type { WorkspaceSessionState } from '../../../../shared/types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 import { canGoBackWorktreeHistory } from './worktree-nav-history'
 
@@ -121,6 +139,39 @@ describe('hydrateWorkspaceSession', () => {
     })
   })
 
+  it('hydrates floating terminal tabs even though they are not repo worktrees', () => {
+    const store = createTestStore()
+    const session: WorkspaceSessionState = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          makeTab({
+            id: 'floating-tab-1',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            ptyId: 'floating-pty-1'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'floating-tab-1': makeLayout()
+      },
+      activeTabIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-tab-1'
+      },
+      activeWorktreeIdsOnShutdown: [FLOATING_TERMINAL_WORKTREE_ID]
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(store.getState().activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
+      'floating-tab-1'
+    )
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([FLOATING_TERMINAL_WORKTREE_ID])
+  })
+
   it('resets persisted agent titles to the fallback label on hydration', () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/wt-1'
@@ -149,6 +200,31 @@ describe('hydrateWorkspaceSession', () => {
         ptyId: null
       })
     ])
+  })
+
+  it('hydrates the default-tab idempotency marker', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: null,
+      terminalLayoutsByTabId: {},
+      tabsByWorktree: {},
+      defaultTerminalTabsAppliedByWorktreeId: { [worktreeId]: true }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().defaultTerminalTabsAppliedByWorktreeId).toEqual({
+      [worktreeId]: true
+    })
   })
 
   it('seeds worktree nav history with the restored active worktree', () => {
@@ -264,5 +340,46 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().worktreeNavHistory).toEqual([wt1, wt2])
     expect(store.getState().worktreeNavHistoryIndex).toBe(1)
     expect(canGoBackWorktreeHistory(store.getState())).toBe(true)
+  })
+})
+
+describe('hydrationSucceeded flag (issue #1158)', () => {
+  it('defaults to false so the session writer is gated off at startup', () => {
+    // Why: App.tsx only flips hydrationSucceeded=true after a clean load from
+    // orca-data.json. If a startup error prevents that call, the flag stays
+    // false and the debounced writer never fires — protecting the user's good
+    // on-disk state from being overwritten with an empty in-memory snapshot.
+    const store = createTestStore()
+    expect(store.getState().hydrationSucceeded).toBe(false)
+  })
+
+  it('setHydrationSucceeded toggles the flag both ways', () => {
+    const store = createTestStore()
+    store.getState().setHydrationSucceeded(true)
+    expect(store.getState().hydrationSucceeded).toBe(true)
+    store.getState().setHydrationSucceeded(false)
+    expect(store.getState().hydrationSucceeded).toBe(false)
+  })
+
+  it('hydrateWorkspaceSession does not flip hydrationSucceeded on its own', () => {
+    // Why: the hydration call can populate state partially and still throw
+    // downstream (e.g. reconnect fails). Leaving the flip to App.tsx — after
+    // hydrateWorkspaceSession has returned without throwing — keeps the gate
+    // honest in those mid-flight failures.
+    const store = createTestStore()
+    const wt = 'repo1::/wt'
+    seedStore(store, {
+      worktreesByRepo: { repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/wt' })] }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(store.getState().hydrationSucceeded).toBe(false)
   })
 })

@@ -1,14 +1,14 @@
 /* eslint-disable max-lines -- Why: DB tests cover messages, tasks, dispatch contexts, decision gates, coordinator runs, and lifecycle in one suite to share the createDb() helper and afterEach cleanup. */
-import Database from 'better-sqlite3'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
+import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import type { MessageType } from './db'
 
 describe('OrchestrationDb', () => {
-  let db: OrchestrationDb
+  let db: OrchestrationDb | undefined
 
   afterEach(() => {
     db?.close()
@@ -59,6 +59,46 @@ describe('OrchestrationDb', () => {
       const filtered = d.getUnreadMessages('b', ['worker_done'])
       expect(filtered).toHaveLength(1)
       expect(filtered[0].type).toBe('worker_done')
+    })
+
+    it('excludes already-delivered rows from getUndeliveredUnreadMessages', () => {
+      const d = createDb()
+      const m1 = d.insertMessage({ from: 'a', to: 'b', subject: 'one' })
+      const m2 = d.insertMessage({ from: 'a', to: 'b', subject: 'two' })
+
+      d.markAsDelivered([m1.id])
+
+      // Push delivery query: only undelivered, unread.
+      const pending = d.getUndeliveredUnreadMessages('b')
+      expect(pending).toHaveLength(1)
+      expect(pending[0].id).toBe(m2.id)
+
+      // Explicit `check` still sees both (they are still unread).
+      const unread = d.getUnreadMessages('b')
+      expect(unread).toHaveLength(2)
+    })
+
+    it('creates the undelivered inbox index used by push delivery', () => {
+      const d = createDb()
+      const sqlite = (d as unknown as { db: Database.Database }).db
+
+      const indexes = sqlite
+        .prepare(
+          `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'messages' AND name = 'idx_messages_undelivered_inbox'`
+        )
+        .all()
+
+      expect(indexes).toHaveLength(1)
+    })
+
+    it('filters getUndeliveredUnreadMessages by type', () => {
+      const d = createDb()
+      d.insertMessage({ from: 'a', to: 'b', subject: 's', type: 'status' })
+      const wd = d.insertMessage({ from: 'a', to: 'b', subject: 'd', type: 'worker_done' })
+
+      const filtered = d.getUndeliveredUnreadMessages('b', ['worker_done'])
+      expect(filtered).toHaveLength(1)
+      expect(filtered[0].id).toBe(wd.id)
     })
 
     it('marks messages as read', () => {
@@ -130,6 +170,17 @@ describe('OrchestrationDb', () => {
       expect(task.id).toMatch(/^task_/)
       expect(task.status).toBe('ready')
       expect(task.deps).toBe('[]')
+    })
+
+    it('persists the creating terminal handle for task-created worktrees', () => {
+      const d = createDb()
+      const task = d.createTask({
+        spec: 'spawn related workspace',
+        createdByTerminalHandle: 'term_creator'
+      })
+
+      expect(task.created_by_terminal_handle).toBe('term_creator')
+      expect(d.getTask(task.id)?.created_by_terminal_handle).toBe('term_creator')
     })
 
     it('creates a task with deps as pending', () => {
@@ -311,6 +362,21 @@ describe('OrchestrationDb', () => {
       const active = d.getActiveDispatchForTerminal('term_a')
       expect(active?.task_id).toBe(task.id)
       expect(d.getActiveDispatchForTerminal('term_b')).toBeUndefined()
+    })
+
+    it('getLatestDispatchForTerminal returns the most recent completed dispatch', () => {
+      const d = createDb()
+      const firstTask = d.createTask({ spec: 'first' })
+      const first = d.createDispatchContext(firstTask.id, 'term_a')
+      d.completeDispatch(first.id)
+      const secondTask = d.createTask({ spec: 'second' })
+      const second = d.createDispatchContext(secondTask.id, 'term_a')
+      d.completeDispatch(second.id)
+
+      const latest = d.getLatestDispatchForTerminal('term_a')
+      expect(latest?.id).toBe(second.id)
+      expect(latest?.status).toBe('completed')
+      expect(d.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
     it('circuit breaker trips after 3 failures', () => {
@@ -614,6 +680,10 @@ describe('OrchestrationDb', () => {
     let tempDir: string
 
     afterEach(() => {
+      // Why: Windows keeps the SQLite file locked until the DB handle closes,
+      // so migration temp directories must close before recursive cleanup.
+      db?.close()
+      db = undefined
       if (tempDir) {
         rmSync(tempDir, { recursive: true, force: true })
       }
@@ -729,6 +799,7 @@ describe('OrchestrationDb', () => {
       const names = new Set(indexes.map((r) => r.name))
       expect(names.has('idx_messages_id')).toBe(true)
       expect(names.has('idx_inbox')).toBe(true)
+      expect(names.has('idx_messages_undelivered_inbox')).toBe(true)
       expect(names.has('idx_thread')).toBe(true)
 
       // v1 data preserved

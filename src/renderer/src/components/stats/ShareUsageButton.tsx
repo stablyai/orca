@@ -5,6 +5,7 @@ import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ShareUsageCard, type ShareUsageCardProps } from './ShareUsageCard'
+import { translate } from '@/i18n/i18n'
 
 type ShareUsageButtonProps = ShareUsageCardProps
 
@@ -20,6 +21,27 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
   const cardRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [capturing, setCapturing] = useState(false)
+  const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: image capture/clipboard IPC can resolve after dialog teardown; avoid
+  // state writes and reset timers after this control unmounts.
+  const isMountedRef = useRef(false)
+
+  const clearCopiedResetTimer = useCallback((): void => {
+    if (copiedResetTimerRef.current !== null) {
+      window.clearTimeout(copiedResetTimerRef.current)
+      copiedResetTimerRef.current = null
+    }
+  }, [])
+
+  const setShareButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
 
   const captureToClipboard = useCallback(async () => {
     if (!cardRef.current || capturing) {
@@ -34,17 +56,23 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
       await window.api.ui.writeClipboardImage(dataUrl)
       return true
     } finally {
-      setCapturing(false)
+      if (isMountedRef.current) {
+        setCapturing(false)
+      }
     }
   }, [capturing])
 
   const handleCopy = useCallback(async () => {
     const ok = await captureToClipboard()
-    if (ok) {
+    if (ok && isMountedRef.current) {
+      clearCopiedResetTimer()
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      copiedResetTimerRef.current = window.setTimeout(() => {
+        copiedResetTimerRef.current = null
+        setCopied(false)
+      }, 2000)
     }
-  }, [captureToClipboard])
+  }, [captureToClipboard, clearCopiedResetTimer])
 
   const handleShareToX = useCallback(async () => {
     const { provider, summary, range } = props
@@ -94,19 +122,29 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
         <Tooltip>
           <TooltipTrigger asChild>
             <DialogTrigger asChild>
-              <Button variant="ghost" size="icon-xs" aria-label="Share usage">
+              <Button
+                ref={setShareButtonRef}
+                variant="ghost"
+                size="icon-xs"
+                aria-label={translate(
+                  'auto.components.stats.ShareUsageButton.bce08eccb9',
+                  'Share usage'
+                )}
+              >
                 <Share2 className="size-3.5" />
               </Button>
             </DialogTrigger>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            Share
+            {translate('auto.components.stats.ShareUsageButton.cecefa7c32', 'Share')}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <DialogContent className="max-w-fit" showCloseButton>
         <DialogHeader>
-          <DialogTitle>Share usage</DialogTitle>
+          <DialogTitle>
+            {translate('auto.components.stats.ShareUsageButton.bce08eccb9', 'Share usage')}
+          </DialogTitle>
         </DialogHeader>
         <div className="flex flex-col items-center gap-3 py-2">
           <ShareUsageCard ref={cardRef} {...props} />
@@ -115,12 +153,12 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
               {copied ? (
                 <>
                   <Check className="mr-2 size-4" />
-                  Copied
+                  {translate('auto.components.stats.ShareUsageButton.bd82c76a70', 'Copied')}
                 </>
               ) : (
                 <>
                   <Copy className="mr-2 size-4" />
-                  Copy image
+                  {translate('auto.components.stats.ShareUsageButton.b295c1c75d', 'Copy image')}
                 </>
               )}
             </Button>
@@ -133,7 +171,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
               <span className="mr-2">
                 <XIcon />
               </span>
-              Share on X
+              {translate('auto.components.stats.ShareUsageButton.7d6b25323d', 'Share on X')}
             </Button>
           </div>
         </div>

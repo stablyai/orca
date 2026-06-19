@@ -20,14 +20,14 @@ jobs:
     steps:
       - name: Generate bufo-bot token
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: 2590194
           private-key: ${{ secrets.BUFO_BOT_PRIVATE_KEY }}
           owner: stablyai
 
       - name: Add PR to project
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           PROJECT_OWNER: stablyai
           PROJECT_NUMBER: '13'

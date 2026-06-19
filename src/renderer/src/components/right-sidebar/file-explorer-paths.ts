@@ -1,8 +1,14 @@
 import { joinPath, normalizeRelativePath } from '@/lib/path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison,
+  normalizeRuntimePathSeparators,
+  relativePathInsideRoot
+} from '../../../../shared/cross-platform-path'
 import { splitPathSegments } from './path-tree'
 
 export function normalizeAbsolutePath(path: string): string {
-  const normalizedPath = path.replace(/[\\/]+/g, '/')
+  const normalizedPath = normalizeRuntimePathSeparators(path)
 
   if (normalizedPath === '/') {
     return normalizedPath
@@ -15,28 +21,21 @@ export function normalizeAbsolutePath(path: string): string {
   return normalizedPath.replace(/\/+$/, '')
 }
 
+export function normalizeAbsolutePathForComparison(path: string): string {
+  return normalizeRuntimePathForComparison(path)
+}
+
 export function isPathEqualOrDescendant(candidatePath: string, targetPath: string): boolean {
-  const normalizedCandidate = normalizeAbsolutePath(candidatePath)
-  const normalizedTarget = normalizeAbsolutePath(targetPath)
-  return (
-    normalizedCandidate === normalizedTarget ||
-    normalizedCandidate.startsWith(`${normalizedTarget}/`)
-  )
+  return isPathInsideOrEqual(targetPath, candidatePath)
 }
 
 export function getRevealAncestorDirs(worktreePath: string, filePath: string): string[] | null {
-  const normalizedWorktreePath = normalizeAbsolutePath(worktreePath)
-  const normalizedTargetPath = normalizeAbsolutePath(filePath)
-  const prefix = `${normalizedWorktreePath}/`
-
-  if (normalizedTargetPath !== normalizedWorktreePath && !normalizedTargetPath.startsWith(prefix)) {
+  const relativePath = relativePathInsideRoot(worktreePath, filePath)
+  if (relativePath === null) {
     return null
   }
 
-  const relativePath = normalizeRelativePath(
-    normalizedTargetPath === normalizedWorktreePath ? '' : normalizedTargetPath.slice(prefix.length)
-  )
-  const segments = splitPathSegments(relativePath)
+  const segments = splitPathSegments(normalizeRelativePath(relativePath))
   const ancestorDirs: string[] = []
   let currentPath = worktreePath
 

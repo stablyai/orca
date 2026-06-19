@@ -170,9 +170,7 @@ function verifyAsar(asarPath) {
   const writeKeyMatch = WRITE_KEY_RE.exec(indexJs)
 
   if (!buildIdentityMatch) {
-    console.error(
-      `::error::BUILD_IDENTITY constant missing or unexpected value in ${asarPath}`
-    )
+    console.error(`::error::BUILD_IDENTITY constant missing or unexpected value in ${asarPath}`)
     const sample = indexJs.match(/.{0,80}BUILD_IDENTITY.{0,80}/g)?.slice(0, 5) ?? []
     for (const line of sample) {
       console.error(`  ${line.slice(0, 200)}`)
@@ -213,9 +211,7 @@ for (const asarPath of asarMatches) {
 
 const distinctIdentities = new Set(results.map((r) => r.buildIdentity))
 if (distinctIdentities.size > 1) {
-  console.error(
-    `::error::asars disagree on BUILD_IDENTITY: ${[...distinctIdentities].join(', ')}`
-  )
+  console.error(`::error::asars disagree on BUILD_IDENTITY: ${[...distinctIdentities].join(', ')}`)
   for (const r of results) {
     console.error(`  - ${r.asarPath}: ${r.buildIdentity}`)
   }

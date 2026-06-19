@@ -7,24 +7,26 @@ describe('isMarkdownPreviewFindShortcut', () => {
       isMarkdownPreviewFindShortcut(
         {
           key: 'f',
+          code: 'KeyF',
           metaKey: true,
           ctrlKey: false,
           altKey: false,
           shiftKey: false
         },
-        true
+        'darwin'
       )
     ).toBe(true)
     expect(
       isMarkdownPreviewFindShortcut(
         {
           key: 'f',
+          code: 'KeyF',
           metaKey: false,
           ctrlKey: true,
           altKey: false,
           shiftKey: false
         },
-        true
+        'darwin'
       )
     ).toBe(false)
   })
@@ -34,24 +36,26 @@ describe('isMarkdownPreviewFindShortcut', () => {
       isMarkdownPreviewFindShortcut(
         {
           key: 'f',
+          code: 'KeyF',
           metaKey: false,
           ctrlKey: true,
           altKey: false,
           shiftKey: false
         },
-        false
+        'linux'
       )
     ).toBe(true)
     expect(
       isMarkdownPreviewFindShortcut(
         {
           key: 'f',
+          code: 'KeyF',
           metaKey: true,
           ctrlKey: false,
           altKey: false,
           shiftKey: false
         },
-        false
+        'linux'
       )
     ).toBe(false)
   })
@@ -67,6 +71,13 @@ describe('findTextMatchRanges', () => {
 
   it('skips overlapping matches so highlights remain stable per text node', () => {
     expect(findTextMatchRanges('ababa', 'aba')).toEqual([{ start: 0, end: 3 }])
+  })
+
+  it('maps locale-lowercase search matches back to original text offsets', () => {
+    const ranges = findTextMatchRanges('İstanbul', 'stan')
+
+    expect(ranges).toEqual([{ start: 1, end: 5 }])
+    expect(ranges.map((range) => 'İstanbul'.slice(range.start, range.end))).toEqual(['stan'])
   })
 
   it('returns no matches for an empty query', () => {

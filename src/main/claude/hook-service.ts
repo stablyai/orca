@@ -1,71 +1,58 @@
-import { homedir } from 'os'
-import { join } from 'path'
-import { app } from 'electron'
+import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
-  createManagedCommandMatcher,
+  buildWindowsAgentHookPostCommand,
   readHooksJson,
-  removeManagedCommands,
-  wrapPosixHookCommand,
   writeHooksJson,
-  writeManagedScript,
-  type HookDefinition
+  writeManagedScript
 } from '../agent-hooks/installer-utils'
+import {
+  readHooksJsonRemote,
+  writeHooksJsonRemote,
+  writeManagedScriptRemote
+} from '../agent-hooks/installer-utils-remote'
+import {
+  applyManagedHooks,
+  CLAUDE_EVENTS,
+  CLAUDE_HOOK_SETTINGS,
+  getManagedScriptFileName,
+  getConfigPath,
+  getManagedCommand,
+  getManagedScriptPath,
+  getPosixManagedScriptFileName,
+  getRemoteConfigPath,
+  getRemoteManagedCommand,
+  removeManagedHooks,
+  type ClaudeCompatibleHookSettings
+} from './hook-settings'
 
-const CLAUDE_EVENTS = [
-  { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  // Why: PreToolUse gives the dashboard a live readout of the in-flight tool
-  // (name + input preview) before it completes. Without it, a long-running
-  // Bash/Task step looks like a silent gap between prompt and Stop.
-  {
-    eventName: 'PreToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUse',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUseFailure',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PermissionRequest',
-    definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
-  }
-] as const
-
-function getConfigPath(): string {
-  return join(homedir(), '.claude', 'settings.json')
+type ClaudeHookServiceOptions = {
+  agent: AgentHookInstallStatus['agent']
+  displayName: string
+  settings: ClaudeCompatibleHookSettings
 }
 
-function getManagedScriptFileName(): string {
-  return process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
+const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
+  agent: 'claude',
+  displayName: 'Claude',
+  settings: CLAUDE_HOOK_SETTINGS
 }
 
-function getManagedScriptPath(): string {
-  return join(app.getPath('userData'), 'agent-hooks', getManagedScriptFileName())
-}
-
-function getManagedCommand(scriptPath: string): string {
-  if (process.platform === 'win32') {
-    // Why: on Windows, Claude Code runs hooks through Git Bash (`/usr/bin/bash`).
-    // A path with single backslashes (e.g. `C:\Users\…\claude-hook.cmd`) is
-    // interpreted by bash as a string with escape sequences, so `\U`, `\A`, etc.
-    // collapse and the launcher fails with `command not found`. Emit forward
-    // slashes — Windows accepts them in path arguments and bash leaves them
-    // intact, so the same JSON value works through every shell layer.
-    return scriptPath.replaceAll('\\', '/')
-  }
-  return wrapPosixHookCommand(scriptPath)
-}
-
-function getManagedScript(): string {
-  if (process.platform === 'win32') {
+function getManagedScript(
+  target: 'local' | 'posix' = 'local',
+  options: { skipWhenDevinImportsClaude?: boolean } = {}
+): string {
+  if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
       'setlocal',
+      ...(options.skipWhenDevinImportsClaude
+        ? [
+            // Why: Devin imports .claude hooks by default. Skip Orca's managed
+            // Claude hook there so status posts stay attributed to Devin.
+            'if not "%DEVIN_PROJECT_DIR%"=="" exit /b 0'
+          ]
+        : []),
       // Why: the endpoint file holds the *live* port/token for this Orca
       // install. A PTY that survived an Orca restart has stale PORT/TOKEN
       // baked into its env from the old instance — loading `endpoint.cmd`
@@ -76,7 +63,7 @@ function getManagedScript(): string {
       'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'if "%ORCA_PANE_KEY%"=="" exit /b 0',
-      `powershell -NoProfile -ExecutionPolicy Bypass -Command "$inputData=[Console]::In.ReadToEnd(); if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }; try { $body=@{ paneKey=$env:ORCA_PANE_KEY; tabId=$env:ORCA_TAB_ID; worktreeId=$env:ORCA_WORKTREE_ID; env=$env:ORCA_AGENT_HOOK_ENV; version=$env:ORCA_AGENT_HOOK_VERSION; payload=($inputData | ConvertFrom-Json) } | ConvertTo-Json -Depth 100; Invoke-WebRequest -UseBasicParsing -Method Post -Uri ('http://127.0.0.1:' + $env:ORCA_AGENT_HOOK_PORT + '/hook/claude') -Headers @{ 'Content-Type'='application/json'; 'X-Orca-Agent-Hook-Token'=$env:ORCA_AGENT_HOOK_TOKEN } -Body $body | Out-Null } catch {}"`,
+      buildWindowsAgentHookPostCommand('claude'),
       'exit /b 0',
       ''
     ].join('\r\n')
@@ -84,6 +71,15 @@ function getManagedScript(): string {
 
   return [
     '#!/bin/sh',
+    ...(options.skipWhenDevinImportsClaude
+      ? [
+          // Why: Devin imports .claude hooks by default. Skip Orca's managed
+          // Claude hook there so status posts stay attributed to Devin.
+          'if [ -n "$DEVIN_PROJECT_DIR" ]; then',
+          '  exit 0',
+          'fi'
+        ]
+      : []),
     // Why: the endpoint file holds the *live* port/token for this Orca
     // install. PTYs that survive an Orca restart have stale PORT/TOKEN
     // baked into their env from the old instance — sourcing the file here
@@ -111,7 +107,9 @@ function getManagedScript(): string {
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
     // shell is not safe once a path contains quotes or newlines. Post the raw
     // hook payload plus metadata as form fields and let the receiver parse it.
+    // Timeout caps best-effort hook posts if the local listener stalls.
     'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude" \\',
+    '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
@@ -126,17 +124,23 @@ function getManagedScript(): string {
 }
 
 export class ClaudeHookService {
+  private readonly options: ClaudeHookServiceOptions
+
+  constructor(options: ClaudeHookServiceOptions = DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS) {
+    this.options = options
+  }
+
   getStatus(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
-    const scriptPath = getManagedScriptPath()
+    const configPath = getConfigPath(this.options.settings)
+    const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: 'Could not parse Claude settings.json'
+        detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
 
@@ -173,82 +177,124 @@ export class ClaudeHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
-    return { agent: 'claude', state, configPath, managedHooksPresent, detail }
+    return { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
   }
 
   install(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
-    const scriptPath = getManagedScriptPath()
+    const configPath = getConfigPath(this.options.settings)
+    const scriptPath = getManagedScriptPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: 'Could not parse Claude settings.json'
+        detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
 
     const command = getManagedCommand(scriptPath)
-    const nextHooks = { ...config.hooks }
-
-    // Why: match by script filename (not exact command string) so a fresh
-    // install sweeps stale entries left by older builds or a different
-    // Electron userData path (dev vs. prod). Without this, repeated installs
-    // accumulate duplicate hook entries pointing at defunct scripts.
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-
-    for (const event of CLAUDE_EVENTS) {
-      const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
-      const cleaned = removeManagedCommands(current, isManagedCommand)
-      const definition: HookDefinition = {
-        ...event.definition,
-        hooks: [{ type: 'command', command }]
-      }
-      nextHooks[event.eventName] = [...cleaned, definition]
-    }
-
-    config.hooks = nextHooks
-    writeManagedScript(scriptPath, getManagedScript())
-    writeHooksJson(configPath, config)
+    const nextConfig = applyManagedHooks(
+      config,
+      command,
+      getManagedScriptFileName(this.options.settings)
+    )
+    writeManagedScript(
+      scriptPath,
+      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+    )
+    writeHooksJson(configPath, nextConfig)
     return this.getStatus()
   }
 
+  // Why: install Orca's Claude hook settings on the remote box rather than the
+  // local machine. Caller passes the user's SFTP handle plus the resolved
+  // remote `$HOME`; POSIX-only by design (Windows-remote deferred).
+  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
+    // Why: remote-Windows is out of scope for v1 — we ship POSIX-shaped paths
+    // and a `.sh` managed script body. The remote platform is gated by the
+    // relay's capability RPC at a higher layer; we cannot detect it from
+    // `process.platform` here (that's the local box).
+    const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
+    const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+    // Why: SFTP reads/writes fail far more often than local fs (network drops,
+    // EACCES on remote dirs, disk full, channel closed). Wrap the entire
+    // install flow in try/catch so a transient I/O failure surfaces as a
+    // structured `state: 'error'` result for the UI, not an unstructured
+    // rejection the caller has to remember to handle. A `null` config
+    // specifically means "file present but unparseable" — keep that branch
+    // distinct so the user sees an actionable message.
+    try {
+      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      if (!config) {
+        return {
+          agent: this.options.agent,
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: `Could not parse remote ${this.options.displayName} settings.json`
+        }
+      }
+
+      // Why: the POSIX wrapper is identical regardless of where the script
+      // lands; only the path differs. Reuse the same wrapper helper.
+      const command = getRemoteManagedCommand(remoteScriptPath)
+      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
+
+      // Why: write the script first, then the settings — settings.json
+      // referencing a missing script body would fire `command not found` on
+      // every tool call until the user re-runs install. Doing it in this
+      // order means a partial-failure mid-install at worst leaves the user
+      // with a working script no settings.json points at (a no-op), instead
+      // of broken settings.json.
+      // Why: SSH remotes use POSIX `.sh` hook paths even when Orca itself is
+      // running on Windows; never derive remote script syntax from local OS.
+      await writeManagedScriptRemote(
+        sftp,
+        remoteScriptPath,
+        getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+      )
+      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
+
+      return {
+        agent: this.options.agent,
+        state: 'installed',
+        configPath: remoteConfigPath,
+        managedHooksPresent: true,
+        detail: null
+      }
+    } catch (err) {
+      return {
+        agent: this.options.agent,
+        state: 'error',
+        configPath: remoteConfigPath,
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  }
+
   remove(): AgentHookInstallStatus {
-    const configPath = getConfigPath()
+    const configPath = getConfigPath(this.options.settings)
     const config = readHooksJson(configPath)
     if (!config) {
       return {
-        agent: 'claude',
+        agent: this.options.agent,
         state: 'error',
         configPath,
         managedHooksPresent: false,
-        detail: 'Could not parse Claude settings.json'
+        detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
-
-    const nextHooks = { ...config.hooks }
-    // Why: same broad matcher as install(), so remove() also cleans up stale
-    // entries from older builds even if the current scriptPath has moved.
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-    for (const [eventName, definitions] of Object.entries(nextHooks)) {
-      // Why: a malformed settings.json entry (non-array value for an event
-      // name) would make removeManagedCommands throw via definitions.flatMap.
-      // Skip — we cannot sweep something we cannot parse, and remove() must
-      // fail open so a broken user config never blocks uninstall.
-      if (!Array.isArray(definitions)) {
-        continue
-      }
-      const cleaned = removeManagedCommands(definitions, isManagedCommand)
-      if (cleaned.length === 0) {
-        delete nextHooks[eventName]
-      } else {
-        nextHooks[eventName] = cleaned
-      }
+    const { config: nextConfig, changed } = removeManagedHooks(
+      config,
+      getManagedScriptFileName(this.options.settings)
+    )
+    if (changed) {
+      writeHooksJson(configPath, nextConfig)
     }
-    config.hooks = nextHooks
-    writeHooksJson(configPath, config)
     return this.getStatus()
   }
 }

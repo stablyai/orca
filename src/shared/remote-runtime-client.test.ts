@@ -1,0 +1,417 @@
+import type { AddressInfo } from 'net'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import WebSocketClient, { WebSocketServer, type WebSocket } from 'ws'
+import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
+import {
+  decrypt,
+  decryptBytes,
+  deriveSharedKey,
+  encrypt,
+  generateKeyPair,
+  publicKeyFromBase64,
+  publicKeyToBase64
+} from './e2ee-crypto'
+import { sendRemoteRuntimeRequest, subscribeRemoteRuntimeRequest } from './remote-runtime-client'
+
+const servers: WebSocketServer[] = []
+
+afterEach(async () => {
+  await Promise.all(
+    servers.splice(0).map(
+      (server) =>
+        new Promise<void>((resolve) => {
+          for (const client of server.clients) {
+            client.close()
+          }
+          server.close(() => resolve())
+        })
+    )
+  )
+})
+
+describe('subscribeRemoteRuntimeRequest', () => {
+  it('includes WebSocket close details when subscription admission is rejected', async () => {
+    const server = await createClosingServer(1013, 'Maximum connections reached')
+
+    await expect(
+      subscribeRemoteRuntimeRequest(server.pairing, 'terminal.subscribe', {}, 1000, {
+        onResponse: vi.fn(),
+        onError: vi.fn()
+      })
+    ).rejects.toThrow(
+      'Remote Orca runtime closed the connection (1013: Maximum connections reached).'
+    )
+  })
+
+  it('sends encrypted binary frames on an established subscription socket', async () => {
+    const server = await createSubscriptionServer()
+    const onResponse = vi.fn()
+    const onError = vi.fn()
+
+    const subscription = await subscribeRemoteRuntimeRequest(
+      server.pairing,
+      'terminal.subscribe',
+      { terminal: 't1' },
+      1000,
+      {
+        onResponse,
+        onError
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(onResponse).toHaveBeenCalledWith(
+        expect.objectContaining({ ok: true, result: { type: 'subscribed' } })
+      )
+    )
+    const bytes = new Uint8Array([1, 2, 3])
+    expect(subscription.sendBinary(bytes)).toBe(true)
+    await expect(server.nextBinary).resolves.toEqual(bytes)
+    expect(onError).not.toHaveBeenCalled()
+    subscription.close()
+  })
+
+  it('detaches subscription socket listeners after close', async () => {
+    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+    try {
+      const server = await createSubscriptionServer()
+      const onResponse = vi.fn()
+      const onError = vi.fn()
+      const onClose = vi.fn()
+
+      const subscription = await subscribeRemoteRuntimeRequest(
+        server.pairing,
+        'terminal.subscribe',
+        { terminal: 't1' },
+        1000,
+        {
+          onResponse,
+          onError,
+          onClose
+        }
+      )
+
+      await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+      subscription.close()
+      await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
+
+      const removedEvents = offSpy.mock.calls.map(([event]) => event)
+      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
+      expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
+      expect(onError).not.toHaveBeenCalled()
+    } finally {
+      offSpy.mockRestore()
+    }
+  })
+
+  it('closes established subscription sockets after terminal protocol errors', async () => {
+    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+    try {
+      const server = await createSubscriptionServer({ sendMismatchedResponseAfterSubscribe: true })
+      const onResponse = vi.fn()
+      const onError = vi.fn()
+      const onClose = vi.fn()
+
+      const subscription = await subscribeRemoteRuntimeRequest(
+        server.pairing,
+        'terminal.subscribe',
+        { terminal: 't1' },
+        1000,
+        {
+          onResponse,
+          onError,
+          onClose
+        }
+      )
+
+      await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+      await vi.waitFor(() =>
+        expect(onError).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 'invalid_runtime_response' })
+        )
+      )
+      expect(onClose).toHaveBeenCalledOnce()
+
+      const removedEvents = offSpy.mock.calls.map(([event]) => event)
+      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
+      expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
+    } finally {
+      offSpy.mockRestore()
+    }
+  })
+})
+
+describe('sendRemoteRuntimeRequest', () => {
+  it('includes WebSocket close details when one-shot admission is rejected', async () => {
+    const server = await createClosingServer(1013, 'Maximum connections reached')
+
+    await expect(sendRemoteRuntimeRequest(server.pairing, 'status.get', {}, 1000)).rejects.toThrow(
+      'Remote Orca runtime closed the connection (1013: Maximum connections reached).'
+    )
+  })
+
+  it('refreshes the per-call timeout when the runtime sends keepalive frames', async () => {
+    const server = await createOneShotServer()
+
+    const response = await sendRemoteRuntimeRequest<{ satisfied: boolean }>(
+      server.pairing,
+      'terminal.wait',
+      { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
+      300
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { satisfied: true }
+    })
+  })
+
+  it('preserves structured failure data for remote computer-use recovery hints', async () => {
+    const server = await createOneShotServer({
+      response: (requestId) => ({
+        id: requestId,
+        ok: false,
+        error: {
+          code: 'app_not_found',
+          message: 'app not found: Gmail',
+          data: {
+            nextSteps: ['Target the desktop browser app/window that contains Gmail.']
+          }
+        },
+        _meta: { runtimeId: 'runtime-test' }
+      })
+    })
+
+    const response = await sendRemoteRuntimeRequest(
+      server.pairing,
+      'computer.getAppState',
+      { app: 'Gmail' },
+      1000
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'app_not_found',
+        data: {
+          nextSteps: [expect.stringContaining('desktop browser app/window')]
+        }
+      }
+    })
+  })
+
+  it('detaches one-shot socket listeners after a successful response', async () => {
+    const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+    try {
+      const server = await createOneShotServer()
+
+      await sendRemoteRuntimeRequest<{ satisfied: boolean }>(
+        server.pairing,
+        'terminal.wait',
+        { terminal: 't1', for: 'tui-idle', timeoutMs: 550 },
+        300
+      )
+
+      const removedEvents = offSpy.mock.calls.map(([event]) => event)
+      expect(removedEvents).toEqual(expect.arrayContaining(['open', 'error', 'close', 'message']))
+    } finally {
+      offSpy.mockRestore()
+    }
+  })
+})
+
+async function createSubscriptionServer(
+  options: {
+    sendMismatchedResponseAfterSubscribe?: boolean
+  } = {}
+): Promise<{
+  pairing: PairingOffer
+  nextBinary: Promise<Uint8Array>
+}> {
+  const serverKeyPair = generateKeyPair()
+  let resolveBinary: (bytes: Uint8Array) => void = () => {}
+  const nextBinary = new Promise<Uint8Array>((resolve) => {
+    resolveBinary = resolve
+  })
+  const wss = new WebSocketServer({ port: 0 })
+  servers.push(wss)
+
+  wss.on('connection', (ws) => {
+    let sharedKey: Uint8Array | null = null
+    let authenticated = false
+
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) {
+        if (!sharedKey) {
+          return
+        }
+        const plaintext = decryptBytes(new Uint8Array(data as Buffer), sharedKey)
+        if (plaintext) {
+          resolveBinary(plaintext)
+        }
+        return
+      }
+
+      const frame = data.toString()
+      if (!sharedKey) {
+        const hello = JSON.parse(frame) as { publicKeyB64: string }
+        sharedKey = deriveSharedKey(
+          serverKeyPair.secretKey,
+          publicKeyFromBase64(hello.publicKeyB64)
+        )
+        ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+        return
+      }
+
+      const plaintext = decrypt(frame, sharedKey)
+      if (!plaintext) {
+        return
+      }
+      if (!authenticated) {
+        authenticated = true
+        sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
+        return
+      }
+
+      const request = JSON.parse(plaintext) as { id: string }
+      sendEncrypted(ws, sharedKey, {
+        id: request.id,
+        ok: true,
+        streaming: true,
+        result: { type: 'subscribed' },
+        _meta: { runtimeId: 'runtime-test' }
+      })
+      if (options.sendMismatchedResponseAfterSubscribe) {
+        sendEncrypted(ws, sharedKey, {
+          id: `${request.id}-mismatch`,
+          ok: true,
+          streaming: true,
+          result: { type: 'subscribed' },
+          _meta: { runtimeId: 'runtime-test' }
+        })
+      }
+    })
+  })
+
+  await new Promise<void>((resolve) => wss.once('listening', resolve))
+  const address = wss.address() as AddressInfo
+  const pairing = parsePairingCode(
+    encodePairingOffer({
+      v: 2,
+      endpoint: `ws://127.0.0.1:${address.port}`,
+      deviceToken: 'device-token',
+      publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
+    })
+  )
+  if (!pairing) {
+    throw new Error('Failed to create test pairing')
+  }
+  return { pairing, nextBinary }
+}
+
+function sendEncrypted(ws: WebSocket, sharedKey: Uint8Array, message: unknown): void {
+  ws.send(encrypt(JSON.stringify(message), sharedKey))
+}
+
+async function createClosingServer(
+  code: number,
+  reason: string
+): Promise<{ pairing: PairingOffer }> {
+  const serverKeyPair = generateKeyPair()
+  const wss = new WebSocketServer({ port: 0 })
+  servers.push(wss)
+  wss.on('connection', (ws) => {
+    ws.close(code, reason)
+  })
+
+  await new Promise<void>((resolve) => wss.once('listening', resolve))
+  const address = wss.address() as AddressInfo
+  const pairing = parsePairingCode(
+    encodePairingOffer({
+      v: 2,
+      endpoint: `ws://127.0.0.1:${address.port}`,
+      deviceToken: 'device-token',
+      publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
+    })
+  )
+  if (!pairing) {
+    throw new Error('Failed to create test pairing')
+  }
+  return { pairing }
+}
+
+async function createOneShotServer(
+  options: {
+    response?: (requestId: string) => unknown
+  } = {}
+): Promise<{ pairing: PairingOffer }> {
+  const serverKeyPair = generateKeyPair()
+  const wss = new WebSocketServer({ port: 0 })
+  servers.push(wss)
+
+  wss.on('connection', (ws) => {
+    let sharedKey: Uint8Array | null = null
+    let authenticated = false
+
+    ws.on('message', (data, isBinary) => {
+      if (isBinary) {
+        return
+      }
+      const frame = data.toString()
+      if (!sharedKey) {
+        const hello = JSON.parse(frame) as { publicKeyB64: string }
+        sharedKey = deriveSharedKey(
+          serverKeyPair.secretKey,
+          publicKeyFromBase64(hello.publicKeyB64)
+        )
+        ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+        return
+      }
+
+      const plaintext = decrypt(frame, sharedKey)
+      if (!plaintext) {
+        return
+      }
+      if (!authenticated) {
+        authenticated = true
+        sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
+        return
+      }
+
+      const request = JSON.parse(plaintext) as { id: string }
+      const key = sharedKey
+      const keepalive = setInterval(() => {
+        sendEncrypted(ws, key, { _keepalive: true })
+      }, 100)
+      ws.once('close', () => clearInterval(keepalive))
+      setTimeout(() => {
+        clearInterval(keepalive)
+        sendEncrypted(
+          ws,
+          key,
+          options.response?.(request.id) ?? {
+            id: request.id,
+            ok: true,
+            result: { satisfied: true },
+            _meta: { runtimeId: 'runtime-test' }
+          }
+        )
+      }, 550)
+    })
+  })
+
+  await new Promise<void>((resolve) => wss.once('listening', resolve))
+  const address = wss.address() as AddressInfo
+  const pairing = parsePairingCode(
+    encodePairingOffer({
+      v: 2,
+      endpoint: `ws://127.0.0.1:${address.port}`,
+      deviceToken: 'device-token',
+      publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
+    })
+  )
+  if (!pairing) {
+    throw new Error('Failed to create test pairing')
+  }
+  return { pairing }
+}

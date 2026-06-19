@@ -2,10 +2,15 @@ import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
+import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
+import { upsertProjectTrustLevel } from './codex/config-toml-trust'
+
+export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
 
 /**
- * Pre-mark a workspace as trusted for cursor-agent / GitHub Copilot CLI so
- * the agent's "Do you trust this folder?" menu does not fire on first launch.
+ * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
+ * Codex so the agent's "Do you trust this folder?" menu does not fire on
+ * first launch.
  *
  * Why: Orca's "drop URL into agent input as a draft" flow injects the URL
  * via bracketed-paste once the TUI is up. If the trust menu intercepts the
@@ -18,6 +23,8 @@ import { writeFileAtomically } from './codex-accounts/fs-utils'
  * Side note: a `--trust`-style CLI flag exists in cursor-agent but only
  * applies in `--print/headless` mode (per its --help). Copilot has no
  * documented flag at all (verified against @github/copilot 1.0.32 bundle).
+ * Codex's `--dangerously-bypass-approvals-and-sandbox` would also change
+ * approval/sandbox policy, so it is not equivalent to "trust this project".
  */
 
 /**
@@ -93,6 +100,23 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
   writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
 }
 
+/**
+ * Codex stores project trust in ~/.codex/config.toml under:
+ *   [projects."<realpath>"]
+ *   trust_level = "trusted"
+ *
+ * Verified against codex-rs/tui/src/onboarding/trust_directory.rs and
+ * codex-rs/core/src/config/config_tests.rs in the Codex CLI source.
+ */
+export function markCodexProjectTrusted(workspacePath: string): void {
+  const absPath = canonicalize(workspacePath)
+  const configPath = join(homedir(), '.codex', 'config.toml')
+  upsertProjectTrustLevel(configPath, absPath, 'trusted')
+  // Why: Orca-launched Codex runs with an Orca-owned CODEX_HOME, so the trust
+  // preset must also update the runtime config Codex will actually read.
+  upsertProjectTrustLevel(join(getOrcaManagedCodexHomePath(), 'config.toml'), absPath, 'trusted')
+}
+
 function canonicalize(p: string): string {
   // Why: macOS reports `/tmp/x` and `/private/tmp/x` as the same inode, but
   // both Cursor and Copilot's trust comparators run realpath() before the
@@ -100,7 +124,7 @@ function canonicalize(p: string): string {
   // (orca caches realpath()'d worktree paths) matches the agent's lookup.
   try {
     if (existsSync(p)) {
-      return realpathSync(p)
+      return realpathSync.native(p)
     }
   } catch {
     // Fall through to the raw input.
@@ -110,6 +134,8 @@ function canonicalize(p: string): string {
 
 function cursorWorkspaceSlug(absPath: string): string {
   const stripped = absPath.replace(/^[\\/]+/, '')
-  const slug = stripped.replace(/[\\/]+/g, '-')
+  // Why: Windows absolute paths include characters such as ":" that cannot
+  // be used in the ~/.cursor/projects/<slug> directory name.
+  const slug = stripped.replace(/[\\/:*?"<>|]+/g, '-')
   return slug
 }

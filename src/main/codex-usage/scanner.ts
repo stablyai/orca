@@ -1,11 +1,13 @@
 /* eslint-disable max-lines -- Why: Codex discovery, incremental parsing, attribution, and aggregation all depend on the same event-normalization rules. Keeping them together makes the duplicate-snapshot logic easier to audit when usage totals look wrong. */
-import { homedir } from 'os'
 import { basename, join, win32, posix } from 'path'
-import { createReadStream } from 'fs'
+import { createReadStream, existsSync } from 'fs'
 import { realpath, readdir, stat } from 'fs/promises'
 import { createInterface } from 'readline'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
+import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
+import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import type {
   CodexUsageAttributedEvent,
   CodexUsageDailyAggregate,
@@ -45,11 +47,15 @@ type CodexUsageParseContext = {
   currentCwd: string | null
   currentModel: string | null
   previousTotals: CodexUsageRawUsage | null
+  totalOnlyBaselinePending?: boolean
 }
 
-const DEFAULT_CODEX_SESSIONS_DIR = join(homedir(), '.codex', 'sessions')
-const LEGACY_FALLBACK_MODEL = 'gpt-5'
+type CodexUsageDeltaResolution =
+  | { kind: 'event'; delta: CodexUsageRawUsage; nextTotals: CodexUsageRawUsage | null }
+  | { kind: 'baseline'; nextTotals: CodexUsageRawUsage }
+
 const YIELD_EVERY_FILES = 10
+const YIELD_EVERY_DISCOVERY_ENTRIES = 100
 
 function ensureNumber(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
@@ -83,17 +89,24 @@ async function canonicalizePath(pathValue: string): Promise<string> {
 }
 
 async function yieldToEventLoop(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await new Promise((resolve) => setImmediate(resolve))
 }
 
-async function walkJsonlFiles(dirPath: string): Promise<string[]> {
+async function walkJsonlFiles(
+  dirPath: string,
+  progress: { entriesVisited: number } = { entriesVisited: 0 }
+): Promise<string[]> {
   const entries = await readdir(dirPath, { withFileTypes: true })
   const files: string[] = []
 
   for (const entry of entries) {
+    progress.entriesVisited += 1
+    if (progress.entriesVisited % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
+      await yieldToEventLoop()
+    }
     const fullPath = join(dirPath, entry.name)
     if (entry.isDirectory()) {
-      files.push(...(await walkJsonlFiles(fullPath)))
+      appendDiscoveredFiles(files, await walkJsonlFiles(fullPath, progress))
       continue
     }
     if (entry.isFile() && entry.name.endsWith('.jsonl')) {
@@ -104,20 +117,123 @@ async function walkJsonlFiles(dirPath: string): Promise<string[]> {
   return files
 }
 
-export function getCodexSessionsDirectory(): string {
-  const codexHome = process.env.CODEX_HOME?.trim()
-  if (codexHome) {
-    return join(codexHome, 'sessions')
+function appendDiscoveredFiles(target: string[], source: readonly string[]): void {
+  // Why: large session directories can exceed V8's argument limit if child
+  // file arrays are spread into push().
+  for (const filePath of source) {
+    target.push(filePath)
   }
-  return DEFAULT_CODEX_SESSIONS_DIR
+}
+
+export function getCodexSessionsDirectory(): string {
+  // Why: Orca-launched Codex processes receive an Orca-owned CODEX_HOME, so
+  // callers that need the primary runtime path should not consult ambient
+  // shell CODEX_HOME.
+  return join(getOrcaManagedCodexHomePath(), 'sessions')
+}
+
+export function getCodexSessionDirectories(): string[] {
+  // Why: upgraded users still have ordinary Codex history under ~/.codex, while
+  // new Orca-launched sessions are written under Orca's managed runtime home.
+  return [getCodexSessionsDirectory(), join(getSystemCodexHomePath(), 'sessions')].filter(
+    (dirPath, index, allDirPaths) => allDirPaths.indexOf(dirPath) === index
+  )
+}
+
+function hasLegacyCopiedSessionBridgeMarkers(): boolean {
+  return existsSync(join(getOrcaManagedCodexHomePath(), '.orca-session-copies'))
 }
 
 export async function listCodexSessionFiles(): Promise<string[]> {
-  try {
-    return (await walkJsonlFiles(getCodexSessionsDirectory())).sort()
-  } catch {
-    return []
+  const files: string[] = []
+  for (const dirPath of getCodexSessionDirectories()) {
+    try {
+      appendDiscoveredFiles(files, await walkJsonlFiles(dirPath))
+    } catch {
+      // Missing or unreadable history in one home should not hide the other.
+    }
   }
+  return dedupeCodexSessionFileAliases(files, hasLegacyCopiedSessionBridgeMarkers())
+}
+
+async function dedupeCodexSessionFileAliases(
+  files: string[],
+  hasLegacyBridgeMarkers: boolean
+): Promise<string[]> {
+  const excludedAliases = new Set<string>()
+  if (hasLegacyBridgeMarkers) {
+    for (const [index, filePath] of files.entries()) {
+      const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
+      if ((index + 1) % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
+        await yieldToEventLoop()
+      }
+      if (!legacyCopyBridge) {
+        continue
+      }
+      if (legacyCopyBridge.sourceSkipBytes !== null) {
+        continue
+      }
+      excludedAliases.add(
+        await getPhysicalFileAliasKey(
+          legacyCopyBridge.preferManagedCopy ? legacyCopyBridge.sourcePath : filePath
+        )
+      )
+    }
+  }
+
+  const seenAliases = new Set<string>()
+  const uniqueFiles: string[] = []
+  for (const [index, filePath] of [...new Set(files)].sort().entries()) {
+    const aliasKey = await getCodexSessionFileAliasKey(filePath)
+    if (excludedAliases.has(aliasKey)) {
+      continue
+    }
+    if (seenAliases.has(aliasKey)) {
+      continue
+    }
+    seenAliases.add(aliasKey)
+    uniqueFiles.push(filePath)
+    if ((index + 1) % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
+      await yieldToEventLoop()
+    }
+  }
+  return uniqueFiles
+}
+
+async function getCodexSessionFileAliasKey(filePath: string): Promise<string> {
+  return getPhysicalFileAliasKey(filePath)
+}
+
+async function getPhysicalFileAliasKey(filePath: string): Promise<string> {
+  try {
+    const fileStat = await stat(filePath)
+    if (fileStat.ino !== 0) {
+      return `${fileStat.dev}:${fileStat.ino}`
+    }
+  } catch {}
+  return `path:${await canonicalizePath(filePath)}`
+}
+
+function getLegacySourceSkipBytesByPath(
+  files: string[],
+  hasLegacyBridgeMarkers = hasLegacyCopiedSessionBridgeMarkers()
+): Map<string, number> {
+  const sourceSkipBytesByPath = new Map<string, number>()
+  if (!hasLegacyBridgeMarkers) {
+    return sourceSkipBytesByPath
+  }
+  for (const filePath of files) {
+    const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
+    if (!legacyCopyBridge || legacyCopyBridge.sourceSkipBytes === null) {
+      continue
+    }
+    const existing = sourceSkipBytesByPath.get(legacyCopyBridge.sourcePath) ?? 0
+    sourceSkipBytesByPath.set(
+      legacyCopyBridge.sourcePath,
+      Math.max(existing, legacyCopyBridge.sourceSkipBytes)
+    )
+  }
+  return sourceSkipBytesByPath
 }
 
 export async function getProcessedFileInfo(filePath: string): Promise<CodexUsageProcessedFile> {
@@ -169,6 +285,107 @@ function subtractRawUsage(
     ),
     totalTokens: Math.max(current.totalTokens - (previous?.totalTokens ?? 0), 0)
   }
+}
+
+function addRawUsage(left: CodexUsageRawUsage, right: CodexUsageRawUsage): CodexUsageRawUsage {
+  return {
+    inputTokens: left.inputTokens + right.inputTokens,
+    cachedInputTokens: left.cachedInputTokens + right.cachedInputTokens,
+    outputTokens: left.outputTokens + right.outputTokens,
+    reasoningOutputTokens: left.reasoningOutputTokens + right.reasoningOutputTokens,
+    totalTokens: left.totalTokens + right.totalTokens
+  }
+}
+
+function rawUsageEquals(left: CodexUsageRawUsage, right: CodexUsageRawUsage): boolean {
+  return (
+    left.inputTokens === right.inputTokens &&
+    left.cachedInputTokens === right.cachedInputTokens &&
+    left.outputTokens === right.outputTokens &&
+    left.reasoningOutputTokens === right.reasoningOutputTokens
+  )
+}
+
+function rawUsageIsMonotonic(current: CodexUsageRawUsage, previous: CodexUsageRawUsage): boolean {
+  return (
+    current.inputTokens >= previous.inputTokens &&
+    current.cachedInputTokens >= previous.cachedInputTokens &&
+    current.outputTokens >= previous.outputTokens &&
+    current.reasoningOutputTokens >= previous.reasoningOutputTokens
+  )
+}
+
+function rawUsageMagnitude(usage: CodexUsageRawUsage): number {
+  return (
+    usage.inputTokens + usage.cachedInputTokens + usage.outputTokens + usage.reasoningOutputTokens
+  )
+}
+
+function looksLikeStaleRegression(
+  current: CodexUsageRawUsage,
+  previous: CodexUsageRawUsage,
+  last: CodexUsageRawUsage
+): boolean {
+  const previousTotal = rawUsageMagnitude(previous)
+  const currentTotal = rawUsageMagnitude(current)
+  const lastTotal = rawUsageMagnitude(last)
+  if (previousTotal <= 0 || currentTotal <= 0 || lastTotal <= 0) {
+    return false
+  }
+  return currentTotal * 100 >= previousTotal * 98 || currentTotal + lastTotal * 2 >= previousTotal
+}
+
+function resolveCodexUsageDelta(
+  totalUsage: CodexUsageRawUsage | null,
+  lastUsage: CodexUsageRawUsage | null,
+  previousTotals: CodexUsageRawUsage | null
+): CodexUsageDeltaResolution | null {
+  if (totalUsage && lastUsage && previousTotals) {
+    if (rawUsageEquals(totalUsage, previousTotals)) {
+      return null
+    }
+    if (
+      !rawUsageIsMonotonic(totalUsage, previousTotals) &&
+      looksLikeStaleRegression(totalUsage, previousTotals, lastUsage)
+    ) {
+      return null
+    }
+    // Why: Codex totals are mutable snapshots after compaction/resume. The
+    // last_token_usage payload is the billable increment; totals are the baseline.
+    return { kind: 'event', delta: lastUsage, nextTotals: totalUsage }
+  }
+
+  if (totalUsage && lastUsage) {
+    return { kind: 'event', delta: lastUsage, nextTotals: totalUsage }
+  }
+
+  if (totalUsage && previousTotals) {
+    if (rawUsageEquals(totalUsage, previousTotals)) {
+      return null
+    }
+    if (!rawUsageIsMonotonic(totalUsage, previousTotals)) {
+      return { kind: 'baseline', nextTotals: totalUsage }
+    }
+    return {
+      kind: 'event',
+      delta: subtractRawUsage(totalUsage, previousTotals),
+      nextTotals: totalUsage
+    }
+  }
+
+  if (totalUsage) {
+    return { kind: 'event', delta: totalUsage, nextTotals: totalUsage }
+  }
+
+  if (lastUsage && previousTotals) {
+    return { kind: 'event', delta: lastUsage, nextTotals: addRawUsage(previousTotals, lastUsage) }
+  }
+
+  if (lastUsage) {
+    return { kind: 'event', delta: lastUsage, nextTotals: null }
+  }
+
+  return null
 }
 
 function extractString(value: unknown): string | null {
@@ -242,14 +459,7 @@ function localDayFromTimestamp(timestamp: string): string | null {
 async function buildWorktreesWithCanonicalPaths(
   worktrees: CodexUsageWorktreeRef[]
 ): Promise<(CodexUsageWorktreeRef & { canonicalPath: string })[]> {
-  const canonicalized = await Promise.all(
-    worktrees.map(async (worktree) => ({
-      ...worktree,
-      canonicalPath: await canonicalizePath(worktree.path)
-    }))
-  )
-
-  return canonicalized.sort((left, right) => right.canonicalPath.length - left.canonicalPath.length)
+  return canonicalizeUsageWorktreePaths(worktrees, canonicalizePath)
 }
 
 function isContainingPath(candidatePath: string, targetPath: string): boolean {
@@ -267,7 +477,14 @@ function isContainingPath(candidatePath: string, targetPath: string): boolean {
   const isAbsoluteRelative = useWin32
     ? win32.isAbsolute(relativePath)
     : posix.isAbsolute(relativePath)
-  return !isAbsoluteRelative && !relativePath.startsWith('..') && relativePath !== '.'
+  const parentPrefix = useWin32 ? `..${win32.sep}` : `..${posix.sep}`
+  // Why: `..name` is a valid child path; only `..` and `../...` escape.
+  return (
+    !isAbsoluteRelative &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(parentPrefix) &&
+    relativePath !== '.'
+  )
 }
 
 function findContainingWorktree(
@@ -546,7 +763,7 @@ function mergeSessions(
   for (const session of sessions) {
     const existing = target.get(session.sessionId)
     if (!existing) {
-      target.set(session.sessionId, structuredClone(session))
+      target.set(session.sessionId, cloneSessionForMerge(session))
       continue
     }
 
@@ -621,6 +838,15 @@ function mergeSessions(
   }
 }
 
+function cloneSessionForMerge(session: CodexUsageSession): CodexUsageSession {
+  return {
+    ...session,
+    locationBreakdown: session.locationBreakdown.map((entry) => ({ ...entry })),
+    modelBreakdown: session.modelBreakdown.map((entry) => ({ ...entry })),
+    locationModelBreakdown: session.locationModelBreakdown.map((entry) => ({ ...entry }))
+  }
+}
+
 function mergeDailyAggregates(
   target: Map<string, CodexUsageDailyAggregate>,
   dailyAggregates: CodexUsageDailyAggregate[]
@@ -688,17 +914,28 @@ export function parseCodexUsageRecord(
   const record = info as Record<string, unknown>
   const totalUsage = normalizeRawUsage(record.total_token_usage)
   const lastUsage = normalizeRawUsage(record.last_token_usage)
-  let delta = totalUsage ? subtractRawUsage(totalUsage, context.previousTotals) : lastUsage
-  if (totalUsage) {
-    context.previousTotals = totalUsage
+  if (context.totalOnlyBaselinePending) {
+    context.totalOnlyBaselinePending = false
+    if (totalUsage && !lastUsage && !context.previousTotals) {
+      context.previousTotals = totalUsage
+      return null
+    }
   }
-  if (!delta) {
+  const resolvedUsage = resolveCodexUsageDelta(totalUsage, lastUsage, context.previousTotals)
+  if (!resolvedUsage) {
+    return null
+  }
+  if (resolvedUsage.kind === 'baseline') {
+    context.previousTotals = resolvedUsage.nextTotals
     return null
   }
 
-  delta = {
-    ...delta,
-    cachedInputTokens: Math.min(delta.cachedInputTokens, delta.inputTokens)
+  let delta = {
+    ...resolvedUsage.delta,
+    cachedInputTokens: Math.min(
+      resolvedUsage.delta.cachedInputTokens,
+      resolvedUsage.delta.inputTokens
+    )
   }
 
   if (
@@ -711,15 +948,16 @@ export function parseCodexUsageRecord(
     return null
   }
 
+  context.previousTotals = resolvedUsage.nextTotals
+
   const resolvedModel = extractModel(parsed.payload) ?? context.currentModel
-  const model = resolvedModel ?? LEGACY_FALLBACK_MODEL
   const hasInferredPricing = resolvedModel === null
 
   return {
     sessionId: context.sessionId,
     timestamp: parsed.timestamp,
     cwd: context.currentCwd ?? context.sessionCwd,
-    model,
+    model: resolvedModel,
     hasInferredPricing,
     inputTokens: delta.inputTokens,
     cachedInputTokens: delta.cachedInputTokens,
@@ -731,11 +969,15 @@ export function parseCodexUsageRecord(
 
 export async function parseCodexUsageFile(
   filePath: string,
-  worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[]
+  worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[],
+  options: { skipInitialBytes?: number } = {}
 ): Promise<CodexUsagePersistedFile> {
   const processedFile = await getProcessedFileInfo(filePath)
   const lines = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf-8' }),
+    input: createReadStream(filePath, {
+      encoding: 'utf-8',
+      start: options.skipInitialBytes ?? 0
+    }),
     crlfDelay: Infinity
   })
   const events: CodexUsageAttributedEvent[] = []
@@ -744,7 +986,10 @@ export async function parseCodexUsageFile(
     sessionCwd: null,
     currentCwd: null,
     currentModel: null,
-    previousTotals: null
+    previousTotals: null,
+    // Why: suffix-only legacy copy parsing lacks the copied prefix context. A
+    // leading total-only snapshot is a baseline, not the suffix's billable delta.
+    totalOnlyBaselinePending: (options.skipInitialBytes ?? 0) > 0
   }
 
   for await (const line of lines) {
@@ -776,18 +1021,25 @@ export async function scanCodexUsageFiles(
   const previousByPath = new Map(previousProcessedFiles.map((file) => [file.path, file]))
   const processedFiles: CodexUsagePersistedFile[] = []
   const worktreesWithCanonicalPaths = await buildWorktreesWithCanonicalPaths(worktrees)
+  const legacySourceSkipBytesByPath = getLegacySourceSkipBytesByPath(files)
   const sessionsById = new Map<string, CodexUsageSession>()
   const dailyByKey = new Map<string, CodexUsageDailyAggregate>()
 
   for (const [index, filePath] of files.entries()) {
+    const legacySourceSkipBytes = legacySourceSkipBytesByPath.get(filePath) ?? 0
     const fileInfo = await getProcessedFileInfo(filePath)
     const previous = previousByPath.get(filePath)
     const canReuse =
-      previous && previous.mtimeMs === fileInfo.mtimeMs && previous.size === fileInfo.size
+      legacySourceSkipBytes === 0 &&
+      previous &&
+      previous.mtimeMs === fileInfo.mtimeMs &&
+      previous.size === fileInfo.size
 
     const processed = canReuse
       ? previous
-      : await parseCodexUsageFile(filePath, worktreesWithCanonicalPaths)
+      : await parseCodexUsageFile(filePath, worktreesWithCanonicalPaths, {
+          skipInitialBytes: legacySourceSkipBytes
+        })
 
     processedFiles.push(processed)
     mergeSessions(sessionsById, processed.sessions)

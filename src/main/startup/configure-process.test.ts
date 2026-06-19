@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -12,6 +14,7 @@ vi.mock('electron', () => {
       quit: vi.fn(),
       exit: vi.fn(),
       isPackaged: false,
+      disableHardwareAcceleration: vi.fn(),
       commandLine: {
         appendSwitch: vi.fn(),
         getSwitchValue: vi.fn(() => '')
@@ -69,9 +72,9 @@ describe('patchPackagedProcessPath', () => {
     // fallback install locations for the opencode and Pi CLI install scripts.
     // Without them on PATH, GUI-launched Orca reports both as "Not installed"
     // even when `which` resolves them in the user's shell.
-    expect(segments).toContain('/Users/tester/.opencode/bin')
-    expect(segments).toContain('/Users/tester/.vite-plus/bin')
-    expect(segments).toContain('/Users/tester/bin')
+    expect(segments).toContain(join('/Users/tester', '.opencode/bin'))
+    expect(segments).toContain(join('/Users/tester', '.vite-plus/bin'))
+    expect(segments).toContain(join('/Users/tester', 'bin'))
   })
 
   it('leaves PATH untouched when the app is not packaged', async () => {
@@ -86,6 +89,23 @@ describe('patchPackagedProcessPath', () => {
     patchPackagedProcessPath()
 
     expect(process.env.PATH).toBe('/usr/bin:/bin')
+  })
+
+  it('prepends Windows user-local CLI dirs for packaged Start Menu launches', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('win32')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    const pathDelimiter = process.platform === 'win32' ? ';' : ':'
+    process.env.PATH = `C:\\Windows\\System32${pathDelimiter}C:\\Windows`
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(pathDelimiter)
+    const userLocalBin = join(homedir(), '.local', 'bin')
+    expect(segments).toContain(userLocalBin)
+    expect(segments.indexOf(userLocalBin)).toBeLessThan(segments.indexOf('C:\\Windows\\System32'))
   })
 })
 
@@ -132,125 +152,141 @@ describe('configureDevUserDataPath', () => {
   })
 })
 
-describe('installDevParentDisconnectQuit', () => {
-  it('quits the dev app when the supervising IPC channel disconnects', async () => {
+describe('configureOrcaUserDataPathEnv', () => {
+  it('overwrites stale inherited ORCA_USER_DATA_PATH with Electron userData', async () => {
     const { app } = await import('electron')
-    const { installDevParentDisconnectQuit } = await import('./configure-process')
+    const { configureOrcaUserDataPathEnv } = await import('./configure-process')
+    const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
+    process.env.ORCA_USER_DATA_PATH = '/tmp/stale-orca-user-data'
+    app.setPath('userData', '/tmp/current-orca-user-data')
+    let configuredUserDataPath: string | undefined
 
-    vi.useFakeTimers()
-    const originalSend = process.send
-    const originalOnce = process.once.bind(process)
-    const disconnectHandlers: (() => void)[] = []
-
-    process.send = (() => true) as unknown as NodeJS.Process['send']
-    process.once = ((event: string | symbol, listener: (...args: any[]) => void) => {
-      if (event === 'disconnect') {
-        disconnectHandlers.push(listener as () => void)
+    try {
+      configureOrcaUserDataPathEnv()
+      configuredUserDataPath = process.env.ORCA_USER_DATA_PATH
+    } finally {
+      if (originalUserDataPath === undefined) {
+        delete process.env.ORCA_USER_DATA_PATH
+      } else {
+        process.env.ORCA_USER_DATA_PATH = originalUserDataPath
       }
-      return process
-    }) as NodeJS.Process['once']
-
-    vi.mocked(app.quit).mockClear()
-
-    try {
-      installDevParentDisconnectQuit(true)
-    } finally {
-      process.send = originalSend
-      process.once = originalOnce
     }
 
-    expect(disconnectHandlers).toHaveLength(1)
-    disconnectHandlers[0]()
-    expect(app.quit).toHaveBeenCalledTimes(1)
-    expect(app.exit).not.toHaveBeenCalled()
-
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(app.exit).toHaveBeenCalledWith(0)
-  })
-
-  it('does not register the disconnect hook outside dev ipc launches', async () => {
-    const { installDevParentDisconnectQuit } = await import('./configure-process')
-    const originalSend = process.send
-    const originalOnce = process.once.bind(process)
-    const onceSpy = vi.fn(originalOnce)
-
-    process.send = undefined
-    process.once = onceSpy as NodeJS.Process['once']
-
-    try {
-      installDevParentDisconnectQuit(true)
-      installDevParentDisconnectQuit(false)
-    } finally {
-      process.send = originalSend
-      process.once = originalOnce
-    }
-
-    expect(onceSpy).not.toHaveBeenCalledWith('disconnect', expect.any(Function))
+    expect(configuredUserDataPath).toBe('/tmp/current-orca-user-data')
   })
 })
 
-describe('installDevParentWatchdog', () => {
-  it('quits the dev app when the original parent pid disappears', async () => {
-    const { app } = await import('electron')
-    const { installDevParentWatchdog } = await import('./configure-process')
+describe('shouldInstallManagedHooks', () => {
+  it('keeps managed hook auto-install enabled for default dev runs', async () => {
+    const { shouldInstallManagedHooks } = await import('./configure-process')
 
-    vi.useFakeTimers()
-    vi.mocked(app.quit).mockClear()
-    vi.mocked(app.exit).mockClear()
+    expect(shouldInstallManagedHooks(true)).toBe(true)
+  })
 
-    let parentExists = true
-    vi.spyOn(process, 'kill').mockImplementation(((
-      pid: number,
-      signal?: NodeJS.Signals | number
-    ) => {
-      if (signal === 0 && pid === 4242 && !parentExists) {
-        const error = new Error('missing') as NodeJS.ErrnoException
-        error.code = 'ESRCH'
-        throw error
-      }
-      return true
-    }) as typeof process.kill)
+  it('allows managed hook auto-install for packaged runs', async () => {
+    const { shouldInstallManagedHooks } = await import('./configure-process')
 
-    const originalPpid = Object.getOwnPropertyDescriptor(process, 'ppid')
-    Object.defineProperty(process, 'ppid', {
-      configurable: true,
-      get: () => 4242
-    })
+    expect(shouldInstallManagedHooks(false)).toBe(true)
+  })
+})
 
-    try {
-      installDevParentWatchdog(true)
-      await vi.advanceTimersByTimeAsync(1000)
-      expect(app.quit).not.toHaveBeenCalled()
+describe('configureElectronNetworkCompatibility', () => {
+  const tempDirs: string[] = []
+  const originalEnvValue = process.env.ORCA_DISABLE_HTTP2
 
-      parentExists = false
-      await vi.advanceTimersByTimeAsync(1000)
-      expect(app.quit).toHaveBeenCalledTimes(1)
-      expect(app.exit).not.toHaveBeenCalled()
+  function createUserDataDir(settings: Record<string, unknown>): string {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-compat-'))
+    tempDirs.push(userDataPath)
+    writeFileSync(join(userDataPath, 'orca-data.json'), JSON.stringify({ settings }), 'utf-8')
+    return userDataPath
+  }
 
-      await vi.advanceTimersByTimeAsync(3000)
-      expect(app.exit).toHaveBeenCalledWith(0)
-    } finally {
-      if (originalPpid) {
-        Object.defineProperty(process, 'ppid', originalPpid)
-      }
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    if (originalEnvValue === undefined) {
+      delete process.env.ORCA_DISABLE_HTTP2
+    } else {
+      process.env.ORCA_DISABLE_HTTP2 = originalEnvValue
     }
   })
 
-  it('does not start the watchdog outside dev mode', async () => {
-    const { installDevParentWatchdog } = await import('./configure-process')
-    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
+  it('enables HTTP/1.1 compatibility when the persisted setting is on', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const userDataPath = createUserDataDir({ electronHttp1CompatibilityMode: true })
 
-    installDevParentWatchdog(false)
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(true)
+  })
 
-    expect(setIntervalSpy).not.toHaveBeenCalled()
+  it('leaves HTTP/2 enabled by default', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const userDataPath = createUserDataDir({})
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
+  })
+
+  it('lets the environment override force compatibility on', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+
+    expect(
+      shouldDisableHttp2ForElectronNetworking({
+        env: { ORCA_DISABLE_HTTP2: 'true' },
+        userDataPath: createUserDataDir({ electronHttp1CompatibilityMode: false })
+      })
+    ).toBe(true)
+  })
+
+  it('lets the environment override force compatibility off', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+
+    expect(
+      shouldDisableHttp2ForElectronNetworking({
+        env: { ORCA_DISABLE_HTTP2: '0' },
+        userDataPath: createUserDataDir({ electronHttp1CompatibilityMode: true })
+      })
+    ).toBe(false)
+  })
+
+  it('appends Electron disable-http2 before sessions are created', async () => {
+    const { app } = await import('electron')
+    const { configureElectronNetworkCompatibility } = await import('./configure-process')
+    const userDataPath = createUserDataDir({ electronHttp1CompatibilityMode: true })
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    configureElectronNetworkCompatibility({ env: {}, userDataPath })
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-http2')
   })
 })
 
 describe('enableMainProcessGpuFeatures', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+
+  function setPlatform(platform: NodeJS.Platform): void {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: platform
+    })
+  }
+
+  afterEach(() => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+    if (originalE2EUserDataDir === undefined) {
+      delete process.env.ORCA_E2E_USER_DATA_DIR
+    } else {
+      process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
+    }
+  })
+
   it('appends VS Code-style GPU channel flags without unsafe WebGPU/Vulkan opt-ins', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
+    delete process.env.ORCA_E2E_USER_DATA_DIR
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     enableMainProcessGpuFeatures()
 
@@ -261,10 +297,30 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
+  it('disables the GPU process for Linux E2E runs', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    setPlatform('linux')
+    process.env.ORCA_E2E_USER_DATA_DIR = '/tmp/orca-e2e'
+    vi.mocked(app.disableHardwareAcceleration).mockClear()
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+    enableMainProcessGpuFeatures()
+
+    expect(app.disableHardwareAcceleration).toHaveBeenCalledTimes(1)
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-gpu')
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.any(String)
+    )
+  })
+
   it('preserves existing enable-features switches', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
+    delete process.env.ORCA_E2E_USER_DATA_DIR
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('ExistingFeature')
     enableMainProcessGpuFeatures()

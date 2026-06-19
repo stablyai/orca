@@ -5,27 +5,10 @@
  * These functions have no side-effects and depend only on their arguments,
  * making them easy to test independently.
  */
-import * as path from 'path'
 import { existsSync } from 'fs'
-
-// ─── Status parsing ──────────────────────────────────────────────────
-
-export function parseStatusChar(char: string): string {
-  switch (char) {
-    case 'M':
-      return 'modified'
-    case 'A':
-      return 'added'
-    case 'D':
-      return 'deleted'
-    case 'R':
-      return 'renamed'
-    case 'C':
-      return 'copied'
-    default:
-      return 'modified'
-  }
-}
+import * as path from 'path'
+import { isBinaryBuffer } from '../shared/binary-buffer'
+import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
 
 export function parseBranchStatusChar(char: string): string {
   switch (char) {
@@ -63,89 +46,6 @@ export function parseConflictKind(xy: string): string | null {
     default:
       return null
   }
-}
-
-/**
- * Parse `git status --porcelain=v2` output into structured entries.
- * Does NOT handle unmerged entries (those require worktree access).
- */
-export function parseStatusOutput(stdout: string): {
-  entries: Record<string, unknown>[]
-  unmergedLines: string[]
-  head?: string
-  branch?: string
-} {
-  const entries: Record<string, unknown>[] = []
-  const unmergedLines: string[] = []
-  let head: string | undefined
-  let branch: string | undefined
-
-  for (const line of stdout.split(/\r?\n/)) {
-    if (!line) {
-      continue
-    }
-
-    if (line.startsWith('# branch.oid ')) {
-      head = line.slice('# branch.oid '.length).trim()
-      continue
-    }
-
-    if (line.startsWith('# branch.head ')) {
-      const branchHead = line.slice('# branch.head '.length).trim()
-      branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : ''
-      continue
-    }
-
-    if (line.startsWith('1 ') || line.startsWith('2 ')) {
-      const parts = line.split(' ')
-      const xy = parts[1]
-      const indexStatus = xy[0]
-      const worktreeStatus = xy[1]
-
-      if (line.startsWith('2 ')) {
-        // Why: porcelain v2 type-2 format is `2 XY sub mH mI mW hH hI Xscore path\torigPath`.
-        // The new path is the last space-delimited token before the tab; origPath follows the tab.
-        const tabParts = line.split('\t')
-        const spaceParts = tabParts[0].split(' ')
-        const filePath = spaceParts.at(-1)!
-        const oldPath = tabParts[1]
-        if (indexStatus !== '.') {
-          entries.push({
-            path: filePath,
-            status: parseStatusChar(indexStatus),
-            area: 'staged',
-            oldPath
-          })
-        }
-        if (worktreeStatus !== '.') {
-          entries.push({
-            path: filePath,
-            status: parseStatusChar(worktreeStatus),
-            area: 'unstaged',
-            oldPath
-          })
-        }
-      } else {
-        const filePath = parts.slice(8).join(' ')
-        if (indexStatus !== '.') {
-          entries.push({ path: filePath, status: parseStatusChar(indexStatus), area: 'staged' })
-        }
-        if (worktreeStatus !== '.') {
-          entries.push({
-            path: filePath,
-            status: parseStatusChar(worktreeStatus),
-            area: 'unstaged'
-          })
-        }
-      }
-    } else if (line.startsWith('? ')) {
-      entries.push({ path: line.slice(2), status: 'untracked', area: 'untracked' })
-    } else if (line.startsWith('u ')) {
-      unmergedLines.push(line)
-    }
-  }
-
-  return { entries, unmergedLines, head, branch }
 }
 
 /**
@@ -202,7 +102,10 @@ export function parseUnmergedEntry(
 /**
  * Parse `git diff --name-status` output into structured change entries.
  */
-export function parseBranchDiff(stdout: string): Record<string, unknown>[] {
+export function parseBranchDiff(
+  stdout: string,
+  statsByPath: Map<string, GitLineStats> = new Map()
+): Record<string, unknown>[] {
   const entries: Record<string, unknown>[] = []
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
@@ -216,12 +119,12 @@ export function parseBranchDiff(stdout: string): Record<string, unknown>[] {
       const oldPath = parts[1]
       const filePath = parts[2]
       if (filePath) {
-        entries.push({ path: filePath, oldPath, status })
+        entries.push({ path: filePath, oldPath, status, ...statsByPath.get(filePath) })
       }
     } else {
       const filePath = parts[1]
       if (filePath) {
-        entries.push({ path: filePath, status })
+        entries.push({ path: filePath, status, ...statsByPath.get(filePath) })
       }
     }
   }
@@ -230,15 +133,37 @@ export function parseBranchDiff(stdout: string): Record<string, unknown>[] {
 
 // ─── Worktree parsing ────────────────────────────────────────────────
 
-export function parseWorktreeList(output: string): Record<string, unknown>[] {
-  const worktrees: Record<string, unknown>[] = []
-  const blocks = output.trim().split(/\r?\n\r?\n/)
+function getErrorText(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const parts: string[] = []
+    if ('message' in error && typeof error.message === 'string') {
+      parts.push(error.message)
+    }
+    if ('stderr' in error && typeof error.stderr === 'string') {
+      parts.push(error.stderr)
+    }
+    return parts.join('\n')
+  }
+  return String(error)
+}
 
-  for (const block of blocks) {
-    if (!block.trim()) {
+export function isUnsupportedWorktreeListZError(error: unknown): boolean {
+  return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
+    getErrorText(error)
+  )
+}
+
+export function parseWorktreeList(
+  output: string,
+  options: { nulDelimited?: boolean } = {}
+): Record<string, unknown>[] {
+  const worktrees: Record<string, unknown>[] = []
+  const blocks = options.nulDelimited ? splitNulWorktreeList(output) : splitLineWorktreeList(output)
+
+  for (const lines of blocks) {
+    if (lines.length === 0) {
       continue
     }
-    const lines = block.trim().split(/\r?\n/)
     let wtPath = ''
     let head = ''
     let branch = ''
@@ -269,17 +194,40 @@ export function parseWorktreeList(output: string): Record<string, unknown>[] {
   return worktrees
 }
 
-// ─── Binary / blob helpers ───────────────────────────────────────────
+function splitLineWorktreeList(output: string): string[][] {
+  return output
+    .trim()
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.trim().split(/\r?\n/))
+}
 
-export function isBinaryBuffer(buffer: Buffer): boolean {
-  const len = Math.min(buffer.length, 8192)
-  for (let i = 0; i < len; i++) {
-    if (buffer[i] === 0) {
-      return true
+function splitNulWorktreeList(output: string): string[][] {
+  if (!output.includes('\0')) {
+    return splitLineWorktreeList(output)
+  }
+
+  const blocks: string[][] = []
+  let currentBlock: string[] = []
+
+  for (const field of output.split('\0')) {
+    if (field) {
+      currentBlock.push(field)
+      continue
+    }
+    if (currentBlock.length > 0) {
+      blocks.push(currentBlock)
+      currentBlock = []
     }
   }
-  return false
+
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock)
+  }
+
+  return blocks
 }
+
+// ─── Binary / blob helpers ───────────────────────────────────────────
 
 export const PREVIEWABLE_MIME: Record<string, string> = {
   '.png': 'image/png',
@@ -304,36 +252,4 @@ export function bufferToBlob(
     return { content: previewable ? buffer.toString('base64') : '', isBinary: true }
   }
   return { content: buffer.toString('utf-8'), isBinary: false }
-}
-
-/**
- * Build a diff result object from original/modified content.
- * Used by both working-tree diffs and branch diffs.
- */
-export function buildDiffResult(
-  originalContent: string,
-  modifiedContent: string,
-  originalIsBinary: boolean,
-  modifiedIsBinary: boolean,
-  filePath?: string
-) {
-  if (originalIsBinary || modifiedIsBinary) {
-    const ext = filePath ? path.extname(filePath).toLowerCase() : ''
-    const mimeType = PREVIEWABLE_MIME[ext]
-    return {
-      kind: 'binary' as const,
-      originalContent,
-      modifiedContent,
-      originalIsBinary,
-      modifiedIsBinary,
-      ...(mimeType ? { isImage: true, mimeType } : {})
-    }
-  }
-  return {
-    kind: 'text' as const,
-    originalContent,
-    modifiedContent,
-    originalIsBinary: false,
-    modifiedIsBinary: false
-  }
 }

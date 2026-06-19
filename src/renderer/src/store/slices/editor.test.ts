@@ -3,7 +3,14 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { createEditorSlice } from './editor'
+import { createTabsSlice } from './tabs'
 import type { AppState } from '../types'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '../../runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -27,11 +34,56 @@ function createEditorStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    recordFeatureInteraction: vi.fn(),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
 }
 
+function createEditorTabsStore(): StoreApi<AppState> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return createStore<any>()((...args: any[]) => ({
+    activeWorktreeId: 'wt-1',
+    tabsByWorktree: {},
+    browserTabsByWorktree: {},
+    activeBrowserTabId: null,
+    activeBrowserTabIdByWorktree: {},
+    recordFeatureInteraction: vi.fn(),
+    ...createTabsSlice(...(args as Parameters<typeof createTabsSlice>)),
+    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+  })) as unknown as StoreApi<AppState>
+}
+
+async function flushAsyncRemoteRefresh(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
+function ownedEditorFileId(
+  filePath: string,
+  worktreeId: string,
+  runtimeEnvironmentId: string | null | undefined
+): string {
+  const runtimeKey = runtimeEnvironmentId?.trim() || 'local'
+  return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+}
+
 describe('createEditorSlice right sidebar state', () => {
+  it('does not record markdown-file-created when opening an existing markdown file', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/docs/existing.md',
+      relativePath: 'docs/existing.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+
+    expect(store.getState().recordFeatureInteraction).not.toHaveBeenCalledWith(
+      'markdown-file-created'
+    )
+  })
+
   it('right sidebar is closed by default', () => {
     const store = createEditorStore()
     expect(store.getState().rightSidebarOpen).toBe(false)
@@ -58,6 +110,288 @@ describe('createEditorSlice right sidebar state', () => {
     store.getState().toggleRightSidebar()
     expect(store.getState().rightSidebarOpen).toBe(false)
   })
+
+  it('setRightSidebarTab updates the global tab without writing a worktree entry', () => {
+    const store = createEditorStore()
+
+    store.getState().setRightSidebarTab('checks')
+
+    expect(store.getState().rightSidebarTab).toBe('checks')
+    expect(store.getState().rightSidebarTabByWorktree).toEqual({})
+  })
+
+  it('increments the right sidebar route request id for explicit route actions', () => {
+    const store = createEditorStore()
+
+    expect(store.getState().rightSidebarRouteRequestId).toBe(0)
+
+    store.getState().setRightSidebarTab('checks')
+    expect(store.getState().rightSidebarRouteRequestId).toBe(1)
+
+    store.getState().setRightSidebarExplorerView('files')
+    expect(store.getState().rightSidebarRouteRequestId).toBe(2)
+
+    store.getState().showRightSidebarFiles()
+    expect(store.getState().rightSidebarRouteRequestId).toBe(3)
+
+    store.getState().showRightSidebarSearch()
+    expect(store.getState().rightSidebarRouteRequestId).toBe(4)
+  })
+
+  it('setRightSidebarTab with no active worktree does not mutate the worktree map', () => {
+    const store = createEditorStore()
+    const remembered = { 'wt-1': 'checks' as const }
+    store.setState({ activeWorktreeId: null, rightSidebarTabByWorktree: remembered })
+
+    store.getState().setRightSidebarTab('checks')
+
+    expect(store.getState().rightSidebarTab).toBe('checks')
+    expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
+  })
+
+  it('showRightSidebarFiles opens Explorer files', () => {
+    const store = createEditorStore()
+    store.setState({ rightSidebarOpen: false, rightSidebarTab: 'checks' })
+
+    store.getState().showRightSidebarFiles()
+
+    expect(store.getState().rightSidebarOpen).toBe(true)
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+    expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ 'wt-1': 'files' })
+  })
+
+  it('showRightSidebarSearch opens Explorer search and requests focus without payload', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'needle',
+      results: { files: [], totalMatches: 1, truncated: false }
+    })
+
+    store.getState().showRightSidebarSearch()
+
+    expect(store.getState().rightSidebarOpen).toBe(true)
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('search')
+    expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ 'wt-1': 'search' })
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: 'needle',
+      results: { files: [], totalMatches: 1, truncated: false },
+      focusRequestId: 1
+    })
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBeUndefined()
+  })
+
+  it('showRightSidebarSearch seeds query and include together with one request', () => {
+    const store = createEditorStore()
+
+    store.getState().showRightSidebarSearch({ query: 'needle', includePattern: 'src/**' })
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: 'needle',
+      includePattern: 'src/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+  })
+
+  it('showRightSidebarSearch include-only focuses when the query is empty', () => {
+    const store = createEditorStore()
+
+    store.getState().showRightSidebarSearch({ includePattern: 'src/**' })
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: '',
+      includePattern: 'src/**',
+      focusRequestId: 1
+    })
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBeUndefined()
+  })
+
+  it('showRightSidebarSearch include-only reruns an existing query', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'needle',
+      results: { files: [], totalMatches: 1, truncated: false }
+    })
+
+    store.getState().showRightSidebarSearch({ includePattern: 'src/**' })
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: 'needle',
+      includePattern: 'src/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+  })
+
+  it('revealInExplorer selects explorer globally without writing a worktree entry', () => {
+    const store = createEditorStore()
+    const remembered = { 'wt-1': 'explorer' as const, 'wt-2': 'checks' as const }
+    store.setState({
+      activeWorktreeId: 'wt-1',
+      rightSidebarTab: 'explorer',
+      rightSidebarExplorerView: 'search',
+      rightSidebarTabByWorktree: remembered
+    })
+
+    store.getState().revealInExplorer('wt-2', '/repo/file.ts')
+
+    expect(store.getState().rightSidebarOpen).toBe(true)
+    expect(store.getState().rightSidebarTab).toBe('explorer')
+    expect(store.getState().rightSidebarExplorerView).toBe('files')
+    expect(store.getState().rightSidebarRouteRequestId).toBe(1)
+    expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ 'wt-2': 'files' })
+    expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
+    expect(store.getState().pendingExplorerReveal).toMatchObject({
+      worktreeId: 'wt-2',
+      filePath: '/repo/file.ts'
+    })
+  })
+
+  it('collapses all expanded directories for one worktree', () => {
+    const store = createEditorStore()
+    store.setState({
+      expandedDirs: {
+        'wt-1': new Set(['/repo/src', '/repo/src/components']),
+        'wt-2': new Set(['/other/packages'])
+      }
+    })
+
+    store.getState().collapseAllDirs('wt-1')
+
+    expect(store.getState().expandedDirs['wt-1']).toEqual(new Set())
+    expect(store.getState().expandedDirs['wt-2']).toEqual(new Set(['/other/packages']))
+  })
+
+  it('keeps collapse all stable when the worktree has no expanded directories', () => {
+    const store = createEditorStore()
+    const expandedDirs = { 'wt-2': new Set(['/other/packages']) }
+    store.setState({ expandedDirs })
+
+    store.getState().collapseAllDirs('wt-1')
+
+    expect(store.getState().expandedDirs).toBe(expandedDirs)
+  })
+
+  it('collapses one directory subtree without touching sibling directories', () => {
+    const store = createEditorStore()
+    store.setState({
+      expandedDirs: {
+        'wt-1': new Set(['/repo/src', '/repo/src/components', '/repo/src2', '/repo/tests']),
+        'wt-2': new Set(['/other/src'])
+      }
+    })
+
+    store.getState().collapseDirSubtree('wt-1', '/repo/src')
+
+    expect(store.getState().expandedDirs['wt-1']).toEqual(new Set(['/repo/src2', '/repo/tests']))
+    expect(store.getState().expandedDirs['wt-2']).toEqual(new Set(['/other/src']))
+  })
+})
+
+describe('createEditorSlice file search seed state', () => {
+  it('seeds file search with a one-shot request id', () => {
+    const store = createEditorStore()
+
+    store.getState().seedFileSearchQuery('wt-1', 'selectedText')
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: 'selectedText',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+  })
+
+  it('preserves search options while replacing stale results and collapsed files', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'old',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: '*.ts',
+      excludePattern: 'dist/**',
+      results: { files: [], totalMatches: 1, truncated: false },
+      loading: true,
+      collapsedFiles: new Set(['/repo/file.ts'])
+    })
+
+    store.getState().seedFileSearchQuery('wt-1', 'next')
+
+    const state = store.getState().fileSearchStateByWorktree['wt-1']
+    expect(state).toMatchObject({
+      query: 'next',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: '*.ts',
+      excludePattern: 'dist/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+    expect(state.collapsedFiles.size).toBe(0)
+  })
+
+  it('seeds file search include pattern with a one-shot request id', () => {
+    const store = createEditorStore()
+
+    store.getState().seedFileSearchIncludePattern('wt-1', 'src/**')
+
+    expect(store.getState().fileSearchStateByWorktree['wt-1']).toMatchObject({
+      query: '',
+      includePattern: 'src/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+  })
+
+  it('preserves search query and options while replacing stale scoped results', () => {
+    const store = createEditorStore()
+    store.getState().updateFileSearchState('wt-1', {
+      query: 'needle',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: 'old/**',
+      excludePattern: 'dist/**',
+      results: { files: [], totalMatches: 1, truncated: false },
+      loading: true,
+      collapsedFiles: new Set(['/repo/file.ts'])
+    })
+
+    store.getState().seedFileSearchIncludePattern('wt-1', 'src/**')
+
+    const state = store.getState().fileSearchStateByWorktree['wt-1']
+    expect(state).toMatchObject({
+      query: 'needle',
+      caseSensitive: true,
+      wholeWord: true,
+      useRegex: true,
+      includePattern: 'src/**',
+      excludePattern: 'dist/**',
+      results: null,
+      loading: false,
+      seedRequestId: 1
+    })
+    expect(state.collapsedFiles.size).toBe(0)
+  })
+
+  it('consumes only the matching seed request id', () => {
+    const store = createEditorStore()
+    store.getState().seedFileSearchQuery('wt-1', 'selectedText')
+
+    store.getState().consumeFileSearchSeedRequest('wt-1', 2)
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBe(1)
+
+    store.getState().consumeFileSearchSeedRequest('wt-1', 1)
+    expect(store.getState().fileSearchStateByWorktree['wt-1']?.seedRequestId).toBeUndefined()
+  })
 })
 
 describe('createEditorSlice openDiff', () => {
@@ -70,6 +404,26 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles.map((file) => file.id)).toEqual([
       'wt-1::diff::unstaged::file.ts',
       'wt-1::diff::staged::file.ts'
+    ])
+  })
+
+  it('keeps local and runtime-owned diffs in separate tabs for the same path', () => {
+    const store = createEditorStore()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false, {
+      runtimeEnvironmentId: 'env-1'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::file.ts',
+        runtimeEnvironmentId: undefined
+      }),
+      expect.objectContaining({
+        id: 'editor-diff:wt-1:env-1:unstaged:file.ts',
+        runtimeEnvironmentId: 'env-1'
+      })
     ])
   })
 
@@ -105,9 +459,870 @@ describe('createEditorSlice openDiff', () => {
     ])
     expect(store.getState().activeFileId).toBe('wt-1::diff::staged::file.ts')
   })
+
+  it('bumps diffContentReloadNonce when re-opening an existing diff tab', () => {
+    const store = createEditorStore()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBeUndefined()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(1)
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(2)
+  })
+
+  it('bumps fileContentReloadNonce when re-opening an existing clean file with reload requested', () => {
+    const store = createEditorStore()
+
+    const openFileWithReloadRequest = (): void =>
+      store.getState().openFile(
+        {
+          filePath: '/repo/file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'edit'
+        },
+        { forceContentReload: true }
+      )
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(1)
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(2)
+  })
+
+  it('does not bump fileContentReloadNonce when a dirty file is re-opened', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().markFileDirty('/repo/file.ts', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/file.ts',
+        relativePath: 'file.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { forceContentReload: true }
+    )
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        isDirty: true,
+        fileContentReloadNonce: undefined
+      })
+    )
+  })
+
+  it('opens the visible diff tab in the requested split group', () => {
+    const store = createEditorTabsStore()
+    const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
+    const targetGroupId = store.getState().createEmptySplitGroup('wt-1', sourceTab.groupId, 'right')
+    if (!targetGroupId) {
+      throw new Error('expected split group')
+    }
+
+    store
+      .getState()
+      .openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false, { targetGroupId })
+
+    const diffTab = store
+      .getState()
+      .unifiedTabsByWorktree['wt-1']?.find((tab) => tab.contentType === 'diff')
+
+    expect(diffTab?.groupId).toBe(targetGroupId)
+    expect(diffTab?.entityId).toBe('wt-1::diff::unstaged::file.ts')
+    expect(store.getState().activeGroupIdByWorktree['wt-1']).toBe(targetGroupId)
+  })
+
+  it('reuses a preview editor tab when opening a preview diff', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/a.ts',
+        relativePath: 'a.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+
+    store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::b.ts',
+        filePath: '/repo/b.ts',
+        isPreview: true,
+        mode: 'diff'
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        contentType: 'diff',
+        entityId: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('keeps an existing preview replaceable when it is opened as preview again', () => {
+    const store = createEditorTabsStore()
+
+    const openPreviewFile = (): void =>
+      store.getState().openFile(
+        {
+          filePath: '/repo/a.ts',
+          relativePath: 'a.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'edit'
+        },
+        { preview: true }
+      )
+
+    openPreviewFile()
+    openPreviewFile()
+
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        entityId: '/repo/a.ts',
+        isPreview: true
+      })
+    ])
+
+    store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        entityId: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('does not orphan another split group when replacing a shared preview diff', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openDiff('wt-1', '/repo/a.ts', 'a.ts', 'typescript', false, { preview: true })
+    const firstGroupId = store.getState().groupsByWorktree['wt-1'][0].id
+    const secondGroupId = store.getState().createEmptySplitGroup('wt-1', firstGroupId, 'right')
+
+    expect(secondGroupId).toBeTruthy()
+
+    store.getState().openDiff('wt-1', '/repo/a.ts', 'a.ts', 'typescript', false, {
+      preview: true,
+      targetGroupId: secondGroupId ?? undefined
+    })
+    store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, {
+      preview: true,
+      targetGroupId: secondGroupId ?? undefined
+    })
+
+    const state = store.getState()
+    expect(state.openFiles).toEqual([
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::a.ts',
+        isPreview: true
+      }),
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+    expect(state.unifiedTabsByWorktree['wt-1']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          groupId: firstGroupId,
+          entityId: 'wt-1::diff::unstaged::a.ts',
+          isPreview: true
+        }),
+        expect.objectContaining({
+          groupId: secondGroupId,
+          entityId: 'wt-1::diff::unstaged::b.ts',
+          isPreview: true
+        })
+      ])
+    )
+  })
+
+  it('opens a new preview diff beside a pinned file tab', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/a.ts',
+        relativePath: 'a.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().pinFile('/repo/a.ts')
+
+    store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: '/repo/a.ts',
+        isPreview: undefined
+      }),
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        entityId: '/repo/a.ts',
+        isPinned: true,
+        isPreview: false
+      }),
+      expect.objectContaining({
+        entityId: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('makes a preview file permanent without pinning the tab', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/a.ts',
+        relativePath: 'a.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().makePreviewFilePermanent('/repo/a.ts')
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: '/repo/a.ts',
+        isPreview: undefined
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        entityId: '/repo/a.ts',
+        isPinned: undefined,
+        isPreview: false
+      })
+    ])
+  })
+
+  it('does not replace a dirty file that was opened as a preview', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/a.ts',
+        relativePath: 'a.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().markFileDirty('/repo/a.ts', true)
+
+    store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: '/repo/a.ts',
+        isDirty: true,
+        isPreview: undefined
+      }),
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        entityId: '/repo/a.ts',
+        isPreview: false
+      }),
+      expect.objectContaining({
+        entityId: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+  })
+})
+
+describe('createEditorSlice floating editor activation', () => {
+  it('creates a visible floating editor tab when the floating workspace is empty', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/tmp/orca/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    const tab = store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]
+    expect(tab).toMatchObject({
+      contentType: 'editor',
+      entityId: '/tmp/orca/notes.md',
+      label: 'notes.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+    expect(store.getState().groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]).toMatchObject({
+      activeTabId: tab?.id,
+      tabOrder: [tab?.id]
+    })
+    expect(store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
+      '/tmp/orca/notes.md'
+    )
+  })
+
+  it('opens floating markdown tabs without changing the main active editor surface', () => {
+    const store = createEditorStore()
+    store.setState({
+      activeFileId: '/repo/main.md',
+      activeTabType: 'editor',
+      activeFileIdByWorktree: { 'wt-1': '/repo/main.md' },
+      activeTabTypeByWorktree: { 'wt-1': 'editor' }
+    } as Partial<AppState>)
+
+    store.getState().openFile({
+      filePath: '/tmp/orca/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    expect(store.getState().activeFileId).toBe('/repo/main.md')
+    expect(store.getState().activeTabType).toBe('editor')
+    expect(store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
+      '/tmp/orca/untitled.md'
+    )
+    expect(store.getState().activeTabTypeByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('editor')
+  })
+
+  it('opens same-path floating markdown as a separate owner-qualified tab', () => {
+    const store = createEditorStore()
+    store.setState({
+      openFiles: [
+        {
+          id: '/repo/README.md',
+          filePath: '/repo/README.md',
+          relativePath: 'README.md',
+          worktreeId: 'wt-1',
+          language: 'markdown',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ],
+      activeFileIdByWorktree: { 'wt-1': '/repo/README.md' },
+      activeTabTypeByWorktree: { 'wt-1': 'editor' }
+    } as Partial<AppState>)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/README.md',
+        relativePath: 'README.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    expect(store.getState().openFiles).toHaveLength(2)
+    expect(store.getState().openFiles[0]).toMatchObject({
+      filePath: '/repo/README.md',
+      worktreeId: 'wt-1'
+    })
+    expect(store.getState().openFiles[1]).toMatchObject({
+      filePath: '/repo/README.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      runtimeEnvironmentId: null
+    })
+    expect(store.getState().openFiles[1]?.id).not.toBe('/repo/README.md')
+    expect(store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
+      store.getState().openFiles[1]?.id
+    )
+  })
+})
+
+describe('createEditorSlice split-group editor routing', () => {
+  function openSourceFile(
+    store: StoreApi<AppState>,
+    filePath: string,
+    options?: Parameters<AppState['openFile']>[1]
+  ): void {
+    store.getState().openFile(
+      {
+        filePath,
+        relativePath: filePath.replace('/repo/', ''),
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      options
+    )
+  }
+
+  function seedTerminalAndEditorGroups(store: StoreApi<AppState>): {
+    terminalTabId: string
+    terminalGroupId: string
+    editorGroupId: string
+  } {
+    const terminalTab = store.getState().createUnifiedTab('wt-1', 'terminal', {
+      id: 'terminal-tab',
+      entityId: 'terminal-tab',
+      label: 'Agent'
+    })
+    const terminalGroup = store.getState().groupsByWorktree['wt-1']?.[0]
+    if (!terminalGroup) {
+      throw new Error('Expected terminal group')
+    }
+    const terminalGroupId = terminalGroup.id
+    const editorGroupId = store.getState().createEmptySplitGroup('wt-1', terminalGroupId, 'right')
+    if (!editorGroupId) {
+      throw new Error('Expected split editor group')
+    }
+    openSourceFile(store, '/repo/seed.ts', { targetGroupId: editorGroupId })
+    store.setState({
+      activeGroupIdByWorktree: { 'wt-1': terminalGroupId },
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { 'wt-1': 'terminal' }
+    } as Partial<AppState>)
+    return { terminalTabId: terminalTab.id, terminalGroupId, editorGroupId }
+  }
+
+  function findUnifiedTabByEntity(store: StoreApi<AppState>, entityId: string) {
+    return store.getState().unifiedTabsByWorktree['wt-1']?.find((tab) => tab.entityId === entityId)
+  }
+
+  it('routes implicit file opens to an existing visible editor group', () => {
+    const store = createEditorTabsStore()
+    const { terminalTabId, terminalGroupId, editorGroupId } = seedTerminalAndEditorGroups(store)
+
+    openSourceFile(store, '/repo/next.ts')
+
+    const openedTab = findUnifiedTabByEntity(store, '/repo/next.ts')
+    const terminalGroup = store
+      .getState()
+      .groupsByWorktree['wt-1'].find((group) => group.id === terminalGroupId)
+    const editorGroup = store
+      .getState()
+      .groupsByWorktree['wt-1'].find((group) => group.id === editorGroupId)
+    expect(openedTab?.groupId).toBe(editorGroupId)
+    expect(editorGroup?.activeTabId).toBe(openedTab?.id)
+    expect(terminalGroup?.activeTabId).toBe(terminalTabId)
+  })
+
+  it('uses editor-recent groups when no inactive group is currently showing an editor', () => {
+    const store = createEditorTabsStore()
+    const { editorGroupId } = seedTerminalAndEditorGroups(store)
+    store.getState().createUnifiedTab('wt-1', 'browser', {
+      id: 'browser-tab',
+      entityId: 'browser-tab',
+      label: 'Browser',
+      targetGroupId: editorGroupId
+    })
+
+    openSourceFile(store, '/repo/recent-target.ts')
+
+    expect(findUnifiedTabByEntity(store, '/repo/recent-target.ts')?.groupId).toBe(editorGroupId)
+  })
+
+  it('keeps explicit target groups ahead of default editor routing', () => {
+    const store = createEditorTabsStore()
+    const { terminalGroupId } = seedTerminalAndEditorGroups(store)
+
+    openSourceFile(store, '/repo/explicit.ts', { targetGroupId: terminalGroupId })
+
+    expect(findUnifiedTabByEntity(store, '/repo/explicit.ts')?.groupId).toBe(terminalGroupId)
+  })
+})
+
+describe('createEditorSlice untitled cleanup routing', () => {
+  const runtimeEnvironmentCallMock = vi.fn()
+  const runtimeEnvironmentTransportCallMock = vi.fn()
+  const localDeletePathMock = vi.fn()
+
+  beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
+    runtimeEnvironmentCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockReset()
+    localDeletePathMock.mockReset()
+    runtimeEnvironmentCallMock.mockResolvedValue({ ok: true, result: { deleted: true } })
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCallMock(args)
+    )
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock },
+        fs: { deletePath: localDeletePathMock }
+      }
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function seedRemoteWorktree(store: StoreApi<AppState>): void {
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [
+        {
+          id: 'repo1',
+          path: '/remote/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/remote/wt',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: false,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      }
+    } as Partial<AppState>)
+  }
+
+  it('closeFile deletes untouched remote untitled files through runtime file RPC', async () => {
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    store.getState().closeFile('/remote/wt/untitled.md')
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
+    })
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+  })
+
+  it('closeAllFiles deletes untouched remote untitled files through runtime file RPC', async () => {
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    store.getState().closeAllFiles()
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
+    })
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+  })
+
+  it('closeFile uses relative remote delete when worktree metadata is missing', async () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [],
+      worktreesByRepo: {}
+    } as Partial<AppState>)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+
+    store.getState().closeFile('/remote/wt/untitled.md')
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
+    })
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+  })
+
+  it('closeFile deletes untouched remote untitled files in their owning runtime after switching local', async () => {
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+    store.setState({ settings: { activeRuntimeEnvironmentId: null } as never })
+
+    store.getState().closeFile('/remote/wt/untitled.md')
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
+    })
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+  })
+
+  it('closeFile deletes untouched remote untitled files in their owning runtime after switching environments', async () => {
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      mode: 'edit'
+    })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-2' } as never })
+
+    store.getState().closeFile('/remote/wt/untitled.md')
+
+    await vi.waitFor(() => {
+      expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'files.delete',
+        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
+        timeoutMs: 15_000
+      })
+    })
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+  })
+
+  it('closeFile keeps untouched templated untitled files on disk', async () => {
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      deleteUntouchedOnClose: false,
+      mode: 'edit'
+    })
+
+    store.getState().closeFile('/remote/wt/untitled.md')
+    await flushAsyncRemoteRefresh()
+
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]).toMatchObject({
+      filePath: '/remote/wt/untitled.md',
+      deleteUntouchedOnClose: false
+    })
+  })
+
+  it('closeAllFiles keeps untouched templated untitled files on disk', async () => {
+    const store = createEditorStore()
+    seedRemoteWorktree(store)
+    store.getState().openFile({
+      filePath: '/remote/wt/untitled.md',
+      relativePath: 'untitled.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isUntitled: true,
+      deleteUntouchedOnClose: false,
+      mode: 'edit'
+    })
+
+    store.getState().closeAllFiles()
+    await flushAsyncRemoteRefresh()
+
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
+    expect(localDeletePathMock).not.toHaveBeenCalled()
+    expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]).toMatchObject({
+      filePath: '/remote/wt/untitled.md',
+      deleteUntouchedOnClose: false
+    })
+  })
+})
+
+describe('createEditorSlice recently closed editor tabs', () => {
+  function openMirroredEditor(store: StoreApi<AppState>, filePath: string, preview = false): void {
+    store.getState().openFile(
+      {
+        filePath,
+        relativePath: filePath.replace('/repo/', ''),
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        runtimeEnvironmentId: 'env-1',
+        mirroredFromRuntimeSession: true,
+        mode: 'edit'
+      },
+      { preview }
+    )
+  }
+
+  it('reopens a closed mirrored editor tab as a local tab', () => {
+    const store = createEditorStore()
+    openMirroredEditor(store, '/repo/notes.md')
+
+    store.getState().closeFile('/repo/notes.md')
+
+    const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
+    expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(recent).not.toHaveProperty('mirroredFromRuntimeSession')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+    expect(store.getState().openFiles[0]).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(store.getState().openFiles[0]).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
+
+  it('reopens close-all mirrored editor tabs as local tabs', () => {
+    const store = createEditorStore()
+    openMirroredEditor(store, '/repo/notes.md')
+
+    store.getState().closeAllFiles()
+
+    const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
+    expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(recent).not.toHaveProperty('mirroredFromRuntimeSession')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+    expect(store.getState().openFiles[0]).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(store.getState().openFiles[0]).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
+
+  it('reopens replaced mirrored preview tabs as local tabs', () => {
+    const store = createEditorStore()
+    openMirroredEditor(store, '/repo/notes.md', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/guide.md',
+        relativePath: 'guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        runtimeEnvironmentId: 'env-1',
+        mode: 'edit'
+      },
+      { preview: true, recordReplacedPreview: true }
+    )
+
+    const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
+    expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(recent).not.toHaveProperty('mirroredFromRuntimeSession')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+    expect(store.getState().openFiles.at(-1)).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(store.getState().openFiles.at(-1)).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
 })
 
 describe('createEditorSlice markdown view state', () => {
+  it('updates stale language metadata when reopening an existing file', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/notebooks/example.ipynb',
+      relativePath: 'notebooks/example.ipynb',
+      worktreeId: 'wt-1',
+      language: 'json',
+      mode: 'edit'
+    })
+
+    store.getState().openFile({
+      filePath: '/repo/notebooks/example.ipynb',
+      relativePath: 'notebooks/example.ipynb',
+      worktreeId: 'wt-1',
+      language: 'notebook',
+      mode: 'edit'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/notebooks/example.ipynb',
+        language: 'notebook'
+      })
+    ])
+  })
+
   it('drops markdown view mode for a replaced preview tab', () => {
     const store = createEditorStore()
 
@@ -188,6 +1403,129 @@ describe('createEditorSlice editor view mode', () => {
   })
 })
 
+describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
+  it('stores visible=true as an explicit entry keyed by fileId', () => {
+    const store = createEditorStore()
+
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
+  })
+
+  it('deletes the entry when visibility resets to hidden', () => {
+    const store = createEditorStore()
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+
+  it('is a no-op when hiding a file that was never shown', () => {
+    const store = createEditorStore()
+    const before = store.getState().markdownFrontmatterVisible
+
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
+
+    expect(store.getState().markdownFrontmatterVisible).toBe(before)
+  })
+
+  it('drops the visibility flag when the file is closed', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    store.getState().closeFile('/repo/notes.md')
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+
+  it('keeps the visibility flag while a preview tab still references the source file', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    store.getState().closeFile('/repo/notes.md')
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
+
+    store.getState().closeFile('markdown-preview::/repo/notes.md')
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+
+  it('keeps the visibility flag when replacing an edit preview referenced by a markdown preview', () => {
+    const store = createEditorStore()
+    store.getState().openFile(
+      {
+        filePath: '/repo/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().openMarkdownPreview(
+      {
+        filePath: '/repo/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown'
+      },
+      { sourceFileId: '/repo/notes.md' }
+    )
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/guide.md',
+        relativePath: 'guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
+  })
+
+  it('drops the visibility flag when all files are closed', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    store.getState().closeAllFiles()
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+})
+
 describe('createEditorSlice openMarkdownPreview', () => {
   it('opens markdown preview as a separate read-only tab', () => {
     const store = createEditorStore()
@@ -246,6 +1584,135 @@ describe('createEditorSlice openMarkdownPreview', () => {
         markdownPreviewAnchor: 'install'
       })
     ])
+  })
+
+  it('keeps preview-only same-path markdown previews separate by owner', () => {
+    const store = createEditorStore()
+    const floatingSourceId = ownedEditorFileId(
+      '/repo/docs/README.md',
+      FLOATING_TERMINAL_WORKTREE_ID,
+      null
+    )
+
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'README.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      runtimeEnvironmentId: null,
+      language: 'markdown'
+    })
+
+    const previews = store.getState().openFiles.filter((file) => file.mode === 'markdown-preview')
+    expect(previews).toEqual([
+      expect.objectContaining({
+        id: 'markdown-preview::/repo/docs/README.md',
+        markdownPreviewSourceFileId: '/repo/docs/README.md',
+        worktreeId: 'wt-1'
+      }),
+      expect.objectContaining({
+        id: `markdown-preview::${floatingSourceId}`,
+        markdownPreviewSourceFileId: floatingSourceId,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+    ])
+  })
+
+  it('keeps same-path markdown previews separate by source owner', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'README.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+    const floatingFile = store
+      .getState()
+      .openFiles.find((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
+    expect(floatingFile).toBeDefined()
+
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().openMarkdownPreview(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'README.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null,
+        language: 'markdown'
+      },
+      { sourceFileId: floatingFile?.id }
+    )
+
+    const previews = store.getState().openFiles.filter((file) => file.mode === 'markdown-preview')
+    expect(previews).toHaveLength(2)
+    expect(previews.map((file) => file.markdownPreviewSourceFileId)).toEqual([
+      '/repo/docs/README.md',
+      floatingFile?.id
+    ])
+  })
+
+  it('uses the resolved active runtime owner when opening markdown previews', () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings'],
+      openFiles: [
+        {
+          id: '/repo/docs/README.md',
+          filePath: '/repo/docs/README.md',
+          relativePath: 'docs/README.md',
+          worktreeId: 'wt-1',
+          language: 'markdown',
+          isDirty: false,
+          mode: 'edit'
+        },
+        {
+          id: 'editor:wt-1:env-active:readme',
+          filePath: '/repo/docs/README.md',
+          relativePath: 'docs/README.md',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: 'env-active',
+          language: 'markdown',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    } as Partial<AppState>)
+
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+
+    expect(store.getState().openFiles.at(-1)).toMatchObject({
+      mode: 'markdown-preview',
+      runtimeEnvironmentId: 'env-active',
+      markdownPreviewSourceFileId: 'editor:wt-1:env-active:readme'
+    })
   })
 })
 
@@ -453,6 +1920,36 @@ describe('createEditorSlice editor drafts', () => {
 })
 
 describe('createEditorSlice conflict status reconciliation', () => {
+  it('records clean git status checks with an explicit empty entry list', () => {
+    const store = createEditorStore()
+
+    store.getState().setGitStatus('wt-clean', {
+      conflictOperation: 'unknown',
+      entries: []
+    })
+
+    expect(store.getState().gitStatusByWorktree).toHaveProperty('wt-clean')
+    expect(store.getState().gitStatusByWorktree['wt-clean']).toEqual([])
+  })
+
+  it('clears ignored path cache when status refresh omits ignored paths', () => {
+    const store = createEditorStore()
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      ignoredPaths: ['dist/', '.env']
+    })
+    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual(['dist/', '.env'])
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: []
+    })
+
+    expect(store.getState().gitIgnoredPathsByWorktree['wt-1']).toEqual([])
+  })
+
   it('tracks unresolved conflicts when opened through the conflict-safe entry point', () => {
     const store = createEditorStore()
 
@@ -487,6 +1984,207 @@ describe('createEditorSlice conflict status reconciliation', () => {
         conflictStatusSource: 'session'
       }
     ])
+  })
+
+  it('reloads an open check-details tab from the hosted provider', async () => {
+    const fetchPRCheckDetails = vi.fn().mockResolvedValue({
+      name: 'verify',
+      status: 'completed',
+      conclusion: 'success',
+      url: null,
+      detailsUrl: null,
+      startedAt: null,
+      completedAt: null,
+      title: 'Build passed',
+      summary: null,
+      text: null,
+      annotations: [],
+      jobs: []
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = createStore<any>()((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      repos: [{ id: 'repo-1', path: '/repo' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+      fetchPRCheckDetails,
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    })) as unknown as StoreApi<AppState>
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: false,
+      error: null
+    })
+
+    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
+
+    expect(fetchPRCheckDetails).toHaveBeenCalledWith(
+      '/repo',
+      expect.objectContaining({ checkRunId: 42, checkName: 'verify' }),
+      { repoId: 'repo-1' }
+    )
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::check-run:42',
+        checkRunDetails: expect.objectContaining({
+          loading: false,
+          details: expect.objectContaining({ title: 'Build passed', conclusion: 'success' })
+        })
+      })
+    )
+  })
+
+  it('patches an open check-details tab without changing the active file', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().openFile({
+      filePath: '/repo/other.ts',
+      relativePath: 'other.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
+      details: {
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'failure',
+        url: null,
+        detailsUrl: null,
+        startedAt: null,
+        completedAt: null,
+        title: 'Build failed',
+        summary: null,
+        text: null,
+        annotations: [],
+        jobs: []
+      },
+      loading: false,
+      error: null
+    })
+
+    expect(store.getState().activeFileId).toBe('/repo/other.ts')
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::check-run:42',
+        checkRunDetails: expect.objectContaining({
+          loading: false,
+          details: expect.objectContaining({ title: 'Build failed' })
+        })
+      })
+    )
+  })
+
+  it('opens check full details as a center-pane editor tab', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: {
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'failure',
+        url: null,
+        detailsUrl: null,
+        startedAt: null,
+        completedAt: null,
+        title: 'Build failed',
+        summary: null,
+        text: null,
+        annotations: [],
+        jobs: []
+      },
+      loading: false,
+      error: null
+    })
+
+    expect(store.getState().activeFileId).toBe('wt-1::check-details::check-run:42')
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::check-run:42',
+        mode: 'check-details',
+        relativePath: 'verify',
+        checkRunDetails: expect.objectContaining({
+          contextKey: 'repo:99',
+          check,
+          details: expect.objectContaining({ title: 'Build failed' })
+        })
+      })
+    )
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toContainEqual(
+      expect.objectContaining({
+        entityId: 'wt-1::check-details::check-run:42',
+        contentType: 'check-details',
+        label: 'verify'
+      })
+    )
+  })
+
+  it('keeps the conflict review active when selecting a conflict from its tree', () => {
+    const store = createEditorStore()
+
+    store
+      .getState()
+      .openConflictReview(
+        'wt-1',
+        '/repo',
+        [{ path: 'src/conflict.ts', conflictKind: 'both_modified' }],
+        'live-summary'
+      )
+    store.getState().openConflictReviewFile(
+      'wt-1::conflict-review',
+      'wt-1',
+      '/repo',
+      {
+        path: 'src/conflict.ts',
+        status: 'modified',
+        area: 'unstaged',
+        conflictKind: 'both_modified',
+        conflictStatus: 'unresolved',
+        conflictStatusSource: 'git'
+      },
+      'typescript'
+    )
+
+    const reviewFile = store
+      .getState()
+      .openFiles.find((file) => file.id === 'wt-1::conflict-review')
+
+    expect(store.getState().activeFileId).toBe('wt-1::conflict-review')
+    expect(reviewFile?.conflictReview?.selectedFileId).toBe('/repo/src/conflict.ts')
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: '/repo/src/conflict.ts',
+        mode: 'edit',
+        conflict: expect.objectContaining({ conflictStatus: 'unresolved' })
+      })
+    )
   })
 
   it('marks tracked conflicts as resolved locally after live conflict state disappears', () => {
@@ -587,6 +2285,8 @@ describe('createEditorSlice remote branch actions', () => {
   const gitUpstreamStatusMock = vi.fn()
   const gitPushMock = vi.fn()
   const gitPullMock = vi.fn()
+  const gitFastForwardMock = vi.fn()
+  const gitRebaseFromBaseMock = vi.fn()
   const gitFetchMock = vi.fn()
 
   beforeEach(() => {
@@ -595,6 +2295,8 @@ describe('createEditorSlice remote branch actions', () => {
     gitUpstreamStatusMock.mockReset()
     gitPushMock.mockReset()
     gitPullMock.mockReset()
+    gitFastForwardMock.mockReset()
+    gitRebaseFromBaseMock.mockReset()
     gitFetchMock.mockReset()
 
     gitStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
@@ -614,6 +2316,8 @@ describe('createEditorSlice remote branch actions', () => {
         upstreamStatus: gitUpstreamStatusMock,
         push: gitPushMock,
         pull: gitPullMock,
+        fastForward: gitFastForwardMock,
+        rebaseFromBase: gitRebaseFromBaseMock,
         fetch: gitFetchMock
       }
     }
@@ -637,6 +2341,54 @@ describe('createEditorSlice remote branch actions', () => {
     })
   })
 
+  it('does not notify subscribers when upstream status is unchanged', () => {
+    const store = createEditorStore()
+    const status = {
+      hasUpstream: true,
+      upstreamName: 'origin/main',
+      ahead: 2,
+      behind: 1
+    }
+
+    store.getState().setUpstreamStatus('wt-1', status)
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+    store.getState().setUpstreamStatus('wt-1', { ...status })
+    unsubscribe()
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('updates subscribers when explicit upstream status adds patch equivalence', () => {
+    const store = createEditorStore()
+    store.getState().setUpstreamStatus('wt-1', {
+      hasUpstream: true,
+      upstreamName: 'origin/feature',
+      ahead: 14,
+      behind: 3
+    })
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+
+    store.getState().setUpstreamStatus('wt-1', {
+      hasUpstream: true,
+      upstreamName: 'origin/feature',
+      ahead: 14,
+      behind: 3,
+      behindCommitsArePatchEquivalent: true
+    })
+    unsubscribe()
+
+    expect(listener).toHaveBeenCalled()
+    expect(store.getState().remoteStatusesByWorktree['wt-1']).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/feature',
+      ahead: 14,
+      behind: 3,
+      behindCommitsArePatchEquivalent: true
+    })
+  })
+
   it('runs pull and refreshes status + upstream on success', async () => {
     const store = createEditorStore()
     store.getState().setGitStatus('wt-1', {
@@ -653,6 +2405,157 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
+  it('routes git operations through the explicit runtime owner instead of ambient focus', async () => {
+    const store = createEditorStore()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
+
+    await store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
+      runtimeTargetSettings: { activeRuntimeEnvironmentId: null }
+    })
+
+    expect(gitPushMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      publish: false,
+      connectionId: undefined,
+      pushTarget: undefined,
+      forceWithLease: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget: undefined
+    })
+  })
+
+  it('runs rebase from base and refreshes upstream on success', async () => {
+    const store = createEditorStore()
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await store.getState().rebaseFromBase('wt-1', '/repo', 'origin/main', undefined, pushTarget)
+
+    expect(gitRebaseFromBaseMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      baseRef: 'origin/main',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget
+    })
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('runs fast-forward and refreshes upstream on success', async () => {
+    const store = createEditorStore()
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await store.getState().fastForwardBranch('wt-1', '/repo', undefined, pushTarget)
+
+    expect(gitFastForwardMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget
+    })
+    expect(toastErrorMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces a fast-forward toast and clears the busy flag when fast-forward fails', async () => {
+    const store = createEditorStore()
+    gitFastForwardMock.mockRejectedValueOnce(new Error('Not possible to fast-forward, aborting.'))
+
+    await expect(store.getState().fastForwardBranch('wt-1', '/repo')).rejects.toThrow(
+      'Not possible to fast-forward'
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Fast-forward failed. Not possible to fast-forward, aborting.'
+    )
+    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('keeps fast-forward wording when normalized pull errors report local changes', async () => {
+    const store = createEditorStore()
+    gitFastForwardMock.mockRejectedValueOnce(
+      new Error(
+        'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
+      )
+    )
+
+    await expect(store.getState().fastForwardBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Fast-forward blocked — commit or stash your local changes first.'
+    )
+  })
+
+  it('keeps fast-forward wording when normalized pull errors report untracked files', async () => {
+    const store = createEditorStore()
+    gitFastForwardMock.mockRejectedValueOnce(
+      new Error('Pull would overwrite untracked files. Move, remove, or add them before pulling.')
+    )
+
+    await expect(store.getState().fastForwardBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Fast-forward blocked — move, remove, or add untracked files first.'
+    )
+  })
+
+  it('keeps rebase wording when normalized pull errors report local changes', async () => {
+    const store = createEditorStore()
+    gitRebaseFromBaseMock.mockRejectedValueOnce(
+      new Error(
+        'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
+      )
+    )
+
+    await expect(store.getState().rebaseFromBase('wt-1', '/repo', 'origin/main')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Rebase blocked — commit or stash your local changes first.'
+    )
+  })
+
+  it('keeps rebase wording when normalized pull errors report untracked files', async () => {
+    const store = createEditorStore()
+    gitRebaseFromBaseMock.mockRejectedValueOnce(
+      new Error('Pull would overwrite untracked files. Move, remove, or add them before pulling.')
+    )
+
+    await expect(store.getState().rebaseFromBase('wt-1', '/repo', 'origin/main')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Rebase blocked — move, remove, or add untracked files first.'
+    )
+  })
+
+  it('fetches the explicit push target and refreshes that target status', async () => {
+    const store = createEditorStore()
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await store.getState().fetchBranch('wt-1', '/repo', undefined, pushTarget)
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      pushTarget
+    })
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
   it('surfaces a readable toast when pull reports local changes would be overwritten', async () => {
     const store = createEditorStore()
     gitPullMock.mockRejectedValueOnce(
@@ -665,6 +2568,21 @@ describe('createEditorSlice remote branch actions', () => {
 
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Pull blocked — commit or stash your local changes first.'
+    )
+  })
+
+  it('surfaces an explicit toast when pull stops on merge conflicts', async () => {
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'Auto-merging src/app.ts\nCONFLICT (content): Merge conflict in src/app.ts\nAutomatic merge failed; fix conflicts and then commit the result.'
+      )
+    )
+
+    await expect(store.getState().pullBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Pull stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
     )
   })
 
@@ -686,7 +2604,7 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
-  it('preserves actionable publish errors and avoids refresh on failure', async () => {
+  it('preserves actionable publish errors and refreshes upstream after rejection', async () => {
     const store = createEditorStore()
     const publishError = new Error(
       'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
@@ -700,8 +2618,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -719,8 +2646,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -771,8 +2707,17 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -788,8 +2733,75 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith(
       'Push rejected — remote has changes. Pull first, then try again.'
     )
+    await flushAsyncRemoteRefresh()
+
     expect(gitStatusMock).not.toHaveBeenCalled()
-    expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces submodule push failures with the submodule name', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "Command failed: git push\nPushing submodule 'find-cmux-followers'\n" +
+        ' ! [rejected]        master -> master (fetch first)\n' +
+        "Unable to push submodule 'find-cmux-followers'\n" +
+        'fatal: failed to push all needed submodules'
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Push failed. Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
+    )
+    await flushAsyncRemoteRefresh()
+
+    expect(gitStatusMock).not.toHaveBeenCalled()
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('surfaces transport-prefixed normalized submodule push failures', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "Error invoking remote method 'git:push': Error: Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Push failed. Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
+    )
+    await flushAsyncRemoteRefresh()
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -805,6 +2817,50 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('Push failed. Check your connection and try again.')
     expect(gitStatusMock).not.toHaveBeenCalled()
     expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('maps force-with-lease rejection into force-push guidance', async () => {
+    const store = createEditorStore()
+    const pushError = new Error('fatal: stale info')
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(
+      store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
+        forceWithLease: true
+      })
+    ).rejects.toThrow(pushError.message)
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Force push rejected — remote changed since last fetch. Fetch first, then try again.'
+    )
+    await flushAsyncRemoteRefresh()
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('uses a force-push fallback message for generic force-with-lease errors', async () => {
+    const store = createEditorStore()
+    const pushError = new Error('network timeout')
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(
+      store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
+        forceWithLease: true
+      })
+    ).rejects.toThrow(pushError.message)
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Force Push failed. Check your connection and try again.'
+    )
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
@@ -838,7 +2894,7 @@ describe('createEditorSlice remote branch actions', () => {
 
     await expect(store.getState().fetchBranch('wt-1', '/repo')).rejects.toThrow('network timeout')
 
-    expect(toastErrorMock).toHaveBeenCalledWith('network timeout')
+    expect(toastErrorMock).toHaveBeenCalledWith('Fetch failed. network timeout')
     expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
@@ -939,18 +2995,48 @@ describe('createEditorSlice remote branch actions', () => {
     // Why: guards against a no-op push round-trip after a pure fast-forward
     // pull. See syncBranch's ahead>0 guard in editor.ts.
     const store = createEditorStore()
-    gitUpstreamStatusMock.mockResolvedValueOnce({
-      hasUpstream: true,
-      upstreamName: 'origin/main',
-      ahead: 0,
-      behind: 0
-    })
+    gitUpstreamStatusMock
+      .mockResolvedValueOnce({
+        hasUpstream: true,
+        upstreamName: 'origin/main',
+        ahead: 0,
+        behind: 1
+      })
+      .mockResolvedValueOnce({
+        hasUpstream: true,
+        upstreamName: 'origin/main',
+        ahead: 0,
+        behind: 0
+      })
 
     await store.getState().syncBranch('wt-1', '/repo')
 
     expect(gitFetchMock).toHaveBeenCalled()
     expect(gitPullMock).toHaveBeenCalled()
     expect(gitPushMock).not.toHaveBeenCalled()
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('force-pushes with lease instead of pulling when sync sees a stale rebased upstream', async () => {
+    const store = createEditorStore()
+    gitUpstreamStatusMock.mockResolvedValueOnce({
+      hasUpstream: true,
+      upstreamName: 'origin/feature',
+      ahead: 14,
+      behind: 3,
+      behindCommitsArePatchEquivalent: true
+    })
+
+    await store.getState().syncBranch('wt-1', '/repo')
+
+    expect(gitFetchMock).toHaveBeenCalled()
+    expect(gitPullMock).not.toHaveBeenCalled()
+    expect(gitPushMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined,
+      forceWithLease: true
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledTimes(2)
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
@@ -1013,18 +3099,64 @@ describe('createEditorSlice remote branch actions', () => {
     expect(gitPushMock).not.toHaveBeenCalled()
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
+
+  it('surfaces a sync-labeled toast when syncBranch stops on merge conflicts', async () => {
+    const store = createEditorStore()
+    gitPullMock.mockRejectedValueOnce(
+      new Error(
+        'Auto-merging src/app.ts\nCONFLICT (content): Merge conflict in src/app.ts\nAutomatic merge failed; fix conflicts and then commit the result.'
+      )
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Sync stopped with merge conflicts. Resolve them in Source Control, then commit the merge.'
+    )
+    expect(gitPushMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
 })
 
 describe('createEditorSlice activateMarkdownLink', () => {
   const openUrlMock = vi.fn()
   const openFileUriMock = vi.fn()
   const pathExistsMock = vi.fn()
+  const authorizeExternalPathMock = vi.fn()
+  const fsStatMock = vi.fn()
+  const runtimeEnvironmentCallMock = vi.fn()
+  const runtimeEnvironmentTransportCallMock = vi.fn()
 
   beforeEach(() => {
+    clearRuntimeCompatibilityCacheForTests()
     toastErrorMock.mockReset()
     openUrlMock.mockReset()
     openFileUriMock.mockReset()
     pathExistsMock.mockReset()
+    pathExistsMock.mockResolvedValue(true)
+    authorizeExternalPathMock.mockReset()
+    fsStatMock.mockReset()
+    fsStatMock.mockImplementation(async ({ filePath }: { filePath: string }) => {
+      const exists = await pathExistsMock(filePath)
+      if (!exists) {
+        throw new Error('File not found')
+      }
+      return { size: 1, isDirectory: false, mtime: 1 }
+    })
+    runtimeEnvironmentCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockReset()
+    runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-1',
+      ok: true,
+      result: { size: 1, isDirectory: false, mtime: 1 },
+      _meta: { runtimeId: 'runtime-source' }
+    })
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-source') ??
+        runtimeEnvironmentCallMock(args)
+    )
     openHttpLinkMock.mockReset()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ;(globalThis as any).window = (globalThis as any).window ?? {}
@@ -1034,6 +3166,13 @@ describe('createEditorSlice activateMarkdownLink', () => {
         openUrl: openUrlMock,
         openFileUri: openFileUriMock,
         pathExists: pathExistsMock
+      },
+      fs: {
+        authorizeExternalPath: authorizeExternalPathMock,
+        stat: fsStatMock
+      },
+      runtimeEnvironments: {
+        call: runtimeEnvironmentTransportCallMock
       }
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1044,6 +3183,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
   })
 
   afterEach(() => {
+    vi.unstubAllGlobals()
     vi.useRealTimers()
   })
 
@@ -1068,6 +3208,142 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
+  it('opens remote-owned markdown links through the source file runtime owner', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings']
+    })
+    store.getState().openFile({
+      filePath: '/repo/docs/note.md',
+      relativePath: 'docs/note.md',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: 'env-source',
+      language: 'markdown',
+      mode: 'edit'
+    })
+
+    await store.getState().activateMarkdownLink('./guide.md', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+      selector: 'env-source',
+      method: 'files.stat',
+      params: { worktree: 'id:wt-1', relativePath: 'docs/guide.md' },
+      timeoutMs: 15_000
+    })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/note.md',
+        runtimeEnvironmentId: 'env-source'
+      }),
+      expect.objectContaining({
+        filePath: '/repo/docs/guide.md',
+        runtimeEnvironmentId: 'env-source',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('stats SSH markdown links through the source worktree connection before opening', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/repo',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      }
+    } as Partial<AppState>)
+
+    await store.getState().activateMarkdownLink('./guide.md', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(fsStatMock).toHaveBeenCalledWith({
+      filePath: '/repo/docs/guide.md',
+      connectionId: 'ssh-1'
+    })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/guide.md',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('does not open linked markdown directories as files', async () => {
+    const store = createEditorStore()
+    fsStatMock.mockResolvedValueOnce({ size: 1, isDirectory: true, mtime: 1 })
+
+    await store.getState().activateMarkdownLink('./guide.md', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().openFiles).toEqual([])
+    expect(toastErrorMock).toHaveBeenCalledWith('Cannot open directory: docs/guide.md')
+  })
+
+  it('can open a local file without adopting the currently active runtime owner', () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings']
+    })
+
+    store.getState().openFile(
+      {
+        filePath: '/remote/.orca/drops/log.txt',
+        relativePath: '.orca/drops/log.txt',
+        worktreeId: 'wt-1',
+        language: 'text',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    expect(store.getState().openFiles[0]).toMatchObject({
+      filePath: '/remote/.orca/drops/log.txt'
+    })
+    expect(store.getState().openFiles[0]?.runtimeEnvironmentId).toBeNull()
+  })
+
   it('toasts when the markdown target is missing', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(false)
@@ -1083,7 +3359,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
-  it('sets source view mode before opening when the link has a line anchor', async () => {
+  it('sets source view mode when the link has a line anchor', async () => {
     const store = createEditorStore()
     pathExistsMock.mockResolvedValue(true)
 
@@ -1096,7 +3372,136 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(store.getState().markdownViewMode['/repo/docs/guide.md']).toBe('source')
     expect(store.getState().pendingEditorReveal).toEqual({
       filePath: '/repo/docs/guide.md',
+      fileId: '/repo/docs/guide.md',
       line: 10,
+      column: 1,
+      matchLength: 0
+    })
+  })
+
+  it('cancels superseded line-anchor reveal frames', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    let nextFrameId = 1
+    const pendingFrames = new Map<number, FrameRequestCallback>()
+    const canceledFrameIds = new Set<number>()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      const frameId = nextFrameId++
+      pendingFrames.set(frameId, callback)
+      return frameId
+    })
+    vi.stubGlobal('cancelAnimationFrame', (frameId: number) => {
+      canceledFrameIds.add(frameId)
+      pendingFrames.delete(frameId)
+    })
+
+    await store.getState().activateMarkdownLink('./first.md#L3', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    await store.getState().activateMarkdownLink('./second.md#L9', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(canceledFrameIds).toContain(1)
+    while (pendingFrames.size > 0) {
+      const nextPendingFrame = pendingFrames.entries().next()
+      if (nextPendingFrame.done) {
+        break
+      }
+      const [frameId, callback] = nextPendingFrame.value
+      pendingFrames.delete(frameId)
+      callback(0)
+    }
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/docs/second.md',
+      fileId: '/repo/docs/second.md',
+      line: 9,
+      column: 1,
+      matchLength: 0
+    })
+  })
+
+  it('reveals active-runtime markdown line anchors on the owner-qualified tab id', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-active' } as AppState['settings'],
+      openFiles: [
+        {
+          id: '/repo/docs/guide.md',
+          filePath: '/repo/docs/guide.md',
+          relativePath: 'docs/guide.md',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          language: 'markdown',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    } as Partial<AppState>)
+    const activeRuntimeFileId = ownedEditorFileId('/repo/docs/guide.md', 'wt-1', 'env-active')
+
+    await store.getState().activateMarkdownLink('./guide.md#L10', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().markdownViewMode[activeRuntimeFileId]).toBe('source')
+    expect(store.getState().markdownViewMode['/repo/docs/guide.md']).toBeUndefined()
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/docs/guide.md',
+      fileId: activeRuntimeFileId,
+      line: 10,
+      column: 1,
+      matchLength: 0
+    })
+  })
+
+  it('sets line-anchor source mode on the owner-qualified target id', async () => {
+    const store = createEditorStore()
+    pathExistsMock.mockResolvedValue(true)
+    store.getState().openFile({
+      filePath: '/repo/docs/note.md',
+      relativePath: 'docs/note.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/note.md',
+        relativePath: 'docs/note.md',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+    const floatingFileId = ownedEditorFileId(
+      '/repo/docs/note.md',
+      FLOATING_TERMINAL_WORKTREE_ID,
+      null
+    )
+
+    await store.getState().activateMarkdownLink('./note.md#L3', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      worktreeRoot: '/repo',
+      runtimeEnvironmentId: null
+    })
+
+    expect(store.getState().markdownViewMode[floatingFileId]).toBe('source')
+    expect(store.getState().markdownViewMode['/repo/docs/note.md']).toBeUndefined()
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/docs/note.md',
+      fileId: floatingFileId,
+      line: 3,
       column: 1,
       matchLength: 0
     })
@@ -1114,15 +3519,135 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(store.getState().openFiles).toEqual([])
   })
 
-  it('delegates outside-worktree files to shell.openFileUri', async () => {
+  it('opens in-worktree file links in Orca', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('./image.png', {
       sourceFilePath: '/repo/docs/note.md',
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(openFileUriMock).toHaveBeenCalledTimes(1)
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/image.png',
+        relativePath: 'docs/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('reveals line targets for non-markdown file links', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('../src/PdfViewer.tsx:142:7', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/src/PdfViewer.tsx',
+        relativePath: 'src/PdfViewer.tsx',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(store.getState().pendingEditorReveal).toEqual({
+      filePath: '/repo/src/PdfViewer.tsx',
+      fileId: '/repo/src/PdfViewer.tsx',
+      line: 142,
+      column: 7,
+      matchLength: 0
+    })
+  })
+
+  it('opens explicit file URLs inside the worktree in Orca', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('file:///repo/docs/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/repo/docs/image.png',
+        relativePath: 'docs/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('opens explicit file URLs outside the worktree in Orca after authorizing them', async () => {
+    const store = createEditorStore()
+    await store.getState().activateMarkdownLink('file:///tmp/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/image.png' })
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        filePath: '/tmp/image.png',
+        relativePath: '/tmp/image.png',
+        mode: 'edit',
+        isPreview: true
+      })
+    ])
+    expect(openFileUriMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks external file URLs from SSH markdown sources', async () => {
+    const store = createEditorStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/repo',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      }
+    } as Partial<AppState>)
+
+    await store.getState().activateMarkdownLink('file:///tmp/image.png', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+
+    expect(authorizeExternalPathMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([])
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Opening remote paths in the local OS is not available.'
+    )
   })
 
   it('activates same-file line anchors via setActiveFile without opening a new tab', async () => {

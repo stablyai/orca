@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveWithSshG } from './ssh-config-parser'
 
 vi.mock('os', () => ({
@@ -10,6 +10,15 @@ vi.mock('child_process', () => ({
 }))
 
 describe('resolveWithSshG', () => {
+  beforeEach(async () => {
+    const { execFile } = await import('child_process')
+    vi.mocked(execFile).mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('returns parsed config on success', async () => {
     const { execFile } = await import('child_process')
     const mockExecFile = vi.mocked(execFile)
@@ -60,5 +69,25 @@ describe('resolveWithSshG', () => {
 
     const result = await resolveWithSshG('myhost')
     expect(result).toBeNull()
+  })
+
+  it('returns null when ssh -G never reports completion', async () => {
+    vi.useFakeTimers()
+    const { execFile } = await import('child_process')
+    const mockExecFile = vi.mocked(execFile)
+    const killMock = vi.fn()
+    mockExecFile.mockImplementation(() => ({ kill: killMock }) as never)
+
+    let settled = false
+    const resultPromise = resolveWithSshG('stuck-host').then((result) => {
+      settled = true
+      return result
+    })
+
+    await vi.advanceTimersByTimeAsync(5000)
+
+    expect(settled).toBe(true)
+    await expect(resultPromise).resolves.toBeNull()
+    expect(killMock).toHaveBeenCalled()
   })
 })

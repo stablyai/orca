@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
@@ -10,23 +10,25 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import TabBar from '../tab-bar/TabBar'
-import TerminalPane from '../terminal-pane/TerminalPane'
-import { browserSlotAnchorName } from '../browser-pane/browser-pane-slots'
+
+import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import TabGroupDropOverlay from './TabGroupDropOverlay'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import {
   getTabPaneBodyDroppableId,
   type HoveredTabInsertion,
   type TabDropZone
 } from './useTabDragSplit'
+import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import { translate } from '@/i18n/i18n'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
 export default function TabGroupPanel({
   groupId,
   worktreeId,
-  isWorktreeActive,
   isFocused,
   hasSplitGroups,
   touchesRightEdge,
@@ -39,7 +41,6 @@ export default function TabGroupPanel({
 }: {
   groupId: string
   worktreeId: string
-  isWorktreeActive: boolean
   isFocused: boolean
   hasSplitGroups: boolean
   touchesRightEdge: boolean
@@ -53,22 +54,8 @@ export default function TabGroupPanel({
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
 
-  const [wslAvailable, setWslAvailable] = useState(false)
-  useEffect(() => {
-    void window.api.wsl.isAvailable().then(setWslAvailable)
-  }, [])
-
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
-  const {
-    activeTab,
-    browserItems,
-    commands,
-    editorItems,
-    runtimeTerminalTabById,
-    tabBarOrder,
-    terminalTabs,
-    worktreePath
-  } = model
+  const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -78,13 +65,14 @@ export default function TabGroupPanel({
     },
     disabled: !isTabDragActive
   })
-  // Why: browser panes for this worktree are rendered once at the worktree
+  // Why: browser and terminal panes for this worktree are rendered once at the worktree
   // level (BrowserPaneOverlayLayer) and positioned over the owning group's
   // body via CSS anchor positioning. Tagging this body with a per-group
   // `anchor-name` lets the overlay reference it via `position-anchor`;
   // moving a tab between groups only swaps which anchor-name the overlay
-  // targets, never reparenting the `<webview>` (which would reload it).
-  const bodyAnchorName = browserSlotAnchorName(groupId)
+  // targets. Browsers avoid `<webview>` reloads; terminals avoid remounting
+  // xterm and losing alt-screen TUI state.
+  const bodyAnchorName = tabGroupBodyAnchorName(groupId)
   // Why: memoize the style object so the literal isn't recreated on every
   // render. A fresh object every render would make the body `<div>` appear
   // to have a new `style` prop on every parent re-render, which defeats any
@@ -103,12 +91,15 @@ export default function TabGroupPanel({
       expandedPaneByTabId={model.expandedPaneByTabId}
       onActivate={commands.activateTerminal}
       onClose={(terminalId) => {
-        const item = model.groupTabs.find(
-          (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
-        )
-        if (item) {
+        const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
+        if (item?.contentType === 'terminal') {
           commands.closeItem(item.id)
+          return
         }
+        // Why: agent quick-launch can briefly desync unified/runtime tab ids
+        // before the host snapshot lands; still route close through the shared
+        // terminal close helper instead of no-op'ing.
+        closeTerminalTab(terminalId)
       }}
       onCloseOthers={(visibleId) => {
         // Why: TabBar emits this with the entityId for terminals/browsers and
@@ -127,26 +118,32 @@ export default function TabGroupPanel({
       }}
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
-      wslAvailable={wslAvailable}
       onNewBrowserTab={commands.newBrowserTab}
+      onNewSimulatorTab={commands.newSimulatorTab}
+      onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
       onSetTabColor={commands.setTabColor}
-      onTogglePaneExpand={() => {}}
+      onTogglePaneExpand={commands.toggleTerminalPaneExpand}
       editorFiles={editorItems}
       browserTabs={browserItems}
       activeFileId={
-        activeTab?.contentType === 'terminal' || activeTab?.contentType === 'browser'
+        activeTab?.contentType === 'terminal' ||
+        activeTab?.contentType === 'browser' ||
+        activeTab?.contentType === 'simulator'
           ? null
           : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
+      activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
       activeTabType={
         activeTab?.contentType === 'terminal'
           ? 'terminal'
           : activeTab?.contentType === 'browser'
             ? 'browser'
-            : 'editor'
+            : activeTab?.contentType === 'simulator'
+              ? 'simulator'
+              : 'editor'
       }
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
@@ -161,6 +158,16 @@ export default function TabGroupPanel({
       }}
       onDuplicateBrowserTab={commands.duplicateBrowserTab}
       onCloseAllFiles={commands.closeAllEditorTabsInGroup}
+      onMakePreviewFilePermanent={(_fileId, tabId) => {
+        if (!tabId) {
+          return
+        }
+        const item = model.groupTabs.find((candidate) => candidate.id === tabId)
+        if (!item) {
+          return
+        }
+        commands.makePreviewFilePermanent(item.entityId, item.id)
+      }}
       onPinFile={(_fileId, tabId) => {
         if (!tabId) {
           return
@@ -179,12 +186,14 @@ export default function TabGroupPanel({
 
   const menuButtonClassName =
     'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
-  const actionChromeClassName = `flex shrink-0 items-center overflow-hidden transition-[width,margin,opacity] duration-150 ${
-    isFocused
-      ? 'ml-1.5 w-7 pointer-events-auto opacity-100'
-      : 'ml-1.5 w-7 pointer-events-none opacity-0'
+  // Why: focused-only — the QC split-button and Pane Actions ellipsis both
+  // appear together so the action cluster never reflows when focus shifts
+  // between groups. Unfocused groups collapse the cluster fully (no
+  // reserved width) since the surrounding tab strip already absorbs the
+  // freed space.
+  const actionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
+    isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
   }`
-
   return (
     <div
       // Why: vertical borders are always `border-border` so the focus
@@ -256,12 +265,21 @@ export default function TabGroupPanel({
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
             {isFocused ? (
+              <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
+            ) : null}
+            {isFocused ? (
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    aria-label="Pane Actions"
-                    title="Pane Actions"
+                    aria-label={translate(
+                      'auto.components.tab.group.TabGroupPanel.9acaf92093',
+                      'Pane Actions'
+                    )}
+                    title={translate(
+                      'auto.components.tab.group.TabGroupPanel.9acaf92093',
+                      'Pane Actions'
+                    )}
                     onClick={(event) => {
                       event.stopPropagation()
                     }}
@@ -277,7 +295,7 @@ export default function TabGroupPanel({
                     }}
                   >
                     <Columns2 className="size-4" />
-                    Split Right
+                    {translate('auto.components.tab.group.TabGroupPanel.ab1e2bff04', 'Split Right')}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => {
@@ -285,7 +303,7 @@ export default function TabGroupPanel({
                     }}
                   >
                     <Rows2 className="size-4" />
-                    Split Down
+                    {translate('auto.components.tab.group.TabGroupPanel.4df2a06d36', 'Split Down')}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => {
@@ -293,7 +311,7 @@ export default function TabGroupPanel({
                     }}
                   >
                     <Columns2 className="size-4" />
-                    Split Left
+                    {translate('auto.components.tab.group.TabGroupPanel.30137df7d0', 'Split Left')}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => {
@@ -301,7 +319,7 @@ export default function TabGroupPanel({
                     }}
                   >
                     <Rows2 className="size-4" />
-                    Split Up
+                    {translate('auto.components.tab.group.TabGroupPanel.0db2081805', 'Split Up')}
                   </DropdownMenuItem>
                   {hasSplitGroups ? (
                     <>
@@ -313,7 +331,10 @@ export default function TabGroupPanel({
                         }}
                       >
                         <X className="size-4" />
-                        Close Group
+                        {translate(
+                          'auto.components.tab.group.TabGroupPanel.f7d6ce445e',
+                          'Close Group'
+                        )}
                       </DropdownMenuItem>
                     </>
                   ) : null}
@@ -345,57 +366,34 @@ export default function TabGroupPanel({
 
       <div
         ref={setBodyDropRef}
+        data-tab-group-body-id={groupId}
+        data-worktree-id={worktreeId}
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >
+        {/* Why: this empty anchor lets the agent-sessions tour read as a
+            terminal-area tip instead of attaching to toolbar chrome. */}
+        {isFocused ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
+            data-contextual-tour-target="workspace-agent-terminal-tip"
+          />
+        ) : null}
         {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
-        {model.groupTabs
-          .filter((item) => item.contentType === 'terminal')
-          .map((item) => (
-            <TerminalPane
-              key={`${item.entityId}-${runtimeTerminalTabById.get(item.entityId)?.generation ?? 0}`}
-              tabId={item.entityId}
-              worktreeId={worktreeId}
-              cwd={worktreePath}
-              isActive={
-                isFocused && activeTab?.id === item.id && activeTab.contentType === 'terminal'
-              }
-              // Why: in multi-group splits, the active terminal in each group
-              // must remain visible (display:flex) so the user sees its output,
-              // but only the focused group's terminal should receive keyboard
-              // input. Hidden worktrees stay mounted offscreen, so `isVisible`
-              // must also respect worktree visibility or those detached panes
-              // keep their WebGL renderers alive and exhaust Chromium's context
-              // budget across worktrees.
-              isVisible={
-                isWorktreeActive &&
-                activeTab?.id === item.id &&
-                activeTab.contentType === 'terminal'
-              }
-              onPtyExit={(ptyId) => {
-                if (commands.consumeSuppressedPtyExit(ptyId)) {
-                  return
-                }
-                commands.closeItem(item.id)
-              }}
-              onCloseTab={() => commands.closeItem(item.id)}
-            />
-          ))}
-
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
-          activeTab.contentType !== 'browser' && (
+          activeTab.contentType !== 'browser' &&
+          activeTab.contentType !== 'simulator' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
-              {/* Why: split groups render editor/browser content inside a
-                  plain relative pane body instead of the legacy flex column in
-                  Terminal.tsx. Anchoring the surface to `absolute inset-0`
-                  recreates the bounded viewport those panes expect, so plain
-                  overflow containers like MarkdownPreview can actually scroll
-                  instead of expanding to content height. */}
+              {/* Why: split groups render editor content inside a plain relative pane body
+                  instead of the legacy flex column in Terminal.tsx. */}
               <Suspense
                 fallback={
                   <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    Loading editor...
+                    {translate(
+                      'auto.components.tab.group.TabGroupPanel.814fb04c43',
+                      'Loading editor...'
+                    )}
                   </div>
                 }
               >
@@ -404,12 +402,11 @@ export default function TabGroupPanel({
             </div>
           )}
 
-        {/* Why: browser panes are rendered at the worktree level by
-            BrowserPaneOverlayLayer and absolutely positioned over this body
-            element via the slot registered above. Rendering them per-group
-            here caused moving a browser tab between groups to unmount and
-            remount the pane, reparenting the Electron `<webview>` — which
-            destroys its guest contents and reloads the page. */}
+        {/* Why: terminal/browser/simulator panes are rendered at the worktree level by
+            overlay layers and absolutely positioned over this body element
+            via the slot registered above. Rendering them per-group caused
+            split moves to remount xterm, reparent Electron `<webview>`, or
+            reload the simulator stream. */}
       </div>
     </div>
   )

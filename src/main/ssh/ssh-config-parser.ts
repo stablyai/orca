@@ -1,8 +1,10 @@
-import { readFileSync, existsSync } from 'fs'
+import { existsSync } from 'fs'
 import { execFile } from 'child_process'
 import { join } from 'path'
 import { homedir } from 'os'
 import type { SshTarget } from '../../shared/ssh-types'
+import { expandSshConfigIncludes } from './ssh-config-include-expander'
+import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 
 export type SshConfigHost = {
   host: string
@@ -10,7 +12,10 @@ export type SshConfigHost = {
   port?: number
   user?: string
   identityFile?: string
+  identityAgent?: string
+  identitiesOnly?: boolean
   proxyCommand?: string
+  proxyUseFdpass?: boolean
   proxyJump?: string
 }
 
@@ -21,7 +26,7 @@ export type SshConfigHost = {
  */
 export function parseSshConfig(content: string): SshConfigHost[] {
   const hosts: SshConfigHost[] = []
-  let current: SshConfigHost | null = null
+  let current: SshConfigHost[] = []
 
   for (const rawLine of content.split('\n')) {
     const line = rawLine.trim()
@@ -29,78 +34,176 @@ export function parseSshConfig(content: string): SshConfigHost[] {
       continue
     }
 
-    const match = line.match(/^(\S+)\s+(.+)$/)
-    if (!match) {
+    const directive = parseConfigDirective(line)
+    if (!directive) {
       continue
     }
 
-    const [, keyword, rawValue] = match
-    const key = keyword.toLowerCase()
-    const value = rawValue.trim()
+    const { key, rawValue } = directive
 
     if (key === 'host') {
-      if (current) {
-        hosts.push(current)
+      if (current.length > 0) {
+        appendHosts(hosts, current)
       }
 
-      // Skip wildcard-only entries (e.g. "Host *" or "Host *.*")
-      const patterns = value.split(/\s+/)
-      const hasConcretePattern = patterns.some((p) => !p.includes('*') && !p.includes('?'))
-      if (!hasConcretePattern) {
-        current = null
+      const patterns = splitHostPatterns(rawValue)
+      const concretePatterns = patterns.filter(
+        (pattern) => !pattern.startsWith('!') && !pattern.includes('*') && !pattern.includes('?')
+      )
+      if (concretePatterns.length === 0) {
+        current = []
         continue
       }
 
-      current = { host: patterns[0] }
+      current = concretePatterns.map((pattern) => ({ host: pattern }))
       continue
     }
 
     if (key === 'match') {
-      // Match blocks are complex conditionals — push current and skip
-      if (current) {
-        hosts.push(current)
+      if (current.length > 0) {
+        appendHosts(hosts, current)
       }
-      current = null
+      current = []
       continue
     }
 
-    if (!current) {
+    if (current.length === 0) {
       continue
     }
+
+    const value = parseScalarConfigValue(rawValue)
 
     switch (key) {
       case 'hostname':
-        current.hostname = value
+        for (const host of current) {
+          host.hostname = value
+        }
         break
       case 'port':
-        current.port = parseInt(value, 10) || 22
+        for (const host of current) {
+          host.port = parseInt(value, 10) || 22
+        }
         break
       case 'user':
-        current.user = value
+        for (const host of current) {
+          host.user = value
+        }
         break
       case 'identityfile':
-        current.identityFile = resolveHomePath(value)
+        for (const host of current) {
+          host.identityFile = resolveSshConfigHomePath(value)
+        }
+        break
+      case 'identityagent':
+        for (const host of current) {
+          host.identityAgent = resolveSshConfigHomePath(value)
+        }
+        break
+      case 'identitiesonly':
+        for (const host of current) {
+          host.identitiesOnly = value.toLowerCase() === 'yes'
+        }
         break
       case 'proxycommand':
-        current.proxyCommand = value
+        for (const host of current) {
+          // Why: OpenSSH treats ProxyCommand as a shell snippet and preserves
+          // the rest of the line, including quotes and `#` characters.
+          host.proxyCommand = rawValue.trim()
+        }
+        break
+      case 'proxyusefdpass':
+        for (const host of current) {
+          host.proxyUseFdpass = value.toLowerCase() === 'yes'
+        }
         break
       case 'proxyjump':
-        current.proxyJump = value
+        for (const host of current) {
+          host.proxyJump = value
+        }
         break
     }
   }
 
-  if (current) {
-    hosts.push(current)
+  if (current.length > 0) {
+    appendHosts(hosts, current)
   }
   return hosts
 }
 
-function resolveHomePath(filepath: string): string {
-  if (filepath.startsWith('~/') || filepath === '~') {
-    return join(homedir(), filepath.slice(1))
+function appendHosts(target: SshConfigHost[], entries: SshConfigHost[]): void {
+  // Why: generated SSH configs can put many concrete aliases on one Host line;
+  // spreading that block into push can exceed JavaScript's argument limit.
+  for (const entry of entries) {
+    target.push(entry)
   }
-  return filepath
+}
+
+function parseConfigDirective(line: string): { key: string; rawValue: string } | null {
+  const match = line.match(/^([^=\s]+)(?:\s*=\s*|\s+)(.*)$/)
+  if (!match) {
+    return null
+  }
+
+  return {
+    key: match[1].toLowerCase(),
+    rawValue: match[2].trim()
+  }
+}
+
+function parseScalarConfigValue(input: string): string {
+  // Why: scalar OpenSSH directives strip wrapping quotes and inline comments;
+  // keeping them would turn valid config values into bad hostnames/users/paths.
+  return splitOpenSshArguments(input)[0] ?? ''
+}
+
+function splitHostPatterns(input: string): string[] {
+  return splitOpenSshArguments(input)
+}
+
+function splitOpenSshArguments(input: string): string[] {
+  const args: string[] = []
+  let current = ''
+  let inQuotes = false
+  let escaped = false
+
+  for (const char of input) {
+    if (escaped) {
+      current += char
+      escaped = false
+      continue
+    }
+
+    if (inQuotes && char === '\\') {
+      escaped = true
+      continue
+    }
+
+    if (char === '"') {
+      inQuotes = !inQuotes
+      continue
+    }
+
+    // Why: multi-alias import must not turn OpenSSH inline comments into targets.
+    if (!inQuotes && char === '#') {
+      break
+    }
+
+    if (!inQuotes && /\s/.test(char)) {
+      if (current) {
+        args.push(current)
+        current = ''
+      }
+      continue
+    }
+
+    current += char
+  }
+
+  if (current) {
+    args.push(current)
+  }
+
+  return args
 }
 
 /** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */
@@ -111,7 +214,7 @@ export function loadUserSshConfig(): SshConfigHost[] {
   }
 
   try {
-    const content = readFileSync(configPath, 'utf-8')
+    const content = expandSshConfigIncludes(configPath)
     return parseSshConfig(content)
   } catch {
     console.warn(`[ssh] Failed to read SSH config at ${configPath}`)
@@ -125,15 +228,16 @@ export function sshConfigHostsToTargets(
   existingTargetHosts: Set<string>
 ): SshTarget[] {
   const targets: SshTarget[] = []
+  const seenLabels = new Set(existingTargetHosts)
 
   for (const entry of hosts) {
     const effectiveHost = entry.hostname || entry.host
     const label = entry.host
 
-    // Skip if already imported (match on label, which is the Host alias)
-    if (existingTargetHosts.has(label)) {
+    if (seenLabels.has(label)) {
       continue
     }
+    seenLabels.add(label)
 
     targets.push({
       id: `ssh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -143,6 +247,8 @@ export function sshConfigHostsToTargets(
       port: entry.port ?? 22,
       username: entry.user ?? '',
       identityFile: entry.identityFile,
+      identityAgent: entry.identityAgent,
+      identitiesOnly: entry.identitiesOnly,
       proxyCommand: entry.proxyCommand,
       jumpHost: entry.proxyJump
     })
@@ -150,7 +256,6 @@ export function sshConfigHostsToTargets(
 
   return targets
 }
-
 // ── ssh -G config resolution ──────────────────────────────────────────
 
 export type SshResolvedConfig = {
@@ -158,8 +263,11 @@ export type SshResolvedConfig = {
   user?: string
   port: number
   identityFile: string[]
+  identityAgent?: string
+  identitiesOnly: boolean
   forwardAgent: boolean
   proxyCommand?: string
+  proxyUseFdpass: boolean
   proxyJump?: string
 }
 
@@ -171,15 +279,41 @@ const SSH_G_TIMEOUT_MS = 5000
 // resolution without reimplementing OpenSSH's complex matching logic.
 export function resolveWithSshG(host: string): Promise<SshResolvedConfig | null> {
   return new Promise((resolve) => {
-    // Why: '--' prevents a host label starting with '-' from being interpreted
-    // as an SSH flag (classic argument injection vector).
-    execFile('ssh', ['-G', '--', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
-      if (err) {
-        resolve(null)
+    let settled = false
+    let child: ReturnType<typeof execFile> | undefined
+    const timer = setTimeout(() => {
+      if (settled) {
         return
       }
-      resolve(parseSshGOutput(stdout))
-    })
+      settled = true
+      child?.kill()
+      resolve(null)
+    }, SSH_G_TIMEOUT_MS)
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+
+    // Why: '--' prevents a host label starting with '-' from being interpreted
+    // as an SSH flag (classic argument injection vector).
+    // Why: execFile's timeout only signals ssh; a stuck callback must still
+    // release SSH import/connection resolution with the existing null fallback.
+    try {
+      child = execFile('ssh', ['-G', '--', host], { timeout: SSH_G_TIMEOUT_MS }, (err, stdout) => {
+        if (err) {
+          settle(() => resolve(null))
+          return
+        }
+        settle(() => resolve(parseSshGOutput(stdout)))
+      })
+    } catch {
+      settle(() => resolve(null))
+    }
   })
 }
 
@@ -195,7 +329,7 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
     const key = line.substring(0, spaceIdx).toLowerCase()
     const value = line.substring(spaceIdx + 1).trim()
     if (key === 'identityfile') {
-      identityFiles.push(resolveHomePath(value))
+      identityFiles.push(resolveSshConfigHomePath(value))
     } else {
       map.set(key, value)
     }
@@ -207,14 +341,19 @@ export function parseSshGOutput(stdout: string): SshResolvedConfig {
   const proxyCommand = rawProxy && rawProxy !== 'none' ? rawProxy : undefined
   const rawJump = map.get('proxyjump')
   const proxyJump = rawJump && rawJump !== 'none' ? rawJump : undefined
+  const rawIdentityAgent = map.get('identityagent')
+  const identityAgent = rawIdentityAgent ? resolveSshConfigHomePath(rawIdentityAgent) : undefined
 
   return {
     hostname: map.get('hostname') ?? '',
     user: map.get('user') || undefined,
     port: parseInt(map.get('port') ?? '22', 10),
     identityFile: identityFiles,
+    identityAgent,
+    identitiesOnly: map.get('identitiesonly') === 'yes',
     forwardAgent: map.get('forwardagent') === 'yes',
     proxyCommand,
+    proxyUseFdpass: map.get('proxyusefdpass') === 'yes',
     proxyJump
   }
 }

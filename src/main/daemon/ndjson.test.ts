@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { encodeNdjson, createNdjsonParser } from './ndjson'
+import { encodeNdjson, createNdjsonParser, NDJSON_MAX_LINE_BYTES } from './ndjson'
 
 describe('encodeNdjson', () => {
   it('encodes an object as a JSON line ending with newline', () => {
@@ -16,6 +16,10 @@ describe('encodeNdjson', () => {
 })
 
 describe('createNdjsonParser', () => {
+  it('exports a bounded default line size', () => {
+    expect(NDJSON_MAX_LINE_BYTES).toBe(16 * 1024 * 1024)
+  })
+
   it('parses a single complete message', () => {
     const onMessage = vi.fn()
     const onError = vi.fn()
@@ -96,6 +100,33 @@ describe('createNdjsonParser', () => {
     expect(onError).toHaveBeenCalledOnce()
     expect(onMessage).toHaveBeenCalledOnce()
     expect(onMessage).toHaveBeenCalledWith({ good: true })
+  })
+
+  it('drops oversized complete lines and parses following messages', () => {
+    const onMessage = vi.fn()
+    const onError = vi.fn()
+    const parser = createNdjsonParser(onMessage, onError, { maxLineBytes: 24 })
+
+    parser.feed(`${'x'.repeat(25)}\n{"good":true}\n`)
+
+    expect(onError).toHaveBeenCalledOnce()
+    expect(onError.mock.calls[0][0].message).toContain('NDJSON line exceeds max 24 bytes')
+    expect(onMessage).toHaveBeenCalledOnce()
+    expect(onMessage).toHaveBeenCalledWith({ good: true })
+  })
+
+  it('discards oversized partial lines until the next delimiter', () => {
+    const onMessage = vi.fn()
+    const onError = vi.fn()
+    const parser = createNdjsonParser(onMessage, onError, { maxLineBytes: 24 })
+
+    parser.feed('{"too":')
+    parser.feed(`"${'x'.repeat(24)}"}`)
+    parser.feed('\n{"fresh":true}\n')
+
+    expect(onError).toHaveBeenCalledOnce()
+    expect(onMessage).toHaveBeenCalledOnce()
+    expect(onMessage).toHaveBeenCalledWith({ fresh: true })
   })
 
   it('handles messages with embedded newlines in strings', () => {

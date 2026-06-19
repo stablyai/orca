@@ -4,6 +4,8 @@ import type {
   TabGroupLayoutNode,
   WorkspaceSessionState
 } from '../../../../shared/types'
+import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import {
   dedupeTabOrder,
   getPersistedEditFileIdsByWorktree,
@@ -19,7 +21,7 @@ type HydratedTabState = {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
 }
 
-function pruneLayoutForGroups(
+export function pruneTabGroupLayoutForGroups(
   root: TabGroupLayoutNode,
   validGroupIds: Set<string>
 ): TabGroupLayoutNode | null {
@@ -27,14 +29,17 @@ function pruneLayoutForGroups(
     return validGroupIds.has(root.groupId) ? root : null
   }
 
-  const first = pruneLayoutForGroups(root.first, validGroupIds)
-  const second = pruneLayoutForGroups(root.second, validGroupIds)
+  const first = pruneTabGroupLayoutForGroups(root.first, validGroupIds)
+  const second = pruneTabGroupLayoutForGroups(root.second, validGroupIds)
 
   if (first === null) {
     return second
   }
   if (second === null) {
     return first
+  }
+  if (first === root.first && second === root.second) {
+    return root
   }
 
   return { ...root, first, second }
@@ -58,12 +63,41 @@ function hydrateUnifiedFormat(
       continue
     }
     const persistedEditFileIds = persistedEditFileIdsByWorktree[worktreeId] ?? new Set<string>()
+    const generatedTitleByTerminalId = new Map(
+      (session.tabsByWorktree[worktreeId] ?? [])
+        .filter((tab) => tab.generatedTitle?.trim())
+        .map((tab) => [tab.id, tab.generatedTitle!.trim()])
+    )
+    const quickCommandLabelByTerminalId = new Map(
+      (session.tabsByWorktree[worktreeId] ?? [])
+        .filter((tab) => tab.quickCommandLabel?.trim())
+        .map((tab) => [tab.id, tab.quickCommandLabel!.trim()])
+    )
     tabsByWorktree[worktreeId] = [...tabs]
       .map((tab) => ({
         ...tab,
         entityId: tab.entityId ?? tab.id
       }))
+      .map((tab) => {
+        if (tab.contentType !== 'terminal') {
+          return tab
+        }
+        const quickCommandLabel = tab.quickCommandLabel?.trim()
+          ? tab.quickCommandLabel.trim()
+          : quickCommandLabelByTerminalId.get(tab.entityId)
+        const generatedLabel = generatedTitleByTerminalId.get(tab.entityId)
+        return {
+          ...tab,
+          ...(quickCommandLabel ? { quickCommandLabel } : {}),
+          ...(!tab.generatedLabel?.trim() && generatedLabel ? { generatedLabel } : {})
+        }
+      })
       .filter((tab) => {
+        if (tab.contentType === 'terminal') {
+          // Why: old web-client sessions could persist host surface ids
+          // containing "::"; those are invalid pane-key tab ids.
+          return isValidTerminalTabId(tab.id) && isValidTerminalTabId(tab.entityId)
+        }
         if (!isTransientEditorContentType(tab.contentType)) {
           return true
         }
@@ -108,7 +142,13 @@ function hydrateUnifiedFormat(
     })
     const hydratedGroups = validatedGroups.filter((group, index) => {
       const hadTabsBeforeHydration = groups[index]?.tabOrder.length > 0
-      return !hadTabsBeforeHydration || group.tabOrder.length > 0
+      if (group.tabOrder.length > 0) {
+        return true
+      }
+      if (hadTabsBeforeHydration) {
+        return false
+      }
+      return validatedGroups.every((candidate) => candidate.tabOrder.length === 0)
     })
     if (hydratedGroups.length === 0) {
       if ((tabsByWorktree[worktreeId] ?? []).length === 0) {
@@ -127,7 +167,7 @@ function hydrateUnifiedFormat(
     }
     const hydratedGroupIds = new Set(hydratedGroups.map((group) => group.id))
     const hydratedLayout = session.tabGroupLayouts?.[worktreeId]
-      ? pruneLayoutForGroups(session.tabGroupLayouts[worktreeId], hydratedGroupIds)
+      ? pruneTabGroupLayoutForGroups(session.tabGroupLayouts[worktreeId], hydratedGroupIds)
       : null
     layoutByWorktree[worktreeId] = hydratedLayout ?? {
       type: 'leaf',
@@ -156,14 +196,16 @@ function hydrateLegacyFormat(
   const layoutByWorktree: Record<string, TabGroupLayoutNode> = {}
 
   for (const worktreeId of validWorktreeIds) {
-    const terminalTabs = session.tabsByWorktree[worktreeId] ?? []
+    const terminalTabs = (session.tabsByWorktree[worktreeId] ?? []).filter((tab) =>
+      isValidTerminalTabId(tab.id)
+    )
     const editorFiles = session.openFilesByWorktree?.[worktreeId] ?? []
 
     if (terminalTabs.length === 0 && editorFiles.length === 0) {
       continue
     }
 
-    const groupId = globalThis.crypto.randomUUID()
+    const groupId = createBrowserUuid()
     const tabs: Tab[] = []
     const tabOrder: string[] = []
 
@@ -175,6 +217,8 @@ function hydrateLegacyFormat(
         worktreeId,
         contentType: 'terminal',
         label: tt.title,
+        ...(tt.quickCommandLabel?.trim() ? { quickCommandLabel: tt.quickCommandLabel.trim() } : {}),
+        ...(tt.generatedTitle?.trim() ? { generatedLabel: tt.generatedTitle.trim() } : {}),
         customLabel: tt.customTitle,
         color: tt.color,
         sortOrder: tt.sortOrder,

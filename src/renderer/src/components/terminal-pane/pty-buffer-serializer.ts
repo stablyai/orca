@@ -27,6 +27,7 @@ export type SerializeFn = (
 // matches its captured token.
 type SerializerEntry = {
   fn: SerializeFn
+  clear?: () => void
   owner: symbol
 }
 
@@ -40,9 +41,13 @@ const serializersByPtyId = new Map<string, SerializerEntry>()
 const lastTitleByPtyId = new Map<string, TitleEntry>()
 let listenerAttached = false
 
-export function registerPtySerializer(ptyId: string, serialize: SerializeFn): () => void {
+export function registerPtySerializer(
+  ptyId: string,
+  serialize: SerializeFn,
+  clear?: () => void
+): () => void {
   const owner = Symbol(ptyId)
-  serializersByPtyId.set(ptyId, { fn: serialize, owner })
+  serializersByPtyId.set(ptyId, { fn: serialize, clear, owner })
   ensureSerializerListener()
   return () => {
     const current = serializersByPtyId.get(ptyId)
@@ -77,6 +82,15 @@ export function registerPtyTitleSource(
     // owner token is available. Calling out of order is a programming bug.
     throw new Error(`registerPtyTitleSource called before serializer for ptyId ${ptyId}`)
   }
+  const existing = lastTitleByPtyId.get(ptyId)
+  const initialTitle = existing?.owner === serializerOwner ? existing.title : ''
+  if (existing) {
+    // Why: same-PTY remounts can install the new serializer/title source before
+    // the stale mount unregisters. Replace the tracked disposable immediately
+    // so the new quiet-pane listener cannot become unowned.
+    existing.disposable.dispose()
+    lastTitleByPtyId.delete(ptyId)
+  }
   const disposable = attach((title) => {
     const current = lastTitleByPtyId.get(ptyId)
     if (current && current.owner !== serializerOwner) {
@@ -86,10 +100,7 @@ export function registerPtyTitleSource(
   })
   // Seed an entry with an empty title so the disposable is tracked even
   // before the first onTitleChange fires. Subsequent updates overwrite it.
-  const existing = lastTitleByPtyId.get(ptyId)
-  if (!existing) {
-    lastTitleByPtyId.set(ptyId, { title: '', owner: serializerOwner, disposable })
-  }
+  lastTitleByPtyId.set(ptyId, { title: initialTitle, owner: serializerOwner, disposable })
   return () => {
     const entry = lastTitleByPtyId.get(ptyId)
     if (entry?.owner === serializerOwner) {
@@ -108,6 +119,13 @@ function ensureSerializerListener(): void {
     return
   }
   listenerAttached = true
+
+  window.api.pty.onClearBufferRequest((request) => {
+    // Why: mobile clear is a terminal action, not a PTY byte. Clearing the
+    // renderer-owned xterm keeps future mobile snapshots from rehydrating
+    // scrollback that the user explicitly removed.
+    serializersByPtyId.get(request.ptyId)?.clear?.()
+  })
 
   window.api.pty.onSerializeBufferRequest((request) => {
     const entry = serializersByPtyId.get(request.ptyId)

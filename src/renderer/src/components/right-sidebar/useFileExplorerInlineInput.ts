@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -8,13 +8,16 @@ import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage, renameFileOnDisk } from '@/lib/rename-file'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
+import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
+import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-client'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
   worktreePath: string | null
   expanded: Set<string>
-  flatRows: TreeNode[]
+  rowProjection: FileExplorerRowProjection
   scrollRef: React.RefObject<HTMLDivElement | null>
   refreshDir: (dirPath: string) => Promise<void>
 }
@@ -32,42 +35,39 @@ export function useFileExplorerInlineInput({
   activeWorktreeId,
   worktreePath,
   expanded,
-  flatRows,
+  rowProjection,
   scrollRef,
   refreshDir
 }: UseFileExplorerInlineInputParams): UseFileExplorerInlineInputResult {
   const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)
   const [inlineInput, setInlineInput] = useState<InlineInput | null>(null)
+  const scrollFocusFrameRef = useRef<number | null>(null)
+
+  const cancelScrollFocusFrame = useCallback((): void => {
+    if (scrollFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(scrollFocusFrameRef.current)
+    scrollFocusFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelScrollFocusFrame, [cancelScrollFocusFrame])
+
+  const scheduleScrollFocus = useCallback((): void => {
+    cancelScrollFocusFrame()
+    scrollFocusFrameRef.current = requestAnimationFrame(() => {
+      scrollFocusFrameRef.current = null
+      scrollRef.current?.focus()
+    })
+  }, [cancelScrollFocusFrame, scrollRef])
 
   const inlineInputIndex = useMemo(() => {
     if (!inlineInput || inlineInput.type === 'rename') {
       return -1
     }
-    const parentPath = inlineInput.parentPath
-    let last = -1
-    for (let i = 0; i < flatRows.length; i++) {
-      const rowPath = flatRows[i].path
-      // Match the parent itself and any descendants (handle both / and \ separators)
-      if (
-        rowPath === parentPath ||
-        rowPath.startsWith(`${parentPath}/`) ||
-        rowPath.startsWith(`${parentPath}\\`)
-      ) {
-        last = i
-      }
-    }
-    if (last >= 0) {
-      return last + 1
-    }
-    // Empty root directory — place at the top
-    if (parentPath === worktreePath) {
-      return 0
-    }
-    // Collapsed non-root parent — place right after the parent row
-    const parentIndex = flatRows.findIndex((row) => row.path === parentPath)
-    return parentIndex >= 0 ? parentIndex + 1 : 0
-  }, [inlineInput, flatRows, worktreePath])
+    return rowProjection.getInsertIndexAfterSubtree(inlineInput.parentPath, worktreePath)
+  }, [inlineInput, rowProjection, worktreePath])
 
   const startNew = useCallback(
     (type: 'file' | 'folder', parentPath: string, depth: number) => {
@@ -93,8 +93,8 @@ export function useFileExplorerInlineInput({
 
   const dismissInlineInput = useCallback(() => {
     setInlineInput(null)
-    requestAnimationFrame(() => scrollRef.current?.focus())
-  }, [scrollRef])
+    scheduleScrollFocus()
+  }, [scheduleScrollFocus])
 
   const handleInlineSubmit = useCallback(
     (value: string) => {
@@ -110,6 +110,12 @@ export function useFileExplorerInlineInput({
       }
       const run = async (): Promise<void> => {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+        const fileContext = {
+          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        }
         if (inlineInput.type === 'rename' && inlineInput.existingPath) {
           await renameFileOnDisk({
             oldPath: inlineInput.existingPath,
@@ -121,29 +127,31 @@ export function useFileExplorerInlineInput({
         } else {
           const fullPath = joinPath(inlineInput.parentPath, name)
           try {
-            await (inlineInput.type === 'folder'
-              ? window.api.fs.createDir({ dirPath: fullPath, connectionId })
-              : window.api.fs.createFile({ filePath: fullPath, connectionId }))
+            await createRuntimePath(
+              fileContext,
+              fullPath,
+              inlineInput.type === 'folder' ? 'directory' : 'file'
+            )
             const parentForRefresh = inlineInput.parentPath
             if (inlineInput.type === 'folder') {
               commitFileExplorerOp({
                 undo: async () => {
-                  await window.api.fs.deletePath({ targetPath: fullPath, connectionId })
+                  await deleteRuntimePath(fileContext, fullPath, true)
                   await refreshDir(parentForRefresh)
                 },
                 redo: async () => {
-                  await window.api.fs.createDir({ dirPath: fullPath, connectionId })
+                  await createRuntimePath(fileContext, fullPath, 'directory')
                   await refreshDir(parentForRefresh)
                 }
               })
             } else {
               commitFileExplorerOp({
                 undo: async () => {
-                  await window.api.fs.deletePath({ targetPath: fullPath, connectionId })
+                  await deleteRuntimePath(fileContext, fullPath)
                   await refreshDir(parentForRefresh)
                 },
                 redo: async () => {
-                  await window.api.fs.createFile({ filePath: fullPath, connectionId })
+                  await createRuntimePath(fileContext, fullPath, 'file')
                   await refreshDir(parentForRefresh)
                 }
               })
@@ -167,9 +175,9 @@ export function useFileExplorerInlineInput({
       }
       void run()
       setInlineInput(null)
-      requestAnimationFrame(() => scrollRef.current?.focus())
+      scheduleScrollFocus()
     },
-    [inlineInput, activeWorktreeId, worktreePath, refreshDir, openFile, scrollRef]
+    [inlineInput, activeWorktreeId, worktreePath, refreshDir, openFile, scheduleScrollFocus]
   )
 
   return {

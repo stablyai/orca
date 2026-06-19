@@ -1,0 +1,167 @@
+export function parseStatusChar(char: string): string {
+  switch (char) {
+    case 'M':
+      return 'modified'
+    case 'A':
+      return 'added'
+    case 'D':
+      return 'deleted'
+    case 'R':
+      return 'renamed'
+    case 'C':
+      return 'copied'
+    default:
+      return 'modified'
+  }
+}
+
+/**
+ * Parse `git status --porcelain=v2` output into structured entries.
+ * Does NOT handle unmerged entries (those require worktree access).
+ */
+export function parseStatusOutput(stdout: string): {
+  entries: Record<string, unknown>[]
+  unmergedLines: string[]
+  ignoredPaths: string[]
+  head?: string
+  branch?: string
+  upstreamStatus: {
+    hasUpstream: boolean
+    upstreamName?: string
+    ahead: number
+    behind: number
+  }
+} {
+  const entries: Record<string, unknown>[] = []
+  const unmergedLines: string[] = []
+  const ignoredPaths: string[] = []
+  let head: string | undefined
+  let branch: string | undefined
+  let upstreamName: string | undefined
+  let upstreamAheadBehind: { ahead: number; behind: number } | null = null
+
+  for (const line of stdout.split(/\r?\n/)) {
+    if (!line) {
+      continue
+    }
+
+    if (line.startsWith('# branch.oid ')) {
+      head = line.slice('# branch.oid '.length).trim()
+      continue
+    }
+
+    if (line.startsWith('# branch.head ')) {
+      const branchHead = line.slice('# branch.head '.length).trim()
+      branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : ''
+      continue
+    }
+
+    if (line.startsWith('# branch.upstream ')) {
+      upstreamName = line.slice('# branch.upstream '.length).trim() || undefined
+      continue
+    }
+
+    if (line.startsWith('# branch.ab ')) {
+      upstreamAheadBehind = parseBranchAheadBehind(line)
+      continue
+    }
+
+    if (line.startsWith('1 ') || line.startsWith('2 ')) {
+      const parts = line.split(' ')
+      const xy = parts[1]
+      const submodule = parseSubmoduleStatus(parts[2])
+      const indexStatus = xy[0]
+      const worktreeStatus = xy[1]
+
+      if (line.startsWith('2 ')) {
+        // Why: porcelain v2 type-2 format is `2 XY sub mH mI mW hH hI Xscore path\torigPath`.
+        // The new path starts after 9 fixed fields and can contain spaces; origPath follows the tab.
+        const tabParts = line.split('\t')
+        const filePath = tabParts[0].split(' ').slice(9).join(' ')
+        const oldPath = tabParts.slice(1).join('\t')
+        if (indexStatus !== '.') {
+          entries.push({
+            path: filePath,
+            status: parseStatusChar(indexStatus),
+            area: 'staged',
+            oldPath,
+            ...(submodule ? { submodule } : {})
+          })
+        }
+        if (worktreeStatus !== '.') {
+          entries.push({
+            path: filePath,
+            status: parseStatusChar(worktreeStatus),
+            area: 'unstaged',
+            oldPath,
+            ...(submodule ? { submodule } : {})
+          })
+        }
+      } else {
+        const filePath = parts.slice(8).join(' ')
+        if (indexStatus !== '.') {
+          entries.push({
+            path: filePath,
+            status: parseStatusChar(indexStatus),
+            area: 'staged',
+            ...(submodule ? { submodule } : {})
+          })
+        }
+        if (worktreeStatus !== '.') {
+          entries.push({
+            path: filePath,
+            status: parseStatusChar(worktreeStatus),
+            area: 'unstaged',
+            ...(submodule ? { submodule } : {})
+          })
+        }
+      }
+    } else if (line.startsWith('? ')) {
+      entries.push({ path: line.slice(2), status: 'untracked', area: 'untracked' })
+    } else if (line.startsWith('! ')) {
+      ignoredPaths.push(line.slice(2))
+    } else if (line.startsWith('u ')) {
+      unmergedLines.push(line)
+    }
+  }
+
+  return {
+    entries,
+    unmergedLines,
+    ignoredPaths,
+    head,
+    branch,
+    upstreamStatus: upstreamName
+      ? {
+          hasUpstream: true,
+          upstreamName,
+          ahead: upstreamAheadBehind?.ahead ?? 0,
+          behind: upstreamAheadBehind?.behind ?? 0
+        }
+      : { hasUpstream: false, ahead: 0, behind: 0 }
+  }
+}
+
+function parseSubmoduleStatus(
+  submoduleField: string | undefined
+): { commitChanged: boolean; trackedChanges: boolean; untrackedChanges: boolean } | undefined {
+  if (!submoduleField?.startsWith('S')) {
+    return undefined
+  }
+  return {
+    commitChanged: submoduleField[1] === 'C',
+    trackedChanges: submoduleField[2] === 'M',
+    untrackedChanges: submoduleField[3] === 'U'
+  }
+}
+
+function parseBranchAheadBehind(line: string): { ahead: number; behind: number } | null {
+  const match = line.match(/^# branch\.ab \+(\d+) -(\d+)$/)
+  if (!match) {
+    return null
+  }
+  return {
+    ahead: Number.parseInt(match[1], 10),
+    behind: Number.parseInt(match[2], 10)
+  }
+}

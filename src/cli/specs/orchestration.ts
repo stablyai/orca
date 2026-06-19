@@ -6,7 +6,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
     usage:
-      'orca orchestration send --to <handle> --subject <text> [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--json]',
+      'orca orchestration send --to <handle> --subject <text> [--from <handle>] [--body <text>] [--type <type>] [--priority <level>] [--thread-id <id>] [--payload <json>] [--task-id <id>] [--dispatch-id <id>] [--files-modified <csv>] [--report-path <path>] [--phase <text>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'to',
@@ -16,7 +16,17 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'type',
       'priority',
       'thread-id',
-      'payload'
+      'payload',
+      'task-id',
+      'dispatch-id',
+      'files-modified',
+      'report-path',
+      'phase'
+    ],
+    notes: [
+      'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
+      'worker_done and heartbeat must target a concrete coordinator terminal handle; use status for broadcast updates.',
+      'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.'
     ]
   },
   {
@@ -39,6 +49,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'inject',
       'wait',
       'timeout-ms'
+    ],
+    notes: [
+      'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".'
     ]
   },
   {
@@ -136,8 +149,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'reset'],
-    summary: 'Reset orchestration state',
-    usage: 'orca orchestration reset [--all] [--tasks] [--messages] [--json]',
+    summary: 'Reset orchestration state (one scope; bare command resets all)',
+    usage: 'orca orchestration reset [--all | --tasks | --messages] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'all', 'tasks', 'messages']
   }
 ]

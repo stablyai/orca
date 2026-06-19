@@ -6,12 +6,18 @@
  * remain decoupled from the GitHandler class.
  */
 import * as path from 'path'
-import { readFile } from 'fs/promises'
-import { bufferToBlob, buildDiffResult, parseBranchDiff } from './git-handler-utils'
+import { bufferToBlob, parseBranchDiff } from './git-handler-utils'
+import { buildDiffResult } from './git-diff-result'
+import { isGitBufferOverflowError } from './git-buffer-overflow'
+import { readWorkingDiffFile } from './git-working-file-read'
 
 // ─── Executor types ──────────────────────────────────────────────────
 
-export type GitExec = (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }>
+export type GitExec = (
+  args: string[],
+  cwd: string,
+  opts?: { maxBuffer?: number; disableOptionalLocks?: boolean }
+) => Promise<{ stdout: string; stderr: string }>
 
 export type GitBufferExec = (args: string[], cwd: string) => Promise<Buffer>
 
@@ -23,10 +29,15 @@ export async function readBlobAtOid(
   oid: string,
   filePath: string
 ): Promise<{ content: string; isBinary: boolean }> {
+  // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
+  const gitPath = filePath.replace(/\\/g, '/')
   try {
-    const buf = await gitBuffer(['show', `${oid}:${filePath}`], cwd)
+    const buf = await gitBuffer(['show', '--end-of-options', `${oid}:${gitPath}`], cwd)
     return bufferToBlob(buf, filePath)
-  } catch {
+  } catch (error) {
+    if (isGitBufferOverflowError(error)) {
+      return { content: '', isBinary: true }
+    }
     return { content: '', isBinary: false }
   }
 }
@@ -36,10 +47,15 @@ export async function readBlobAtIndex(
   cwd: string,
   filePath: string
 ): Promise<{ content: string; isBinary: boolean }> {
+  // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
+  const gitPath = filePath.replace(/\\/g, '/')
   try {
-    const buf = await gitBuffer(['show', `:${filePath}`], cwd)
+    const buf = await gitBuffer(['show', '--end-of-options', `:${gitPath}`], cwd)
     return bufferToBlob(buf, filePath)
-  } catch {
+  } catch (error) {
+    if (isGitBufferOverflowError(error)) {
+      return { content: '', isBinary: true }
+    }
     return { content: '', isBinary: false }
   }
 }
@@ -54,17 +70,6 @@ export async function readUnstagedLeft(
     return index
   }
   return readBlobAtOid(gitBuffer, cwd, 'HEAD', filePath)
-}
-
-export async function readWorkingFile(
-  absPath: string
-): Promise<{ content: string; isBinary: boolean }> {
-  try {
-    const buffer = await readFile(absPath)
-    return bufferToBlob(buffer)
-  } catch {
-    return { content: '', isBinary: false }
-  }
 }
 
 // ─── Diff ────────────────────────────────────────────────────────────
@@ -97,7 +102,7 @@ export async function computeDiff(
       originalContent = left.content
       originalIsBinary = left.isBinary
 
-      const right = await readWorkingFile(path.join(worktreePath, filePath))
+      const right = await readWorkingDiffFile(path.join(worktreePath, filePath))
       modifiedContent = right.content
       modifiedIsBinary = right.isBinary
     }
@@ -143,18 +148,33 @@ export async function branchCompare(
   }
 
   let headOid: string
+  let baseOid = ''
   try {
     const { stdout } = await git(['rev-parse', '--verify', 'HEAD'], worktreePath)
     headOid = stdout.trim()
     summary.headOid = headOid
   } catch {
+    try {
+      const { stdout } = await git(['rev-parse', '--verify', baseRef], worktreePath)
+      baseOid = stdout.trim()
+      summary.baseOid = baseOid
+      // Why: new remote worktrees can be on an unborn branch until the first
+      // commit. There are no committed branch changes yet; surfacing this as a
+      // compare error makes the source-control panel look broken.
+      summary.changedFiles = 0
+      summary.commitsAhead = 0
+      summary.status = 'ready'
+      return { summary, entries: [] }
+    } catch {
+      // Preserve the existing unborn-head message when even the base is not
+      // resolvable; callers cannot compare or present a useful empty state.
+    }
     summary.status = 'unborn-head'
     summary.errorMessage =
       'This branch does not have a committed HEAD yet, so compare-to-base is unavailable.'
     return { summary, entries: [] }
   }
 
-  let baseOid: string
   try {
     const { stdout } = await git(['rev-parse', '--verify', baseRef], worktreePath)
     baseOid = stdout.trim()

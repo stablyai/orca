@@ -1,8 +1,18 @@
+/* eslint-disable max-lines -- Why: autosave owns the save queue, quiesce
+coordination, and dirty-file shutdown hooks; keeping those lifecycles together
+avoids split-brain saves across visible and hidden editors. */
 import type { StoreApi } from 'zustand'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { getConnectionId } from '@/lib/connection-context'
+import {
+  buildWorkspaceSessionPayload,
+  shouldPersistWorkspaceSession
+} from '@/lib/workspace-session'
+import { persistWorkspaceSessionByHostSync } from '@/lib/workspace-session-host-persistence'
+import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { writeRuntimeFile } from '@/runtime/runtime-file-client'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
@@ -20,21 +30,18 @@ import {
 import { flushPendingEditorChange } from './editor-pending-flush'
 import { clearSelfWrite, recordSelfWrite } from './editor-self-write-registry'
 import {
+  autosaveSubscriberInputsEqual,
+  getAutosaveSubscriberInputs,
+  getDuplicateDirtySavePaths
+} from './editor-autosave-state-projections'
+import {
+  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
+  type EditorPrepareHotExitDetail,
   type EditorSaveDirtyFilesDetail
 } from '../../../../shared/editor-save-events'
 
 type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
-
-function getDuplicateDirtySavePaths(files: OpenFile[]): string[] {
-  const counts = new Map<string, number>()
-  for (const file of files) {
-    counts.set(file.filePath, (counts.get(file.filePath) ?? 0) + 1)
-  }
-  return Array.from(counts.entries())
-    .filter(([, count]) => count > 1)
-    .map(([filePath]) => filePath)
-}
 
 export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   const autoSaveTimers = new Map<string, number>()
@@ -75,23 +82,31 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
         const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
         const connectionId = getConnectionId(liveFile.worktreeId) ?? undefined
+        const worktree = liveFile.worktreeId
+          ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
+          : null
         // Why: stamp before the write so the fs:changed event that our own
         // write produces is ignored by useEditorExternalWatch instead of
         // round-tripping back into a setContent that jumps the cursor to the
         // end (and, under round-trip drift, can drop keystrokes typed in the
         // debounce window). See editor-self-write-registry.
-        recordSelfWrite(liveFile.filePath)
+        recordSelfWrite(liveFile.filePath, contentToSave, liveFile.runtimeEnvironmentId)
         try {
-          await window.api.fs.writeFile({
-            filePath: liveFile.filePath,
-            content: contentToSave,
-            connectionId
-          })
+          await writeRuntimeFile(
+            {
+              settings: settingsForRuntimeOwner(state.settings, liveFile.runtimeEnvironmentId),
+              worktreeId: liveFile.worktreeId,
+              worktreePath: worktree?.path ?? null,
+              connectionId
+            },
+            liveFile.filePath,
+            contentToSave
+          )
         } catch (error) {
           // Why: the self-write stamp is only valid if a disk write actually
           // happened. Clearing it on failure keeps the external watcher from
           // suppressing a real third-party update that lands during the TTL.
-          clearSelfWrite(liveFile.filePath)
+          clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
           throw error
         }
 
@@ -235,6 +250,56 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     }
   }
 
+  const handlePrepareHotExit = async (event: Event): Promise<void> => {
+    const detail = (event as CustomEvent<EditorPrepareHotExitDetail>).detail
+    if (!detail) {
+      return
+    }
+
+    try {
+      detail.claim()
+
+      const initiallyDirtyFiles = store.getState().openFiles.filter((file) => file.isDirty)
+      await Promise.all(initiallyDirtyFiles.map((file) => quiesceFileSave(file.id)))
+
+      const state = store.getState()
+      const dirtyFiles = state.openFiles.filter((file) => file.isDirty)
+      const unsupportedDirtyFiles = dirtyFiles.filter((file) => file.mode !== 'edit')
+      if (unsupportedDirtyFiles.length > 0) {
+        detail.reject('Some unsaved editor changes cannot be backed up before restart.')
+        return
+      }
+
+      for (const file of dirtyFiles) {
+        if (state.editorDrafts[file.id] === undefined) {
+          throw new Error(`Missing editor buffer for ${file.relativePath}`)
+        }
+      }
+
+      if (dirtyFiles.length > 0 && !shouldPersistWorkspaceSession(state)) {
+        detail.reject(
+          'Unsaved editor changes cannot be backed up until workspace restore finishes.'
+        )
+        return
+      }
+
+      // Why: restart/update may quit before the debounced session writer fires.
+      // Write the full session now so dirty drafts restore as unsaved tabs.
+      if (shouldPersistWorkspaceSession(state)) {
+        // Why: runtime-owned worktree slices persist under their host
+        // partition, mirroring the debounced writer's split.
+        persistWorkspaceSessionByHostSync(
+          window.api.session,
+          buildWorkspaceSessionPayload(state),
+          state
+        )
+      }
+      detail.resolve()
+    } catch (error) {
+      detail.reject(String((error as Error)?.message ?? error))
+    }
+  }
+
   const handleSaveAndClose = async (event: Event): Promise<void> => {
     const { fileId } = (event as CustomEvent<{ fileId: string }>).detail
     const file = store.getState().openFiles.find((openFile) => openFile.id === fileId)
@@ -319,10 +384,22 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     state.clearEditorDrafts(matchingFiles.map((file) => file.id))
   }
 
-  const unsubscribe = store.subscribe(syncAutoSave)
+  // Why: the root store subscriber fires for every terminal title/focus tick.
+  // Autosave only reads these four inputs, so skip the open-files scan when
+  // unrelated store slices change.
+  let previousAutosaveInputs = getAutosaveSubscriberInputs(store.getState())
+  const unsubscribe = store.subscribe(() => {
+    const nextAutosaveInputs = getAutosaveSubscriberInputs(store.getState())
+    if (autosaveSubscriberInputsEqual(previousAutosaveInputs, nextAutosaveInputs)) {
+      return
+    }
+    previousAutosaveInputs = nextAutosaveInputs
+    syncAutoSave()
+  })
   syncAutoSave()
 
   window.addEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handleSaveDirtyFiles as EventListener)
+  window.addEventListener(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, handlePrepareHotExit as EventListener)
   window.addEventListener(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, handleSaveAndClose as EventListener)
   window.addEventListener(ORCA_EDITOR_SAVE_FILE_EVENT, handleSaveFile as EventListener)
   window.addEventListener(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, handleQuiesce as EventListener)
@@ -336,6 +413,10 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     window.removeEventListener(
       ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
       handleSaveDirtyFiles as EventListener
+    )
+    window.removeEventListener(
+      ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
+      handlePrepareHotExit as EventListener
     )
     window.removeEventListener(
       ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
@@ -355,8 +436,4 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
     saveQueue.clear()
     saveGeneration.clear()
   }
-}
-
-export function attachAppEditorAutosaveController(): () => void {
-  return attachEditorAutosaveController(useAppStore)
 }

@@ -1,61 +1,36 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import type { GitHubAssignableUser } from '../../../../../shared/types'
+import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import type { GlobalSettings } from '../../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 export function AssigneesEditor({
   owner,
   repo,
   selected,
   disabled,
+  sourceSettings,
   onChange
 }: {
   owner: string
   repo: string
   selected: string[]
   disabled?: boolean
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onChange: (add: string[], remove: string[]) => void | Promise<void>
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const [users, setUsers] = useState<GitHubAssignableUser[]>([])
-  const [loading, setLoading] = useState(false)
   // Why: stabilize the assignee seed identity. `selected` is a fresh array on
   // every parent render — depending on it directly would refire the IPC for
   // every unrelated re-render while the popover is open.
   const seedKey = useMemo(() => selected.slice().sort().join(','), [selected])
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    // Why: guard against late responses overwriting newer state when
-    // owner/repo/seedKey change (or the popover toggles) before the IPC
-    // resolves. Mirrors the requestIdRef pattern used for the details fetch.
-    let cancelled = false
-    setLoading(true)
-    window.api.gh
-      .listAssignableUsersBySlug({
-        owner,
-        repo,
-        seedLogins: seedKey ? seedKey.split(',') : []
-      })
-      .then((res) => {
-        if (cancelled) {
-          return
-        }
-        if (res.ok) {
-          setUsers(res.users)
-        }
-      })
-      .finally(() => {
-        if (cancelled) {
-          return
-        }
-        setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [open, owner, repo, seedKey])
+  const metadata = useRepoAssigneesBySlug(
+    open ? owner : null,
+    open ? repo : null,
+    seedKey ? seedKey.split(',') : [],
+    sourceSettings
+  )
   return (
     <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>
       <PopoverTrigger asChild>
@@ -64,14 +39,28 @@ export function AssigneesEditor({
           disabled={disabled}
           className="rounded-md border border-border/50 bg-muted/30 px-2 py-0.5 text-[11px] hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-muted/30"
         >
-          Assignees: {selected.length === 0 ? 'none' : selected.join(', ')}
+          {translate(
+            'auto.components.github.project.slug.dialog.AssigneesEditor.98914e6b36',
+            'Assignees:'
+          )}
+          {selected.length === 0
+            ? translate(
+                'auto.components.github.project.slug.dialog.AssigneesEditor.94a4e6e4fa',
+                'none'
+              )
+            : selected.join(', ')}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
-        {loading ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">Loading…</div>
+        {metadata.loading ? (
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.slug.dialog.AssigneesEditor.529fec247b',
+              'Loading…'
+            )}
+          </div>
         ) : (
-          users.map((u) => {
+          metadata.data.map((u) => {
             const isOn = selected.includes(u.login)
             return (
               <button

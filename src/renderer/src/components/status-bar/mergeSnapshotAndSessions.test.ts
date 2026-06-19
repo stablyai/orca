@@ -3,12 +3,8 @@
    single-source view of how snapshot + daemon-session inputs combine. */
 import { describe, expect, it } from 'vitest'
 import type { MemorySnapshot, TerminalTab, WorktreeMemory } from '../../../../shared/types'
-import {
-  mergeSnapshotAndSessions,
-  UNATTRIBUTED_REPO_ID,
-  type DaemonSession,
-  type MergeContext
-} from './mergeSnapshotAndSessions'
+import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
+import type { DaemonSession, MergeContext } from './resource-usage-merge-types'
 
 function emptyAppMemory() {
   return {
@@ -303,7 +299,7 @@ describe('mergeSnapshotAndSessions', () => {
     })
   })
 
-  it('uses repoDisplayNameById to humanize new repo groups when available', () => {
+  it('uses repoDisplayNameById to humanize new project groups when available', () => {
     const ds: DaemonSession[] = [{ id: 'stably-ai/orca::/remote/Wt@@1', cwd: '', title: '' }]
     const ctx = baseCtx({
       repoDisplayNameById: new Map([['stably-ai/orca', 'ORCA']])

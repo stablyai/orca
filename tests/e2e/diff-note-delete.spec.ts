@@ -67,6 +67,7 @@ test.describe('Diff note delete', () => {
         const comment = await store.getState().addDiffComment({
           worktreeId: wId,
           filePath: rel,
+          source: 'diff',
           lineNumber: 1,
           body: 'delete-me note',
           side: 'modified'
@@ -102,7 +103,7 @@ test.describe('Diff note delete', () => {
     // The note card is rendered into a Monaco view zone. Wait for the
     // trash button itself rather than any parent container so we know the
     // React root inside the zone has actually mounted.
-    const deleteButton = orcaPage.locator('.orca-diff-comment-delete').first()
+    const deleteButton = orcaPage.getByTitle('Delete note').first()
     await expect(deleteButton).toBeVisible({ timeout: 15_000 })
 
     await deleteButton.click()
@@ -131,7 +132,7 @@ test.describe('Diff note delete', () => {
     // …and the view zone must be unmounted, proving the click actually
     // reached the React handler (not just some other listener that
     // happened to mutate the store).
-    await expect(orcaPage.locator('.orca-diff-comment-delete')).toHaveCount(0, {
+    await expect(orcaPage.getByTitle('Delete note')).toHaveCount(0, {
       timeout: 5_000
     })
   })

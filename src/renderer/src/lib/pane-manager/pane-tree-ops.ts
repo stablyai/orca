@@ -1,14 +1,17 @@
+/* eslint-disable max-lines -- Why: split-tree DOM reparent, promote, and equalize rules need one consistent owner. */
 import type {
   DropZone,
   ManagedPane,
   ManagedPaneInternal,
-  PaneStyleOptions
+  PaneStyleOptions,
+  ScrollState
 } from './pane-manager-types'
-import { createDivider } from './pane-divider'
+import { createDivider, disposeDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
+import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
 
-export { findLineByContent, captureScrollState, restoreScrollState } from './pane-scroll'
+export { captureScrollState, restoreScrollState } from './pane-scroll'
 
 // ---------------------------------------------------------------------------
 // Split-tree manipulation: detach, insert, promote sibling
@@ -20,7 +23,14 @@ type TreeOpsCallbacks = {
   safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
   onLayoutChanged?: () => void
+  isDestroyed?: () => boolean
+  requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
 }
+
+const MIN_PANE_FIT_WIDTH_PX = 48
+const MIN_PANE_FIT_HEIGHT_PX = 24
+const MIN_PANE_FIT_COLS = 8
+const MIN_PANE_FIT_ROWS = 4
 
 function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
   try {
@@ -30,17 +40,37 @@ function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number 
   }
 }
 
-// Why: xterm's terminal.resize() (called by fitAddon.fit()) natively preserves
-// viewportY across reflows — see scroll-reflow.test.ts "reference: undisturbed".
-// A plain fit() is all we need during sidebar drags, divider drags, and window
-// resizes. This matches how Superset and VSCode handle the same cases.
-//
-// pendingSplitScrollState is the one case where fit() alone isn't enough:
-// wrapInSplit() reparents the container, which makes the browser reset
-// scrollTop to 0 asynchronously. splitPane captures the pre-split state and
-// scheduleSplitScrollRestore owns the authoritative restore on a timer, so
-// safeFit here just fits and lets the scheduled restore do its job.
+function canMeasurePaneForFit(pane: ManagedPane): boolean {
+  const measure = pane.container.getBoundingClientRect
+  if (typeof measure === 'function') {
+    const rect = measure.call(pane.container)
+    if (rect.width < MIN_PANE_FIT_WIDTH_PX || rect.height < MIN_PANE_FIT_HEIGHT_PX) {
+      return false
+    }
+  }
+  const dims = getProposedDimensions(pane)
+  if (!dims) {
+    return false
+  }
+  // Why: worktree switches can briefly measure a near-zero overlay before
+  // fallback positioning lands. Fitting there pins the PTY at ~2 cols until
+  // the next user-driven resize.
+  return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
+}
+
+function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
+  // Why: split reparent has its own delayed restore; restoring here can fight that timer.
+  return 'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
+    ? null
+    : captureScrollState(pane.terminal)
+}
+
 export function safeFit(pane: ManagedPane): void {
+  if (!canMeasurePaneForFit(pane)) {
+    return
+  }
+  let scrollState: ScrollState | null = null
+  let shouldRestoreScroll = false
   try {
     // Why: when a mobile client has resized this PTY to phone dimensions,
     // the desktop must keep xterm at those dimensions instead of fitting to
@@ -51,6 +81,8 @@ export function safeFit(pane: ManagedPane): void {
     const override = ptyId ? getFitOverrideForPty(ptyId) : null
     if (override) {
       if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
+        scrollState = captureScrollStateForFit(pane)
+        shouldRestoreScroll = true
         pane.terminal.resize(override.cols, override.rows)
       }
       return
@@ -63,9 +95,20 @@ export function safeFit(pane: ManagedPane): void {
       // churn, which was causing visible terminal blinking while resizing.
       return
     }
+    scrollState = captureScrollStateForFit(pane)
+    shouldRestoreScroll = true
     pane.fitAddon.fit()
   } catch {
     // Container may not have dimensions yet
+  } finally {
+    if (shouldRestoreScroll && scrollState) {
+      try {
+        restoreScrollStateAfterLayout(pane.terminal, scrollState)
+      } catch {
+        // Why: xterm can temporarily expose a terminal whose renderer has not
+        // initialized dimensions yet during SSH reattach/layout. Fit is best-effort.
+      }
+    }
   }
 }
 
@@ -202,7 +245,13 @@ export function insertPaneNextTo(
     split.appendChild(source.container)
   }
 
-  requestAnimationFrame(() => {
+  const requestReparentFrame =
+    callbacks.requestPaneReparentFrame ??
+    ((callback: FrameRequestCallback) => requestAnimationFrame(callback))
+  requestReparentFrame(() => {
+    if (callbacks.isDestroyed?.()) {
+      return
+    }
     if (sourceHadWebgl && source.gpuRenderingEnabled && !source.webglDisabledAfterContextLoss) {
       attachWebgl(source)
     }
@@ -267,6 +316,7 @@ export function removeDividers(parent: HTMLElement): void {
       child instanceof HTMLElement && child.classList.contains('pane-divider')
   )
   for (const d of dividers) {
+    disposeDivider(d)
     d.remove()
   }
 }
@@ -278,6 +328,57 @@ export function findPaneChildren(parent: HTMLElement): HTMLElement[] {
       child instanceof HTMLElement &&
       (child.classList.contains('pane') || child.classList.contains('pane-split'))
   )
+}
+
+function getSplitDirection(split: HTMLElement): 'vertical' | 'horizontal' {
+  return split.classList.contains('is-horizontal') ? 'horizontal' : 'vertical'
+}
+
+function getEqualizeWeight(el: HTMLElement, direction: 'vertical' | 'horizontal'): number {
+  if (!el.classList.contains('pane-split') || getSplitDirection(el) !== direction) {
+    return 1
+  }
+
+  const children = findPaneChildren(el)
+  return Math.max(
+    1,
+    children.reduce((sum, child) => sum + getEqualizeWeight(child, direction), 0)
+  )
+}
+
+export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
+  if (!root) {
+    return false
+  }
+
+  let changed = false
+  const visit = (el: HTMLElement): void => {
+    if (!el.classList.contains('pane-split')) {
+      return
+    }
+
+    const direction = getSplitDirection(el)
+    const children = findPaneChildren(el)
+    if (children.length >= 2) {
+      for (const child of children) {
+        // Why: same-axis nested splits need pane-count weighting so three
+        // side-by-side panes become thirds, not 50/25/25.
+        const weight = getEqualizeWeight(child, direction)
+        const nextFlex = `${weight} 1 0%`
+        if (child.style.flex !== nextFlex) {
+          child.style.flex = nextFlex
+          changed = true
+        }
+      }
+    }
+
+    for (const child of children) {
+      visit(child)
+    }
+  }
+
+  visit(root)
+  return changed
 }
 
 /**

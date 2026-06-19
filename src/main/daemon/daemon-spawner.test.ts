@@ -21,6 +21,7 @@ function createMockSubprocess(): SubprocessHandle {
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 88888,
+    getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
@@ -87,7 +88,11 @@ describe('DaemonSpawner', () => {
       const s = createSpawner()
       const info = await s.ensureRunning()
 
-      expect(info.socketPath).toContain(dir)
+      if (process.platform === 'win32') {
+        expect(info.socketPath).toContain(`orca-terminal-host-v${PROTOCOL_VERSION}`)
+      } else {
+        expect(info.socketPath).toContain(dir)
+      }
       expect(info.tokenPath).toContain(dir)
     })
 

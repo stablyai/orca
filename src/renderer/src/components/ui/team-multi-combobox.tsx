@@ -11,6 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import type { LinearTeam } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type TeamMultiComboboxProps = {
   teams: LinearTeam[]
@@ -22,10 +23,18 @@ type TeamMultiComboboxProps = {
 
 function renderTriggerLabel(teams: LinearTeam[], selected: ReadonlySet<string>): React.JSX.Element {
   if (teams.length === 0) {
-    return <span className="text-muted-foreground">No teams</span>
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        {translate('auto.components.ui.team.multi.combobox.301f2a796e', 'All teams')}
+      </span>
+    )
   }
   if (selected.size === teams.length) {
-    return <span className="inline-flex min-w-0 items-center gap-1.5">All teams</span>
+    return (
+      <span className="inline-flex min-w-0 items-center gap-1.5">
+        {translate('auto.components.ui.team.multi.combobox.301f2a796e', 'All teams')}
+      </span>
+    )
   }
   const selectedTeams = teams.filter((t) => selected.has(t.id))
   const [first, second, ...rest] = selectedTeams
@@ -110,11 +119,19 @@ export default function TeamMultiCombobox({
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-0">
+      <PopoverContent
+        align="start"
+        // Why: team filter triggers can collapse in narrow toolbars; the menu
+        // needs room for names and keys while still fitting small viewports.
+        className="w-[min(320px,calc(100vw-1rem))] min-w-[var(--radix-popover-trigger-width)] p-0"
+      >
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder="Search teams..."
+            placeholder={translate(
+              'auto.components.ui.team.multi.combobox.18ec58881e',
+              'Search teams...'
+            )}
             value={query}
             onValueChange={setQuery}
             className="text-xs"
@@ -136,11 +153,18 @@ export default function TeamMultiCombobox({
                   allSelected ? 'opacity-70' : 'opacity-0'
                 )}
               />
-              <span>All teams</span>
+              <span>
+                {translate('auto.components.ui.team.multi.combobox.301f2a796e', 'All teams')}
+              </span>
             </button>
           </div>
           <CommandList>
-            <CommandEmpty>No teams match your search.</CommandEmpty>
+            <CommandEmpty>
+              {translate(
+                'auto.components.ui.team.multi.combobox.de83523bf9',
+                'No teams match your search.'
+              )}
+            </CommandEmpty>
             {filteredTeams.map((team) => {
               const isSelected = selected.has(team.id)
               const isLastSelected = isSelected && selected.size <= 1
@@ -159,8 +183,8 @@ export default function TeamMultiCombobox({
                     )}
                   />
                   <div className="min-w-0 flex-1">
-                    <span className="inline-flex items-center gap-1.5 text-xs">
-                      <span>{team.name}</span>
+                    <span className="inline-flex max-w-full items-center gap-1.5 text-xs">
+                      <span className="min-w-0 truncate">{team.name}</span>
                       <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                         {team.key}
                       </span>

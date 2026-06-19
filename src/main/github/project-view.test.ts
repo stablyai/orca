@@ -5,9 +5,19 @@
 //     (GitHub allows them, e.g. `_internal`),
 // (c) owner slug validation must reject `.`/`_` (GitHub disallows them in
 //     usernames/orgs),
-// (d) parseProjectPaste shorthand owner-only alphabet matches the renderer.
-import { describe, expect, it } from 'vitest'
+// (d) parseProjectPaste shorthand owner-only alphabet matches the renderer,
+// (e) project owner/capability caches stay bounded in long sessions.
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES,
+  _getProjectViewCacheSizesForTests,
+  _getProjectViewOwnerTypeForTests,
+  _hasProjectViewParentFieldRetriedForTests,
+  _hasProjectViewParentFieldWarningLoggedForTests,
+  _markProjectViewParentFieldRetriedForTests,
+  _markProjectViewParentFieldWarningLoggedForTests,
+  _rememberProjectViewOwnerTypeForTests,
+  _resetProjectViewCachesForTests,
   classifyProjectError,
   isValidOwnerSlug,
   isValidRepoSlug,
@@ -140,5 +150,40 @@ describe('parseProjectPaste', () => {
   it('returns null for empty input', () => {
     expect(parseProjectPaste('')).toBeNull()
     expect(parseProjectPaste('   ')).toBeNull()
+  })
+})
+
+describe('project view owner caches', () => {
+  beforeEach(() => {
+    _resetProjectViewCachesForTests()
+  })
+
+  it('LRU-evicts old owner type probes', () => {
+    for (let i = 0; i <= PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES; i++) {
+      _rememberProjectViewOwnerTypeForTests(`owner-${i}`, i % 2 === 0 ? 'organization' : 'user')
+    }
+
+    expect(_getProjectViewCacheSizesForTests().ownerTypes).toBe(
+      PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES
+    )
+    expect(_getProjectViewOwnerTypeForTests('owner-0')).toBeUndefined()
+    expect(_getProjectViewOwnerTypeForTests('owner-1')).toBe('user')
+  })
+
+  it('LRU-evicts old parent-field retry and warning probes', () => {
+    for (let i = 0; i <= PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES; i++) {
+      const scopeKey = `owner-${i}\u0000organization`
+      _markProjectViewParentFieldRetriedForTests(scopeKey)
+      _markProjectViewParentFieldWarningLoggedForTests(scopeKey)
+    }
+
+    expect(_getProjectViewCacheSizesForTests()).toMatchObject({
+      parentFieldRetries: PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES,
+      parentFieldWarnings: PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES
+    })
+    expect(_hasProjectViewParentFieldRetriedForTests('owner-0\u0000organization')).toBe(false)
+    expect(_hasProjectViewParentFieldWarningLoggedForTests('owner-0\u0000organization')).toBe(false)
+    expect(_hasProjectViewParentFieldRetriedForTests('owner-1\u0000organization')).toBe(true)
+    expect(_hasProjectViewParentFieldWarningLoggedForTests('owner-1\u0000organization')).toBe(true)
   })
 })

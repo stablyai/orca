@@ -28,28 +28,48 @@ const TASK_STATUSES: TaskStatus[] = [
   'blocked'
 ]
 
-const SendParams = z.object({
-  to: requiredString('Missing --to'),
-  subject: requiredString('Missing --subject'),
-  from: OptionalString,
-  body: OptionalString,
-  type: z
-    .enum([
-      'status',
-      'dispatch',
-      'worker_done',
-      'merge_ready',
-      'escalation',
-      'handoff',
-      'decision_gate',
-      'heartbeat'
-    ])
-    .optional(),
-  priority: z.enum(['normal', 'high', 'urgent']).optional(),
-  threadId: OptionalString,
-  payload: OptionalString,
-  devMode: OptionalBoolean
-})
+function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
+  return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
+}
+
+const SendParams = z
+  .object({
+    to: requiredString('Missing --to'),
+    subject: requiredString('Missing --subject'),
+    from: OptionalString,
+    body: OptionalString,
+    type: z
+      .enum([
+        'status',
+        'dispatch',
+        'worker_done',
+        'merge_ready',
+        'escalation',
+        'handoff',
+        'decision_gate',
+        'heartbeat'
+      ])
+      .optional(),
+    priority: z.enum(['normal', 'high', 'urgent']).optional(),
+    threadId: OptionalString,
+    payload: OptionalString,
+    devMode: OptionalBoolean
+  })
+  .superRefine((params, ctx) => {
+    if (
+      (params.type !== 'worker_done' && params.type !== 'heartbeat') ||
+      !isGroupAddress(params.to)
+    ) {
+      return
+    }
+    // Why: dispatch lifecycle messages are authority/liveness signals for one
+    // coordinator. Fanout creates lifecycle mail in unrelated terminals.
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: getLifecycleGroupRecipientError(params.type),
+      path: ['to']
+    })
+  })
 
 const CheckParams = z.object({
   terminal: OptionalString,
@@ -81,7 +101,8 @@ const InboxParams = z.object({
 const TaskCreateParams = z.object({
   spec: requiredString('Missing --spec'),
   deps: OptionalString,
-  parent: OptionalString
+  parent: OptionalString,
+  callerTerminalHandle: OptionalString
 })
 
 const TaskListParams = z.object({
@@ -135,11 +156,23 @@ const AskParams = z.object({
   from: OptionalString
 })
 
-const ResetParams = z.object({
-  all: OptionalBoolean,
-  tasks: OptionalBoolean,
-  messages: OptionalBoolean
-})
+const ResetParams = z
+  .object({
+    all: OptionalBoolean,
+    tasks: OptionalBoolean,
+    messages: OptionalBoolean
+  })
+  .superRefine((params, ctx) => {
+    const selectedScopeCount = [params.all, params.tasks, params.messages].filter(
+      (scope) => scope === true
+    ).length
+    if (selectedScopeCount !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose exactly one reset scope: --all, --tasks, or --messages.'
+      })
+    }
+  })
 
 export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
@@ -162,7 +195,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           payload: params.payload
         })
         runtime.deliverPendingMessagesForHandle(params.to)
-        runtime.notifyMessageArrived(params.to)
+        runtime.notifyMessageArrived(params.to, msg.type)
         return { message: msg }
       }
 
@@ -191,9 +224,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           payload: params.payload
         })
       )
-      for (const handle of handles) {
-        runtime.deliverPendingMessagesForHandle(handle)
-        runtime.notifyMessageArrived(handle)
+      for (const message of messages) {
+        runtime.deliverPendingMessagesForHandle(message.to_handle)
+        runtime.notifyMessageArrived(message.to_handle, message.type)
       }
 
       return { messages, recipients: handles.length }
@@ -227,7 +260,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const readAndReturn = () => {
         const messages = showUnread
           ? db.getUnreadMessages(handle, typeFilter)
-          : db.getAllMessagesForHandle(handle)
+          : db.getAllMessagesForHandle(handle, undefined, typeFilter)
 
         if (showUnread && messages.length > 0) {
           db.markAsRead(messages.map((m) => m.id))
@@ -241,6 +274,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         return { messages, count: messages.length }
       }
 
+      if (signal?.aborted) {
+        return { messages: [], count: 0 }
+      }
       const result = readAndReturn()
       if (result.count > 0 || !params.wait) {
         return result
@@ -257,6 +293,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         timeoutMs: params.timeoutMs ?? undefined,
         signal
       })
+      if (signal?.aborted) {
+        return { messages: [], count: 0 }
+      }
       return readAndReturn()
     }
   }),
@@ -281,7 +320,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         threadId: original.thread_id ?? original.id
       })
 
-      runtime.notifyMessageArrived(original.from_handle)
+      runtime.notifyMessageArrived(original.from_handle, reply.type)
       return { message: reply }
     }
   }),
@@ -322,7 +361,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const task = db.createTask({
         spec: params.spec,
         deps,
-        parentId: params.parent
+        parentId: params.parent,
+        createdByTerminalHandle: params.callerTerminalHandle
       })
       return { task }
     }
@@ -411,7 +451,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (!hasAgent) {
           throw new Error(
             `Cannot dispatch --inject to terminal ${to}: no recognized agent detected. ` +
-              'Start an agent CLI (e.g. claude, codex, gemini) in the terminal first, ' +
+              'Start an agent CLI (e.g. claude, codex, gemini, droid) in the terminal first, ' +
               'or dispatch without --inject and send the prompt manually.'
           )
         }
@@ -491,7 +531,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.ask',
     params: AskParams,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, signal }) => {
       // Why: group addresses have no unambiguous answer semantics (whose
       // reply wins? first? consensus?) and the ~60-LOC scope is not the
       // place to design that. Rejecting here closes the silent-timeout
@@ -523,7 +563,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         payload
       })
       runtime.deliverPendingMessagesForHandle(params.to)
-      runtime.notifyMessageArrived(params.to)
+      runtime.notifyMessageArrived(params.to, outbound.type)
 
       const threadId = outbound.id
       const deadline = Date.now() + timeoutMs
@@ -546,11 +586,16 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             timedOut: false
           }
         }
+        if (signal?.aborted) {
+          return { answer: null, messageId: null, threadId, timedOut: true }
+        }
         const remainingMs = deadline - Date.now()
         if (remainingMs <= 0) {
           return { answer: null, messageId: null, threadId, timedOut: true }
         }
-        await runtime.waitForMessage(from, { timeoutMs: remainingMs })
+        // Why: if the asking client disconnects, release the waiter immediately
+        // while leaving the already-sent decision gate visible to the recipient.
+        await runtime.waitForMessage(from, { timeoutMs: remainingMs, signal })
       }
     }
   }),
@@ -574,8 +619,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         db.resetMessages()
         return { reset: 'messages' }
       }
-      db.resetAll()
-      return { reset: 'all' }
+      throw new Error('Invalid reset scope')
     }
   })
 ]

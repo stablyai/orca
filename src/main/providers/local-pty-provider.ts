@@ -2,7 +2,7 @@
 ~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
-import { basename } from 'path'
+import { basename, delimiter } from 'path'
 import { win32 as pathWin32 } from 'path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from './windows-powershell'
@@ -10,6 +10,7 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
+import { splitWorktreeId } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -29,10 +30,25 @@ import {
   writeStartupCommandWhenShellReady,
   STARTUP_COMMAND_READY_MAX_WAIT_MS
 } from './local-pty-shell-ready'
+import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
+import { addWslEnvKeys } from '../wsl-env'
+import {
+  isWindowsGitBashShellPath,
+  resolveGitBashPath,
+  resolveWindowsGitBashShellPath
+} from '../git-bash'
+import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { resolveAgentForegroundProcess } from './agent-foreground-process'
+import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+
+const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyShellName = new Map<string, string>()
+const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: node-pty's onData/onExit register native NAPI ThreadSafeFunction
 // callbacks. If the PTY is killed without disposing these listeners, the
 // stale callbacks survive into node::FreeEnvironment() where NAPI attempts
@@ -65,6 +81,32 @@ function getDefaultCwd(): string {
   return 'C:\\'
 }
 
+function removeUnspecifiedPaneIdentityEnv(
+  env: Record<string, string>,
+  explicitEnv: Record<string, string> | undefined
+): void {
+  for (const key of PANE_IDENTITY_ENV_KEYS) {
+    if (!explicitEnv || !Object.hasOwn(explicitEnv, key)) {
+      delete env[key]
+    }
+  }
+}
+
+function promoteAgentTeamsShimPath(
+  env: Record<string, string>,
+  requestedPath: string | undefined
+): void {
+  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
+    return
+  }
+  const shimDir = requestedPath.split(delimiter)[0]
+  if (!shimDir) {
+    return
+  }
+  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
+  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
+}
+
 function disposePtyListeners(id: string): void {
   const disposables = ptyDisposables.get(id)
   if (disposables) {
@@ -75,14 +117,70 @@ function disposePtyListeners(id: string): void {
   }
 }
 
+function getWslContextFromWorktreeId(
+  worktreeId: string | undefined
+): { distro: string; treatPosixCwdAsWsl: true } | undefined {
+  const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
+  const wslInfo = worktreePath ? parseWslPath(worktreePath) : null
+  return wslInfo ? { distro: wslInfo.distro, treatPosixCwdAsWsl: true } : undefined
+}
+
+function getWslContextFromPreferredDistro(
+  distro: string | null | undefined
+): { distro: string } | undefined {
+  const trimmed = distro?.trim()
+  return trimmed ? { distro: trimmed } : undefined
+}
+
 function clearPtyState(id: string): void {
   disposePtyListeners(id)
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
+  ptyAgentForegroundContextPaths.delete(id)
   ptyLoadGeneration.delete(id)
 }
 
-function destroyPtyProcess(proc: pty.IPty): void {
+function allocatePtyId(sessionId: string | undefined): string {
+  const requested = normalizeLocalCallerSessionId(sessionId)
+  if (requested) {
+    return requested
+  }
+  let id: string
+  do {
+    id = String(++ptyCounter)
+  } while (ptyProcesses.has(id))
+  return id
+}
+
+function normalizeLocalCallerSessionId(sessionId: string | undefined): string | null {
+  const requested = sessionId?.trim()
+  if (!requested || /^\d+$/.test(requested)) {
+    return null
+  }
+  return requested
+}
+
+function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
+  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
+  if (!trimmed || trimmed === 'xterm-256color') {
+    return null
+  }
+  return trimmed.split(/[\\/]/).pop() || null
+}
+
+function resolveForegroundFallbackProcess(
+  processName: string | null | undefined,
+  shellName: string | undefined
+): string | null {
+  if (process.platform !== 'win32' || normalizeForegroundProcessName(processName)) {
+    return processName || null
+  }
+  // Why: Windows node-pty can expose only the terminal name (`xterm-256color`).
+  // The spawned shell is the best fallback for agent foreground enrichment.
+  return shellName ?? processName ?? null
+}
+
+function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } = {}): void {
   // Why: node-pty's UnixTerminal.destroy() closes the master socket, which
   // releases the ptmx fd to the OS — without this call the fd leaks until GC
   // (see docs/fix-pty-fd-leak.md). destroy() also registers a close listener
@@ -90,9 +188,11 @@ function destroyPtyProcess(proc: pty.IPty): void {
   // the time that listener runs the child may have exited and its pid been
   // recycled to an unrelated user process — SIGHUP would land on a Chrome tab,
   // editor, etc. Neutralize proc.kill on this instance before calling
-  // destroy() to defuse the hazard. Windows exempt: WindowsTerminal.destroy
-  // IS a kill() call via _deferNoArgs, so neutralizing it would leak the
-  // ConPTY agent.
+  // destroy() to defuse the hazard. On Windows, destroy() is itself kill();
+  // skip it only after we have already killed the ConPTY.
+  if (process.platform === 'win32' && options.alreadyKilled) {
+    return
+  }
   if (process.platform !== 'win32') {
     ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
   }
@@ -110,12 +210,20 @@ function safeKillAndClean(id: string, proc: pty.IPty): void {
   } catch {
     /* Process may already be dead */
   }
-  destroyPtyProcess(proc)
+  destroyPtyProcess(proc, { alreadyKilled: true })
   clearPtyState(id)
 }
 
 export type LocalPtyProviderOptions = {
-  buildSpawnEnv?: (id: string, baseEnv: Record<string, string>) => Record<string, string>
+  /** Why: `ctx.command` carries the renderer-chosen launch command (e.g. `pi`,
+   *  `omp`, `claude`). Pi vs OMP must drive overlay source-dir selection in
+   *  `buildPtyHostEnv` — a cross-agent disk-presence fallback silently
+   *  shadows the other agent's user extensions when both are installed. */
+  buildSpawnEnv?: (
+    id: string,
+    baseEnv: Record<string, string>,
+    ctx?: { command?: string; shellPath?: string; isWsl?: boolean; wslDistro?: string | null }
+  ) => Record<string, string>
   /** Whether worktree-scoped shell history is enabled. When true (or absent)
    *  and a worktreeId is provided, HISTFILE is scoped per-worktree. */
   isHistoryEnabled?: () => boolean
@@ -144,11 +252,29 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
-    const id = String(++ptyCounter)
+    const reattachId = normalizeLocalCallerSessionId(args.sessionId)
+    if (reattachId) {
+      const existing = ptyProcesses.get(reattachId)
+      if (existing) {
+        try {
+          existing.resize(args.cols, args.rows)
+        } catch {
+          /* Existing PTY may reject resize during teardown; still return the live handle. */
+        }
+        return { id: reattachId, pid: existing.pid, isReattach: true }
+      }
+    }
+    const id = allocatePtyId(reattachId ?? undefined)
 
     const defaultCwd = getDefaultCwd()
     const cwd = args.cwd || defaultCwd
     const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
+    const worktreeWslContext =
+      process.platform === 'win32' ? getWslContextFromWorktreeId(args.worktreeId) : undefined
+    const preferredWslContext =
+      process.platform === 'win32'
+        ? getWslContextFromPreferredDistro(args.terminalWindowsWslDistro)
+        : undefined
 
     let shellPath: string
     let shellArgs: string[]
@@ -159,21 +285,23 @@ export class LocalPtyProvider implements IPtyProvider {
       | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
       | undefined
     if (wslInfo) {
-      const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
       shellPath = 'wsl.exe'
-      shellArgs = ['-d', wslInfo.distro, '--', 'bash', '-c', `cd '${escapedCwd}' && exec bash -l`]
-      effectiveCwd = getDefaultCwd()
-      validationCwd = cwd
+      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
+      shellArgs = resolved.shellArgs
+      effectiveCwd = resolved.effectiveCwd
+      validationCwd = resolved.validationCwd
     } else if (process.platform === 'win32') {
       // Why: shellOverride lets a single tab open in a different shell than the
       // persisted default (e.g. "New WSL terminal" from the "+" submenu) without
       // changing the user's setting. It takes priority over the setting.
-      const shellFamily =
+      const requestedShellFamily =
         args.shellOverride ||
         this.opts.getWindowsShell?.() ||
         process.env.COMSPEC ||
         'powershell.exe'
+      const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
       const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
+      const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
       // Why: shell selection can arrive either as a canonical setting value
       // ('powershell.exe') or as a concrete PowerShell executable path from a
       // one-off override. Normalize both forms back to the PowerShell family so
@@ -182,18 +310,24 @@ export class LocalPtyProvider implements IPtyProvider {
       const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
       const shouldResolvePowerShellFamily =
         powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
-      shellPath = shouldResolvePowerShellFamily
-        ? (resolveEffectiveWindowsPowerShell({
-            shellFamily:
-              normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-                ? 'powershell.exe'
-                : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                  ? normalizedShellFamily
-                  : undefined,
-            implementation: powerShellImplementation,
-            pwshAvailable: this.opts.pwshAvailable?.() ?? false
-          }) ?? shellFamily)
-        : shellFamily
+      if (resolvedGitBashPath) {
+        shellPath = resolvedGitBashPath
+      } else if (shellFamily === WINDOWS_GIT_BASH_SHELL) {
+        shellPath = 'powershell.exe'
+      } else {
+        shellPath = shouldResolvePowerShellFamily
+          ? (resolveEffectiveWindowsPowerShell({
+              shellFamily:
+                normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+                  ? 'powershell.exe'
+                  : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+                    ? normalizedShellFamily
+                    : undefined,
+              implementation: powerShellImplementation,
+              pwshAvailable: this.opts.pwshAvailable?.() ?? false
+            }) ?? shellFamily)
+          : shellFamily
+      }
       // Why: one-off overrides and persisted shell-family selection keep the
       // same priority, while the shared resolver chooses which PowerShell
       // executable is safe to run right now if that family is selected.
@@ -201,7 +335,12 @@ export class LocalPtyProvider implements IPtyProvider {
       // same shellArgs for the same (shell, cwd) pair. The helper keeps CJK
       // UTF-8 setup (chcp 65001), PowerShell $PROFILE dot-sourcing, and the
       // wsl.exe /mnt/<drive> cwd translation in one place.
-      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
+      const resolved = resolveWindowsShellLaunchArgs(
+        shellPath,
+        cwd,
+        defaultCwd,
+        worktreeWslContext ?? preferredWslContext
+      )
       shellArgs = resolved.shellArgs
       effectiveCwd = resolved.effectiveCwd
       validationCwd = resolved.validationCwd
@@ -235,8 +374,15 @@ export class LocalPtyProvider implements IPtyProvider {
       // restores clickable refs like `owner/repo#123` / `PR#123`.
       FORCE_HYPERLINK: '1'
     } as Record<string, string>
+    // Why: Orca can be launched from an Orca terminal while developing. Pane
+    // identity belongs to the child PTY, not the parent shell that spawned app.
+    removeUnspecifiedPaneIdentityEnv(spawnEnv, args.env)
+    removeInheritedNoColor(spawnEnv)
     for (const key of args.envToDelete ?? []) {
       delete spawnEnv[key]
+    }
+    if (args.env?.TERM) {
+      spawnEnv.TERM = args.env.TERM
     }
 
     spawnEnv.LANG ??= 'en_US.UTF-8'
@@ -248,32 +394,108 @@ export class LocalPtyProvider implements IPtyProvider {
     // Python scripts run inside the terminal.
     if (process.platform === 'win32') {
       spawnEnv.PYTHONUTF8 ??= '1'
+      if (isWindowsGitBashShellPath(shellPath)) {
+        // Why: Git for Windows login startup files otherwise cd to $HOME,
+        // ignoring node-pty's cwd for repo-scoped terminals.
+        spawnEnv.CHERE_INVOKING ??= '1'
+      }
     }
 
-    const finalEnv = this.opts.buildSpawnEnv ? this.opts.buildSpawnEnv(id, spawnEnv) : spawnEnv
+    const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
+    const launchWslDistro =
+      wslInfo?.distro ?? worktreeWslContext?.distro ?? preferredWslContext?.distro ?? null
+    const finalEnv = this.opts.buildSpawnEnv
+      ? this.opts.buildSpawnEnv(id, spawnEnv, {
+          command: args.command,
+          shellPath,
+          isWsl: isWslShell,
+          wslDistro: launchWslDistro
+        })
+      : spawnEnv
+    // Why: app-level env hooks can reintroduce vars that special launch modes
+    // explicitly scrubbed. Apply deletions last so shims like Claude Agent
+    // Teams keep their PATH and terminal-detection contract.
+    for (const key of args.envToDelete ?? []) {
+      delete finalEnv[key]
+    }
+    if (args.env?.TERM) {
+      finalEnv.TERM = args.env.TERM
+    }
+    if (process.platform === 'win32') {
+      const codexHomeWslInfo = finalEnv.CODEX_HOME ? parseWslPath(finalEnv.CODEX_HOME) : null
+      if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+        if (codexHomeWslInfo) {
+          if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
+            delete finalEnv.CODEX_HOME
+            delete finalEnv.ORCA_CODEX_HOME
+          } else {
+            finalEnv.CODEX_HOME = codexHomeWslInfo.linuxPath
+            finalEnv.ORCA_CODEX_HOME = codexHomeWslInfo.linuxPath
+            // Why: wsl.exe only imports non-default env vars named in WSLENV.
+            addWslEnvKeys(finalEnv, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+            if (!launchWslDistro) {
+              const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd, {
+                distro: codexHomeWslInfo.distro
+              })
+              shellArgs = resolved.shellArgs
+              effectiveCwd = resolved.effectiveCwd
+              validationCwd = resolved.validationCwd
+            }
+          }
+        } else if (isHostCodexHomeForWsl(finalEnv.CODEX_HOME)) {
+          // Why: Orca's selected Codex runtime home is host-local. WSL Codex
+          // must use its Linux-side ~/.codex instead of a Windows path.
+          delete finalEnv.CODEX_HOME
+          delete finalEnv.ORCA_CODEX_HOME
+        } else if (finalEnv.CODEX_HOME) {
+          addWslEnvKeys(finalEnv, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+        }
+        if (finalEnv.CLAUDE_CONFIG_DIR) {
+          // Why: managed WSL Claude accounts pass a Linux CLAUDE_CONFIG_DIR
+          // through Windows wsl.exe; non-default env vars need WSLENV import.
+          addWslEnvKeys(finalEnv, ['CLAUDE_CONFIG_DIR'])
+        }
+      } else if (codexHomeWslInfo || isWslCodexHomeForHost(finalEnv.CODEX_HOME)) {
+        // Why: WSL-managed Codex homes are Linux paths. Windows Codex cannot use
+        // them. ORCA_CODEX_HOME must go too because shell-ready scripts restore
+        // CODEX_HOME from it after user profiles run.
+        delete finalEnv.CODEX_HOME
+        delete finalEnv.ORCA_CODEX_HOME
+      }
+    }
     if (!wslInfo && process.platform !== 'win32') {
-      // Why: any Orca-injected overlay env that user rc files can clobber
-      // needs the wrapper so the post-rc restore line runs.
+      // Why: OpenCode/Codex path restoration and OMP's typed-command status
+      // wrapper need shell-ready code after user startup files run.
       const needsNoMarkerWrapper =
         finalEnv.ORCA_ATTRIBUTION_SHIM_DIR ||
         finalEnv.ORCA_OPENCODE_CONFIG_DIR ||
-        finalEnv.ORCA_PI_CODING_AGENT_DIR
-      getFallbackShellReadyConfig = args.command
-        ? (shell) => getShellReadyLaunchConfig(shell)
-        : needsNoMarkerWrapper
-          ? (shell) => getAttributionShellLaunchConfig(shell)
-          : undefined
-      const shellLaunch = args.command
-        ? getShellReadyLaunchConfig(shellPath)
-        : needsNoMarkerWrapper
-          ? getAttributionShellLaunchConfig(shellPath)
-          : null
+        finalEnv.ORCA_OMP_STATUS_EXTENSION ||
+        finalEnv.ORCA_CODEX_HOME ||
+        finalEnv.ORCA_AGENT_TEAMS_SHIM_DIR
+      const isCodexStartupCommand =
+        recognizeAgentProcessFromCommandLine(args.command)?.agent === 'codex'
+      let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
+      if (args.command && isCodexStartupCommand) {
+        // Why: Codex needs the env-restoring wrapper, but waiting for a shell
+        // marker delays the first useful TUI frame.
+        getFallbackShellReadyConfig = (shell) => getAttributionShellLaunchConfig(shell)
+        shellLaunch = getAttributionShellLaunchConfig(shellPath)
+      } else if (args.command) {
+        getFallbackShellReadyConfig = (shell) => getShellReadyLaunchConfig(shell)
+        shellLaunch = getShellReadyLaunchConfig(shellPath)
+      } else if (needsNoMarkerWrapper) {
+        getFallbackShellReadyConfig = (shell) => getAttributionShellLaunchConfig(shell)
+        shellLaunch = getAttributionShellLaunchConfig(shellPath)
+      } else {
+        getFallbackShellReadyConfig = undefined
+      }
       if (shellLaunch) {
         Object.assign(finalEnv, shellLaunch.env)
         shellArgs = shellLaunch.args ?? shellArgs
         shellReadyLaunch = args.command ? shellLaunch : null
       }
     }
+    promoteAgentTeamsShimPath(finalEnv, args.env?.PATH)
 
     // ── Worktree-scoped shell history (§7–§10 of terminal-history-scope-design) ──
     // Why: without this, all worktree terminals share a single global HISTFILE
@@ -282,10 +504,15 @@ export class LocalPtyProvider implements IPtyProvider {
     const historyEnabled = worktreeId && (this.opts.isHistoryEnabled?.() ?? true)
     // Resolve the effective shell kind for history injection. For WSL, the
     // outer executable is wsl.exe but the inner login shell is bash.
-    const effectiveShellPath = wslInfo ? 'bash' : shellPath
+    const isWslTerminal =
+      Boolean(wslInfo || worktreeWslContext || preferredWslContext) ||
+      pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
+    const effectiveShellPath = isWslTerminal ? 'bash' : shellPath
     let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
     if (historyEnabled) {
-      historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd)
+      historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd, {
+        wslDistro: preferredWslContext?.distro ?? worktreeWslContext?.distro ?? null
+      })
       logHistoryInjection(worktreeId, historyResult)
     }
 
@@ -296,6 +523,7 @@ export class LocalPtyProvider implements IPtyProvider {
       rows: args.rows,
       cwd: effectiveCwd,
       env: finalEnv,
+      termName: finalEnv.TERM,
       ptySpawn: pty.spawn,
       getShellReadyConfig: getFallbackShellReadyConfig,
       // Why: if zsh failed and bash took over, HISTFILE still points to
@@ -314,6 +542,10 @@ export class LocalPtyProvider implements IPtyProvider {
     const proc = spawnResult.process
     ptyProcesses.set(id, proc)
     ptyShellName.set(id, basename(shellPath))
+    ptyAgentForegroundContextPaths.set(
+      id,
+      getAgentForegroundContextPaths({ cwd: args.cwd, worktreeId: args.worktreeId })
+    )
     ptyLoadGeneration.set(id, loadGeneration)
     this.opts.onSpawned?.(id)
 
@@ -422,6 +654,9 @@ export class LocalPtyProvider implements IPtyProvider {
 
   // Local PTYs are always attached -- no-op. Remote providers use this to resubscribe.
   async attach(_id: string): Promise<void> {}
+  hasPty(id: string): boolean {
+    return ptyProcesses.has(id)
+  }
   write(id: string, data: string): void {
     ptyProcesses.get(id)?.write(data)
   }
@@ -445,9 +680,10 @@ export class LocalPtyProvider implements IPtyProvider {
     } catch {
       /* Process may already be dead */
     }
-    destroyPtyProcess(proc)
+    destroyPtyProcess(proc, { alreadyKilled: true })
     ptyProcesses.delete(id)
     ptyShellName.delete(id)
+    ptyAgentForegroundContextPaths.delete(id)
     ptyLoadGeneration.delete(id)
     this.opts.onExit?.(id, -1)
     for (const cb of exitListeners) {
@@ -515,7 +751,13 @@ export class LocalPtyProvider implements IPtyProvider {
       return null
     }
     try {
-      return proc.process || null
+      return await resolveAgentForegroundProcess(
+        proc.pid,
+        resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
+        {
+          contextPaths: ptyAgentForegroundContextPaths.get(id)
+        }
+      )
     } catch {
       return null
     }
@@ -549,6 +791,10 @@ export class LocalPtyProvider implements IPtyProvider {
         { name: 'PowerShell', path: 'powershell.exe' },
         { name: 'Command Prompt', path: 'cmd.exe' }
       ]
+      const gitBashPath = resolveGitBashPath()
+      if (gitBashPath) {
+        profiles.push({ name: 'Git Bash', path: gitBashPath })
+      }
       if (isWslAvailable()) {
         profiles.push({ name: 'WSL', path: 'wsl.exe' })
       }

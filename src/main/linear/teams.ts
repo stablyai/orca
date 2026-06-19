@@ -1,52 +1,129 @@
-import type { LinearTeam, LinearWorkflowState, LinearLabel, LinearMember } from '../../shared/types'
-import { acquire, release, getClient, isAuthError, clearToken } from './client'
+import type {
+  LinearTeam,
+  LinearWorkflowState,
+  LinearLabel,
+  LinearMember,
+  LinearWorkspaceError,
+  LinearWorkspaceSelection
+} from '../../shared/types'
+import { acquire, release, getClients, isAuthError, clearToken } from './client'
+import {
+  fetchAllTeamLabels,
+  fetchAllTeamMembers,
+  fetchAllTeamsForWorkspace,
+  fetchAllTeamStates
+} from './linear-team-pages'
 
-export async function listTeams(): Promise<LinearTeam[]> {
-  const client = getClient()
-  if (!client) {
+export async function listTeams(
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<LinearTeam[]> {
+  const entries = getClients(workspaceId)
+  if (entries.length === 0) {
     return []
   }
 
-  await acquire()
-  try {
-    const teams = await client.teams()
-    return teams.nodes
-      .map((t) => ({ id: t.id, name: t.name, key: t.key }))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  } catch (error) {
-    if (isAuthError(error)) {
-      clearToken()
-      throw error
-    }
-    console.warn('[linear] listTeams failed:', error)
+  const results = await Promise.all(
+    entries.map(async (entry) => {
+      await acquire()
+      try {
+        return fetchAllTeamsForWorkspace(entry)
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+          if (workspaceId !== 'all') {
+            throw error
+          }
+        } else {
+          console.warn('[linear] listTeams failed:', error)
+        }
+        return []
+      } finally {
+        release()
+      }
+    })
+  )
+  return results.flat().sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function listTeamsOrThrow(
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<LinearTeam[]> {
+  const entries = getClients(workspaceId)
+  if (entries.length === 0) {
     return []
-  } finally {
-    release()
+  }
+
+  const results = await Promise.all(
+    entries.map(async (entry) => {
+      await acquire()
+      try {
+        return await fetchAllTeamsForWorkspace(entry)
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+        }
+        throw error
+      } finally {
+        release()
+      }
+    })
+  )
+  return results.flat().sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function listTeamsForAgent(
+  workspaceId?: LinearWorkspaceSelection | null
+): Promise<{ teams: LinearTeam[]; errors: LinearWorkspaceError[] }> {
+  const entries = getClients(workspaceId)
+  if (entries.length === 0) {
+    return { teams: [], errors: [] }
+  }
+
+  const results = await Promise.all(
+    entries.map(async (entry) => {
+      await acquire()
+      try {
+        return { teams: await fetchAllTeamsForWorkspace(entry), error: null }
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+        }
+        return {
+          teams: [],
+          error: {
+            workspaceId: entry.workspace.id,
+            workspaceName: entry.workspace.organizationName,
+            type: isAuthError(error) ? 'auth' : 'unknown',
+            message: error instanceof Error ? error.message : String(error)
+          } satisfies LinearWorkspaceError
+        }
+      } finally {
+        release()
+      }
+    })
+  )
+  return {
+    teams: results.flatMap((result) => result.teams).sort((a, b) => a.name.localeCompare(b.name)),
+    errors: results.flatMap((result) => (result.error ? [result.error] : []))
   }
 }
 
-export async function getTeamStates(teamId: string): Promise<LinearWorkflowState[]> {
-  const client = getClient()
-  if (!client) {
+export async function getTeamStates(
+  teamId: string,
+  workspaceId?: string | null
+): Promise<LinearWorkflowState[]> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
     return []
   }
 
   await acquire()
   try {
-    const team = await client.team(teamId)
-    const states = await team.states()
-    return states.nodes
-      .map((s) => ({
-        id: s.id,
-        name: s.name,
-        type: s.type,
-        color: s.color,
-        position: s.position
-      }))
-      .sort((a, b) => a.position - b.position)
+    const team = await entry.client.team(teamId)
+    return await fetchAllTeamStates(team)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken()
+      clearToken(entry.workspace.id)
       throw error
     }
     console.warn('[linear] getTeamStates failed:', error)
@@ -56,20 +133,45 @@ export async function getTeamStates(teamId: string): Promise<LinearWorkflowState
   }
 }
 
-export async function getTeamLabels(teamId: string): Promise<LinearLabel[]> {
-  const client = getClient()
-  if (!client) {
+export async function getTeamStatesOrThrow(
+  teamId: string,
+  workspaceId?: string | null
+): Promise<LinearWorkflowState[]> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
     return []
   }
 
   await acquire()
   try {
-    const team = await client.team(teamId)
-    const labels = await team.labels()
-    return labels.nodes.map((l) => ({ id: l.id, name: l.name, color: l.color }))
+    const team = await entry.client.team(teamId)
+    return await fetchAllTeamStates(team)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken()
+      clearToken(entry.workspace.id)
+    }
+    throw error
+  } finally {
+    release()
+  }
+}
+
+export async function getTeamLabels(
+  teamId: string,
+  workspaceId?: string | null
+): Promise<LinearLabel[]> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    return []
+  }
+
+  await acquire()
+  try {
+    const team = await entry.client.team(teamId)
+    return await fetchAllTeamLabels(team)
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.workspace.id)
       throw error
     }
     console.warn('[linear] getTeamLabels failed:', error)
@@ -79,28 +181,98 @@ export async function getTeamLabels(teamId: string): Promise<LinearLabel[]> {
   }
 }
 
-export async function getTeamMembers(teamId: string): Promise<LinearMember[]> {
-  const client = getClient()
-  if (!client) {
+export async function getTeamLabelsOrThrow(
+  teamId: string,
+  workspaceId?: string | null
+): Promise<LinearLabel[]> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
     return []
   }
 
   await acquire()
   try {
-    const team = await client.team(teamId)
-    const members = await team.members()
-    return members.nodes.map((m) => ({
-      id: m.id,
-      displayName: m.displayName,
-      avatarUrl: m.avatarUrl ?? undefined
-    }))
+    const team = await entry.client.team(teamId)
+    return await fetchAllTeamLabels(team)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken()
+      clearToken(entry.workspace.id)
+    }
+    throw error
+  } finally {
+    release()
+  }
+}
+
+export async function getTeamMembers(
+  teamId: string,
+  workspaceId?: string | null
+): Promise<LinearMember[]> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    return []
+  }
+
+  await acquire()
+  try {
+    const team = await entry.client.team(teamId)
+    return await fetchAllTeamMembers(team)
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.workspace.id)
       throw error
     }
     console.warn('[linear] getTeamMembers failed:', error)
     return []
+  } finally {
+    release()
+  }
+}
+
+export async function getTeamMembersOrThrow(
+  teamId: string,
+  workspaceId?: string | null
+): Promise<LinearMember[]> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    return []
+  }
+
+  await acquire()
+  try {
+    const team = await entry.client.team(teamId)
+    return await fetchAllTeamMembers(team)
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.workspace.id)
+    }
+    throw error
+  } finally {
+    release()
+  }
+}
+
+export async function getViewerForWorkspaceOrThrow(
+  workspaceId: string
+): Promise<{ id: string; displayName?: string | null; avatarUrl?: string | null }> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new Error('Not connected to Linear')
+  }
+
+  await acquire()
+  try {
+    const viewer = await entry.client.viewer
+    return {
+      id: viewer.id,
+      displayName: viewer.displayName,
+      avatarUrl: viewer.avatarUrl ?? undefined
+    }
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.workspace.id)
+    }
+    throw error
   } finally {
     release()
   }

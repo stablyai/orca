@@ -1,29 +1,47 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import {
-  shouldAllowComposerEnterSubmitTarget,
-  shouldSuppressEnterSubmit
-} from '@/lib/new-workspace-enter-guard'
-import type { TuiAgent, WorkspaceCreateTelemetrySource } from '../../../shared/types'
-
-const isMac = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+  pickQuickWorkspaceAgent,
+  resolveQuickWorkspaceAgentSelection
+} from '@/lib/quick-workspace-agent-selection'
+import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
+import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import type {
+  TuiAgent,
+  WorkspaceCreateTelemetrySource,
+  WorkspaceStatus
+} from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
+import { translate } from '@/i18n/i18n'
+import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
+import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
 
 type ComposerModalData = {
   prefilledName?: string
   initialRepoId?: string
+  initialProjectGroupId?: string
   linkedWorkItem?: LinkedWorkItemSummary | null
+  taskSourceContext?: TaskSourceContext | null
   initialBaseBranch?: string
+  initialWorkspaceStatus?: WorkspaceStatus
   /** Telemetry surface that opened the composer. Set by each
    *  `openModal('new-workspace-composer', ...)` site so
    *  `workspace_created.source` carries the right value. Falls back to
    *  `unknown` when omitted. */
   telemetrySource?: WorkspaceCreateTelemetrySource
+  contextualTourSource?: string
+  setupGuideTourRequestId?: string
 }
 
 export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
@@ -68,24 +86,17 @@ function ComposerModalBody({
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex flex-col sm:max-w-lg"
+        className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
         onOpenAutoFocus={(event) => {
           // Why: Radix's FocusScope fires this once the dialog has mounted.
           // preventDefault stops it from focusing whatever first-tabbable it
-          // picks (close button), and we instead focus the repo picker so the
-          // keyboard flow starts at the top of the unified create form.
+          // picks (close button), and we instead focus the name/source field
+          // so users can start typing immediately.
           event.preventDefault()
           const content = event.currentTarget as HTMLElement
-          const trigger = content.querySelector<HTMLElement>(
-            '[data-repo-combobox-root="true"][role="combobox"]'
-          )
-          trigger?.focus({ preventScroll: true })
+          getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
-        <DialogHeader className="gap-1">
-          <DialogTitle className="text-base font-semibold">Create Workspace</DialogTitle>
-        </DialogHeader>
-
         <QuickTabBody modalData={modalData} onClose={onClose} active />
       </DialogContent>
     </Dialog>
@@ -102,17 +113,29 @@ function QuickTabBody({
   active: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const { cardProps, composerRef, nameInputRef, submitQuick, createDisabled } = useComposerState({
+  const {
+    cardProps,
+    composerRef,
+    onComposerNodeChange,
+    nameInputRef,
+    submitQuick,
+    createDisabled
+  } = useComposerState({
     initialName: modalData.prefilledName ?? '',
     // Why: the modal is quick-create only now, so prompt-prefill state is
     // intentionally ignored even if older callers still send it.
     initialPrompt: '',
     initialLinkedWorkItem: modalData.linkedWorkItem ?? null,
+    initialTaskSourceContext: modalData.taskSourceContext ?? null,
     initialRepoId: modalData.initialRepoId,
+    initialProjectGroupId: modalData.initialProjectGroupId,
+    initialWorkspaceStatus: modalData.initialWorkspaceStatus,
     ...(modalData.initialBaseBranch ? { initialBaseBranch: modalData.initialBaseBranch } : {}),
     persistDraft: false,
     onCreated: onClose,
-    ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {})
+    ...(modalData.telemetrySource ? { telemetrySource: modalData.telemetrySource } : {}),
+    enableIssueAutomation: false,
+    createGateMode: 'quick'
   })
   // Why: the composer's built-in `onOpenAgentSettings` handler navigates to
   // the settings page and closes the modal. For the quick-create flow we want
@@ -131,18 +154,22 @@ function QuickTabBody({
   )
   const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
     const pref = settings?.defaultTuiAgent
-    if (pref === 'blank') {
-      // Why: 'blank' is the explicit "no agent" preference — the quick agent
-      // model already uses null to mean "blank terminal", so translate here.
-      return null
-    }
-    if (pref) {
-      return pref
-    }
-    const detected = cardProps.detectedAgentIds
-    return AGENT_CATALOG.find((agent) => detected === null || detected.has(agent.id))?.id ?? null
-  }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent])
-  const quickAgent = quickAgentOverride === undefined ? preferredQuickAgent : quickAgentOverride
+    // Why: detection can still be pending when quick-create submits; keep the
+    // prior catalog fallback while filtering disabled agents out of that choice.
+    return pickQuickWorkspaceAgent(pref, cardProps.detectedAgentIds, settings?.disabledTuiAgents)
+  }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent, settings?.disabledTuiAgents])
+  const resolvedQuickAgentSelection = resolveQuickWorkspaceAgentSelection({
+    quickAgentOverride,
+    preferredQuickAgent,
+    detectedAgentIds: cardProps.detectedAgentIds,
+    disabledTuiAgents: settings?.disabledTuiAgents
+  })
+  if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
+    // Why: detection/settings changes can invalidate a user-picked agent; repair
+    // before the child selector renders an unavailable option for one commit.
+    setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
+  }
+  const quickAgent = resolvedQuickAgentSelection.quickAgent
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)
@@ -151,6 +178,15 @@ function QuickTabBody({
   const handleCreate = useCallback(async (): Promise<void> => {
     await submitQuick(quickAgent)
   }, [quickAgent, submitQuick])
+  const selectedProjectOption = cardProps.projectOptions.find(
+    (option) => option.id === cardProps.selectedProjectId
+  )
+  const isFolderWorkspaceTarget = selectedProjectOption?.kind === 'project-group'
+  const primaryActionLabel = isFolderWorkspaceTarget
+    ? getFolderWorkspacePrimaryActionLabel()
+    : cardProps.selectedRepoIsGit
+      ? 'Create worktree'
+      : 'Create workspace'
 
   // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
   useEffect(() => {
@@ -182,21 +218,15 @@ function QuickTabBody({
         return
       }
 
-      // Why: require the platform modifier (Cmd on macOS, Ctrl elsewhere) so
-      // plain Enter inside fields (notes, repo search) doesn't accidentally
-      // submit — users can type or confirm selections without triggering
-      // workspace creation.
-      const hasModifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-      if (!hasModifier) {
+      // Why: workspace creation is screen-local submit behavior, not a
+      // user-configurable app command.
+      if (!isScreenSubmitShortcut(event)) {
         return
       }
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
         return
       }
       if (createDisabled) {
-        return
-      }
-      if (shouldSuppressEnterSubmit(event, false)) {
         return
       }
       event.preventDefault()
@@ -208,12 +238,35 @@ function QuickTabBody({
 
   return (
     <>
+      <DialogHeader className="gap-1">
+        <DialogTitle className="text-base font-semibold">
+          {isFolderWorkspaceTarget
+            ? translate(
+                'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
+                'Create Folder Workspace'
+              )
+            : primaryActionLabel}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          {translate(
+            'auto.components.NewWorkspaceComposerModal.fa90f739a5',
+            'Choose the project, workspace name, and agent before creating the workspace.'
+          )}
+        </DialogDescription>
+      </DialogHeader>
       <NewWorkspaceComposerCard
+        contextualTourSource={modalData.contextualTourSource}
+        // Why: the scroll container clips children, while Orca's standard
+        // field focus ring paints 3px outside the control. Inset both sides so
+        // keyboard focus stays fully visible at the dialog edges.
+        containerClassName="min-h-0 flex-1 overflow-y-auto px-1 scrollbar-sleek"
         composerRef={composerRef}
+        onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
         {...cardProps}
+        primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
       />

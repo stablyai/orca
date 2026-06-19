@@ -1,34 +1,58 @@
+import {
+  getKeybindingDefinition,
+  isKeybindingAllowedInTerminal,
+  isKeybindingPotentialTerminalConflict,
+  keybindingMatchesAction,
+  normalizeTerminalShortcutPolicy,
+  type KeybindingActionId,
+  type KeybindingMatchOptions,
+  type KeybindingOverrides,
+  type PhysicalModifierToken
+} from './keybindings'
+
 export type WindowShortcutInput = {
+  type?: string
   key?: string
   code?: string
   alt?: boolean
   meta?: boolean
   control?: boolean
   shift?: boolean
+  altKey?: boolean
+  metaKey?: boolean
+  ctrlKey?: boolean
+  shiftKey?: boolean
+  // Set only by the double-tap detector; threads the synthetic input through
+  // the main-process resolver so allowlisted actions can fire on double-tap.
+  doubleTapModifier?: PhysicalModifierToken
 }
 
 export type WindowShortcutAction =
   | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
+  | { type: 'openSettings' }
+  | { type: 'forceReload' }
   | { type: 'toggleWorktreePalette' }
+  | { type: 'toggleFloatingTerminal' }
   | { type: 'toggleLeftSidebar' }
   | { type: 'toggleRightSidebar' }
   | { type: 'openQuickOpen' }
   | { type: 'openNewWorkspace' }
+  | { type: 'deleteCurrentWorkspace' }
+  | { type: 'openWorkspaceBoard' }
+  | { type: 'openTasks' }
+  | { type: 'switchRecentTab' }
   | { type: 'jumpToWorktreeIndex'; index: number }
+  | { type: 'jumpToTabIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
+  | { type: 'dictationKeyDown' }
+
+type WindowShortcutResolveOptions = KeybindingMatchOptions
 
 function platformPrimaryModifier(
   input: Pick<WindowShortcutInput, 'meta' | 'control'>,
   platform: NodeJS.Platform
 ): boolean {
   return platform === 'darwin' ? Boolean(input.meta) : Boolean(input.control)
-}
-
-function platformOppositeModifier(
-  input: Pick<WindowShortcutInput, 'meta' | 'control'>,
-  platform: NodeJS.Platform
-): boolean {
-  return platform === 'darwin' ? Boolean(input.control) : Boolean(input.meta)
 }
 
 export function isWindowShortcutModifierChord(
@@ -38,128 +62,155 @@ export function isWindowShortcutModifierChord(
   return platformPrimaryModifier(input, platform) && !input.alt
 }
 
-// Why: worktree history navigation is the first allowlisted chord that
-// intentionally carries Alt, so it needs its own predicate. The shared
-// isWindowShortcutModifierChord helper deliberately rejects Alt because its
-// callers (zoom, sidebar toggles, palette, jump indices) must not steal
-// Alt-combinations used by shells and readline.
-//
-// Why: this predicate also narrows to ArrowLeft/ArrowRight (not just
-// "primary+alt") so a future alt-carrying chord added as its own branch in
-// resolveWindowShortcutAction is not silently swallowed by the early
-// return-null below. Any non-arrow alt combo falls through to the rest of
-// the policy, where Alt is rejected by isWindowShortcutModifierChord as
-// before.
-function isHistoryNavigateChord(input: WindowShortcutInput, platform: NodeJS.Platform): boolean {
-  // Why: excluding Shift reserves Cmd/Ctrl+Alt+Shift+Arrow for future chords
-  // (e.g. "close back/forward entry" or cross-stack selection) without
-  // taking a breaking-change hit on the v1 chord binding. Excluding the
-  // opposite primary modifier (Ctrl on darwin, Meta on non-darwin) prevents
-  // Cmd+Ctrl+Alt+Arrow / Win+Ctrl+Alt+Arrow from being mis-classified as
-  // history navigation — those combinations collide with OS chords
-  // (macOS Mission Control spaces, GNOME workspace switching) and must
-  // continue to flow to the OS.
-  return (
-    platformPrimaryModifier(input, platform) &&
-    !platformOppositeModifier(input, platform) &&
-    Boolean(input.alt) &&
-    !input.shift &&
-    (input.code === 'ArrowLeft' || input.code === 'ArrowRight')
-  )
-}
-
-function isZoomInShortcut(input: WindowShortcutInput): boolean {
-  return input.key === '=' || input.key === '+' || input.code === 'NumpadAdd'
-}
-
-function isZoomOutShortcut(input: WindowShortcutInput): boolean {
-  // Why: Electron reports Cmd/Ctrl+Minus differently across layouts and devices:
-  // some emit '-' while shifted layouts emit '_', and other layouts/devices
-  // report symbolic names like "Minus"/"Subtract" in either key or code.
-  // We accept all known variants so zoom out remains reachable everywhere.
-  const key = (input.key ?? '').toLowerCase()
-  const code = (input.code ?? '').toLowerCase()
-  return (
-    key === '-' ||
-    key === '_' ||
-    key.includes('minus') ||
-    key.includes('subtract') ||
-    code.includes('minus') ||
-    code.includes('subtract')
-  )
-}
-
-// Why: letter shortcuts must follow the user's active keyboard layout. Matching
-// solely on `input.code` uses the physical QWERTY position of the key, which
-// breaks on Dvorak, Colemak, AZERTY, and other non-QWERTY layouts — e.g. on
-// Dvorak the key that types 'b' sits at physical position 'KeyN', so
-// `input.code === 'KeyB'` never fires when the user presses what is, to them,
-// "Cmd+B". `input.key` carries the layout-aware character, so we prefer it
-// when it looks like a letter. We fall back to the QWERTY code when `key` is
-// empty or non-letter (dead keys, some IME states, rare Electron edge cases)
-// so shortcuts still reach users whose driver does not surface `key`.
-function matchesLetterShortcut(
+export function matchesRecentTabSwitcherChord(
   input: WindowShortcutInput,
-  letter: string,
-  codeFallback: string
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides,
+  options: WindowShortcutResolveOptions = {}
 ): boolean {
-  const key = (input.key ?? '').toLowerCase()
-  if (key.length === 1 && key >= 'a' && key <= 'z') {
-    return key === letter
+  const control = Boolean(input.control ?? input.ctrlKey)
+  const meta = Boolean(input.meta ?? input.metaKey)
+  const alt = Boolean(input.alt ?? input.altKey)
+  if (input.code !== 'Tab' || !control || meta || alt) {
+    return false
   }
-  return input.code === codeFallback
+  // Why: the Ctrl+Tab switcher is a held-key interaction where Shift reverses
+  // direction. Gate the whole family on the configurable unshifted binding.
+  return keybindingMatchesAction(
+    'tab.previousRecent',
+    {
+      key: input.key,
+      code: input.code,
+      alt,
+      meta,
+      control,
+      shift: false,
+      altKey: alt,
+      metaKey: meta,
+      ctrlKey: control,
+      shiftKey: false
+    },
+    platform,
+    keybindings,
+    options
+  )
+}
+
+function isControlKey(input: WindowShortcutInput): boolean {
+  return (
+    input.code === 'ControlLeft' ||
+    input.code === 'ControlRight' ||
+    input.code === 'Control' ||
+    input.key === 'Control'
+  )
+}
+
+function isTabKey(input: WindowShortcutInput): boolean {
+  return input.code === 'Tab' || input.key === 'Tab'
+}
+
+export function isRecentTabSwitcherCommitRelease(input: WindowShortcutInput): boolean {
+  if (input.type !== 'keyUp' && input.type !== 'keyup') {
+    return false
+  }
+  if (isControlKey(input)) {
+    return true
+  }
+  const control = input.control ?? input.ctrlKey
+  // Why: some Electron surfaces report the final Ctrl+Tab release as Tab
+  // keyup after Control is already up, so commit instead of stranding the UI.
+  return isTabKey(input) && control === false
+}
+
+function actionMatches(
+  actionId: KeybindingActionId,
+  input: WindowShortcutInput,
+  platform: NodeJS.Platform,
+  keybindings: KeybindingOverrides | undefined,
+  options: WindowShortcutResolveOptions
+): boolean {
+  return keybindingMatchesAction(actionId, input, platform, keybindings, options)
+}
+
+function implicitWorktreeIndexShortcutAllowed(options: WindowShortcutResolveOptions): boolean {
+  if (options.context !== 'terminal') {
+    return true
+  }
+  return normalizeTerminalShortcutPolicy(options.terminalShortcutPolicy) === 'orca-first'
+}
+
+function implicitTabIndexShortcutAllowed(options: WindowShortcutResolveOptions): boolean {
+  return implicitWorktreeIndexShortcutAllowed(options)
+}
+
+function tabIndexModifierPressed(input: WindowShortcutInput, platform: NodeJS.Platform): boolean {
+  const meta = Boolean(input.meta ?? input.metaKey)
+  const control = Boolean(input.control ?? input.ctrlKey)
+  const alt = Boolean(input.alt ?? input.altKey)
+
+  // Why: Ctrl+1-9 is free on macOS because workspace jumps use Cmd+1-9.
+  // On Windows/Linux Ctrl+1-9 is already the workspace jump, so Alt+1-9
+  // gives tab indexing a non-conflicting hardcoded chord.
+  return platform === 'darwin' ? control && !meta && !alt : alt && !meta && !control
 }
 
 export function resolveWindowShortcutAction(
   input: WindowShortcutInput,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides,
+  options: WindowShortcutResolveOptions = {}
 ): WindowShortcutAction | null {
-  // Why: evaluate the history-navigate chord BEFORE the standard modifier-chord
-  // gate because that gate rejects Alt. The predicate already narrows to
-  // ArrowLeft/ArrowRight so only those two codes reach here.
-  if (isHistoryNavigateChord(input, platform)) {
+  if (actionMatches('worktree.history.back', input, platform, keybindings, options)) {
     return {
       type: 'worktreeHistoryNavigate',
-      direction: input.code === 'ArrowLeft' ? 'back' : 'forward'
+      direction: 'back'
     }
   }
 
-  if (!isWindowShortcutModifierChord(input, platform)) {
-    return null
+  if (actionMatches('worktree.history.forward', input, platform, keybindings, options)) {
+    return {
+      type: 'worktreeHistoryNavigate',
+      direction: 'forward'
+    }
   }
 
-  if (isZoomInShortcut(input)) {
+  if (actionMatches('floatingTerminal.toggle', input, platform, keybindings, options)) {
+    return { type: 'toggleFloatingTerminal' }
+  }
+
+  if (actionMatches('zoom.in', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'in' }
   }
 
-  if (isZoomOutShortcut(input)) {
+  if (actionMatches('zoom.out', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'out' }
   }
 
-  if (input.key === '0' && !input.shift) {
+  if (actionMatches('zoom.reset', input, platform, keybindings, options)) {
     return { type: 'zoom', direction: 'reset' }
   }
 
-  if (
-    matchesLetterShortcut(input, 'j', 'KeyJ') &&
-    ((platform === 'darwin' && !input.shift) || (platform !== 'darwin' && input.shift))
-  ) {
+  if (actionMatches('app.settings', input, platform, keybindings, options)) {
+    return { type: 'openSettings' }
+  }
+
+  if (actionMatches('app.forceReload', input, platform, keybindings, options)) {
+    return { type: 'forceReload' }
+  }
+
+  if (actionMatches('worktree.palette', input, platform, keybindings, options)) {
     return { type: 'toggleWorktreePalette' }
   }
 
-  // Why: Ctrl+B and Ctrl+L are terminal control characters (STX / form-feed).
-  // Without main-process interception, xterm.js processes the keydown before
-  // the renderer's window-capture handler can preventDefault, causing ^B / ^L
-  // to appear in the terminal alongside the sidebar toggle.
-  if (matchesLetterShortcut(input, 'b', 'KeyB') && !input.shift) {
+  if (actionMatches('sidebar.left.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleLeftSidebar' }
   }
 
-  if (matchesLetterShortcut(input, 'l', 'KeyL') && !input.shift) {
+  if (actionMatches('sidebar.right.toggle', input, platform, keybindings, options)) {
     return { type: 'toggleRightSidebar' }
   }
 
-  if (matchesLetterShortcut(input, 'p', 'KeyP') && !input.shift) {
+  if (actionMatches('worktree.quickOpen', input, platform, keybindings, options)) {
     return { type: 'openQuickOpen' }
   }
 
@@ -169,19 +220,113 @@ export function resolveWindowShortcutAction(
   // webContents, both of which bypass the renderer's window-level keydown.
   // Shift is accepted for compatibility with the former Create-from shortcut;
   // the unified composer now exposes source switching inside the name field.
-  if (matchesLetterShortcut(input, 'n', 'KeyN')) {
-    if (!input.alt) {
-      return { type: 'openNewWorkspace' }
-    }
+  if (actionMatches('workspace.create', input, platform, keybindings, options)) {
+    return { type: 'openNewWorkspace' }
   }
 
-  if (input.key && input.key >= '1' && input.key <= '9' && !input.shift) {
+  if (actionMatches('workspace.delete', input, platform, keybindings, options)) {
+    return { type: 'deleteCurrentWorkspace' }
+  }
+
+  if (actionMatches('workspace.openBoard', input, platform, keybindings, options)) {
+    return { type: 'openWorkspaceBoard' }
+  }
+
+  if (actionMatches('voice.dictation', input, platform, keybindings, options)) {
+    return { type: 'dictationKeyDown' }
+  }
+
+  if (actionMatches('view.tasks', input, platform, keybindings, options)) {
+    return { type: 'openTasks' }
+  }
+
+  if (actionMatches('tab.previousRecent', input, platform, keybindings, options)) {
+    return { type: 'switchRecentTab' }
+  }
+
+  if (
+    implicitWorktreeIndexShortcutAllowed(options) &&
+    platformPrimaryModifier(input, platform) &&
+    !input.alt &&
+    !input.shift &&
+    input.key &&
+    input.key >= '1' &&
+    input.key <= '9'
+  ) {
     return { type: 'jumpToWorktreeIndex', index: parseInt(input.key, 10) - 1 }
+  }
+
+  if (
+    implicitTabIndexShortcutAllowed(options) &&
+    tabIndexModifierPressed(input, platform) &&
+    !input.shift &&
+    input.key &&
+    input.key >= '1' &&
+    input.key <= '9'
+  ) {
+    return { type: 'jumpToTabIndex', index: parseInt(input.key, 10) - 1 }
   }
 
   // Why: this helper is the explicit allowlist for main-process interception.
   // Anything not listed here must keep flowing to the renderer/PTTY so readline
-  // chords like Ctrl+R, Ctrl+U, and Ctrl+E are not accidentally stolen by a
-  // future shortcut addition.
+  // chords like Ctrl+R, Ctrl+U, and Ctrl+E are not accidentally stolen while
+  // terminals own focus.
   return null
+}
+
+export function getWindowShortcutActionId(action: WindowShortcutAction): KeybindingActionId | null {
+  switch (action.type) {
+    case 'zoom':
+      return action.direction === 'in'
+        ? 'zoom.in'
+        : action.direction === 'out'
+          ? 'zoom.out'
+          : 'zoom.reset'
+    case 'openSettings':
+      return 'app.settings'
+    case 'forceReload':
+      return 'app.forceReload'
+    case 'toggleWorktreePalette':
+      return 'worktree.palette'
+    case 'toggleFloatingTerminal':
+      return 'floatingTerminal.toggle'
+    case 'toggleLeftSidebar':
+      return 'sidebar.left.toggle'
+    case 'toggleRightSidebar':
+      return 'sidebar.right.toggle'
+    case 'openQuickOpen':
+      return 'worktree.quickOpen'
+    case 'openNewWorkspace':
+      return 'workspace.create'
+    case 'deleteCurrentWorkspace':
+      return 'workspace.delete'
+    case 'openWorkspaceBoard':
+      return 'workspace.openBoard'
+    case 'openTasks':
+      return 'view.tasks'
+    case 'switchRecentTab':
+      return 'tab.previousRecent'
+    case 'worktreeHistoryNavigate':
+      return action.direction === 'back' ? 'worktree.history.back' : 'worktree.history.forward'
+    case 'dictationKeyDown':
+      return 'voice.dictation'
+    case 'jumpToWorktreeIndex':
+    case 'jumpToTabIndex':
+      return null
+  }
+}
+
+export function windowShortcutActionCapturesTerminal(action: WindowShortcutAction): boolean {
+  if (action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex') {
+    return true
+  }
+  const actionId = getWindowShortcutActionId(action)
+  if (!actionId) {
+    return false
+  }
+  const definition = getKeybindingDefinition(actionId)
+  if (!definition || isKeybindingAllowedInTerminal(definition)) {
+    return false
+  }
+  return isKeybindingPotentialTerminalConflict(definition)
 }

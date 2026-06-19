@@ -1,10 +1,23 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  TerminalStreamOpcode,
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamJson,
+  encodeTerminalStreamFrame,
+  encodeTerminalStreamJson,
+  encodeTerminalStreamText
+} from '../../../../shared/terminal-stream-protocol'
+import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
   let onExit: ((payload: { id: string; code: number }) => void) | null = null
+
+  function flushPtySideEffects(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0))
+  }
 
   beforeEach(() => {
     vi.resetModules()
@@ -19,6 +32,7 @@ describe('createIpcPtyTransport', () => {
           ...originalWindow?.api?.pty,
           spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
           write: vi.fn(),
+          writeAccepted: vi.fn().mockResolvedValue(true),
           resize: vi.fn(),
           kill: vi.fn(),
           onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
@@ -58,6 +72,198 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('defers title side effects until after terminal data is delivered', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+    const onDataCallback = vi.fn(() => {
+      expect(onTitleChange).not.toHaveBeenCalled()
+    })
+    const transport = createIpcPtyTransport({ onTitleChange })
+
+    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
+
+    onData?.({ id: 'pty-1', data: '\u001b]0;title-one\u0007body' })
+
+    expect(onDataCallback).toHaveBeenCalledWith('\u001b]0;title-one\u0007body')
+    expect(onTitleChange).not.toHaveBeenCalled()
+
+    await flushPtySideEffects()
+
+    expect(onTitleChange).toHaveBeenCalledWith('title-one', 'title-one')
+    transport.disconnect()
+  })
+
+  it('does not schedule PTY side-effect drains for ordinary output with no working title', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onBell = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onBell })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('plain command output\r\n'.repeat(50), callbacks)
+
+      expect(callbacks.onData).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(onTitleChange).not.toHaveBeenCalled()
+      expect(onBell).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves stale-title detection after compacting deferred side effects', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onAgentBecameWorking = vi.fn()
+      const onAgentBecameIdle = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange,
+        onAgentBecameWorking,
+        onAgentBecameIdle
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;. Claude working\x07', callbacks)
+      for (let i = 0; i < 20; i++) {
+        processor.processData(`plain output ${i}\r\n`, callbacks)
+      }
+
+      expect(onAgentBecameWorking).not.toHaveBeenCalled()
+      vi.advanceTimersByTime(0)
+
+      expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(3_000)
+
+      expect(onAgentBecameIdle).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('limits deferred PTY side-effect work per timer tick', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+
+      for (let i = 0; i < 200; i++) {
+        processor.processData(`\x1b]0;title-${i}\x07`, callbacks)
+      }
+
+      expect(onTitleChange).not.toHaveBeenCalled()
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(onTitleChange.mock.calls.length).toBeGreaterThan(0)
+      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
+
+      await vi.runAllTimersAsync()
+      expect(onTitleChange).toHaveBeenCalledTimes(200)
+      expect(onTitleChange).toHaveBeenLastCalledWith('title-199', 'title-199')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('limits coalesced OSC titles in one PTY chunk per timer tick', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+      const titles = Array.from({ length: 200 }, (_, i) => `\x1b]0;chunk-title-${i}\x07`).join('')
+
+      processor.processData(titles, callbacks)
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(onTitleChange.mock.calls.length).toBeGreaterThan(0)
+      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
+
+      await vi.runAllTimersAsync()
+      expect(onTitleChange).toHaveBeenCalledTimes(200)
+      expect(onTitleChange).toHaveBeenLastCalledWith('chunk-title-199', 'chunk-title-199')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('flushes all remaining PTY side effects after a partial bounded drain', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange })
+      const callbacks = { onData: vi.fn() }
+
+      for (let i = 0; i < 200; i++) {
+        processor.processData(`\x1b]0;flush-title-${i}\x07`, callbacks)
+      }
+
+      await vi.runOnlyPendingTimersAsync()
+      expect(onTitleChange.mock.calls.length).toBeLessThan(200)
+
+      processor.flushPendingSideEffects()
+
+      expect(onTitleChange).toHaveBeenCalledTimes(200)
+      expect(onTitleChange).toHaveBeenLastCalledWith('flush-title-199', 'flush-title-199')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still runs stale-title detection when an OSC status chunk has no title', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onAgentStatus = vi.fn()
+      const onAgentBecameIdle = vi.fn()
+      const processor = createPtyOutputProcessor({
+        onTitleChange,
+        onAgentStatus,
+        onAgentBecameIdle
+      })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('\x1b]0;. Claude working\x07', callbacks)
+      processor.processData(
+        '\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex"}\x07plain output\r\n',
+        callbacks
+      )
+
+      await vi.runOnlyPendingTimersAsync()
+      expect(onAgentStatus).toHaveBeenCalledWith({
+        state: 'working',
+        prompt: 'ship it',
+        agentType: 'codex'
+      })
+
+      vi.advanceTimersByTime(3_000)
+      expect(onAgentBecameIdle).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses acknowledged writes only for local IPC PTYs', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const localTransport = createIpcPtyTransport({})
+
+    await localTransport.connect({ url: '', callbacks: {} })
+    await expect(localTransport.sendInputAccepted?.('\x03')).resolves.toBe(true)
+    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith('pty-1', '\x03')
+
+    const sshTransport = createIpcPtyTransport({ connectionId: 'ssh-1' })
+    await sshTransport.connect({ url: '', callbacks: {} })
+    expect(sshTransport.sendInputAccepted).toBeUndefined()
+  })
+
   it('suppresses attention side effects when replaying eager-buffered data during attach', async () => {
     // Why: eager PTY buffers capture output produced before the pane mounted —
     // typically catch-up bytes from a previous app session. A BEL or
@@ -87,9 +293,55 @@ describe('createIpcPtyTransport', () => {
     })
 
     expect(handle.flush()).toBe('')
+    await flushPtySideEffects()
     expect(onTitleChange).toHaveBeenCalledWith('* Claude done', '* Claude done')
     expect(onBell).not.toHaveBeenCalled()
     expect(onAgentBecameIdle).not.toHaveBeenCalled()
+  })
+
+  it('resets replay parser state after deferred side effects drain', async () => {
+    // Why: replay side effects run after xterm receives data. Attach cleanup
+    // still has to wait for them, or a replayed partial OSC can make the first
+    // live BEL look like an OSC terminator instead of an attention bell.
+    const { createIpcPtyTransport, registerEagerPtyBuffer } = await import('./pty-transport')
+    const onBell = vi.fn()
+
+    registerEagerPtyBuffer('pty-restored', vi.fn())
+    onData?.({
+      id: 'pty-restored',
+      data: '\x1b]0;partial-title'
+    })
+
+    const transport = createIpcPtyTransport({ onBell })
+    transport.attach({
+      existingPtyId: 'pty-restored',
+      callbacks: {}
+    })
+
+    await flushPtySideEffects()
+    onData?.({ id: 'pty-restored', data: '\x07' })
+    await flushPtySideEffects()
+
+    expect(onBell).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps exit sidecars after eager-buffered PTYs attach to a terminal', async () => {
+    const { createIpcPtyTransport, registerEagerPtyBuffer, subscribeToPtyExit } =
+      await import('./pty-transport')
+    const eagerExit = vi.fn()
+    const sidecarExit = vi.fn()
+
+    registerEagerPtyBuffer('pty-restored', eagerExit)
+    subscribeToPtyExit('pty-restored', sidecarExit)
+
+    createIpcPtyTransport().attach({
+      existingPtyId: 'pty-restored',
+      callbacks: {}
+    })
+    onExit?.({ id: 'pty-restored', code: 0 })
+
+    expect(eagerExit).not.toHaveBeenCalled()
+    expect(sidecarExit).toHaveBeenCalledWith(0)
   })
 
   it('fires onBell for bare BELs but ignores BELs inside OSC sequences', async () => {
@@ -108,11 +360,97 @@ describe('createIpcPtyTransport', () => {
     onData?.({ id: 'pty-1', data: ']0;title-one' })
     onData?.({ id: 'pty-1', data: ']0;title-two' })
     onData?.({ id: 'pty-1', data: ']0;title-three' })
+    await flushPtySideEffects()
     expect(onBell).not.toHaveBeenCalled()
 
     // Bare BEL outside any OSC: fires once.
     onData?.({ id: 'pty-1', data: '' })
+    await flushPtySideEffects()
     expect(onBell).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds the eager buffer to its cap and keeps the most recent output', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const cap = 512 * 1024
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+
+    // 8 x 100 KB = 800 KB of distinct chunks, exceeding the 512 KB cap; the
+    // earliest chunks must be dropped while the prompt-bearing tail is kept.
+    for (let i = 0; i < 8; i += 1) {
+      onData?.({ id: 'pty-restored', data: String.fromCharCode(65 + i).repeat(100 * 1024) })
+    }
+    onData?.({ id: 'pty-restored', data: 'PROMPT$' })
+
+    const flushed = handle.flush()
+    expect(flushed.length).toBeLessThanOrEqual(cap)
+    expect(flushed.endsWith('PROMPT$')).toBe(true)
+    expect(flushed).not.toContain('A') // oldest chunk trimmed
+  })
+
+  it('caps a single oversized eager chunk to its most-recent tail', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const cap = 512 * 1024
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+
+    // One chunk larger than the cap must not be stored whole.
+    onData?.({ id: 'pty-restored', data: `${'x'.repeat(cap)}TAIL$` })
+
+    const flushed = handle.flush()
+    expect(flushed.length).toBeLessThanOrEqual(cap)
+    expect(flushed.endsWith('TAIL$')).toBe(true)
+  })
+
+  it('enforces the eager buffer cap in UTF-8 bytes for multi-byte output', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const cap = 512 * 1024
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+
+    onData?.({ id: 'pty-restored', data: `${'界'.repeat(cap)}PROMPT$` })
+
+    const flushed = handle.flush()
+    expect(new TextEncoder().encode(flushed).byteLength).toBeLessThanOrEqual(cap)
+    expect(flushed.endsWith('PROMPT$')).toBe(true)
+  })
+
+  it('preserves a BOM when it starts the retained oversized eager-buffer tail', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const cap = 512 * 1024
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+
+    onData?.({ id: 'pty-restored', data: `${'x'.repeat(16)}\uFEFF${'y'.repeat(cap - 3)}` })
+
+    const flushed = handle.flush()
+    expect(new TextEncoder().encode(flushed).byteLength).toBe(cap)
+    expect(flushed.startsWith('\uFEFF')).toBe(true)
+  })
+
+  it('does not use Array.shift while trimming many eager chunks', async () => {
+    const { registerEagerPtyBuffer } = await import('./pty-transport')
+    const handle = registerEagerPtyBuffer('pty-restored', vi.fn())
+    const originalShift = Array.prototype.shift
+
+    try {
+      // Why: this hot path used to call Array.shift() once per trim, which
+      // reindexed the live buffer and made many small chunks quadratic.
+      Object.defineProperty(Array.prototype, 'shift', {
+        configurable: true,
+        writable: true,
+        value() {
+          throw new Error('Array.shift should not be used by the eager buffer')
+        }
+      })
+      for (let i = 0; i < 2048; i += 1) {
+        onData?.({ id: 'pty-restored', data: 'x'.repeat(1024) })
+      }
+    } finally {
+      Object.defineProperty(Array.prototype, 'shift', {
+        configurable: true,
+        writable: true,
+        value: originalShift
+      })
+    }
+
+    expect(handle.flush().length).toBeLessThanOrEqual(512 * 1024)
   })
 
   it('routes eager-buffered bytes through onReplayData so the renderer can engage the replay guard', async () => {
@@ -145,6 +483,30 @@ describe('createIpcPtyTransport', () => {
     expect(handle.flush()).toBe('')
     expect(onReplayData).toHaveBeenCalledWith(bufferedPayload)
     expect(onDataCallback).not.toHaveBeenCalledWith(bufferedPayload)
+  })
+
+  it('clears before replaying eager-buffered output so hidden automation terminals do not open blank', async () => {
+    const { createIpcPtyTransport, registerEagerPtyBuffer } = await import('./pty-transport')
+
+    const bufferedPayload = '\x1b[?1049hAutomation agent is running'
+    registerEagerPtyBuffer('pty-automation', vi.fn())
+    onData?.({
+      id: 'pty-automation',
+      data: bufferedPayload
+    })
+
+    const transport = createIpcPtyTransport()
+    const onReplayData = vi.fn()
+
+    transport.attach({
+      existingPtyId: 'pty-automation',
+      callbacks: {
+        onReplayData
+      }
+    })
+
+    const clear = '\x1b[2J\x1b[3J\x1b[H'
+    expect(onReplayData.mock.calls.map(([data]) => data)).toEqual([clear, bufferedPayload])
   })
 
   it('routes the attach-time clear sequence through onReplayData for non-alternate-screen sessions', async () => {
@@ -366,6 +728,7 @@ describe('createIpcPtyTransport', () => {
 
     // Agent starts working
     onData?.({ id: 'pty-1', data: ']0;. Claude working' })
+    await flushPtySideEffects()
     expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
 
     // Simulate shutdownWorktreeTerminals: unregister data handlers before kill.
@@ -401,10 +764,12 @@ describe('createIpcPtyTransport', () => {
 
       // Agent starts working — sets the title to a working indicator
       onData?.({ id: 'pty-1', data: ']0;. Claude working' })
+      vi.advanceTimersByTime(0)
       expect(onAgentBecameWorking).toHaveBeenCalledTimes(1)
 
       // Data arrives without a title change — starts the 3 s staleTitleTimer
       onData?.({ id: 'pty-1', data: 'some output without title\r\n' })
+      vi.advanceTimersByTime(0)
 
       // Simulate shutdownWorktreeTerminals: unregister handlers which should
       // cancel the pending staleTitleTimer AND reset the agent tracker so the
@@ -505,6 +870,39 @@ describe('createIpcPtyTransport', () => {
     expect(onError).toHaveBeenCalledWith('ENOENT: spawn /bin/nope not found')
   })
 
+  it('surfaces terminal session state save failures without the Electron IPC wrapper', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const wrappedMessage = `Error invoking remote method 'pty:spawn': Error: ${createTerminalSessionStateSaveFailureMessage()}`
+    const spawnMock = vi.fn().mockRejectedValue(new Error(wrappedMessage))
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const transport = createIpcPtyTransport()
+    const onError = vi.fn()
+
+    await transport.connect({
+      url: '',
+      callbacks: { onError }
+    })
+
+    expect(onError).toHaveBeenCalledWith(createTerminalSessionStateSaveFailureMessage())
+  })
+
   it('keeps the exit observer alive after detach so remounts do not reuse dead PTYs', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onPtyExit = vi.fn()
@@ -532,5 +930,218 @@ describe('createIpcPtyTransport', () => {
 
     expect(onPtyExit).toHaveBeenCalledWith('pty-detached')
     expect(transport.getPtyId()).toBeNull()
+  })
+})
+
+describe('createRemoteRuntimePtyTransport', () => {
+  const originalWindow = (globalThis as { window?: typeof window }).window
+  const runtimeCall = vi.fn()
+  const runtimeSubscribe = vi.fn()
+  let subscriptionCallbacks: {
+    onResponse: (response: unknown) => void
+    onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
+    onError?: (error: { code: string; message: string }) => void
+    onClose?: () => void
+  } | null = null
+  let unsubscribe: {
+    unsubscribe: () => void
+    sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
+  } | null = null
+  let unsubscribeFn: ReturnType<typeof vi.fn<() => void>> | null = null
+
+  beforeEach(() => {
+    vi.resetModules()
+    runtimeCall.mockReset()
+    runtimeSubscribe.mockReset()
+    subscriptionCallbacks = null
+    unsubscribeFn = vi.fn<() => void>()
+    unsubscribe = {
+      unsubscribe: unsubscribeFn,
+      sendBinary: vi.fn()
+    }
+    runtimeCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: {
+        terminal: {
+          handle: 'term-remote',
+          worktreeId: 'repo1::/remote/wt',
+          title: null,
+          surface: 'background'
+        }
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        queueMicrotask(() => {
+          subscriptionCallbacks?.onResponse({
+            id: 'rpc-multiplex',
+            ok: true,
+            result: { type: 'ready' },
+            _meta: { runtimeId: 'runtime-remote' }
+          })
+        })
+        return unsubscribe
+      }
+    )
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        runtimeEnvironments: {
+          ...originalWindow?.api?.runtimeEnvironments,
+          call: runtimeCall,
+          subscribe: runtimeSubscribe
+        }
+      }
+    } as unknown as typeof window
+  })
+
+  afterEach(() => {
+    if (originalWindow) {
+      ;(globalThis as { window: typeof window }).window = originalWindow
+    } else {
+      delete (globalThis as { window?: typeof window }).window
+    }
+  })
+
+  function latestRemoteSubscribePayload(): { streamId: number } {
+    const send = unsubscribe?.sendBinary as unknown as
+      | { mock: { calls: [Uint8Array<ArrayBufferLike>][] } }
+      | undefined
+    const frames =
+      send?.mock.calls
+        .map((call) => decodeTerminalStreamFrame(call[0]))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe) ?? []
+    const frame = frames.at(-1)
+    if (!frame) {
+      throw new Error('missing remote terminal subscribe frame')
+    }
+    const payload = decodeTerminalStreamJson<{ streamId: number }>(frame.payload)
+    if (!payload) {
+      throw new Error('invalid remote terminal subscribe frame')
+    }
+    return payload
+  }
+
+  it('creates and subscribes to a terminal on the active remote runtime', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onReplayData = vi.fn()
+    const onData = vi.fn()
+    const onConnect = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: 'claude',
+      env: { ORCA_TAB_ID: 'tab-1' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    const result = await transport.connect({
+      url: '',
+      callbacks: { onReplayData, onData, onConnect }
+    })
+
+    expect(result).toEqual({ id: 'remote:env-1@@term-remote', replay: '' })
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.create',
+      params: {
+        worktree: 'id:repo1::/remote/wt',
+        command: 'claude',
+        env: { ORCA_TAB_ID: 'tab-1' },
+        tabId: 'tab-1',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        focus: false
+      },
+      timeoutMs: 15_000
+    })
+    expect(runtimeSubscribe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'terminal.multiplex',
+        params: {}
+      }),
+      expect.any(Object)
+    )
+    const { streamId } = latestRemoteSubscribePayload()
+
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotStart,
+        streamId,
+        seq: 1,
+        payload: encodeTerminalStreamJson({ kind: 'scrollback' })
+      })
+    )
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotChunk,
+        streamId,
+        seq: 2,
+        payload: encodeTerminalStreamText('hello')
+      })
+    )
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotEnd,
+        streamId,
+        seq: 3,
+        payload: new Uint8Array()
+      })
+    )
+    subscriptionCallbacks?.onBinary?.(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Output,
+        streamId,
+        seq: 4,
+        payload: encodeTerminalStreamText(' world')
+      })
+    )
+
+    expect(onReplayData).toHaveBeenCalledWith('hello')
+    expect(onConnect).toHaveBeenCalled()
+    expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
+  })
+
+  it('forwards input over the stream and disconnects without closing shared remote sessions', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'repo1::/remote/wt',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      await transport.connect({ url: '', callbacks: {} })
+      const { streamId } = latestRemoteSubscribePayload()
+      runtimeCall.mockClear()
+      const send = unsubscribe?.sendBinary as unknown as {
+        mockClear: () => void
+        mock: { calls: [Uint8Array<ArrayBufferLike>][] }
+      }
+      send.mockClear()
+
+      expect(transport.sendInput('ls\r')).toBe(true)
+      await vi.runOnlyPendingTimersAsync()
+      expect(runtimeCall).not.toHaveBeenCalled()
+      const inputFrame = decodeTerminalStreamFrame(send.mock.calls[0][0])
+      expect(inputFrame?.opcode).toBe(TerminalStreamOpcode.Input)
+      expect(inputFrame?.streamId).toBe(streamId)
+
+      transport.disconnect()
+      expect(unsubscribeFn).toHaveBeenCalled()
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'terminal.close'
+        })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

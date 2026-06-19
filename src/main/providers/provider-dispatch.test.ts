@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const { handleMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() => ({
+const { handleMock, onMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
+  onMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   removeAllListenersMock: vi.fn()
 }))
@@ -13,7 +14,7 @@ vi.mock('electron', () => ({
   },
   ipcMain: {
     handle: handleMock,
-    on: vi.fn(),
+    on: onMock,
     removeHandler: removeHandlerMock,
     removeAllListeners: removeAllListenersMock
   }
@@ -50,7 +51,13 @@ vi.mock('../pi/titlebar-extension-service', () => ({
   piTitlebarExtensionService: { buildPtyEnv: () => ({}), clearPty: vi.fn() }
 }))
 
-import { registerPtyHandlers, registerSshPtyProvider, unregisterSshPtyProvider } from '../ipc/pty'
+import {
+  deletePtyOwnership,
+  registerPtyHandlers,
+  registerSshPtyProvider,
+  setPtyOwnership,
+  unregisterSshPtyProvider
+} from '../ipc/pty'
 import type { IPtyProvider } from './types'
 
 describe('PTY provider dispatch', () => {
@@ -63,10 +70,39 @@ describe('PTY provider dispatch', () => {
   function setup(): void {
     handlers.clear()
     handleMock.mockReset()
+    onMock.mockReset()
     handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
       handlers.set(channel, handler)
     })
+    onMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    })
     registerPtyHandlers(mainWindow as never)
+  }
+
+  function createMockProvider(id: string): IPtyProvider {
+    return {
+      spawn: vi.fn().mockResolvedValue({ id }),
+      attach: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      listProcesses: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn(),
+      onData: vi.fn().mockReturnValue(() => {}),
+      onReplay: vi.fn().mockReturnValue(() => {}),
+      onExit: vi.fn().mockReturnValue(() => {})
+    }
   }
 
   it('routes to local provider when connectionId is null', async () => {
@@ -90,28 +126,7 @@ describe('PTY provider dispatch', () => {
 
   it('routes to SSH provider when connectionId is set', async () => {
     setup()
-    const mockSshProvider: IPtyProvider = {
-      spawn: vi.fn().mockResolvedValue({ id: 'ssh-pty-1' }),
-      attach: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      listProcesses: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn(),
-      onData: vi.fn().mockReturnValue(() => {}),
-      onReplay: vi.fn().mockReturnValue(() => {}),
-      onExit: vi.fn().mockReturnValue(() => {})
-    }
+    const mockSshProvider = createMockProvider('ssh-pty-1')
 
     registerSshPtyProvider('conn-123', mockSshProvider)
 
@@ -145,28 +160,7 @@ describe('PTY provider dispatch', () => {
 
   it('unregisterSshPtyProvider removes the provider', async () => {
     setup()
-    const mockProvider: IPtyProvider = {
-      spawn: vi.fn().mockResolvedValue({ id: 'ssh-pty-2' }),
-      attach: vi.fn(),
-      write: vi.fn(),
-      resize: vi.fn(),
-      shutdown: vi.fn(),
-      sendSignal: vi.fn(),
-      getCwd: vi.fn(),
-      getInitialCwd: vi.fn(),
-      clearBuffer: vi.fn(),
-      acknowledgeDataEvent: vi.fn(),
-      hasChildProcesses: vi.fn(),
-      getForegroundProcess: vi.fn(),
-      serialize: vi.fn(),
-      revive: vi.fn(),
-      listProcesses: vi.fn(),
-      getDefaultShell: vi.fn(),
-      getProfiles: vi.fn(),
-      onData: vi.fn().mockReturnValue(() => {}),
-      onReplay: vi.fn().mockReturnValue(() => {}),
-      onExit: vi.fn().mockReturnValue(() => {})
-    }
+    const mockProvider = createMockProvider('ssh-pty-2')
 
     registerSshPtyProvider('conn-456', mockProvider)
     unregisterSshPtyProvider('conn-456')
@@ -178,5 +172,31 @@ describe('PTY provider dispatch', () => {
         connectionId: 'conn-456'
       })
     ).rejects.toThrow('No PTY provider for connection "conn-456"')
+  })
+
+  it('keeps same relay PTY ids distinct across SSH targets', () => {
+    setup()
+    const providerA = createMockProvider('ssh:conn-a@@pty-1')
+    const providerB = createMockProvider('ssh:conn-b@@pty-1')
+    registerSshPtyProvider('conn-a', providerA)
+    registerSshPtyProvider('conn-b', providerB)
+    setPtyOwnership('ssh:conn-a@@pty-1', 'conn-a')
+    setPtyOwnership('ssh:conn-b@@pty-1', 'conn-b')
+
+    try {
+      const write = handlers.get('pty:write') as (event: unknown, args: unknown) => void
+      write(null, { id: 'ssh:conn-a@@pty-1', data: 'a' })
+      write(null, { id: 'ssh:conn-b@@pty-1', data: 'b' })
+
+      expect(providerA.write).toHaveBeenCalledWith('ssh:conn-a@@pty-1', 'a')
+      expect(providerB.write).toHaveBeenCalledWith('ssh:conn-b@@pty-1', 'b')
+      expect(providerA.write).not.toHaveBeenCalledWith('ssh:conn-b@@pty-1', expect.anything())
+      expect(providerB.write).not.toHaveBeenCalledWith('ssh:conn-a@@pty-1', expect.anything())
+    } finally {
+      deletePtyOwnership('ssh:conn-a@@pty-1')
+      deletePtyOwnership('ssh:conn-b@@pty-1')
+      unregisterSshPtyProvider('conn-a')
+      unregisterSshPtyProvider('conn-b')
+    }
   })
 })

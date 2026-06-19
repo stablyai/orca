@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: the SSH relay protocol state machine keeps
+   request, notification, keepalive, and cancellation semantics paired. */
 import {
   FrameDecoder,
   MessageType,
@@ -24,9 +26,12 @@ type PendingRequest = {
   resolve: (result: unknown) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
+  cleanup: () => void
 }
 
 export type NotificationHandler = (method: string, params: Record<string, unknown>) => void
+export type MethodNotificationHandler = (params: Record<string, unknown>) => void
+export type RequestHandler = (params: Record<string, unknown>) => Promise<unknown> | unknown
 
 const REQUEST_TIMEOUT_MS = 30_000
 
@@ -40,6 +45,11 @@ export class SshChannelMultiplexer {
   private lastReceivedAt = Date.now()
   private pendingRequests = new Map<number, PendingRequest>()
   private notificationHandlers: NotificationHandler[] = []
+  private requestHandlers = new Map<string, RequestHandler>()
+  // Why: per-method dispatch map keeps streaming consumers (fs.streamChunk,
+  // fs.streamEnd, fs.streamError) from accreting string-match logic in the
+  // generic notification listener that already serves fs.changed.
+  private methodNotificationHandlers = new Map<string, Set<MethodNotificationHandler>>()
   private disposeHandlers: ((reason: 'shutdown' | 'connection_lost') => void)[] = []
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null
   private timeoutTimer: ReturnType<typeof setInterval> | null = null
@@ -76,11 +86,45 @@ export class SshChannelMultiplexer {
   }
 
   onNotification(handler: NotificationHandler): () => void {
+    if (this.disposed) {
+      return () => {}
+    }
     this.notificationHandlers.push(handler)
     return () => {
       const idx = this.notificationHandlers.indexOf(handler)
       if (idx !== -1) {
         this.notificationHandlers.splice(idx, 1)
+      }
+    }
+  }
+
+  onNotificationByMethod(method: string, handler: MethodNotificationHandler): () => void {
+    if (this.disposed) {
+      return () => {}
+    }
+    let set = this.methodNotificationHandlers.get(method)
+    if (!set) {
+      set = new Set()
+      this.methodNotificationHandlers.set(method, set)
+    }
+    set.add(handler)
+    return () => {
+      const current = this.methodNotificationHandlers.get(method)
+      if (!current) {
+        return
+      }
+      current.delete(handler)
+      if (current.size === 0) {
+        this.methodNotificationHandlers.delete(method)
+      }
+    }
+  }
+
+  onRequest(method: string, handler: RequestHandler): () => void {
+    this.requestHandlers.set(method, handler)
+    return () => {
+      if (this.requestHandlers.get(method) === handler) {
+        this.requestHandlers.delete(method)
       }
     }
   }
@@ -91,6 +135,9 @@ export class SshChannelMultiplexer {
   // and no recovery path — the SSH connection stays up so onStateChange
   // never fires the reconnect logic.
   onDispose(handler: (reason: 'shutdown' | 'connection_lost') => void): () => void {
+    if (this.disposed) {
+      return () => {}
+    }
     this.disposeHandlers.push(handler)
     return () => {
       const idx = this.disposeHandlers.indexOf(handler)
@@ -103,9 +150,18 @@ export class SshChannelMultiplexer {
   /**
    * Send a JSON-RPC request and wait for the response.
    */
-  async request(method: string, params?: Record<string, unknown>): Promise<unknown> {
+  async request(
+    method: string,
+    params?: Record<string, unknown>,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ): Promise<unknown> {
     if (this.disposed) {
       throw new Error('Multiplexer disposed')
+    }
+    if (options?.signal?.aborted) {
+      const error = new Error(`Request "${method}" was cancelled`) as Error & { name: string }
+      error.name = 'AbortError'
+      throw error
     }
 
     const id = this.nextRequestId++
@@ -115,14 +171,46 @@ export class SshChannelMultiplexer {
       method,
       ...(params !== undefined ? { params } : {})
     }
+    const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
 
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+      let timer: ReturnType<typeof setTimeout>
+      const cleanup = (): void => {
+        clearTimeout(timer)
+        if (options?.signal) {
+          options.signal.removeEventListener('abort', onAbort)
+        }
+      }
+      const onAbort = (): void => {
+        const pending = this.pendingRequests.get(id)
+        if (!pending) {
+          return
+        }
+        pending.cleanup()
         this.pendingRequests.delete(id)
-        reject(new Error(`Request "${method}" timed out after ${REQUEST_TIMEOUT_MS}ms`))
-      }, REQUEST_TIMEOUT_MS)
+        // Why: Space scans can run long on SSH hosts. Let the relay stop its
+        // local filesystem work instead of only dropping the client promise.
+        this.notify('rpc.cancel', { id })
+        const error = new Error(`Request "${method}" was cancelled`) as Error & { name: string }
+        error.name = 'AbortError'
+        pending.reject(error)
+      }
+      timer = setTimeout(() => {
+        const pending = this.pendingRequests.get(id)
+        if (pending) {
+          pending.cleanup()
+          // Why: request timeouts should stop relay-side long-running work,
+          // not just detach the client from the eventual response.
+          this.notify('rpc.cancel', { id })
+        }
+        this.pendingRequests.delete(id)
+        reject(new Error(`Request "${method}" timed out after ${timeoutMs}ms`))
+      }, timeoutMs)
 
-      this.pendingRequests.set(id, { resolve, reject, timer })
+      if (options?.signal) {
+        options.signal.addEventListener('abort', onAbort, { once: true })
+      }
+      this.pendingRequests.set(id, { resolve, reject, timer, cleanup })
       this.sendMessage(msg)
     })
   }
@@ -148,10 +236,12 @@ export class SshChannelMultiplexer {
     if (this.disposed) {
       return
     }
-    console.warn(
-      `[ssh-mux] Disposing multiplexer (reason: ${reason})`,
-      new Error('dispose trace').stack
-    )
+    if (process.env.ORCA_SSH_MUX_DEBUG === '1') {
+      console.warn(
+        `[ssh-mux] Disposing multiplexer (reason: ${reason})`,
+        new Error('dispose trace').stack
+      )
+    }
     this.disposed = true
 
     if (this.keepaliveTimer) {
@@ -170,7 +260,7 @@ export class SshChannelMultiplexer {
     const errorCode = reason === 'connection_lost' ? 'CONNECTION_LOST' : 'DISPOSED'
 
     for (const [id, pending] of this.pendingRequests) {
-      clearTimeout(pending.timer)
+      pending.cleanup()
       const err = new Error(errorMessage) as Error & { code: string }
       err.code = errorCode
       pending.reject(err)
@@ -178,6 +268,10 @@ export class SshChannelMultiplexer {
     }
 
     this.unackedTimestamps.clear()
+    // Why: relay teardown can race with late provider registration; disposed
+    // muxes must not retain provider/session closures through subscribers.
+    this.notificationHandlers.length = 0
+    this.methodNotificationHandlers.clear()
     this.decoder.reset()
     this.transport.close?.()
 
@@ -258,10 +352,41 @@ export class SshChannelMultiplexer {
   private handleMessage(msg: JsonRpcMessage): void {
     if ('id' in msg && ('result' in msg || 'error' in msg)) {
       this.handleResponse(msg as JsonRpcResponse)
+    } else if ('id' in msg && 'method' in msg) {
+      void this.handleRequest(msg as JsonRpcRequest)
     } else if ('method' in msg && !('id' in msg)) {
       this.handleNotification(msg as JsonRpcNotification)
     }
-    // Requests from relay to client are not expected in Phase 2
+  }
+
+  private async handleRequest(msg: JsonRpcRequest): Promise<void> {
+    const handler = this.requestHandlers.get(msg.method)
+    if (!handler) {
+      this.sendMessage({
+        jsonrpc: '2.0',
+        id: msg.id,
+        error: { code: -32601, message: `Method not found: ${msg.method}` }
+      })
+      return
+    }
+
+    try {
+      const result = await handler(msg.params ?? {})
+      this.sendMessage({
+        jsonrpc: '2.0',
+        id: msg.id,
+        result: result ?? null
+      })
+    } catch (err) {
+      this.sendMessage({
+        jsonrpc: '2.0',
+        id: msg.id,
+        error: {
+          code: (err as { code?: number }).code ?? -32000,
+          message: err instanceof Error ? err.message : String(err)
+        }
+      })
+    }
   }
 
   private handleResponse(msg: JsonRpcResponse): void {
@@ -270,7 +395,7 @@ export class SshChannelMultiplexer {
       return
     }
 
-    clearTimeout(pending.timer)
+    pending.cleanup()
     this.pendingRequests.delete(msg.id)
 
     if (msg.error) {
@@ -286,11 +411,38 @@ export class SshChannelMultiplexer {
   private handleNotification(msg: JsonRpcNotification): void {
     const params = msg.params ?? {}
     // Why: handlers may unsubscribe during iteration (via the returned disposer
-    // from onNotification), which splices the live array and skips the next handler.
-    // Iterating a snapshot prevents that.
+    // from onNotification / onNotificationByMethod), which mutates the live
+    // collection and skips the next handler. Iterating a snapshot prevents that.
     const snapshot = Array.from(this.notificationHandlers)
     for (const handler of snapshot) {
-      handler(msg.method, params)
+      try {
+        handler(msg.method, params)
+      } catch (err) {
+        // Why: relay notifications arrive on the SSH stream callback; one
+        // bad subscriber must not escape as a main-process uncaught exception.
+        console.warn(
+          `[ssh-mux] Notification handler failed for ${msg.method}: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        )
+      }
+    }
+    const methodHandlers = this.methodNotificationHandlers.get(msg.method)
+    if (methodHandlers && methodHandlers.size > 0) {
+      const methodSnapshot = Array.from(methodHandlers)
+      for (const handler of methodSnapshot) {
+        try {
+          handler(params)
+        } catch (err) {
+          // Why: file-stream and PTY listeners are per-method subscribers; keep
+          // the mux alive even if one consumer rejects a malformed notification.
+          console.warn(
+            `[ssh-mux] Method notification handler failed for ${msg.method}: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          )
+        }
+      }
     }
   }
 

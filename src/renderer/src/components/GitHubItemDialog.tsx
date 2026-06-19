@@ -4,39 +4,53 @@ import React, {
   lazy,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore
 } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { useShallow } from 'zustand/react/shallow'
+import type { editor as monacoEditor } from 'monaco-editor'
 import {
-  AlignJustify,
   ArrowDown,
   ArrowRight,
   ArrowUp,
   Braces,
+  Check,
   ChevronDown,
-  ChevronRight,
+  ChevronLeft,
   CircleDashed,
   CircleDot,
+  Copy,
   ExternalLink,
   FileText,
-  Folder,
-  FolderOpen,
+  FolderKanban,
+  GitMerge,
   GitPullRequest,
-  LayoutList,
+  GitPullRequestClosed,
+  ListChecks,
   LoaderCircle,
   MessageSquare,
   MessageSquarePlus,
+  PanelLeftOpen,
+  Pencil,
+  Plus,
+  RefreshCw,
   Send,
+  Settings,
   UndoDot,
+  Users,
+  Wrench,
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import { VisuallyHidden } from 'radix-ui'
+import { Input } from '@/components/ui/input'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import {
   Accordion,
   AccordionContent,
@@ -45,17 +59,65 @@ import {
 } from '@/components/ui/accordion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
-import { buildDiffTree, type DiffTreeNode } from '@/components/pr-diff-tree'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-helpers'
+import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
+import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
+import {
+  CombinedDiffFileTree,
+  createCombinedDiffSectionIndexMap,
+  handleCombinedDiffFileTreeNavigation
+} from '@/components/editor/CombinedDiffFileTree'
+import {
+  getDiffSectionEstimatedHeight,
+  isIntrinsicHeightImageDiff
+} from '@/components/editor/diff-section-layout'
+import type { DiffSection } from '@/components/editor/diff-section-types'
+import { removeDiffSectionMeasuredHeight } from '@/components/editor/diff-section-height-cache'
+import {
+  MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
+  MAX_RENDERED_DIFF_LINES_PER_SIDE,
+  getLargeDiffRenderLimit,
+  type LargeDiffRenderLimit
+} from '@/components/editor/large-diff-render-limit'
+import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
+import {
+  getStoredTextDiffContent,
+  getStoredTextDiffResult
+} from '@/components/editor/large-diff-section-content'
+import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
+import {
+  createGitHubChecksTabState,
+  resolveGitHubChecksTabState,
+  toggleGitHubChecksTabExpandedKey,
+  updateGitHubChecksTabDetails,
+  updateGitHubChecksTabLocalChecks,
+  type CheckDetailsLoadState
+} from '@/components/github-checks-tab-state'
+import {
+  clearGitHubLinkCopied,
+  createGitHubLinkCopyState,
+  markGitHubLinkCopied,
+  resolveGitHubLinkCopyState
+} from '@/components/github-link-copy-state'
+import {
+  resolveGitHubBodyDraft,
+  shouldSyncGitHubBodyDraft
+} from '@/components/github-body-draft-state'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   getPRCommentAudienceEmptyLabel,
-  PR_COMMENT_AUDIENCE_FILTERS,
+  getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
 } from '@/lib/pr-comment-audience'
 import {
@@ -69,21 +131,58 @@ import {
   PR_COMMENT_RESOLVED_CONTAINER_CLASS,
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
+import {
+  createCommentCodeContextExpansionState,
+  resolveCommentCodeContextExpansionState,
+  updateCommentCodeContextExpansionState,
+  type CommentCodeContextLineUpdate
+} from '@/components/comment-code-context-state'
+import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { useAppStore } from '@/store'
+import { useAllWorktrees } from '@/store/selectors'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
+import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import IssueSourceIndicator, { sameGitHubOwnerRepo } from '@/components/github/IssueSourceIndicator'
+import {
+  getGitHubPRReviewerRows,
+  normalizeGitHubReviewerLogins
+} from '@/components/github-pr-reviewer-display'
+import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import {
+  GITHUB_PR_MERGE_METHOD_LABELS,
+  resolveGitHubPRMergeMethods
+} from '../../../shared/github-pr-merge-methods'
+import {
+  findGithubIssueWorkspaceAttachment,
+  getGithubWorkItemWorkspaceAttachmentLabel
+} from '@/lib/github-work-item-workspace-attachment'
+import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { buildFixBrokenChecksPrompt, getBrokenChecks } from '@/components/pr-checks-fix-prompt'
 import type {
   GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents,
+  GitHubPRFileViewedState,
   GitHubWorkItem,
   GitHubWorkItemDetails,
   GitHubAssignableUser,
   GitHubReaction,
+  GitHubPRMergeMethod,
+  GitBranchChangeEntry,
+  GitDiffResult,
+  PRCheckDetail,
   PRComment
 } from '../../../shared/types'
+import {
+  getTaskSourceRuntimeSettings,
+  type TaskSourceContext
+} from '../../../shared/task-source-context'
 import { PER_REPO_FETCH_LIMIT } from '../../../shared/work-items'
+import { translate } from '@/i18n/i18n'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
 // doesn't have the full owner/repo context the list's cache entry carries.
@@ -107,24 +206,30 @@ function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
   }
 }
 
-// Why: the editor's DiffViewer loads Monaco, which is heavy and should not be
-// pulled into the dialog's bundle until the user actually opens the Files tab.
-const DiffViewer = lazy(() => import('@/components/editor/DiffViewer'))
+function getGitHubRepositoryLabelsUrl(itemUrl: string): string | null {
+  try {
+    const parsed = new URL(itemUrl)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return null
+    }
+    const segments = parsed.pathname.split('/').filter(Boolean)
+    if (segments.length < 2) {
+      return null
+    }
+    // Why: label management is repository-scoped; preserving the origin keeps
+    // GitHub Enterprise URLs working while navigating away from the issue path.
+    parsed.pathname = `/${segments[0]}/${segments[1]}/labels`
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
 const MonacoCodeExcerpt = lazy(() => import('@/components/editor/MonacoCodeExcerpt'))
 
-type ItemDialogTab = 'conversation' | 'files'
-
-type MentionOption = {
-  login: string
-  name?: string | null
-  avatarUrl?: string
-  source: string
-}
-
-type MentionQuery = {
-  atIndex: number
-  query: string
-}
+export type ItemDialogTab = 'conversation' | 'checks' | 'files'
 
 const CODE_CONTEXT_EXPAND_STEP = 5
 const CODE_CONTEXT_FALLBACK_LINES = 20
@@ -139,6 +244,16 @@ const REACTION_EMOJI: Record<GitHubReaction['content'], string> = {
   hooray: '🎉',
   rocket: '🚀',
   eyes: '👀'
+}
+
+function normalizeItemDialogTab(
+  item: GitHubWorkItem | null,
+  tab: ItemDialogTab | undefined
+): ItemDialogTab {
+  if (item?.type !== 'pr') {
+    return 'conversation'
+  }
+  return tab ?? 'conversation'
 }
 
 /** Why: Project-origin rows don't always belong to the active local repo.
@@ -161,8 +276,16 @@ export type GitHubItemDialogProjectOrigin = {
 type GitHubItemDialogProps = {
   workItem: GitHubWorkItem | null
   repoPath: string | null
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+  initialTab?: ItemDialogTab
+  backLabel?: string
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
+  onReviewRequestsChange?: (
+    itemKey: { id: string; repoId: string },
+    reviewRequests: GitHubAssignableUser[]
+  ) => void
   onClose: () => void
   /** Optional Project-origin context. When set, edits in the dialog are
    *  routed via slug-addressed mutation IPCs against the row's actual repo
@@ -189,80 +312,6 @@ function formatRelativeTime(input: string): string {
   }
   const diffDays = Math.round(diffHours / 24)
   return formatter.format(diffDays, 'day')
-}
-
-function findMentionQuery(value: string, caret: number): MentionQuery | null {
-  const beforeCaret = value.slice(0, caret)
-  const match = /(^|[\s([{,])@([A-Za-z0-9-]*)$/.exec(beforeCaret)
-  if (!match) {
-    return null
-  }
-  const query = match[2] ?? ''
-  return {
-    atIndex: beforeCaret.length - query.length - 1,
-    query
-  }
-}
-
-function buildMentionOptions({
-  item,
-  comments,
-  participants,
-  assignableUsers
-}: {
-  item: GitHubWorkItem
-  comments: PRComment[]
-  participants: GitHubAssignableUser[]
-  assignableUsers: GitHubAssignableUser[]
-}): MentionOption[] {
-  const byLogin = new Map<string, MentionOption>()
-  const add = (
-    login: string | null | undefined,
-    source: string,
-    avatarUrl?: string,
-    name?: string | null
-  ): void => {
-    if (!login || login === 'ghost') {
-      return
-    }
-    const key = login.toLowerCase()
-    const existing = byLogin.get(key)
-    if (existing) {
-      if (!existing.avatarUrl && avatarUrl) {
-        existing.avatarUrl = avatarUrl
-      }
-      if (!existing.name && name) {
-        existing.name = name
-      }
-      return
-    }
-    byLogin.set(key, { login, source, avatarUrl, name })
-  }
-
-  add(item.author, item.type === 'pr' ? 'PR author' : 'Issue author')
-  for (const comment of comments) {
-    add(comment.author, 'Commenter', comment.authorAvatarUrl)
-  }
-  for (const user of participants) {
-    add(user.login, 'Participant', user.avatarUrl, user.name)
-  }
-  for (const user of assignableUsers) {
-    add(user.login, 'Team member', user.avatarUrl, user.name)
-  }
-
-  return Array.from(byLogin.values())
-}
-
-function filterMentionOptions(options: MentionOption[], query: string): MentionOption[] {
-  const normalizedQuery = query.toLowerCase()
-  const filtered = normalizedQuery
-    ? options.filter(
-        (option) =>
-          option.login.toLowerCase().includes(normalizedQuery) ||
-          (option.name ?? '').toLowerCase().includes(normalizedQuery)
-      )
-    : options
-  return filtered.slice(0, 8)
 }
 
 function getStateLabel(item: GitHubWorkItem): string {
@@ -300,35 +349,815 @@ function getStateTone(item: GitHubWorkItem): string {
   return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300'
 }
 
-function fileStatusTone(status: GitHubPRFile['status']): string {
-  switch (status) {
-    case 'added':
-      return 'text-emerald-500'
-    case 'removed':
-      return 'text-rose-500'
-    case 'renamed':
-    case 'copied':
-      return 'text-sky-500'
-    default:
-      return 'text-amber-500'
-  }
+function WorkItemStateBadge({
+  item,
+  className
+}: {
+  item: GitHubWorkItem
+  className?: string
+}): React.JSX.Element {
+  return (
+    <span
+      className={cn(
+        'inline-flex h-5 items-center rounded-full border px-2 text-[11px] font-medium',
+        getStateTone(item),
+        className
+      )}
+    >
+      {getStateLabel(item)}
+    </span>
+  )
 }
 
-function fileStatusLabel(status: GitHubPRFile['status']): string {
-  switch (status) {
-    case 'added':
-      return 'A'
-    case 'removed':
-      return 'D'
-    case 'renamed':
-      return 'R'
-    case 'copied':
-      return 'C'
-    case 'unchanged':
-      return '·'
-    default:
-      return 'M'
+function ReviewerAvatar({
+  login,
+  avatarUrl
+}: {
+  login: string
+  avatarUrl: string
+}): React.JSX.Element {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        title={login}
+        className="size-6 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
+      />
+    )
   }
+  return (
+    <span
+      title={login}
+      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted text-[10px] font-medium text-muted-foreground"
+    >
+      {login.slice(0, 1).toUpperCase()}
+    </span>
+  )
+}
+
+function mergeReviewerSuggestions(
+  users: GitHubAssignableUser[],
+  seedUsers: GitHubAssignableUser[]
+): GitHubAssignableUser[] {
+  const byLogin = new Map<string, GitHubAssignableUser>()
+  for (const user of [...seedUsers, ...users]) {
+    const key = user.login.toLowerCase()
+    const existing = byLogin.get(key)
+    if (!existing) {
+      byLogin.set(key, user)
+      continue
+    }
+    if (!existing.avatarUrl && user.avatarUrl) {
+      byLogin.set(key, { ...existing, avatarUrl: user.avatarUrl })
+    }
+  }
+  return Array.from(byLogin.values()).sort((a, b) => a.login.localeCompare(b.login))
+}
+
+function buildRequestedReviewUsers(
+  logins: string[],
+  candidates: GitHubAssignableUser[],
+  existingRequests: GitHubAssignableUser[]
+): GitHubAssignableUser[] {
+  const byLogin = new Map<string, GitHubAssignableUser>()
+  for (const user of existingRequests) {
+    byLogin.set(user.login.toLowerCase(), user)
+  }
+  const candidatesByLogin = new Map(candidates.map((user) => [user.login.toLowerCase(), user]))
+  for (const login of logins) {
+    const key = login.toLowerCase()
+    if (byLogin.has(key)) {
+      continue
+    }
+    byLogin.set(key, candidatesByLogin.get(key) ?? { login, name: null, avatarUrl: '' })
+  }
+  return Array.from(byLogin.values())
+}
+
+function PRReviewersPanel({
+  item,
+  loading,
+  repoPath,
+  sourceContext,
+  onReviewersRequested
+}: {
+  item: GitHubWorkItem
+  loading: boolean
+  repoPath: string | null
+  sourceContext?: TaskSourceContext | null
+  onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [reviewerInput, setReviewerInput] = useState('')
+  const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
+  const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
+  const [activeReviewerCursor, setActiveReviewerCursor] = useState({
+    resetKey: '',
+    index: 0
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
+    () => item.reviewRequests ?? []
+  )
+  const [reviewRequestsSource, setReviewRequestsSource] = useState(() => ({
+    itemId: item.id,
+    repoId: item.repoId,
+    reviewRequests: item.reviewRequests
+  }))
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
+  const reviewerInputRef = useRef<HTMLInputElement | null>(null)
+  const reviewerInputFocusFrameRef = useRef<number | null>(null)
+  const reviewerPanelMountedRef = useRef(true)
+
+  const cancelReviewerInputFocusFrame = useCallback((): void => {
+    if (reviewerInputFocusFrameRef.current !== null) {
+      cancelAnimationFrame(reviewerInputFocusFrameRef.current)
+      reviewerInputFocusFrameRef.current = null
+    }
+  }, [])
+
+  const scheduleReviewerInputFocus = useCallback((): void => {
+    if (!reviewerPanelMountedRef.current) {
+      return
+    }
+    cancelReviewerInputFocusFrame()
+    reviewerInputFocusFrameRef.current = requestAnimationFrame(() => {
+      reviewerInputFocusFrameRef.current = null
+      reviewerInputRef.current?.focus()
+    })
+  }, [cancelReviewerInputFocusFrame])
+
+  useEffect(() => {
+    reviewerPanelMountedRef.current = true
+    return () => {
+      reviewerPanelMountedRef.current = false
+      cancelReviewerInputFocusFrame()
+    }
+  }, [cancelReviewerInputFocusFrame])
+
+  // Why: reviewer edits are optimistic, but item switches/refetches must clear
+  // stale local requests before paint; a passive Effect leaves one stale render.
+  if (
+    reviewRequestsSource.itemId !== item.id ||
+    reviewRequestsSource.repoId !== item.repoId ||
+    reviewRequestsSource.reviewRequests !== item.reviewRequests
+  ) {
+    setReviewRequestsSource({
+      itemId: item.id,
+      repoId: item.repoId,
+      reviewRequests: item.reviewRequests
+    })
+    setLocalReviewRequests(item.reviewRequests ?? [])
+  }
+
+  const reviewerSeedUsers = useMemo<GitHubAssignableUser[]>(() => {
+    const byLogin = new Map<string, GitHubAssignableUser>()
+    const add = (user: GitHubAssignableUser): void => {
+      if (!user.login) {
+        return
+      }
+      byLogin.set(user.login.toLowerCase(), user)
+    }
+    for (const user of localReviewRequests) {
+      add(user)
+    }
+    for (const review of item.latestReviews ?? []) {
+      add({
+        login: review.login,
+        name: null,
+        avatarUrl: review.avatarUrl ?? ''
+      })
+    }
+    if (item.author) {
+      add({ login: item.author, name: null, avatarUrl: '' })
+    }
+    return Array.from(byLogin.values())
+  }, [item.author, item.latestReviews, localReviewRequests])
+
+  const reviewSlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const reviewerMetadataBySlug = useRepoAssigneesBySlug(
+    open && reviewSlug ? reviewSlug.owner : null,
+    open && reviewSlug ? reviewSlug.repo : null,
+    reviewerSeedUsers.map((user) => user.login),
+    sourceSettings
+  )
+  const reviewerMetadataByPath = useRepoAssignees(
+    open && !reviewSlug ? repoPath : null,
+    open && !reviewSlug ? item.repoId : null,
+    sourceSettings
+  )
+  const reviewerMetadata = reviewSlug ? reviewerMetadataBySlug : reviewerMetadataByPath
+  const displayItem = { ...item, reviewRequests: localReviewRequests }
+  const reviewers = getGitHubPRReviewerRows(displayItem)
+  const authorLogin = item.author?.toLowerCase() ?? null
+  const reviewerCandidates = useMemo(
+    () =>
+      mergeReviewerSuggestions(reviewerMetadata.data, reviewerSeedUsers).filter(
+        (user) => user.login.toLowerCase() !== authorLogin
+      ),
+    [authorLogin, reviewerMetadata.data, reviewerSeedUsers]
+  )
+  const reviewerCandidatesByLogin = useMemo(
+    () => new Map(reviewerCandidates.map((user) => [user.login.toLowerCase(), user])),
+    [reviewerCandidates]
+  )
+  const selectedReviewerLogins = useMemo(
+    () =>
+      new Set(
+        localReviewRequests.map((reviewer) => reviewer.login.trim().toLowerCase()).filter(Boolean)
+      ),
+    [localReviewRequests]
+  )
+  const reviewerQuery = reviewerInput.trim().replace(/^@/, '').toLowerCase()
+  const filteredReviewerCandidates = useMemo(() => {
+    const query = reviewerQuery
+    return reviewerCandidates
+      .filter((user) => {
+        const login = user.login.toLowerCase()
+        return (
+          query.length === 0 ||
+          login.includes(query) ||
+          (user.name ?? '').toLowerCase().includes(query)
+        )
+      })
+      .sort((a, b) => {
+        const aLogin = a.login.toLowerCase()
+        const bLogin = b.login.toLowerCase()
+        const aStarts = aLogin.startsWith(query)
+        const bStarts = bLogin.startsWith(query)
+        if (aStarts !== bStarts) {
+          return aStarts ? -1 : 1
+        }
+        return a.login.localeCompare(b.login)
+      })
+  }, [reviewerCandidates, reviewerQuery])
+  const suggestedReviewerRows = useMemo(
+    () =>
+      reviewerQuery.length === 0
+        ? reviewerSeedUsers
+            .filter((user) => !selectedReviewerLogins.has(user.login.toLowerCase()))
+            .filter((user) => user.login.toLowerCase() !== authorLogin)
+            .map((user) => reviewerCandidatesByLogin.get(user.login.toLowerCase()) ?? user)
+            .slice(0, 1)
+        : [],
+    [
+      authorLogin,
+      reviewerCandidatesByLogin,
+      reviewerQuery.length,
+      reviewerSeedUsers,
+      selectedReviewerLogins
+    ]
+  )
+  const everyoneElseReviewerRows = useMemo(() => {
+    const suggestedLogins = new Set(suggestedReviewerRows.map((user) => user.login.toLowerCase()))
+    return filteredReviewerCandidates.filter(
+      (user) => !suggestedLogins.has(user.login.toLowerCase())
+    )
+  }, [filteredReviewerCandidates, suggestedReviewerRows])
+  const actionableReviewerRows = useMemo(
+    () => [...suggestedReviewerRows, ...everyoneElseReviewerRows],
+    [everyoneElseReviewerRows, suggestedReviewerRows]
+  )
+
+  const reviewerCursorResetKey = `${reviewerQuery}\u0000${actionableReviewerRows.length}`
+  if (activeReviewerCursor.resetKey !== reviewerCursorResetKey) {
+    setActiveReviewerCursor({ resetKey: reviewerCursorResetKey, index: 0 })
+  }
+  const activeReviewerIndex =
+    activeReviewerCursor.resetKey === reviewerCursorResetKey ? activeReviewerCursor.index : 0
+  const setActiveReviewerIndex = useCallback(
+    (nextIndex: number | ((current: number) => number)): void => {
+      setActiveReviewerCursor((current) => {
+        const currentIndex = current.resetKey === reviewerCursorResetKey ? current.index : 0
+        return {
+          resetKey: reviewerCursorResetKey,
+          index: typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
+        }
+      })
+    },
+    [reviewerCursorResetKey]
+  )
+
+  const hasReviewerMetadata =
+    item.reviewDecision !== undefined ||
+    localReviewRequests.length > 0 ||
+    item.reviewRequests !== undefined ||
+    item.latestReviews !== undefined
+  const canRequestReview =
+    !!repoPath || getActiveRuntimeTarget(sourceSettings).kind === 'environment'
+
+  const measureReviewerPickerPlacement = useCallback(() => {
+    const rect = reviewerInputRef.current?.getBoundingClientRect()
+    if (!rect) {
+      setReviewerPickerSide('bottom')
+      setReviewerPickerMaxHeight(null)
+      return
+    }
+
+    const gap = 8
+    const minUsefulHeight = 180
+    const availableBelow = window.innerHeight - rect.bottom - gap
+    const availableAbove = rect.top - gap
+    const nextSide =
+      availableBelow < minUsefulHeight && availableAbove > availableBelow ? 'top' : 'bottom'
+    const available = nextSide === 'top' ? availableAbove : availableBelow
+
+    setReviewerPickerSide(nextSide)
+    setReviewerPickerMaxHeight(Math.max(120, Math.min(330, available)))
+  }, [])
+
+  const handleRequestReview = async (requestedLogins?: string[]): Promise<void> => {
+    if (submitting) {
+      return
+    }
+    const logins = normalizeGitHubReviewerLogins(
+      requestedLogins ?? reviewerInput.split(/[\s,]+/),
+      selectedReviewerLogins
+    )
+    if (logins.length === 0) {
+      toast.error(translate('auto.components.GitHubItemDialog.94ab23a9f9', 'Enter a reviewer'))
+      return
+    }
+    if (localReviewRequests.length + logins.length > 15) {
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.12e761610e',
+          'You can request up to 15 reviewers'
+        )
+      )
+      return
+    }
+    const target = getActiveRuntimeTarget(sourceSettings)
+    if (target.kind !== 'environment' && !repoPath) {
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.b4af16bf43',
+          'No repo context available for this pull request.'
+        )
+      )
+      return
+    }
+    setSubmitting(true)
+    try {
+      const result =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
+              target,
+              'github.requestPRReviewers',
+              { repo: item.repoId, prNumber: item.number, reviewers: logins },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.requestPRReviewers({
+              repoPath: repoPath ?? '',
+              repoId: item.repoId,
+              sourceContext,
+              prNumber: item.number,
+              reviewers: logins
+            })
+      if (!reviewerPanelMountedRef.current) {
+        return
+      }
+      if (!result.ok) {
+        toast.error(
+          result.error ??
+            translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
+        )
+        return
+      }
+      const nextReviewRequests = buildRequestedReviewUsers(
+        logins,
+        reviewerCandidates,
+        localReviewRequests
+      )
+      setLocalReviewRequests(nextReviewRequests)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
+      onReviewersRequested(nextReviewRequests)
+      setReviewerInput('')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        logins.length === 1
+          ? translate('auto.components.GitHubItemDialog.ea985e657f', 'Reviewer requested')
+          : translate('auto.components.GitHubItemDialog.c016e4bac3', 'Reviewers requested')
+      )
+    } catch {
+      if (reviewerPanelMountedRef.current) {
+        toast.error(
+          translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
+        )
+      }
+    } finally {
+      if (reviewerPanelMountedRef.current) {
+        setSubmitting(false)
+      }
+    }
+  }
+
+  const handleRemoveReviewers = async (reviewersToRemove: string[]): Promise<void> => {
+    if (submitting) {
+      return
+    }
+    const selected = new Set(localReviewRequests.map((reviewer) => reviewer.login.toLowerCase()))
+    const logins = reviewersToRemove
+      .map((reviewer) => reviewer.trim().replace(/^@/, ''))
+      .filter((reviewer) => reviewer.length > 0 && selected.has(reviewer.toLowerCase()))
+    if (logins.length === 0) {
+      return
+    }
+    const target = getActiveRuntimeTarget(sourceSettings)
+    if (target.kind !== 'environment' && !repoPath) {
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.b4af16bf43',
+          'No repo context available for this pull request.'
+        )
+      )
+      return
+    }
+    setSubmitting(true)
+    try {
+      const result =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
+              target,
+              'github.removePRReviewers',
+              { repo: item.repoId, prNumber: item.number, reviewers: logins },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.removePRReviewers({
+              repoPath: repoPath ?? '',
+              repoId: item.repoId,
+              sourceContext,
+              prNumber: item.number,
+              reviewers: logins
+            })
+      if (!reviewerPanelMountedRef.current) {
+        return
+      }
+      if (!result.ok) {
+        toast.error(
+          result.error ??
+            translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
+        )
+        return
+      }
+      const removed = new Set(logins.map((login) => login.toLowerCase()))
+      const nextReviewRequests = localReviewRequests.filter(
+        (reviewer) => !removed.has(reviewer.login.toLowerCase())
+      )
+      setLocalReviewRequests(nextReviewRequests)
+      patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
+        sourceContext
+      })
+      onReviewersRequested(nextReviewRequests)
+      setReviewerInput('')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        logins.length === 1
+          ? translate('auto.components.GitHubItemDialog.69515bff81', 'Reviewer removed')
+          : translate('auto.components.GitHubItemDialog.2e69540652', 'Reviewers removed')
+      )
+    } catch {
+      if (reviewerPanelMountedRef.current) {
+        toast.error(
+          translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
+        )
+      }
+    } finally {
+      if (reviewerPanelMountedRef.current) {
+        setSubmitting(false)
+      }
+    }
+  }
+
+  const requestReviewer = async (reviewer: GitHubAssignableUser): Promise<void> => {
+    await (selectedReviewerLogins.has(reviewer.login.toLowerCase())
+      ? handleRemoveReviewers([reviewer.login])
+      : handleRequestReview([reviewer.login]))
+    scheduleReviewerInputFocus()
+  }
+
+  const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
+    if (nextOpen) {
+      measureReviewerPickerPlacement()
+    }
+    setOpen(nextOpen)
+    if (nextOpen) {
+      scheduleReviewerInputFocus()
+      return
+    }
+    setReviewerInput('')
+  }
+
+  const renderReviewerPickerRow = (
+    reviewer: GitHubAssignableUser,
+    options: { suggested: boolean; activeIndex: number }
+  ): React.JSX.Element => {
+    const selected = selectedReviewerLogins.has(reviewer.login.toLowerCase())
+    const active = actionableReviewerRows[activeReviewerIndex]?.login === reviewer.login
+    return (
+      <button
+        key={`${options.suggested ? 'suggested' : 'reviewer'}:${reviewer.login}`}
+        type="button"
+        aria-label={
+          selected
+            ? translate(
+                'auto.components.GitHubItemDialog.fedc09eeb9',
+                'Unrequest reviewer {{value0}}',
+                { value0: reviewer.login }
+              )
+            : translate(
+                'auto.components.GitHubItemDialog.8c45901789',
+                'Request reviewer {{value0}}',
+                { value0: reviewer.login }
+              )
+        }
+        aria-pressed={selected}
+        className={cn(
+          'flex min-h-10 w-full items-center gap-2 border-b border-border/70 px-3 py-2 text-left text-[13px] outline-none last:border-b-0 hover:bg-accent/70 focus-visible:bg-accent focus-visible:text-accent-foreground',
+          active && 'bg-accent text-accent-foreground',
+          selected && 'font-medium'
+        )}
+        onMouseEnter={() => setActiveReviewerIndex(options.activeIndex)}
+        onMouseDown={(event) => {
+          event.preventDefault()
+        }}
+        onFocus={() => setActiveReviewerIndex(options.activeIndex)}
+        onClick={() => {
+          void requestReviewer(reviewer)
+        }}
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center text-foreground">
+          {selected ? <Check className="size-3.5" /> : null}
+        </span>
+        {reviewer.avatarUrl ? (
+          <img src={reviewer.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
+        ) : (
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+            {reviewer.login.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">
+            <span className="font-semibold text-foreground">{reviewer.login}</span>
+            {reviewer.name ? (
+              <span className="ml-1 font-normal text-muted-foreground">{reviewer.name}</span>
+            ) : null}
+          </span>
+          {options.suggested ? (
+            <span className="block truncate text-[12px] leading-4 text-muted-foreground">
+              {translate(
+                'auto.components.GitHubItemDialog.e3243d9376',
+                'Recently edited these files'
+              )}
+            </span>
+          ) : null}
+        </span>
+      </button>
+    )
+  }
+
+  return (
+    <aside className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
+      <div className="flex h-10 items-center gap-2 border-b border-border/50 px-3">
+        <Users className="size-3.5 text-muted-foreground" />
+        <span className="text-[13px] font-medium text-foreground">
+          {translate('auto.components.GitHubItemDialog.dc8a092c57', 'Reviewers')}
+        </span>
+        {reviewers.length > 0 ? (
+          <span className="ml-auto rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+            {reviewers.length}
+          </span>
+        ) : null}
+      </div>
+      <div className="px-3 py-2.5">
+        {loading && !hasReviewerMetadata ? (
+          <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
+            <LoaderCircle className="size-3.5 animate-spin" />
+            {translate('auto.components.GitHubItemDialog.6a45771d47', 'Loading reviewers')}
+          </div>
+        ) : reviewers.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {reviewers.map((reviewer) => {
+              const canRemoveReviewer = selectedReviewerLogins.has(reviewer.login.toLowerCase())
+              return (
+                <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
+                  <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-medium text-foreground">
+                      {reviewer.login}
+                    </div>
+                    {reviewer.name ? (
+                      <div className="truncate text-[11px] text-muted-foreground">
+                        {reviewer.name}
+                      </div>
+                    ) : null}
+                  </div>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {reviewer.stateLabel}
+                  </span>
+                  {canRemoveReviewer ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                          disabled={submitting || !canRequestReview}
+                          aria-label={translate(
+                            'auto.components.GitHubItemDialog.8b15a5e91c',
+                            'Remove reviewer {{value0}}',
+                            { value0: reviewer.login }
+                          )}
+                          onClick={() => {
+                            void handleRemoveReviewers([reviewer.login])
+                          }}
+                        >
+                          <X className="size-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {translate(
+                          'auto.components.GitHubItemDialog.5c1c973855',
+                          'Remove reviewer'
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="py-1 text-[12px] text-muted-foreground">
+            {translate('auto.components.GitHubItemDialog.36f9ac4a47', 'No reviewers requested.')}
+          </div>
+        )}
+        <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
+          <PopoverAnchor asChild>
+            <Input
+              ref={reviewerInputRef}
+              value={reviewerInput}
+              onChange={(event) => {
+                setReviewerInput(event.target.value)
+                if (!open) {
+                  handleReviewerPickerOpenChange(true)
+                }
+              }}
+              disabled={submitting || !canRequestReview}
+              placeholder={translate(
+                'auto.components.GitHubItemDialog.bb42774171',
+                'Type or choose a user'
+              )}
+              aria-label={translate('auto.components.GitHubItemDialog.934add88b6', 'Reviewer')}
+              aria-expanded={open}
+              aria-haspopup="listbox"
+              className="mt-3 h-8 min-w-0 cursor-text rounded-md border-border/50 bg-background text-xs"
+              onFocus={() => {
+                if (canRequestReview) {
+                  handleReviewerPickerOpenChange(true)
+                }
+              }}
+              onClick={() => {
+                if (canRequestReview) {
+                  handleReviewerPickerOpenChange(true)
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
+                  event.preventDefault()
+                  setOpen(true)
+                  setActiveReviewerIndex((current) => (current + 1) % actionableReviewerRows.length)
+                  return
+                }
+                if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
+                  event.preventDefault()
+                  setOpen(true)
+                  setActiveReviewerIndex(
+                    (current) =>
+                      (current - 1 + actionableReviewerRows.length) % actionableReviewerRows.length
+                  )
+                  return
+                }
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  const activeReviewer = actionableReviewerRows[activeReviewerIndex]
+                  if (activeReviewer) {
+                    void requestReviewer(activeReviewer)
+                    return
+                  }
+                  void handleRequestReview()
+                  return
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  handleReviewerPickerOpenChange(false)
+                }
+              }}
+            />
+          </PopoverAnchor>
+          <PopoverContent
+            className="flex w-[330px] flex-col overflow-hidden rounded-md border-border/70 p-0"
+            align="start"
+            side={reviewerPickerSide}
+            sideOffset={6}
+            avoidCollisions={false}
+            style={{
+              maxHeight: reviewerPickerMaxHeight ? `${reviewerPickerMaxHeight}px` : undefined
+            }}
+            onOpenAutoFocus={(event) => {
+              event.preventDefault()
+            }}
+          >
+            <div className="border-b border-border/70 px-3 py-2">
+              <div className="text-[13px] font-semibold text-foreground">
+                {translate(
+                  'auto.components.GitHubItemDialog.b0b7344684',
+                  'Request up to 15 reviewers'
+                )}
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+              {reviewerMetadata.loading ? (
+                <div className="px-3 py-2 text-[13px] text-muted-foreground">
+                  {translate('auto.components.GitHubItemDialog.a98433e73d', 'Loading...')}
+                </div>
+              ) : filteredReviewerCandidates.length > 0 ? (
+                <>
+                  {suggestedReviewerRows.length > 0 ? (
+                    <>
+                      <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
+                        {translate('auto.components.GitHubItemDialog.c2b21818e1', 'Suggestions')}
+                      </div>
+                      {suggestedReviewerRows.map((reviewer, index) =>
+                        renderReviewerPickerRow(reviewer, {
+                          suggested: true,
+                          activeIndex: index
+                        })
+                      )}
+                    </>
+                  ) : null}
+                  <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
+                    {translate('auto.components.GitHubItemDialog.1ffce94a8b', 'Everyone else')}
+                  </div>
+                  {everyoneElseReviewerRows.length > 0 ? (
+                    everyoneElseReviewerRows.map((reviewer, index) =>
+                      renderReviewerPickerRow(reviewer, {
+                        suggested: false,
+                        activeIndex: suggestedReviewerRows.length + index
+                      })
+                    )
+                  ) : (
+                    <div className="px-3 py-2 text-[13px] text-muted-foreground">
+                      {translate(
+                        'auto.components.GitHubItemDialog.70e84e3d0b',
+                        'No matching reviewers.'
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="px-3 py-2 text-[13px] text-muted-foreground">
+                  {reviewerMetadata.error ??
+                    (hasReviewerMetadata
+                      ? translate(
+                          'auto.components.GitHubItemDialog.70e84e3d0b',
+                          'No matching reviewers.'
+                        )
+                      : translate(
+                          'auto.components.GitHubItemDialog.3f79ffc8b7',
+                          'Open the PR details to view current reviewers.'
+                        ))}
+                </div>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </aside>
+  )
+}
+
+function isPRFileViewed(file: GitHubPRFile): boolean {
+  return file.viewerViewedState === 'VIEWED'
 }
 
 function findNearestBraceBlock(
@@ -369,138 +1198,6 @@ function findNearestBraceBlock(
   )
 }
 
-type FileRowProps = {
-  file: GitHubPRFile
-  repoPath: string
-  prNumber: number
-  headSha: string | undefined
-  baseSha: string | undefined
-}
-
-type DiffViewMode = 'flat' | 'tree'
-
-// ─── Tree view components ────────────────────────────────────────────
-
-type DiffTreeNodeProps = {
-  node: DiffTreeNode
-  depth: number
-  repoPath: string
-  prNumber: number
-  headSha: string | undefined
-  baseSha: string | undefined
-  onCommentAdded: (comment: PRComment) => void
-}
-
-function PRDiffTreeNode({
-  node,
-  depth,
-  repoPath,
-  prNumber,
-  headSha,
-  baseSha,
-  onCommentAdded
-}: DiffTreeNodeProps): React.JSX.Element {
-  const [open, setOpen] = useState(true)
-
-  if (node.kind === 'file') {
-    return (
-      <PRFileRow
-        file={node.file}
-        repoPath={repoPath}
-        prNumber={prNumber}
-        headSha={headSha}
-        baseSha={baseSha}
-        onCommentAdded={onCommentAdded}
-        // Why: tree-view file rows are indented by a CSS left-padding proportional
-        // to depth so the expand chevron of PRFileRow stays at position 0 while
-        // the folder hierarchy is communicated purely through indentation.
-        indentDepth={depth}
-        label={node.name}
-      />
-    )
-  }
-
-  // Directory node
-  return (
-    <div role="treeitem" aria-expanded={open}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left transition hover:bg-muted/40"
-        style={{ paddingLeft: `${12 + depth * 16}px` }}
-        aria-label={`${open ? 'Collapse' : 'Expand'} folder ${node.name}`}
-      >
-        {open ? (
-          <>
-            <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
-            <FolderOpen className="size-3.5 shrink-0 text-amber-400" />
-          </>
-        ) : (
-          <>
-            <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
-            <Folder className="size-3.5 shrink-0 text-amber-400" />
-          </>
-        )}
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
-          {node.name}
-        </span>
-      </button>
-      {open && (
-        <div role="group">
-          {node.children.map((child) => (
-            <PRDiffTreeNode
-              key={child.kind === 'file' ? child.file.path : child.path}
-              node={child}
-              depth={depth + 1}
-              repoPath={repoPath}
-              prNumber={prNumber}
-              headSha={headSha}
-              baseSha={baseSha}
-              onCommentAdded={onCommentAdded}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-type PRDiffTreeViewProps = {
-  files: GitHubPRFile[]
-  repoPath: string
-  prNumber: number
-  headSha: string | undefined
-  baseSha: string | undefined
-  onCommentAdded: (comment: PRComment) => void
-}
-
-function PRDiffTreeView({
-  files,
-  repoPath,
-  prNumber,
-  headSha,
-  baseSha,
-  onCommentAdded
-}: PRDiffTreeViewProps): React.JSX.Element {
-  const tree = useMemo(() => buildDiffTree(files), [files])
-  return (
-    <div role="tree" aria-label="Changed files">
-      {tree.map((node) => (
-        <PRDiffTreeNode
-          key={node.kind === 'file' ? node.file.path : node.path}
-          node={node}
-          depth={0}
-          repoPath={repoPath}
-          prNumber={prNumber}
-          headSha={headSha}
-          baseSha={baseSha}
-          onCommentAdded={onCommentAdded}
-        />
-      ))}
-    </div>
-  )
-}
-
 // Why: SWR cache for the work-item details fetch. Reopening the same drawer
 // pays full IPC + `gh` process startup latency without this; with it, cached
 // data paints immediately while a background refetch keeps the view honest.
@@ -537,13 +1234,14 @@ function notifyWorkItemDetailsCache(): void {
 
 function getWorkItemDetailsCacheKey(args: {
   repoPath: string
+  repoId: string
   issueSourcePreference: string | undefined
   type: 'issue' | 'pr'
   number: number
 }): string {
   // Why: include all axes that change which (repo, item) the IPC resolves to.
   // `\0` separator avoids ambiguity between fields that may contain `:` or `/`.
-  return [args.repoPath, args.issueSourcePreference ?? 'auto', args.type, args.number].join('\0')
+  return [args.repoId, args.issueSourcePreference ?? 'auto', args.type, args.number].join('\0')
 }
 
 function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
@@ -586,12 +1284,13 @@ let workItemDetailsCacheGeneration = 0
 // matches the (repoPath, type, number) tuple regardless of source preference.
 function invalidateWorkItemDetailsCacheByMatch(args: {
   repoPath: string
+  repoId?: string
   type: 'issue' | 'pr'
   number: number
 }): void {
   workItemDetailsCacheGeneration += 1
   const suffix = `\0${args.type}\0${args.number}`
-  const prefix = `${args.repoPath}\0`
+  const prefix = `${args.repoId ?? args.repoPath}\0`
   let removed = false
   for (const key of Array.from(workItemDetailsCache.keys())) {
     if (key.startsWith(prefix) && key.endsWith(suffix)) {
@@ -604,6 +1303,80 @@ function invalidateWorkItemDetailsCacheByMatch(args: {
   }
 }
 
+function patchCachedPRFileViewedState(
+  cacheKey: string,
+  path: string,
+  viewerViewedState: GitHubPRFileViewedState
+): GitHubPRFileViewedState | undefined {
+  const prev = workItemDetailsCache.get(cacheKey)
+  const files = prev?.details?.files
+  if (!prev?.details || !files) {
+    return undefined
+  }
+  let previousState: GitHubPRFileViewedState | undefined
+  const nextFiles = files.map((file) => {
+    if (file.path !== path) {
+      return file
+    }
+    previousState = file.viewerViewedState ?? 'UNVIEWED'
+    return { ...file, viewerViewedState }
+  })
+  if (previousState === undefined || previousState === viewerViewedState) {
+    return previousState
+  }
+  touchWorkItemDetailsCache(cacheKey, {
+    ...prev,
+    details: { ...prev.details, files: nextFiles },
+    error: undefined
+  })
+  return previousState
+}
+
+function patchCachedPRChecks(cacheKey: string, checks: PRCheckDetail[]): void {
+  const prev = workItemDetailsCache.get(cacheKey)
+  if (!prev?.details) {
+    return
+  }
+  touchWorkItemDetailsCache(cacheKey, {
+    ...prev,
+    details: { ...prev.details, checks },
+    fetchedAt: Date.now(),
+    error: undefined
+  })
+}
+
+function patchCachedPRReviewRequests(
+  cacheKey: string,
+  reviewRequests: GitHubAssignableUser[]
+): void {
+  const prev = workItemDetailsCache.get(cacheKey)
+  if (!prev?.details) {
+    return
+  }
+  touchWorkItemDetailsCache(cacheKey, {
+    ...prev,
+    details: {
+      ...prev.details,
+      item: { ...prev.details.item, reviewRequests }
+    },
+    fetchedAt: Date.now(),
+    error: undefined
+  })
+}
+
+function patchCachedWorkItemBody(cacheKey: string, body: string): void {
+  const prev = workItemDetailsCache.get(cacheKey)
+  if (!prev?.details) {
+    return
+  }
+  touchWorkItemDetailsCache(cacheKey, {
+    ...prev,
+    details: { ...prev.details, body },
+    fetchedAt: Date.now(),
+    error: undefined
+  })
+}
+
 // Why: install once at module load — every dialog instance shares the cache,
 // so a single subscription is enough. The preload bridge re-emits the
 // main-process broadcast for every window, so each renderer invalidates its
@@ -614,6 +1387,7 @@ if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
   workItemMutatedUnsub = window.api.gh.onWorkItemMutated((payload) => {
     invalidateWorkItemDetailsCacheByMatch({
       repoPath: payload.repoPath,
+      repoId: payload.repoId,
       type: payload.type,
       number: payload.number
     })
@@ -628,34 +1402,104 @@ if (typeof import.meta !== 'undefined' && import.meta.hot) {
 // Why: bounded LRU — opening many PRs with many files during a session
 // would otherwise grow this module-level map without bound until reload.
 const PR_FILE_CONTENT_CACHE_MAX = 64
-const prFileContentCache = new Map<string, Promise<GitHubPRFileContents> | GitHubPRFileContents>()
+// Why: raw-content overflow is only a sentinel; force the reported size past
+// the render budget so downstream checks reliably choose fallback mode.
+const GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT = MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1
+const PR_FILE_CONTENT_CACHE_MAX_BYTES = MAX_RENDERED_DIFF_COMBINED_CHARACTERS * 4
+type PRFileContentCacheEntry = {
+  value: Promise<GitHubPRFileContents> | GitHubPRFileContents
+  byteCount: number
+}
+const prFileContentCache = new Map<string, PRFileContentCacheEntry>()
+let prFileContentCacheBytes = 0
+
+function getUtf8ByteCount(value: string): number {
+  let byteCount = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code < 0x80) {
+      byteCount += 1
+    } else if (code < 0x800) {
+      byteCount += 2
+    } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+      const next = value.charCodeAt(index + 1)
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        byteCount += 4
+        index += 1
+      } else {
+        byteCount += 3
+      }
+    } else {
+      byteCount += 3
+    }
+  }
+  return byteCount
+}
+
+function isPRFileContentsTooLargeSentinel(contents: GitHubPRFileContents): boolean {
+  return contents.originalTooLarge === true || contents.modifiedTooLarge === true
+}
+
+function getPRFileContentsCacheByteCount(contents: GitHubPRFileContents): number {
+  if (isPRFileContentsTooLargeSentinel(contents)) {
+    return 0
+  }
+  return getUtf8ByteCount(contents.original) + getUtf8ByteCount(contents.modified)
+}
+
+function getRetainedPRFileContentsByteCount(contents: GitHubPRFileContents): number | null {
+  if (isPRFileContentsTooLargeSentinel(contents)) {
+    return 0
+  }
+  const byteCount = getPRFileContentsCacheByteCount(contents)
+  return byteCount <= PR_FILE_CONTENT_CACHE_MAX_BYTES ? byteCount : null
+}
 
 function touchPRFileContentCache(
   key: string,
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
 ): void {
+  const retainedByteCount = value instanceof Promise ? 0 : getRetainedPRFileContentsByteCount(value)
+  if (retainedByteCount === null) {
+    const existing = prFileContentCache.get(key)
+    prFileContentCacheBytes -= existing?.byteCount ?? 0
+    prFileContentCache.delete(key)
+    return
+  }
+
+  const existing = prFileContentCache.get(key)
+  prFileContentCacheBytes -= existing?.byteCount ?? 0
   // Why: re-insert to move to the most-recently-used position; Map preserves
   // insertion order so the oldest key is always first when evicting.
   prFileContentCache.delete(key)
-  prFileContentCache.set(key, value)
-  while (prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX) {
+  const byteCount = retainedByteCount
+  prFileContentCache.set(key, { value, byteCount })
+  prFileContentCacheBytes += byteCount
+  while (
+    prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX ||
+    prFileContentCacheBytes > PR_FILE_CONTENT_CACHE_MAX_BYTES
+  ) {
     const oldest = prFileContentCache.keys().next().value
     if (oldest === undefined) {
       break
     }
+    const evicted = prFileContentCache.get(oldest)
+    prFileContentCacheBytes -= evicted?.byteCount ?? 0
     prFileContentCache.delete(oldest)
   }
 }
 
 function getPRFileContentCacheKey(args: {
   repoPath: string
+  repoId: string
   prNumber: number
   file: GitHubPRFile
   headSha: string
   baseSha: string
 }): string {
+  const repositoryKey = args.repoId ? `repo:${args.repoId}` : `path:${args.repoPath}`
   return [
-    args.repoPath,
+    repositoryKey,
     args.prNumber,
     args.file.path,
     args.file.oldPath ?? '',
@@ -667,6 +1511,8 @@ function getPRFileContentCacheKey(args: {
 
 function loadPRFileContents(args: {
   repoPath: string
+  repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   file: GitHubPRFile
   headSha: string
@@ -675,12 +1521,15 @@ function loadPRFileContents(args: {
   const cacheKey = getPRFileContentCacheKey(args)
   const cached = prFileContentCache.get(cacheKey)
   if (cached) {
-    touchPRFileContentCache(cacheKey, cached)
-    return Promise.resolve(cached)
+    touchPRFileContentCache(cacheKey, cached.value)
+    return Promise.resolve(cached.value)
   }
-  const request = window.api.gh
+  let request: Promise<GitHubPRFileContents>
+  request = window.api.gh
     .prFileContents({
       repoPath: args.repoPath,
+      repoId: args.repoId,
+      sourceContext: args.sourceContext,
       prNumber: args.prNumber,
       path: args.file.path,
       oldPath: args.file.oldPath,
@@ -689,221 +1538,821 @@ function loadPRFileContents(args: {
       baseSha: args.baseSha
     })
     .then((contents) => {
-      touchPRFileContentCache(cacheKey, contents)
+      if (prFileContentCache.get(cacheKey)?.value === request) {
+        touchPRFileContentCache(cacheKey, contents)
+      }
       return contents
     })
     .catch((err) => {
-      prFileContentCache.delete(cacheKey)
+      const cachedRequest = prFileContentCache.get(cacheKey)
+      if (cachedRequest?.value === request) {
+        prFileContentCacheBytes -= cachedRequest.byteCount
+        prFileContentCache.delete(cacheKey)
+      }
       throw err
     })
   touchPRFileContentCache(cacheKey, request)
   return request
 }
 
-function PRFileRow({
-  file,
+function addIssueCommentForRepo(args: {
+  repoId?: string
+  repoPath: string
+  sourceContext?: TaskSourceContext | null
+  number: number
+  body: string
+  type?: 'issue' | 'pr'
+}): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
+  return window.api.gh.addIssueComment({
+    repoPath: args.repoPath,
+    repoId: args.repoId,
+    sourceContext: args.sourceContext,
+    number: args.number,
+    body: args.body,
+    type: args.type
+  })
+}
+
+function addPRReviewCommentForRepo(args: {
+  repoId?: string
+  repoPath: string
+  sourceContext?: TaskSourceContext | null
+  prNumber: number
+  commitId: string
+  path: string
+  line: number
+  startLine?: number
+  body: string
+}): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>> {
+  return window.api.gh.addPRReviewComment({
+    repoPath: args.repoPath,
+    repoId: args.repoId,
+    sourceContext: args.sourceContext,
+    prNumber: args.prNumber,
+    commitId: args.commitId,
+    path: args.path,
+    line: args.line,
+    startLine: args.startLine,
+    body: args.body
+  })
+}
+
+function addPRReviewCommentReplyForRepo(args: {
+  repoId?: string
+  repoPath: string
+  sourceContext?: TaskSourceContext | null
+  prNumber: number
+  commentId: number
+  body: string
+  threadId?: string
+  path?: string
+  line?: number
+}): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>> {
+  return window.api.gh.addPRReviewCommentReply({
+    repoPath: args.repoPath,
+    repoId: args.repoId,
+    sourceContext: args.sourceContext,
+    prNumber: args.prNumber,
+    commentId: args.commentId,
+    body: args.body,
+    threadId: args.threadId,
+    path: args.path,
+    line: args.line
+  })
+}
+
+function setPRFileViewedForRepo(args: {
+  repoId?: string
+  repoPath: string
+  sourceContext?: TaskSourceContext | null
+  prNumber: number
+  pullRequestId: string
+  path: string
+  viewed: boolean
+}): Promise<boolean> {
+  return window.api.gh.setPRFileViewed({
+    repoPath: args.repoPath,
+    repoId: args.repoId,
+    sourceContext: args.sourceContext,
+    prNumber: args.prNumber,
+    pullRequestId: args.pullRequestId,
+    path: args.path,
+    viewed: args.viewed
+  })
+}
+
+function getWorkItemDetailsForRepo(args: {
+  repoId?: string
+  repoPath: string
+  sourceContext?: TaskSourceContext | null
+  number: number
+  type: 'issue' | 'pr'
+}): Promise<GitHubWorkItemDetails | null> {
+  return window.api.gh.workItemDetails({
+    repoPath: args.repoPath,
+    repoId: args.repoId,
+    sourceContext: args.sourceContext,
+    number: args.number,
+    type: args.type
+  })
+}
+
+function PRViewedCheckbox({
+  checked,
+  pending,
+  filePath,
+  onToggle
+}: {
+  checked: boolean
+  pending: boolean
+  filePath: string
+  onToggle: () => void
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={checked}
+          aria-label={translate(
+            'auto.components.GitHubItemDialog.2d89a38d9d',
+            '{{value0}} {{value1}} as viewed',
+            { value0: checked ? 'Unmark' : 'Mark', value1: filePath }
+          )}
+          disabled={pending}
+          onClick={(event) => {
+            event.stopPropagation()
+            onToggle()
+          }}
+          className={cn(
+            'flex h-6 shrink-0 items-center gap-1.5 rounded-md px-1.5 text-[11px] text-muted-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            checked && 'text-foreground',
+            pending && 'cursor-default opacity-60'
+          )}
+        >
+          <span
+            className={cn(
+              'flex size-4 items-center justify-center rounded-sm border transition-colors',
+              checked
+                ? 'border-foreground bg-foreground text-background'
+                : 'border-muted-foreground/50 bg-background text-transparent'
+            )}
+          >
+            {pending ? (
+              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+            ) : checked ? (
+              <Check className="size-3" strokeWidth={3} />
+            ) : null}
+          </span>
+          <span>{translate('auto.components.GitHubItemDialog.af924014f8', 'Viewed')}</span>
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={4}>
+        {checked
+          ? translate('auto.components.GitHubItemDialog.ba8e329d92', 'Unmark viewed')
+          : translate('auto.components.GitHubItemDialog.16c1abe76c', 'Mark viewed')}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+const PR_DIFF_OVERSCAN = 5
+
+function mapPRFileStatus(status: GitHubPRFile['status']): GitBranchChangeEntry['status'] {
+  switch (status) {
+    case 'added':
+      return 'added'
+    case 'removed':
+      return 'deleted'
+    case 'renamed':
+      return 'renamed'
+    case 'copied':
+      return 'copied'
+    case 'changed':
+    case 'modified':
+    case 'unchanged':
+      return 'modified'
+  }
+}
+
+function getPRFileSectionKey(path: string): string {
+  return `combined-commit:${path}`
+}
+
+function gitHubPRFileToBranchEntry(file: GitHubPRFile): GitBranchChangeEntry {
+  return {
+    path: file.path,
+    oldPath: file.oldPath,
+    status: mapPRFileStatus(file.status),
+    added: file.additions,
+    removed: file.deletions
+  }
+}
+
+function getPRFileContentsRenderLimit(contents: GitHubPRFileContents): LargeDiffRenderLimit {
+  if (!contents.originalTooLarge && !contents.modifiedTooLarge) {
+    return getLargeDiffRenderLimit({
+      originalContent: contents.original,
+      modifiedContent: contents.modified
+    })
+  }
+
+  return {
+    limited: true,
+    reason: 'character-count' as const,
+    lineCounts: null,
+    characterCount:
+      contents.original.length +
+      contents.modified.length +
+      (contents.originalTooLarge ? GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT : 0) +
+      (contents.modifiedTooLarge ? GITHUB_PR_RAW_CONTENT_OVERFLOW_CHARACTER_COUNT : 0),
+    limits: {
+      maxLinesPerSide: MAX_RENDERED_DIFF_LINES_PER_SIDE,
+      maxCombinedCharacters: MAX_RENDERED_DIFF_COMBINED_CHARACTERS
+    }
+  }
+}
+
+function getPRFileDiffResult(contents: GitHubPRFileContents): GitDiffResult {
+  if (contents.originalIsBinary) {
+    return {
+      kind: 'binary',
+      originalContent: contents.original,
+      modifiedContent: contents.modified,
+      originalIsBinary: true,
+      modifiedIsBinary: contents.modifiedIsBinary
+    }
+  }
+  if (contents.modifiedIsBinary) {
+    return {
+      kind: 'binary',
+      originalContent: contents.original,
+      modifiedContent: contents.modified,
+      originalIsBinary: false,
+      modifiedIsBinary: true
+    }
+  }
+
+  return {
+    kind: 'text',
+    originalContent: contents.original,
+    modifiedContent: contents.modified,
+    originalIsBinary: false,
+    modifiedIsBinary: false
+  }
+}
+
+type PRFilesCombinedDiffViewerProps = {
+  files: GitHubPRFile[]
+  comments: PRComment[]
+  repoPath: string
+  repoId: string
+  sourceContext?: TaskSourceContext | null
+  prNumber: number
+  prUrl: string
+  headSha: string | undefined
+  baseSha: string | undefined
+  pendingViewedPaths: ReadonlySet<string>
+  onCommentAdded: (comment: PRComment) => void
+  onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
+}
+
+function PRFilesCombinedDiffViewer({
+  files,
+  comments,
   repoPath,
+  repoId,
+  sourceContext,
   prNumber,
+  prUrl,
   headSha,
   baseSha,
+  pendingViewedPaths,
   onCommentAdded,
-  indentDepth = 0,
-  label
-}: FileRowProps & {
-  onCommentAdded: (comment: PRComment) => void
-  indentDepth?: number
-  label?: string
-}): React.JSX.Element {
-  const [expanded, setExpanded] = useState(false)
-  const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  onViewedChange
+}: PRFilesCombinedDiffViewerProps): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
+  const isDark =
+    settings?.theme === 'dark' ||
+    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const entriesCacheRef = useRef<{
+    signature: string
+    entries: GitBranchChangeEntry[]
+  } | null>(null)
+  const diffEntrySignature = useMemo(
+    () =>
+      JSON.stringify(
+        files.map((file) => ({
+          path: file.path,
+          oldPath: file.oldPath ?? null,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+          isBinary: file.isBinary
+        }))
+      ),
+    [files]
+  )
+  const entries = useMemo(() => {
+    if (entriesCacheRef.current?.signature === diffEntrySignature) {
+      return entriesCacheRef.current.entries
+    }
+    const nextEntries = files.map(gitHubPRFileToBranchEntry)
+    entriesCacheRef.current = {
+      signature: diffEntrySignature,
+      entries: nextEntries
+    }
+    return nextEntries
+  }, [diffEntrySignature, files])
+  const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
+  const inlineReviewComments = useMemo<DecoratedDiffComment[]>(
+    () =>
+      comments.flatMap((comment): DecoratedDiffComment[] => {
+        // Why: stale threads keep originalLine for the sidebar, but rendering
+        // that number inline can attach the comment to unrelated current code.
+        if (comment.isOutdated || !comment.path || typeof comment.line !== 'number') {
+          return []
+        }
+        const createdAtMs = new Date(comment.createdAt).getTime()
+        return [
+          {
+            id: `github-pr-comment:${comment.id}`,
+            worktreeId: `github-pr:${repoId}:${prNumber}`,
+            filePath: comment.path,
+            source: 'diff',
+            startLine: comment.startLine,
+            lineNumber: comment.line,
+            body: comment.body,
+            createdAt: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
+            side: 'modified',
+            author: comment.author,
+            authorAvatarUrl: comment.authorAvatarUrl,
+            createdAtLabel: formatRelativeTime(comment.createdAt),
+            url: comment.url,
+            canDelete: false,
+            canEdit: false
+          }
+        ]
+      }),
+    [comments, prNumber, repoId]
+  )
+  const entrySignature = useMemo(
+    () =>
+      JSON.stringify({
+        repoId,
+        prNumber,
+        headSha: headSha ?? null,
+        baseSha: baseSha ?? null,
+        files: diffEntrySignature
+      }),
+    [baseSha, diffEntrySignature, headSha, prNumber, repoId]
+  )
+  const [sections, setSections] = useState<DiffSection[]>([])
+  const [sideBySide, setSideBySide] = useState(false)
+  const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
+  const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
+  const [activeTreeSectionKey, setActiveTreeSectionKey] = useState<string | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const loadedIndicesRef = useRef<Set<number>>(new Set())
+  const loadingIndicesRef = useRef<Set<number>>(new Set())
+  const sectionsRef = useRef<DiffSection[]>([])
+  const generationRef = useRef(0)
+  const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
+  const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
+  sectionsRef.current = sections
 
-  const canLoadDiff = Boolean(headSha && baseSha) && !file.isBinary
+  useEffect(() => {
+    generationRef.current += 1
+    loadedIndicesRef.current.clear()
+    loadingIndicesRef.current.clear()
+    setSectionHeights({})
+    setActiveTreeSectionKey(null)
+    setSections(
+      entries.map((entry) => ({
+        key: getPRFileSectionKey(entry.path),
+        path: entry.path,
+        oldPath: entry.oldPath,
+        status: entry.status,
+        added: entry.added,
+        removed: entry.removed,
+        originalContent: '',
+        modifiedContent: '',
+        collapsed: false,
+        loading: true,
+        error: undefined,
+        dirty: false,
+        diffResult: null,
+        largeDiffRenderLimit: null
+      }))
+    )
+  }, [entries, entrySignature])
 
-  const handleToggle = useCallback(() => {
-    setExpanded((prev) => {
-      const next = !prev
-      if (next && !contents && !loading && canLoadDiff && headSha && baseSha) {
-        setLoading(true)
-        setError(null)
-        loadPRFileContents({
+  const loadSection = useCallback(
+    (index: number) => {
+      const section = sectionsRef.current[index]
+      if (!section || section.collapsed) {
+        return
+      }
+      if (loadedIndicesRef.current.has(index) || loadingIndicesRef.current.has(index)) {
+        return
+      }
+      const file = fileByPath.get(section.path)
+      if (!file) {
+        return
+      }
+      const generation = generationRef.current
+      loadingIndicesRef.current.add(index)
+
+      const load = async (): Promise<{
+        result: GitDiffResult
+        resultContents?: GitHubPRFileContents
+        error?: string
+      }> => {
+        if (file.isBinary) {
+          return {
+            result: {
+              kind: 'binary',
+              originalContent: '',
+              modifiedContent: '',
+              originalIsBinary: true,
+              modifiedIsBinary: true
+            }
+          }
+        }
+        if (!headSha || !baseSha) {
+          return {
+            result: {
+              kind: 'text',
+              originalContent: '',
+              modifiedContent: '',
+              originalIsBinary: false,
+              modifiedIsBinary: false
+            },
+            error: translate(
+              'auto.components.GitHubItemDialog.829674460a',
+              'Diff unavailable because the PR commit SHAs are missing.'
+            )
+          }
+        }
+        const contents = await loadPRFileContents({
           repoPath,
+          repoId,
+          sourceContext,
           prNumber,
           file,
           headSha,
           baseSha
         })
-          .then((result) => {
-            setContents(result)
-          })
-          .catch((err) => {
-            setError(err instanceof Error ? err.message : 'Failed to load diff')
-          })
-          .finally(() => {
-            setLoading(false)
-          })
+        return { result: getPRFileDiffResult(contents), resultContents: contents }
       }
-      return next
-    })
-  }, [baseSha, canLoadDiff, contents, file, headSha, loading, prNumber, repoPath])
 
-  const language = useMemo(() => detectLanguage(file.path), [file.path])
-  const modelKey = `gh-dialog:pr:${prNumber}:${file.path}`
+      load()
+        .catch((error) => ({
+          result: {
+            kind: 'text',
+            originalContent: '',
+            modifiedContent: '',
+            originalIsBinary: false,
+            modifiedIsBinary: false
+          } as GitDiffResult,
+          resultContents: undefined,
+          error: error instanceof Error ? error.message : 'Failed to load diff.'
+        }))
+        .then(({ result, resultContents, error }) => {
+          loadingIndicesRef.current.delete(index)
+          if (generationRef.current !== generation) {
+            return
+          }
+          const largeDiffRenderLimit =
+            !error && result.kind === 'text' && resultContents
+              ? getPRFileContentsRenderLimit(resultContents)
+              : null
+          const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
+          const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
+          loadedIndicesRef.current.add(index)
+          setSections((prev) =>
+            prev.map((current, currentIndex) =>
+              currentIndex === index
+                ? {
+                    ...current,
+                    diffResult: storedResult,
+                    originalContent: storedContent.originalContent,
+                    modifiedContent: storedContent.modifiedContent,
+                    loading: false,
+                    error,
+                    largeDiffRenderLimit
+                  }
+                : current
+            )
+          )
+        })
+    },
+    [baseSha, fileByPath, headSha, prNumber, repoId, repoPath, sourceContext]
+  )
+
+  const retrySection = useCallback(
+    (index: number) => {
+      loadedIndicesRef.current.delete(index)
+      loadingIndicesRef.current.delete(index)
+      setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
+      setSections((prev) =>
+        prev.map((section, sectionIndex) =>
+          sectionIndex === index
+            ? {
+                ...section,
+                diffResult: null,
+                originalContent: '',
+                modifiedContent: '',
+                loading: true,
+                error: undefined,
+                largeDiffRenderLimit: null
+              }
+            : section
+        )
+      )
+      loadSection(index)
+    },
+    [loadSection]
+  )
+
+  const toggleSection = useCallback(
+    (index: number) => {
+      const shouldLoadAfterExpand = sectionsRef.current[index]?.collapsed ?? false
+      setSections((prev) =>
+        prev.map((section, sectionIndex) =>
+          sectionIndex === index ? { ...section, collapsed: !section.collapsed } : section
+        )
+      )
+      if (shouldLoadAfterExpand) {
+        window.requestAnimationFrame(() => loadSection(index))
+      }
+    },
+    [loadSection]
+  )
+
+  const setAllSectionsCollapsed = useCallback(
+    (collapsed: boolean) => {
+      setSections((prev) => prev.map((section) => ({ ...section, collapsed })))
+      if (!collapsed) {
+        window.requestAnimationFrame(() => {
+          sectionsRef.current.forEach((_, index) => loadSection(index))
+        })
+      }
+    },
+    [loadSection]
+  )
+
+  const allSectionsCollapsed = sections.length > 0 && sections.every((section) => section.collapsed)
+  const sectionIndexByKey = useMemo(() => createCombinedDiffSectionIndexMap(sections), [sections])
+  const viewedSectionKeys = useMemo(
+    () => new Set(files.filter(isPRFileViewed).map((file) => getPRFileSectionKey(file.path))),
+    [files]
+  )
+
+  const virtualizer = useVirtualizer({
+    count: sections.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: (index) => {
+      const section = sections[index]
+      if (!section) {
+        return 88
+      }
+      return getDiffSectionEstimatedHeight({
+        collapsed: section.collapsed,
+        measuredContentHeight: sectionHeights[index],
+        originalContent: section.originalContent,
+        modifiedContent: section.modifiedContent,
+        changedLineCount:
+          section.added === undefined && section.removed === undefined
+            ? undefined
+            : (section.added ?? 0) + (section.removed ?? 0),
+        useIntrinsicImageHeight: isIntrinsicHeightImageDiff(section.diffResult),
+        isLargeDiffLimited: section.largeDiffRenderLimit?.limited === true,
+        lineCounts: section.largeDiffRenderLimit?.lineCounts ?? undefined
+      })
+    },
+    overscan: PR_DIFF_OVERSCAN,
+    getItemKey: (index) => {
+      const section = sections[index]
+      return section
+        ? `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${entrySignature}`
+        : `${index}:${entrySignature}`
+    }
+  })
+
+  useLayoutEffect(() => {
+    virtualizer.measure()
+  }, [sideBySide, virtualizer])
+
+  const handleTreeNavigate = useCallback(
+    (entry: CombinedDiffFileTreeEntry) => {
+      const navigatedIndex = handleCombinedDiffFileTreeNavigation({
+        mode: 'commit',
+        entry,
+        sections: sectionsRef.current,
+        sectionIndexByKey,
+        toggleSection,
+        scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
+      })
+      if (navigatedIndex !== null) {
+        setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)
+      }
+    },
+    [sectionIndexByKey, toggleSection, virtualizer]
+  )
+
+  const openFilesOnGitHub = useCallback(() => {
+    void window.api.shell.openUrl(`${prUrl.replace(/\/$/, '')}/files`)
+  }, [prUrl])
+
   const handleAddLineComment = useCallback(
-    async ({
-      lineNumber,
-      startLine,
-      body: commentBody
-    }: {
-      lineNumber: number
-      startLine?: number
-      body: string
-    }) => {
+    async (
+      section: DiffSection,
+      {
+        lineNumber,
+        startLine,
+        body
+      }: {
+        lineNumber: number
+        startLine?: number
+        body: string
+      }
+    ) => {
       if (!headSha) {
-        toast.error('Unable to comment without the PR head SHA.')
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.d1fa2cf888',
+            'Unable to comment without the PR head SHA.'
+          )
+        )
         return false
       }
-      const result = await window.api.gh.addPRReviewComment({
+      const result = await addPRReviewCommentForRepo({
         repoPath,
+        repoId,
+        sourceContext,
         prNumber,
         commitId: headSha,
-        path: file.path,
+        path: section.path,
         line: lineNumber,
         startLine,
-        body: commentBody
+        body
       })
       if (!result.ok) {
-        toast.error(result.error || 'Failed to add review comment.')
+        toast.error(
+          result.error ||
+            translate(
+              'auto.components.GitHubItemDialog.b0b09778c8',
+              'Failed to add review comment.'
+            )
+        )
         return false
       }
       onCommentAdded(result.comment)
-      toast.success('Review comment added.')
+      toast.success(
+        translate('auto.components.GitHubItemDialog.a341343303', 'Review comment added.')
+      )
       return true
     },
-    [file.path, headSha, onCommentAdded, prNumber, repoPath]
+    [headSha, onCommentAdded, prNumber, repoId, repoPath, sourceContext]
+  )
+
+  const renderViewedCheckbox = useCallback(
+    (section: DiffSection) => {
+      const file = fileByPath.get(section.path)
+      if (!file) {
+        return null
+      }
+      const viewed = isPRFileViewed(file)
+      const pending = pendingViewedPaths.has(file.path)
+      return (
+        <PRViewedCheckbox
+          checked={viewed}
+          pending={pending}
+          filePath={file.path}
+          onToggle={() => {
+            if (!pending) {
+              void onViewedChange(file.path, !viewed)
+            }
+          }}
+        />
+      )
+    },
+    [fileByPath, onViewedChange, pendingViewedPaths]
   )
 
   return (
-    <div className="border-b border-border/50" {...(label != null ? { role: 'treeitem' } : {})}>
-      <button
-        type="button"
-        onClick={handleToggle}
-        className="flex w-full items-center gap-2 py-2 pr-3 text-left transition hover:bg-muted/40"
-        style={{ paddingLeft: `${12 + indentDepth * 16}px` }}
-      >
-        {expanded ? (
-          <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-        ) : (
-          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-        <span
-          className={cn(
-            'inline-flex size-5 shrink-0 items-center justify-center rounded border border-border/60 font-mono text-[10px]',
-            fileStatusTone(file.status)
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background/50 px-3 py-1.5">
+        <div className="flex min-w-0 items-center gap-2">
+          {fileTreeCollapsed && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.1257d1435d',
+                    'Show file tree'
+                  )}
+                  onClick={() => setFileTreeCollapsed(false)}
+                >
+                  <PanelLeftOpen className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6}>
+                {translate('auto.components.GitHubItemDialog.1257d1435d', 'Show file tree')}
+              </TooltipContent>
+            </Tooltip>
           )}
-          aria-label={file.status}
-        >
-          {fileStatusLabel(file.status)}
-        </span>
-        <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
-          {file.oldPath && file.oldPath !== file.path ? (
-            label ? (
-              // Why: in tree view we only have room for basenames, but still need to
-              // communicate the rename so the user doesn't have to expand or switch
-              // to flat view to discover what was renamed. When basenames match (i.e.
-              // only the directory changed), we include the parent directory so the
-              // display isn't a meaningless "foo.ts → foo.ts".
-              (() => {
-                const oldBase = file.oldPath!.split('/').pop() ?? file.oldPath!
-                if (oldBase === label) {
-                  const oldParts = file.oldPath!.split('/')
-                  const newParts = file.path.split('/')
-                  const oldShort = oldParts.slice(-2).join('/')
-                  const newShort = newParts.slice(-2).join('/')
-                  return (
-                    <>
-                      <span className="text-muted-foreground">{oldShort}</span>
-                      <span className="mx-1 text-muted-foreground">→</span>
-                      {newShort}
-                    </>
-                  )
-                }
-                return (
-                  <>
-                    <span className="text-muted-foreground">{oldBase}</span>
-                    <span className="mx-1 text-muted-foreground">→</span>
-                    {label}
-                  </>
-                )
-              })()
-            ) : (
-              <>
-                <span className="text-muted-foreground">{file.oldPath}</span>
-                <span className="mx-1 text-muted-foreground">→</span>
-                {file.path}
-              </>
-            )
-          ) : (
-            (label ?? file.path)
-          )}
-        </span>
-        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-          <span className="text-emerald-500">+{file.additions}</span>
-          <span className="mx-1">/</span>
-          <span className="text-rose-500">−{file.deletions}</span>
-        </span>
-      </button>
-
-      {expanded && (
-        // Why: DiffViewer's inner layout uses flex-1/min-h-0, so this wrapper
-        // must be a flex column with a fixed height for Monaco to size itself
-        // correctly. A plain block div collapses flex-1 to 0 and renders empty.
-        <div className="flex h-[420px] flex-col border-t border-border/40 bg-background">
-          {!canLoadDiff ? (
-            <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-muted-foreground">
-              {file.isBinary
-                ? 'Binary file — diff not shown.'
-                : 'Diff unavailable (missing commit SHAs).'}
-            </div>
-          ) : loading ? (
-            <div className="flex h-full items-center justify-center">
-              <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : error ? (
-            <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-destructive">
-              {error}
-            </div>
-          ) : contents ? (
-            contents.originalIsBinary || contents.modifiedIsBinary ? (
-              <div className="flex h-full items-center justify-center px-4 text-center text-[12px] text-muted-foreground">
-                Binary file — diff not shown.
-              </div>
-            ) : (
-              <Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center">
-                    <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-                  </div>
-                }
-              >
-                <DiffViewer
-                  modelKey={modelKey}
-                  originalContent={contents.original}
-                  modifiedContent={contents.modified}
-                  language={language}
-                  filePath={file.path}
-                  relativePath={file.path}
-                  sideBySide={false}
-                  onAddLineComment={handleAddLineComment}
-                  addLineCommentLabel="Comment"
-                  addLineCommentPlaceholder="Add a review comment"
-                />
-              </Suspense>
-            )
-          ) : null}
+          <span className="truncate text-xs text-muted-foreground">
+            {files.filter(isPRFileViewed).length} / {files.length}{' '}
+            {translate('auto.components.GitHubItemDialog.f2d02cdf8c', 'files viewed')}
+          </span>
         </div>
-      )}
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className="w-20 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
+          >
+            {allSectionsCollapsed
+              ? translate('auto.components.GitHubItemDialog.3c19ec3069', 'Expand All')
+              : translate('auto.components.GitHubItemDialog.d00a0a7f8f', 'Collapse All')}
+          </button>
+          <button
+            type="button"
+            className="w-24 rounded border border-border px-2 py-0.5 text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => setSideBySide((prev) => !prev)}
+          >
+            {sideBySide
+              ? translate('auto.components.GitHubItemDialog.6e43a16435', 'Inline')
+              : translate('auto.components.GitHubItemDialog.31770bef03', 'Side by Side')}
+          </button>
+        </div>
+      </div>
+      <div className="flex min-h-0 flex-1">
+        <CombinedDiffFileTree
+          mode="commit"
+          worktreePath={repoPath}
+          entries={entries}
+          sectionIndexByKey={sectionIndexByKey}
+          activeSectionKey={activeTreeSectionKey}
+          viewedSectionKeys={viewedSectionKeys}
+          collapsed={fileTreeCollapsed}
+          onCollapsedChange={setFileTreeCollapsed}
+          onNavigate={handleTreeNavigate}
+        />
+        <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const section = sections[virtualItem.index]
+              if (!section) {
+                return null
+              }
+              return (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute left-0 top-0 w-full"
+                  style={{ top: `${virtualItem.start}px` }}
+                >
+                  <DiffSectionItem
+                    section={section}
+                    index={virtualItem.index}
+                    isBranchMode={false}
+                    sideBySide={sideBySide}
+                    isDark={isDark}
+                    settings={settings}
+                    sectionHeight={sectionHeights[virtualItem.index]}
+                    worktreeId={`github-pr:${repoId}:${prNumber}`}
+                    inlineComments={inlineReviewComments}
+                    loadSection={loadSection}
+                    retrySection={retrySection}
+                    toggleSection={toggleSection}
+                    openSection={openFilesOnGitHub}
+                    openSectionTitle="Open files on GitHub"
+                    renderHeaderTrailingContent={renderViewedCheckbox}
+                    onAddLineComment={handleAddLineComment}
+                    addLineCommentLabel="Comment"
+                    addLineCommentPlaceholder="Add a review comment"
+                    getCommentableLineNumbers={(section) =>
+                      fileByPath.get(section.path)?.reviewCommentLineNumbers
+                    }
+                    setSectionHeights={setSectionHeights}
+                    setSections={setSections}
+                    modifiedEditorsRef={modifiedEditorsRef}
+                    handleSectionSaveRef={handleSectionSaveRef}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -911,6 +2360,8 @@ function PRFileRow({
 function CommentCodeContext({
   comment,
   repoPath,
+  repoId,
+  sourceContext,
   prNumber,
   files,
   headSha,
@@ -918,6 +2369,8 @@ function CommentCodeContext({
 }: {
   comment: PRComment
   repoPath: string | null
+  repoId: string
+  sourceContext?: TaskSourceContext | null
   prNumber: number
   files: GitHubPRFile[]
   headSha: string | undefined
@@ -925,8 +2378,9 @@ function CommentCodeContext({
 }): React.JSX.Element | null {
   const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
   const [error, setError] = useState(false)
-  const [contextBefore, setContextBefore] = useState(0)
-  const [contextAfter, setContextAfter] = useState(0)
+  const [contextExpansionState, setContextExpansionState] = useState(() =>
+    createCommentCodeContextExpansionState(comment.id)
+  )
   const file = useMemo(
     () => files.find((candidate) => candidate.path === comment.path),
     [comment.path, files]
@@ -941,7 +2395,7 @@ function CommentCodeContext({
       return
     }
     let cancelled = false
-    loadPRFileContents({ repoPath, prNumber, file, headSha, baseSha })
+    loadPRFileContents({ repoPath, repoId, sourceContext, prNumber, file, headSha, baseSha })
       .then((result) => {
         if (!cancelled) {
           setContents(result)
@@ -955,12 +2409,39 @@ function CommentCodeContext({
     return () => {
       cancelled = true
     }
-  }, [baseSha, file, headSha, line, prNumber, repoPath])
+  }, [baseSha, file, headSha, line, prNumber, repoId, repoPath, sourceContext])
 
-  useEffect(() => {
-    setContextBefore(0)
-    setContextAfter(0)
-  }, [comment.id])
+  const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
+    contextExpansionState,
+    comment.id
+  )
+  if (resolvedContextExpansionState !== contextExpansionState) {
+    // Why: comment rows can be reused when a PR refreshes; reset before paint
+    // so expanded context from the previous comment is never shown on the next.
+    setContextExpansionState(resolvedContextExpansionState)
+  }
+  const contextBefore = resolvedContextExpansionState.contextBefore
+  const contextAfter = resolvedContextExpansionState.contextAfter
+  const setContextBefore = useCallback(
+    (contextBeforeUpdate: CommentCodeContextLineUpdate) => {
+      setContextExpansionState((current) =>
+        updateCommentCodeContextExpansionState(current, comment.id, {
+          contextBefore: contextBeforeUpdate
+        })
+      )
+    },
+    [comment.id]
+  )
+  const setContextAfter = useCallback(
+    (contextAfterUpdate: CommentCodeContextLineUpdate) => {
+      setContextExpansionState((current) =>
+        updateCommentCodeContextExpansionState(current, comment.id, {
+          contextAfter: contextAfterUpdate
+        })
+      )
+    },
+    [comment.id]
+  )
 
   if (!comment.path || !line || !file || file.isBinary || error) {
     return null
@@ -970,9 +2451,13 @@ function CommentCodeContext({
     return (
       <div className="mb-3 flex items-center gap-2 rounded-md border border-border/40 bg-muted/20 px-3 py-2 text-[12px] text-muted-foreground">
         <LoaderCircle className="size-3.5 animate-spin" />
-        Loading code context…
+        {translate('auto.components.GitHubItemDialog.db61d76cd5', 'Loading code context…')}
       </div>
     )
+  }
+
+  if (getPRFileContentsRenderLimit(contents).limited) {
+    return null
   }
 
   const source = contents.modified || contents.original
@@ -1019,16 +2504,31 @@ function CommentCodeContext({
           <span className="truncate font-mono">{comment.path}</span>
           <span className="shrink-0 font-mono">
             L{from}
-            {to !== from ? `-L${to}` : ''}
+            {to !== from
+              ? translate('auto.components.GitHubItemDialog.d1c0dad471', '-L{{value0}}', {
+                  value0: to
+                })
+              : ''}
           </span>
           {(from !== commentFrom || to !== commentTo) && (
             <span className="shrink-0 font-mono text-muted-foreground/70">
-              comment L{commentFrom}
-              {commentTo !== commentFrom ? `-L${commentTo}` : ''}
+              {translate('auto.components.GitHubItemDialog.bd7be7b1fd', 'comment L')}
+              {commentFrom}
+              {commentTo !== commentFrom
+                ? translate('auto.components.GitHubItemDialog.d1c0dad471', '-L{{value0}}', {
+                    value0: commentTo
+                  })
+                : ''}
             </span>
           )}
         </div>
-        <ButtonGroup className="text-muted-foreground" aria-label="Code context controls">
+        <ButtonGroup
+          className="text-muted-foreground"
+          aria-label={translate(
+            'auto.components.GitHubItemDialog.d43736d09c',
+            'Code context controls'
+          )}
+        >
           {(contextBefore > 0 || contextAfter > 0) && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1041,12 +2541,17 @@ function CommentCodeContext({
                     setContextBefore(0)
                     setContextAfter(0)
                   }}
-                  aria-label="Reset code context"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.b1574e8ac2',
+                    'Reset code context'
+                  )}
                 >
                   <UndoDot className="size-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Reset code context</TooltipContent>
+              <TooltipContent>
+                {translate('auto.components.GitHubItemDialog.b1574e8ac2', 'Reset code context')}
+              </TooltipContent>
             </Tooltip>
           )}
           <Tooltip>
@@ -1062,12 +2567,18 @@ function CommentCodeContext({
                     Math.min(current + CODE_CONTEXT_EXPAND_STEP, commentFrom - 1)
                   )
                 }
-                aria-label={`Show ${CODE_CONTEXT_EXPAND_STEP} more lines above`}
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.307c98e8e3',
+                  'Show {{value0}} more lines above',
+                  { value0: CODE_CONTEXT_EXPAND_STEP }
+                )}
               >
                 <ArrowUp className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Show more lines above</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.GitHubItemDialog.5664681624', 'Show more lines above')}
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1082,12 +2593,18 @@ function CommentCodeContext({
                     Math.min(current + CODE_CONTEXT_EXPAND_STEP, lines.length - commentTo)
                   )
                 }
-                aria-label={`Show ${CODE_CONTEXT_EXPAND_STEP} more lines below`}
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.307c98e8e3',
+                  'Show {{value0}} more lines below',
+                  { value0: CODE_CONTEXT_EXPAND_STEP }
+                )}
               >
                 <ArrowDown className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Show more lines below</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.GitHubItemDialog.06c06e58ba', 'Show more lines below')}
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1150,67 +2667,143 @@ function CommentCodeContext({
 function ConversationTab({
   item,
   repoPath,
+  sourceContext,
   body,
   comments,
   files,
   headSha,
   baseSha,
   loading,
+  detailsLoaded,
   checks,
-  participants: detailsParticipants,
-  onUse,
-  onCommentAdded
+  localState,
+  onStateChange,
+  projectOrigin,
+  onMutated,
+  onChecksUpdated,
+  onBodyUpdated,
+  onCommentAdded,
+  onReviewersRequested
 }: {
   item: GitHubWorkItem
   repoPath: string | null
+  repoId: string | null
+  sourceContext?: TaskSourceContext | null
   body: string
   comments: PRComment[]
   files: GitHubPRFile[]
   headSha: string | undefined
   baseSha: string | undefined
   loading: boolean
+  detailsLoaded: boolean
   checks: GitHubWorkItemDetails['checks']
-  participants: GitHubAssignableUser[]
-  onUse: (item: GitHubWorkItem) => void
+  localState: GitHubWorkItem['state']
+  onStateChange: (state: GitHubWorkItem['state']) => void
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  onMutated: () => void
+  onChecksUpdated: (checks: PRCheckDetail[]) => void
+  onBodyUpdated: (body: string) => void
   onCommentAdded: (comment: PRComment) => void
+  onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
   const authorLabel = item.author ?? 'unknown'
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
-  const repoAssignees = useRepoAssignees(repoPath)
+  const [bodyDraft, setBodyDraft] = useState(body)
+  const [bodyEditing, setBodyEditing] = useState(false)
+  const [bodySaving, setBodySaving] = useState(false)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
   const visibleComments = useMemo(
     () => filterPRCommentsByAudience(comments, commentFilter),
     [commentFilter, comments]
   )
   const visibleCommentGroups = useMemo(() => groupPRComments(visibleComments), [visibleComments])
-  const mentionOptions = useMemo(
-    () =>
-      buildMentionOptions({
-        item,
-        comments,
-        participants: detailsParticipants,
-        assignableUsers: repoAssignees.data
-      }),
-    [comments, detailsParticipants, item, repoAssignees.data]
-  )
+  const resolvedReplyingTo = resolveCommentReplyTarget(replyingTo, visibleComments)
 
-  useEffect(() => {
-    if (replyingTo !== null && !visibleComments.some((comment) => comment.id === replyingTo)) {
-      setReplyingTo(null)
+  if (resolvedReplyingTo !== replyingTo) {
+    // Why: comment filters/refetches can hide the active reply target; clear it
+    // before paint so a stale composer does not flash for the wrong comment set.
+    setReplyingTo(resolvedReplyingTo)
+  }
+
+  const resolvedBodyDraft = resolveGitHubBodyDraft(bodyDraft, body, bodyEditing)
+  if (shouldSyncGitHubBodyDraft(bodyDraft, body, bodyEditing)) {
+    // Why: background detail refreshes can change the body while the editor is
+    // closed; reconcile before paint so reopening never sees a stale draft.
+    setBodyDraft(resolvedBodyDraft)
+  }
+
+  const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const markdownGitHubRepo = useMemo(
+    () => (projectOrigin ? { owner: projectOrigin.owner, repo: projectOrigin.repo } : bodySlug),
+    [bodySlug, projectOrigin]
+  )
+  const canEditBody =
+    item.type === 'pr' ? Boolean(projectOrigin || bodySlug) : Boolean(projectOrigin || repoPath)
+  const bodyChanged = resolvedBodyDraft !== body
+
+  const handleSaveBody = useCallback(async (): Promise<void> => {
+    if (bodySaving || !bodyChanged) {
+      setBodyEditing(false)
+      return
     }
-  }, [replyingTo, visibleComments])
+    setBodySaving(true)
+    try {
+      await runWorkItemBodyUpdate({
+        item,
+        repoPath,
+        sourceContext,
+        projectOrigin,
+        body: resolvedBodyDraft,
+        parsedSlug: bodySlug
+      })
+      onBodyUpdated(resolvedBodyDraft)
+      setBodyEditing(false)
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        translate('auto.components.GitHubItemDialog.5221548274', 'Description updated.')
+      )
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.GitHubItemDialog.58c73cb0d8',
+              'Failed to update description.'
+            )
+      )
+    } finally {
+      setBodySaving(false)
+    }
+  }, [
+    bodyChanged,
+    resolvedBodyDraft,
+    bodySaving,
+    bodySlug,
+    item,
+    onBodyUpdated,
+    projectOrigin,
+    repoPath,
+    sourceContext
+  ])
 
   const handleReply = useCallback(
     async (comment: PRComment, replyBody: string): Promise<boolean> => {
       if (!repoPath) {
-        toast.error('Unable to reply without a repository path.')
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.745c9089ec',
+            'Unable to reply without a repository path.'
+          )
+        )
         return false
       }
       const result =
         comment.path && item.type === 'pr'
-          ? await window.api.gh.addPRReviewCommentReply({
+          ? await addPRReviewCommentReplyForRepo({
               repoPath,
+              repoId: item.repoId,
+              sourceContext,
               prNumber: item.number,
               commentId: comment.id,
               body: replyBody,
@@ -1218,47 +2811,61 @@ function ConversationTab({
               path: comment.path,
               line: comment.line
             })
-          : await window.api.gh.addIssueComment({
+          : await addIssueCommentForRepo({
               repoPath,
+              repoId: item.repoId,
+              sourceContext,
               number: item.number,
               body: `@${comment.author} ${replyBody}`,
               type: item.type
             })
 
       if (!result.ok) {
-        toast.error(result.error || 'Failed to post reply.')
+        toast.error(
+          result.error ||
+            translate('auto.components.GitHubItemDialog.283699bc82', 'Failed to post reply.')
+        )
         return false
       }
       onCommentAdded(result.comment)
       setReplyingTo(null)
-      toast.success('Reply posted.')
+      toast.success(translate('auto.components.GitHubItemDialog.10f4ff5be8', 'Reply posted.'))
       return true
     },
-    [item.number, item.type, onCommentAdded, repoPath]
-  )
-
-  const startWorkspaceButton = (
-    <Button
-      onClick={() => onUse(item)}
-      className="w-full justify-center gap-2"
-      aria-label={`Start workspace from ${item.type === 'pr' ? 'PR' : 'issue'}`}
-    >
-      {`Start workspace from ${item.type === 'pr' ? 'PR' : 'issue'}`}
-      <ArrowRight className="size-4" />
-    </Button>
+    [item.number, item.repoId, item.type, onCommentAdded, repoPath, sourceContext]
   )
 
   const rightPanel =
     item.type === 'pr' ? (
       <div className="flex h-fit flex-col gap-3 xl:sticky xl:top-4">
-        {startWorkspaceButton}
-        <aside className="rounded-lg border border-border/50 bg-background/30">
-          <div className="flex h-10 items-center gap-2 border-b border-border/50 px-3">
-            <CircleDashed className="size-3.5 text-muted-foreground" />
-            <span className="text-[13px] font-medium text-foreground">Checks</span>
-            <span className="text-[12px] text-muted-foreground">{(checks ?? []).length}</span>
-          </div>
-          <ChecksTab checks={checks} loading={loading} />
+        <PRActionsPanel
+          item={item}
+          repoPath={repoPath}
+          repoId={item.repoId}
+          sourceContext={sourceContext}
+          projectOrigin={projectOrigin}
+          localState={localState}
+          onStateChange={onStateChange}
+          onMutated={onMutated}
+        />
+        <PRReviewersPanel
+          item={item}
+          loading={loading}
+          repoPath={repoPath}
+          sourceContext={sourceContext}
+          onReviewersRequested={onReviewersRequested}
+        />
+        <aside className="overflow-hidden rounded-lg border border-border/50 bg-card/50 shadow-xs">
+          <ChecksTab
+            item={item}
+            repoPath={repoPath}
+            repoId={item.repoId}
+            sourceContext={sourceContext}
+            headSha={headSha}
+            checks={checks}
+            loading={loading || !detailsLoaded}
+            onChecksUpdated={onChecksUpdated}
+          />
         </aside>
       </div>
     ) : null
@@ -1267,12 +2874,12 @@ function ConversationTab({
     <div
       key={comment.id}
       className={cn(
-        'rounded-lg border border-border/40 bg-background/30',
-        isReply && 'ml-6',
+        'min-w-0 overflow-hidden rounded-lg border border-border/40 bg-card/50 shadow-xs',
+        isReply && 'ml-6 max-w-[calc(100%-1.5rem)]',
         comment.isResolved && PR_COMMENT_RESOLVED_CONTAINER_CLASS
       )}
     >
-      <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2">
         {comment.authorAvatarUrl ? (
           <img
             src={comment.authorAvatarUrl}
@@ -1284,27 +2891,31 @@ function ConversationTab({
         )}
         <span
           className={cn(
-            'text-[13px] font-semibold',
+            'min-w-0 truncate text-[13px] font-semibold',
             comment.isResolved ? PR_COMMENT_RESOLVED_AUTHOR_CLASS : PR_COMMENT_OPEN_AUTHOR_CLASS
           )}
         >
           {comment.author}
         </span>
-        <span className="text-[12px] text-muted-foreground">
+        <span className="shrink-0 text-[12px] text-muted-foreground">
           · {formatRelativeTime(comment.createdAt)}
         </span>
         {comment.path && (
-          <span className="font-mono text-[11px] text-muted-foreground/70">
+          <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">
             {comment.path.split('/').pop()}
-            {comment.line ? `:L${comment.line}` : ''}
+            {comment.line
+              ? translate('auto.components.GitHubItemDialog.136542c9ba', ':L{{value0}}', {
+                  value0: comment.line
+                })
+              : ''}
           </span>
         )}
         {comment.isResolved && (
           <span className="rounded-full border border-border/60 bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground">
-            resolved
+            {translate('auto.components.GitHubItemDialog.68cb993d61', 'resolved')}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -1314,12 +2925,17 @@ function ConversationTab({
                 onClick={() =>
                   setReplyingTo((current) => (current === comment.id ? null : comment.id))
                 }
-                aria-label="Reply to comment"
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.bca8eb39ac',
+                  'Reply to comment'
+                )}
               >
                 <MessageSquarePlus className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Reply to comment</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.GitHubItemDialog.bca8eb39ac', 'Reply to comment')}
+            </TooltipContent>
           </Tooltip>
           {comment.url && (
             <Tooltip>
@@ -1330,20 +2946,27 @@ function ConversationTab({
                   size="icon-xs"
                   className="size-7"
                   onClick={() => window.api.shell.openUrl(comment.url)}
-                  aria-label="Open comment on GitHub"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.a154ec5224',
+                    'Open comment on GitHub'
+                  )}
                 >
                   <ExternalLink className="size-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Open comment on GitHub</TooltipContent>
+              <TooltipContent>
+                {translate('auto.components.GitHubItemDialog.a154ec5224', 'Open comment on GitHub')}
+              </TooltipContent>
             </Tooltip>
           )}
         </div>
       </div>
-      <div className="px-3 py-2">
+      <div className="min-w-0 px-3 py-2">
         <CommentCodeContext
           comment={comment}
           repoPath={repoPath}
+          repoId={item.repoId}
+          sourceContext={sourceContext}
           prNumber={item.number}
           files={files}
           headSha={headSha}
@@ -1352,16 +2975,23 @@ function ConversationTab({
         <CommentMarkdown
           content={comment.body}
           variant="document"
-          className="text-[13px] leading-relaxed"
+          githubRepo={markdownGitHubRepo}
+          className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
         />
         <CommentReactions reactions={comment.reactions} />
-        {replyingTo === comment.id && (
+        {resolvedReplyingTo === comment.id && (
           <CommentReplyForm
             className="mt-3"
             placeholder={
-              comment.path ? 'Reply in this review thread' : `Reply to @${comment.author}`
+              comment.path
+                ? translate(
+                    'auto.components.GitHubItemDialog.86f809e2ce',
+                    'Reply in this review thread'
+                  )
+                : translate('auto.components.GitHubItemDialog.080d071d48', 'Reply to @{{value0}}', {
+                    value0: comment.author
+                  })
             }
-            mentionOptions={mentionOptions}
             onCancel={() => setReplyingTo(null)}
             onSubmit={(replyBody) => handleReply(comment, replyBody)}
           />
@@ -1381,7 +3011,7 @@ function ConversationTab({
 
     if (!isResolvedPRCommentGroup(group)) {
       return (
-        <div key={getPRCommentGroupId(group)} className="flex flex-col gap-3">
+        <div key={getPRCommentGroupId(group)} className="flex min-w-0 flex-col gap-3">
           {cards}
         </div>
       )
@@ -1393,15 +3023,19 @@ function ConversationTab({
       <Accordion key={getPRCommentGroupId(group)} type="single" collapsible>
         <AccordionItem
           value={getPRCommentGroupId(group)}
-          className="rounded-lg border border-border/40 bg-background/20"
+          className="rounded-lg border border-border/40 bg-card/40"
         >
           <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
             <span className="min-w-0 truncate">
-              Resolved {group.kind === 'thread' ? 'thread' : 'comment'} by {root.author}
+              {translate('auto.components.GitHubItemDialog.228e2f59d3', 'Resolved')}{' '}
+              {group.kind === 'thread'
+                ? translate('auto.components.GitHubItemDialog.28d0d3374f', 'thread')
+                : translate('auto.components.GitHubItemDialog.e2bf3e41a9', 'comment')}{' '}
+              {translate('auto.components.GitHubItemDialog.0ae387d8ca', 'by')} {root.author}
               {count > 1 ? ` (${count})` : ''}
             </span>
           </AccordionTrigger>
-          <AccordionContent className="flex flex-col gap-3 px-3 pb-3 pt-0">
+          <AccordionContent className="flex min-w-0 flex-col gap-3 px-3 pb-3 pt-0">
             {cards}
           </AccordionContent>
         </AccordionItem>
@@ -1412,81 +3046,177 @@ function ConversationTab({
   return (
     <div
       className={cn(
-        'grid gap-4 px-4 py-4',
-        item.type === 'pr' && 'xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]'
+        'grid min-w-0 gap-5 px-4 py-4',
+        // Why: the drawer expands nearly full-width on narrow app windows, so
+        // keep PR controls beside the conversation instead of hiding them below
+        // long review threads.
+        item.type === 'pr' && 'grid-cols-[minmax(0,1fr)_300px]'
       )}
     >
       <div className="flex min-w-0 flex-col gap-4">
-        <div className="rounded-lg border border-border/50 bg-background/40">
+        <div className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
           <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
             <span className="font-medium text-foreground">{authorLabel}</span>
-            <span>· {formatRelativeTime(item.updatedAt)}</span>
+            <span>
+              {translate('auto.components.GitHubItemDialog.8223320f8d', 'updated')}{' '}
+              {formatRelativeTime(item.updatedAt)}
+            </span>
+            {canEditBody && !loading && detailsLoaded ? (
+              bodyEditing ? (
+                <div className="ml-auto flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="gap-1.5"
+                    disabled={bodySaving}
+                    onClick={() => {
+                      setBodyDraft(body)
+                      setBodyEditing(false)
+                    }}
+                  >
+                    <X className="size-3.5" />
+                    {translate('auto.components.GitHubItemDialog.675bc0d638', 'Cancel')}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    className="gap-1.5"
+                    disabled={bodySaving || !bodyChanged}
+                    onClick={() => void handleSaveBody()}
+                  >
+                    {bodySaving ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <Check className="size-3.5" />
+                    )}
+                    {translate('auto.components.GitHubItemDialog.9df4e74bdf', 'Save')}
+                  </Button>
+                </div>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      className="ml-auto size-7"
+                      onClick={() => {
+                        setBodyDraft(body)
+                        setBodyEditing(true)
+                      }}
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.4d555d3796',
+                        'Edit description'
+                      )}
+                    >
+                      <Pencil className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {translate('auto.components.GitHubItemDialog.4d555d3796', 'Edit description')}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            ) : null}
           </div>
-          <div className="px-3 py-3 text-[14px] leading-relaxed text-foreground">
-            {body.trim() ? (
+          <div className="px-4 py-4 text-[14px] leading-relaxed text-foreground">
+            {loading && !detailsLoaded ? (
+              <div className="flex items-center justify-center py-5">
+                <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : bodyEditing ? (
+              <GitHubMarkdownComposer
+                value={resolvedBodyDraft}
+                onChange={setBodyDraft}
+                placeholder={translate(
+                  'auto.components.GitHubItemDialog.52b20b56f7',
+                  'Description'
+                )}
+                disabled={bodySaving}
+                autoFocus
+                minHeightClassName="min-h-64"
+                onSubmitShortcut={() => void handleSaveBody()}
+              />
+            ) : body.trim() ? (
               <CommentMarkdown
                 content={body}
                 variant="document"
-                className="text-[14px] leading-relaxed"
+                githubRepo={markdownGitHubRepo}
+                className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
               />
             ) : (
-              <span className="italic text-muted-foreground">No description provided.</span>
+              <span className="italic text-muted-foreground">
+                {translate(
+                  'auto.components.GitHubItemDialog.9b9cb55994',
+                  'No description provided.'
+                )}
+              </span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 pt-1">
-          <MessageSquare className="size-4 text-muted-foreground" />
-          <span className="text-[13px] font-medium text-foreground">Comments</span>
-          {comments.length > 0 && (
-            <span className="text-[12px] text-muted-foreground">{comments.length}</span>
-          )}
-        </div>
+        {detailsLoaded ? (
+          <>
+            <div className="flex items-center gap-2 pt-1">
+              <MessageSquare className="size-4 text-muted-foreground" />
+              <span className="text-[13px] font-medium text-foreground">
+                {translate('auto.components.GitHubItemDialog.1506916c09', 'Comments')}
+              </span>
+              {comments.length > 0 && (
+                <span className="rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+                  {comments.length}
+                </span>
+              )}
+            </div>
 
-        {item.type === 'pr' && comments.length > 0 && (
-          <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
-            {PR_COMMENT_AUDIENCE_FILTERS.map((filter) => {
-              const isActive = commentFilter === filter.value
-              return (
-                <button
-                  key={filter.value}
-                  type="button"
-                  className={cn(
-                    'flex h-8 items-center justify-center gap-1 rounded-md px-2 text-[12px] font-medium text-muted-foreground transition-colors',
-                    isActive && 'bg-muted text-foreground'
-                  )}
-                  aria-pressed={isActive}
-                  onClick={() => setCommentFilter(filter.value)}
-                >
-                  <span>{filter.label}</span>
-                  <span className="tabular-nums">{commentCounts[filter.value]}</span>
-                </button>
-              )
-            })}
-          </div>
-        )}
+            {item.type === 'pr' && comments.length > 0 && (
+              <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
+                {getPrCommentAudienceFilters().map((filter) => {
+                  const isActive = commentFilter === filter.value
+                  return (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      className={cn(
+                        'flex h-8 items-center justify-center gap-1 rounded-md px-2 text-[12px] font-medium text-muted-foreground transition-colors',
+                        isActive && 'bg-muted text-foreground'
+                      )}
+                      aria-pressed={isActive}
+                      onClick={() => setCommentFilter(filter.value)}
+                    >
+                      <span>{filter.label}</span>
+                      <span className="tabular-nums">{commentCounts[filter.value]}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
-        {loading && comments.length === 0 ? (
-          <div className="flex items-center justify-center py-6">
-            <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-          </div>
-        ) : comments.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">No comments yet.</p>
-        ) : visibleComments.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground">
-            {getPRCommentAudienceEmptyLabel(commentFilter)}
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3">{visibleCommentGroups.map(renderCommentGroup)}</div>
-        )}
+            {comments.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
+                {translate('auto.components.GitHubItemDialog.5a94f3d0e9', 'No comments yet.')}
+              </div>
+            ) : visibleComments.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-center text-[13px] text-muted-foreground">
+                {getPRCommentAudienceEmptyLabel(commentFilter)}
+              </div>
+            ) : (
+              <div className="flex min-w-0 flex-col gap-3">
+                {visibleCommentGroups.map(renderCommentGroup)}
+              </div>
+            )}
+          </>
+        ) : null}
 
-        {repoPath && (
+        {detailsLoaded && repoPath && (
           <GHCommentComposer
             className="mt-1"
             repoPath={repoPath}
+            repoId={item.repoId}
+            sourceContext={sourceContext}
             issueNumber={item.number}
             itemType={item.type}
-            mentionOptions={mentionOptions}
             onCommentAdded={onCommentAdded}
           />
         )}
@@ -1494,6 +3224,304 @@ function ConversationTab({
 
       {rightPanel}
     </div>
+  )
+}
+
+function PRActionsPanel({
+  item,
+  repoPath,
+  repoId,
+  sourceContext,
+  projectOrigin,
+  localState,
+  onStateChange,
+  onMutated
+}: {
+  item: GitHubWorkItem
+  repoPath: string | null
+  repoId: string | null
+  sourceContext?: TaskSourceContext | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  localState: GitHubWorkItem['state']
+  onStateChange: (state: GitHubWorkItem['state']) => void
+  onMutated: () => void
+}): React.JSX.Element {
+  const [statePending, setStatePending] = useState(false)
+  const [mergePending, setMergePending] = useState(false)
+  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+  const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const confirm = useConfirmationDialog()
+  const actionItem = { ...item, state: localState }
+  const mergePresentation = presentGitHubPRMergeState(actionItem)
+  const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
+  const canMutateState = localState !== 'merged' && (!!repoPath || !!projectOrigin)
+  const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
+  const mergeDisabled = !repoPath || mergePending || !mergePresentation.directMergeAvailable
+
+  const patchProjectRowIfNeeded = useCallback(
+    (state: GitHubWorkItem['state']) => {
+      if (!projectOrigin) {
+        return
+      }
+      patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, { state })
+    },
+    [patchProjectRowContent, projectOrigin]
+  )
+
+  const applyStatePatch = useCallback(
+    (state: GitHubWorkItem['state']) => {
+      onStateChange(state)
+      patchWorkItem(item.id, { state }, item.repoId, { sourceContext })
+      patchProjectRowIfNeeded(state)
+    },
+    [item.id, item.repoId, onStateChange, patchProjectRowIfNeeded, patchWorkItem, sourceContext]
+  )
+
+  const handleStateChange = async (): Promise<void> => {
+    if (!canMutateState || statePending) {
+      return
+    }
+    const label = nextState === 'closed' ? 'Close' : 'Reopen'
+    const confirmed = await confirm({
+      title: translate(
+        'auto.components.GitHubItemDialog.03d7216d62',
+        '{{value0}} PR #{{value1}}?',
+        { value0: label, value1: item.number }
+      ),
+      description:
+        nextState === 'closed'
+          ? translate(
+              'auto.components.GitHubItemDialog.de45fedf7b',
+              'This will close the pull request on GitHub.'
+            )
+          : translate(
+              'auto.components.GitHubItemDialog.b6f1b7adbd',
+              'This will reopen the pull request on GitHub.'
+            ),
+      confirmLabel: label,
+      confirmVariant: nextState === 'closed' ? 'destructive' : 'default'
+    })
+    if (!confirmed) {
+      return
+    }
+    const previousState = localState
+    setStatePending(true)
+    applyStatePatch(nextState)
+    try {
+      await runPullRequestStateUpdate({
+        repoPath,
+        repoId,
+        sourceContext,
+        projectOrigin,
+        number: item.number,
+        updates: { state: nextState }
+      })
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        nextState === 'closed'
+          ? translate('auto.components.GitHubItemDialog.9f88657c4e', 'Pull request closed')
+          : translate('auto.components.GitHubItemDialog.bd3b4492a0', 'Pull request reopened')
+      )
+      onMutated()
+    } catch (err) {
+      applyStatePatch(previousState)
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.GitHubItemDialog.e9b7cb7d17', 'Failed to {{value0}} PR', {
+              value0: label.toLowerCase()
+            })
+      )
+    } finally {
+      setStatePending(false)
+    }
+  }
+
+  const handleMerge = async (method: GitHubPRMergeMethod): Promise<void> => {
+    if (!repoPath || mergeDisabled) {
+      return
+    }
+    const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
+    const confirmed = await confirm({
+      title: translate(
+        'auto.components.GitHubItemDialog.03d7216d62',
+        '{{value0}} PR #{{value1}}?',
+        { value0: label, value1: item.number }
+      ),
+      description: translate(
+        'auto.components.GitHubItemDialog.a27ee5ca1a',
+        'This will update the pull request on GitHub.'
+      ),
+      confirmLabel: label
+    })
+    if (!confirmed) {
+      return
+    }
+    setMergePending(true)
+    try {
+      const result = await window.api.gh.mergePR({
+        repoPath,
+        repoId: repoId ?? undefined,
+        sourceContext,
+        prNumber: item.number,
+        method,
+        prRepo: item.prRepo ?? null
+      })
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      applyStatePatch('merged')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(translate('auto.components.GitHubItemDialog.dbe5e2448e', 'Pull request merged'))
+      onMutated()
+    } catch {
+      toast.error(
+        translate('auto.components.GitHubItemDialog.aba792c8b3', 'Failed to merge pull request')
+      )
+    } finally {
+      setMergePending(false)
+    }
+  }
+
+  const handleAutoMerge = async (): Promise<void> => {
+    if (!repoPath || !mergePresentation.autoMergeAction) {
+      return
+    }
+    const enabled = mergePresentation.autoMergeAction.kind === 'enable'
+    setMergePending(true)
+    try {
+      const result = await window.api.gh.setPRAutoMerge({
+        repoPath,
+        repoId: repoId ?? undefined,
+        sourceContext,
+        prNumber: item.number,
+        enabled,
+        method: enabled ? mergeMethods.defaultMethod : undefined,
+        prRepo: item.prRepo ?? null
+      })
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      toast.success(
+        enabled
+          ? translate('auto.components.GitHubItemDialog.a35ea5a0f6', 'Auto-merge enabled')
+          : translate('auto.components.GitHubItemDialog.4b390bd50d', 'Auto-merge disabled')
+      )
+      onMutated()
+    } catch {
+      toast.error(
+        enabled
+          ? translate('auto.components.GitHubItemDialog.825a8fb8cd', 'Failed to enable auto-merge')
+          : translate('auto.components.GitHubItemDialog.ce360fc318', 'Failed to disable auto-merge')
+      )
+    } finally {
+      setMergePending(false)
+    }
+  }
+
+  return (
+    <aside className="rounded-lg border border-border/50 bg-card/50 p-3 shadow-xs">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <GitPullRequest className="size-3.5 text-muted-foreground" />
+          <span className="text-[13px] font-medium text-foreground">
+            {translate('auto.components.GitHubItemDialog.a2495e4784', 'Pull request')}
+          </span>
+        </div>
+        <WorkItemStateBadge item={actionItem} />
+      </div>
+
+      <div className="grid gap-2">
+        <DropdownMenu modal={false}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  className={cn(
+                    'w-full justify-center gap-2 bg-green-600 text-white hover:bg-green-700',
+                    'disabled:cursor-not-allowed disabled:opacity-50'
+                  )}
+                >
+                  {mergePending ? (
+                    <LoaderCircle className="size-3.5 animate-spin" />
+                  ) : (
+                    <GitMerge className="size-3.5" />
+                  )}
+                  {mergePresentation.autoMergeAction?.label ??
+                    (mergePresentation.directMergeAvailable
+                      ? mergeMethods.defaultLabel
+                      : mergePresentation.label)}
+                  <ChevronDown className="size-3 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {!repoPath
+                ? translate(
+                    'auto.components.GitHubItemDialog.5932578f51',
+                    'Merge requires a registered local repo'
+                  )
+                : mergePresentation.tooltip}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="start" className="w-52">
+            {mergePresentation.autoMergeAction && (
+              <DropdownMenuItem
+                disabled={!repoPath || mergePending}
+                onSelect={() => void handleAutoMerge()}
+              >
+                <GitMerge className="size-4" />
+                {mergePresentation.autoMergeAction.label}
+              </DropdownMenuItem>
+            )}
+            {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
+            {mergeMethods.methods.map(({ method, label }) => (
+              <DropdownMenuItem
+                key={method}
+                disabled={mergeDisabled}
+                onSelect={() => void handleMerge(method)}
+              >
+                <GitMerge className="size-4" />
+                {label}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
+              <ExternalLink className="size-4" />
+              {translate('auto.components.GitHubItemDialog.53fe19aefc', 'Open GitHub merge box')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <Button
+          type="button"
+          variant={nextState === 'closed' ? 'outline' : 'secondary'}
+          size="sm"
+          className={cn(
+            'w-full justify-center gap-2',
+            nextState === 'closed' &&
+              'border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
+          )}
+          disabled={!canMutateState || statePending}
+          onClick={() => void handleStateChange()}
+        >
+          {statePending ? (
+            <LoaderCircle className="size-3.5 animate-spin" />
+          ) : nextState === 'closed' ? (
+            <GitPullRequestClosed className="size-3.5 text-destructive" />
+          ) : (
+            <CircleDot className="size-3.5" />
+          )}
+          {nextState === 'closed'
+            ? translate('auto.components.GitHubItemDialog.21860b58d0', 'Close pull request')
+            : translate('auto.components.GitHubItemDialog.ec5c4b3ab2', 'Reopen PR')}
+        </Button>
+      </div>
+    </aside>
   )
 }
 
@@ -1513,7 +3541,15 @@ function CommentReactions({
         <span
           key={reaction.content}
           className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/35 px-2 text-[12px] leading-none text-foreground"
-          aria-label={`${reaction.count} ${reaction.content} reaction${reaction.count === 1 ? '' : 's'}`}
+          aria-label={translate(
+            'auto.components.GitHubItemDialog.a18f669c7a',
+            '{{value0}} {{value1}} reaction{{value2}}',
+            {
+              value0: reaction.count,
+              value1: reaction.content,
+              value2: reaction.count === 1 ? '' : 's'
+            }
+          )}
         >
           <span aria-hidden="true">{REACTION_EMOJI[reaction.content]}</span>
           <span className="tabular-nums">{reaction.count}</span>
@@ -1526,23 +3562,17 @@ function CommentReactions({
 function CommentReplyForm({
   className,
   placeholder,
-  mentionOptions,
   onCancel,
   onSubmit
 }: {
   className?: string
   placeholder: string
-  mentionOptions: MentionOption[]
   onCancel: () => void
   onSubmit: (body: string) => Promise<boolean>
 }): React.JSX.Element {
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    textareaRef.current?.focus()
-  }, [])
+  const mountedRef = useMountedRef()
 
   const submit = useCallback(async () => {
     const trimmed = body.trim()
@@ -1552,242 +3582,891 @@ function CommentReplyForm({
     setSubmitting(true)
     try {
       const ok = await onSubmit(trimmed)
+      if (!mountedRef.current) {
+        return
+      }
       if (ok) {
         setBody('')
       }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
-  }, [body, onSubmit, submitting])
+  }, [body, mountedRef, onSubmit, submitting])
 
   return (
     <div className={cn('rounded-md border border-border/50 bg-background/60 p-2', className)}>
-      <MentionTextarea
-        textareaRef={textareaRef}
+      <GitHubMarkdownComposer
         value={body}
-        onValueChange={setBody}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.preventDefault()
-            onCancel()
-            return
-          }
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault()
-            void submit()
-          }
-        }}
+        onChange={setBody}
         placeholder={placeholder}
-        rows={3}
-        mentionOptions={mentionOptions}
-        className="scrollbar-sleek min-h-20 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-[13px] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        disabled={submitting}
+        autoFocus
+        minHeightClassName="min-h-24"
+        onSubmitShortcut={() => void submit()}
       />
       <div className="mt-2 flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onCancel}>
-          Cancel
+          {translate('auto.components.GitHubItemDialog.675bc0d638', 'Cancel')}
         </Button>
         <Button size="sm" disabled={!body.trim() || submitting} onClick={() => void submit()}>
-          {submitting ? 'Posting…' : 'Reply'}
+          {submitting
+            ? translate('auto.components.GitHubItemDialog.5752c25aff', 'Posting…')
+            : translate('auto.components.GitHubItemDialog.f64dd90102', 'Reply')}
         </Button>
       </div>
     </div>
   )
+}
+
+const CHECK_SORT_ORDER: Record<string, number> = {
+  failure: 0,
+  timed_out: 0,
+  cancelled: 1,
+  pending: 2,
+  neutral: 3,
+  skipped: 4,
+  success: 5
+}
+
+function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
+  return check.conclusion ?? 'pending'
+}
+
+function getCheckStatusLabel(check: PRCheckDetail): string {
+  const conclusion = getCheckConclusion(check)
+  if (conclusion === 'success') {
+    return 'Successful'
+  }
+  if (conclusion === 'failure') {
+    return 'Failed'
+  }
+  if (conclusion === 'cancelled') {
+    return 'Cancelled'
+  }
+  if (conclusion === 'timed_out') {
+    return 'Timed out'
+  }
+  if (conclusion === 'neutral') {
+    return 'Neutral'
+  }
+  if (conclusion === 'skipped') {
+    return 'Skipped'
+  }
+  if (check.status === 'queued') {
+    return 'Queued'
+  }
+  if (check.status === 'in_progress') {
+    return 'In progress'
+  }
+  return 'Pending'
+}
+
+function getCheckCounts(checks: PRCheckDetail[]): {
+  passing: number
+  failing: number
+  pending: number
+  skipped: number
+  neutral: number
+} {
+  return checks.reduce(
+    (counts, check) => {
+      const conclusion = getCheckConclusion(check)
+      if (conclusion === 'success') {
+        counts.passing += 1
+      } else if (['failure', 'cancelled', 'timed_out'].includes(conclusion)) {
+        counts.failing += 1
+      } else if (conclusion === 'skipped') {
+        counts.skipped += 1
+      } else if (conclusion === 'neutral') {
+        counts.neutral += 1
+      } else {
+        counts.pending += 1
+      }
+      return counts
+    },
+    { passing: 0, failing: 0, pending: 0, skipped: 0, neutral: 0 }
+  )
+}
+
+function getChecksSummaryLabel(checks: PRCheckDetail[]): string {
+  const counts = getCheckCounts(checks)
+  if (checks.length === 0) {
+    return 'No checks found'
+  }
+  if (counts.failing > 0) {
+    return `${counts.failing} ${counts.failing === 1 ? 'check' : 'checks'} failing`
+  }
+  if (counts.pending > 0) {
+    return `${counts.pending} ${counts.pending === 1 ? 'check' : 'checks'} pending`
+  }
+  if (counts.passing === checks.length) {
+    return 'All checks passing'
+  }
+  return `${counts.passing} of ${checks.length} checks passing`
+}
+
+function getCheckDetailsKey(check: PRCheckDetail): string {
+  return String(check.checkRunId ?? check.workflowRunId ?? check.url ?? check.name)
+}
+
+function formatCheckTimestamp(input: string | null | undefined): string | null {
+  if (!input) {
+    return null
+  }
+  const date = new Date(input)
+  if (Number.isNaN(date.getTime())) {
+    return null
+  }
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  })
 }
 
 function ChecksTab({
+  item,
+  repoPath,
+  repoId,
+  sourceContext,
+  headSha,
   checks,
-  loading
+  loading,
+  variant = 'compact',
+  onChecksUpdated
 }: {
+  item: GitHubWorkItem
+  repoPath: string | null
+  repoId: string | null
+  sourceContext?: TaskSourceContext | null
+  headSha: string | undefined
   checks: GitHubWorkItemDetails['checks']
   loading: boolean
+  variant?: 'compact' | 'page'
+  onChecksUpdated: (checks: PRCheckDetail[]) => void
 }): React.JSX.Element {
-  const list = checks ?? []
+  const [refreshing, setRefreshing] = useState(false)
+  const [rerunning, setRerunning] = useState(false)
+  const [fixingChecks, setFixingChecks] = useState(false)
+  const [checksState, setChecksState] = useState(() => createGitHubChecksTabState(checks))
+  const mountedRef = useMountedRef()
+  const resolvedChecksState = resolveGitHubChecksTabState(checksState, checks)
+  if (resolvedChecksState !== checksState) {
+    // Why: parent check refreshes replace the source list; clear local refresh
+    // and inline detail state before stale rows/details can paint.
+    setChecksState(resolvedChecksState)
+  }
+  const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
+  const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
+  const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
+  const sorted = [...list].sort(
+    (a, b) =>
+      (CHECK_SORT_ORDER[getCheckConclusion(a)] ?? 3) -
+      (CHECK_SORT_ORDER[getCheckConclusion(b)] ?? 3)
+  )
+  const failedChecks = getBrokenChecks(list)
+  const counts = getCheckCounts(list)
+  const summaryLabel = getChecksSummaryLabel(list)
+  const SummaryIcon =
+    counts.failing > 0
+      ? CHECK_ICON.failure
+      : counts.pending > 0
+        ? CHECK_ICON.pending
+        : list.length > 0
+          ? CHECK_ICON.success
+          : CircleDashed
+  const summaryColor =
+    counts.failing > 0
+      ? CHECK_COLOR.failure
+      : counts.pending > 0
+        ? CHECK_COLOR.pending
+        : list.length > 0
+          ? CHECK_COLOR.success
+          : 'text-muted-foreground'
+  const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
+
+  const handleRefresh = useCallback(async (): Promise<PRCheckDetail[] | null> => {
+    if (!repoPath) {
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.e7007aa1d8',
+          'Unable to refresh checks without a repository path.'
+        )
+      )
+      return null
+    }
+    setRefreshing(true)
+    try {
+      const nextChecks = (await window.api.gh.prChecks({
+        repoPath,
+        repoId: repoId ?? undefined,
+        sourceContext,
+        prNumber: item.number,
+        headSha,
+        noCache: true
+      })) as PRCheckDetail[]
+      setChecksState((current) => updateGitHubChecksTabLocalChecks(current, nextChecks))
+      onChecksUpdated(nextChecks)
+      return nextChecks
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.GitHubItemDialog.0bbdc673c1', 'Failed to refresh checks')
+      )
+      return null
+    } finally {
+      setRefreshing(false)
+    }
+  }, [headSha, item.number, onChecksUpdated, repoId, repoPath, sourceContext])
+
+  const handleRerun = useCallback(
+    async (failedOnly: boolean): Promise<void> => {
+      if (!repoPath || rerunning) {
+        return
+      }
+      setRerunning(true)
+      try {
+        const result = await window.api.gh.rerunPRChecks({
+          repoPath,
+          repoId: repoId ?? undefined,
+          sourceContext,
+          prNumber: item.number,
+          headSha,
+          failedOnly
+        })
+        if (!result.ok) {
+          toast.error(result.error)
+          return
+        }
+        toast.success(
+          result.count === 1
+            ? translate('auto.components.GitHubItemDialog.ddafe851e1', 'Check rerun requested')
+            : translate('auto.components.GitHubItemDialog.e463ec935f', 'Check reruns requested')
+        )
+        await handleRefresh()
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.GitHubItemDialog.9e7c221b8d', 'Failed to rerun checks')
+        )
+      } finally {
+        setRerunning(false)
+      }
+    },
+    [handleRefresh, headSha, item.number, rerunning, repoId, repoPath, sourceContext]
+  )
+
+  const handleFixBrokenChecks = useCallback(async (): Promise<void> => {
+    const targetRepoId = repoId ?? item.repoId
+    if (!targetRepoId || fixingChecks) {
+      return
+    }
+    if (failedChecks.length === 0) {
+      toast.message(
+        translate('auto.components.GitHubItemDialog.1690fd7f4a', 'No broken checks to fix.')
+      )
+      return
+    }
+
+    const basePrompt = buildFixBrokenChecksPrompt({
+      reviewKind: 'PR',
+      reviewNumber: item.number,
+      reviewTitle: item.title,
+      reviewUrl: item.url,
+      checks: list
+    })
+    setFixingChecks(true)
+    try {
+      const started = await startFixChecksAgent({
+        item,
+        repoId: targetRepoId,
+        basePrompt,
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
+        openModalFallback: () => {
+          toast.error(
+            translate(
+              'auto.components.GitHubItemDialog.06482d6190',
+              'Unable to create a fix workspace automatically.'
+            )
+          )
+        }
+      })
+      if (started) {
+        toast.success(
+          translate(
+            'auto.components.GitHubItemDialog.28986b3747',
+            'Started an AI agent for the broken checks.'
+          )
+        )
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('Failed to start fix checks agent', err)
+      toast.error(
+        translate(
+          'auto.components.GitHubItemDialog.03e542fcfe',
+          'Failed to start an AI agent for the broken checks: {{value0}}',
+          { value0: message }
+        )
+      )
+    } finally {
+      setFixingChecks(false)
+    }
+  }, [failedChecks.length, fixingChecks, item, list, repoId])
+
+  const handleToggleCheckDetails = useCallback(
+    (check: PRCheckDetail): void => {
+      const key = getCheckDetailsKey(check)
+      setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
+      if (
+        !repoPath ||
+        detailsByCheckKey[key] ||
+        (!check.checkRunId && !check.workflowRunId && !check.url)
+      ) {
+        return
+      }
+      setChecksState((current) =>
+        updateGitHubChecksTabDetails(current, key, {
+          loading: true,
+          details: null,
+          error: null
+        })
+      )
+      void window.api.gh
+        .prCheckDetails({
+          repoPath,
+          repoId: repoId ?? undefined,
+          checkRunId: check.checkRunId,
+          workflowRunId: check.workflowRunId,
+          checkName: check.name,
+          url: check.url,
+          prRepo
+        })
+        .then((details) => {
+          if (!mountedRef.current) {
+            return
+          }
+          setChecksState((current) =>
+            updateGitHubChecksTabDetails(current, key, {
+              loading: false,
+              details,
+              error: details ? null : 'No inline details are available for this check.'
+            })
+          )
+        })
+        .catch((err) => {
+          if (!mountedRef.current) {
+            return
+          }
+          setChecksState((current) =>
+            updateGitHubChecksTabDetails(current, key, {
+              loading: false,
+              details: null,
+              error: err instanceof Error ? err.message : 'Failed to load check details.'
+            })
+          )
+        })
+    },
+    [detailsByCheckKey, mountedRef, prRepo, repoId, repoPath]
+  )
+
+  const refreshAction = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="size-7 shrink-0"
+          disabled={!repoPath || refreshing}
+          onClick={() => void handleRefresh()}
+          aria-label={translate('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
+        >
+          <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {translate('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
+      </TooltipContent>
+    </Tooltip>
+  )
+  const fixBrokenChecksAction =
+    failedChecks.length > 0 || fixingChecks ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="h-7 gap-1 px-2 text-[11px]"
+            disabled={!canFixBrokenChecks || fixingChecks}
+            onClick={() => void handleFixBrokenChecks()}
+          >
+            {fixingChecks ? (
+              <LoaderCircle className="size-3 animate-spin" />
+            ) : (
+              <Wrench className="size-3" />
+            )}
+            {variant === 'compact'
+              ? translate('auto.components.GitHubItemDialog.9157d48ddb', 'Fix checks')
+              : translate('auto.components.GitHubItemDialog.2511f44bb7', 'Fix broken checks')}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {translate(
+            'auto.components.GitHubItemDialog.f4b1292569',
+            'Start the default AI agent on these checks'
+          )}
+        </TooltipContent>
+      </Tooltip>
+    ) : null
+  const rerunAction =
+    list.length > 0 || rerunning ? (
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="h-7 gap-1 px-2 text-[11px]"
+            disabled={!repoPath || rerunning || list.length === 0}
+          >
+            {rerunning ? (
+              <LoaderCircle className="size-3 animate-spin" />
+            ) : (
+              <RefreshCw className="size-3" />
+            )}
+            {translate('auto.components.GitHubItemDialog.1b56e28faa', 'Rerun')}
+            <ChevronDown className="size-3 opacity-60" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          <DropdownMenuItem
+            disabled={failedChecks.length === 0 || rerunning}
+            onSelect={() => void handleRerun(true)}
+          >
+            <RefreshCw className="size-4" />
+            {translate('auto.components.GitHubItemDialog.e31651a224', 'Rerun failed checks')}
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={rerunning} onSelect={() => void handleRerun(false)}>
+            <RefreshCw className="size-4" />
+            {translate('auto.components.GitHubItemDialog.71c11aff84', 'Rerun all checks')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : null
+  const secondaryActions =
+    variant === 'compact' && !fixBrokenChecksAction ? null : fixBrokenChecksAction ||
+      rerunAction ? (
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+        {fixBrokenChecksAction}
+        {variant === 'page' ? rerunAction : null}
+      </div>
+    ) : null
+  const actions = (
+    <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+      {refreshAction}
+      {fixBrokenChecksAction}
+      {rerunAction}
+    </div>
+  )
+  const compactHeader = (
+    <div className="border-b border-border/50 px-3 py-2">
+      <div className="flex min-w-0 items-start gap-2">
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          <SummaryIcon
+            className={cn(
+              'mt-0.5 size-3.5 shrink-0',
+              summaryColor,
+              counts.pending > 0 && counts.failing === 0 && 'animate-spin'
+            )}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-medium leading-5 text-foreground">
+              {translate('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
+            </div>
+            {list.length > 0 && (
+              <div className="truncate text-[11px] leading-4 text-muted-foreground">
+                {summaryLabel}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {refreshAction}
+          {list.length > 0 && (
+            <div className="[&_button]:h-7 [&_button]:px-2 [&_button]:text-[11px]">
+              {rerunAction}
+            </div>
+          )}
+        </div>
+      </div>
+      {secondaryActions ? (
+        <div className="mt-2 flex min-w-0 justify-end">{secondaryActions}</div>
+      ) : null}
+    </div>
+  )
+
+  const renderCheckRow = (check: PRCheckDetail): React.JSX.Element => {
+    const conclusion = getCheckConclusion(check)
+    const Icon = CHECK_ICON[conclusion] ?? CircleDashed
+    const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
+    const statusLabel = getCheckStatusLabel(check)
+    const key = getCheckDetailsKey(check)
+    const expanded = expandedCheckKey === key
+    const detailsState = detailsByCheckKey[key]
+    return (
+      <div key={key} className="min-w-0">
+        <button
+          type="button"
+          onClick={() => handleToggleCheckDetails(check)}
+          aria-expanded={expanded}
+          className={cn(
+            'flex w-full min-w-0 items-center gap-2 rounded-md text-left transition',
+            variant === 'page' ? 'px-3 py-2.5 hover:bg-accent/60' : 'px-2 py-1.5 hover:bg-muted/40'
+          )}
+        >
+          <ChevronDown
+            className={cn(
+              'size-3 shrink-0 text-muted-foreground transition-transform',
+              !expanded && '-rotate-90'
+            )}
+          />
+          <Icon
+            className={cn('size-3.5 shrink-0', color, conclusion === 'pending' && 'animate-spin')}
+          />
+          <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">{check.name}</span>
+          <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel}</span>
+        </button>
+        {expanded && renderCheckDetails(check, detailsState)}
+      </div>
+    )
+  }
+
+  const renderCheckDetails = (
+    check: PRCheckDetail,
+    state: CheckDetailsLoadState | undefined
+  ): React.JSX.Element => {
+    const details = state?.details
+    const openUrl = details?.detailsUrl ?? details?.url ?? check.url
+    const startedAt = formatCheckTimestamp(details?.startedAt)
+    const completedAt = formatCheckTimestamp(details?.completedAt)
+    const detailsStatusCheck: PRCheckDetail = {
+      ...check,
+      status: (details?.status as PRCheckDetail['status'] | undefined) ?? check.status,
+      conclusion:
+        (details?.conclusion as PRCheckDetail['conclusion'] | undefined) ?? check.conclusion
+    }
+    const hasOutput = Boolean(details?.title || details?.summary || details?.text)
+    const hasAnnotations = (details?.annotations.length ?? 0) > 0
+    const hasJobs = (details?.jobs.length ?? 0) > 0
+
+    return (
+      <div className="mx-2 mb-2 mt-1 min-w-0 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
+        {state?.loading ? (
+          <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground">
+            <LoaderCircle className="size-3.5 animate-spin" />
+            {translate('auto.components.GitHubItemDialog.934d87ab96', 'Loading check details…')}
+          </div>
+        ) : (
+          <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+              <span>
+                {translate('auto.components.GitHubItemDialog.9c3ba11a05', 'Status:')}{' '}
+                {details ? getCheckStatusLabel(detailsStatusCheck) : getCheckStatusLabel(check)}
+              </span>
+              {startedAt && (
+                <span>
+                  {translate('auto.components.GitHubItemDialog.4812814bc8', 'Started')}
+                  {startedAt}
+                </span>
+              )}
+              {completedAt && (
+                <span>
+                  {translate('auto.components.GitHubItemDialog.0f478f5efa', 'Completed')}
+                  {completedAt}
+                </span>
+              )}
+              {check.checkRunId && (
+                <span className="font-mono">
+                  {translate('auto.components.GitHubItemDialog.485609c4f2', 'check #')}
+                  {check.checkRunId}
+                </span>
+              )}
+            </div>
+
+            {state?.error && <div className="text-[12px] text-muted-foreground">{state.error}</div>}
+
+            {hasOutput && (
+              <div className="min-w-0 rounded-md border border-border/40 bg-background/70 px-2.5 py-2">
+                {details?.title && (
+                  <div className="mb-1 text-[12px] font-medium text-foreground">
+                    {details.title}
+                  </div>
+                )}
+                {details?.summary && (
+                  <CommentMarkdown
+                    content={details.summary}
+                    variant="document"
+                    className="min-w-0 max-w-full overflow-hidden break-words text-[12px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+                  />
+                )}
+                {details?.text && (
+                  <CommentMarkdown
+                    content={details.text}
+                    variant="document"
+                    className="mt-2 min-w-0 max-w-full overflow-hidden break-words text-[12px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+                  />
+                )}
+              </div>
+            )}
+
+            {hasAnnotations && (
+              <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
+                <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
+                  {translate('auto.components.GitHubItemDialog.96d8f36798', 'Annotations')}
+                </div>
+                <div className="flex flex-col">
+                  {details!.annotations.map((annotation, index) => (
+                    <div
+                      key={`${annotation.path ?? 'annotation'}-${index}`}
+                      className={cn(
+                        'min-w-0 px-2.5 py-2 text-[12px]',
+                        index > 0 && 'border-t border-border/30'
+                      )}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+                          {annotation.path ??
+                            translate('auto.components.GitHubItemDialog.7d42606f66', 'Annotation')}
+                          {annotation.startLine ? `:${annotation.startLine}` : ''}
+                        </span>
+                        {annotation.annotationLevel && (
+                          <span className="shrink-0 text-[11px] text-muted-foreground">
+                            {annotation.annotationLevel}
+                          </span>
+                        )}
+                      </div>
+                      {annotation.title && (
+                        <div className="mt-1 text-[12px] font-medium text-foreground">
+                          {annotation.title}
+                        </div>
+                      )}
+                      <div className="mt-1 break-words text-[12px] text-foreground">
+                        {annotation.message}
+                      </div>
+                      {annotation.rawDetails && (
+                        <pre className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">
+                          {annotation.rawDetails}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {hasJobs && (
+              <div className="min-w-0 rounded-md border border-border/40 bg-background/70">
+                <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
+                  {translate('auto.components.GitHubItemDialog.08d072664d', 'Jobs')}
+                </div>
+                <div className="flex flex-col">
+                  {details!.jobs.map((job, index) => (
+                    <div
+                      key={`${job.name}-${index}`}
+                      className={cn(
+                        'min-w-0 px-2.5 py-2',
+                        index > 0 && 'border-t border-border/30'
+                      )}
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground">
+                          {job.name}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
+                          {job.conclusion ??
+                            job.status ??
+                            translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
+                        </span>
+                      </div>
+                      {job.steps.length > 0 && (
+                        <div className="mt-1 grid gap-1">
+                          {job.steps.map((step) => (
+                            <div
+                              key={step.name}
+                              className="flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground"
+                            >
+                              <span className="min-w-0 flex-1 truncate">{step.name}</span>
+                              <span className="shrink-0">{step.conclusion ?? step.status}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!state?.error && !hasOutput && !hasAnnotations && !hasJobs && (
+              <div className="text-[12px] text-muted-foreground">
+                {translate(
+                  'auto.components.GitHubItemDialog.744197c84d',
+                  'No inline output is available for this check.'
+                )}
+              </div>
+            )}
+
+            {openUrl && (
+              <div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="h-7 gap-1 px-2 text-[11px]"
+                  onClick={() => window.api.shell.openUrl(openUrl)}
+                >
+                  {translate('auto.components.GitHubItemDialog.5dddefdf58', 'Open in GitHub')}
+                  <ExternalLink className="size-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (loading && list.length === 0) {
     return (
-      <div className="flex items-center justify-center py-10">
-        <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-      </div>
+      <>
+        {variant === 'compact' ? compactHeader : null}
+        <div className="flex items-center justify-center py-10">
+          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+        </div>
+      </>
     )
   }
   if (list.length === 0) {
+    if (variant === 'page') {
+      return (
+        <div className="flex flex-col gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <CircleDashed className="size-4 shrink-0 text-muted-foreground" />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="truncate text-[13px] font-medium text-foreground">
+                {translate('auto.components.GitHubItemDialog.ecffebc251', 'No checks found')}
+              </span>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {translate(
+                  'auto.components.GitHubItemDialog.90020cc1f3',
+                  'This pull request has no reported checks yet.'
+                )}
+              </span>
+            </div>
+            {actions}
+          </div>
+        </div>
+      )
+    }
     return (
-      <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-        No checks configured.
+      <>
+        {compactHeader}
+        <div className="flex flex-col items-center justify-center gap-1 px-4 py-6 text-center">
+          <CircleDashed className="size-4 text-muted-foreground/60" />
+          <div className="text-[12px] text-muted-foreground">
+            {translate('auto.components.GitHubItemDialog.e52bed9264', 'No checks reported yet')}
+          </div>
+        </div>
+      </>
+    )
+  }
+  if (variant === 'page') {
+    const countChips: { label: string; className: string }[] = []
+    if (counts.passing > 0) {
+      countChips.push({
+        label: translate('auto.components.GitHubItemDialog.311d0cee55', '{{value0}} passing', {
+          value0: counts.passing
+        }),
+        className: CHECK_COLOR.success
+      })
+    }
+    if (counts.failing > 0) {
+      countChips.push({
+        label: translate('auto.components.GitHubItemDialog.b1ac991806', '{{value0}} failing', {
+          value0: counts.failing
+        }),
+        className: CHECK_COLOR.failure
+      })
+    }
+    if (counts.pending > 0) {
+      countChips.push({
+        label: translate('auto.components.GitHubItemDialog.18f80e1329', '{{value0}} pending', {
+          value0: counts.pending
+        }),
+        className: CHECK_COLOR.pending
+      })
+    }
+    if (counts.skipped + counts.neutral > 0) {
+      countChips.push({
+        label: translate('auto.components.GitHubItemDialog.d23bbb6416', '{{value0}} skipped', {
+          value0: counts.skipped + counts.neutral
+        }),
+        className: 'text-muted-foreground'
+      })
+    }
+    return (
+      <div className="flex flex-col gap-3 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <SummaryIcon
+            className={cn(
+              'size-4 shrink-0',
+              summaryColor,
+              counts.pending > 0 && counts.failing === 0 && 'animate-spin'
+            )}
+          />
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <span className="truncate text-[13px] font-medium text-foreground">{summaryLabel}</span>
+            {countChips.length > 1 && (
+              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                {countChips.map((chip, i) => (
+                  <React.Fragment key={chip.label}>
+                    {i > 0 && <span className="opacity-40">·</span>}
+                    <span className={chip.className}>{chip.label}</span>
+                  </React.Fragment>
+                ))}
+              </span>
+            )}
+          </div>
+          {actions}
+        </div>
+        <div className="overflow-hidden rounded-lg border border-border/50 bg-card/50 shadow-xs">
+          {sorted.map((check, index) => (
+            <div
+              key={getCheckDetailsKey(check)}
+              className={cn(index > 0 && 'border-t border-border/40')}
+            >
+              {renderCheckRow(check)}
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
   return (
-    <div className="px-2 py-2">
-      {list.map((check) => {
-        const conclusion = check.conclusion ?? 'pending'
-        const Icon = CHECK_ICON[conclusion] ?? CircleDashed
-        const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
-        return (
-          <button
-            key={check.name}
-            type="button"
-            onClick={() => {
-              if (check.url) {
-                window.api.shell.openUrl(check.url)
-              }
-            }}
-            className={cn(
-              'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition',
-              check.url ? 'hover:bg-muted/40' : ''
-            )}
-          >
-            <Icon
-              className={cn('size-3.5 shrink-0', color, conclusion === 'pending' && 'animate-spin')}
-            />
-            <span className="flex-1 truncate text-[12px] text-foreground">{check.name}</span>
-            {check.url && <ExternalLink className="size-3 shrink-0 text-muted-foreground/40" />}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function MentionTextarea({
-  value,
-  onValueChange,
-  onKeyDown,
-  placeholder,
-  rows,
-  className,
-  wrapperClassName,
-  mentionOptions,
-  textareaRef
-}: {
-  value: string
-  onValueChange: (value: string) => void
-  onKeyDown?: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
-  placeholder: string
-  rows: number
-  className?: string
-  wrapperClassName?: string
-  mentionOptions: MentionOption[]
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>
-}): React.JSX.Element {
-  const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null)
-  const [activeIndex, setActiveIndex] = useState(0)
-  const suggestions = useMemo(
-    () => (mentionQuery ? filterMentionOptions(mentionOptions, mentionQuery.query) : []),
-    [mentionOptions, mentionQuery]
-  )
-  const showSuggestions = mentionQuery !== null && suggestions.length > 0
-
-  const syncMentionQuery = useCallback((textarea: HTMLTextAreaElement): void => {
-    const nextQuery = findMentionQuery(textarea.value, textarea.selectionStart)
-    setMentionQuery(nextQuery)
-    setActiveIndex(0)
-  }, [])
-
-  const insertMention = useCallback(
-    (option: MentionOption): void => {
-      const textarea = textareaRef.current
-      const caret = textarea?.selectionStart ?? value.length
-      const query = textarea ? findMentionQuery(value, caret) : mentionQuery
-      if (!query) {
-        return
-      }
-      const suffix = value[caret] && !/\s/.test(value[caret]) ? ' ' : ''
-      const inserted = `@${option.login}${suffix}`
-      const nextValue = `${value.slice(0, query.atIndex)}${inserted}${value.slice(caret)}`
-      const nextCaret = query.atIndex + inserted.length
-      onValueChange(nextValue)
-      setMentionQuery(null)
-      requestAnimationFrame(() => {
-        textarea?.focus()
-        textarea?.setSelectionRange(nextCaret, nextCaret)
-      })
-    },
-    [mentionQuery, onValueChange, textareaRef, value]
-  )
-
-  return (
-    <div className={cn('relative min-w-0 flex-1', wrapperClassName)}>
-      {showSuggestions && (
-        <div className="absolute right-0 bottom-[calc(100%+6px)] left-0 z-50 max-h-64 overflow-y-auto rounded-md border border-border/70 bg-popover p-1 text-popover-foreground shadow-lg">
-          {suggestions.map((option, index) => (
-            <button
-              key={option.login}
-              type="button"
-              onMouseDown={(event) => {
-                event.preventDefault()
-                insertMention(option)
-              }}
-              className={cn(
-                'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px]',
-                index === activeIndex && 'bg-accent text-accent-foreground'
-              )}
-            >
-              {option.avatarUrl ? (
-                <img src={option.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
-              ) : (
-                <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
-                  {option.login.slice(0, 1).toUpperCase()}
-                </div>
-              )}
-              <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                <span className="shrink-0 font-medium">@{option.login}</span>
-                {option.name && (
-                  <>
-                    <span className="shrink-0 text-muted-foreground">|</span>
-                    <span className="truncate text-muted-foreground">{option.name}</span>
-                  </>
-                )}
-                <span className="shrink-0 text-muted-foreground">|</span>
-                <span className="shrink-0 text-[11px] text-muted-foreground">{option.source}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(event) => {
-          onValueChange(event.target.value)
-          syncMentionQuery(event.currentTarget)
-        }}
-        onClick={(event) => syncMentionQuery(event.currentTarget)}
-        onKeyUp={(event) => {
-          if (!['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
-            syncMentionQuery(event.currentTarget)
-          }
-        }}
-        onBlur={() => setMentionQuery(null)}
-        onKeyDown={(event) => {
-          if (showSuggestions) {
-            if (event.key === 'ArrowDown') {
-              event.preventDefault()
-              setActiveIndex((current) => (current + 1) % suggestions.length)
-              return
-            }
-            if (event.key === 'ArrowUp') {
-              event.preventDefault()
-              setActiveIndex((current) => (current - 1 + suggestions.length) % suggestions.length)
-              return
-            }
-            if (event.key === 'Enter' || event.key === 'Tab') {
-              event.preventDefault()
-              insertMention(suggestions[activeIndex] ?? suggestions[0])
-              return
-            }
-            if (event.key === 'Escape') {
-              event.preventDefault()
-              setMentionQuery(null)
-              return
-            }
-          }
-          onKeyDown?.(event)
-        }}
-        placeholder={placeholder}
-        rows={rows}
-        className={className}
-      />
-    </div>
+    <>
+      {compactHeader}
+      <div className="max-h-[280px] overflow-y-auto p-1 scrollbar-sleek">
+        {sorted.map(renderCheckRow)}
+      </div>
+    </>
   )
 }
 
@@ -1797,19 +4476,40 @@ function MentionTextarea({
 // repo. The edit IPCs return a structured `{ ok, error }` shape; we adapt
 // to a thrown rejection so the existing `useImmediateMutation` flow
 // (which expects throws on failure) continues to work unchanged.
+function getGitHubMutationSettings(repoId: string | null | undefined) {
+  const state = useAppStore.getState()
+  // Why: project-origin mutations are slug-addressed, but when we know the
+  // backing repo id they must still execute on that repo's owner host.
+  return getSettingsForRepoRuntimeOwner(state, repoId ?? null)
+}
+
 async function runIssueUpdate(args: {
   repoPath: string | null
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
 }): Promise<void> {
   if (args.projectOrigin) {
-    const res = await window.api.gh.updateIssueBySlug({
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
+    const updateArgs = {
       owner: args.projectOrigin.owner,
       repo: args.projectOrigin.repo,
       number: args.number,
       updates: args.updates
-    })
+    }
+    const res =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssueBySlug>>>(
+            target,
+            'github.project.updateIssueBySlug',
+            updateArgs,
+            {
+              timeoutMs: 30_000
+            }
+          )
+        : await window.api.gh.updateIssueBySlug(updateArgs)
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -1818,16 +4518,152 @@ async function runIssueUpdate(args: {
   if (!args.repoPath) {
     throw new Error('No repo context available for this edit.')
   }
-  await window.api.gh.updateIssue({
+  const res = await window.api.gh.updateIssue({
     repoPath: args.repoPath,
+    repoId: args.repoId ?? undefined,
+    sourceContext: args.sourceContext,
     number: args.number,
     updates: args.updates
   })
+  if (!res.ok) {
+    throw new Error(res.error)
+  }
+}
+
+async function runWorkItemBodyUpdate(args: {
+  item: GitHubWorkItem
+  repoPath: string | null
+  sourceContext?: TaskSourceContext | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  body: string
+  parsedSlug: GitHubOwnerRepo | null
+}): Promise<void> {
+  if (args.item.type === 'pr') {
+    const targetSlug = args.projectOrigin
+      ? { owner: args.projectOrigin.owner, repo: args.projectOrigin.repo }
+      : args.parsedSlug
+    if (!targetSlug) {
+      throw new Error('No GitHub repository context available for this pull request.')
+    }
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.item.repoId))
+    const updateArgs = {
+      owner: targetSlug.owner,
+      repo: targetSlug.repo,
+      number: args.item.number,
+      updates: { body: args.body }
+    }
+    const res =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePullRequestBySlug>>>(
+            target,
+            'github.project.updatePullRequestBySlug',
+            updateArgs,
+            {
+              timeoutMs: 30_000
+            }
+          )
+        : await window.api.gh.updatePullRequestBySlug(updateArgs)
+    if (!res.ok) {
+      throw new Error(res.error.message)
+    }
+    return
+  }
+
+  await runIssueUpdate({
+    repoPath: args.repoPath,
+    repoId: args.item.repoId,
+    sourceContext: args.sourceContext,
+    projectOrigin: args.projectOrigin,
+    number: args.item.number,
+    updates: { body: args.body }
+  })
+}
+
+async function runPullRequestStateUpdate(args: {
+  repoPath: string | null
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+  projectOrigin: GitHubItemDialogProjectOrigin | undefined
+  number: number
+  updates: { state: 'open' | 'closed' }
+}): Promise<void> {
+  if (args.projectOrigin) {
+    const target = getActiveRuntimeTarget(getGitHubMutationSettings(args.repoId))
+    const updateArgs = {
+      owner: args.projectOrigin.owner,
+      repo: args.projectOrigin.repo,
+      number: args.number,
+      updates: args.updates
+    }
+    const res =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePullRequestBySlug>>>(
+            target,
+            'github.project.updatePullRequestBySlug',
+            updateArgs,
+            {
+              timeoutMs: 30_000
+            }
+          )
+        : await window.api.gh.updatePullRequestBySlug(updateArgs)
+    if (!res.ok) {
+      throw new Error(res.error.message)
+    }
+    return
+  }
+  if (!args.repoPath) {
+    throw new Error('No repo context available for this pull request.')
+  }
+  const res = await window.api.gh.updatePRState({
+    repoPath: args.repoPath,
+    repoId: args.repoId ?? undefined,
+    sourceContext: args.sourceContext,
+    prNumber: args.number,
+    updates: args.updates
+  })
+  if (!res.ok) {
+    throw new Error(res.error)
+  }
+}
+
+function GitHubLabelsSettingsLink({
+  url,
+  separated,
+  onOpen
+}: {
+  url: string | null
+  separated?: boolean
+  onOpen?: () => void
+}): React.JSX.Element | null {
+  if (!url) {
+    return null
+  }
+
+  return (
+    <div className={cn(separated && 'mt-1 border-t border-border/60 pt-1')}>
+      <button
+        type="button"
+        onClick={() => {
+          onOpen?.()
+          void window.api.shell.openUrl(url)
+        }}
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+      >
+        <Settings className="size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1 text-left">
+          {translate('auto.components.GitHubItemDialog.2aa9acdf34', 'Edit labels on GitHub')}
+        </span>
+        <ExternalLink className="size-3 shrink-0 opacity-70" />
+      </button>
+    </div>
+  )
 }
 
 function GHEditSection({
   item,
   repoPath,
+  repoId,
+  sourceContext,
   projectOrigin,
   localState,
   localLabels,
@@ -1835,10 +4671,15 @@ function GHEditSection({
   onLabelsChange,
   onMutated,
   assignees,
-  onUse
+  onUse,
+  onOpenOrUse,
+  attachedWorkspaceLabel,
+  layout = 'horizontal'
 }: {
   item: GitHubWorkItem
   repoPath: string | null
+  repoId: string | null
+  sourceContext?: TaskSourceContext | null
   projectOrigin: GitHubItemDialogProjectOrigin | undefined
   localState: GitHubWorkItem['state']
   localLabels: string[]
@@ -1850,15 +4691,34 @@ function GHEditSection({
   onMutated: () => void
   assignees: string[]
   onUse: (item: GitHubWorkItem) => void
+  onOpenOrUse?: (item: GitHubWorkItem) => void
+  attachedWorkspaceLabel?: string | null
+  /** `'horizontal'` is the legacy strip rendered above the conversation; the
+   *  `'sidebar'` layout matches the GitHub issue page's right rail with each
+   *  metadata row stacked under a section heading. */
+  layout?: 'horizontal' | 'sidebar'
 }): React.JSX.Element | null {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
   const [localAssignees, setLocalAssignees] = useState<string[]>(assignees)
-  const hasEditedAssigneesRef = useRef(false)
+  const editedAssigneesItemKeyRef = useRef<string | null>(null)
+  const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
+  const repoOwnerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
+  )
+  const sourceSettings = useMemo(
+    () =>
+      sourceContext?.provider === 'github'
+        ? ({
+            ...repoOwnerSettings,
+            ...getTaskSourceRuntimeSettings(sourceContext)
+          } as typeof repoOwnerSettings)
+        : repoOwnerSettings,
+    [repoOwnerSettings, sourceContext]
+  )
   const { isPending, run } = useImmediateMutation()
-
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
   // `workItemsCache` — `patchWorkItem` only walks the latter, so without this
@@ -1879,27 +4739,40 @@ function GHEditSection({
   // values from a different repo than the writes target.
   const slugOwner = projectOrigin?.owner ?? null
   const slugRepo = projectOrigin?.repo ?? null
-  const repoLabelsByPath = useRepoLabels(projectOrigin ? null : repoPath)
-  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo)
+  const repoLabelsByPath = useRepoLabels(
+    projectOrigin ? null : repoPath,
+    projectOrigin ? null : repoId,
+    sourceSettings
+  )
+  const repoLabelsBySlug = useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
-  const repoAssigneesByPath = useRepoAssignees(projectOrigin ? null : repoPath)
-  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees)
+  const repositoryLabelsUrl = useMemo(() => getGitHubRepositoryLabelsUrl(item.url), [item.url])
+  const repoAssigneesByPath = useRepoAssignees(
+    projectOrigin ? null : repoPath,
+    projectOrigin ? null : repoId,
+    sourceSettings
+  )
+  const repoAssigneesBySlug = useRepoAssigneesBySlug(slugOwner, slugRepo, assignees, sourceSettings)
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
+  const hasAttachedWorkspace =
+    attachedWorkspaceLabel !== null && attachedWorkspaceLabel !== undefined
+  const handleOpenOrUseWorkspace = useCallback((): void => {
+    if (onOpenOrUse) {
+      onOpenOrUse(item)
+      return
+    }
+    onUse(item)
+  }, [item, onOpenOrUse, onUse])
 
   // Why: sync local assignees when item changes or when the detail fetch
   // resolves with real data — but skip if the user already made an
   // optimistic edit so we don't clobber in-flight changes.
   useEffect(() => {
-    if (hasEditedAssigneesRef.current) {
+    if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
       return
     }
     setLocalAssignees(assignees)
-  }, [item.id, assignees])
-
-  // Reset the dirty flag when we switch to a different item.
-  useEffect(() => {
-    hasEditedAssigneesRef.current = false
-  }, [item.id])
+  }, [assigneesItemKey, assignees])
 
   const handleStateChange = useCallback(
     (newState: 'open' | 'closed') => {
@@ -1910,23 +4783,26 @@ function GHEditSection({
       run('state', {
         mutate: () =>
           runIssueUpdate({
+            repoId: item.repoId,
             repoPath,
+            sourceContext,
             projectOrigin,
             number: item.number,
             updates: { state: newState }
           }),
         onOptimistic: () => {
           onStateChange(newState)
-          patchWorkItem(item.id, { state: newState })
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
         },
         onRevert: () => {
           onStateChange(prevState)
-          patchWorkItem(item.id, { state: prevState })
+          patchWorkItem(item.id, { state: prevState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
-          patchWorkItem(item.id, { state: newState })
+          useAppStore.getState().recordFeatureInteraction('github-tasks')
+          patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
         },
@@ -1936,8 +4812,10 @@ function GHEditSection({
     [
       item.id,
       item.number,
+      item.repoId,
       localState,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -1957,22 +4835,25 @@ function GHEditSection({
         run('labels', {
           mutate: () =>
             runIssueUpdate({
+              repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels })
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels })
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onError: (err) => toast.error(err)
@@ -1981,22 +4862,25 @@ function GHEditSection({
         run('labels', {
           mutate: () =>
             runIssueUpdate({
+              repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeLabels: [label] }
             }),
           onOptimistic: () => {
             onLabelsChange(newLabels)
-            patchWorkItem(item.id, { labels: newLabels })
+            patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onRevert: () => {
             onLabelsChange(prevLabels)
-            patchWorkItem(item.id, { labels: prevLabels })
+            patchWorkItem(item.id, { labels: prevLabels }, item.repoId, { sourceContext })
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onError: (err) => toast.error(err)
@@ -2006,8 +4890,10 @@ function GHEditSection({
     [
       item.id,
       item.number,
+      item.repoId,
       localLabels,
       repoPath,
+      sourceContext,
       projectOrigin,
       patchWorkItem,
       patchProjectRowIfNeeded,
@@ -2025,12 +4911,16 @@ function GHEditSection({
         ? prevAssignees.filter((l) => l !== login)
         : [...prevAssignees, login]
 
-      hasEditedAssigneesRef.current = true
+      // Why: the optimistic guard is scoped to this repo item so switching
+      // items does not suppress the next item's assignee sync.
+      editedAssigneesItemKeyRef.current = assigneesItemKey
       if (isAssigned) {
         run('assignees', {
           mutate: () =>
             runIssueUpdate({
+              repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { removeAssignees: [login] }
@@ -2044,6 +4934,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ assignees: prevAssignees })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onError: (err) => toast.error(err)
@@ -2052,7 +4943,9 @@ function GHEditSection({
         run('assignees', {
           mutate: () =>
             runIssueUpdate({
+              repoId: item.repoId,
               repoPath,
+              sourceContext,
               projectOrigin,
               number: item.number,
               updates: { addAssignees: [login] }
@@ -2062,6 +4955,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ assignees: newAssignees })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onRevert: () => {
@@ -2072,7 +4966,18 @@ function GHEditSection({
         })
       }
     },
-    [item.number, repoPath, projectOrigin, localAssignees, patchProjectRowIfNeeded, run, onMutated]
+    [
+      item.number,
+      item.repoId,
+      assigneesItemKey,
+      repoPath,
+      sourceContext,
+      projectOrigin,
+      localAssignees,
+      patchProjectRowIfNeeded,
+      run,
+      onMutated
+    ]
   )
 
   if (item.type === 'pr') {
@@ -2090,6 +4995,304 @@ function GHEditSection({
       />
     </svg>
   )
+
+  if (layout === 'sidebar') {
+    return (
+      <aside className="flex flex-col gap-5 text-[13px]">
+        {/* State */}
+        <section>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            {translate('auto.components.GitHubItemDialog.00ccdf9b5a', 'Status')}
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition hover:brightness-125 hover:ring-1 hover:ring-white/10',
+                  getStateTone({ ...item, state: localState })
+                )}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  {localState === 'closed' ? (
+                    <CircleDashed className="size-3.5" />
+                  ) : (
+                    <CircleDot className="size-3.5" />
+                  )}
+                  {getStateLabel({ ...item, state: localState })}
+                </span>
+                <ChevronDown className="size-3 opacity-60" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-44 p-1" align="start">
+              <button
+                type="button"
+                onClick={() => handleStateChange('open')}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+                  localState === 'open' && 'bg-accent/50'
+                )}
+              >
+                <CircleDot className="size-3 text-emerald-500" />
+                {translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleStateChange('closed')}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent',
+                  localState === 'closed' && 'bg-accent/50'
+                )}
+              >
+                <CircleDashed className="size-3 text-rose-500" />
+                {translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')}
+              </button>
+            </PopoverContent>
+          </Popover>
+        </section>
+
+        {/* Assignees */}
+        <section>
+          <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            <span>{translate('auto.components.GitHubItemDialog.83ac703dda', 'Assignees')}</span>
+            <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  disabled={isPending('assignees') || repoAssignees.loading}
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.76adcf5fe2',
+                    'Edit assignees'
+                  )}
+                  className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+                >
+                  {isPending('assignees') ? (
+                    <LoaderCircle className="size-3 animate-spin" />
+                  ) : (
+                    <Pencil className="size-3" />
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="popover-scroll-content scrollbar-sleek w-60 p-1"
+                align="end"
+              >
+                {repoAssignees.error ? (
+                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                    {repoAssignees.error}
+                  </div>
+                ) : (
+                  <div>
+                    {repoAssignees.data.map((user) => (
+                      <button
+                        key={user.login}
+                        type="button"
+                        onClick={() => handleAssigneeToggle(user.login)}
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                      >
+                        <span
+                          className={cn(
+                            'flex size-3.5 items-center justify-center rounded-sm border',
+                            localAssignees.includes(user.login)
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-input'
+                          )}
+                        >
+                          {localAssignees.includes(user.login) && checkIcon}
+                        </span>
+                        <span className="min-w-0 flex-1 text-left">
+                          <span className="block truncate">{user.login}</span>
+                          {user.name && (
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {user.name}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
+          {localAssignees.length === 0 ? (
+            <div className="text-[12px] text-muted-foreground">
+              {translate('auto.components.GitHubItemDialog.c67de9e2fe', 'No one assigned')}
+            </div>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {localAssignees.map((login) => {
+                const user = repoAssignees.data.find((u) => u.login === login)
+                return (
+                  <li key={login} className="flex min-w-0 items-center gap-2">
+                    {user?.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt=""
+                        className="size-5 shrink-0 rounded-full border border-border/40 object-cover"
+                      />
+                    ) : (
+                      <div className="size-5 shrink-0 rounded-full bg-muted" />
+                    )}
+                    <span className="min-w-0 truncate text-[12px] font-medium text-foreground">
+                      {login}
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+
+        {/* Labels */}
+        <section>
+          <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            <span>{translate('auto.components.GitHubItemDialog.217e55d87c', 'Labels')}</span>
+            <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  disabled={isPending('labels') || repoLabels.loading}
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.4ba0132f37',
+                    'Edit labels'
+                  )}
+                  className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
+                >
+                  {isPending('labels') ? (
+                    <LoaderCircle className="size-3 animate-spin" />
+                  ) : (
+                    <Pencil className="size-3" />
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="popover-scroll-content scrollbar-sleek w-60 p-1"
+                align="end"
+              >
+                {repoLabels.error ? (
+                  <div className="px-2 py-3 text-center text-[12px] text-destructive">
+                    {repoLabels.error}
+                  </div>
+                ) : null}
+                {!repoLabels.error ? (
+                  <div>
+                    {repoLabels.data.map((label) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => handleLabelToggle(label)}
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] hover:bg-accent"
+                      >
+                        <span
+                          className={cn(
+                            'flex size-3.5 items-center justify-center rounded-sm border',
+                            localLabels.includes(label)
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-input'
+                          )}
+                        >
+                          {localLabels.includes(label) && checkIcon}
+                        </span>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <GitHubLabelsSettingsLink
+                  url={repositoryLabelsUrl}
+                  separated={!repoLabels.error && repoLabels.data.length > 0}
+                  onOpen={() => setLabelPopoverOpen(false)}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+          {localLabels.length === 0 ? (
+            <div className="text-[12px] text-muted-foreground">
+              {translate('auto.components.GitHubItemDialog.886a64b081', 'None yet')}
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {localLabels.map((name) => (
+                <span
+                  key={name}
+                  className="inline-flex items-center rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground"
+                >
+                  {name}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+            {translate('auto.components.GitHubItemDialog.2e4d806c92', 'Workspace')}
+          </div>
+          {attachedWorkspaceLabel ? (
+            <div className="mb-2 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
+              <FolderKanban className="size-3.5 shrink-0" />
+              <span className="truncate">{attachedWorkspaceLabel}</span>
+            </div>
+          ) : null}
+          {hasAttachedWorkspace ? (
+            <DropdownMenu modal={false}>
+              <ButtonGroup className="w-full">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleOpenOrUseWorkspace}
+                  className="flex-1 gap-1.5"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.84855fedd0',
+                    'Open workspace attached to issue'
+                  )}
+                >
+                  {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
+                  <ArrowRight className="size-3.5" />
+                </Button>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.fe6ff12dc2',
+                      'More issue workspace actions'
+                    )}
+                  >
+                    <ChevronDown className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </ButtonGroup>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => onUse(item)}>
+                  <Plus className="size-4" />
+                  {translate('auto.components.GitHubItemDialog.36182aa57f', 'Start new workspace')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => onUse(item)}
+              className="w-full gap-1.5"
+              aria-label={translate(
+                'auto.components.GitHubItemDialog.0ab4664a8b',
+                'Start workspace from issue'
+              )}
+            >
+              {translate(
+                'auto.components.GitHubItemDialog.0ab4664a8b',
+                'Start workspace from issue'
+              )}
+              <ArrowRight className="size-3.5" />
+            </Button>
+          )}
+        </section>
+      </aside>
+    )
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
@@ -2117,7 +5320,7 @@ function GHEditSection({
             )}
           >
             <CircleDot className="size-3 text-emerald-500" />
-            Open
+            {translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
           </button>
           <button
             type="button"
@@ -2128,7 +5331,7 @@ function GHEditSection({
             )}
           >
             <CircleDashed className="size-3 text-rose-500" />
-            Closed
+            {translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')}
           </button>
         </PopoverContent>
       </Popover>
@@ -2142,7 +5345,9 @@ function GHEditSection({
             className="group/labels inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
           >
             {localLabels.length === 0 ? (
-              <span className="text-muted-foreground">+ Label</span>
+              <span className="text-muted-foreground">
+                {translate('auto.components.GitHubItemDialog.f41ec96c13', '+ Label')}
+              </span>
             ) : (
               localLabels.map((name) => (
                 <span key={name} className="text-[10px] text-muted-foreground">
@@ -2162,7 +5367,8 @@ function GHEditSection({
             <div className="px-2 py-3 text-center text-[12px] text-destructive">
               {repoLabels.error}
             </div>
-          ) : (
+          ) : null}
+          {!repoLabels.error ? (
             <div>
               {repoLabels.data.map((label) => (
                 <button
@@ -2185,7 +5391,12 @@ function GHEditSection({
                 </button>
               ))}
             </div>
-          )}
+          ) : null}
+          <GitHubLabelsSettingsLink
+            url={repositoryLabelsUrl}
+            separated={!repoLabels.error && repoLabels.data.length > 0}
+            onOpen={() => setLabelPopoverOpen(false)}
+          />
         </PopoverContent>
       </Popover>
 
@@ -2198,7 +5409,9 @@ function GHEditSection({
             className="group/assignees inline-flex items-center gap-1 rounded-full border border-border/30 bg-muted/20 px-2 py-0.5 text-[11px] transition hover:brightness-125 hover:ring-1 hover:ring-white/10 disabled:opacity-50"
           >
             {localAssignees.length === 0 ? (
-              <span className="text-muted-foreground">+ Assignee</span>
+              <span className="text-muted-foreground">
+                {translate('auto.components.GitHubItemDialog.c6f37a563d', '+ Assignee')}
+              </span>
             ) : (
               localAssignees.map((login) => (
                 <span key={login} className="text-[10px] text-muted-foreground">
@@ -2252,15 +5465,65 @@ function GHEditSection({
         </PopoverContent>
       </Popover>
 
-      <Button
-        size="sm"
-        onClick={() => onUse(item)}
-        className="ml-auto gap-2"
-        aria-label="Start workspace from issue"
-      >
-        Start workspace from issue
-        <ArrowRight className="size-4" />
-      </Button>
+      <div className="ml-auto flex min-w-0 items-center gap-2">
+        {attachedWorkspaceLabel ? (
+          <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+            <FolderKanban className="size-3 shrink-0" />
+            <span className="truncate">{attachedWorkspaceLabel}</span>
+          </span>
+        ) : null}
+        {hasAttachedWorkspace ? (
+          <DropdownMenu modal={false}>
+            <ButtonGroup>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleOpenOrUseWorkspace}
+                className="gap-2"
+                aria-label={translate(
+                  'auto.components.GitHubItemDialog.84855fedd0',
+                  'Open workspace attached to issue'
+                )}
+              >
+                {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
+                <ArrowRight className="size-4" />
+              </Button>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.fe6ff12dc2',
+                    'More issue workspace actions'
+                  )}
+                >
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+            </ButtonGroup>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => onUse(item)}>
+                <Plus className="size-4" />
+                {translate('auto.components.GitHubItemDialog.36182aa57f', 'Start new workspace')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => onUse(item)}
+            className="gap-2"
+            aria-label={translate(
+              'auto.components.GitHubItemDialog.0ab4664a8b',
+              'Start workspace from issue'
+            )}
+          >
+            {translate('auto.components.GitHubItemDialog.0ab4664a8b', 'Start workspace from issue')}
+            <ArrowRight className="size-4" />
+          </Button>
+        )}
+      </div>
     </div>
   )
 }
@@ -2268,30 +5531,23 @@ function GHEditSection({
 function GHCommentComposer({
   className,
   repoPath,
+  repoId,
+  sourceContext,
   issueNumber,
   itemType,
-  mentionOptions,
   onCommentAdded
 }: {
   className?: string
   repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   issueNumber: number
   itemType: 'issue' | 'pr'
-  mentionOptions: MentionOption[]
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  const autoGrow = useCallback(() => {
-    const el = textareaRef.current
-    if (!el) {
-      return
-    }
-    el.style.height = 'auto'
-    el.style.height = `${Math.max(80, Math.min(el.scrollHeight, 240))}px`
-  }, [])
+  const mountedRef = useMountedRef()
 
   const handleSubmit = useCallback(async () => {
     const trimmed = body.trim()
@@ -2300,66 +5556,66 @@ function GHCommentComposer({
     }
     setSubmitting(true)
     try {
-      const result = await window.api.gh.addIssueComment({
+      const result = await addIssueCommentForRepo({
         repoPath,
+        repoId: repoId ?? undefined,
+        sourceContext,
         number: issueNumber,
         body: trimmed,
         type: itemType
       })
+      if (!mountedRef.current) {
+        return
+      }
       if (result.ok) {
         setBody('')
-        requestAnimationFrame(autoGrow)
         // Why: use the comment returned by GitHub so the optimistic row shows
         // the real login/avatar immediately instead of waiting for a reopen.
         onCommentAdded(result.comment)
       } else {
-        toast.error(result.error ?? 'Failed to add comment')
+        toast.error(
+          result.error ??
+            translate('auto.components.GitHubItemDialog.082515176a', 'Failed to add comment')
+        )
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add comment')
-    } finally {
-      setSubmitting(false)
-    }
-  }, [autoGrow, body, repoPath, issueNumber, itemType, onCommentAdded])
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        handleSubmit()
+      if (mountedRef.current) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.GitHubItemDialog.082515176a', 'Failed to add comment')
+        )
       }
-    },
-    [handleSubmit]
-  )
+    } finally {
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
+    }
+  }, [body, mountedRef, repoPath, repoId, sourceContext, issueNumber, itemType, onCommentAdded])
 
   return (
     <div className={cn('flex flex-col items-start gap-2', className)}>
-      <MentionTextarea
-        textareaRef={textareaRef}
+      <GitHubMarkdownComposer
         value={body}
-        onValueChange={(nextValue) => {
-          setBody(nextValue)
-          requestAnimationFrame(autoGrow)
-        }}
-        onKeyDown={handleKeyDown}
-        placeholder="Add a comment…"
-        rows={4}
-        mentionOptions={mentionOptions}
-        wrapperClassName="flex min-h-20 w-full items-stretch"
-        className="scrollbar-sleek block h-20 max-h-[240px] min-h-20 w-full resize-none overflow-y-auto rounded-md border border-input bg-card px-3 py-2 text-[13px] leading-5 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        onChange={setBody}
+        placeholder={translate('auto.components.GitHubItemDialog.c5c117270e', 'Add a comment…')}
+        disabled={submitting}
+        minHeightClassName="min-h-28"
+        className="w-full"
+        onSubmitShortcut={() => void handleSubmit()}
       />
       <Button
         onClick={handleSubmit}
         disabled={!body.trim() || submitting}
         className="gap-2"
-        aria-label="Send comment"
+        aria-label={translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
       >
         {submitting ? (
           <LoaderCircle className="size-3.5 animate-spin" />
         ) : (
           <Send className="size-3.5" />
         )}
-        Comment
+        {translate('auto.components.GitHubItemDialog.bf43425540', 'Comment')}
       </Button>
     </div>
   )
@@ -2382,10 +5638,12 @@ function GHCommentComposer({
 // doc §1 rule: hide when either side is unknown rather than guessing.
 function WorkItemIssueSourceIndicator({
   url,
+  repoId,
   repoPath
 }: {
   url: string
-  repoPath: string | null
+  repoId: string | null
+  repoPath?: string | null
 }): React.JSX.Element | null {
   // Why: subscribe to a single store-side selector that returns the resolved
   // sources for this repo — either the primary `(repoPath, PER_REPO_FETCH_LIMIT, '')`
@@ -2399,7 +5657,7 @@ function WorkItemIssueSourceIndicator({
   // indicator is small and the cache rewrite rate is bounded by user-initiated
   // refresh/search actions.
   const sources = useAppStore((s) =>
-    s.getWorkItemsAnySourcesForRepo(repoPath ?? '', PER_REPO_FETCH_LIMIT)
+    s.getWorkItemsAnySourcesForRepo(repoId ?? '', PER_REPO_FETCH_LIMIT, repoPath ?? undefined)
   )
   const issues = useMemo<GitHubOwnerRepo | null>(() => {
     const fromUrl = parseOwnerRepoFromItemUrl(url)
@@ -2430,17 +5688,66 @@ function WorkItemIssueSourceIndicator({
 export default function GitHubItemDialog({
   workItem,
   repoPath,
+  repoId,
+  sourceContext,
+  initialTab,
+  backLabel = 'Back',
   projectOrigin,
   onUse,
+  onReviewRequestsChange,
   onClose
 }: GitHubItemDialogProps): React.JSX.Element {
-  const [tab, setTab] = useState<ItemDialogTab>('conversation')
+  const workItemId = workItem?.id
+  const [tab, setTab] = useState<ItemDialogTab>(() => normalizeItemDialogTab(workItem, initialTab))
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
-  const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('flat')
-  const workItemId = workItem?.id
+  const [linkCopyState, setLinkCopyState] = useState(() => createGitHubLinkCopyState(workItemId))
+  const resolvedLinkCopyState = resolveGitHubLinkCopyState(linkCopyState, workItemId)
+  if (resolvedLinkCopyState !== linkCopyState) {
+    // Why: switching GitHub items should not paint a stale copied indicator
+    // from the previous item while waiting for a passive Effect pass.
+    setLinkCopyState(resolvedLinkCopyState)
+  }
+  const linkCopied = resolvedLinkCopyState.copied
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
+  const effectiveRepoId = repoId ?? workItem?.repoId ?? null
+  const allWorktrees = useAllWorktrees()
+  const issueAttachedWorkspace = useMemo(
+    () =>
+      workItem?.type === 'issue'
+        ? findGithubIssueWorkspaceAttachment(allWorktrees, effectiveRepoId, workItem.number)
+        : null,
+    [allWorktrees, effectiveRepoId, workItem]
+  )
+  const issueAttachedWorkspaceLabel = issueAttachedWorkspace
+    ? getGithubWorkItemWorkspaceAttachmentLabel(issueAttachedWorkspace)
+    : null
+
+  const handleOpenOrUseIssueWorkspace = useCallback(
+    (item: GitHubWorkItem): void => {
+      const currentAttached = findGithubIssueWorkspaceAttachment(
+        useAppStore.getState().allWorktrees(),
+        effectiveRepoId,
+        item.number
+      )
+      if (!currentAttached) {
+        onUse(item)
+        return
+      }
+
+      const result = activateAndRevealWorktree(currentAttached.id)
+      if (result === false) {
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.2ef631437e',
+            'Unable to open the workspace attached to this issue.'
+          )
+        )
+      }
+    },
+    [effectiveRepoId, onUse]
+  )
 
   // Why: the cache key has to include the issue source preference so a user
   // toggling between origin/upstream for the same issue number doesn't read
@@ -2448,22 +5755,24 @@ export default function GitHubItemDialog({
   // than threading it as a prop because every existing call site already has
   // the repo registered in the store.
   const issueSourcePreference = useAppStore((s) => {
-    if (!repoPath) {
+    if (!repoPath && !effectiveRepoId) {
       return undefined
     }
-    return s.repos.find((r) => r.path === repoPath)?.issueSourcePreference
+    return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
+      ?.issueSourcePreference
   })
   const detailsCacheKey = useMemo(() => {
-    if (!workItem || !repoPath) {
+    if (!workItem || !repoPath || !effectiveRepoId) {
       return null
     }
     return getWorkItemDetailsCacheKey({
       repoPath,
+      repoId: effectiveRepoId,
       issueSourcePreference,
       type: workItem.type,
       number: workItem.number
     })
-  }, [repoPath, workItem, issueSourcePreference])
+  }, [repoPath, effectiveRepoId, workItem, issueSourcePreference])
 
   // Why: reset lifted edit state when the dialog switches items or when the
   // same item receives an optimistic cache patch from the surrounding table.
@@ -2494,7 +5803,9 @@ export default function GitHubItemDialog({
     }
     let cancelled = false
     let count = 0
+    let frameId: number | null = null
     const tick = (): void => {
+      frameId = null
       if (cancelled) {
         return
       }
@@ -2502,12 +5813,15 @@ export default function GitHubItemDialog({
         document.body.style.pointerEvents = ''
       }
       if (count++ < 5) {
-        requestAnimationFrame(tick)
+        frameId = requestAnimationFrame(tick)
       }
     }
     tick()
     return () => {
       cancelled = true
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
     }
   }, [workItem])
 
@@ -2554,7 +5868,10 @@ export default function GitHubItemDialog({
     if (missing.length === 0) {
       return cachedDetails
     }
-    return { ...cachedDetails, comments: [...cachedDetails.comments, ...missing] }
+    return {
+      ...cachedDetails,
+      comments: [...cachedDetails.comments, ...missing]
+    }
     // Why: optimisticTick is the rerender signal for cold-open writes — the
     // memo reads optimisticCommentsRef.current (a ref, no subscription), so
     // bumping the tick is what forces this memo to re-run. The lint flags it
@@ -2565,6 +5882,9 @@ export default function GitHubItemDialog({
 
   const loading = !!cachedEntry?.pending && !cachedEntry?.details
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
+  const detailsLoaded =
+    Boolean(cachedEntry?.details) ||
+    Boolean(cachedEntry && !cachedEntry.pending && !cachedEntry.error && cachedEntry.fetchedAt > 0)
 
   // Why: if a cross-window mutation invalidates the open drawer's entry
   // (cachedEntry becomes undefined while workItem is still set), the main
@@ -2590,7 +5910,7 @@ export default function GitHubItemDialog({
       optimisticCommentsRef.current = []
     }
     prevItemIdRef.current = workItem.id
-    setTab('conversation')
+    setTab(normalizeItemDialogTab(workItem, initialTab))
 
     const cached = workItemDetailsCache.get(detailsCacheKey)
     const now = Date.now()
@@ -2605,8 +5925,10 @@ export default function GitHubItemDialog({
     // racing two `gh` subprocesses against each other.
     const inflight: Promise<GitHubWorkItemDetails | null> =
       cached?.pending ??
-      window.api.gh.workItemDetails({
+      getWorkItemDetailsForRepo({
         repoPath,
+        repoId: effectiveRepoId ?? undefined,
+        sourceContext,
         number: workItem.number,
         type: workItem.type
       })
@@ -2667,16 +5989,88 @@ export default function GitHubItemDialog({
           error: message
         })
       })
-  }, [repoPath, workItem, detailsCacheKey, refetchTick])
+  }, [repoPath, effectiveRepoId, sourceContext, workItem, detailsCacheKey, initialTab, refetchTick])
 
   const Icon = workItem?.type === 'pr' ? GitPullRequest : CircleDot
+  const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
+    if (!workItem) {
+      return null
+    }
+    if (!details?.item) {
+      return workItem
+    }
+    return { ...workItem, ...details.item, repoId: workItem.repoId }
+  }, [details?.item, workItem])
+
+  useEffect(() => {
+    if (!workItem || details?.item.reviewRequests === undefined) {
+      return
+    }
+    // Why: PR details can carry fresher reviewer metadata than the list row;
+    // push it back so the Tasks review chip doesn't keep a stale snapshot.
+    onReviewRequestsChange?.(
+      { id: workItem.id, repoId: workItem.repoId },
+      details.item.reviewRequests
+    )
+  }, [details?.item.reviewRequests, onReviewRequestsChange, workItem])
+
   const body = details?.body ?? ''
   const comments = details?.comments ?? []
   const files = details?.files ?? []
   const checks = details?.checks ?? []
+  const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
+  // Why: clipboard IPC can resolve after the dialog unmounts; skip copied-state
+  // feedback instead of starting its reset timer on a stale surface.
+  const linkCopyMountedRef = useRef(false)
+  const linkCopiedResetTimerRef = useRef<number | null>(null)
+  const clearLinkCopiedResetTimer = useCallback((): void => {
+    if (linkCopiedResetTimerRef.current === null) {
+      return
+    }
+    window.clearTimeout(linkCopiedResetTimerRef.current)
+    linkCopiedResetTimerRef.current = null
+  }, [])
+  const setLinkCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      linkCopyMountedRef.current = node !== null
+      if (node === null) {
+        // Why: the copied-state timer belongs to the copy control surface;
+        // clear it when that surface detaches without a passive cleanup Effect.
+        clearLinkCopiedResetTimer()
+      }
+    },
+    [clearLinkCopiedResetTimer]
+  )
+
+  const handleCopyWorkItemLink = useCallback(async (): Promise<void> => {
+    if (!workItem) {
+      return
+    }
+    try {
+      // Why: Electron's clipboard IPC is reliable even when browser clipboard
+      // APIs lose focus/activation inside nested overlay surfaces.
+      await window.api.ui.writeClipboardText(workItem.url)
+      if (!linkCopyMountedRef.current) {
+        return
+      }
+      clearLinkCopiedResetTimer()
+      const copiedWorkItemId = workItem.id
+      setLinkCopyState(markGitHubLinkCopied(copiedWorkItemId))
+      linkCopiedResetTimerRef.current = window.setTimeout(() => {
+        linkCopiedResetTimerRef.current = null
+        setLinkCopyState((current) => clearGitHubLinkCopied(current, copiedWorkItemId))
+      }, 1500)
+      toast.success(translate('auto.components.GitHubItemDialog.2e77dc2053', 'GitHub link copied'))
+    } catch {
+      toast.error(
+        translate('auto.components.GitHubItemDialog.5fea151559', 'Failed to copy GitHub link')
+      )
+    }
+  }, [clearLinkCopiedResetTimer, workItem])
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       // Why: skip refreshDetails() — gh api --cache 60s returns stale data
       // that overwrites the optimistic comment. The next dialog open (after
       // cache expiry) will pick up the server-confirmed version.
@@ -2692,7 +6086,10 @@ export default function GitHubItemDialog({
           const ids = new Set(prev.details.comments.map((c) => c.id))
           if (!ids.has(comment.id)) {
             touchWorkItemDetailsCache(detailsCacheKey, {
-              details: { ...prev.details, comments: [...prev.details.comments, comment] },
+              details: {
+                ...prev.details,
+                comments: [...prev.details.comments, comment]
+              },
               fetchedAt: 0,
               error: undefined
             })
@@ -2709,262 +6106,656 @@ export default function GitHubItemDialog({
     [detailsCacheKey]
   )
 
-  return (
-    <Sheet open={workItem !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px] lg:max-w-[760px] xl:max-w-[900px]"
-        onOpenAutoFocus={(event) => {
-          // Why: focusing the first actionable element inside the drawer
-          // causes the "Start workspace" action to receive focus and
-          // get visually highlighted on open. Preventing auto-focus keeps the
-          // drawer feeling like a passive preview until the user acts.
-          event.preventDefault()
-        }}
-      >
-        {/* Why: SheetTitle/Description are required by Radix Dialog for a11y,
-            but the visible header carries the same info. Wrap each with
-            `asChild` so the VisuallyHidden span wraps the element cleanly. */}
-        <VisuallyHidden.Root asChild>
-          <SheetTitle>{workItem?.title ?? 'GitHub item'}</SheetTitle>
-        </VisuallyHidden.Root>
-        <VisuallyHidden.Root asChild>
-          <SheetDescription>
-            Read-only preview of the selected GitHub issue or pull request.
-          </SheetDescription>
-        </VisuallyHidden.Root>
+  const handlePRFileViewedChange = useCallback(
+    async (path: string, viewed: boolean): Promise<boolean> => {
+      if (!repoPath || !details?.pullRequestId || !workItem || workItem.type !== 'pr') {
+        toast.error(
+          translate(
+            'auto.components.GitHubItemDialog.c0253318d6',
+            'Unable to sync viewed state for this pull request.'
+          )
+        )
+        return false
+      }
+      setPendingViewedPaths((prev) => new Set(prev).add(path))
+      const nextState: GitHubPRFileViewedState = viewed ? 'VIEWED' : 'UNVIEWED'
+      const previousState = detailsCacheKey
+        ? patchCachedPRFileViewedState(detailsCacheKey, path, nextState)
+        : undefined
+      try {
+        const ok = await setPRFileViewedForRepo({
+          repoId: workItem.repoId,
+          repoPath,
+          sourceContext,
+          prNumber: workItem.number,
+          pullRequestId: details.pullRequestId,
+          path,
+          viewed
+        })
+        if (!ok) {
+          if (detailsCacheKey && previousState) {
+            patchCachedPRFileViewedState(detailsCacheKey, path, previousState)
+          }
+          toast.error(
+            translate(
+              'auto.components.GitHubItemDialog.b7bf31b8de',
+              'Failed to sync viewed state with GitHub.'
+            )
+          )
+          return false
+        }
+        return true
+      } finally {
+        setPendingViewedPaths((prev) => {
+          const next = new Set(prev)
+          next.delete(path)
+          return next
+        })
+      }
+    },
+    [details?.pullRequestId, detailsCacheKey, repoPath, sourceContext, workItem]
+  )
 
-        {workItem && (
-          <div className="flex h-full min-h-0 flex-col">
-            <div className="flex-none border-b border-border/60 px-4 py-3">
-              <div className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <span className="font-mono text-[12px] text-muted-foreground">
-                    #{workItem.number}
+  const isIssuePage = workItem?.type === 'issue'
+  const ownerRepo = workItem ? parseOwnerRepoFromItemUrl(workItem.url) : null
+  const issueStateBadgeTone =
+    localState === 'closed' ? 'bg-rose-600 text-white' : 'bg-emerald-600 text-white'
+
+  const content = workItem ? (
+    <div className="flex h-full min-h-0 flex-col">
+      {isIssuePage ? (
+        <>
+          {/* Row 1: breadcrumb-style strip mirroring GitHub's canvas-subtle header */}
+          <div className="flex-none border-b border-border/60 bg-muted/30 px-6 py-2.5">
+            <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="-ml-2 h-7 gap-1 px-2 text-muted-foreground hover:text-foreground"
+                aria-label={backLabel}
+              >
+                <ChevronLeft className="size-4" />
+                {backLabel}
+              </Button>
+              <span className="text-border">·</span>
+              {ownerRepo ? (
+                <>
+                  <span className="truncate">
+                    <span className="text-muted-foreground">{ownerRepo.owner}</span>
+                    <span className="mx-1 text-muted-foreground/60">/</span>
+                    <span className="font-medium text-foreground">{ownerRepo.repo}</span>
                   </span>
-                  <h2 className="mt-1 flex items-start gap-2 text-[15px] font-semibold leading-tight text-foreground">
-                    <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                    <span className="min-w-0">{workItem.title}</span>
-                  </h2>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-6 text-[11px] text-muted-foreground">
-                    <span>{workItem.author ?? 'unknown'}</span>
-                    <span>· {formatRelativeTime(workItem.updatedAt)}</span>
-                    {workItem.branchName && (
-                      <span className="font-mono text-[10px] text-muted-foreground/80">
-                        · {workItem.branchName}
-                      </span>
-                    )}
-                  </div>
-                  {workItem.type === 'issue' && (
-                    <WorkItemIssueSourceIndicator url={workItem.url} repoPath={repoPath} />
-                  )}
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7"
-                        onClick={() => window.api.shell.openUrl(workItem.url)}
-                        aria-label="Open on GitHub"
-                      >
-                        <ExternalLink className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Open on GitHub
-                    </TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7"
-                        onClick={onClose}
-                        aria-label="Close preview"
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      Close · Esc
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
+                  <span className="text-muted-foreground/60">·</span>
+                </>
+              ) : null}
+              <span className="font-mono text-muted-foreground">#{workItem.number}</span>
+              <div className="ml-auto flex items-center gap-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      ref={setLinkCopyButtonRef}
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => void handleCopyWorkItemLink()}
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.c43fe79ee0',
+                        'Copy GitHub link'
+                      )}
+                    >
+                      {linkCopied ? (
+                        <Check className="size-4 text-emerald-500" />
+                      ) : (
+                        <Copy className="size-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {linkCopied
+                      ? translate('auto.components.GitHubItemDialog.038b3d39b1', 'Copied')
+                      : translate(
+                          'auto.components.GitHubItemDialog.c43fe79ee0',
+                          'Copy GitHub link'
+                        )}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => window.api.shell.openUrl(workItem.url)}
+                      aria-label={translate(
+                        'auto.components.GitHubItemDialog.3fdf777817',
+                        'Open on GitHub'
+                      )}
+                    >
+                      <ExternalLink className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
+          </div>
 
-            {(repoPath || projectOrigin) && (
-              <GHEditSection
-                item={workItem}
-                repoPath={repoPath}
-                projectOrigin={projectOrigin}
-                localState={localState}
-                localLabels={localLabels}
-                onStateChange={setLocalState}
-                onLabelsChange={setLocalLabels}
-                onMutated={() => {
-                  // Why: drop the cached details for this item so the next
-                  // open issues a fresh fetch instead of painting pre-edit
-                  // state. We invalidate by (repoPath, type, number) match
-                  // because a single mutation can affect entries across all
-                  // issueSourcePreference values for the same number.
-                  if (repoPath) {
-                    invalidateWorkItemDetailsCacheByMatch({
-                      repoPath,
-                      type: workItem.type,
-                      number: workItem.number
-                    })
-                  }
-                }}
-                assignees={details?.assignees ?? []}
-                onUse={onUse}
-              />
-            )}
-
-            <div className="min-h-0 flex-1">
-              {error ? (
-                <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
-              ) : (
-                <Tabs
-                  value={tab}
-                  onValueChange={(value) => setTab(value as ItemDialogTab)}
-                  className="flex h-full min-h-0 flex-col gap-0"
-                >
-                  <TabsList
-                    variant="line"
-                    className="mx-4 mt-2 justify-start gap-3 border-b border-border/60"
+          {/* Row 2: large title block */}
+          <div className="flex-none border-b border-border/60 bg-card px-6 py-4">
+            <div className="flex items-start gap-4">
+              <h1 className="min-w-0 flex-1 text-[28px] font-medium leading-tight text-foreground">
+                <span className="break-words">{workItem.title}</span>
+                <span className="ml-2 font-light text-muted-foreground">#{workItem.number}</span>
+              </h1>
+              <div className="flex shrink-0 items-center gap-2">
+                {/* Why: Orca's signature affordance — keep this primary so it
+                    stands out against GitHub's familiar surface. */}
+                {issueAttachedWorkspace ? (
+                  <DropdownMenu modal={false}>
+                    <ButtonGroup>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleOpenOrUseIssueWorkspace(workItem)}
+                        className="gap-1.5 whitespace-nowrap"
+                        aria-label={translate(
+                          'auto.components.GitHubItemDialog.84855fedd0',
+                          'Open workspace attached to issue'
+                        )}
+                      >
+                        {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
+                        <ArrowRight className="size-3.5" />
+                      </Button>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          aria-label={translate(
+                            'auto.components.GitHubItemDialog.fe6ff12dc2',
+                            'More issue workspace actions'
+                          )}
+                        >
+                          <ChevronDown className="size-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                    </ButtonGroup>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => onUse(workItem)}>
+                        <Plus className="size-4" />
+                        {translate(
+                          'auto.components.GitHubItemDialog.36182aa57f',
+                          'Start new workspace'
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
+                        <ExternalLink className="size-4" />
+                        {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => onUse(workItem)}
+                    className="gap-1.5 whitespace-nowrap"
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.0ab4664a8b',
+                      'Start workspace from issue'
+                    )}
                   >
-                    <TabsTrigger value="conversation" className="px-2">
-                      <MessageSquare className="size-3.5" />
-                      Conversation
-                    </TabsTrigger>
-                    {workItem.type === 'pr' && (
-                      <TabsTrigger value="files" className="px-2">
-                        <FileText className="size-3.5" />
-                        Files
-                        {files.length > 0 && (
-                          <span className="ml-1 text-[10px] text-muted-foreground">
-                            {files.length}
-                          </span>
-                        )}
-                      </TabsTrigger>
+                    {translate(
+                      'auto.components.GitHubItemDialog.0ab4664a8b',
+                      'Start workspace from issue'
                     )}
-                  </TabsList>
-
-                  <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-                    <TabsContent value="conversation" className="mt-0">
-                      <ConversationTab
-                        item={workItem}
-                        repoPath={repoPath}
-                        body={body}
-                        comments={comments}
-                        files={files}
-                        headSha={details?.headSha}
-                        baseSha={details?.baseSha}
-                        loading={loading}
-                        checks={checks}
-                        participants={details?.participants ?? []}
-                        onUse={onUse}
-                        onCommentAdded={appendOptimisticComment}
-                      />
-                    </TabsContent>
-
-                    {workItem.type === 'pr' && (
-                      <TabsContent value="files" className="mt-0">
-                        {loading && files.length === 0 ? (
-                          <div className="flex items-center justify-center py-10">
-                            <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-                          </div>
-                        ) : files.length === 0 ? (
-                          <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-                            No files changed.
-                          </div>
-                        ) : (
-                          <div>
-                            {/* Files-tab toolbar: view-mode toggle */}
-                            <div className="flex items-center justify-end gap-1 border-b border-border/40 px-3 py-1.5">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    id="pr-files-flat-view"
-                                    type="button"
-                                    onClick={() => setDiffViewMode('flat')}
-                                    aria-label="Flat view"
-                                    aria-pressed={diffViewMode === 'flat'}
-                                    className={cn(
-                                      'flex size-6 items-center justify-center rounded transition hover:bg-muted',
-                                      diffViewMode === 'flat'
-                                        ? 'bg-muted text-foreground'
-                                        : 'text-muted-foreground'
-                                    )}
-                                  >
-                                    <AlignJustify className="size-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={4}>
-                                  Flat view
-                                </TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    id="pr-files-tree-view"
-                                    type="button"
-                                    onClick={() => setDiffViewMode('tree')}
-                                    aria-label="Tree view"
-                                    aria-pressed={diffViewMode === 'tree'}
-                                    className={cn(
-                                      'flex size-6 items-center justify-center rounded transition hover:bg-muted',
-                                      diffViewMode === 'tree'
-                                        ? 'bg-muted text-foreground'
-                                        : 'text-muted-foreground'
-                                    )}
-                                  >
-                                    <LayoutList className="size-3.5" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom" sideOffset={4}>
-                                  Tree view
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                            {diffViewMode === 'flat' ? (
-                              files.map((file) => (
-                                <PRFileRow
-                                  key={file.path}
-                                  file={file}
-                                  repoPath={repoPath ?? ''}
-                                  prNumber={workItem.number}
-                                  headSha={details?.headSha}
-                                  baseSha={details?.baseSha}
-                                  onCommentAdded={appendOptimisticComment}
-                                />
-                              ))
-                            ) : (
-                              <PRDiffTreeView
-                                files={files}
-                                repoPath={repoPath ?? ''}
-                                prNumber={workItem.number}
-                                headSha={details?.headSha}
-                                baseSha={details?.baseSha}
-                                onCommentAdded={appendOptimisticComment}
-                              />
-                            )}
-                          </div>
-                        )}
-                      </TabsContent>
+                    <ArrowRight className="size-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium',
+                  issueStateBadgeTone
+                )}
+              >
+                {localState === 'closed' ? (
+                  <CircleDashed className="size-3.5" />
+                ) : (
+                  <CircleDot className="size-3.5" />
+                )}
+                {localState === 'closed'
+                  ? translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')
+                  : translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
+              </span>
+              <span className="flex flex-wrap items-center gap-1.5">
+                <span className="font-semibold text-foreground">
+                  {workItem.author ??
+                    translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
+                </span>
+                <span>
+                  {translate('auto.components.GitHubItemDialog.55962099bc', 'opened this issue')}
+                </span>
+                <span className="text-muted-foreground/80">
+                  {translate('auto.components.GitHubItemDialog.10ef1afb8e', '· updated')}
+                  {formatRelativeTime(workItem.updatedAt)}
+                </span>
+              </span>
+              <WorkItemIssueSourceIndicator
+                url={workItem.url}
+                repoId={effectiveRepoId}
+                repoPath={repoPath}
+              />
+              {issueAttachedWorkspaceLabel ? (
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <FolderKanban className="size-3.5 shrink-0" />
+                  <span className="truncate">{issueAttachedWorkspaceLabel}</span>
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex-none border-b border-border/60 bg-card/80 px-4 py-3 shadow-xs backdrop-blur supports-[backdrop-filter]:bg-card/70">
+          <div className="flex items-start gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="-ml-1 mt-0.5 shrink-0 gap-1.5"
+              aria-label={backLabel}
+            >
+              <ChevronLeft className="size-4" />
+              {backLabel}
+            </Button>
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40 text-muted-foreground">
+              <Icon className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                <WorkItemStateBadge item={{ ...workItem, state: localState }} />
+                <span className="font-mono">#{workItem.number}</span>
+                <span>
+                  {workItem.type === 'pr'
+                    ? translate('auto.components.GitHubItemDialog.a2495e4784', 'Pull request')
+                    : translate('auto.components.GitHubItemDialog.3e544d966d', 'Issue')}
+                </span>
+              </div>
+              <h2 className="text-[15px] font-semibold leading-snug text-foreground">
+                {workItem.title}
+              </h2>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                <span>
+                  {workItem.author ??
+                    translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')}
+                </span>
+                <span>
+                  {translate('auto.components.GitHubItemDialog.8223320f8d', 'updated')}
+                  {formatRelativeTime(workItem.updatedAt)}
+                </span>
+                {workItem.branchName && (
+                  <span className="max-w-full truncate rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    {workItem.branchName}
+                  </span>
+                )}
+                {issueAttachedWorkspaceLabel ? (
+                  <span className="inline-flex min-w-0 items-center gap-1">
+                    <FolderKanban className="size-3 shrink-0" />
+                    <span className="truncate">{issueAttachedWorkspaceLabel}</span>
+                  </span>
+                ) : null}
+              </div>
+              {workItem.type === 'issue' && (
+                <WorkItemIssueSourceIndicator
+                  url={workItem.url}
+                  repoId={effectiveRepoId}
+                  repoPath={repoPath}
+                />
+              )}
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-1">
+              {workItem.type === 'pr' && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => onUse(workItem)}
+                  className="gap-1.5 whitespace-nowrap"
+                  aria-label={translate(
+                    'auto.components.GitHubItemDialog.0caac1a18f',
+                    'Start workspace from PR'
+                  )}
+                >
+                  {translate(
+                    'auto.components.GitHubItemDialog.0caac1a18f',
+                    'Start workspace from PR'
+                  )}
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    ref={setLinkCopyButtonRef}
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => void handleCopyWorkItemLink()}
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.c43fe79ee0',
+                      'Copy GitHub link'
                     )}
+                  >
+                    {linkCopied ? (
+                      <Check className="size-4 text-emerald-500" />
+                    ) : (
+                      <Copy className="size-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {linkCopied
+                    ? translate('auto.components.GitHubItemDialog.038b3d39b1', 'Copied')
+                    : translate('auto.components.GitHubItemDialog.c43fe79ee0', 'Copy GitHub link')}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => window.api.shell.openUrl(workItem.url)}
+                    aria-label={translate(
+                      'auto.components.GitHubItemDialog.3fdf777817',
+                      'Open on GitHub'
+                    )}
+                  >
+                    <ExternalLink className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {translate('auto.components.GitHubItemDialog.3fdf777817', 'Open on GitHub')}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isIssuePage && (repoPath || projectOrigin) && (
+        <GHEditSection
+          item={workItem}
+          repoPath={repoPath}
+          repoId={effectiveRepoId}
+          sourceContext={sourceContext}
+          projectOrigin={projectOrigin}
+          localState={localState}
+          localLabels={localLabels}
+          onStateChange={setLocalState}
+          onLabelsChange={setLocalLabels}
+          onMutated={() => {
+            // Why: drop the cached details for this item so the next
+            // open issues a fresh fetch instead of painting pre-edit
+            // state. We invalidate by (repoPath, type, number) match
+            // because a single mutation can affect entries across all
+            // issueSourcePreference values for the same number.
+            if (repoPath) {
+              invalidateWorkItemDetailsCacheByMatch({
+                repoPath,
+                repoId: effectiveRepoId ?? undefined,
+                type: workItem.type,
+                number: workItem.number
+              })
+            }
+          }}
+          assignees={details?.assignees ?? []}
+          onUse={onUse}
+          onOpenOrUse={handleOpenOrUseIssueWorkspace}
+          attachedWorkspaceLabel={issueAttachedWorkspaceLabel}
+        />
+      )}
+
+      <div className="min-h-0 flex-1">
+        {error ? (
+          <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
+        ) : isIssuePage ? (
+          <div className="h-full min-h-0 overflow-y-auto scrollbar-sleek bg-background">
+            <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-8 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+              <div className="min-w-0">
+                <ConversationTab
+                  item={displayWorkItem ?? workItem}
+                  repoPath={repoPath}
+                  repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
+                  body={body}
+                  comments={comments}
+                  files={files}
+                  headSha={details?.headSha}
+                  baseSha={details?.baseSha}
+                  loading={loading}
+                  detailsLoaded={detailsLoaded}
+                  checks={checks}
+                  localState={localState}
+                  onStateChange={setLocalState}
+                  projectOrigin={projectOrigin}
+                  onMutated={() => {
+                    if (repoPath) {
+                      invalidateWorkItemDetailsCacheByMatch({
+                        repoPath,
+                        repoId: effectiveRepoId ?? undefined,
+                        type: workItem.type,
+                        number: workItem.number
+                      })
+                    }
+                  }}
+                  onChecksUpdated={(nextChecks) => {
+                    if (detailsCacheKey) {
+                      patchCachedPRChecks(detailsCacheKey, nextChecks)
+                    }
+                  }}
+                  onBodyUpdated={(nextBody) => {
+                    if (detailsCacheKey) {
+                      patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                    }
+                  }}
+                  onCommentAdded={appendOptimisticComment}
+                  onReviewersRequested={(nextReviewRequests) => {
+                    if (detailsCacheKey) {
+                      patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
+                    }
+                    onReviewRequestsChange?.(
+                      { id: workItem.id, repoId: workItem.repoId },
+                      nextReviewRequests
+                    )
+                  }}
+                />
+              </div>
+              {(repoPath || projectOrigin) && (
+                <div className="min-w-0">
+                  <div className="lg:sticky lg:top-4">
+                    <GHEditSection
+                      item={workItem}
+                      repoPath={repoPath}
+                      repoId={effectiveRepoId}
+                      sourceContext={sourceContext}
+                      projectOrigin={projectOrigin}
+                      localState={localState}
+                      localLabels={localLabels}
+                      onStateChange={setLocalState}
+                      onLabelsChange={setLocalLabels}
+                      onMutated={() => {
+                        if (repoPath) {
+                          invalidateWorkItemDetailsCacheByMatch({
+                            repoPath,
+                            repoId: effectiveRepoId ?? undefined,
+                            type: workItem.type,
+                            number: workItem.number
+                          })
+                        }
+                      }}
+                      assignees={details?.assignees ?? []}
+                      onUse={onUse}
+                      onOpenOrUse={handleOpenOrUseIssueWorkspace}
+                      attachedWorkspaceLabel={issueAttachedWorkspaceLabel}
+                      layout="sidebar"
+                    />
                   </div>
-                </Tabs>
+                </div>
               )}
             </div>
           </div>
+        ) : (
+          <Tabs
+            value={tab}
+            onValueChange={(value) => setTab(value as ItemDialogTab)}
+            className="flex h-full min-h-0 flex-col gap-0"
+          >
+            <TabsList
+              variant="line"
+              className="mx-4 mt-2 justify-start gap-3 border-b border-border/60 bg-transparent"
+            >
+              <TabsTrigger value="conversation" className="px-2">
+                <MessageSquare className="size-3.5" />
+                {translate('auto.components.GitHubItemDialog.e30a5470c9', 'Conversation')}
+              </TabsTrigger>
+              {workItem.type === 'pr' && (
+                <>
+                  <TabsTrigger value="checks" className="px-2">
+                    <ListChecks className="size-3.5" />
+                    {translate('auto.components.GitHubItemDialog.4bd1f5b055', 'Checks')}
+                    {checks.length > 0 && (
+                      <span className="ml-1 text-[10px] text-muted-foreground">
+                        {checks.length}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="files" className="px-2">
+                    <FileText className="size-3.5" />
+                    {translate('auto.components.GitHubItemDialog.999b5ad7d9', 'Files')}
+                    {files.length > 0 && (
+                      <span className="ml-1 text-[10px] text-muted-foreground">{files.length}</span>
+                    )}
+                  </TabsTrigger>
+                </>
+              )}
+            </TabsList>
+
+            <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+              <TabsContent value="conversation" className="mt-0">
+                <ConversationTab
+                  item={displayWorkItem ?? workItem}
+                  repoPath={repoPath}
+                  repoId={effectiveRepoId}
+                  sourceContext={sourceContext}
+                  body={body}
+                  comments={comments}
+                  files={files}
+                  headSha={details?.headSha}
+                  baseSha={details?.baseSha}
+                  loading={loading}
+                  detailsLoaded={detailsLoaded}
+                  checks={checks}
+                  localState={localState}
+                  onStateChange={setLocalState}
+                  projectOrigin={projectOrigin}
+                  onMutated={() => {
+                    if (repoPath) {
+                      invalidateWorkItemDetailsCacheByMatch({
+                        repoPath,
+                        repoId: effectiveRepoId ?? undefined,
+                        type: workItem.type,
+                        number: workItem.number
+                      })
+                    }
+                  }}
+                  onChecksUpdated={(nextChecks) => {
+                    if (detailsCacheKey) {
+                      patchCachedPRChecks(detailsCacheKey, nextChecks)
+                    }
+                  }}
+                  onBodyUpdated={(nextBody) => {
+                    if (detailsCacheKey) {
+                      patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                    }
+                  }}
+                  onCommentAdded={appendOptimisticComment}
+                  onReviewersRequested={(nextReviewRequests) => {
+                    if (detailsCacheKey) {
+                      patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
+                    }
+                    onReviewRequestsChange?.(
+                      { id: workItem.id, repoId: workItem.repoId },
+                      nextReviewRequests
+                    )
+                  }}
+                />
+              </TabsContent>
+
+              {workItem.type === 'pr' && (
+                <>
+                  <TabsContent value="checks" className="mt-0">
+                    <ChecksTab
+                      item={workItem}
+                      repoPath={repoPath}
+                      repoId={effectiveRepoId}
+                      sourceContext={sourceContext}
+                      headSha={details?.headSha}
+                      checks={checks}
+                      loading={loading || !detailsLoaded}
+                      variant="page"
+                      onChecksUpdated={(nextChecks) => {
+                        if (detailsCacheKey) {
+                          patchCachedPRChecks(detailsCacheKey, nextChecks)
+                        }
+                      }}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="files" className="mt-0 h-full min-h-0 overflow-hidden">
+                    {loading && files.length === 0 ? (
+                      <div className="flex items-center justify-center py-10">
+                        <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : files.length === 0 ? (
+                      <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
+                        {translate(
+                          'auto.components.GitHubItemDialog.3cd5ae5b7b',
+                          'No files changed.'
+                        )}
+                      </div>
+                    ) : (
+                      <PRFilesCombinedDiffViewer
+                        files={files}
+                        comments={comments}
+                        repoPath={repoPath ?? ''}
+                        repoId={effectiveRepoId ?? ''}
+                        sourceContext={sourceContext}
+                        prNumber={workItem.number}
+                        prUrl={workItem.url}
+                        headSha={details?.headSha}
+                        baseSha={details?.baseSha}
+                        pendingViewedPaths={pendingViewedPaths}
+                        onCommentAdded={appendOptimisticComment}
+                        onViewedChange={handlePRFileViewedChange}
+                      />
+                    )}
+                  </TabsContent>
+                </>
+              )}
+            </div>
+          </Tabs>
         )}
-      </SheetContent>
-    </Sheet>
+      </div>
+    </div>
+  ) : null
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+      {content}
+    </div>
   )
 }

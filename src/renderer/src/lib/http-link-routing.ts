@@ -1,10 +1,12 @@
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
   forceSystemBrowser?: boolean
 }
 
 type StoreAccessor = () => {
-  settings?: { openLinksInApp?: boolean } | null
+  settings?: { openLinksInApp?: boolean; activeRuntimeEnvironmentId?: string | null } | null
   setActiveWorktree: (worktreeId: string) => void
   createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
 }
@@ -28,15 +30,23 @@ export function registerHttpLinkStoreAccessor(fn: StoreAccessor): void {
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
   const { worktreeId, forceSystemBrowser } = opts
   const state = storeAccessor?.()
+  const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
   const routeToOrca =
-    !forceSystemBrowser && Boolean(worktreeId) && state?.settings?.openLinksInApp !== false
+    !remoteRuntimeActive &&
+    !forceSystemBrowser &&
+    Boolean(worktreeId) &&
+    state?.settings?.openLinksInApp === true
 
   if (routeToOrca && worktreeId && state) {
     // Why: http clicks from inside a worktree should not push a worktree-switch
     // history entry — the user isn't changing worktrees, they're opening a tab
     // in the one they're already in. activateAndRevealWorktree is reserved for
     // file-link jumps that genuinely switch worktrees.
-    state.setActiveWorktree(worktreeId)
+    if (worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+      // Why: the floating workspace uses a synthetic worktree id. Promoting it
+      // to the global activeWorktreeId deselects the real repo workspace.
+      state.setActiveWorktree(worktreeId)
+    }
     state.createBrowserTab(worktreeId, url, { activate: true })
     return
   }

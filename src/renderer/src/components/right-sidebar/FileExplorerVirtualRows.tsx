@@ -4,31 +4,40 @@ import { dirname, normalizeRelativePath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import type { GitFileStatus } from '../../../../shared/types'
 import { FileExplorerRow, InlineInputRow, type InlineInput } from './FileExplorerRow'
-import { STATUS_COLORS } from './status-display'
+import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
 import type { DirCache, TreeNode } from './file-explorer-types'
+import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
   inlineInputIndex: number
-  flatRows: TreeNode[]
+  rowProjection: FileExplorerRowProjection
   inlineInput: InlineInput | null
   handleInlineSubmit: (value: string) => void
   dismissInlineInput: () => void
   folderStatusByRelativePath: Map<string, GitFileStatus | null>
   statusByRelativePath: Map<string, GitFileStatus>
+  ignoredByRelativePath: Set<string>
   expanded: Set<string>
+  canCollapseFolderSubtree?: boolean
   dirCache: Record<string, DirCache>
-  selectedPath: string | null
+  selectedPaths: Set<string>
   activeFileId: string | null
   flashingPath: string | null
   deleteShortcutLabel: string
-  onClick: (node: TreeNode) => void
+  connectionId?: string | null
+  onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
-  onSelectPath: (path: string) => void
+  onContextMenuSelect: (node: TreeNode) => void
+  onCopyPaths: (node: TreeNode, pathKind: 'absolute' | 'relative') => void
   onStartNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
+  onAddFolderAsProject: (node: TreeNode) => void
+  canAddFolderAsProject: (node: TreeNode) => boolean
   onRequestDelete: (node: TreeNode) => void
+  onCollapseFolderSubtree: (node: TreeNode) => void
+  onFindInFolder: (node: TreeNode) => void
   onMoveDrop: (sourcePath: string, destDir: string) => void
   onDragTargetChange: (dir: string | null) => void
   onDragSourceChange: (path: string | null) => void
@@ -44,25 +53,33 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
   const {
     virtualizer,
     inlineInputIndex,
-    flatRows,
+    rowProjection,
     inlineInput,
     handleInlineSubmit,
     dismissInlineInput,
     folderStatusByRelativePath,
     statusByRelativePath,
+    ignoredByRelativePath,
     expanded,
+    canCollapseFolderSubtree = true,
     dirCache,
-    selectedPath,
+    selectedPaths,
     activeFileId,
     flashingPath,
     deleteShortcutLabel,
+    connectionId,
     onClick,
     onDoubleClick,
-    onSelectPath,
+    onContextMenuSelect,
+    onCopyPaths,
     onStartNew,
     onStartRename,
     onDuplicate,
+    onAddFolderAsProject,
+    canAddFolderAsProject,
     onRequestDelete,
+    onCollapseFolderSubtree,
+    onFindInFolder,
     onMoveDrop,
     onDragTargetChange,
     onDragSourceChange,
@@ -74,6 +91,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     nativeDropTargetDir
   } = props
 
+  const visibleSelectionCount = rowProjection.countVisiblePaths(selectedPaths)
+
   return (
     <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
       {virtualizer.getVirtualItems().map((vItem) => {
@@ -82,7 +101,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
           !isInlineRow && inlineInputIndex >= 0 && vItem.index > inlineInputIndex
             ? vItem.index - 1
             : vItem.index
-        const node = isInlineRow ? null : flatRows[rowIndex]
+        const node = isInlineRow ? null : rowProjection.getRowAtIndex(rowIndex)
         if (!isInlineRow && !node) {
           return null
         }
@@ -116,6 +135,11 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         const nodeStatus = n.isDirectory
           ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
           : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+        const isIgnored = shouldShowIgnoredDecoration(
+          nodeStatus,
+          ignoredByRelativePath,
+          normalizedRelativePath
+        )
 
         const rowParentDir = n.isDirectory ? n.path : dirname(n.path)
         const sourceParentDir = dragSourcePath ? dirname(dragSourcePath) : null
@@ -136,20 +160,30 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               node={n}
               isExpanded={expanded.has(n.path)}
               isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
-              isSelected={selectedPath === n.path || activeFileId === n.path}
+              isSelected={selectedPaths.has(n.path) || activeFileId === n.path}
+              selectedPaths={selectedPaths}
               isFlashing={flashingPath === n.path}
               nodeStatus={nodeStatus}
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}
+              isIgnored={isIgnored}
               deleteShortcutLabel={deleteShortcutLabel}
+              connectionId={connectionId}
+              canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}
-              onClick={() => onClick(n)}
+              selectionSize={selectedPaths.has(n.path) ? visibleSelectionCount : 1}
+              onClick={(event) => onClick(n, event)}
               onDoubleClick={() => onDoubleClick(n)}
-              onSelect={() => onSelectPath(n.path)}
+              onContextMenuSelect={() => onContextMenuSelect(n)}
+              onCopyPaths={(pathKind) => onCopyPaths(n, pathKind)}
               onStartNew={onStartNew}
               onStartRename={onStartRename}
               onDuplicate={onDuplicate}
+              onAddFolderAsProject={() => onAddFolderAsProject(n)}
+              canAddAsProject={canAddFolderAsProject(n)}
               onRequestDelete={() => onRequestDelete(n)}
+              onCollapseFolderSubtree={() => onCollapseFolderSubtree(n)}
+              onFindInFolder={() => onFindInFolder(n)}
               onMoveDrop={onMoveDrop}
               onDragTargetChange={onDragTargetChange}
               onDragSourceChange={onDragSourceChange}

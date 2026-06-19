@@ -1,5 +1,4 @@
-const GH_ITEM_PATH_RE = /^\/[^/]+\/[^/]+\/(?:issues|pull)\/(\d+)(?:\/)?$/i
-const GH_ITEM_PATH_FULL_RE = /^\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)(?:\/)?$/i
+const GH_ITEM_PATH_RE = /^\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/.*)?$/i
 
 export type RepoSlug = {
   owner: string
@@ -9,6 +8,17 @@ export type RepoSlug = {
 export type GitHubLinkQuery = {
   query: string
   directNumber: number | null
+}
+
+export function buildGitHubRepoUrl(slug: RepoSlug | null | undefined): string | null {
+  if (!slug?.owner || !slug.repo) {
+    return null
+  }
+  return `https://github.com/${encodeURIComponent(slug.owner)}/${encodeURIComponent(slug.repo)}`
+}
+
+function matchGitHubItemPath(url: URL): RegExpExecArray | null {
+  return GH_ITEM_PATH_RE.exec(url.pathname.replace(/\/+$/, ''))
 }
 
 /**
@@ -33,21 +43,21 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
     return null
   }
 
-  if (!/^(?:www\.)?github\.com$/i.test(url.hostname)) {
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     return null
   }
 
-  const match = GH_ITEM_PATH_RE.exec(url.pathname)
+  const match = matchGitHubItemPath(url)
   if (!match) {
     return null
   }
 
-  return Number.parseInt(match[1], 10)
+  return Number.parseInt(match[4], 10)
 }
 
 /**
  * Parses an owner/repo slug plus issue/PR number from a GitHub URL. Returns
- * null for anything that isn't a recognizable github.com issue or pull URL.
+ * null for anything that isn't a recognizable GitHub-shaped issue or pull URL.
  */
 export function parseGitHubIssueOrPRLink(input: string): {
   slug: RepoSlug
@@ -66,19 +76,19 @@ export function parseGitHubIssueOrPRLink(input: string): {
     return null
   }
 
-  if (!/^(?:www\.)?github\.com$/i.test(url.hostname)) {
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     return null
   }
 
-  const match = GH_ITEM_PATH_FULL_RE.exec(url.pathname)
+  const match = matchGitHubItemPath(url)
   if (!match) {
     return null
   }
 
   return {
     slug: { owner: match[1], repo: match[2] },
-    type: url.pathname.toLowerCase().includes('/pull/') ? 'pr' : 'issue',
-    number: Number.parseInt(match[3], 10)
+    type: match[3].toLowerCase() === 'pull' ? 'pr' : 'issue',
+    number: Number.parseInt(match[4], 10)
   }
 }
 
@@ -102,7 +112,7 @@ export function normalizeGitHubLinkQuery(raw: string): GitHubLinkQuery {
     return { query: trimmed, directNumber: null }
   }
 
-  // Why: any github.com issue/pull URL is accepted by number regardless of
+  // Why: any GitHub-shaped issue/pull URL is accepted by number regardless of
   // slug, since fork checkouts can legitimately target upstream issues whose
   // slug differs from the origin remote.
   return {

@@ -18,6 +18,14 @@ describe('isEditableKeyboardTarget', () => {
     expect(isEditableKeyboardTarget(child)).toBe(true)
   })
 
+  it('returns true for Monaco editor descendants', () => {
+    const child = {
+      isContentEditable: false,
+      closest: (selector: string) => (selector.includes('.monaco-editor') ? {} : null)
+    }
+    expect(isEditableKeyboardTarget(child)).toBe(true)
+  })
+
   it('returns false for non-editable elements', () => {
     const div = {
       isContentEditable: false,

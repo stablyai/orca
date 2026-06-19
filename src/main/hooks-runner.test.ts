@@ -47,7 +47,7 @@ describe('createSetupRunnerScript', () => {
       const { createSetupRunnerScript } = await import('./hooks')
       const result = createSetupRunnerScript(
         makeRepo(),
-        'C:\\repo\\feature',
+        'C:\\repo\\feature\\',
         'pnpm install\npnpm build'
       )
 
@@ -55,7 +55,8 @@ describe('createSetupRunnerScript', () => {
         runnerScriptPath: 'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd',
         envVars: expect.objectContaining({
           ORCA_ROOT_PATH: '/test/repo',
-          ORCA_WORKTREE_PATH: 'C:\\repo\\feature'
+          ORCA_WORKTREE_PATH: 'C:\\repo\\feature\\',
+          ORCA_WORKSPACE_NAME: 'feature'
         })
       })
       expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
@@ -70,6 +71,33 @@ describe('createSetupRunnerScript', () => {
           ''
         ].join('\r\n'),
         'utf-8'
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('derives ORCA_WORKSPACE_NAME from a POSIX worktree path', async () => {
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('/test/repo/.git/worktrees/feature/orca/setup-runner.sh')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
+
+    try {
+      const { createSetupRunnerScript } = await import('./hooks')
+      const result = createSetupRunnerScript(makeRepo(), '/test/repo-feature', 'pnpm install')
+
+      expect(result.envVars).toEqual(
+        expect.objectContaining({
+          ORCA_WORKTREE_PATH: '/test/repo-feature',
+          ORCA_WORKSPACE_NAME: 'repo-feature'
+        })
       )
     } finally {
       Object.defineProperty(process, 'platform', {
@@ -106,6 +134,7 @@ describe('createSetupRunnerScript', () => {
         envVars: expect.objectContaining({
           ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
           ORCA_WORKTREE_PATH: '/home/jin/feature',
+          ORCA_WORKSPACE_NAME: 'feature',
           CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
           GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca'
         })
@@ -151,6 +180,7 @@ describe('createSetupRunnerScript', () => {
         envVars: expect.objectContaining({
           ORCA_ROOT_PATH: '/test/repo',
           ORCA_WORKTREE_PATH: '/home/jin/repo/feature',
+          ORCA_WORKSPACE_NAME: 'feature',
           CONDUCTOR_ROOT_PATH: '/test/repo',
           GHOSTX_ROOT_PATH: '/test/repo'
         })
@@ -185,33 +215,45 @@ describe('createIssueCommandRunnerScript', () => {
 
   it('writes a POSIX runner under the worktree git dir for long issue commands', async () => {
     const fs = await import('fs')
+    const originalPlatform = process.platform
 
     execFileSyncMock.mockReturnValue(
       '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh'
     )
-
-    const { createIssueCommandRunnerScript } = await import('./hooks')
-    const result = createIssueCommandRunnerScript(
-      makeRepo(),
-      '/test/repo-feature',
-      'codex exec "long command"\nclaude -p "review it"'
-    )
-
-    expect(result).toEqual({
-      runnerScriptPath: '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
-      envVars: expect.objectContaining({
-        ORCA_ROOT_PATH: '/test/repo',
-        ORCA_WORKTREE_PATH: '/test/repo-feature'
-      })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
     })
-    expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
-      '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
-      '#!/usr/bin/env bash\nset -e\ncodex exec "long command"\nclaude -p "review it"\n',
-      'utf-8'
-    )
-    expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
-      '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
-      0o755
-    )
+
+    try {
+      const { createIssueCommandRunnerScript } = await import('./hooks')
+      const result = createIssueCommandRunnerScript(
+        makeRepo(),
+        '/test/repo-feature',
+        'codex exec "long command"\nclaude -p "review it"'
+      )
+
+      expect(result).toEqual({
+        runnerScriptPath: '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
+        envVars: expect.objectContaining({
+          ORCA_ROOT_PATH: '/test/repo',
+          ORCA_WORKTREE_PATH: '/test/repo-feature'
+        })
+      })
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
+        '#!/usr/bin/env bash\nset -e\ncodex exec "long command"\nclaude -p "review it"\n',
+        'utf-8'
+      )
+      expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
+        '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh',
+        0o755
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
   })
 })

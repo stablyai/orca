@@ -33,7 +33,9 @@ const StatusIndicator = React.memo(function StatusIndicator({
         title={resolvedTitle}
         {...rest}
       >
-        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin" />
+        {/* Why: a stepped spin preserves the worker-is-running affordance while
+            avoiding a full-refresh-rate compositor loop for long agent runs. */}
+        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent [animation:spin_1s_steps(12,end)_infinite]" />
       </span>
     )
   }
@@ -48,12 +50,11 @@ const StatusIndicator = React.memo(function StatusIndicator({
         className={cn(
           'block size-2 rounded-full',
           status === 'permission'
-            ? 'bg-red-500'
+            ? 'bg-amber-500'
             : status === 'done' || status === 'active'
               ? // Green dot for both hook-reported 'done' and the heuristic
                 // 'active' (terminal open, quiet). Working uses a yellow
-                // spinner so working vs done differ by motion; 'inactive'
-                // stays grey.
+                // ring above; 'inactive' stays grey.
                 'bg-emerald-500'
               : 'bg-neutral-500/40'
         )}

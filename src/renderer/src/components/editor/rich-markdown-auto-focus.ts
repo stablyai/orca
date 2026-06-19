@@ -6,8 +6,9 @@ import type { Editor } from '@tiptap/react'
  * from modals/dialogs and skips scrollIntoView to avoid racing with
  * useEditorScrollRestore.
  */
-export function autoFocusRichEditor(nextEditor: Editor, rootEl: HTMLElement | null): void {
-  requestAnimationFrame(() => {
+export function autoFocusRichEditor(nextEditor: Editor, rootEl: HTMLElement | null): () => void {
+  let frameId: number | null = requestAnimationFrame(() => {
+    frameId = null
     if (nextEditor.isDestroyed) {
       return
     }
@@ -32,4 +33,10 @@ export function autoFocusRichEditor(nextEditor: Editor, rootEl: HTMLElement | nu
     // scroll position on every tab switch.
     nextEditor.commands.focus('start', { scrollIntoView: false })
   })
+  return () => {
+    if (frameId !== null) {
+      cancelAnimationFrame(frameId)
+      frameId = null
+    }
+  }
 }

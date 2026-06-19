@@ -1,5 +1,13 @@
-import { useState, useEffect } from 'react'
-import { View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-native'
+import { useState } from 'react'
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Platform,
+  type KeyboardTypeOptions
+} from 'react-native'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
 
@@ -9,6 +17,10 @@ type Props = {
   message?: string
   defaultValue?: string
   placeholder?: string
+  submitLabel?: string
+  selectTextOnFocus?: boolean
+  allowEmpty?: boolean
+  keyboardType?: KeyboardTypeOptions
   onSubmit: (value: string) => void
   onCancel: () => void
 }
@@ -19,20 +31,36 @@ export function TextInputModal({
   message,
   defaultValue = '',
   placeholder,
+  submitLabel = 'Save',
+  selectTextOnFocus = false,
+  allowEmpty = false,
+  keyboardType,
   onSubmit,
   onCancel
 }: Props) {
   const [value, setValue] = useState(defaultValue)
+  const [previousVisible, setPreviousVisible] = useState(visible)
+  const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
 
-  useEffect(() => {
-    if (visible) setValue(defaultValue)
-  }, [visible, defaultValue])
-
-  function handleSubmit() {
-    if (value.trim()) {
-      onSubmit(value.trim())
+  // Why: reset before the opening commit so the drawer never paints the
+  // previous modal value while preserving the existing close animation state.
+  const shouldResetValue = visible && (!previousVisible || defaultValue !== previousDefaultValue)
+  if (visible !== previousVisible || shouldResetValue) {
+    setPreviousVisible(visible)
+    if (shouldResetValue) {
+      setPreviousDefaultValue(defaultValue)
+      setValue(defaultValue)
     }
   }
+
+  function handleSubmit() {
+    const trimmed = value.trim()
+    if (trimmed || allowEmpty) {
+      onSubmit(trimmed)
+    }
+  }
+
+  const canSubmit = allowEmpty || value.trim().length > 0
 
   return (
     <BottomDrawer visible={visible} onClose={onCancel}>
@@ -50,6 +78,8 @@ export function TextInputModal({
         autoFocus
         autoCapitalize="none"
         autoCorrect={false}
+        selectTextOnFocus={selectTextOnFocus}
+        keyboardType={keyboardType}
         returnKeyType="done"
         onSubmitEditing={handleSubmit}
         selectionColor={colors.accentBlue}
@@ -66,12 +96,12 @@ export function TextInputModal({
           style={({ pressed }) => [
             styles.submitButton,
             pressed && styles.buttonPressed,
-            !value.trim() && styles.submitButtonDisabled
+            !canSubmit && styles.submitButtonDisabled
           ]}
-          disabled={!value.trim()}
+          disabled={!canSubmit}
           onPress={handleSubmit}
         >
-          <Text style={styles.submitText}>Save</Text>
+          <Text style={styles.submitText}>{submitLabel}</Text>
         </Pressable>
       </View>
     </BottomDrawer>

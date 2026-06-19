@@ -1,6 +1,8 @@
 import './xterm-env-polyfill'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
+import { extractLastOscTitle } from '../../shared/agent-detection'
+import { parseFileUriPath } from './osc7-file-uri'
 import type { TerminalSnapshot, TerminalModes } from './types'
 
 export type HeadlessEmulatorOptions = {
@@ -13,40 +15,29 @@ export type HeadlessSnapshotOptions = {
   scrollbackRows?: number
 }
 
-const DEFAULT_SCROLLBACK = 5000
-
-function parseFileUriPath(uri: string): string | null {
-  try {
-    const url = new URL(uri)
-    if (url.protocol !== 'file:') {
-      return null
-    }
-
-    const decodedPath = decodeURIComponent(url.pathname)
-    if (process.platform !== 'win32') {
-      return decodedPath
-    }
-
-    // Why: Windows OSC-7 cwd updates can describe both drive-letter paths
-    // (`file:///C:/repo`) and UNC shares (`file://server/share/repo`). Use the
-    // hostname when present so live cwd tracking, snapshots, and restore all
-    // round-trip to a native Windows path instead of dropping the server name.
-    if (url.hostname) {
-      return `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`
-    }
-    if (/^\/[A-Za-z]:/.test(decodedPath)) {
-      return decodedPath.slice(1)
-    }
-    return decodedPath.replace(/\//g, '\\')
-  } catch {
-    return null
+type TerminalWithSynchronousWrite = Terminal & {
+  _core?: {
+    writeSync?: (data: string) => void
   }
 }
+
+const DEFAULT_SCROLLBACK = 5000
+const OSC_SCAN_TAIL_LIMIT = 4096
+// Why: PTY/SSH chunks can split a long combined DECSET before the final h/l.
+// Keep parser state far beyond normal mode lists while still bounding memory.
+const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
+type MouseTrackingMode = NonNullable<TerminalModes['mouseTrackingMode']>
 
 export class HeadlessEmulator {
   private terminal: Terminal
   private serializer: SerializeAddon
   private cwd: string | null = null
+  private lastTitle: string | null = null
+  private oscScanTail = ''
+  private privateModeScanTail = ''
+  private mouseTrackingMode: MouseTrackingMode = 'none'
+  private sgrMouseMode = false
+  private sgrMousePixelsMode = false
   private disposed = false
 
   constructor(opts: HeadlessEmulatorOptions) {
@@ -54,7 +45,8 @@ export class HeadlessEmulator {
       cols: opts.cols,
       rows: opts.rows,
       scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
-      allowProposedApi: true
+      allowProposedApi: true,
+      logLevel: 'off'
     })
 
     this.serializer = new SerializeAddon()
@@ -78,10 +70,52 @@ export class HeadlessEmulator {
       return Promise.resolve()
     }
 
-    this.scanOsc7(data)
+    if (this.tryWriteSync(data)) {
+      return Promise.resolve()
+    }
+    this.scanInputForOscState(data)
     return new Promise<void>((resolve) => {
-      this.terminal.write(data, resolve)
+      this.terminal.write(data, () => {
+        // Why: snapshots combine serialized xterm state with mirrored mouse
+        // modes. Commit the mirror only after xterm has parsed the same bytes.
+        this.scanPrivateModes(data)
+        resolve()
+      })
     })
+  }
+
+  /** Synchronous write used by cold-restore log replay, where a snapshot is
+   *  taken immediately after the last record and queued async writes would
+   *  serialize a half-applied stream. Returns false when xterm's synchronous
+   *  write path is unavailable — callers must then abandon the replay. */
+  writeSync(data: string): boolean {
+    if (this.disposed) {
+      return false
+    }
+    return this.tryWriteSync(data)
+  }
+
+  private tryWriteSync(data: string): boolean {
+    const writeSync = (this.terminal as TerminalWithSynchronousWrite)._core?.writeSync
+    if (typeof writeSync !== 'function') {
+      return false
+    }
+    this.scanInputForOscState(data)
+    // Why: hidden renderer restore snapshots are requested immediately after
+    // PTY bursts; queued headless writes can snapshot half-cleared TUI rows.
+    writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, data)
+    this.scanPrivateModes(data)
+    return true
+  }
+
+  private scanInputForOscState(data: string): void {
+    const oscInput = this.oscScanTail + data
+    this.oscScanTail = this.extractOscScanTail(oscInput)
+    this.scanOsc7(oscInput)
+    const lastTitle = extractLastOscTitle(oscInput)
+    if (lastTitle !== null) {
+      this.lastTitle = lastTitle
+    }
   }
 
   resize(cols: number, rows: number): void {
@@ -93,15 +127,20 @@ export class HeadlessEmulator {
 
   getSnapshot(opts: HeadlessSnapshotOptions = {}): TerminalSnapshot {
     const modes = this.getModes()
+    const snapshotAnsi = this.normalizeSnapshotAnsiForModes(
+      this.serializer.serialize({ scrollback: opts.scrollbackRows }),
+      modes
+    )
     return {
-      snapshotAnsi: this.serializer.serialize({ scrollback: opts.scrollbackRows }),
+      snapshotAnsi,
       scrollbackAnsi: '',
       rehydrateSequences: this.buildRehydrateSequences(modes),
       cwd: this.cwd,
       modes,
       cols: this.terminal.cols,
       rows: this.terminal.rows,
-      scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows
+      scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows,
+      lastTitle: this.lastTitle ?? undefined
     }
   }
 
@@ -109,8 +148,25 @@ export class HeadlessEmulator {
     return this.terminal.buffer.active.type === 'alternate'
   }
 
+  getVisibleLines(): string[] {
+    const buffer = this.terminal.buffer.active
+    const lines: string[] = []
+    for (let row = buffer.viewportY; row < buffer.viewportY + this.terminal.rows; row += 1) {
+      lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
+    }
+    return lines
+  }
+
   getCwd(): string | null {
     return this.cwd
+  }
+
+  setCwd(cwd: string | null): void {
+    this.cwd = cwd
+  }
+
+  setLastTitle(title: string): void {
+    this.lastTitle = title
   }
 
   clearScrollback(): void {
@@ -133,6 +189,107 @@ export class HeadlessEmulator {
     }
   }
 
+  private extractOscScanTail(input: string): string {
+    const lastOsc = input.lastIndexOf('\x1b]')
+    const lastEscape = input.endsWith('\x1b') ? input.length - 1 : -1
+    const start = Math.max(lastOsc, lastEscape)
+    if (start === -1) {
+      return ''
+    }
+    const suffix = input.slice(start)
+    if (suffix.includes('\x07') || suffix.includes('\x1b\\')) {
+      return ''
+    }
+    return suffix.slice(-OSC_SCAN_TAIL_LIMIT)
+  }
+
+  private scanPrivateModes(data: string): void {
+    const input = this.privateModeScanTail + data
+    this.privateModeScanTail = this.extractPrivateModeScanTail(input)
+    // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
+    const privateModeRe = /\x1bc|\x1b\[\?([0-9;]+)([hl])|\x9b\?([0-9;]+)([hl])/g
+    let match: RegExpExecArray | null
+    while ((match = privateModeRe.exec(input)) !== null) {
+      if (match[0] === '\x1bc') {
+        this.mouseTrackingMode = 'none'
+        this.sgrMouseMode = false
+        this.sgrMousePixelsMode = false
+        continue
+      }
+      const params = match[1] ?? match[3]
+      const enabled = (match[2] ?? match[4]) === 'h'
+      for (const rawParam of params.split(';')) {
+        if (rawParam === '') {
+          continue
+        }
+        const param = Number(rawParam)
+        if (!Number.isInteger(param)) {
+          continue
+        }
+        if (param === 9) {
+          this.mouseTrackingMode = enabled ? 'x10' : 'none'
+        }
+        if (param === 1000) {
+          this.mouseTrackingMode = enabled ? 'vt200' : 'none'
+        }
+        if (param === 1002) {
+          this.mouseTrackingMode = enabled ? 'drag' : 'none'
+        }
+        if (param === 1003) {
+          this.mouseTrackingMode = enabled ? 'any' : 'none'
+        }
+        if (param === 1006) {
+          this.sgrMouseMode = enabled
+          this.sgrMousePixelsMode = false
+        }
+        if (param === 1016) {
+          this.sgrMouseMode = false
+          this.sgrMousePixelsMode = enabled
+        }
+      }
+    }
+  }
+
+  private extractPrivateModeScanTail(input: string): string {
+    const start = Math.max(input.lastIndexOf('\x1b'), input.lastIndexOf('\x9b'))
+    if (start === -1) {
+      return ''
+    }
+    const tail = input.slice(start)
+    if (tail.length > PRIVATE_MODE_SCAN_TAIL_LIMIT) {
+      return ''
+    }
+    if (tail === '\x1b' || tail === '\x1b[' || tail === '\x9b') {
+      return tail
+    }
+    if (tail.startsWith('\x1b[?')) {
+      return this.isIncompletePrivateModeParams(tail.slice(3)) ? tail : ''
+    }
+    if (tail.startsWith('\x9b?')) {
+      return this.isIncompletePrivateModeParams(tail.slice(2)) ? tail : ''
+    }
+    return ''
+  }
+
+  private isIncompletePrivateModeParams(params: string): boolean {
+    return /^[0-9;]*$/.test(params)
+  }
+
+  private normalizeSnapshotAnsiForModes(snapshotAnsi: string, modes: TerminalModes): string {
+    if (!modes.alternateScreen) {
+      return snapshotAnsi
+    }
+    const alternateScreenMarker = '\x1b[?1049h'
+    const start = snapshotAnsi.lastIndexOf(alternateScreenMarker)
+    if (start === -1) {
+      return snapshotAnsi
+    }
+    // Why: rehydrateSequences already enters the alternate screen and restores
+    // mouse modes. Dropping SerializeAddon's duplicate ?1049h keeps mobile's
+    // "slice from last alt-screen marker" replay from discarding those modes.
+    return snapshotAnsi.slice(start + alternateScreenMarker.length)
+  }
+
   private parseOsc7Uri(uri: string): void {
     const parsed = parseFileUriPath(uri)
     if (parsed) {
@@ -142,9 +299,13 @@ export class HeadlessEmulator {
 
   private getModes(): TerminalModes {
     const buffer = this.terminal.buffer.active
+    const mouseTrackingMode = this.mouseTrackingMode
     return {
       bracketedPaste: this.terminal.modes.bracketedPasteMode,
-      mouseTracking: this.terminal.modes.mouseTrackingMode !== 'none',
+      mouseTracking: mouseTrackingMode !== 'none',
+      mouseTrackingMode,
+      sgrMouseMode: this.sgrMouseMode,
+      sgrMousePixelsMode: this.sgrMousePixelsMode,
       applicationCursor:
         buffer.type === 'normal' ? this.terminal.modes.applicationCursorKeysMode : false,
       alternateScreen: buffer.type === 'alternate'
@@ -153,14 +314,39 @@ export class HeadlessEmulator {
 
   private buildRehydrateSequences(modes: TerminalModes): string {
     const seqs: string[] = []
+    if (modes.alternateScreen) {
+      seqs.push('\x1b[?1049h')
+    }
     if (modes.bracketedPaste) {
       seqs.push('\x1b[?2004h')
     }
     if (modes.applicationCursor) {
       seqs.push('\x1b[?1h')
     }
-    if (modes.alternateScreen) {
-      seqs.push('\x1b[?1049h')
+    // Why: mobile alt-screen scroll gestures need xterm's mouse mode restored
+    // from cold snapshots; OpenCode/OpenTUI enables scrollable panes this way.
+    switch (modes.mouseTracking ? (modes.mouseTrackingMode ?? 'vt200') : 'none') {
+      case 'x10':
+        seqs.push('\x1b[?9h')
+        break
+      case 'vt200':
+        seqs.push('\x1b[?1000h')
+        break
+      case 'drag':
+        seqs.push('\x1b[?1002h')
+        break
+      case 'any':
+        seqs.push('\x1b[?1003h')
+        break
+      case 'none':
+        break
+    }
+    // Why: xterm tracks the mouse protocol and SGR encoding as independent
+    // modes, so snapshots must preserve the encoding even when reporting is off.
+    if (modes.sgrMousePixelsMode) {
+      seqs.push('\x1b[?1016h')
+    } else if (modes.sgrMouseMode) {
+      seqs.push('\x1b[?1006h')
     }
     return seqs.join('')
   }

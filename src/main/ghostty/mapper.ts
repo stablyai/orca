@@ -261,11 +261,18 @@ export function mapGhosttyToOrca(
         return null
       }
       return { key: 'terminalFocusFollowsMouse', value: v === 'true' }
+    },
+
+    'middle-click-action': (v) => {
+      if (v !== 'primary-paste' && v !== 'ignore') {
+        return null
+      }
+      return { key: 'primarySelectionMiddleClickPaste', value: v === 'primary-paste' }
     }
   }
 
   for (const [key, rawValue] of Object.entries(parsed)) {
-    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue
+    const value = Array.isArray(rawValue) ? (rawValue.at(-1) ?? '') : rawValue
 
     // Why: Ghostty's selection-word-chars defines characters that ARE part of a
     // word, while xterm.js wordSeparator defines characters that BREAK words.

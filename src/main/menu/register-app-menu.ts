@@ -1,16 +1,33 @@
 import { BrowserWindow, Menu, app } from 'electron'
+import {
+  formatKeybindingList,
+  getEffectiveKeybindingsForAction,
+  type KeybindingActionId,
+  type KeybindingOverrides
+} from '../../shared/keybindings'
+import { translateMain } from '../i18n/main-i18n'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
+  showAutomationsButton: boolean
+  showMobileButton: boolean
   showTitlebarAppName: boolean
   statusBarVisible: boolean
 }
 
 export type AppearanceMenuKey = keyof AppearanceMenuState
 
+export function getNextDefaultOnAppearanceSettingValue(current: boolean | undefined): boolean {
+  return !(current !== false)
+}
+
 type RegisterAppMenuOptions = {
   onOpenSettings: () => void
+  onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
+  onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
+  onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: { includePrerelease: boolean }) => void
+  onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   onZoomIn: () => void
   onZoomOut: () => void
   onZoomReset: () => void
@@ -18,29 +35,45 @@ type RegisterAppMenuOptions = {
   onToggleRightSidebar: () => void
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
+  getKeybindings?: () => KeybindingOverrides | undefined
 }
 
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const {
     onOpenSettings,
+    onOpenSetupGuide,
+    onOpenFeatureTour,
+    onOpenCrashReport,
     onCheckForUpdates,
+    onBeforeReload,
     onZoomIn,
     onZoomOut,
     onZoomReset,
     onToggleLeftSidebar,
     onToggleRightSidebar,
     onToggleAppearance,
-    getAppearanceState
+    getAppearanceState,
+    getKeybindings
   } = options
 
   const isMac = process.platform === 'darwin'
   const appearance = getAppearanceState()
+  const shortcutLabel = (actionId: KeybindingActionId): string => {
+    const bindings = getEffectiveKeybindingsForAction(
+      actionId,
+      process.platform,
+      getKeybindings?.()
+    )
+    return formatKeybindingList(bindings, process.platform)
+  }
 
   const reloadFocusedWindow = (ignoreCache: boolean): void => {
     const webContents = BrowserWindow.getFocusedWindow()?.webContents
     if (!webContents) {
       return
     }
+
+    onBeforeReload?.({ ignoreCache, webContentsId: webContents.id })
 
     if (ignoreCache) {
       webContents.reloadIgnoringCache()
@@ -63,30 +96,28 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   }
 
   const checkForUpdatesItem: Electron.MenuItemConstructorOptions = {
-    label: 'Check for Updates...',
+    label: translateMain('menu.checkForUpdates', 'Check for Updates...'),
     click: checkForUpdatesClick
   }
 
   const settingsItem: Electron.MenuItemConstructorOptions = {
-    label: 'Settings',
-    accelerator: 'CmdOrCtrl+,',
+    label: `${translateMain('menu.settings', 'Settings')}\t${shortcutLabel('app.settings')}`,
     click: () => onOpenSettings()
   }
 
-  const exportPdfItem: Electron.MenuItemConstructorOptions = {
-    label: 'Export as PDF...',
-    accelerator: 'CmdOrCtrl+Shift+E',
-    click: () => {
-      // Why: fire a one-way event into the focused renderer. The renderer
-      // owns the knowledge of whether a markdown surface is active and
-      // what DOM to extract — when no markdown surface is active this is
-      // a silent no-op on that side (see design doc §4 "Renderer UI
-      // trigger"). Keeping this as a send (not an invoke) avoids main
-      // needing to reason about surface state. Using
-      // BrowserWindow.getFocusedWindow() rather than the menu's
-      // focusedWindow param avoids the BaseWindow typing gap.
-      BrowserWindow.getFocusedWindow()?.webContents.send('export:requestPdf')
-    }
+  const featureTourItem: Electron.MenuItemConstructorOptions = {
+    label: translateMain('menu.exploreOrca', 'Explore Orca'),
+    click: (_menuItem, window) => onOpenFeatureTour(window)
+  }
+
+  const setupGuideItem: Electron.MenuItemConstructorOptions = {
+    label: translateMain('menu.gettingStarted', 'Getting Started with Orca'),
+    click: (_menuItem, window) => onOpenSetupGuide(window)
+  }
+
+  const crashReportItem: Electron.MenuItemConstructorOptions = {
+    label: translateMain('menu.reportCrash', 'Report Crash...'),
+    click: (_menuItem, window) => onOpenCrashReport(window)
   }
 
   // Why: the macOS app-menu (named after the app) is mandatory on darwin and
@@ -112,25 +143,19 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   }
 
   const fileMenu: Electron.MenuItemConstructorOptions = {
-    label: 'File',
+    label: translateMain('menu.file', 'File'),
+    // Why: on Windows/Linux there is no app-named menu, so Settings and
+    // Quit live under File — matching the common platform convention and
+    // keeping all user-facing actions reachable from the in-window menu bar.
     submenu: [
-      exportPdfItem,
-      // Why: on Windows/Linux there is no app-named menu, so Settings and
-      // Quit live under File — matching the common platform convention and
-      // keeping all user-facing actions reachable from the in-window menu bar.
-      ...(isMac
-        ? []
-        : ([
-            { type: 'separator' },
-            settingsItem,
-            { type: 'separator' },
-            { role: 'quit', label: 'Exit' }
-          ] satisfies Electron.MenuItemConstructorOptions[]))
+      settingsItem,
+      { type: 'separator' },
+      { role: 'quit', label: translateMain('menu.exit', 'Exit') }
     ]
   }
 
   const editMenu: Electron.MenuItemConstructorOptions = {
-    label: 'Edit',
+    label: translateMain('menu.edit', 'Edit'),
     submenu: [
       { role: 'undo' },
       { role: 'redo' },
@@ -150,7 +175,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   // appearance state through getAppearanceState() and produces a fresh
   // template with accurate `checked` values.
   const appearanceSubmenu: Electron.MenuItemConstructorOptions = {
-    label: 'Appearance',
+    label: translateMain('menu.appearance', 'Appearance'),
     submenu: [
       {
         // Why: display-only shortcut hint — not a real accelerator. Cmd/Ctrl+B
@@ -159,29 +184,41 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         // accelerator here would steal the chord before that carve-out can
         // fire. Sidebar open/closed lives in the renderer store (non-persisted),
         // so we forward a toggle request rather than mirroring state in main.
-        label: `Toggle Left Sidebar\t${isMac ? 'Cmd+B' : 'Ctrl+B'}`,
+        label: `${translateMain('menu.toggleLeftSidebar', 'Toggle Left Sidebar')}\t${shortcutLabel('sidebar.left.toggle')}`,
         click: () => onToggleLeftSidebar()
       },
       {
         // Why: display-only shortcut hint for the same reason as above.
-        label: `Toggle Right Sidebar\t${isMac ? 'Alt+Cmd+B' : 'Ctrl+Alt+B'}`,
+        label: `${translateMain('menu.toggleRightSidebar', 'Toggle Right Sidebar')}\t${shortcutLabel('sidebar.right.toggle')}`,
         click: () => onToggleRightSidebar()
       },
       {
-        label: 'Show Status Bar',
+        label: translateMain('menu.showStatusBar', 'Show Status Bar'),
         type: 'checkbox',
         checked: appearance.statusBarVisible,
         click: () => onToggleAppearance('statusBarVisible')
       },
       { type: 'separator' },
       {
-        label: 'Show Tasks Button',
+        label: translateMain('menu.showTasksButton', 'Show Tasks Button'),
         type: 'checkbox',
         checked: appearance.showTasksButton,
         click: () => onToggleAppearance('showTasksButton')
       },
       {
-        label: 'Show Titlebar App Name',
+        label: translateMain('menu.showAutomationsButton', 'Show Automations Button'),
+        type: 'checkbox',
+        checked: appearance.showAutomationsButton,
+        click: () => onToggleAppearance('showAutomationsButton')
+      },
+      {
+        label: translateMain('menu.showMobileButton', 'Show Orca Mobile Button'),
+        type: 'checkbox',
+        checked: appearance.showMobileButton,
+        click: () => onToggleAppearance('showMobileButton')
+      },
+      {
+        label: translateMain('menu.showTitlebarAppName', 'Show Titlebar App Name'),
         type: 'checkbox',
         checked: appearance.showTitlebarAppName,
         click: () => onToggleAppearance('showTitlebarAppName')
@@ -190,44 +227,28 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   }
 
   const viewMenu: Electron.MenuItemConstructorOptions = {
-    label: 'View',
+    label: translateMain('menu.view', 'View'),
     submenu: [
       {
-        label: 'Reload',
+        label: translateMain('menu.reload', 'Reload'),
         click: () => reloadFocusedWindow(false)
       },
       {
-        label: 'Force Reload',
-        accelerator: 'Shift+CmdOrCtrl+R',
+        label: `${translateMain('menu.forceReload', 'Force Reload')}\t${shortcutLabel('app.forceReload')}`,
         click: () => reloadFocusedWindow(true)
       },
       { role: 'toggleDevTools' },
       { type: 'separator' },
       {
-        label: 'Reset Size',
-        accelerator: 'CmdOrCtrl+0',
-        // Why: Some keyboard layouts/platforms intercept Cmd/Ctrl+zoom chords
-        // before before-input-event fires. Binding the menu accelerator gives
-        // us a reliable cross-platform fallback path.
+        label: `${translateMain('menu.resetSize', 'Reset Size')}\t${shortcutLabel('zoom.reset')}`,
         click: () => onZoomReset()
       },
       {
-        label: 'Zoom In',
-        accelerator: 'CmdOrCtrl+=',
+        label: `${translateMain('menu.zoomIn', 'Zoom In')}\t${shortcutLabel('zoom.in')}`,
         click: () => onZoomIn()
       },
       {
-        label: 'Zoom Out',
-        accelerator: 'CmdOrCtrl+-',
-        click: () => onZoomOut()
-      },
-      {
-        label: 'Zoom Out (Shift Alias)',
-        // Why: Some Linux keyboard layouts report the top-row minus chord as
-        // an underscore accelerator. Keep this hidden alias so Ctrl+- and
-        // Ctrl+_ can both route to terminal zoom out.
-        accelerator: 'CmdOrCtrl+_',
-        visible: false,
+        label: `${translateMain('menu.zoomOut', 'Zoom Out')}\t${shortcutLabel('zoom.out')}`,
         click: () => onZoomOut()
       },
       { type: 'separator' },
@@ -237,7 +258,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         // before the renderer's keydown handler fires. The overlay
         // mutual-exclusion logic (which runs in the renderer) would be
         // bypassed if this were a real accelerator binding.
-        label: `Open Worktree Palette\t${isMac ? 'Cmd+J' : 'Ctrl+Shift+J'}`
+        label: `${translateMain('menu.openWorktreePalette', 'Open Worktree Palette')}\t${shortcutLabel('worktree.palette')}`
       },
       { type: 'separator' },
       { role: 'togglefullscreen' },
@@ -247,26 +268,34 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   }
 
   const windowMenu: Electron.MenuItemConstructorOptions = {
-    label: 'Window',
+    label: translateMain('menu.window', 'Window'),
     submenu: [{ role: 'minimize' }, { role: 'zoom' }]
   }
 
-  // Why: Windows/Linux have no app-named menu, so About + Check for Updates
-  // go into a Help menu — the standard place for those entries on those
-  // platforms. On macOS the system "About Orca" and "Check for Updates"
-  // already sit under the app menu, so we don't duplicate them here.
   const helpMenu: Electron.MenuItemConstructorOptions = {
-    label: 'Help',
-    submenu: [{ role: 'about' }, checkForUpdatesItem]
+    label: translateMain('menu.help', 'Help'),
+    submenu: [
+      crashReportItem,
+      { type: 'separator' },
+      featureTourItem,
+      setupGuideItem,
+      ...(isMac
+        ? []
+        : ([
+            { type: 'separator' },
+            { role: 'about' },
+            checkForUpdatesItem
+          ] satisfies Electron.MenuItemConstructorOptions[]))
+    ]
   }
 
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(isMac ? [macAppMenu] : []),
-    fileMenu,
+    ...(isMac ? [] : [fileMenu]),
     editMenu,
     viewMenu,
     windowMenu,
-    ...(isMac ? [] : [helpMenu])
+    helpMenu
   ]
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))

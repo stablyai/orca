@@ -6,6 +6,8 @@ export type RemoteDirEntry = {
   isDirectory: boolean
 }
 
+const SSH_BROWSE_TIMEOUT_MS = 15_000
+
 // Why: the relay's fs.readDir enforces workspace root ACLs, which aren't
 // registered until a repo is added. This handler uses a raw SSH exec channel
 // to list directories, allowing the user to browse the remote filesystem
@@ -30,33 +32,86 @@ export function registerSshBrowseHandler(
         throw new Error(`SSH connection "${args.targetId}" not found`)
       }
 
-      // Why: using printf with a delimiter instead of ls avoids issues with
-      // filenames containing spaces or special characters. The -1 flag outputs
-      // one entry per line. The -p flag appends / to directories.
+      // Why: using one line per entry preserves filenames containing spaces.
+      // `command ls` bypasses user aliases/functions like `ls='eza ...'`.
+      // The -1 flag outputs one entry per line. The -p flag appends / to directories.
       // We resolve ~ and get the absolute path via `cd <path> && pwd`.
       // `cd` and `ls` are chained with `&&` so a failing `ls` (e.g. permission
       // denied after a readable `cd ... && pwd`) propagates as a non-zero exit
       // code rather than being indistinguishable from an empty directory.
-      const command = `cd ${shellEscape(args.dirPath)} && pwd && ls -1ap`
+      const command = `cd ${shellEscape(args.dirPath)} && pwd && command ls -1Ap`
       const channel = await conn.exec(command)
 
       return new Promise((resolve, reject) => {
         let stdout = ''
         let stderr = ''
         let exitCode: number | null = null
+        let settled = false
+        let timeout: ReturnType<typeof setTimeout> | null = null
 
-        channel.on('data', (data: Buffer) => {
+        const cleanup = (): void => {
+          if (timeout) {
+            clearTimeout(timeout)
+            timeout = null
+          }
+          channel.off('data', onStdoutData)
+          channel.stderr.off('data', onStderrData)
+          channel.off('exit', onExit)
+          channel.off('close', onClose)
+          channel.off('error', onError)
+          channel.stderr.off('error', onError)
+        }
+        const rejectOnce = (error: Error): void => {
+          if (settled) {
+            return
+          }
+          settled = true
+          cleanup()
+          reject(error)
+        }
+        const closeChannel = (): void => {
+          const closable = channel as { close?: () => void; destroy?: () => void }
+          try {
+            if (typeof closable.close === 'function') {
+              closable.close()
+            } else if (typeof closable.destroy === 'function') {
+              closable.destroy()
+            }
+          } catch {
+            /* best effort */
+          }
+        }
+        const onTimeout = (): void => {
+          // Why: remote browsing runs before a relay workspace root exists, so
+          // it cannot rely on relay request deadlines. Bound this raw exec
+          // channel directly to keep Add Remote Project from hanging forever.
+          rejectOnce(new Error('Remote directory listing timed out'))
+          closeChannel()
+        }
+        const resolveOnce = (result: { entries: RemoteDirEntry[]; resolvedPath: string }): void => {
+          if (settled) {
+            return
+          }
+          settled = true
+          cleanup()
+          resolve(result)
+        }
+
+        const onStdoutData = (data: Buffer): void => {
           stdout += data.toString()
-        })
-        channel.stderr.on('data', (data: Buffer) => {
+        }
+        const onStderrData = (data: Buffer): void => {
           stderr += data.toString()
-        })
+        }
         // `exit` fires before `close`; capture the code so we can distinguish
         // a failed `ls` that still produced `pwd` output from an empty listing.
-        channel.on('exit', (code: number | null) => {
+        const onExit = (code: number | null): void => {
           exitCode = code
-        })
-        channel.on('close', () => {
+        }
+        const onError = (error: Error): void => {
+          rejectOnce(error)
+        }
+        const onClose = (): void => {
           // A null exitCode means the server closed the channel without
           // sending an exit-status message (or signalled termination). We
           // can't assume success — falling back to "empty stdout = empty
@@ -70,17 +125,17 @@ export function registerSshBrowseHandler(
               (exitCode === null
                 ? 'Remote listing failed (channel closed without exit status)'
                 : `Remote listing failed (exit ${exitCode})`)
-            reject(new Error(msg))
+            rejectOnce(new Error(msg))
             return
           }
           if (stderr.trim() && !stdout.trim()) {
-            reject(new Error(stderr.trim()))
+            rejectOnce(new Error(stderr.trim()))
             return
           }
 
           const lines = stdout.trim().split('\n')
           if (lines.length === 0) {
-            reject(new Error('Empty response from remote'))
+            rejectOnce(new Error('Empty response from remote'))
             return
           }
 
@@ -107,8 +162,21 @@ export function registerSshBrowseHandler(
             return a.name.localeCompare(b.name)
           })
 
-          resolve({ entries, resolvedPath })
-        })
+          resolveOnce({ entries, resolvedPath })
+        }
+
+        channel.on('data', onStdoutData)
+        channel.stderr.on('data', onStderrData)
+        channel.on('exit', onExit)
+        channel.on('close', onClose)
+        // Why: SSH exec streams emit `error` on transport loss; without a
+        // scoped listener, a disappearing remote can become process-fatal.
+        channel.on('error', onError)
+        channel.stderr.on('error', onError)
+        timeout = setTimeout(onTimeout, SSH_BROWSE_TIMEOUT_MS)
+        if (typeof timeout.unref === 'function') {
+          timeout.unref()
+        }
       })
     }
   )

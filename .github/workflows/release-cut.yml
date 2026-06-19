@@ -16,7 +16,7 @@ name: Cut Release
 #   5. Write package.json, commit (detached), tag, push tag.
 #   6. If ref was the tip of origin/main, fast-forward main to include the
 #      version-bump commit so developers see the right version locally.
-#   7. Invoke release.yml to build and publish artifacts.
+#   7. Build and publish artifacts from the tag.
 
 on:
   workflow_dispatch:
@@ -57,20 +57,26 @@ concurrency:
 
 jobs:
   cut:
+    # Why: this job bumps package.json and fast-forwards main. On a fork with
+    # Actions enabled, the scheduled cut would run against the fork's main and
+    # diverge it (version line) every slot, conflicting every PR back upstream.
+    # Gate to the canonical repo so the workflow no-ops on forks.
+    if: github.repository == 'stablyai/orca'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
-      should_release: ${{ steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+      should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
+      latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
     steps:
       - name: Checkout ref
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 
@@ -174,16 +180,28 @@ jobs:
           echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
           echo "Reason: ${{ steps.existing.outputs.reason }}"
 
+      - name: Publish complete release-cut RC drafts from prior runs
+        id: publish_drafts
+        # Why: this must run even when the current slot already cut a tag; a
+        # later cron retry may be the first chance to unstick a complete RC draft.
+        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node config/scripts/publish-complete-draft-releases.mjs
+
       - name: Compute next version
         id: version
-        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        # Why: if an RC run only had complete drafts to publish, stop there
+        # instead of immediately cutting another RC after the recovered one.
+        # Stable dispatches should still cut the requested stable release.
+        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && !((github.event_name == 'schedule' || inputs.kind == 'rc') && steps.publish_drafts.outputs.published_count != '0' && steps.publish_drafts.outputs.skipped_count == '0')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
         run: |
           set -euo pipefail
 
-          # Latest stable release tag, picked by *tag shape*:
+          # Latest stable release tag, picked by *tag shape* and semver max:
           #   - must start with `v<digit>` (desktop convention, e.g. v1.3.32)
           #   - must NOT contain `-rc.` (not a prerelease)
           #
@@ -199,12 +217,12 @@ jobs:
           # `mobile`, `Number("mobile")` → NaN → 0, and a patch-bump would
           # produce `0.0.1` — exactly the wedge on 2026-05-04 (run
           # 25304336767). Any non-desktop tag shape must be excluded here.
-          latest_stable="$(gh release list \
-              --repo "$GITHUB_REPOSITORY" \
-              --exclude-drafts \
-              --limit 50 \
-              --json tagName \
-              --jq '[.[] | .tagName | select(test("^v[0-9]") and (test("-rc\\.") | not))] | .[0] // ""')"
+          #
+          # Why not `gh release list` order: GitHub can list a newer published
+          # stable after older releases. On 2026-06-04, v1.4.44 existed but
+          # the list returned v1.4.42 first, causing a manual RC cut to reopen
+          # the already-shipped 1.4.43 series as v1.4.43-rc.0.
+          latest_stable="$(node config/scripts/latest-stable-release.mjs)"
           latest_stable="${latest_stable#v}"
           echo "Latest stable: ${latest_stable:-<none>}"
 
@@ -238,25 +256,96 @@ jobs:
             ' "$(strip_pre "$1")" "$2"
           }
 
-          next_rc_in_series() {
-            # Given a base version, find the highest existing -rc.N for it
-            # and return base-rc.(N+1). If none exists, base-rc.0.
-            local base="$1"
-            local highest
-            highest="$(git tag --list "v${base}-rc.*" \
-                | sed -E "s/^v${base//./\\.}-rc\.//" \
-                | sort -n \
-                | tail -n 1 || true)"
-            if [[ -z "$highest" ]]; then
-              echo "${base}-rc.0"
-            else
-              echo "${base}-rc.$((highest + 1))"
+          highest_rc_for_base() {
+            node config/scripts/release-rc-history.mjs "$1"
+          }
+
+          current_package_stable() {
+            node -e '
+              const { version } = require("./package.json");
+              if (/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version)) console.log(version);
+            '
+          }
+
+          tag_matches_current_ref() {
+            local tag="$1"
+            local tag_commit
+            local head_commit
+            if ! tag_commit="$(git rev-parse "${tag}^{}" 2>/dev/null)"; then
+              return 1
             fi
+            head_commit="$(git rev-parse HEAD)"
+            if [[ "$tag_commit" == "$head_commit" ]]; then
+              return 0
+            fi
+
+            local tag_parent
+            tag_parent="$(git rev-parse "${tag_commit}^" 2>/dev/null)" || return 1
+            [[ "$tag_parent" == "$head_commit" ]]
+          }
+
+          release_draft_state() {
+            # Prints: true, false, or missing.
+            local tag="$1"
+            local state_file="$RUNNER_TEMP/release-state-${tag//[^A-Za-z0-9_.-]/_}"
+            if gh release view "$tag" \
+                --repo "$GITHUB_REPOSITORY" \
+                --json isDraft \
+                --jq '.isDraft' >"$state_file" 2>/dev/null; then
+              cat "$state_file"
+            else
+              echo "missing"
+            fi
+          }
+
+          recover_unpublished_tag() {
+            local tag="$1"
+            local reason="$2"
+            local release_state
+            release_state="$(release_draft_state "$tag")"
+            case "$release_state" in
+              missing|true)
+                if ! tag_matches_current_ref "$tag"; then
+                  echo "::warning::Tag $tag already exists but was cut from a different release ref ($reason) - cutting the next version instead of reusing stale artifacts."
+                  return 1
+                fi
+                echo "::warning::Tag $tag already exists but has no published release ($reason) - recovering by re-dispatching the release build against the existing tag."
+                echo "recovered_tag=$tag" >>"$GITHUB_OUTPUT"
+                echo "recovered=true" >>"$GITHUB_OUTPUT"
+                exit 0
+                ;;
+              false)
+                return 1
+                ;;
+              *)
+                echo "::error::Unexpected release state for $tag: $release_state" >&2
+                exit 1
+                ;;
+            esac
           }
 
           # Fresh repo fallback so the math below never divides by zero.
           if [[ -z "$latest_stable" ]]; then
             latest_stable="0.0.0"
+          fi
+
+          package_stable="$(current_package_stable)"
+          if [[ -n "$package_stable" ]]; then
+            # Why: if a stable release is deleted after its version-bump commit
+            # reached main, GitHub's release list regresses. package.json is the
+            # floor for the current ref so the next cut cannot reuse an older
+            # stable number just because the public release was nuked.
+            if semver_gt "$package_stable" "$latest_stable"; then
+              if [[ "$KIND" != "rc" ]]; then
+                package_tag="v$package_stable"
+                if git rev-parse "$package_tag" >/dev/null 2>&1; then
+                  recover_unpublished_tag "$package_tag" "current ref stable tag is newer than latest published stable" || true
+                fi
+              fi
+
+              echo "Stable floor from package.json: $package_stable"
+              latest_stable="$package_stable"
+            fi
           fi
 
           case "$KIND" in
@@ -270,7 +359,19 @@ jobs:
               # that class of bug; minor/major RCs are cut by running
               # that stable kind first.
               base="$(bump "$latest_stable" patch)"
-              new="$(next_rc_in_series "$base")"
+              highest_rc="$(highest_rc_for_base "$base")"
+              if [[ -z "$highest_rc" ]]; then
+                new="${base}-rc.0"
+              else
+                existing_rc_tag="v${base}-rc.${highest_rc}"
+                # Why: a failed or GitHub-stuck run can leave the highest RC
+                # tag attached to a draft/missing release. Resume only when it
+                # was cut from this ref; stale attempts advance to rc.N+1.
+                if git rev-parse "$existing_rc_tag" >/dev/null 2>&1; then
+                  recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
+                fi
+                new="${base}-rc.$((highest_rc + 1))"
+              fi
               ;;
             patch|minor|major)
               new="$(bump "$latest_stable" "$KIND")"
@@ -279,6 +380,33 @@ jobs:
                 echo "::error::Refusing to cut $KIND $new: not greater than latest stable $latest_stable." >&2
                 exit 1
               fi
+
+              # Why: a stale orphan stable tag can exist from an older release
+              # ref after main has moved on. If it cannot be recovered for the
+              # current ref, advance to the next stable version instead of
+              # wedging every future patch cut on the same collision.
+              for _ in {1..100}; do
+                candidate_tag="v$new"
+                if ! git rev-parse "$candidate_tag" >/dev/null 2>&1; then
+                  break
+                fi
+
+                candidate_release_state="$(release_draft_state "$candidate_tag")"
+                case "$candidate_release_state" in
+                  missing|true)
+                    recover_unpublished_tag "$candidate_tag" "tag collision" || true
+                    new="$(bump "$new" "$KIND")"
+                    ;;
+                  false)
+                    echo "::error::Tag $candidate_tag already exists with a published release. Refusing to skip over a shipped version." >&2
+                    exit 1
+                    ;;
+                  *)
+                    echo "::error::Unexpected release state for $candidate_tag: $candidate_release_state" >&2
+                    exit 1
+                    ;;
+                esac
+              done
               ;;
             *)
               echo "::error::Unknown kind: $KIND" >&2
@@ -289,7 +417,7 @@ jobs:
           # Orphan-tag recovery.
           #
           # Why: if a previous cut pushed the tag but was cancelled (or the
-          # dependent release.yml job otherwise failed to start) before the
+          # dependent release build jobs otherwise failed to start) before the
           # GitHub Release was published, the tag now exists on the remote
           # but "latest stable" still points at the prior version. Every
           # subsequent patch cut then recomputes the same version and dies
@@ -301,7 +429,7 @@ jobs:
           # Recovery policy: if the tag exists AND no GitHub release has
           # been published for it (draft-or-absent both count as "not
           # shipped"), treat this as a resumable state: emit the existing
-          # tag as the job output so the downstream release.yml job runs
+          # tag as the job output so the downstream release build jobs run
           # against it and finishes what the earlier attempt started. The
           # bump/commit/push steps are skipped in that case — there is
           # nothing to bump; the tag is already on the remote.
@@ -310,32 +438,10 @@ jobs:
           # already exist — that's a real conflict (someone tagged manually
           # over a shipped version) and needs human attention.
           if git rev-parse "v$new" >/dev/null 2>&1; then
-            # Why: use the REST API, not `gh release view`. `gh api` returns
-            # `true`/`false` for a real release, while a 404 means the tag is
-            # orphaned and can be safely re-dispatched. Capture failures
-            # explicitly so the 404 payload never leaks into the state check.
-            release_state="missing"
-            if gh api \
-                "repos/$GITHUB_REPOSITORY/releases/tags/v$new" \
-                --jq '.draft' >"$RUNNER_TEMP/release-state" 2>/dev/null; then
-              release_state="$(cat "$RUNNER_TEMP/release-state")"
-            fi
-            case "$release_state" in
-              missing|true)
-                echo "::warning::Tag v$new already exists but no published release is attached — recovering by re-dispatching release.yml against the existing tag."
-                echo "recovered_tag=v$new" >>"$GITHUB_OUTPUT"
-                echo "recovered=true" >>"$GITHUB_OUTPUT"
-                exit 0
-                ;;
-              false)
-                echo "::error::Tag v$new already exists and has a published release. Refusing to re-cut over a shipped version." >&2
-                exit 1
-                ;;
-              *)
-                echo "::error::Unexpected release state for v$new: $release_state" >&2
-                exit 1
-                ;;
-            esac
+            recover_unpublished_tag "v$new" "tag collision" || {
+              echo "::error::Tag v$new already exists and cannot be recovered for this ref. Refusing to re-cut over an existing version." >&2
+              exit 1
+            }
           fi
 
           echo "version=$new" >>"$GITHUB_OUTPUT"
@@ -359,7 +465,14 @@ jobs:
           if [[ "$EVENT_NAME" == "schedule" ]]; then
             commit_message="$commit_message [rc-slot:$SLOT]"
           fi
-          git commit -m "$commit_message"
+          if git diff --cached --quiet; then
+            # Why: a failed cut can push the version bump to main before the
+            # release is published. Re-cutting then needs a fresh taggable
+            # release commit even though package.json is already at VERSION.
+            git commit --allow-empty -m "$commit_message"
+          else
+            git commit -m "$commit_message"
+          fi
           git tag -a "v$VERSION" -m "v$VERSION"
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
@@ -380,6 +493,19 @@ jobs:
             git push origin "$TAG"
           fi
 
+      - name: Release E2E signal summary
+        if: always()
+        run: |
+          {
+            echo "## Release E2E Signal"
+            echo ""
+            echo "- Terminal rendering golden is release-blocking."
+            echo "- Full E2E is diagnostic/non-blocking release evidence."
+            echo "- Terminal rendering release evidence is diagnostic/non-blocking."
+            echo ""
+            echo "Publishing behavior is controlled by the existing job dependencies; this summary does not change release gating."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   create-release:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
@@ -388,11 +514,11 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
-      - name: Create draft release with auto-generated notes
+      - name: Create draft release with bounded generated notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
@@ -402,26 +528,175 @@ jobs:
             exit 0
           fi
 
-          is_rc=false
-          if [[ "$TAG" == *"-rc."* ]]; then
-            is_rc=true
-          fi
+          node config/scripts/create-draft-release.mjs "$TAG"
 
-          gh release create "$TAG" \
-            --draft \
-            --generate-notes \
-            --prerelease="$is_rc"
-
-  # Why: E2E runs alongside the release for visibility (failures surface as a
-  # red check on the tag), but is NOT in `publish-release`'s needs list.
-  # Releases already take a while and the suite is already a required check
-  # on PRs, so gating here would mostly delay shipping without adding signal.
+  # Why: tag-scoped E2E gives release visibility, but the suite is flaky enough
+  # that publish-release must not depend on it.
   e2e:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
     uses: ./.github/workflows/e2e.yml
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+  terminal-rendering-golden:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    name: terminal rendering golden ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-15
+            platform: mac
+          - os: windows-latest
+            platform: windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      - name: Install native build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: Linux terminal golden E2E uses the same native install path as
+      # release CI, which needs pnpm to bypass its non-executable gyp_main.py.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app for terminal rendering golden
+        run: npx electron-vite build --mode e2e
+
+      - name: Run terminal rendering golden on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+
+      - name: Run terminal rendering golden on macOS
+        if: runner.os == 'macOS'
+        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+
+      - name: Run terminal rendering golden on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:SKIP_BUILD = '1'
+          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
+          pnpm run test:e2e:terminal-rendering-golden
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-rendering-golden-${{ matrix.platform }}-playwright-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Why: these broader terminal rendering repros are useful release evidence,
+  # but they include heavier app-like flows and must not block publishing.
+  terminal-rendering-release-evidence:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    continue-on-error: true
+    name: terminal rendering release evidence ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-15
+            platform: mac
+          - os: windows-latest
+            platform: windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      - name: Install native build tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: keep the non-blocking evidence lane on the same Linux native
+      # install path as the blocking golden and release build jobs.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app for terminal rendering evidence
+        run: npx electron-vite build --mode e2e
+
+      - name: Run terminal rendering evidence on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence
+
+      - name: Run terminal rendering evidence on macOS
+        if: runner.os == 'macOS'
+        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence
+
+      - name: Run terminal rendering evidence on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:SKIP_BUILD = '1'
+          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
+          pnpm run test:e2e:terminal-rendering-release-evidence
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: terminal-rendering-release-evidence-${{ matrix.platform }}-playwright-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
 
   build:
     needs:
@@ -434,19 +709,19 @@ jobs:
         include:
           - os: macos-15
             platform: mac
-            release_command: ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
             eb_cache_path: |
               ~/Library/Caches/electron
               ~/Library/Caches/electron-builder
           - os: windows-latest
             platform: win
-            release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
+            release_command: 'node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always'
             eb_cache_path: |
               ~\AppData\Local\electron\Cache
               ~\AppData\Local\electron-builder\Cache
           - os: ubuntu-latest
             platform: linux
-            release_command: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux --publish always
             eb_cache_path: |
               ~/.cache/electron
               ~/.cache/electron-builder
@@ -458,18 +733,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: package.json
           cache: pnpm
@@ -492,7 +767,7 @@ jobs:
       # Cache the Electron binary + electron-builder tool downloads (notarytool,
       # winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job, incl. mac.
       - name: Cache electron-builder downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ matrix.eb_cache_path }}
           key: electron-builder-${{ matrix.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
@@ -504,12 +779,21 @@ jobs:
       # occasionally returns 504s that fail the whole release. Retry on
       # failure so transient network errors don't require a manual re-run.
       - name: Install dependencies
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
+
+      # Why: `pnpm build:release` verifies the Linux computer-use provider by
+      # importing AT-SPI bindings, which are runtime package deps but are not
+      # present on stock GitHub Ubuntu release runners.
+      # Why: `rpm` is needed by electron-builder's fpm backend to produce the
+      # .rpm artifact. Stock Ubuntu runners do not ship it.
+      - name: Install Linux computer-use provider dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool rpm
 
       - name: Verify macOS signing environment
         if: matrix.platform == 'mac'
@@ -520,6 +804,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Why: `plutil -lint` accepts duplicate plist keys, but `codesign`
+      # rejects duplicate entitlements after the expensive app build.
+      - name: Verify macOS entitlements
+        if: matrix.platform == 'mac'
+        run: pnpm verify:macos-entitlements
 
       # Why: telemetry's transport gate (`src/main/telemetry/client.ts:IS_OFFICIAL_BUILD`)
       # requires the build identity to be the literal string `stable` or `rc`,
@@ -558,10 +848,17 @@ jobs:
       # Why ORCA_BUILD_IDENTITY here (not in env at the job level): the
       # value comes from the per-tag classification above and electron-vite
       # reads it from `process.env` during `pnpm build:release` only.
+      # Why ORCA_DIAGNOSTICS_TOKEN_URL here: official builds pin crash
+      # diagnostic uploads to Orca's endpoint at compile time, matching the
+      # telemetry gate's "official binary only" behavior.
       - name: Build app
         run: pnpm build:release
         env:
+          # Why: Vite's web build crossed Node's default old-space ceiling on
+          # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
+          NODE_OPTIONS: --max-old-space-size=4096
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
       # Why: macOS signing secrets (CSC_LINK, CSC_KEY_PASSWORD) must NOT be
@@ -579,7 +876,7 @@ jobs:
       # don't require a manual re-run.
       - name: Publish release artifacts (macOS)
         if: matrix.platform == 'mac'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 45
           max_attempts: 3
@@ -595,7 +892,7 @@ jobs:
 
       - name: Publish release artifacts
         if: matrix.platform != 'mac'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 30
           max_attempts: 3
@@ -603,6 +900,30 @@ jobs:
           command: ${{ matrix.release_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify release remains draft after artifact upload
+        # Why: the build matrix must never be the actor that exposes a partial
+        # release. If an uploader or GitHub transition flips draft early, fail
+        # this platform leg and leave the diagnostic monitor artifact behind.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          # Why: release upload must validate the draft before it is publicly visible.
+          draft="$(jq -e -r --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ' <<<"$releases_json")" || {
+            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
+            exit 1
+          }
+          if [[ "$draft" != "true" ]]; then
+            echo "::error::Release $TAG was published during the ${{ matrix.platform }} artifact upload."
+            exit 1
+          fi
 
       # Why post-publish (not pre-publish): electron-builder packs and
       # uploads in a single `--publish always` invocation, so there is no
@@ -626,10 +947,48 @@ jobs:
     needs:
       - cut
       - build
+      - terminal-rendering-golden
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Verify release is still draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          set -euo pipefail
+          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          # Why: publish-release verifies the draft before making it visible.
+          draft="$(jq -e -r --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ' <<<"$releases_json")" || {
+            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
+            exit 1
+          }
+          if [[ "$draft" != "true" ]]; then
+            echo "::error::Release $TAG was published before publish-release; refusing to continue."
+            exit 1
+          fi
+
+      - name: Verify release assets complete
+        # Why: publish-release is the only intended draft -> published
+        # transition. Refuse to un-draft until every updater manifest and
+        # referenced installer asset is present on GitHub.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: node config/scripts/verify-release-required-assets.mjs "$TAG"
+
       - name: Publish release
         # Why: derive `--prerelease` from the tag shape (not from whatever
         # electron-builder left the release flagged as). On 2026-04-27,
@@ -653,11 +1012,22 @@ jobs:
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
 
+  homebrew-bump-published-rc-draft:
+    needs:
+      - cut
+    # Why: publish-complete-draft-releases can expose a recovered RC without
+    # running the build/publish jobs; still advance the RC cask to that tag.
+    if: ${{ needs.cut.outputs.latest_published_rc_tag != '' }}
+    uses: ./.github/workflows/homebrew-bump.yml
+    with:
+      tag: ${{ needs.cut.outputs.latest_published_rc_tag }}
+    secrets: inherit
+
   homebrew-bump:
     needs:
       - cut
       - publish-release
-    if: ${{ !contains(needs.cut.outputs.tag, '-rc.') }}
+    if: ${{ needs.cut.outputs.tag != '' && startsWith(needs.cut.outputs.tag, 'v') }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
       tag: ${{ needs.cut.outputs.tag }}

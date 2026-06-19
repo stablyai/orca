@@ -3,7 +3,12 @@ import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 
 function installGetCwd(fn: (id: string) => Promise<string>): void {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test-only shim for window.api.pty.getCwd
-  ;(globalThis as any).window = { api: { pty: { getCwd: fn } } }
+  ;(globalThis as any).window = {
+    api: {
+      pty: { getCwd: fn },
+      runtimeEnvironments: { call: vi.fn() }
+    }
+  }
 }
 
 describe('resolveSplitCwd', () => {
@@ -102,6 +107,19 @@ describe('resolveSplitCwd', () => {
       fallbackCwd: '/worktree'
     })
     expect(result).toBe('/worktree')
+    expect(getCwd).not.toHaveBeenCalled()
+  })
+
+  it('skips local PTY IPC for remote runtime PTY ids', async () => {
+    const getCwd = vi.fn()
+    installGetCwd(getCwd as unknown as (id: string) => Promise<string>)
+    const result = await resolveSplitCwd({
+      paneCwdMap: new Map(),
+      sourcePaneId: 1,
+      sourcePtyId: 'remote:term-1',
+      fallbackCwd: '/remote/worktree'
+    })
+    expect(result).toBe('/remote/worktree')
     expect(getCwd).not.toHaveBeenCalled()
   })
 })

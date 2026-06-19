@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { openHttpLink, registerHttpLinkStoreAccessor } from './http-link-routing'
 
 const openUrlMock = vi.fn()
@@ -6,7 +7,13 @@ const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 
 const storeState = {
-  settings: undefined as { openLinksInApp?: boolean } | undefined,
+  settings: undefined as
+    | {
+        openLinksInApp?: boolean
+        openLinksInAppPreferencePrompted?: boolean
+        activeRuntimeEnvironmentId?: string | null
+      }
+    | undefined,
   setActiveWorktree: setActiveWorktreeMock,
   createBrowserTab: createBrowserTabMock
 }
@@ -41,12 +48,26 @@ describe('openHttpLink', () => {
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
-  it('defaults to Orca routing when settings have not hydrated', () => {
+  it('defaults to the system browser when settings have not hydrated', () => {
     storeState.settings = undefined
 
     openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
 
-    expect(createBrowserTabMock).toHaveBeenCalled()
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('routes floating workspace links into Orca without changing the active repo worktree', () => {
+    storeState.settings = { openLinksInApp: true }
+
+    openHttpLink('https://example.com/', { worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      'https://example.com/',
+      { activate: true }
+    )
     expect(openUrlMock).not.toHaveBeenCalled()
   })
 
@@ -57,6 +78,16 @@ describe('openHttpLink', () => {
 
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('routes to the system browser when a remote runtime environment is active', () => {
+    storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-1' }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1' })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('routes to the system browser when no worktree id is provided', () => {

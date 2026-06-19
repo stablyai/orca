@@ -1,19 +1,21 @@
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
+import { editorShortcutMatches } from './editor-shortcuts'
 import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
+import { commitRow, type DocLinkMenuRow, type DocLinkMenuState } from './rich-markdown-commands'
 import {
-  commitRow,
   runSlashCommand,
-  type DocLinkMenuRow,
-  type DocLinkMenuState,
   type SlashCommand,
   type SlashMenuState
-} from './rich-markdown-commands'
+} from './rich-markdown-slash-commands'
 import {
   collapseEmptyListContinuationParagraph,
   commitEmptyOrderedListMarkerAsText,
-  convertEmptyNestedOrderedItemToContinuation
+  convertEmptyNestedOrderedItemToContinuation,
+  exitTrailingEmptyOrderedListItem
 } from './rich-markdown-list-continuation'
 
 export type KeyHandlerContext = {
@@ -31,6 +33,7 @@ export type KeyHandlerContext = {
   filteredDocLinkRowsRef: MutableRefObject<DocLinkMenuRow[]>
   selectedDocLinkIndexRef: MutableRefObject<number>
   handleLocalImagePickRef: MutableRefObject<() => void>
+  handleEmojiPickRef: MutableRefObject<(menu: SlashMenuState) => void>
   typedEmptyOrderedListMarkerRef: MutableRefObject<boolean>
   flushPendingSerialization: () => void
   openSearchRef: MutableRefObject<() => void>
@@ -38,12 +41,53 @@ export type KeyHandlerContext = {
   setLinkBubble: (bubble: LinkBubbleState | null) => void
   setSelectedCommandIndex: Dispatch<SetStateAction<number>>
   setSelectedDocLinkIndex: Dispatch<SetStateAction<number>>
-  setSlashMenu: (menu: SlashMenuState | null) => void
+  setSlashMenu: Dispatch<SetStateAction<SlashMenuState | null>>
   setDocLinkMenu: (menu: DocLinkMenuState | null) => void
 }
 
 function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
   return event.isComposing || editor?.view.composing === true
+}
+
+type NativeSelectionSnapshot = {
+  anchorNode: Node | null
+  anchorOffset: number
+  focusNode: Node | null
+  focusOffset: number
+}
+
+type ProseMirrorDomObserver = {
+  currentSelection?: {
+    set?: (selection: NativeSelectionSnapshot) => void
+  }
+  flush?: () => void
+}
+
+type ProseMirrorViewWithDomObserver = Editor['view'] & {
+  domObserver?: ProseMirrorDomObserver
+}
+
+function flushPendingProseMirrorSelection(editor: Editor): void {
+  let observer: ProseMirrorDomObserver | undefined
+  try {
+    observer = (editor.view as ProseMirrorViewWithDomObserver).domObserver
+  } catch {
+    return
+  }
+
+  if (typeof observer?.flush !== 'function') {
+    return
+  }
+
+  // Why: immediate Tab after a mouse click can run before ProseMirror has
+  // copied the native selection into editor state, so list commands hit stale item state.
+  observer.currentSelection?.set?.({
+    anchorNode: null,
+    anchorOffset: 0,
+    focusNode: null,
+    focusOffset: 0
+  })
+  observer.flush()
 }
 
 /**
@@ -55,12 +99,18 @@ export function createRichMarkdownKeyHandler(
 ): (_view: unknown, event: KeyboardEvent) => boolean {
   return (_view, event) => {
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
-    if (isMarkdownPreviewFindShortcut(event, ctx.isMac)) {
+    if (
+      isMarkdownPreviewFindShortcut(
+        event,
+        getShortcutPlatform(),
+        useAppStore.getState().keybindings
+      )
+    ) {
       event.preventDefault()
       ctx.openSearchRef.current()
       return true
     }
-    if (mod && event.key.toLowerCase() === 's') {
+    if (editorShortcutMatches('editor.save', event)) {
       event.preventDefault()
       // Why: flush any pending debounced serialization so the save
       // captures the very latest editor content, not a stale snapshot.
@@ -131,6 +181,10 @@ export function createRichMarkdownKeyHandler(
         event.preventDefault()
         return true
       }
+      if (ed && !isComposingMarkdownInput(event, ed) && exitTrailingEmptyOrderedListItem(ed)) {
+        event.preventDefault()
+        return true
+      }
     }
 
     // Tab/Shift-Tab: indent/outdent lists, insert spaces in code blocks,
@@ -143,6 +197,7 @@ export function createRichMarkdownKeyHandler(
       if (!ed) {
         return true
       }
+      flushPendingProseMirrorSelection(ed)
 
       if (event.shiftKey) {
         if (!ed.commands.liftListItem('listItem')) {
@@ -156,7 +211,7 @@ export function createRichMarkdownKeyHandler(
         return true
       }
 
-      // Why: sinkListItem succeeds when cursor is in a non-first list item;
+      // Why: sinkListItem succeeds when the item has a previous sibling;
       // otherwise it no-ops. Either way we consume Tab to prevent focus escape.
       if (!ed.commands.sinkListItem('listItem')) {
         ed.commands.sinkListItem('taskItem')
@@ -232,6 +287,13 @@ export function createRichMarkdownKeyHandler(
     }
 
     const currentFilteredSlashCommands = ctx.filteredSlashCommandsRef.current
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      ctx.setSlashMenu(null)
+      return true
+    }
+
     if (currentFilteredSlashCommands.length === 0) {
       return false
     }
@@ -265,18 +327,16 @@ export function createRichMarkdownKeyHandler(
       // mirrors the latest highlighted slash-menu item for keyboard picks.
       const selectedCommand = currentFilteredSlashCommands[ctx.selectedCommandIndexRef.current]
       if (selectedCommand) {
-        runSlashCommand(activeEditor, currentSlashMenu, selectedCommand, () =>
-          ctx.handleLocalImagePickRef.current()
+        runSlashCommand(
+          activeEditor,
+          currentSlashMenu,
+          selectedCommand,
+          () => ctx.handleLocalImagePickRef.current(),
+          () => ctx.handleEmojiPickRef.current(currentSlashMenu)
         )
       }
       return true
     }
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      ctx.setSlashMenu(null)
-      return true
-    }
-
     return false
   }
 }

@@ -1,5 +1,6 @@
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
+import { translate } from '@/i18n/i18n'
 
 export type MarkdownRichModeUnsupportedReason =
   | 'html-or-jsx'
@@ -16,7 +17,12 @@ type UnsupportedMatch = {
 const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
   {
     reason: 'html-or-jsx',
-    message: 'Editable only in code mode because this file contains HTML, JSX, or MDX.',
+    get message() {
+      return translate(
+        'auto.components.editor.markdown.rich.mode.57128b73e1',
+        'Editable only in code mode because this file contains HTML, JSX, or MDX.'
+      )
+    },
     // Why: the rich editor preserves common embedded markup via placeholder
     // tokens before parsing, but any HTML shape that still fails round-trip
     // must fall back instead of risking silent source corruption.
@@ -24,12 +30,22 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
   },
   {
     reason: 'reference-links',
-    message: 'Editable only in code mode because this file contains reference-style links.',
+    get message() {
+      return translate(
+        'auto.components.editor.markdown.rich.mode.2fd2b44073',
+        'Editable only in code mode because this file contains reference-style links.'
+      )
+    },
     pattern: /^\[[^\]]+\]:\s+\S+/m
   },
   {
     reason: 'footnotes',
-    message: 'Editable only in code mode because this file contains footnotes.',
+    get message() {
+      return translate(
+        'auto.components.editor.markdown.rich.mode.7a8ce7c7da',
+        'Editable only in code mode because this file contains footnotes.'
+      )
+    },
     pattern: /^\[\^[^\]]+\]:\s+/m
   }
 ]

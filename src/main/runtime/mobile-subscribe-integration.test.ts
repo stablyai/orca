@@ -135,6 +135,102 @@ describe('mobile subscribe integration', () => {
     vi.useRealTimers()
   })
 
+  it('serializeMainTerminalBuffer reports the seq included in the headless snapshot', async () => {
+    vi.useRealTimers()
+    const { runtime } = createRuntime()
+    const first = 'one\r\n'
+    const second = 'two\r\n'
+    const third = 'three\r\n'
+
+    runtime.onPtyData('pty-1', first, Date.now())
+    const initialSnapshot = await runtime.serializeMainTerminalBuffer('pty-1')
+    expect(initialSnapshot?.seq).toBe(first.length)
+    expect(initialSnapshot?.source).toBe('headless')
+
+    type HeadlessStateForTest = {
+      emulator: { write: (data: string) => Promise<void> | void }
+    }
+    const headless = (
+      runtime as unknown as { headlessTerminals: Map<string, HeadlessStateForTest> }
+    ).headlessTerminals.get('pty-1')
+    expect(headless).toBeDefined()
+    const originalWrite = headless!.emulator.write.bind(headless!.emulator)
+    const secondWriteGate: { release: (() => void) | null } = { release: null }
+    const secondWriteStarted = new Promise<void>((resolve) => {
+      headless!.emulator.write = async (data: string): Promise<void> => {
+        if (data === second) {
+          resolve()
+          await new Promise<void>((release) => {
+            secondWriteGate.release = release
+          })
+        }
+        await originalWrite(data)
+      }
+    })
+
+    try {
+      runtime.onPtyData('pty-1', second, Date.now())
+      await secondWriteStarted
+      const racedSnapshot = runtime.serializeMainTerminalBuffer('pty-1')
+      runtime.onPtyData('pty-1', third, Date.now())
+      if (!secondWriteGate.release) {
+        throw new Error('second write did not block')
+      }
+      secondWriteGate.release()
+
+      const snapshot = await racedSnapshot
+      expect(snapshot?.seq).toBe(first.length + second.length)
+      expect(snapshot?.source).toBe('headless')
+      expect(runtime.getPtyOutputSequence('pty-1')).toBe(
+        first.length + second.length + third.length
+      )
+
+      const finalSnapshot = await runtime.serializeMainTerminalBuffer('pty-1')
+      expect(finalSnapshot?.seq).toBe(first.length + second.length + third.length)
+      expect(finalSnapshot?.source).toBe('headless')
+    } finally {
+      headless!.emulator.write = originalWrite
+      secondWriteGate.release?.()
+    }
+  })
+
+  it('serializeMainTerminalBuffer returns an empty snapshot for an empty headless buffer', async () => {
+    const { runtime } = createRuntime()
+    type HeadlessStateForTest = {
+      emulator: {
+        isAlternateScreen: boolean
+        getSnapshot: (opts: { scrollbackRows?: number }) => {
+          rehydrateSequences: string
+          snapshotAnsi: string
+          cols: number
+          rows: number
+        }
+      }
+      outputSequence: number
+      writeChain: Promise<void>
+    }
+    const runtimePrivate = runtime as unknown as {
+      headlessTerminals: Map<string, HeadlessStateForTest>
+    }
+    runtimePrivate.headlessTerminals.set('pty-empty', {
+      emulator: {
+        isAlternateScreen: false,
+        getSnapshot: () => ({ rehydrateSequences: '', snapshotAnsi: '', cols: 90, rows: 30 })
+      },
+      outputSequence: 17,
+      writeChain: Promise.resolve()
+    })
+
+    await expect(runtime.serializeMainTerminalBuffer('pty-empty')).resolves.toEqual({
+      data: '',
+      cols: 90,
+      rows: 30,
+      seq: 17,
+      source: 'headless'
+    })
+    await expect(runtime.serializeTerminalBuffer('pty-empty')).resolves.toBeNull()
+  })
+
   it('handleMobileSubscribe resizes PTY to phone dims', async () => {
     const { runtime, ptySizes, resizes, notifications } = createRuntime()
 
@@ -810,6 +906,25 @@ describe('mobile subscribe integration', () => {
       const ok = await runtime.reclaimTerminalForDesktop('pty-1')
       expect(ok).toBe(true)
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    })
+
+    it('reclaimTerminalForDesktop prefers fresh desktop geometry for a held PTY', async () => {
+      // Why: the held override can carry the first phone-fit baseline, but
+      // desktop can measure newer real geometry while the phone-sized PTY is
+      // held. Manual restore must honor that fresh desktop measurement.
+      settingsState.mobileAutoRestoreFitMs = null
+      const { runtime, ptySizes } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
+
+      runtime.recordRendererGeometry('pty-1', 180, 50)
+
+      const ok = await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(ok).toBe(true)
+      expect(ptySizes.get('pty-1')).toEqual({ cols: 180, rows: 50 })
     })
 
     it('setMobileAutoRestoreFitMs(null) clears all pending timers', async () => {

@@ -17,7 +17,8 @@ function getBaseLabel(file: OpenFile, variant: EditorLabelVariant): string {
 const DIFF_SOURCE_LABELS: Record<string, string> = {
   staged: 'staged diff',
   unstaged: 'diff',
-  branch: 'branch diff'
+  branch: 'branch diff',
+  commit: 'commit diff'
 }
 
 export function getEditorDisplayLabel(
@@ -26,6 +27,10 @@ export function getEditorDisplayLabel(
 ): string {
   if (file.mode === 'conflict-review') {
     return 'Conflict Review'
+  }
+
+  if (file.mode === 'check-details') {
+    return file.checkRunDetails?.check.name ?? getBaseLabel(file, variant)
   }
 
   if (file.mode === 'markdown-preview') {
@@ -42,6 +47,11 @@ export function getEditorDisplayLabel(
   }
   if (source === 'combined-branch') {
     return `Branch Changes (${file.branchCompare?.baseRef ?? 'base'})`
+  }
+  if (source === 'combined-commit') {
+    return file.commitCompare?.subject
+      ? `Commit ${file.commitCompare.compareRef}: ${file.commitCompare.subject}`
+      : `Commit ${file.commitCompare?.compareRef ?? 'diff'}`
   }
 
   const baseLabel = getBaseLabel(file, variant)

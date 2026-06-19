@@ -1,9 +1,28 @@
 /* oxlint-disable max-lines */
 import { execSync } from 'child_process'
 import { existsSync, statSync } from 'fs'
-import { join, basename } from 'path'
-import hostedGitInfo from 'hosted-git-info'
+import { basename } from 'path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
+import type { BaseRefSearchResult } from '../../shared/types'
+import {
+  buildHostedRemoteCommitUrl,
+  buildHostedRemoteFileUrl,
+  parseHostedRemote
+} from './hosted-remote-url'
+import { normalizeGitUsername } from './git-username'
+
+const GH_LOGIN_TIMEOUT_MS = 2500
+
+type LocalGitExecOptions = {
+  wslDistro?: string
+}
+
+function gitExecOptions(
+  cwd: string,
+  options: LocalGitExecOptions = {}
+): { cwd: string; wslDistro?: string } {
+  return options.wslDistro ? { cwd, wslDistro: options.wslDistro } : { cwd }
+}
 
 /**
  * Ordered probe list used to resolve a repo's default base ref when no
@@ -49,25 +68,23 @@ export function isGitRepo(path: string): boolean {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
       return false
     }
-    // .git dir or file (for worktrees) or bare repo
-    if (existsSync(join(path, '.git'))) {
-      return true
-    }
-    // Might be a bare repo — ask git
-    const result = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
+    const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
       cwd: path
     }).trim()
-    return result === 'true'
-  } catch {
-    // Also check if it's a bare repo
-    try {
-      const result = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
-        cwd: path
-      }).trim()
-      return result === 'true'
-    } catch {
-      return false
+    if (insideWorkTree === 'true') {
+      return true
     }
+  } catch {
+    // Fall through to the bare-repo probe below.
+  }
+
+  try {
+    const bareRepo = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
+      cwd: path
+    }).trim()
+    return bareRepo === 'true'
+  } catch {
+    return false
   }
 }
 
@@ -85,12 +102,55 @@ export function getRepoName(path: string): string {
  */
 export function getRemoteUrl(path: string): string | null {
   try {
-    return gitExecFileSync(['remote', 'get-url', 'origin'], {
-      cwd: path
-    }).trim()
+    return getRemoteUrlByName(path, 'origin')
   } catch {
     return null
   }
+}
+
+function getRemoteUrlByName(path: string, remote: string): string {
+  return gitExecFileSync(['remote', 'get-url', remote], {
+    cwd: path
+  }).trim()
+}
+
+function listRemoteNamesSync(path: string): string[] {
+  try {
+    return gitExecFileSync(['remote'], { cwd: path })
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+function getConfiguredBranchRemote(path: string, branch: string | null): string {
+  if (!branch) {
+    return ''
+  }
+  const remote = getGitConfigValue(path, `branch.${branch}.remote`)
+  return remote === '.' ? '' : remote
+}
+
+function getCurrentBranchName(path: string): string {
+  try {
+    return gitExecFileSync(['branch', '--show-current'], { cwd: path }).trim()
+  } catch {
+    return ''
+  }
+}
+
+function getRemoteNameFromRef(shortRef: string, remotes: readonly string[]): string {
+  const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
+  return sortedRemotes.find((remote) => shortRef.startsWith(`${remote}/`)) ?? ''
+}
+
+function getDefaultBranchName(shortRef: string, remoteName: string): string {
+  if (!shortRef.includes('/')) {
+    return shortRef
+  }
+  return remoteName ? shortRef.slice(remoteName.length + 1) : shortRef.split('/').slice(1).join('/')
 }
 
 function getGitConfigValue(path: string, key: string): string {
@@ -103,17 +163,19 @@ function getGitConfigValue(path: string, key: string): string {
   }
 }
 
-function normalizeUsername(value: string): string {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return ''
+let cachedGhLogin: string | undefined
+
+function isGhProbeTimeout(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
   }
 
-  const localPart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed
-  return localPart.replace(/^\d+\+/, '')
+  const err = error as { code?: unknown; message?: unknown }
+  return (
+    err.code === 'ETIMEDOUT' ||
+    (typeof err.message === 'string' && /\bETIMEDOUT\b|timed out/i.test(err.message))
+  )
 }
-
-let cachedGhLogin: string | undefined
 
 function getGhLogin(): string {
   if (cachedGhLogin !== undefined) {
@@ -123,13 +185,20 @@ function getGhLogin(): string {
   try {
     const apiLogin = execSync('gh api user -q .login', {
       encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: GH_LOGIN_TIMEOUT_MS
     }).trim()
     if (apiLogin) {
-      cachedGhLogin = normalizeUsername(apiLogin)
+      cachedGhLogin = normalizeGitUsername(apiLogin)
       return cachedGhLogin
     }
-  } catch {
+  } catch (err) {
+    if (isGhProbeTimeout(err)) {
+      // Why: if `gh api user` timed out, `gh auth status` is likely to hit the
+      // same stuck keychain/network path. Keep repo creation bounded to one probe.
+      cachedGhLogin = ''
+      return ''
+    }
     // Fall through to auth status parsing
   }
 
@@ -139,39 +208,86 @@ function getGhLogin(): string {
     const output = execSync('gh auth status 2>&1', {
       encoding: 'utf-8',
       shell: process.platform === 'win32' ? process.env.ComSpec || 'cmd.exe' : '/bin/bash',
-      stdio: ['pipe', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: GH_LOGIN_TIMEOUT_MS
     })
 
     const activeAccountMatch = output.match(
       /Active account:\s+true[\s\S]*?account\s+([A-Za-z0-9-]+)/
     )
     if (activeAccountMatch?.[1]) {
-      cachedGhLogin = normalizeUsername(activeAccountMatch[1])
+      cachedGhLogin = normalizeGitUsername(activeAccountMatch[1])
       return cachedGhLogin
     }
 
     const accountMatch = output.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)
-    const login = normalizeUsername(accountMatch?.[1] ?? '')
+    const login = normalizeGitUsername(accountMatch?.[1] ?? '')
     if (login) {
       cachedGhLogin = login
     }
     return login
   } catch {
-    // Don't cache empty results on failure — allow retry on next call
+    // Why: broken tokens/keychains can block the Electron main process.
+    // Keep the fallback best-effort for this app session.
+    cachedGhLogin = ''
     return ''
   }
 }
 
+function getGhLoginForGitHubRemote(path: string): string {
+  const remoteUrl = getGitHubRemoteUrlForGhLogin(path)
+  if (!remoteUrl) {
+    return ''
+  }
+  return getGhLogin()
+}
+
+function getGitHubRemoteUrlForGhLogin(path: string): string {
+  const remotes = listRemoteNamesSync(path)
+  const defaultBaseRef = getDefaultBaseRef(path)
+  const defaultBaseRemote = defaultBaseRef ? getRemoteNameFromRef(defaultBaseRef, remotes) : ''
+  const defaultBranch = defaultBaseRef
+    ? getDefaultBranchName(defaultBaseRef, defaultBaseRemote)
+    : null
+
+  const candidateRemotes = [
+    getConfiguredBranchRemote(path, getCurrentBranchName(path)),
+    getConfiguredBranchRemote(path, defaultBranch),
+    defaultBaseRemote,
+    'origin',
+    remotes.length === 1 ? remotes[0] : ''
+  ]
+
+  const seen = new Set<string>()
+  for (const remote of candidateRemotes) {
+    if (!remote || seen.has(remote)) {
+      continue
+    }
+    seen.add(remote)
+    try {
+      const remoteUrl = getRemoteUrlByName(path, remote)
+      if (parseHostedRemote(remoteUrl)?.provider === 'github') {
+        return remoteUrl
+      }
+    } catch {
+      // Missing candidate remotes are expected; try the next repo-level fallback.
+    }
+  }
+  // Why: `gh` reports a GitHub account. For GitLab/Bitbucket/self-hosted
+  // repos, using that identity would create the wrong provider prefix.
+  return ''
+}
+
 /**
- * Get the best username-style branch prefix for the repo.
+ * Get the GitHub/explicit username-style branch prefix for the repo.
  */
 export function getGitUsername(path: string): string {
-  return normalizeUsername(
+  // Why: this backs the "Git Username" branch-prefix setting. Commit author
+  // email/name are not hosted-account usernames, so keep them out of this path.
+  return normalizeGitUsername(
     getGitConfigValue(path, 'github.user') ||
       getGitConfigValue(path, 'user.username') ||
-      getGhLogin() ||
-      getGitConfigValue(path, 'user.email').split('@')[0] ||
-      getGitConfigValue(path, 'user.name')
+      getGhLoginForGitHubRemote(path)
   )
 }
 
@@ -219,8 +335,11 @@ export function getDefaultBaseRef(path: string): string | null {
   return null
 }
 
-export async function getBaseRefDefault(path: string): Promise<string | null> {
-  return getDefaultBaseRefAsync(path)
+export async function getBaseRefDefault(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<string | null> {
+  return getDefaultBaseRefAsync(path, options)
 }
 
 /**
@@ -236,12 +355,13 @@ export async function getBaseRefDefault(path: string): Promise<string | null> {
 export function getRemoteDrift(
   repoPath: string,
   localRef: string,
-  remoteRef: string
+  remoteRef: string,
+  options: LocalGitExecOptions = {}
 ): { ahead: number; behind: number } | null {
   try {
     const stdout = gitExecFileSync(
       ['rev-list', '--left-right', '--count', `${localRef}...${remoteRef}`],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     const [aheadStr, behindStr] = stdout.trim().split(/\s+/)
     const ahead = Number(aheadStr)
@@ -267,12 +387,13 @@ export function getRecentDriftSubjects(
   repoPath: string,
   localRef: string,
   remoteRef: string,
-  limit: number
+  limit: number,
+  options: LocalGitExecOptions = {}
 ): string[] {
   try {
     const stdout = gitExecFileSync(
       ['log', '--format=%s', '-n', String(limit), `${localRef}..${remoteRef}`],
-      { cwd: repoPath }
+      gitExecOptions(repoPath, options)
     )
     return stdout.split('\n').filter((s) => s.trim().length > 0)
   } catch {
@@ -345,8 +466,13 @@ export async function resolveDefaultBaseRefViaExec(exec: GitExec): Promise<strin
   })
 }
 
-async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
-  return resolveDefaultBaseRefViaExec((argv) => gitExecFileAsync(argv, { cwd: path }))
+async function getDefaultBaseRefAsync(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<string | null> {
+  return resolveDefaultBaseRefViaExec((argv) =>
+    gitExecFileAsync(argv, gitExecOptions(path, options))
+  )
 }
 
 /**
@@ -358,12 +484,11 @@ async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
  * `upstream/main`). The picker would otherwise structurally deny the
  * correct answer for fork contributors — see docs/upstream-base-ref-design.md.
  *
- * Why two remote globs for a single-segment query: `git for-each-ref`
- * uses fnmatch-style globs where `*` does NOT cross `/`. A single
- * `refs/remotes/*\/*<q>*` pattern only matches when `<q>` appears in the
- * branch-name segment, so typing `upstream` (a remote name) would return
- * nothing. The extra `refs/remotes/*<q>*\/*` glob matches when the query
- * appears in the remote-name segment, making remote-name filtering work.
+ * Why paired leaf/ancestor globs for a single-segment query: `git for-each-ref`
+ * uses fnmatch-style globs where `*` does NOT cross `/`. Slash-named branch
+ * refs need an ancestor-segment glob for `user` in `user/feature`, a leaf glob
+ * for `feature`, and the same remote-side shape so typing a remote name like
+ * `upstream` keeps working.
  *
  * Why the multi-segment branch: the picker displays results as
  * `upstream/main`, so users naturally retype that format. With a single
@@ -376,8 +501,39 @@ async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
  * Why shared: the local path and the SSH relay path must send the exact
  * same argv so results cannot diverge between transports.
  */
-export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
-  const base = ['for-each-ref', '--format=%(refname)%00%(refname:short)', '--sort=-committerdate']
+const REF_SEARCH_CANDIDATE_MULTIPLIER = 4
+const REF_SEARCH_LEGACY_HEADROOM = 100
+
+function getRefSearchCandidateCount(limit: number, excludesRemoteHead: boolean): number {
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error('invalid_limit')
+  }
+  const baseCount = limit * REF_SEARCH_CANDIDATE_MULTIPLIER
+  return excludesRemoteHead ? baseCount : baseCount + REF_SEARCH_LEGACY_HEADROOM
+}
+
+export function buildSearchBaseRefsArgv(
+  normalizedQuery: string,
+  limit: number,
+  options: { excludeRemoteHead?: boolean } = {}
+): string[] {
+  const excludeRemoteHead = options.excludeRemoteHead ?? true
+  const candidateCount = getRefSearchCandidateCount(limit, excludeRemoteHead)
+  const base = [
+    'for-each-ref',
+    '--format=%(refname)%00%(refname:short)',
+    '--sort=-committerdate',
+    ...(excludeRemoteHead
+      ? [
+          // Why: exclude remote HEAD pseudo-refs before --count so the bounded
+          // candidate window is spent on refs the picker can actually display.
+          '--exclude=refs/remotes/**/HEAD'
+        ]
+      : []),
+    // Why: empty Branch-tab searches use broad globs; cap git output before
+    // execFile/SSH buffers capture every ref in very large repositories.
+    `--count=${candidateCount}`
+  ]
   // Why: split on `/` so display-format queries (`upstream/main`) route
   // each token to one git ref segment. Filter empty tokens so trailing
   // (`upstream/`), leading (`/main`), or doubled (`upstream//main`)
@@ -388,13 +544,18 @@ export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
   const tokens = normalizedQuery.split('/').filter((t) => t.length > 0)
   if (tokens.length <= 1) {
     const q = tokens[0] ?? ''
-    // Why three globs for a single-segment query: `git for-each-ref`
-    // uses fnmatch-style globs where `*` does NOT cross `/`. A single
-    // `refs/remotes/*\/*<q>*` only matches when `<q>` is in the branch
-    // segment, so typing `upstream` (a remote name) returns nothing.
-    // The extra `refs/remotes/*<q>*\/*` matches when the query lives in
-    // the remote segment, making remote-name filtering work.
-    return [...base, `refs/remotes/*${q}*/*`, `refs/remotes/*/*${q}*`, `refs/heads/*${q}*`]
+    // Why `**`, not `*`: git for-each-ref globs are fnmatch-style where a
+    // single `*` does NOT cross `/`. Slash-named branches (`user/feature`)
+    // are the norm, so match both leaf and ancestor branch-name segments.
+    // The remote ancestor glob also preserves remote-name queries like
+    // `upstream` while `**/` keeps flat names like `main` working.
+    return [
+      ...base,
+      `refs/heads/**/*${q}*`,
+      `refs/heads/**/*${q}*/**`,
+      `refs/remotes/**/*${q}*`,
+      `refs/remotes/**/*${q}*/**`
+    ]
   }
   // Why: multi-token queries like `upstream/main` map one `*token*` per
   // ref segment, so each token is matched within a single git ref
@@ -405,13 +566,28 @@ export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
   return [...base, `refs/remotes/${segmented}`, `refs/heads/${segmented}`]
 }
 
+export function isForEachRefExcludeUnsupportedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  const maybe = error as { message?: unknown; stderr?: unknown; stdout?: unknown }
+  const text = [maybe.message, maybe.stderr, maybe.stdout]
+    .filter((value): value is string => typeof value === 'string')
+    .join('\n')
+    .toLowerCase()
+  return text.includes('unknown option') && text.includes('exclude')
+}
+
 /**
  * Resolve the default push remote for a repo.
  * Order: remote configured on the current default branch → origin → the single
  * remote when the repo has exactly one → error.
  */
-export async function getDefaultRemote(path: string): Promise<string> {
-  const defaultRef = await getDefaultBaseRefAsync(path)
+export async function getDefaultRemote(
+  path: string,
+  options: LocalGitExecOptions = {}
+): Promise<string> {
+  const defaultRef = await getDefaultBaseRefAsync(path, options)
   // Why: getDefaultBaseRefAsync returns null when no default branch can be
   // detected (e.g. a brand-new repo with no commits on origin). Guard so we
   // don't crash on .includes(); fall through to the remote-list heuristics.
@@ -425,7 +601,7 @@ export async function getDefaultRemote(path: string): Promise<string> {
     try {
       const { stdout } = await gitExecFileAsync(
         ['config', '--get', `branch.${defaultBranch}.remote`],
-        { cwd: path }
+        gitExecOptions(path, options)
       )
       const value = stdout.trim()
       if (value) {
@@ -437,7 +613,7 @@ export async function getDefaultRemote(path: string): Promise<string> {
   }
 
   try {
-    const { stdout } = await gitExecFileAsync(['remote'], { cwd: path })
+    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
     const remotes = stdout
       .split('\n')
       .map((line) => line.trim())
@@ -463,25 +639,58 @@ export async function getDefaultRemote(path: string): Promise<string> {
 }
 
 export async function searchBaseRefs(path: string, query: string, limit = 25): Promise<string[]> {
-  const normalizedQuery = normalizeRefSearchQuery(query)
-  if (!normalizedQuery) {
+  return (await searchBaseRefDetails(path, query, limit)).map((entry) => entry.refName)
+}
+
+export async function searchBaseRefDetails(
+  path: string,
+  query: string,
+  limit = 25
+): Promise<BaseRefSearchResult[]> {
+  if (!Number.isInteger(limit) || limit <= 0) {
     return []
   }
+  const normalizedQuery = normalizeRefSearchQuery(query)
 
   try {
     // Why: argv (including the two-remote-glob rationale) lives in
     // buildSearchBaseRefsArgv so the SSH sibling cannot drift.
-    const { stdout } = await gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery), {
-      cwd: path
-    })
+    const remotesPromise = listRemoteNames(path)
+    let result: { stdout: string }
+    try {
+      result = await gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery, limit), {
+        cwd: path
+      })
+    } catch (err) {
+      if (!isForEachRefExcludeUnsupportedError(err)) {
+        throw err
+      }
+      result = await gitExecFileAsync(
+        buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
+        { cwd: path }
+      )
+    }
+    const remotes = await remotesPromise
 
-    return parseAndFilterSearchRefs(stdout, limit)
+    return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
   } catch (err) {
     // Why: surface the failure for diagnostics; callers treat `[]` as "no
     // matches", but silently swallowing the error makes a missing result
     // set impossible to debug. Mirrors the SSH sibling in
     // src/main/ipc/repos.ts.
     console.warn('[searchBaseRefs] for-each-ref failed', { path, err })
+    return []
+  }
+}
+
+async function listRemoteNames(path: string, options: LocalGitExecOptions = {}): Promise<string[]> {
+  try {
+    const { stdout } = await gitExecFileAsync(['remote'], gitExecOptions(path, options))
+    return stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+  } catch {
     return []
   }
 }
@@ -498,7 +707,16 @@ export async function searchBaseRefs(path: string, query: string, limit = 25): P
  * lived in a single location; two copies double the regression surface.
  */
 export function parseAndFilterSearchRefs(stdout: string, limit: number): string[] {
+  return parseAndFilterSearchRefDetails(stdout, limit).map((entry) => entry.refName)
+}
+
+export function parseAndFilterSearchRefDetails(
+  stdout: string,
+  limit: number,
+  remotes: string[] = []
+): BaseRefSearchResult[] {
   const seen = new Set<string>()
+  const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
   return (
     stdout
       .split('\n')
@@ -531,7 +749,10 @@ export function parseAndFilterSearchRefs(stdout: string, limit: number): string[
         seen.add(short)
         return true
       })
-      .map(({ short }) => short)
+      .map(({ full, short }) => ({
+        refName: short,
+        localBranchName: resolveLocalBranchName(full, short, sortedRemotes)
+      }))
       // Why: `Math.max(0, limit)` — treat pathological `limit <= 0` as
       // "zero results" rather than "at least 1". More honest than silently
       // returning a single ref when the caller explicitly asked for none.
@@ -539,13 +760,30 @@ export function parseAndFilterSearchRefs(stdout: string, limit: number): string[
   )
 }
 
+function resolveLocalBranchName(fullRef: string, shortRef: string, remotes: string[]): string {
+  const remoteRefPrefix = 'refs/remotes/'
+  if (!fullRef.startsWith(remoteRefPrefix)) {
+    return shortRef
+  }
+  const remoteAndBranch = fullRef.slice(remoteRefPrefix.length)
+  const remote = remotes.find((candidate) => remoteAndBranch.startsWith(`${candidate}/`))
+  if (remote) {
+    return remoteAndBranch.slice(remote.length + 1)
+  }
+  return remoteAndBranch.split('/').slice(1).join('/') || shortRef
+}
+
 export function normalizeRefSearchQuery(query: string): string {
   return query.trim().replace(/[*?[\]\\]/g, '')
 }
 
-async function hasGitRefAsync(path: string, ref: string): Promise<boolean> {
+async function hasGitRefAsync(
+  path: string,
+  ref: string,
+  options: LocalGitExecOptions = {}
+): Promise<boolean> {
   try {
-    await gitExecFileAsync(['rev-parse', '--verify', ref], { cwd: path })
+    await gitExecFileAsync(['rev-parse', '--verify', ref], gitExecOptions(path, options))
     return true
   } catch {
     return false
@@ -556,23 +794,30 @@ export type BranchConflictKind = 'local' | 'remote'
 
 export async function getBranchConflictKind(
   path: string,
-  branchName: string
+  branchName: string,
+  allowedBaseRef?: string,
+  options: LocalGitExecOptions = {}
 ): Promise<BranchConflictKind | null> {
-  if (await hasGitRefAsync(path, `refs/heads/${branchName}`)) {
+  if (await hasGitRefAsync(path, `refs/heads/${branchName}`, options)) {
     return 'local'
   }
 
   try {
+    const remoteNames = (await listRemoteNames(path, options)).sort((a, b) => b.length - a.length)
     const { stdout } = await gitExecFileAsync(
       ['for-each-ref', '--format=%(refname)', 'refs/remotes'],
-      { cwd: path }
+      gitExecOptions(path, options)
     )
-    // Why: refs have the form refs/remotes/<remote>/<branch>. We strip the
-    // first three segments so that e.g. "feature/dashboard" only matches
-    // "refs/remotes/origin/feature/dashboard", not "refs/remotes/origin/other/feature/dashboard".
     const hasRemoteConflict = stdout.split('\n').some((ref) => {
-      const parts = ref.trim().split('/')
-      return parts.slice(3).join('/') === branchName
+      const trimmed = ref.trim()
+      if (isAllowedRemoteBaseRef(trimmed, allowedBaseRef)) {
+        return false
+      }
+      const shortRef = trimmed.replace(/^refs\/remotes\//, '')
+      // Why: git allows slashes in remote names. Use the configured remote
+      // list so foo/bar/feature resolves as branch "feature" for remote
+      // "foo/bar", matching searchBaseRefDetails.
+      return resolveLocalBranchName(trimmed, shortRef, remoteNames) === branchName
     })
 
     return hasRemoteConflict ? 'remote' : null
@@ -581,12 +826,19 @@ export async function getBranchConflictKind(
   }
 }
 
+function isAllowedRemoteBaseRef(refName: string, allowedBaseRef: string | undefined): boolean {
+  if (!allowedBaseRef) {
+    return false
+  }
+  const normalizedAllowedRef = allowedBaseRef.startsWith('refs/remotes/')
+    ? allowedBaseRef
+    : `refs/remotes/${allowedBaseRef}`
+  return refName === normalizedAllowedRef
+}
+
 /**
  * Build a hosted URL (e.g. GitHub, GitLab, Bitbucket) for a specific file
  * and line in the repo. Returns null when the remote isn't a recognized host.
- *
- * Why hosted-git-info: it handles SSH, HTTPS, and shorthand remote URLs
- * across multiple providers, so we don't have to maintain our own URL parser.
  */
 export function getRemoteFileUrl(
   repoPath: string,
@@ -598,22 +850,23 @@ export function getRemoteFileUrl(
     return null
   }
 
-  const info = hostedGitInfo.fromUrl(remoteUrl)
-  if (!info) {
-    return null
-  }
-
   const defaultBaseRef = getDefaultBaseRef(repoPath)
   if (!defaultBaseRef) {
     return null
   }
   const defaultBranch = defaultBaseRef.replace(/^origin\//, '')
-  const browseUrl = info.browseFile(relativePath, { committish: defaultBranch })
-  if (!browseUrl) {
+
+  return buildHostedRemoteFileUrl(remoteUrl, relativePath, defaultBranch, line)
+}
+
+/**
+ * Build a hosted URL (e.g. GitHub, GitLab, Bitbucket) for a commit. Returns
+ * null when the origin remote isn't a recognized host.
+ */
+export function getRemoteCommitUrl(repoPath: string, sha: string): string | null {
+  const remoteUrl = getRemoteUrl(repoPath)
+  if (!remoteUrl) {
     return null
   }
-
-  // Why: hosted-git-info lowercases the fragment, but GitHub convention
-  // uses uppercase L for line links (e.g. #L42). Append manually.
-  return `${browseUrl}#L${line}`
+  return buildHostedRemoteCommitUrl(remoteUrl, sha)
 }

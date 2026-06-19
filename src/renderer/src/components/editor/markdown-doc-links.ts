@@ -1,4 +1,5 @@
 import type { MarkdownDocument } from '../../../../shared/types'
+import { slugMarkdownHeading } from './markdown-heading-slug'
 
 export const MARKDOWN_DOC_LINK_PREFIX = '#orca-doc-link='
 
@@ -24,6 +25,12 @@ export type MarkdownDocLinkTextPart =
   | { type: 'text'; value: string }
   | { type: 'docLink'; target: string; label: string }
 
+export type ParsedMarkdownDocLink = {
+  target: string
+  label: string
+  alias: string | null
+}
+
 export type MarkdownDocumentIndex = {
   byName: Map<string, MarkdownDocument[]>
   byRelativePath: Map<string, MarkdownDocument[]>
@@ -43,6 +50,25 @@ export function stripMarkdownExtension(value: string): string {
     }
   }
   return value
+}
+
+function getMarkdownDocLinkDocumentTarget(target: string): string {
+  const hashIndex = target.indexOf('#')
+  if (hashIndex <= 0) {
+    return target
+  }
+  // Why: Obsidian-style [[note#Heading]] links resolve the document first;
+  // the heading fragment is applied only after the file target is known.
+  return target.slice(0, hashIndex)
+}
+
+export function getMarkdownDocLinkAnchor(target: string): string | null {
+  const hashIndex = target.indexOf('#')
+  if (hashIndex === -1 || hashIndex === target.length - 1) {
+    return null
+  }
+  const anchor = target.slice(hashIndex + 1).trim()
+  return anchor ? slugMarkdownHeading(anchor) : null
 }
 
 function normalizeDocLinkKey(value: string): string {
@@ -97,7 +123,7 @@ export function resolveMarkdownDocLink(
   target: string,
   index: MarkdownDocumentIndex
 ): MarkdownDocLinkResolution {
-  const normalizedTarget = normalizeDocLinkKey(target)
+  const normalizedTarget = normalizeDocLinkKey(getMarkdownDocLinkDocumentTarget(target))
   const extensionlessTarget = stripMarkdownExtension(normalizedTarget)
 
   // Why: exact relative path must be checked before the extensionless lookup
@@ -125,12 +151,36 @@ export function resolveMarkdownDocLink(
   return { status: 'missing' }
 }
 
-export function getMarkdownDocLinkTarget(rawTarget: string): string | null {
-  const target = rawTarget.trim()
-  if (!target || /[\r\n[\]|]/.test(target)) {
+export function parseMarkdownDocLink(rawTarget: string): ParsedMarkdownDocLink | null {
+  const separatorIndex = rawTarget.indexOf('|')
+  const target =
+    separatorIndex === -1 ? rawTarget.trim() : rawTarget.slice(0, separatorIndex).trim()
+  const alias = separatorIndex === -1 ? null : rawTarget.slice(separatorIndex + 1).trim() || null
+
+  if (!target || /[\r\n[\]]/.test(target) || (alias !== null && /[\r\n[\]]/.test(alias))) {
     return null
   }
-  return target
+  if (separatorIndex !== -1 && alias === null) {
+    return null
+  }
+
+  return {
+    target,
+    alias,
+    label: alias ?? target
+  }
+}
+
+export function getMarkdownDocLinkTarget(rawTarget: string): string | null {
+  return parseMarkdownDocLink(rawTarget)?.target ?? null
+}
+
+export function formatMarkdownDocLinkBody(target: string, alias?: string | null): string {
+  return alias ? `${target}|${alias}` : target
+}
+
+export function formatMarkdownDocLink(target: string, alias?: string | null): string {
+  return `[[${formatMarkdownDocLinkBody(target, alias)}]]`
 }
 
 export function splitMarkdownDocLinkText(value: string): MarkdownDocLinkTextPart[] {
@@ -150,8 +200,8 @@ export function splitMarkdownDocLinkText(value: string): MarkdownDocLinkTextPart
       break
     }
 
-    const target = getMarkdownDocLinkTarget(value.slice(start + 2, end))
-    if (!target) {
+    const link = parseMarkdownDocLink(value.slice(start + 2, end))
+    if (!link) {
       parts.push({ type: 'text', value: value.slice(position, end + 2) })
       position = end + 2
       continue
@@ -160,7 +210,7 @@ export function splitMarkdownDocLinkText(value: string): MarkdownDocLinkTextPart
     if (start > position) {
       parts.push({ type: 'text', value: value.slice(position, start) })
     }
-    parts.push({ type: 'docLink', target, label: target })
+    parts.push({ type: 'docLink', target: link.target, label: link.label })
     position = end + 2
   }
 

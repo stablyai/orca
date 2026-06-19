@@ -1,55 +1,147 @@
-import { useEffect } from 'react'
-import { ChevronLeft } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { isEditableTarget } from '@/lib/editable-target'
+import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { OnboardingState } from '../../../../shared/types'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
-import { RepoStep } from './RepoStep'
-import { STEPS, useOnboardingFlow } from './use-onboarding-flow'
+import { IntegrationsStep } from './IntegrationsStep'
+import { WindowsTerminalStep } from './WindowsTerminalStep'
+import { useOnboardingFlow } from './use-onboarding-flow'
+import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
+import { OnboardingFooter } from './OnboardingFooter'
+import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
-
-const isMac = navigator.userAgent.includes('Mac')
-// Why: AGENTS.md mandates `Ctrl+Enter` style on non-Mac; bare `Ctrl↵` reads as one glyph.
-const enterLabel = isMac ? '⌘↵' : 'Ctrl+Enter'
+import { translate } from '@/i18n/i18n'
 
 const stepCopy = {
   agent: {
-    title: 'Pick your default agent',
-    subtitle:
-      "Orca works with every CLI agent. Choose the one you'll reach for most — switch any time."
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.198b148b3c',
+        'Pick your default agent'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.322fc50a18',
+        "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time."
+      )
+    }
   },
   theme: {
-    title: 'Make it feel like home',
-    subtitle: 'Pick the look you want to stare at for hours.'
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.f396db9f20',
+        'Make it feel like home'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.04ae28d8ca',
+        'Pick the look you want to stare at for hours.'
+      )
+    }
   },
   notifications: {
-    title: 'Know when an agent needs you',
-    subtitle: 'Get a desktop notification when your agent finishes or asks a question.'
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.b054332836',
+        'Set up notifications'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.ff92d15436',
+        'Orca will notify you when agents are done or need help.'
+      )
+    }
   },
-  repo: {
-    title: 'Point Orca at some code',
-    subtitle: 'Open a folder, clone a repo, or skip and add one later.'
+  integrations: {
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.ae3b00ca82',
+        'Set up GitHub tasks'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.97c42cda00',
+        'Install the GitHub CLI to:'
+      )
+    }
+  },
+  windows_terminal: {
+    get title() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.windowsTerminalTitle',
+        'Set Windows terminal defaults'
+      )
+    },
+    get subtitle() {
+      return translate(
+        'auto.components.onboarding.OnboardingFlow.windowsTerminalSubtitle',
+        'Choose the DEFAULT Shell for new panes and how right-click behaves in the terminal.'
+      )
+    }
   }
+} as const
+
+const stepTooltipLabels = {
+  agent: 'Default Agent',
+  theme: 'Appearance',
+  windows_terminal: 'Windows Terminal',
+  notifications: 'Notifications',
+  integrations: 'Integrations'
 } as const
 
 type OnboardingFlowProps = {
   onboarding: OnboardingState
   onOnboardingChange: (state: OnboardingState) => void
+  onSettingsDetourStart?: () => void
 }
 
 export default function OnboardingFlow({
   onboarding,
-  onOnboardingChange
+  onOnboardingChange,
+  onSettingsDetourStart
 }: OnboardingFlowProps): React.JSX.Element {
-  const flow = useOnboardingFlow(onboarding, onOnboardingChange)
+  const flow = useOnboardingFlow(onboarding, onOnboardingChange, { onSettingsDetourStart })
+  const continueShortcutModifierLabel = getScreenSubmitModifierLabel()
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
+  const shouldShowSkipToProjectSetup = currentStep.id !== 'notifications'
+  const shouldShowFooterBusy = Boolean(busyLabel)
+  const footerPrimaryLabel =
+    busyLabel ?? (currentStep.id === 'notifications' ? 'Add your first project' : 'Continue')
+  const canDismissCurrentStep = currentStep.id !== 'notifications'
+  const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
+  const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
+  const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
+
+  const requestSkipConfirmation = useCallback(
+    (advancedVia: 'button' | 'keyboard') => {
+      // Why: the final notifications step hands off to Add Project, so all
+      // dismiss paths are disabled there, not just the visible Skip button.
+      if (!canDismissCurrentStep || busyLabel || skipConfirmOpen) {
+        return
+      }
+      skipConfirmAdvancedViaRef.current = advancedVia
+      setSkipConfirmOpen(true)
+    },
+    [busyLabel, canDismissCurrentStep, skipConfirmOpen]
+  )
+
+  const confirmSkipOnboarding = useCallback(() => {
+    const advancedVia = skipConfirmAdvancedViaRef.current
+    setSkipConfirmOpen(false)
+    void flowDismissOnboarding(advancedVia)
+  }, [flowDismissOnboarding])
+
   // Why: depend on stable callbacks + step id only so the listener doesn't
   // re-bind on every render of the parent (flow object identity changes).
-  const { next: flowNext, openFolder: flowOpenFolder } = flow
-
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       // Why: don't hijack Enter / Cmd+Enter while the user is typing into the
@@ -57,157 +149,196 @@ export default function OnboardingFlow({
       if (isEditableTarget(event.target)) {
         return
       }
-      const mod = isMac ? event.metaKey : event.ctrlKey
-      if (!mod || event.key !== 'Enter') {
+      // Why: onboarding continue is screen-local submit behavior, not a
+      // user-configurable app command.
+      if (!isScreenSubmitShortcut(event)) {
         return
       }
       event.preventDefault()
-      if (currentStep.id === 'repo') {
-        void flowOpenFolder()
-      } else {
-        void flowNext('keyboard')
-      }
+      void flowNext('keyboard')
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [currentStep.id, flowNext, flowOpenFolder])
+  }, [flowNext])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || skipConfirmOpen) {
+        return
+      }
+      event.preventDefault()
+      requestSkipConfirmation('keyboard')
+    }
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+  }, [requestSkipConfirmation, skipConfirmOpen])
 
   return (
-    <div className="fixed inset-0 z-[100] overflow-auto bg-background text-foreground">
+    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
       <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-70 dark:opacity-70"
-        style={{
-          background:
-            'radial-gradient(60% 50% at 20% 0%, color-mix(in srgb, var(--foreground) 6%, transparent) 0%, transparent 60%), radial-gradient(45% 40% at 90% 100%, color-mix(in srgb, var(--foreground) 4%, transparent) 0%, transparent 60%)'
+        className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground backdrop-blur-[2px]"
+        data-onboarding-overlay
+        onPointerDown={(event) => {
+          if (!shouldRequestOnboardingSkipConfirmation(event)) {
+            return
+          }
+          requestSkipConfirmation('button')
         }}
-      />
-      <div
-        className="absolute inset-x-0 top-0 h-12"
-        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-      />
+      >
+        <div
+          className="absolute inset-x-0 top-0 h-8"
+          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        />
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-[820px] flex-col px-8 pb-10 pt-16">
-        <div className="flex items-center gap-2.5 text-sm font-semibold tracking-tight">
-          <div
-            className="flex size-7 items-center justify-center rounded-md"
-            style={{ backgroundColor: '#12181e' }}
-          >
-            <img src={logo} alt="Orca logo" className="size-5" />
-          </div>
-          <span>Orca</span>
-        </div>
-
-        <div className="mt-12 flex items-center gap-2">
-          {STEPS.map((step, idx) => {
-            const isActive = idx === stepIndex
-            const isDone = idx < stepIndex
-            return (
-              <div
-                key={step.id}
-                className={cn(
-                  'h-1 rounded-full transition-all duration-300',
-                  isActive
-                    ? 'w-10 bg-foreground'
-                    : isDone
-                      ? 'w-6 bg-muted-foreground/70'
-                      : 'w-6 bg-muted'
-                )}
+        <section
+          ref={flow.setLifecycleRootRef}
+          role="dialog"
+          aria-label={translate(
+            'auto.components.onboarding.OnboardingFlow.277ba45540',
+            'Orca onboarding'
+          )}
+          aria-modal="true"
+          data-onboarding-modal
+          className={cn(
+            'relative flex h-[calc(100vh-2rem)] max-h-[960px] min-h-0 w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] transition-[max-width] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+            'max-w-[1100px]'
+          )}
+        >
+          <div className="relative flex h-full min-h-0 flex-col px-6 pb-6 pt-8 sm:px-8 sm:pb-8 sm:pt-9">
+            <div className="flex items-center gap-3 text-base font-semibold tracking-tight">
+              <img
+                src={logo}
+                alt=""
+                aria-hidden="true"
+                className="h-7 w-auto shrink-0 invert dark:invert-0"
               />
-            )
-          })}
-          <span className="ml-3 text-xs font-medium text-muted-foreground">
-            {stepIndex + 1} of {STEPS.length}
-          </span>
-        </div>
-
-        <div className="mt-8">
-          {stepIndex === 0 && (
-            <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Welcome to Orca
+              <span>
+                {translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}
+              </span>
             </div>
-          )}
-          <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
-            {copy.title}
-          </h1>
-          <p className="mt-3 max-w-[58ch] text-[15px] leading-relaxed text-muted-foreground">
-            {copy.subtitle}
-          </p>
-        </div>
 
-        <div className="mt-10 flex-1">
-          {currentStep.id === 'agent' && (
-            <AgentStep
-              selectedAgent={flow.selectedAgent}
-              onSelect={flow.setSelectedAgent}
-              detectedSet={flow.detectedSet}
-              isDetecting={flow.isDetectingAgents}
-            />
-          )}
-          {currentStep.id === 'theme' && (
-            <ThemeStep
-              theme={flow.theme}
-              onThemeChange={flow.setTheme}
-              settings={flow.settings}
-              updateSettings={flow.updateSettings}
-            />
-          )}
-          {currentStep.id === 'notifications' && (
-            <NotificationStep value={flow.notifications} onChange={flow.setNotifications} />
-          )}
-          {currentStep.id === 'repo' && (
-            <RepoStep
-              cloneUrl={flow.cloneUrl}
-              onCloneUrlChange={flow.setCloneUrl}
-              onOpenFolder={() => void flow.openFolder()}
-              onClone={() => void flow.clone()}
-              workspaceDir={flow.settings?.workspaceDir ?? ''}
-              busyLabel={flow.busyLabel}
-              error={flow.error}
-            />
-          )}
-        </div>
+            <div className="mt-10 flex items-center gap-2 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none">
+              {flow.progressSteps.map(({ step, index: realStepIndex, isSkipped }, progressIdx) => {
+                const isActive = realStepIndex === stepIndex
+                const isDone = realStepIndex < stepIndex
+                return (
+                  <Tooltip key={step.id}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          // Why: the visible bars stay 4px tall, but the invisible
+                          // hit area makes hover/click/tooltip targeting reliable.
+                          'relative h-1 rounded-full outline-none transition-all duration-300 before:absolute before:-inset-y-2 before:-inset-x-1 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card',
+                          isActive
+                            ? 'w-10 bg-foreground'
+                            : isDone
+                              ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
+                              : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45',
+                          isSkipped && 'cursor-default hover:bg-muted-foreground/25'
+                        )}
+                        aria-label={translate(
+                          'auto.components.onboarding.OnboardingFlow.adaa0aa627',
+                          'Go to onboarding step {{value0}}: {{value1}}',
+                          { value0: progressIdx + 1, value1: stepTooltipLabels[step.id] }
+                        )}
+                        aria-current={isActive ? 'step' : undefined}
+                        disabled={isSkipped}
+                        onClick={() => flow.jumpToStep(realStepIndex)}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={8} style={{ zIndex: 110 }}>
+                      {stepTooltipLabels[step.id]}
+                    </TooltipContent>
+                  </Tooltip>
+                )
+              })}
+              <span className="ml-3 text-xs font-medium text-muted-foreground">
+                {flow.progressStepIndex + 1}{' '}
+                {translate('auto.components.onboarding.OnboardingFlow.4db04f2f57', 'of')}{' '}
+                {flow.progressSteps.length}
+              </span>
+            </div>
 
-        <footer className="mt-10 flex items-center justify-between border-t border-border pt-5">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <kbd className="rounded-md border border-border bg-muted/60 px-1.5 py-0.5 font-mono text-[11px] text-foreground">
-              {enterLabel}
-            </kbd>
-            <span>{currentStep.id === 'repo' ? 'open folder' : 'continue'}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              className={
-                currentStep.id === 'repo'
-                  ? 'rounded-md border border-foreground/20 bg-muted px-3 py-2 text-sm font-medium text-foreground hover:bg-muted-foreground/10'
-                  : 'rounded-md px-3 py-2 text-sm text-muted-foreground hover:text-foreground'
-              }
-              onClick={() => void flow.skip()}
+            <div className="mt-8 shrink-0">
+              {stepIndex === 0 && (
+                <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  {translate(
+                    'auto.components.onboarding.OnboardingFlow.1b5e182e9f',
+                    'Welcome to Orca'
+                  )}
+                </div>
+              )}
+              <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
+                {copy.title}
+              </h1>
+              {copy.subtitle ? (
+                <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
+                  {copy.subtitle}
+                </p>
+              ) : null}
+            </div>
+
+            <div
+              className={cn(
+                'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
+                // Why: agent step pins permissions below a capped agent grid scroll
+                // region; other steps keep the shared outer scroll container.
+                currentStep.id === 'agent'
+                  ? 'mt-10 flex flex-col overflow-hidden'
+                  : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
+              )}
             >
-              {currentStep.id === 'repo' ? "I'll add one later" : 'Skip'}
-            </button>
-            {stepIndex > 0 && (
-              <button
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/60 px-3 py-2 text-sm text-foreground hover:bg-muted disabled:opacity-60"
-                disabled={Boolean(busyLabel)}
-                onClick={flow.back}
-              >
-                <ChevronLeft className="size-4" />
-                Back
-              </button>
-            )}
-            {currentStep.id !== 'repo' && (
-              <button
-                className="rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-                disabled={Boolean(busyLabel)}
-                onClick={() => void flow.next()}
-              >
-                Continue
-              </button>
-            )}
+              {currentStep.id === 'agent' && (
+                <AgentStep
+                  selectedAgent={flow.selectedAgent}
+                  onSelect={flow.setSelectedAgent}
+                  detectedSet={flow.detectedSet}
+                  isDetecting={flow.isDetectingAgents}
+                  yoloPermissions={flow.yoloPermissions}
+                  onYoloPermissionsChange={flow.setYoloPermissions}
+                />
+              )}
+              {currentStep.id === 'theme' && (
+                <ThemeStep
+                  theme={flow.theme}
+                  onThemeChange={flow.setTheme}
+                  settings={flow.settings}
+                  updateSettings={flow.updateSettings}
+                />
+              )}
+              {currentStep.id === 'notifications' && (
+                <NotificationStep settings={flow.settings} updateSettings={flow.updateSettings} />
+              )}
+              {currentStep.id === 'integrations' && <IntegrationsStep />}
+              {currentStep.id === 'windows_terminal' && (
+                <WindowsTerminalStep
+                  settings={flow.settings}
+                  updateSettings={flow.updateSettings}
+                />
+              )}
+            </div>
+
+            <OnboardingFooter
+              shouldShowSkipToProjectSetup={shouldShowSkipToProjectSetup}
+              busyLabel={busyLabel}
+              onSkipToRepo={() => void flow.skipToRepo()}
+              stepIndex={stepIndex}
+              onBack={flow.nestedScan ? flow.cancelNested : flow.back}
+              showPrimary
+              primaryBusy={shouldShowFooterBusy}
+              primaryLabel={footerPrimaryLabel}
+              shortcutModifierLabel={continueShortcutModifierLabel}
+              onPrimary={() => void flow.next()}
+            />
           </div>
-        </footer>
+        </section>
+        <OnboardingSkipConfirmationDialog
+          open={skipConfirmOpen}
+          onOpenChange={setSkipConfirmOpen}
+          onSkip={confirmSkipOnboarding}
+        />
       </div>
-    </div>
+    </TooltipProvider>
   )
 }

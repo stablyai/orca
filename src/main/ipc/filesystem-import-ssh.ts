@@ -1,9 +1,15 @@
-import { lstat, readdir } from 'fs/promises'
+import { lstat, readdir, realpath } from 'fs/promises'
 import { basename, join, posix, resolve } from 'path'
 import type { SFTPWrapper } from 'ssh2'
 import { authorizeExternalPath, isENOENT } from './filesystem-auth'
 import { getSshConnectionManager } from './ssh'
-import { uploadFile, uploadDirectory, mkdirSftp, sftpPathExists } from '../ssh/sftp-upload'
+import {
+  uploadFile,
+  uploadDirectory,
+  mkdirSftp,
+  sftpPathExists,
+  removeDirectorySftp
+} from '../ssh/sftp-upload'
 import type { ImportItemResult } from './filesystem-mutations'
 
 // Why: the SSH import path bypasses SshFilesystemProvider and uses
@@ -118,16 +124,20 @@ async function importOneSourceSsh(
 
   const originalName = basename(resolvedSource)
 
+  let createdDestDir: string | null = null
   try {
     const finalName = await deconflictNameSftp(sftp, destDir, originalName, reservedNames)
     const destPath = `${destDir}/${finalName}`
     const renamed = finalName !== originalName
 
     if (isDir) {
-      await mkdirSftp(sftp, destPath)
-      await uploadDirectory(sftp, resolvedSource, destPath)
+      await mkdirSftp(sftp, destPath, { allowExisting: false })
+      createdDestDir = destPath
+      await uploadDirectory(sftp, resolvedSource, destPath, await realpath(resolvedSource), {
+        exclusive: true
+      })
     } else {
-      await uploadFile(sftp, resolvedSource, destPath)
+      await uploadFile(sftp, resolvedSource, destPath, { exclusive: true })
     }
 
     return {
@@ -138,6 +148,11 @@ async function importOneSourceSsh(
       renamed
     }
   } catch (error) {
+    if (createdDestDir) {
+      // Why: local directory imports roll back partial output; SSH imports
+      // should not leave the no-clobber root after a nested upload failure.
+      await removeDirectorySftp(sftp, createdDestDir).catch(() => {})
+    }
     return {
       sourcePath,
       status: 'failed',
@@ -201,16 +216,24 @@ function writeSftpFile(sftp: SFTPWrapper, remotePath: string, contents: string):
   return new Promise((resolve, reject) => {
     let settled = false
     const writeStream = sftp.createWriteStream(remotePath)
+    const cleanup = (): void => {
+      writeStream.off('close', onClose)
+      writeStream.off('error', onError)
+    }
     const settle = (fn: typeof resolve | typeof reject, val?: unknown): void => {
       if (settled) {
         return
       }
       settled = true
+      cleanup()
       writeStream.destroy()
       fn(val as never)
     }
-    writeStream.on('close', () => settle(resolve))
-    writeStream.on('error', (err) => settle(reject, err))
+    const onClose = (): void => settle(resolve)
+    const onError = (err: Error): void => settle(reject, err)
+
+    writeStream.on('close', onClose)
+    writeStream.on('error', onError)
     writeStream.end(contents)
   })
 }

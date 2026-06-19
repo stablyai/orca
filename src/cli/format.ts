@@ -1,31 +1,67 @@
-import type {
-  BrowserProfileListResult,
-  BrowserTabCurrentResult,
-  BrowserScreenshotResult,
-  BrowserSnapshotResult,
-  BrowserTabListResult,
-  BrowserTabProfileCloneResult,
-  BrowserTabProfileShowResult,
-  BrowserTabShowResult,
-  CliStatusResult,
-  RuntimeRepoList,
-  RuntimeRepoSearchRefs,
-  RuntimeTerminalClose,
-  RuntimeTerminalCreate,
-  RuntimeTerminalFocus,
-  RuntimeTerminalListResult,
-  RuntimeTerminalRead,
-  RuntimeTerminalRename,
-  RuntimeTerminalSend,
-  RuntimeTerminalShow,
-  RuntimeTerminalSplit,
-  RuntimeTerminalWait,
-  RuntimeWorktreeListResult,
-  RuntimeWorktreePsResult,
-  RuntimeWorktreeRecord
-} from '../shared/runtime-types'
+import type { CliStatusResult } from '../shared/runtime-types'
+import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recovery'
+import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
+
+export {
+  formatBrowserProfileList,
+  formatScreenshot,
+  formatSnapshot,
+  formatTabList,
+  formatTabListWithProfiles,
+  formatTabProfileClone,
+  formatTabProfileShow,
+  formatTabShow
+} from './browser-format'
+
+export {
+  formatComputerAction,
+  formatGetAppState,
+  formatListApps,
+  formatListWindows
+} from './computer-format'
+export type { ComputerActionFollowUpTarget } from './computer-format'
+export {
+  formatProjectHostSetupCreateResult,
+  formatProjectHostSetupDeleteResult,
+  formatProjectHostSetupList,
+  formatProjectHostSetupResult,
+  formatProjectHostSetupUpdateResult,
+  formatProjectList
+} from './project-format'
+export {
+  formatTerminalClose,
+  formatTerminalCreate,
+  formatTerminalFocus,
+  formatTerminalList,
+  formatTerminalRead,
+  formatTerminalRename,
+  formatTerminalSend,
+  formatTerminalShow,
+  formatTerminalSplit,
+  formatTerminalWait
+} from './terminal-format'
+export {
+  formatAutomationList,
+  formatAutomationRemoved,
+  formatAutomationRun,
+  formatAutomationRuns,
+  formatAutomationShow,
+  formatEnvironment,
+  formatEnvironmentList,
+  formatMemorySnapshot,
+  formatRepoList,
+  formatRepoRefs,
+  formatRepoShow,
+  formatWorktreeList,
+  formatWorktreePs,
+  formatWorktreeShow
+} from './workspace-format'
+
+type CliErrorContext = {
+  commandPath?: readonly string[]
+}
 
 export function printResult<TResult>(
   response: RuntimeRpcSuccess<TResult>,
@@ -33,16 +69,26 @@ export function printResult<TResult>(
   formatter: (value: TResult) => string
 ): void {
   if (json) {
-    console.log(JSON.stringify(response, null, 2))
+    console.log(JSON.stringify(prepareComputerCliJsonResult(response), null, 2))
     return
   }
   console.log(formatter(response.result))
 }
 
-export function formatCliError(error: unknown): string {
+export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
   const message = error instanceof Error ? error.message : String(error)
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
     return `${message}\nOrca is not running. Run 'orca open' first.`
+  }
+  if (
+    error instanceof RuntimeClientError &&
+    error.code === 'invalid_argument' &&
+    context.commandPath?.[0] === 'computer'
+  ) {
+    return formatMessageWithNextSteps(
+      message,
+      computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? []
+    )
   }
   if (
     error instanceof RuntimeRpcFailureError &&
@@ -50,10 +96,20 @@ export function formatCliError(error: unknown): string {
   ) {
     return `${message}\nOrca is not running. Run 'orca open' first.`
   }
+  if (error instanceof RuntimeRpcFailureError) {
+    const data = error.response.error.data
+    const nextSteps =
+      data && typeof data === 'object' && Array.isArray((data as { nextSteps?: unknown }).nextSteps)
+        ? (data as { nextSteps: unknown[] }).nextSteps.filter(
+            (step): step is string => typeof step === 'string'
+          )
+        : []
+    return formatMessageWithNextSteps(message, nextSteps)
+  }
   return message
 }
 
-export function reportCliError(error: unknown, json: boolean): void {
+export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
   if (json) {
     if (error instanceof RuntimeRpcFailureError) {
       console.log(JSON.stringify(error.response, null, 2))
@@ -63,7 +119,8 @@ export function reportCliError(error: unknown, json: boolean): void {
         ok: false,
         error: {
           code: error instanceof RuntimeClientError ? error.code : 'runtime_error',
-          message: formatCliError(error)
+          message: error instanceof Error ? error.message : String(error),
+          data: localCliErrorData(error, context)
         },
         _meta: {
           runtimeId: null
@@ -72,8 +129,26 @@ export function reportCliError(error: unknown, json: boolean): void {
       console.log(JSON.stringify(response, null, 2))
     }
   } else {
-    console.error(formatCliError(error))
+    console.error(formatCliError(error, context))
   }
+}
+
+function formatMessageWithNextSteps(message: string, nextSteps: readonly string[]): string {
+  if (nextSteps.length === 0) {
+    return message
+  }
+  return `${message}\n${nextSteps.map((step) => `Next step: ${step}`).join('\n')}`
+}
+
+function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
+  if (
+    error instanceof RuntimeClientError &&
+    error.code === 'invalid_argument' &&
+    context.commandPath?.[0] === 'computer'
+  ) {
+    return computerUseErrorRecoveryData('invalid_argument')
+  }
+  return undefined
 }
 
 export function formatCliStatus(status: CliStatusResult): string {
@@ -89,212 +164,4 @@ export function formatCliStatus(status: CliStatusResult): string {
 
 export function formatStatus(status: CliStatusResult): string {
   return formatCliStatus(status)
-}
-
-export function formatTerminalList(result: RuntimeTerminalListResult): string {
-  if (result.terminals.length === 0) {
-    return 'No live terminals.'
-  }
-  const body = result.terminals
-    .map(
-      (terminal) =>
-        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
-    )
-    .join('\n\n')
-  return result.truncated
-    ? `${body}\n\ntruncated: showing ${result.terminals.length} of ${result.totalCount}`
-    : body
-}
-
-export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): string {
-  const terminal = result.terminal
-  return [
-    `handle: ${terminal.handle}`,
-    `title: ${terminal.title ?? '(untitled)'}`,
-    `worktree: ${terminal.worktreePath}`,
-    `branch: ${terminal.branch}`,
-    `leaf: ${terminal.leafId}`,
-    `ptyId: ${terminal.ptyId ?? 'none'}`,
-    `connected: ${terminal.connected}`,
-    `writable: ${terminal.writable}`,
-    `preview: ${terminal.preview || '<empty>'}`
-  ].join('\n')
-}
-
-export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
-  const terminal = result.terminal
-  const header = [
-    `handle: ${terminal.handle}`,
-    `status: ${terminal.status}`,
-    ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : [])
-  ]
-  return [...header, '', ...terminal.tail].join('\n')
-}
-
-export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
-  return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
-}
-
-export function formatTerminalRename(result: { rename: RuntimeTerminalRename }): string {
-  return result.rename.title
-    ? `Renamed terminal ${result.rename.handle} to "${result.rename.title}".`
-    : `Cleared title for terminal ${result.rename.handle}.`
-}
-
-export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
-  const titleNote = result.terminal.title ? ` (title: "${result.terminal.title}")` : ''
-  return `Created terminal ${result.terminal.handle}${titleNote}`
-}
-
-export function formatTerminalSplit(result: { split: RuntimeTerminalSplit }): string {
-  return `Split pane ${result.split.handle} in tab ${result.split.tabId}`
-}
-
-export function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): string {
-  return `Focused terminal ${result.focus.handle} (tab ${result.focus.tabId}).`
-}
-
-export function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {
-  const ptyNote = result.close.ptyKilled ? ' PTY killed.' : ''
-  return `Closed terminal ${result.close.handle}.${ptyNote}`
-}
-
-export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): string {
-  return [
-    `handle: ${result.wait.handle}`,
-    `condition: ${result.wait.condition}`,
-    `satisfied: ${result.wait.satisfied}`,
-    `status: ${result.wait.status}`,
-    `exitCode: ${result.wait.exitCode ?? 'null'}`
-  ].join('\n')
-}
-
-export function formatWorktreePs(result: RuntimeWorktreePsResult): string {
-  if (result.worktrees.length === 0) {
-    return 'No worktrees found.'
-  }
-  const body = result.worktrees
-    .map(
-      (worktree) =>
-        `${worktree.repo} ${worktree.branch}  live:${worktree.liveTerminalCount}  pty:${worktree.hasAttachedPty ? 'yes' : 'no'}  unread:${worktree.unread ? 'yes' : 'no'}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
-    )
-    .join('\n\n')
-  return result.truncated
-    ? `${body}\n\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
-    : body
-}
-
-export function formatRepoList(result: RuntimeRepoList): string {
-  if (result.repos.length === 0) {
-    return 'No repos found.'
-  }
-  return result.repos.map((repo) => `${repo.id}  ${repo.displayName}  ${repo.path}`).join('\n')
-}
-
-export function formatRepoShow(result: { repo: Record<string, unknown> }): string {
-  return Object.entries(result.repo)
-    .map(
-      ([key, value]) =>
-        `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
-    )
-    .join('\n')
-}
-
-export function formatRepoRefs(result: RuntimeRepoSearchRefs): string {
-  if (result.refs.length === 0) {
-    return 'No refs found.'
-  }
-  return result.truncated ? `${result.refs.join('\n')}\n\ntruncated: yes` : result.refs.join('\n')
-}
-
-export function formatWorktreeList(result: RuntimeWorktreeListResult): string {
-  if (result.worktrees.length === 0) {
-    return 'No worktrees found.'
-  }
-  const body = result.worktrees
-    .map(
-      (worktree) =>
-        `${String(worktree.id)}  ${String(worktree.branch)}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
-    )
-    .join('\n\n')
-  return result.truncated
-    ? `${body}\n\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
-    : body
-}
-
-export function formatWorktreeShow(result: { worktree: RuntimeWorktreeRecord }): string {
-  const worktree = result.worktree
-  return Object.entries(worktree)
-    .map(
-      ([key, value]) =>
-        `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`
-    )
-    .join('\n')
-}
-
-export function formatSnapshot(result: BrowserSnapshotResult): string {
-  const header = `page: ${result.browserPageId}\n${result.title} — ${result.url}\n`
-  return header + result.snapshot
-}
-
-export function formatScreenshot(result: BrowserScreenshotResult): string {
-  return `Screenshot captured (${result.format}, ${Math.round(result.data.length * 0.75)} bytes)`
-}
-
-export function formatTabList(result: BrowserTabListResult): string {
-  return formatTabListWithProfiles(result, false)
-}
-
-export function formatTabListWithProfiles(
-  result: BrowserTabListResult,
-  showProfile: boolean
-): string {
-  if (result.tabs.length === 0) {
-    return 'No browser tabs open.'
-  }
-  return result.tabs
-    .map((t) => {
-      const marker = t.active ? '* ' : '  '
-      const profile = showProfile ? `  [${t.profileLabel ?? t.profileId ?? 'Unknown'}]` : ''
-      return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}`
-    })
-    .join('\n')
-}
-
-export function formatBrowserProfileList(result: BrowserProfileListResult): string {
-  if (result.profiles.length === 0) {
-    return 'No browser profiles found.'
-  }
-  return result.profiles
-    .map((profile) => {
-      const marker = profile.scope === 'default' ? '* ' : '  '
-      const source = profile.source?.browserFamily ?? 'none'
-      return `${marker}${profile.id}  ${profile.label}  ${profile.scope}  source:${source}`
-    })
-    .join('\n')
-}
-
-export function formatTabShow(result: BrowserTabShowResult | BrowserTabCurrentResult): string {
-  const tab = result.tab
-  return [
-    `page: ${tab.browserPageId}`,
-    `title: ${tab.title}`,
-    `url: ${tab.url}`,
-    `active: ${tab.active}`,
-    `worktree: ${tab.worktreeId ?? 'unknown'}`,
-    `profile: ${tab.profileLabel ?? tab.profileId ?? 'unknown'}`
-  ].join('\n')
-}
-
-export function formatTabProfileShow(result: BrowserTabProfileShowResult): string {
-  return [
-    `page: ${result.browserPageId}`,
-    `worktree: ${result.worktreeId ?? 'unknown'}`,
-    `profileId: ${result.profileId ?? 'default'}`,
-    `profile: ${result.profileLabel ?? result.profileId ?? 'default'}`
-  ].join('\n')
-}
-
-export function formatTabProfileClone(result: BrowserTabProfileCloneResult): string {
-  return `Cloned ${result.sourceBrowserPageId} to ${result.browserPageId} (${result.profileLabel ?? result.profileId ?? 'default'})`
 }

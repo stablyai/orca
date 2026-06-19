@@ -12,6 +12,7 @@ import { rm, readFile, stat } from 'fs/promises'
 import * as path from 'path'
 import { tmpdir } from 'os'
 import { execFileSync } from 'child_process'
+import { randomBytes } from 'crypto'
 
 import {
   SshChannelMultiplexer,
@@ -118,6 +119,15 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
       expect(result.isBinary).toBe(false)
     })
 
+    it('readFileStream round-trip preserves a 12 MB binary file', async () => {
+      const filePath = path.join(tmpDir, 'big.png')
+      const original = randomBytes(12 * 1024 * 1024)
+      writeFileSync(filePath, original)
+      const { readFileViaStream } = await import('../main/ssh/ssh-filesystem-stream-reader')
+      const { content } = await readFileViaStream(mux, filePath)
+      expect(Buffer.from(content, 'base64').equals(original)).toBe(true)
+    }, 30_000)
+
     it('writeFile creates/overwrites file content', async () => {
       const filePath = path.join(tmpDir, 'output.txt')
 
@@ -129,13 +139,10 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
 
     it('stat returns file metadata', async () => {
       writeFileSync(path.join(tmpDir, 'sized.txt'), 'abcdef')
-
       const result = (await mux.request('fs.stat', {
         filePath: path.join(tmpDir, 'sized.txt')
       })) as { size: number; type: string; mtime: number }
-
-      expect(result.type).toBe('file')
-      expect(result.size).toBe(6)
+      expect(result).toMatchObject({ type: 'file', size: 6 })
       expect(typeof result.mtime).toBe('number')
     })
 

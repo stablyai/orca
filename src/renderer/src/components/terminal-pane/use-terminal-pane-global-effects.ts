@@ -1,14 +1,30 @@
 import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
-  SYNC_FIT_PANES_EVENT,
+  PASTE_TERMINAL_TEXT_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
-  type FocusTerminalPaneDetail
+  type FocusTerminalPaneDetail,
+  type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { resetAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
+import {
+  flushTerminalOutput,
+  requestTerminalBacklogRecovery
+} from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
+import { surfaceStaleAgentRow } from './stale-agent-row'
+import { useAppStore } from '@/store'
+import { restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
+import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
+import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
+import { pasteTerminalText } from './terminal-bracketed-paste'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+
+const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -16,6 +32,8 @@ type UseTerminalPaneGlobalEffectsArgs = {
   cwd?: string
   isActive: boolean
   isVisible: boolean
+  isSyncFitEnabled: boolean
+  paneCount: number
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
@@ -30,6 +48,8 @@ export function useTerminalPaneGlobalEffects({
   cwd,
   isActive,
   isVisible,
+  isSyncFitEnabled,
+  paneCount,
   managerRef,
   containerRef,
   paneTransportsRef,
@@ -46,39 +66,122 @@ export function useTerminalPaneGlobalEffects({
   // otherwise leak WebGL contexts — openTerminal() unconditionally creates
   // one — and exhaust Chromium's ~8-context budget across worktrees.
   const wasVisibleRef = useRef(true)
+  const {
+    captureViewportPositions,
+    withSuppressedScrollTracking,
+    applyPendingFollowOutputRequests,
+    scheduleFollowOutputIfNeeded
+  } = useTerminalScrollVisibilityMemory({
+    managerRef,
+    isVisibleRef,
+    visibleResumeCompleteRef: wasVisibleRef,
+    paneCount
+  })
+  useTerminalContainerFitSync({ isVisible, isSyncFitEnabled, managerRef, containerRef })
 
   useEffect(() => {
     const manager = managerRef.current
     if (!manager) {
       return
     }
+    isActiveRef.current = isActive
+    isVisibleRef.current = isVisible
     if (isVisible) {
-      // Resume WebGL immediately so the terminal shows its last-known state
-      // on the first painted frame. macOS context creation is ~5 ms; on
-      // Windows (ANGLE → D3D11) it can be 100–500 ms but a deferred resume
-      // would paint a stretched DOM-fallback flash, which is worse UX.
-      manager.resumeRendering()
-      // Single fit on resume. xterm has been writing live the whole time
-      // (no visibility-gated buffering), so cols/rows are already correct
-      // for the new container; this fit is just to absorb any container
-      // dimension change that happened while we were hidden (e.g. sidebar
-      // toggle on another worktree).
-      if (isActive) {
-        fitAndFocusPanes(manager)
-      } else {
-        fitPanes(manager)
-      }
+      // Why: WebGL resume can disturb xterm's viewport bookkeeping before the
+      // post-resume fit runs. Capture numeric viewport positions first; the
+      // restore path avoids content matching so duplicate agent log lines do
+      // not jump to the wrong history entry.
+      const viewportPositions = captureViewportPositions(!wasVisibleRef.current)
+      withSuppressedScrollTracking(() => {
+        // Why: hidden panes can accumulate large PTY bursts while Chromium is
+        // occluded. Drain a bounded slice before fitting; the scheduler keeps
+        // ordering and continues the rest asynchronously so return-to-app does
+        // not beachball behind an entire backlog.
+        for (const pane of manager.getPanes()) {
+          requestTerminalBacklogRecovery(pane.terminal)
+          flushTerminalOutput(pane.terminal, { maxChars: VISIBLE_RESUME_FLUSH_CHARS })
+        }
+        // Resume WebGL immediately so the terminal shows its last-known state
+        // on the first painted frame. macOS context creation is ~5 ms; on
+        // Windows (ANGLE → D3D11) it can be 100–500 ms but a deferred resume
+        // would paint a stretched DOM-fallback flash, which is worse UX.
+        manager.resumeRendering()
+        // Single fit on resume. Background bytes have been pushed into xterm
+        // above, so this fit only absorbs container dimension changes that
+        // happened while hidden (e.g. sidebar toggle on another worktree).
+        if (isActive) {
+          fitAndFocusPanes(manager)
+        } else {
+          fitPanes(manager)
+        }
+        for (const pane of manager.getPanes()) {
+          const position = viewportPositions.get(pane.id)
+          if (position) {
+            restoreScrollStateAfterLayout(pane.terminal, position)
+          }
+        }
+        // Why: this clear wipes the glyph atlas shared with other same-config
+        // terminals; the global reset rebuilds their render models too.
+        resetAllTerminalWebglAtlases()
+      })
+      wasVisibleRef.current = true
+      applyPendingFollowOutputRequests()
+      return
     } else if (wasVisibleRef.current) {
+      // Why: hidden DOM/layout churn can mutate xterm's viewport before the
+      // pane becomes visible again. Preserve the last visible position.
+      captureViewportPositions(false)
       // Suspend WebGL when going hidden. xterm.write() continues to land in
       // the (now DOM-renderer-fallback or paused-canvas) terminal; the
       // suspend is purely a GPU resource decision.
       manager.suspendRendering()
     }
-    wasVisibleRef.current = isVisible
-    isActiveRef.current = isActive
-    isVisibleRef.current = isVisible
+    wasVisibleRef.current = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, isVisible])
+
+  useEffect(() => {
+    if (!isVisible) {
+      return
+    }
+    const recoverWebglAtlases = (): void => {
+      // Why: WebGL atlas corruption does not always raise context loss; window
+      // foregrounding is a low-cost recovery point. Visible terminals can be
+      // inactive in split groups, and same-config terminals share the atlas.
+      resetAllTerminalWebglAtlases()
+    }
+    const onFocus = (): void => recoverWebglAtlases()
+    const onVisibilityChange = (): void => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        recoverWebglAtlases()
+      }
+    }
+    window.addEventListener('focus', onFocus)
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', onVisibilityChange)
+    }
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+        document.removeEventListener('visibilitychange', onVisibilityChange)
+      }
+    }
+  }, [isVisible])
+
+  useEffect(() => {
+    const manager = managerRef.current
+    const activePane = isActive && isVisible ? manager?.getActivePane() : null
+    const ptyId = activePane
+      ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
+      : null
+    if (!ptyId || ptyId.startsWith('remote:')) {
+      return
+    }
+    // Why: main uses this as a scheduler hint only, so the foreground pane's
+    // renderer output gets first chance at the bounded ACK reserve.
+    window.api.pty.setActiveRendererPty?.(ptyId, true)
+    return () => window.api.pty.setActiveRendererPty?.(ptyId, false)
+  }, [isActive, isVisible, managerRef, paneTransportsRef])
 
   useEffect(() => {
     const onToggleExpand = (event: Event): void => {
@@ -108,103 +211,97 @@ export function useTerminalPaneGlobalEffects({
   useEffect(() => {
     const onFocusPane = (event: Event): void => {
       const detail = (event as CustomEvent<FocusTerminalPaneDetail | undefined>).detail
-      if (!detail?.tabId || detail.tabId !== tabId) {
+      handleFocusTerminalPaneDetail(detail, {
+        tabId,
+        manager: managerRef.current,
+        acknowledgeAgents: (paneKeys) => useAppStore.getState().acknowledgeAgents(paneKeys),
+        surfaceStaleAgentRow,
+        scrollToBottomIfOutputSinceLastView: scheduleFollowOutputIfNeeded
+      })
+    }
+    window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
+    return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
+  }, [tabId, managerRef, scheduleFollowOutputIfNeeded])
+
+  useEffect(() => {
+    const onPasteText = (event: Event): void => {
+      const detail = (event as CustomEvent<PasteTerminalTextDetail | undefined>).detail
+      if (!detail?.tabId || detail.tabId !== tabId || !detail.text) {
         return
       }
       const manager = managerRef.current
       if (!manager) {
         return
       }
-      const pane = manager.getPanes().find((candidate) => candidate.id === detail.paneId)
+      const pane = manager.getActivePane() ?? manager.getPanes()[0]
       if (!pane) {
         return
       }
-      manager.setActivePane(pane.id, { focus: true })
+      pasteTerminalText(pane.terminal, detail.text)
+      recordTerminalUserInputForLeaf(tabId, pane.leafId)
+      pane.terminal.focus()
     }
-    window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
-    return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
+    window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
+    return () => window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
   }, [tabId, managerRef])
 
-  // Why: sidebar open/close toggles dispatch SYNC_FIT_PANES_EVENT from a
-  // useLayoutEffect (pre-paint, same frame as the width change) so the
-  // terminal fits synchronously with the new container size, eliminating the
-  // ~16ms "old cols, new container width" flash that a deferred
-  // ResizeObserver rAF would otherwise produce. xterm's terminal.resize()
-  // natively preserves viewportY across reflows (verified in
-  // scroll-reflow.test.ts "reference: undisturbed"), so a bare fitAllPanes()
-  // is all we need — no capture/restore dance. The subsequent per-pane
-  // ResizeObserver rAF and the 150ms debounced global fit become no-ops
-  // because proposeDimensions() will match current cols/rows (early-return
-  // branch in safeFit). Listener is global (not gated on isVisible/isActive)
-  // so background tabs also fit, keeping their scroll position intact for
-  // when the user switches back.
+  // Why: dictation events are dispatched globally; gate on isActiveRef so only
+  // the foreground terminal pane consumes the inserted text — otherwise text
+  // would be duplicated across all mounted but inactive tabs.
   useEffect(() => {
-    const onSyncFit = (): void => {
-      managerRef.current?.fitAllPanes()
-    }
-    window.addEventListener(SYNC_FIT_PANES_EVENT, onSyncFit)
-    return () => {
-      window.removeEventListener(SYNC_FIT_PANES_EVENT, onSyncFit)
-    }
-  }, [managerRef])
-
-  useEffect(() => {
-    if (!isVisible) {
+    if (typeof document === 'undefined') {
       return
     }
-    const container = containerRef.current
-    if (!container) {
-      return
-    }
-    // Why: ResizeObserver fires on every incremental size change during
-    // continuous window resizes or layout animations.  Each fitPanes() call
-    // triggers fitAddon.fit() → terminal.resize() which, when the column
-    // count changes, reflows the entire scrollback buffer and recalculates
-    // the viewport scroll position.  On Windows, a single reflow of 10 000
-    // scrollback lines can block the renderer for 500 ms–2 s, freezing the
-    // UI while a sidebar opens or a window resizes.
-    //
-    // A trailing-edge debounce (150 ms) coalesces bursts into one reflow
-    // after the layout settles.  This is longer than the previous RAF-only
-    // batch (≈16 ms) but still short enough that the user never notices the
-    // terminal running at a stale column count.
-    const RESIZE_DEBOUNCE_MS = 150
-    let timerId: ReturnType<typeof setTimeout> | null = null
-    const resizeObserver = new ResizeObserver(() => {
-      if (timerId !== null) {
-        clearTimeout(timerId)
+    const onDictationInsert = (event: Event): void => {
+      if (!isActiveRef.current) {
+        return
       }
-      timerId = setTimeout(() => {
-        timerId = null
-        const manager = managerRef.current
-        if (!manager) {
-          return
-        }
-        // safeFit early-returns when proposeDimensions matches current
-        // cols/rows, so a no-op resize is cheap. Always-live writes mean
-        // there is no "deferred drain" race; fit can run unconditionally.
-        fitPanes(manager)
-      }, RESIZE_DEBOUNCE_MS)
-    })
-    resizeObserver.observe(container)
-    return () => {
-      resizeObserver.disconnect()
-      if (timerId !== null) {
-        clearTimeout(timerId)
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      const detail = (
+        event as CustomEvent<string | { text?: string; tabId?: string; paneId?: number }>
+      ).detail
+      const text = typeof detail === 'string' ? detail : detail?.text
+      if (typeof detail === 'object' && detail.tabId !== tabId) {
+        return
+      }
+      const requestedPaneId = typeof detail === 'object' ? detail.paneId : undefined
+      const pane = requestedPaneId
+        ? manager.getPanes().find((candidate) => candidate.id === requestedPaneId)
+        : (manager.getActivePane() ?? manager.getPanes()[0])
+      if (!pane) {
+        return
+      }
+      const transport = paneTransportsRef.current.get(pane.id)
+      if (!transport) {
+        return
+      }
+      if (text && transport.sendInput(text)) {
+        recordTerminalUserInputForLeaf(tabId, pane.leafId)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVisible])
+    document.addEventListener('dictation:insertText', onDictationInsert)
+    return () => document.removeEventListener('dictation:insertText', onDictationInsert)
+  }, [isActiveRef, managerRef, paneTransportsRef, tabId])
 
-  // Why: only the active tab's terminal should process file drops. Registering
-  // a listener per mounted tab causes a MaxListenersExceededWarning when 11+
-  // tabs are open. Gating on isActive ensures at most one listener exists.
+  // Why: visible but unfocused split-group terminals can still receive native
+  // OS drops. Route tab-id-aware payloads to the dropped pane, while legacy
+  // payloads without a tab id keep the old active-terminal-only behavior.
   useEffect(() => {
-    if (!isActive) {
+    if (!isActive && !isVisible) {
       return
     }
     return window.api.ui.onFileDrop((data) => {
       if (data.target !== 'terminal') {
+        return
+      }
+      if (data.tabId) {
+        if (data.tabId !== tabId) {
+          return
+        }
+      } else if (!isActive) {
         return
       }
       const manager = managerRef.current
@@ -219,9 +316,10 @@ export function useTerminalPaneGlobalEffects({
         manager,
         paneTransports: paneTransportsRef.current,
         worktreeId: wtId,
+        tabId,
         cwd: cwdRef.current,
         data
       })
     })
-  }, [isActive, managerRef, paneTransportsRef])
+  }, [isActive, isVisible, managerRef, paneTransportsRef, tabId])
 }
