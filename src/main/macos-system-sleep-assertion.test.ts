@@ -79,6 +79,24 @@ describe('MacosSystemSleepAssertion', () => {
     expect(child.kill).toHaveBeenCalledTimes(1)
   })
 
+  it('removes child listeners when stopped intentionally', () => {
+    const child = new FakeCaffeinateProcess()
+    const assertion = new MacosSystemSleepAssertion({
+      logger: createLogger(),
+      platform: 'darwin',
+      spawn: vi.fn(() => child)
+    })
+
+    assertion.start('status-change')
+    expect(child.listenerCount('error')).toBe(1)
+    expect(child.listenerCount('exit')).toBe(1)
+
+    assertion.stop('settings-change')
+
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('exit')).toBe(0)
+  })
+
   it('clears the child and notifies the owner on unexpected exit', () => {
     const firstChild = new FakeCaffeinateProcess()
     const secondChild = new FakeCaffeinateProcess()
@@ -101,6 +119,8 @@ describe('MacosSystemSleepAssertion', () => {
 
     expect(onUnexpectedFailure).toHaveBeenCalledWith('macos-assertion-failure')
     expect(spawn).toHaveBeenCalledTimes(2)
+    expect(firstChild.listenerCount('error')).toBe(0)
+    expect(firstChild.listenerCount('exit')).toBe(0)
   })
 
   it('does not report an intentional stop as unexpected', () => {

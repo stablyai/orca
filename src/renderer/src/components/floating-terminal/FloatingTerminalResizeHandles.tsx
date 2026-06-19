@@ -1,6 +1,5 @@
 import { useRef } from 'react'
 import {
-  clampFloatingTerminalBounds,
   MIN_PANEL_HEIGHT,
   MIN_PANEL_WIDTH,
   type FloatingTerminalPanelBounds
@@ -21,25 +20,14 @@ type ResizeEdge = (typeof RESIZE_HANDLES)[number][0]
 
 type FloatingTerminalResizeHandlesProps = {
   bounds: FloatingTerminalPanelBounds
-  setBounds: React.Dispatch<React.SetStateAction<FloatingTerminalPanelBounds>>
-}
-
-function clampResizedBounds(bounds: FloatingTerminalPanelBounds): FloatingTerminalPanelBounds {
-  const viewportWidth =
-    typeof window === 'undefined' ? bounds.left + bounds.width : window.innerWidth
-  const viewportHeight =
-    typeof window === 'undefined' ? bounds.top + bounds.height : window.innerHeight
-  const next = clampFloatingTerminalBounds(bounds)
-  return {
-    ...next,
-    width: Math.max(MIN_PANEL_WIDTH, Math.min(bounds.width, viewportWidth - next.left - 8)),
-    height: Math.max(MIN_PANEL_HEIGHT, Math.min(bounds.height, viewportHeight - next.top - 8))
-  }
+  onPreviewBounds: (bounds: FloatingTerminalPanelBounds) => void
+  onCommitBounds: () => void
 }
 
 export function FloatingTerminalResizeHandles({
   bounds,
-  setBounds
+  onPreviewBounds,
+  onCommitBounds
 }: FloatingTerminalResizeHandlesProps): React.JSX.Element {
   const resizeRef = useRef<{
     pointerId: number
@@ -47,6 +35,7 @@ export function FloatingTerminalResizeHandles({
     startX: number
     startY: number
     bounds: FloatingTerminalPanelBounds
+    moved: boolean
   } | null>(null)
 
   const handleResizeStart =
@@ -62,7 +51,8 @@ export function FloatingTerminalResizeHandles({
         edge,
         startX: event.clientX,
         startY: event.clientY,
-        bounds
+        bounds,
+        moved: false
       }
       event.currentTarget.setPointerCapture(event.pointerId)
     }
@@ -74,6 +64,9 @@ export function FloatingTerminalResizeHandles({
     }
     const dx = event.clientX - resize.startX
     const dy = event.clientY - resize.startY
+    if (dx === 0 && dy === 0) {
+      return
+    }
     const next = { ...resize.bounds }
     if (resize.edge.includes('e')) {
       next.width = resize.bounds.width + dx
@@ -95,13 +88,19 @@ export function FloatingTerminalResizeHandles({
     if (next.height < MIN_PANEL_HEIGHT && resize.edge.includes('n')) {
       next.top = resize.bounds.top + resize.bounds.height - MIN_PANEL_HEIGHT
     }
-    setBounds(clampResizedBounds(next))
+    resize.moved = true
+    onPreviewBounds(next)
   }
 
   const handleResizeEnd = (event: React.PointerEvent<HTMLDivElement>): void => {
-    if (resizeRef.current?.pointerId === event.pointerId) {
-      resizeRef.current = null
+    const resize = resizeRef.current
+    if (!resize || resize.pointerId !== event.pointerId) {
+      return
     }
+    if (resize.moved) {
+      onCommitBounds()
+    }
+    resizeRef.current = null
   }
 
   return (

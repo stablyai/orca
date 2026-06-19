@@ -192,9 +192,13 @@ async function adminGitdirPointsAtCandidate(
 
 function containsPath(parentPath: string, childPath: string, pathOps: PathOps): boolean {
   const relativePath = pathOps.relative(parentPath, childPath)
+  // Why: `..name` is a valid child name; only `..` and `../...` escape.
   return (
     relativePath === '' ||
-    (!!relativePath && !relativePath.startsWith('..') && !pathOps.isAbsolute(relativePath))
+    (!!relativePath &&
+      relativePath !== '..' &&
+      !relativePath.startsWith(`..${pathOps.sep}`) &&
+      !pathOps.isAbsolute(relativePath))
   )
 }
 

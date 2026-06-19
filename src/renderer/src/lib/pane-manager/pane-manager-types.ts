@@ -1,4 +1,4 @@
-import type { IMarker, Terminal } from '@xterm/xterm'
+import type { IDisposable, IMarker, Terminal } from '@xterm/xterm'
 import type { ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
@@ -9,6 +9,7 @@ import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -77,6 +78,17 @@ export type ManagedPane = {
   serializeAddon: SerializeAddon
 }
 
+export type PaneRenderingDiagnostics = {
+  paneId: number
+  terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration']
+  gpuRenderingEnabled: boolean
+  webglAttachmentDeferred: boolean
+  webglDisabledAfterContextLoss: boolean
+  hasComplexScriptOutput: boolean
+  terminalWebglAutoDecision: TerminalWebglAutoDecision
+  hasWebgl: boolean
+}
+
 // ---------------------------------------------------------------------------
 // Internal types
 // ---------------------------------------------------------------------------
@@ -96,8 +108,8 @@ export type ManagedPaneInternal = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
-  // Why: complex-script shaping/RTL rendering is visibly wrong in xterm WebGL;
-  // keep auto-mode panes on DOM once their output proves they need browser text shaping.
+  // Why: expose complex-output diagnostics without changing renderer choice;
+  // auto renderer fallback is reserved for platform or WebGL failures.
   hasComplexScriptOutput: boolean
   webglAddon: WebglAddon | null
   // Why nullable: ligatures are opt-in per font and toggleable at runtime,
@@ -105,15 +117,32 @@ export type ManagedPaneInternal = {
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
   fitResizeObserver: ResizeObserver | null
+  // Stored so disposePane() can cancel the first post-open fit if a pane closes before paint.
+  pendingInitialFitRafId?: number | null
+  // Stored so disposePane() can cancel the post-WebGL-teardown refresh frame.
+  pendingWebglRefreshRafId?: number | null
   pendingObservedFitRafId: number | null
   serializeAddon: SerializeAddon
   unicode11Addon: Unicode11Addon
   webLinksAddon: WebLinksAddon
+  // Stored so disposePane() can remove pane-local DOM listeners explicitly.
+  panePointerDownHandler?: ((event: PointerEvent) => void) | null
+  paneMouseEnterHandler?: ((event: MouseEvent) => void) | null
+  paneDragCleanup?: (() => void) | null
   // Stored so disposePane() can remove it and avoid a memory leak.
   compositionHandler: (() => void) | null
+  // Stored so disposePane() can remove DOM-renderer focus synchronization.
+  focusClassSyncCleanup?: (() => void) | null
   // Why: splitPane reparents DOM; its delayed restore owns scroll until the
   // browser settles, so intermediate fits must not compete with it.
   pendingSplitScrollState: ScrollState | null
+  // Stored so repeated split restores and disposePane() can cancel deferred
+  // restore handles instead of leaving stale pane closures alive.
+  pendingSplitScrollRafIds?: number[]
+  pendingSplitScrollTimerId?: ReturnType<typeof setTimeout> | null
+  // Stored so repeated split restores and disposePane() can remove the
+  // deferred alt-screen buffer listener instead of stacking callbacks.
+  pendingSplitScrollBufferDisposable?: IDisposable | null
   debugLabel: string | null
 } & ManagedPane
 

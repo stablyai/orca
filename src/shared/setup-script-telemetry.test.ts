@@ -15,7 +15,7 @@ describe('setup script telemetry payload builders', () => {
     })
   })
 
-  it('buckets import prompt counts and preserves only the provider enum', () => {
+  it('buckets candidate prompt counts and preserves only the provider enum', () => {
     const candidate: SetupScriptImportCandidate = {
       provider: 'codex',
       label: 'Codex',
@@ -54,6 +54,48 @@ describe('setup script telemetry payload builders', () => {
       file_count_bucket: '1',
       unsupported_field_count_bucket: '0',
       has_shared_hooks: true
+    })
+  })
+
+  it('builds configure action telemetry for the no-candidate state', () => {
+    expect(
+      buildSetupScriptPromptActionTelemetry({
+        action: 'configure_clicked',
+        candidate: null,
+        hasSharedHooks: false
+      })
+    ).toEqual({
+      action: 'configure_clicked',
+      mode: 'configure_needed',
+      file_count_bucket: '0',
+      unsupported_field_count_bucket: '0',
+      has_shared_hooks: false
+    })
+  })
+
+  it('records whether package-manager setup was edited before save', () => {
+    const candidate: SetupScriptImportCandidate = {
+      provider: 'package-manager',
+      label: 'Node.js',
+      files: ['package.json'],
+      setup: 'npm install'
+    }
+
+    expect(
+      buildSetupScriptPromptActionTelemetry({
+        action: 'save_detected_setup_completed',
+        candidate,
+        hasSharedHooks: false,
+        editedBeforeSave: true
+      })
+    ).toEqual({
+      action: 'save_detected_setup_completed',
+      mode: 'import_available',
+      provider: 'package-manager',
+      file_count_bucket: '1',
+      unsupported_field_count_bucket: '0',
+      has_shared_hooks: false,
+      edited_before_save: true
     })
   })
 })

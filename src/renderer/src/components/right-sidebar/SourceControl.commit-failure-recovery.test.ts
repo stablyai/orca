@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildFixCommitFailurePrompt } from './SourceControl'
+import {
+  appendCommitFailureCustomInstruction,
+  buildCommitFailureAgentCommandInput,
+  buildFixCommitFailurePrompt
+} from './SourceControl'
 
 describe('SourceControl commit failure recovery prompt', () => {
   it('builds a provider-neutral AI prompt for fixing a failed commit hook', () => {
@@ -44,5 +48,54 @@ describe('SourceControl commit failure recovery prompt', () => {
     expect(prompt).toContain('characters omitted')
     expect(prompt).toContain('actual lint error near the end')
     expect(prompt).toContain('No staged files were reported by Source Control')
+  })
+
+  it('adds one-time custom instructions before the response contract', () => {
+    const prompt = buildFixCommitFailurePrompt({
+      summary: 'Lint failed during commit.',
+      error: 'lint failed',
+      commitMessage: 'fix: lint',
+      worktreePath: null,
+      entries: [],
+      customInstruction: 'Only change staged TypeScript files.'
+    })
+
+    expect(prompt).toContain('Additional user instruction for this fix:')
+    expect(prompt).toContain('Only change staged TypeScript files.')
+    expect(prompt.trim().endsWith('anything left for the user.')).toBe(true)
+  })
+
+  it('leaves the base prompt unchanged for empty custom instructions', () => {
+    const prompt = 'Fix the failed commit.'
+
+    expect(appendCommitFailureCustomInstruction(prompt, '   ')).toBe(prompt)
+  })
+
+  it('leaves blank launch templates blank so the launcher can reject them', () => {
+    expect(
+      buildCommitFailureAgentCommandInput({
+        commandInputTemplate: '   ',
+        basePrompt: 'Fix this commit failure.'
+      })
+    ).toBe('')
+  })
+
+  it('falls back to the base commit-failure prompt when no launch template is saved', () => {
+    expect(
+      buildCommitFailureAgentCommandInput({
+        commandInputTemplate: undefined,
+        basePrompt: 'Fix this commit failure.'
+      })
+    ).toBe('Fix this commit failure.')
+  })
+
+  it('trims custom launch overrides before the direct launch path uses them', () => {
+    expect(
+      buildCommitFailureAgentCommandInput({
+        promptOverride: '   ',
+        commandInputTemplate: '{basePrompt}',
+        basePrompt: 'Fix this commit failure.'
+      })
+    ).toBe('')
   })
 })

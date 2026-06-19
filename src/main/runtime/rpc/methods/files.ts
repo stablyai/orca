@@ -4,6 +4,13 @@ import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { createFileWatchEventBatcher } from './file-watch-event-batcher'
 
 let filesWatchSubscriptionSeq = 0
+const RUNTIME_FILE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
+
+function isValidRuntimeFileBase64(value: unknown): value is string {
+  return (
+    typeof value === 'string' && value.length % 4 !== 1 && RUNTIME_FILE_BASE64_PATTERN.test(value)
+  )
+}
 
 const WorktreeSelector = z.object({
   worktree: z
@@ -19,12 +26,31 @@ const FileOpen = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing relative path'))
 })
 
+const ResolveTerminalPath = WorktreeSelector.extend({
+  pathText: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing path text')),
+  cwd: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' && v.length > 0 ? v : null))
+    .nullable()
+    .optional()
+})
+
 const FileOpenDiff = FileOpen.extend({
   staged: z.boolean().optional()
 })
 
 const FileTreePath = WorktreeSelector.extend({
   relativePath: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string())
+})
+
+const ServerDirectoryBrowse = z.object({
+  path: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string())
@@ -43,6 +69,9 @@ const FileWriteBase64 = FileOpen.extend({
   contentBase64: z
     .unknown()
     .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
+    // Why: Buffer.from(..., 'base64') accepts malformed input by dropping
+    // invalid bytes, which can silently create empty or corrupt uploaded files.
+    .refine(isValidRuntimeFileBase64, 'File content must be base64')
 })
 
 const FileWriteBase64Chunk = FileWriteBase64.extend({
@@ -135,6 +164,12 @@ export const FILE_METHODS: RpcAnyMethod[] = [
       runtime.readMobileFile(params.worktree, params.relativePath)
   }),
   defineMethod({
+    name: 'files.resolveTerminalPath',
+    params: ResolveTerminalPath,
+    handler: async (params, { runtime }) =>
+      runtime.resolveTerminalPath(params.worktree, params.pathText, params.cwd ?? null)
+  }),
+  defineMethod({
     name: 'files.readPreview',
     params: FileOpen,
     handler: async (params, { runtime }) =>
@@ -145,6 +180,11 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: FileTreePath,
     handler: async (params, { runtime }) =>
       runtime.readFileExplorerDir(params.worktree, params.relativePath)
+  }),
+  defineMethod({
+    name: 'files.browseServerDir',
+    params: ServerDirectoryBrowse,
+    handler: async (params, { runtime }) => runtime.browseServerDir(params.path)
   }),
   defineMethod({
     name: 'files.write',
@@ -290,6 +330,9 @@ export const FILE_METHODS: RpcAnyMethod[] = [
           if (unwatch) {
             cleanup()
           } else {
+            // Why: watch setup may have queued events before resolving its
+            // unwatch callback. Dispose that transient batcher on early abort.
+            eventBatcher.dispose()
             finish()
           }
         }
@@ -303,6 +346,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
               // Why: the connection can close while watch setup is still
               // resolving. Tear down the late watcher immediately instead of
               // registering cleanup on a connection that was already reaped.
+              eventBatcher.dispose()
               nextUnwatch()
               return
             }

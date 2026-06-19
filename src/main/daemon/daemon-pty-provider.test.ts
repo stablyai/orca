@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'fs'
 import { DaemonPtyProvider } from './daemon-pty-provider'
 import { DaemonServer } from './daemon-server'
 import type { SubprocessHandle } from './session'
+import { getDaemonSocketPath } from './daemon-spawner'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-provider-test-'))
@@ -18,6 +19,7 @@ function createMockSubprocess(): SubprocessHandle & {
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 77777,
+    getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
@@ -59,7 +61,7 @@ describe('DaemonPtyProvider', () => {
 
   beforeEach(async () => {
     dir = createTestDir()
-    socketPath = join(dir, 'test.sock')
+    socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
 
     server = new DaemonServer({

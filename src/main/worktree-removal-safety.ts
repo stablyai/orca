@@ -22,7 +22,8 @@ const ORCA_CREATION_SOURCES = new Set<NonNullable<WorktreeMeta['orcaCreationSour
 const ORCA_OWNED_PROVENANCE_META_KEYS = [
   'orcaCreatedAt',
   'orcaCreationSource',
-  'orcaCreationWorkspaceLayout'
+  'orcaCreationWorkspaceLayout',
+  'automationProvenance'
 ] as const
 type UnregisteredOrcaCleanupMeta = Pick<
   WorktreeMeta,
@@ -38,6 +39,8 @@ type UnregisteredOrcaCleanupMeta = Pick<
 
 export const ORPHANED_WORKTREE_DIRECTORY_MESSAGE =
   'Worktree is no longer registered with Git but its directory remains.'
+export const UNREGISTERED_MISSING_WORKTREE_MESSAGE =
+  'Worktree is no longer registered with Git and its directory is already gone.'
 
 function getPathOps(...paths: string[]): PathOps {
   // Why: forward-slash UNC roots need win32 ops; POSIX joins collapse `//Server` to `/Server`.
@@ -46,9 +49,13 @@ function getPathOps(...paths: string[]): PathOps {
 
 function containsPath(parentPath: string, childPath: string, pathOps: PathOps): boolean {
   const relativePath = pathOps.relative(parentPath, childPath)
+  // Why: `..name` is a valid child name; only `..` and `../...` escape.
   return (
     relativePath === '' ||
-    (!!relativePath && !relativePath.startsWith('..') && !pathOps.isAbsolute(relativePath))
+    (!!relativePath &&
+      relativePath !== '..' &&
+      !relativePath.startsWith(`..${pathOps.sep}`) &&
+      !pathOps.isAbsolute(relativePath))
   )
 }
 

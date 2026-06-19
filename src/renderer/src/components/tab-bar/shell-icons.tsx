@@ -1,17 +1,18 @@
 import React from 'react'
+import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
+import { translate } from '@/i18n/i18n'
+import gitForWindowsLogoUrl from '../../../../../resources/gwindows_logo.svg?url'
 
-export type WindowsShell = 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
+export type WindowsShell = 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | typeof WINDOWS_GIT_BASH_SHELL
 
 // Why: the "+" dropdown and per-tab tab strip both need a visual distinction
-// between PowerShell, CMD, and WSL sessions. Stock lucide glyphs don't
+// between PowerShell, CMD, Git Bash, and WSL sessions. Stock lucide glyphs don't
 // differentiate — every session rendered as the same generic chevron. These
-// hand-crafted icons (derived from the official brand marks and redrawn as
-// small currentColor-aware paths so they inherit the tab's text color) make
-// each shell identifiable at a glance without shipping a heavier brand-asset
-// package like simple-icons. The generic (macOS/Linux) terminal fallback uses
-// the same colored-tile treatment so the tab strip reads as a consistent set
-// of badges rather than a monochrome lucide glyph next to colorful brand
-// marks.
+// hand-crafted icons and the official Git for Windows mark make each shell
+// identifiable at a glance without shipping a heavier brand-asset package
+// like simple-icons. The generic (macOS/Linux) terminal fallback uses the same
+// colored-tile treatment so the tab strip reads as a consistent set of badges
+// rather than a monochrome lucide glyph next to colorful brand marks.
 
 function PowerShellIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   return (
@@ -71,9 +72,23 @@ function WslIcon({ size = 14 }: { size?: number }): React.JSX.Element {
         fill="#1F1F1F"
         fontFamily="system-ui, -apple-system, sans-serif"
       >
-        WSL
+        {translate('auto.components.tab.bar.shell.icons.e9b2e70613', 'WSL')}
       </text>
     </svg>
+  )
+}
+
+function GitBashIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <img
+      src={gitForWindowsLogoUrl}
+      alt=""
+      aria-hidden
+      width={size}
+      height={size}
+      className="block"
+      style={{ width: size, height: size }}
+    />
   )
 }
 
@@ -119,6 +134,7 @@ export function ShellIcon({
   size?: number
 }): React.JSX.Element {
   const normalized = (shell ?? '').toLowerCase()
+  const normalizedName = normalized.replaceAll('\\', '/').split('/').pop()
   if (normalized === 'powershell.exe' || normalized === 'pwsh.exe') {
     return <PowerShellIcon size={size} />
   }
@@ -127,6 +143,9 @@ export function ShellIcon({
   }
   if (normalized === 'wsl.exe' || normalized.startsWith('wsl')) {
     return <WslIcon size={size} />
+  }
+  if (normalized === WINDOWS_GIT_BASH_SHELL || normalizedName === 'bash.exe') {
+    return <GitBashIcon size={size} />
   }
   return <GenericTerminalIcon size={size} />
 }

@@ -14,12 +14,9 @@ export function parseWebPairingInput(input: string): WebPairingOffer | null {
   }
 
   try {
-    if (trimmed.startsWith('orca://pair')) {
-      const hashIndex = trimmed.indexOf('#')
-      if (hashIndex === -1) {
-        return null
-      }
-      return decodePairingPayload(trimmed.slice(hashIndex + 1))
+    if (trimmed.toLowerCase().startsWith('orca://')) {
+      const code = extractPairingCodeFromUrl(trimmed)
+      return code ? decodePairingPayload(code) : null
     }
     return decodePairingPayload(trimmed)
   } catch {
@@ -85,10 +82,32 @@ function decodePairingPayload(base64url: string): WebPairingOffer | null {
   }
 }
 
+function extractPairingCodeFromUrl(url: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  // Why: prefix checks accepted routes like `orca://pairing?...`; only the
+  // pairing deep-link host may carry runtime auth material.
+  if (parsed.protocol !== 'orca:' || parsed.hostname !== 'pair') {
+    return null
+  }
+  if (parsed.pathname !== '' && parsed.pathname !== '/') {
+    return null
+  }
+  const code = parsed.searchParams.get('code')
+  if (code) {
+    return code
+  }
+  return parsed.hash ? parsed.hash.slice(1) || null : null
+}
+
 function base64UrlToBytes(value: string): Uint8Array {
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
   const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
-  const binary = window.atob(padded)
+  const binary = globalThis.atob(padded)
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index)

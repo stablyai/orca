@@ -286,18 +286,26 @@ test.describe('Tab Close Navigation', () => {
     // Sanity: confirm the worktree has no backing terminal/browser surfaces
     // before we close the last editor. Otherwise the deactivate branch would
     // not trigger for reasons unrelated to this regression.
-    const surfaceCounts = await orcaPage.evaluate((wId) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-      const state = store.getState()
-      return {
-        terminals: (state.tabsByWorktree[wId] ?? []).length,
-        browserTabs: (state.browserTabsByWorktree[wId] ?? []).length
-      }
-    }, worktreeId)
-    expect(surfaceCounts).toEqual({ terminals: 0, browserTabs: 0 })
+    await expect
+      .poll(
+        () =>
+          orcaPage.evaluate((wId) => {
+            const store = window.__store
+            if (!store) {
+              throw new Error('window.__store is not available')
+            }
+            const state = store.getState()
+            return {
+              terminals: (state.tabsByWorktree[wId] ?? []).length,
+              browserTabs: (state.browserTabsByWorktree[wId] ?? []).length
+            }
+          }, worktreeId),
+        {
+          timeout: 5_000,
+          message: 'terminal/browser surfaces did not drain before last-editor close'
+        }
+      )
+      .toEqual({ terminals: 0, browserTabs: 0 })
 
     await closeFile(orcaPage, editorIds[0])
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  resolveWorkspaceKanbanCardDropCommitTarget,
   resolveWorkspaceCardDropIndexFromRects,
   resolveWorkspaceStatusDropTargetFromRects
 } from './workspace-kanban-card-pointer-drag-dom'
@@ -39,5 +40,52 @@ describe('workspace kanban pointer drag card drop index', () => {
 
   it('inserts at the end when the pointer is below every card midpoint', () => {
     expect(resolveWorkspaceCardDropIndexFromRects(cardRects, 140)).toBe(3)
+  })
+})
+
+describe('workspace kanban pointer drag commit target', () => {
+  it('uses the current target when release hit-testing succeeds', () => {
+    expect(
+      resolveWorkspaceKanbanCardDropCommitTarget({
+        currentTarget: { status: 'doing', isPinDrop: false, dropIndex: 1 },
+        latestTrackedTarget: {
+          target: { status: 'done', isPinDrop: false, dropIndex: 0 },
+          x: 100,
+          y: 100
+        },
+        x: 100,
+        y: 100
+      })
+    ).toEqual({ status: 'doing', isPinDrop: false, dropIndex: 1 })
+  })
+
+  it('reuses the latest tracked target when release hit-testing blanks at the same point', () => {
+    expect(
+      resolveWorkspaceKanbanCardDropCommitTarget({
+        currentTarget: { status: null, isPinDrop: false, dropIndex: 0 },
+        latestTrackedTarget: {
+          target: { status: 'doing', isPinDrop: false, dropIndex: 2 },
+          x: 100,
+          y: 100
+        },
+        x: 102,
+        y: 101
+      })
+    ).toEqual({ status: 'doing', isPinDrop: false, dropIndex: 2 })
+  })
+
+  it('does not reuse a tracked target after the pointer has moved away', () => {
+    expect(
+      resolveWorkspaceKanbanCardDropCommitTarget({
+        currentTarget: { status: null, isPinDrop: false, dropIndex: 0 },
+        latestTrackedTarget: {
+          target: { status: 'doing', isPinDrop: false, dropIndex: 2 },
+          x: 100,
+          y: 100
+        },
+        x: 140,
+        y: 100
+      })
+    ).toEqual({ status: null, isPinDrop: false, dropIndex: 0 })
   })
 })

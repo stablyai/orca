@@ -1,11 +1,15 @@
 /* eslint-disable max-lines -- Why: speech worker ownership, warm reuse, and
 timeout teardown must stay co-located so dictation lifecycle state cannot drift. */
 import { Worker } from 'worker_threads'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
 import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
+import { OpenAiTranscriptionSession } from './openai-transcription-client'
+import { readOpenAiSpeechApiKey } from './openai-api-key-store'
 
+export const START_DICTATION_TIMEOUT_MS = 60_000
 const STOP_DICTATION_TIMEOUT_MS = 60_000
 export const IDLE_WORKER_TEARDOWN_MS = 60 * 60 * 1000
 
@@ -20,15 +24,20 @@ export type SttEventSink = (event: SttEvent) => void
 
 export class SttService {
   private worker: Worker | null = null
+  private cloudSession: OpenAiTranscriptionSession | null = null
   private modelManager: ModelManager
   private activeModelId: string | null = null
   private activeHotwordsFilePath: string | undefined
   private activeOwner: string | null = null
   private startingOwner: string | null = null
+  private startingModelId: string | null = null
   private starting = false
   private canceledOwners = new Set<string>()
   private eventSink: SttEventSink | null = null
   private idleTeardownTimer: NodeJS.Timeout | null = null
+  // Why: warm workers intentionally keep lifecycle listeners while reusable;
+  // stale workers must not retain this service after error, exit, or teardown.
+  private cleanupWorkerLifecycleListeners: (() => void) | null = null
 
   constructor(modelManager: ModelManager) {
     this.modelManager = modelManager
@@ -46,11 +55,12 @@ export class SttService {
       }
       return
     }
-    if (this.worker && this.activeOwner && this.activeOwner !== owner) {
+    if ((this.worker || this.cloudSession) && this.activeOwner && this.activeOwner !== owner) {
       throw new Error('dictation_already_active')
     }
     this.starting = true
     this.startingOwner = owner
+    this.startingModelId = modelId
     this.clearIdleTeardownTimer()
 
     try {
@@ -63,6 +73,7 @@ export class SttService {
     } finally {
       this.starting = false
       this.startingOwner = null
+      this.startingModelId = null
       this.canceledOwners.delete(owner)
     }
   }
@@ -73,6 +84,34 @@ export class SttService {
     hotwordsFilePath?: string,
     owner = 'desktop'
   ): Promise<void> {
+    const manifest = getCatalogModel(modelId)
+    if (!manifest) {
+      throw new Error(`Unknown model: ${modelId}`)
+    }
+
+    if (manifest.provider === 'openai') {
+      if (this.worker) {
+        await this.stopDictation(owner, { cancelStarting: false })
+        await this.teardownIdleWorker()
+      }
+
+      const modelState = await this.modelManager.getModelState(modelId)
+      if (modelState.status !== 'ready') {
+        throw new Error(`Model not ready: ${modelState.status}`)
+      }
+
+      this.cloudSession = new OpenAiTranscriptionSession(modelId, readOpenAiSpeechApiKey)
+      this.activeModelId = modelId
+      this.activeHotwordsFilePath = undefined
+      this.eventSink = sink
+      sink({ type: 'ready' })
+      return
+    }
+
+    if (this.cloudSession) {
+      await this.stopDictation(owner, { cancelStarting: false })
+    }
+
     if (
       this.worker &&
       this.activeModelId === modelId &&
@@ -86,11 +125,6 @@ export class SttService {
     if (this.worker) {
       await this.stopDictation(owner, { cancelStarting: false })
       await this.teardownIdleWorker()
-    }
-
-    const manifest = getCatalogModel(modelId)
-    if (!manifest) {
-      throw new Error(`Unknown model: ${modelId}`)
     }
 
     const modelState = await this.modelManager.getModelState(modelId)
@@ -112,10 +146,23 @@ export class SttService {
 
     const readyPromise = new Promise<void>((resolve, reject) => {
       let settled = false
+      let startupTimeout: ReturnType<typeof setTimeout> | null = null
       const cleanup = () => {
+        if (startupTimeout) {
+          clearTimeout(startupTimeout)
+          startupTimeout = null
+        }
         worker.off('message', onReadyOrError)
         worker.off('error', onStartupError)
         worker.off('exit', onStartupExit)
+      }
+      const failStartup = (error: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
       }
       const onReadyOrError = (msg: { type: string; text?: string; error?: string }) => {
         if (settled) {
@@ -126,56 +173,61 @@ export class SttService {
           cleanup()
           resolve()
         } else if (msg.type === 'error') {
-          settled = true
-          cleanup()
-          reject(new Error(msg.error ?? 'Speech worker failed to initialize'))
+          failStartup(new Error(msg.error ?? 'Speech worker failed to initialize'))
         }
       }
       const onStartupError = (err: Error) => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        reject(err)
+        failStartup(err)
       }
       const onStartupExit = (code: number) => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        reject(new Error(`Speech worker exited before ready: ${code}`))
+        failStartup(new Error(`Speech worker exited before ready: ${code}`))
       }
       worker.on('message', onReadyOrError)
       worker.on('error', onStartupError)
       worker.on('exit', onStartupExit)
+      // Why: a native STT worker can wedge while loading model bindings without
+      // emitting ready/error/exit; startup must leave the UI's Starting state.
+      startupTimeout = setTimeout(() => {
+        failStartup(new Error('Speech worker timed out while starting.'))
+      }, START_DICTATION_TIMEOUT_MS)
+      startupTimeout.unref?.()
     })
 
-    worker.on('message', (msg: SttEvent) => {
+    const onWorkerMessage = (msg: SttEvent) => {
       this.eventSink?.(msg)
-    })
+    }
 
-    worker.on('error', (err) => {
+    const onWorkerError = (err: Error) => {
       this.eventSink?.({ type: 'error', error: String(err) })
       if (this.worker === worker) {
+        this.cleanupActiveWorkerLifecycleListeners()
         this.worker = null
         this.activeModelId = null
         this.activeHotwordsFilePath = undefined
         this.activeOwner = null
         this.eventSink = null
       }
-    })
+    }
 
-    worker.on('exit', () => {
+    const onWorkerExit = () => {
       if (this.worker === worker) {
+        this.cleanupActiveWorkerLifecycleListeners()
         this.worker = null
         this.activeModelId = null
         this.activeHotwordsFilePath = undefined
         this.activeOwner = null
         this.eventSink = null
       }
-    })
+    }
+
+    worker.on('message', onWorkerMessage)
+    worker.on('error', onWorkerError)
+    worker.on('exit', onWorkerExit)
+    this.cleanupWorkerLifecycleListeners = () => {
+      worker.off('message', onWorkerMessage)
+      worker.off('error', onWorkerError)
+      worker.off('exit', onWorkerExit)
+    }
 
     const modelDir = this.modelManager.getModelDir(modelId)
     worker.postMessage({
@@ -184,7 +236,7 @@ export class SttService {
       modelType: manifest.type,
       streaming: manifest.streaming,
       sampleRate: manifest.sampleRate,
-      files: manifest.files,
+      files: manifest.files ?? [],
       hotwordsFilePath,
       modelingUnit: manifest.modelingUnit
     })
@@ -192,6 +244,7 @@ export class SttService {
     try {
       await readyPromise
     } catch (error) {
+      this.cleanupActiveWorkerLifecycleListeners()
       worker.removeAllListeners()
       void worker.terminate()
       if (this.worker === worker) {
@@ -213,6 +266,10 @@ export class SttService {
     if (currentOwner !== owner) {
       throw new Error('dictation_owner_mismatch')
     }
+    if (this.cloudSession) {
+      this.cloudSession.feedAudio(samples, sampleRate)
+      return
+    }
     this.worker?.postMessage({ type: 'feed', samples, sampleRate }, [samples.buffer as ArrayBuffer])
   }
 
@@ -223,7 +280,7 @@ export class SttService {
     if (options.cancelStarting !== false && this.startingOwner === owner) {
       this.canceledOwners.add(owner)
     }
-    if (!this.worker) {
+    if (!this.worker && !this.cloudSession) {
       return
     }
     const currentOwner = this.activeOwner ?? this.startingOwner
@@ -231,7 +288,33 @@ export class SttService {
       throw new Error('dictation_owner_mismatch')
     }
 
+    if (this.cloudSession) {
+      const session = this.cloudSession
+      this.cloudSession = null
+      try {
+        const text = await session.finish()
+        if (text) {
+          this.eventSink?.({ type: 'final', text })
+        }
+      } catch (error) {
+        this.eventSink?.({
+          type: 'error',
+          error: error instanceof Error ? error.message : String(error)
+        })
+      } finally {
+        this.eventSink?.({ type: 'stopped' })
+        this.activeModelId = null
+        this.activeHotwordsFilePath = undefined
+        this.activeOwner = null
+        this.eventSink = null
+      }
+      return
+    }
+
     const worker = this.worker
+    if (!worker) {
+      return
+    }
     worker.postMessage({ type: 'stop' })
 
     let forcedTeardown = false
@@ -271,6 +354,7 @@ export class SttService {
         cleanup()
         // Why: a worker that cannot finish dictation is no longer reusable; do
         // not keep it in the warm-worker slot or retain its message listeners.
+        this.cleanupActiveWorkerLifecycleListeners()
         worker.removeAllListeners()
         void worker.terminate().finally(resolve)
       }, STOP_DICTATION_TIMEOUT_MS)
@@ -294,11 +378,23 @@ export class SttService {
   }
 
   isActive(): boolean {
-    return this.worker !== null
+    return this.worker !== null || this.cloudSession !== null
   }
 
   getActiveModelId(): string | null {
     return this.activeModelId
+  }
+
+  async prepareModelForDeletion(modelId: string): Promise<void> {
+    if (this.startingModelId === modelId || (this.activeOwner && this.activeModelId === modelId)) {
+      throw new Error('voice_model_in_use')
+    }
+    if (this.worker && this.activeModelId === modelId) {
+      await this.teardownIdleWorker({ ignoreTerminateErrors: false })
+      if (this.worker && this.activeModelId === modelId) {
+        throw new Error('voice_model_in_use')
+      }
+    }
   }
 
   private getWorkerPath(): string {
@@ -326,21 +422,36 @@ export class SttService {
     this.idleTeardownTimer.unref?.()
   }
 
-  private async teardownIdleWorker(): Promise<void> {
+  private async teardownIdleWorker(
+    options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
+  ): Promise<void> {
     this.clearIdleTeardownTimer()
     if (!this.worker || this.activeOwner || this.startingOwner) {
       return
     }
     const worker = this.worker
     worker.postMessage({ type: 'teardown' })
+    try {
+      await worker.terminate()
+    } catch (error) {
+      if (!options.ignoreTerminateErrors) {
+        throw error
+      }
+    }
+    this.cleanupActiveWorkerLifecycleListeners()
     worker.removeAllListeners()
-    await worker.terminate().catch(() => undefined)
     if (this.worker === worker) {
       this.worker = null
       this.activeModelId = null
       this.activeHotwordsFilePath = undefined
       this.eventSink = null
     }
+  }
+
+  private cleanupActiveWorkerLifecycleListeners(): void {
+    const cleanup = this.cleanupWorkerLifecycleListeners
+    this.cleanupWorkerLifecycleListeners = null
+    cleanup?.()
   }
 
   private getSherpaModulePath(): string {
@@ -355,6 +466,10 @@ export class SttService {
         : `sherpa-onnx-${process.platform}-${process.arch}`
 
     if (app.isPackaged) {
+      const resourcesNodeModule = join(process.resourcesPath, 'node_modules', nativePkg)
+      if (existsSync(resourcesNodeModule)) {
+        return resourcesNodeModule
+      }
       return join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', nativePkg)
     }
 

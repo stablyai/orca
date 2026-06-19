@@ -14,10 +14,13 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { applyTerminalAttributionEnv } from './terminal-attribution'
+import { applyTerminalAttributionEnv, resolveAttributionShellFamily } from './terminal-attribution'
 
 describe('applyTerminalAttributionEnv', () => {
   let tmpRoot: string | null = null
+  // Why: these subprocess fixtures create extensionless Bash fake commands;
+  // native Windows command resolution is covered by wrapper/PATH assertions below.
+  const posixSubprocessIt = process.platform === 'win32' ? it.skip : it
 
   afterEach(() => {
     if (tmpRoot) {
@@ -61,7 +64,27 @@ describe('applyTerminalAttributionEnv', () => {
     })
   }
 
-  it('does not amend HEAD when git commit --dry-run exits successfully', () => {
+  it('classifies Windows native and POSIX shell families for attribution shims', () => {
+    expect(resolveAttributionShellFamily({ platform: 'win32', shellPath: 'powershell.exe' })).toBe(
+      'native-windows'
+    )
+    expect(resolveAttributionShellFamily({ platform: 'win32', shellPath: 'cmd.exe' })).toBe(
+      'native-windows'
+    )
+    expect(
+      resolveAttributionShellFamily({
+        platform: 'win32',
+        shellPath: 'C:\\Program Files\\Git\\bin\\bash.exe'
+      })
+    ).toBe('posix')
+    expect(resolveAttributionShellFamily({ platform: 'win32', shellPath: 'wsl.exe' })).toBe('posix')
+    expect(resolveAttributionShellFamily({ platform: 'win32', isWsl: true })).toBe('posix')
+    expect(resolveAttributionShellFamily({ platform: 'darwin', shellPath: '/bin/zsh' })).toBe(
+      undefined
+    )
+  })
+
+  posixSubprocessIt('does not amend HEAD when git commit --dry-run exits successfully', () => {
     const root = makeTmpRoot()
     const repo = join(root, 'repo')
     mkdirSync(repo)
@@ -95,7 +118,7 @@ describe('applyTerminalAttributionEnv', () => {
     )
   })
 
-  it('still adds the trailer when git commit uses --no-verify shorthand', () => {
+  posixSubprocessIt('still adds the trailer when git commit uses --no-verify shorthand', () => {
     const root = makeTmpRoot()
     const repo = join(root, 'repo')
     mkdirSync(repo)
@@ -118,7 +141,7 @@ describe('applyTerminalAttributionEnv', () => {
     )
   })
 
-  it('adds the trailer when git commit uses combined -am shorthand', () => {
+  posixSubprocessIt('adds the trailer when git commit uses combined -am shorthand', () => {
     const root = makeTmpRoot()
     const repo = join(root, 'repo')
     mkdirSync(repo)
@@ -143,7 +166,7 @@ describe('applyTerminalAttributionEnv', () => {
     )
   })
 
-  it('adds the trailer when git commit follows global git config args', () => {
+  posixSubprocessIt('adds the trailer when git commit follows global git config args', () => {
     const root = makeTmpRoot()
     const repo = join(root, 'repo')
     mkdirSync(repo)
@@ -166,7 +189,7 @@ describe('applyTerminalAttributionEnv', () => {
     )
   })
 
-  it('adds the trailer to commit message files before git runs', () => {
+  posixSubprocessIt('adds the trailer to commit message files before git runs', () => {
     const root = makeTmpRoot()
     const repo = join(root, 'repo')
     const messagePath = join(root, 'message.txt')
@@ -192,14 +215,16 @@ describe('applyTerminalAttributionEnv', () => {
     expect(readFileSync(messagePath, 'utf8')).toBe('initial from file\n')
   })
 
-  it('passes missing commit message files through without adding fallback message args', () => {
-    const root = makeTmpRoot()
-    const binDir = join(root, 'bin')
-    const argsPath = join(root, 'commit-args')
-    mkdirSync(binDir)
-    writeFileSync(
-      join(binDir, 'git'),
-      `#!/usr/bin/env bash
+  posixSubprocessIt(
+    'passes missing commit message files through without adding fallback message args',
+    () => {
+      const root = makeTmpRoot()
+      const binDir = join(root, 'bin')
+      const argsPath = join(root, 'commit-args')
+      mkdirSync(binDir)
+      writeFileSync(
+        join(binDir, 'git'),
+        `#!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1" == "commit" ]]; then
   printf '%s\\n' "$@" >"${argsPath}"
@@ -207,38 +232,41 @@ if [[ "$1" == "commit" ]]; then
 fi
 exit 1
 `,
-      'utf8'
-    )
-    chmodSync(join(binDir, 'git'), 0o755)
+        'utf8'
+      )
+      chmodSync(join(binDir, 'git'), 0o755)
 
-    const attributionEnv = {
-      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
-    }
-    applyTerminalAttributionEnv(attributionEnv, {
-      enabled: true,
-      userDataPath: join(root, 'user-data')
-    })
-
-    expect(() =>
-      execFileSync('git', ['commit', '-F', join(root, 'missing-message.txt')], {
-        encoding: 'utf8',
-        env: cleanAttributionEnv(attributionEnv)
+      const attributionEnv = {
+        PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+      }
+      applyTerminalAttributionEnv(attributionEnv, {
+        enabled: true,
+        userDataPath: join(root, 'user-data')
       })
-    ).toThrow()
 
-    expect(readFileSync(argsPath, 'utf8')).not.toContain('Co-authored-by: Orca')
-  })
+      expect(() =>
+        execFileSync('git', ['commit', '-F', join(root, 'missing-message.txt')], {
+          encoding: 'utf8',
+          env: cleanAttributionEnv(attributionEnv)
+        })
+      ).toThrow()
 
-  it('passes reuse and fixup commit message modes through without attribution', () => {
-    const root = makeTmpRoot()
-    const binDir = join(root, 'bin')
-    const argsPath = join(root, 'commit-args')
-    const messagePath = join(root, 'message.txt')
-    mkdirSync(binDir)
-    writeFileSync(messagePath, 'from file\n')
-    writeFileSync(
-      join(binDir, 'git'),
-      `#!/usr/bin/env bash
+      expect(readFileSync(argsPath, 'utf8')).not.toContain('Co-authored-by: Orca')
+    }
+  )
+
+  posixSubprocessIt(
+    'passes reuse and fixup commit message modes through without attribution',
+    () => {
+      const root = makeTmpRoot()
+      const binDir = join(root, 'bin')
+      const argsPath = join(root, 'commit-args')
+      const messagePath = join(root, 'message.txt')
+      mkdirSync(binDir)
+      writeFileSync(messagePath, 'from file\n')
+      writeFileSync(
+        join(binDir, 'git'),
+        `#!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1" == "commit" ]]; then
   printf '%s\\n' "$@" >>"${argsPath}"
@@ -246,35 +274,36 @@ if [[ "$1" == "commit" ]]; then
 fi
 exit 1
 `,
-      'utf8'
-    )
-    chmodSync(join(binDir, 'git'), 0o755)
+        'utf8'
+      )
+      chmodSync(join(binDir, 'git'), 0o755)
 
-    const attributionEnv = {
-      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+      const attributionEnv = {
+        PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+      }
+      applyTerminalAttributionEnv(attributionEnv, {
+        enabled: true,
+        userDataPath: join(root, 'user-data')
+      })
+
+      execFileSync('git', ['commit', '-C', 'HEAD'], {
+        encoding: 'utf8',
+        env: cleanAttributionEnv(attributionEnv)
+      })
+      execFileSync('git', ['commit', '--fixup', 'HEAD'], {
+        encoding: 'utf8',
+        env: cleanAttributionEnv(attributionEnv)
+      })
+      execFileSync('git', ['commit', '-F', messagePath, '--fixup', 'HEAD'], {
+        encoding: 'utf8',
+        env: cleanAttributionEnv(attributionEnv)
+      })
+
+      expect(readFileSync(argsPath, 'utf8')).not.toContain('Co-authored-by: Orca')
     }
-    applyTerminalAttributionEnv(attributionEnv, {
-      enabled: true,
-      userDataPath: join(root, 'user-data')
-    })
+  )
 
-    execFileSync('git', ['commit', '-C', 'HEAD'], {
-      encoding: 'utf8',
-      env: cleanAttributionEnv(attributionEnv)
-    })
-    execFileSync('git', ['commit', '--fixup', 'HEAD'], {
-      encoding: 'utf8',
-      env: cleanAttributionEnv(attributionEnv)
-    })
-    execFileSync('git', ['commit', '-F', messagePath, '--fixup', 'HEAD'], {
-      encoding: 'utf8',
-      env: cleanAttributionEnv(attributionEnv)
-    })
-
-    expect(readFileSync(argsPath, 'utf8')).not.toContain('Co-authored-by: Orca')
-  })
-
-  it('adds the trailer before commit-msg hooks validate the commit', () => {
+  posixSubprocessIt('adds the trailer before commit-msg hooks validate the commit', () => {
     const root = makeTmpRoot()
     const repo = join(root, 'repo')
     mkdirSync(repo)
@@ -314,7 +343,7 @@ grep -Fq 'Co-authored-by: Orca <help@stably.ai>' "$1"
     )
   })
 
-  it('adds git attribution to the original commit command without amending', () => {
+  posixSubprocessIt('adds git attribution to the original commit command without amending', () => {
     const root = makeTmpRoot()
     const binDir = join(root, 'bin')
     const commitPath = join(root, 'commit-called')
@@ -362,7 +391,7 @@ exit 1
     expect(readFileSync(argsPath, 'utf8')).toContain('Co-authored-by: Orca <help@stably.ai>')
   })
 
-  it('passes editor-based commits through without attribution', () => {
+  posixSubprocessIt('passes editor-based commits through without attribution', () => {
     const root = makeTmpRoot()
     const binDir = join(root, 'bin')
     const argsPath = join(root, 'commit-args')
@@ -397,7 +426,7 @@ exit 1
     expect(readFileSync(argsPath, 'utf8')).toBe('commit\n')
   })
 
-  it('preserves interactive gh pr create without guessing which PR to edit', () => {
+  posixSubprocessIt('preserves interactive gh pr create without guessing which PR to edit', () => {
     const root = makeTmpRoot()
     const binDir = join(root, 'bin')
     const markerPath = join(root, 'gh-edit-called')
@@ -444,7 +473,7 @@ exit 1
     expect(existsSync(markerPath)).toBe(false)
   })
 
-  it('adds gh attribution for noninteractive create output URLs', () => {
+  posixSubprocessIt('adds gh attribution for noninteractive create output URLs', () => {
     const root = makeTmpRoot()
     const binDir = join(root, 'bin')
     const prMarkerPath = join(root, 'pr-edit-called')
@@ -512,7 +541,7 @@ exit 1
     expect(readFileSync(patchArgsPath, 'utf8')).not.toContain('PR body')
   })
 
-  it('passes gh create help through without editing existing PRs or issues', () => {
+  posixSubprocessIt('passes gh create help through without editing existing PRs or issues', () => {
     const root = makeTmpRoot()
     const binDir = join(root, 'bin')
     const markerPath = join(root, 'gh-edit-called')
@@ -573,14 +602,16 @@ exit 1
     expect(existsSync(markerPath)).toBe(false)
   })
 
-  it('preserves interactive gh issue create without guessing which issue to edit', () => {
-    const root = makeTmpRoot()
-    const binDir = join(root, 'bin')
-    const markerPath = join(root, 'gh-edit-called')
-    mkdirSync(binDir)
-    writeFileSync(
-      join(binDir, 'gh'),
-      `#!/usr/bin/env bash
+  posixSubprocessIt(
+    'preserves interactive gh issue create without guessing which issue to edit',
+    () => {
+      const root = makeTmpRoot()
+      const binDir = join(root, 'bin')
+      const markerPath = join(root, 'gh-edit-called')
+      mkdirSync(binDir)
+      writeFileSync(
+        join(binDir, 'gh'),
+        `#!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1 $2" == "issue create" ]]; then
   printf '%s\\n' 'interactive issue create complete'
@@ -596,27 +627,28 @@ if [[ "$1 $2 $3 $4" == "api -X PATCH repos/stablyai/orca/issues/456" ]]; then
 fi
 exit 1
 `,
-      'utf8'
-    )
-    chmodSync(join(binDir, 'gh'), 0o755)
-    const attributionEnv = {
-      PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+        'utf8'
+      )
+      chmodSync(join(binDir, 'gh'), 0o755)
+      const attributionEnv = {
+        PATH: `${binDir}:${stripInheritedAttributionPath(process.env.PATH ?? '')}`
+      }
+      applyTerminalAttributionEnv(attributionEnv, {
+        enabled: true,
+        userDataPath: join(root, 'user-data')
+      })
+
+      const output = execFileSync('gh', ['issue', 'create'], {
+        encoding: 'utf8',
+        env: cleanAttributionEnv(attributionEnv)
+      })
+
+      expect(output).toBe('interactive issue create complete\n')
+      expect(existsSync(markerPath)).toBe(false)
     }
-    applyTerminalAttributionEnv(attributionEnv, {
-      enabled: true,
-      userDataPath: join(root, 'user-data')
-    })
+  )
 
-    const output = execFileSync('gh', ['issue', 'create'], {
-      encoding: 'utf8',
-      env: cleanAttributionEnv(attributionEnv)
-    })
-
-    expect(output).toBe('interactive issue create complete\n')
-    expect(existsSync(markerPath)).toBe(false)
-  })
-
-  it('skips gh attribution edits when viewing the created item fails', () => {
+  posixSubprocessIt('skips gh attribution edits when viewing the created item fails', () => {
     const root = makeTmpRoot()
     const binDir = join(root, 'bin')
     const markerPath = join(root, 'gh-edit-called')
@@ -658,7 +690,7 @@ exit 1
     expect(existsSync(markerPath)).toBe(false)
   })
 
-  it('keeps gh create successful when the attribution edit fails', () => {
+  posixSubprocessIt('keeps gh create successful when the attribution edit fails', () => {
     const root = makeTmpRoot()
     const binDir = join(root, 'bin')
     mkdirSync(binDir)
@@ -728,6 +760,50 @@ exit 1
       entry.includes('orca-terminal-attribution')
     )
     expect(new Set(shimEntries).size).toBe(shimEntries.length)
+  })
+
+  it('puts only Windows shims on PATH for native Windows shells', () => {
+    const root = makeTmpRoot()
+    const userDataPath = join(root, 'user-data')
+    const baseEnv: Record<string, string> = { PATH: 'C:\\Git\\cmd;C:\\Windows\\System32' }
+
+    applyTerminalAttributionEnv(baseEnv, {
+      enabled: true,
+      platform: 'win32',
+      shellFamily: 'native-windows',
+      userDataPath
+    })
+
+    const posixDir = join(userDataPath, 'orca-terminal-attribution', 'posix')
+    const win32Dir = join(userDataPath, 'orca-terminal-attribution', 'win32')
+    const pathEntries = baseEnv.PATH.split(';')
+
+    expect(pathEntries[0]).toBe(win32Dir)
+    expect(pathEntries).not.toContain(posixDir)
+    expect(baseEnv.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(existsSync(join(win32Dir, 'git.cmd'))).toBe(true)
+  })
+
+  it('keeps POSIX shims first for Windows Git Bash and WSL shells', () => {
+    const root = makeTmpRoot()
+    const userDataPath = join(root, 'user-data')
+    const baseEnv: Record<string, string> = { PATH: 'C:\\Program Files\\Git\\cmd;C:\\Windows' }
+
+    applyTerminalAttributionEnv(baseEnv, {
+      enabled: true,
+      platform: 'win32',
+      shellFamily: 'posix',
+      userDataPath
+    })
+
+    const posixDir = join(userDataPath, 'orca-terminal-attribution', 'posix')
+    const win32Dir = join(userDataPath, 'orca-terminal-attribution', 'win32')
+    const pathEntries = baseEnv.PATH.split(';')
+
+    expect(pathEntries[0]).toBe(posixDir)
+    expect(pathEntries).not.toContain(win32Dir)
+    expect(baseEnv.ORCA_ATTRIBUTION_SHIM_DIR).toBe(posixDir)
+    expect(existsSync(join(posixDir, 'git'))).toBe(true)
   })
 
   it('writes PowerShell wrappers without raw-template backslash escapes', () => {

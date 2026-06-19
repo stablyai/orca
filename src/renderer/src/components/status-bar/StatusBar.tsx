@@ -4,14 +4,27 @@ states stay consistent across Claude and Codex. */
 import {
   AlertTriangle,
   Activity,
+  RotateCcw,
   Plug,
   ChevronDown,
   ChevronRight,
+  Loader2,
   PanelsTopLeft,
   RefreshCw,
   Server
 } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -25,27 +38,97 @@ import {
 import { useAppStore } from '../../store'
 import type {
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  GlobalSettings
 } from '../../../../shared/types'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
-import { ProviderIcon, ProviderPanel, barColor } from './tooltip'
+import type {
+  ProviderRateLimits,
+  RateLimitRuntimeTarget,
+  RateLimitWindow
+} from '../../../../shared/rate-limit-types'
+import { ProviderIcon, ProviderPanel, barColor, getProviderUsageStatusLabel } from './tooltip'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
-import { SshStatusSegment } from './SshStatusSegment'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
-import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
-import { PortsStatusSegment } from './PortsStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
+import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
-import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 import { summarizeCodexRestartStatus } from './codex-restart-status-summary'
+import {
+  getWindowsTerminalCapabilityOwnerKey,
+  useWindowsTerminalCapabilities
+} from '@/lib/windows-terminal-capabilities'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { translate } from '@/i18n/i18n'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
+}
+
+const PetStatusSegment = lazyWithRetry(() =>
+  import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
+)
+const ResourceUsageStatusSegment = lazyWithRetry(() =>
+  import('./ResourceUsageStatusSegment').then((module) => ({
+    default: module.ResourceUsageStatusSegment
+  }))
+)
+const PortsStatusSegment = lazyWithRetry(() =>
+  import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
+)
+const SshStatusSegment = lazyWithRetry(() =>
+  import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
+)
+
+export type CodexStatusRuntimeTarget = {
+  runtime: 'host' | 'wsl'
+  wslDistro: string | null
+}
+
+type CodexStatusAccount = CodexRateLimitAccountsState['accounts'][number]
+type ClaudeStatusAccount = ClaudeRateLimitAccountsState['accounts'][number]
+
+export type CodexStatusSwitchTarget = {
+  id: string | null
+  label: string
+  active: boolean
+  runtimeTarget: CodexStatusRuntimeTarget
+}
+
+export type CodexStatusSwitchGroup = {
+  key: string
+  label: string
+  runtimeTarget: CodexStatusRuntimeTarget
+  targets: CodexStatusSwitchTarget[]
+}
+
+export type ClaudeStatusSwitchTarget = {
+  id: string | null
+  label: string
+  active: boolean
+  runtimeTarget: CodexStatusRuntimeTarget
+}
+
+export type ClaudeStatusSwitchGroup = {
+  key: string
+  label: string
+  runtimeTarget: CodexStatusRuntimeTarget
+  targets: ClaudeStatusSwitchTarget[]
+}
+
+type StatusSwitchGroupOptions = {
+  fallbackWslDistro?: string | null
+  includeFallbackWsl?: boolean
+}
+
+function getHostRuntimeLabel(): string {
+  return navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
 }
 
 function getCodexAccountLabel(
@@ -56,6 +139,368 @@ function getCodexAccountLabel(
     return 'System default'
   }
   return state.accounts.find((account) => account.id === accountId)?.email ?? 'Codex account'
+}
+
+function getCodexAccountDisplayLabel(account: CodexStatusAccount): string {
+  return account.workspaceLabel ? `${account.email} (${account.workspaceLabel})` : account.email
+}
+
+function getCodexStatusWslKey(wslDistro: string | null | undefined): string {
+  const trimmed = wslDistro?.trim()
+  return trimmed ? trimmed : '__default__'
+}
+
+function getCodexStatusRuntimeLabel(target: CodexStatusRuntimeTarget): string {
+  if (target.runtime === 'host') {
+    return getHostRuntimeLabel()
+  }
+  return target.wslDistro ? `WSL ${target.wslDistro}` : 'WSL default'
+}
+
+function getCodexStatusRuntimeKey(target: CodexStatusRuntimeTarget): string {
+  return target.runtime === 'host' ? 'host' : `wsl:${getCodexStatusWslKey(target.wslDistro)}`
+}
+
+function toCodexStatusRuntimeTarget(
+  target: RateLimitRuntimeTarget | undefined
+): CodexStatusRuntimeTarget {
+  if (target?.runtime === 'wsl') {
+    return { runtime: 'wsl', wslDistro: target.wslDistro }
+  }
+  return { runtime: 'host', wslDistro: null }
+}
+
+export function getStatusBarPreferredWslDistro(
+  settings: GlobalSettings | null | undefined,
+  wslDistros: string[]
+): string | null {
+  const configuredDistro = settings?.localAccountWslDistro?.trim() || null
+  if (configuredDistro) {
+    return configuredDistro
+  }
+  return wslDistros.length === 1 ? wslDistros[0] : null
+}
+
+function shouldIncludeSettingsWslRuntime(settings: GlobalSettings | null | undefined): boolean {
+  return settings?.localAccountRuntime === 'wsl'
+}
+
+function getSingleConcreteCodexWslDistro(state: CodexRateLimitAccountsState): string | null {
+  const keys = new Set<string>()
+  for (const [key, accountId] of Object.entries(state.activeAccountIdsByRuntime?.wsl ?? {})) {
+    if (accountId && key !== '__default__') {
+      keys.add(key)
+    }
+  }
+  for (const account of state.accounts) {
+    const key = getCodexStatusWslKey(account.wslDistro)
+    if (account.managedHomeRuntime === 'wsl' && key !== '__default__') {
+      keys.add(key)
+    }
+  }
+  return keys.size === 1 ? Array.from(keys)[0] : null
+}
+
+function normalizeCodexStatusRuntimeTarget(
+  state: CodexRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): CodexStatusRuntimeTarget {
+  if (target.runtime !== 'wsl' || target.wslDistro) {
+    return target
+  }
+  const concreteDistro = getSingleConcreteCodexWslDistro(state)
+  return concreteDistro ? { runtime: 'wsl', wslDistro: concreteDistro } : target
+}
+
+function getCodexStatusActiveId(
+  state: CodexRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): string | null {
+  const selection = state.activeAccountIdsByRuntime
+  if (target.runtime === 'host') {
+    return selection?.host ?? state.activeAccountId ?? null
+  }
+  const distroSelection = selection?.wsl?.[getCodexStatusWslKey(target.wslDistro)]
+  if (target.wslDistro || distroSelection) {
+    return distroSelection ?? null
+  }
+  const selectedIds = Array.from(new Set(Object.values(selection?.wsl ?? {}).filter(Boolean)))
+  return selectedIds.length === 1 ? selectedIds[0] : null
+}
+
+function getCodexStatusAccountsForTarget(
+  state: CodexRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): CodexStatusAccount[] {
+  if (target.runtime === 'host') {
+    return state.accounts.filter((account) => account.managedHomeRuntime !== 'wsl')
+  }
+  return state.accounts.filter(
+    (account) =>
+      account.managedHomeRuntime === 'wsl' &&
+      getCodexStatusWslKey(account.wslDistro) === getCodexStatusWslKey(target.wslDistro)
+  )
+}
+
+export function buildCodexStatusSwitchGroups(
+  state: CodexRateLimitAccountsState,
+  currentTarget: CodexStatusRuntimeTarget,
+  options: StatusSwitchGroupOptions = {}
+): CodexStatusSwitchGroup[] {
+  const groups: CodexStatusSwitchGroup[] = []
+  const normalizedCurrentTarget = normalizeCodexStatusRuntimeTarget(state, currentTarget)
+  const makeGroup = (target: CodexStatusRuntimeTarget): CodexStatusSwitchGroup => {
+    const activeId = getCodexStatusActiveId(state, target)
+    const accountsForTarget = getCodexStatusAccountsForTarget(state, target)
+    return {
+      key: getCodexStatusRuntimeKey(target),
+      label: getCodexStatusRuntimeLabel(target),
+      runtimeTarget: target,
+      targets: [
+        {
+          id: null,
+          label: translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'),
+          active: activeId === null,
+          runtimeTarget: target
+        },
+        ...accountsForTarget.map((account) => ({
+          id: account.id,
+          label: getCodexAccountDisplayLabel(account),
+          active: account.id === activeId,
+          runtimeTarget: target
+        }))
+      ]
+    }
+  }
+
+  groups.push(makeGroup({ runtime: 'host', wslDistro: null }))
+
+  const wslKeys = new Set<string>(Object.keys(state.activeAccountIdsByRuntime?.wsl ?? {}))
+  if (normalizedCurrentTarget.runtime === 'wsl') {
+    wslKeys.add(getCodexStatusWslKey(normalizedCurrentTarget.wslDistro))
+  }
+  for (const account of state.accounts) {
+    if (account.managedHomeRuntime === 'wsl') {
+      wslKeys.add(getCodexStatusWslKey(account.wslDistro))
+    }
+  }
+  if (options.includeFallbackWsl) {
+    wslKeys.add(getCodexStatusWslKey(options.fallbackWslDistro))
+  }
+  if (currentTarget.runtime === 'wsl' && currentTarget.wslDistro === null) {
+    const concreteDistro = getSingleConcreteCodexWslDistro(state)
+    if (concreteDistro) {
+      wslKeys.delete('__default__')
+    }
+  }
+
+  for (const key of Array.from(wslKeys).sort((a, b) => {
+    if (a === '__default__') {
+      return -1
+    }
+    if (b === '__default__') {
+      return 1
+    }
+    return a.localeCompare(b)
+  })) {
+    groups.push(makeGroup({ runtime: 'wsl', wslDistro: key === '__default__' ? null : key }))
+  }
+
+  return groups
+}
+
+function getCodexStatusAccountsFromSettings(
+  settings: GlobalSettings | null | undefined
+): CodexRateLimitAccountsState | null {
+  if (!settings) {
+    return null
+  }
+  return {
+    accounts: settings.codexManagedAccounts
+      .map((account) => ({
+        id: account.id,
+        email: account.email,
+        managedHomeRuntime: account.managedHomeRuntime ?? 'host',
+        wslDistro: account.wslDistro ?? null,
+        providerAccountId: account.providerAccountId ?? null,
+        workspaceLabel: account.workspaceLabel ?? null,
+        workspaceAccountId: account.workspaceAccountId ?? null,
+        createdAt: account.createdAt,
+        updatedAt: account.updatedAt,
+        lastAuthenticatedAt: account.lastAuthenticatedAt
+      }))
+      .sort((a, b) => b.updatedAt - a.updatedAt),
+    activeAccountId:
+      settings.activeCodexManagedAccountIdsByRuntime?.host ??
+      settings.activeCodexManagedAccountId ??
+      null,
+    activeAccountIdsByRuntime: {
+      host:
+        settings.activeCodexManagedAccountIdsByRuntime?.host ??
+        settings.activeCodexManagedAccountId ??
+        null,
+      wsl: { ...settings.activeCodexManagedAccountIdsByRuntime?.wsl }
+    }
+  }
+}
+
+function getSingleConcreteClaudeWslDistro(state: ClaudeRateLimitAccountsState): string | null {
+  const keys = new Set<string>()
+  for (const [key, accountId] of Object.entries(state.activeAccountIdsByRuntime?.wsl ?? {})) {
+    if (accountId && key !== '__default__') {
+      keys.add(key)
+    }
+  }
+  for (const account of state.accounts) {
+    const key = getCodexStatusWslKey(account.wslDistro)
+    if (account.managedAuthRuntime === 'wsl' && key !== '__default__') {
+      keys.add(key)
+    }
+  }
+  return keys.size === 1 ? Array.from(keys)[0] : null
+}
+
+function normalizeClaudeStatusRuntimeTarget(
+  state: ClaudeRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): CodexStatusRuntimeTarget {
+  if (target.runtime !== 'wsl' || target.wslDistro) {
+    return target
+  }
+  const concreteDistro = getSingleConcreteClaudeWslDistro(state)
+  return concreteDistro ? { runtime: 'wsl', wslDistro: concreteDistro } : target
+}
+
+function getClaudeStatusActiveId(
+  state: ClaudeRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): string | null {
+  const selection = state.activeAccountIdsByRuntime
+  if (target.runtime === 'host') {
+    return selection?.host ?? state.activeAccountId ?? null
+  }
+  const distroSelection = selection?.wsl?.[getCodexStatusWslKey(target.wslDistro)]
+  if (target.wslDistro || distroSelection) {
+    return distroSelection ?? null
+  }
+  const selectedIds = Array.from(new Set(Object.values(selection?.wsl ?? {}).filter(Boolean)))
+  return selectedIds.length === 1 ? selectedIds[0] : null
+}
+
+function getClaudeStatusAccountsForTarget(
+  state: ClaudeRateLimitAccountsState,
+  target: CodexStatusRuntimeTarget
+): ClaudeStatusAccount[] {
+  if (target.runtime === 'host') {
+    return state.accounts.filter((account) => account.managedAuthRuntime !== 'wsl')
+  }
+  return state.accounts.filter(
+    (account) =>
+      account.managedAuthRuntime === 'wsl' &&
+      getCodexStatusWslKey(account.wslDistro) === getCodexStatusWslKey(target.wslDistro)
+  )
+}
+
+export function buildClaudeStatusSwitchGroups(
+  state: ClaudeRateLimitAccountsState,
+  currentTarget: CodexStatusRuntimeTarget,
+  options: StatusSwitchGroupOptions = {}
+): ClaudeStatusSwitchGroup[] {
+  const groups: ClaudeStatusSwitchGroup[] = []
+  const normalizedCurrentTarget = normalizeClaudeStatusRuntimeTarget(state, currentTarget)
+  const makeGroup = (target: CodexStatusRuntimeTarget): ClaudeStatusSwitchGroup => {
+    const activeId = getClaudeStatusActiveId(state, target)
+    const accountsForTarget = getClaudeStatusAccountsForTarget(state, target)
+    return {
+      key: getCodexStatusRuntimeKey(target),
+      label: getCodexStatusRuntimeLabel(target),
+      runtimeTarget: target,
+      targets: [
+        {
+          id: null,
+          label: translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'),
+          active: activeId === null,
+          runtimeTarget: target
+        },
+        ...accountsForTarget.map((account) => ({
+          id: account.id,
+          label: account.email,
+          active: account.id === activeId,
+          runtimeTarget: target
+        }))
+      ]
+    }
+  }
+
+  groups.push(makeGroup({ runtime: 'host', wslDistro: null }))
+
+  const wslKeys = new Set<string>(Object.keys(state.activeAccountIdsByRuntime?.wsl ?? {}))
+  if (normalizedCurrentTarget.runtime === 'wsl') {
+    wslKeys.add(getCodexStatusWslKey(normalizedCurrentTarget.wslDistro))
+  }
+  for (const account of state.accounts) {
+    if (account.managedAuthRuntime === 'wsl') {
+      wslKeys.add(getCodexStatusWslKey(account.wslDistro))
+    }
+  }
+  if (options.includeFallbackWsl) {
+    wslKeys.add(getCodexStatusWslKey(options.fallbackWslDistro))
+  }
+  if (currentTarget.runtime === 'wsl' && currentTarget.wslDistro === null) {
+    const concreteDistro = getSingleConcreteClaudeWslDistro(state)
+    if (concreteDistro) {
+      wslKeys.delete('__default__')
+    }
+  }
+
+  for (const key of Array.from(wslKeys).sort((a, b) => {
+    if (a === '__default__') {
+      return -1
+    }
+    if (b === '__default__') {
+      return 1
+    }
+    return a.localeCompare(b)
+  })) {
+    groups.push(makeGroup({ runtime: 'wsl', wslDistro: key === '__default__' ? null : key }))
+  }
+
+  return groups
+}
+
+function getClaudeStatusAccountsFromSettings(
+  settings: GlobalSettings | null | undefined
+): ClaudeRateLimitAccountsState | null {
+  if (!settings) {
+    return null
+  }
+  return {
+    accounts: settings.claudeManagedAccounts
+      .map((account) => ({
+        id: account.id,
+        email: account.email,
+        managedAuthRuntime: account.managedAuthRuntime ?? 'host',
+        wslDistro: account.wslDistro ?? null,
+        authMethod: account.authMethod ?? 'unknown',
+        organizationUuid: account.organizationUuid ?? null,
+        organizationName: account.organizationName ?? null,
+        createdAt: account.createdAt,
+        updatedAt: account.updatedAt,
+        lastAuthenticatedAt: account.lastAuthenticatedAt
+      }))
+      .sort((a, b) => b.updatedAt - a.updatedAt),
+    activeAccountId:
+      settings.activeClaudeManagedAccountIdsByRuntime?.host ??
+      settings.activeClaudeManagedAccountId ??
+      null,
+    activeAccountIdsByRuntime: {
+      host:
+        settings.activeClaudeManagedAccountIdsByRuntime?.host ??
+        settings.activeClaudeManagedAccountId ??
+        null,
+      wsl: { ...settings.activeClaudeManagedAccountIdsByRuntime?.wsl }
+    }
+  }
 }
 
 function CodexRestartStatusPrompt(): React.JSX.Element | null {
@@ -87,11 +532,21 @@ function CodexRestartStatusPrompt(): React.JSX.Element | null {
           bulk restart action operates per PTY-backed pane restart. Show
           both counts so split panes do not make the number look wrong. */}
           {staleCodexStatus.staleSessionCount === 1
-            ? '1 Codex session is still on the old account'
-            : `${staleCodexStatus.staleSessionCount} Codex sessions are still on the old account.`}
+            ? translate(
+                'auto.components.status.bar.StatusBar.605901a495',
+                '1 Codex session is still on the old account'
+              )
+            : translate(
+                'auto.components.status.bar.StatusBar.1446d0d8a0',
+                '{{value0}} Codex sessions are still on the old account.',
+                { value0: staleCodexStatus.staleSessionCount }
+              )}
           {staleCodexStatus.staleWorktreeCount > 1 ? (
             <span className="mt-0.5 block">
-              Visible sessions restart now. Others restart when their worktree becomes active.
+              {translate(
+                'auto.components.status.bar.StatusBar.59c6e7b4e0',
+                'Visible sessions restart now. Others restart when their worktree becomes active.'
+              )}
             </span>
           ) : null}
         </div>
@@ -101,11 +556,61 @@ function CodexRestartStatusPrompt(): React.JSX.Element | null {
           className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
         >
           {staleCodexStatus.staleSessionCount === 1
-            ? 'Restart Session'
-            : `Restart ${staleCodexStatus.staleSessionCount} Sessions`}
+            ? translate('auto.components.status.bar.StatusBar.6cd6650b4c', 'Restart Session')
+            : translate(
+                'auto.components.status.bar.StatusBar.cd9d7b40ff',
+                'Restart {{value0}} Sessions',
+                { value0: staleCodexStatus.staleSessionCount }
+              )}
         </button>
       </div>
     </>
+  )
+}
+
+function AccountRuntimeToggle<TGroup extends { key: string; label: string }>({
+  groups,
+  value,
+  onChange,
+  ariaLabel
+}: {
+  groups: TGroup[]
+  value: string
+  onChange: (group: TGroup) => void
+  ariaLabel: string
+}): React.JSX.Element | null {
+  if (groups.length <= 1) {
+    return null
+  }
+
+  return (
+    <div className="px-2 pt-2">
+      <div
+        role="radiogroup"
+        aria-label={ariaLabel}
+        className="inline-flex w-full items-center rounded-md border border-border bg-background/50 p-0.5"
+      >
+        {groups.map((group) => {
+          const active = group.key === value
+          return (
+            <button
+              key={group.key}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(group)}
+              className={`min-w-0 flex-1 rounded-sm px-2 py-1 text-center text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 ${
+                active
+                  ? 'bg-accent font-medium text-accent-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="block truncate">{group.label}</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -122,26 +627,49 @@ function ClaudeSwitcherMenu({
   const [accountsExpanded, setAccountsExpanded] = useState(false)
   const [accounts, setAccounts] = useState<ClaudeRateLimitAccountsState>({
     accounts: [],
-    activeAccountId: null
+    activeAccountId: null,
+    activeAccountIdsByRuntime: { host: null, wsl: {} }
   })
   const [isSwitching, setIsSwitching] = useState(false)
+  const mountedRef = useRef(true)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const refreshClaudeRateLimitsForTarget = useAppStore((s) => s.refreshClaudeRateLimitsForTarget)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
+  const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
+  const settings = useAppStore((s) => s.settings)
+  const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
+    false,
+    getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId),
+    runtimeTarget
+  )
   const claudeAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
     if (!settings) {
       return 'no-settings'
     }
-    return `${settings.activeClaudeManagedAccountId ?? 'system'}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+    return `${settings.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeClaudeManagedAccountIdsByRuntime ?? null)}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
   })
+  const accountState = getClaudeStatusAccountsFromSettings(settings) ?? accounts
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const loadAccounts = useCallback(async () => {
     const next = await window.api.claudeAccounts.list()
-    setAccounts(next)
+    if (mountedRef.current) {
+      setAccounts(next)
+    }
   }, [])
 
   useEffect(() => {
@@ -157,62 +685,116 @@ function ClaudeSwitcherMenu({
     }
   }, [])
 
-  useEffect(() => {
-    if (accountsExpanded) {
+  // Why: inactive-account usage is needed only for the explicit switcher
+  // expansion, so fetch it on that event instead of one render later.
+  const handleAccountsExpandedToggle = useCallback((): void => {
+    const nextExpanded = !accountsExpanded
+    setAccountsExpanded(nextExpanded)
+    if (nextExpanded) {
       void fetchInactiveClaudeAccountUsage()
     }
   }, [accountsExpanded, fetchInactiveClaudeAccountUsage])
 
-  const handleSelectAccount = async (accountId: string | null): Promise<void> => {
+  const handleSelectAccount = async (
+    accountId: string | null,
+    target: CodexStatusRuntimeTarget
+  ): Promise<void> => {
     if (isSwitching) {
       return
     }
     setIsSwitching(true)
     try {
-      const next = await window.api.claudeAccounts.select({ accountId })
+      const next = await window.api.claudeAccounts.select({
+        accountId,
+        runtime: target.runtime,
+        wslDistro: target.wslDistro
+      })
       recordFeatureInteraction('claude-account-switching')
-      setAccounts(next)
+      if (mountedRef.current) {
+        setAccounts(next)
+      }
       await fetchSettings()
-      setAccountsExpanded(false)
+      if (mountedRef.current) {
+        setAccountsExpanded(false)
+      }
     } catch (error) {
       console.error('Failed to switch Claude account from status bar:', error)
     } finally {
-      setIsSwitching(false)
+      if (mountedRef.current) {
+        setIsSwitching(false)
+      }
     }
   }
 
-  const activeAccountLabel =
-    accounts.activeAccountId === null
-      ? 'System default'
-      : (accounts.accounts.find((account) => account.id === accounts.activeAccountId)?.email ??
-        'Managed')
-  const availableSwitchTargets = [
-    ...(accounts.activeAccountId === null
-      ? []
-      : [{ id: null as string | null, label: 'System default' }]),
-    ...accounts.accounts
-      .filter((account) => account.id !== accounts.activeAccountId)
-      .map((account) => ({ id: account.id, label: account.email }))
-  ]
+  const handleSelectRuntime = async (group: ClaudeStatusSwitchGroup): Promise<void> => {
+    const currentKey = getCodexStatusRuntimeKey(
+      normalizeClaudeStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(claudeTarget))
+    )
+    if (group.key === currentKey) {
+      return
+    }
+    setAccountsExpanded(false)
+    try {
+      await refreshClaudeRateLimitsForTarget(group.runtimeTarget)
+    } catch (error) {
+      console.error('Failed to switch Claude usage runtime:', error)
+    }
+  }
+
+  const selectedRuntimeKey = getCodexStatusRuntimeKey(
+    normalizeClaudeStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(claudeTarget))
+  )
+  const fallbackWslDistro = getStatusBarPreferredWslDistro(
+    settings,
+    windowsTerminalCapabilities.wslDistros
+  )
+  const switchGroups = buildClaudeStatusSwitchGroups(
+    accountState,
+    toCodexStatusRuntimeTarget(claudeTarget),
+    {
+      fallbackWslDistro,
+      includeFallbackWsl: shouldIncludeSettingsWslRuntime(settings)
+    }
+  )
+  const selectedGroup =
+    switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
+  const activeTarget = selectedGroup?.targets.find((target) => target.active)
 
   return (
     <ProviderDetailsMenu
       provider={claude}
       compact={compact}
       iconOnly={iconOnly}
-      ariaLabel="Open Claude details and account switcher"
+      ariaLabel={translate(
+        'auto.components.status.bar.StatusBar.3dd7ddfae1',
+        'Open Claude details and account switcher'
+      )}
+      topContent={
+        <AccountRuntimeToggle
+          groups={switchGroups}
+          value={selectedGroup?.key ?? selectedRuntimeKey}
+          onChange={(group) => void handleSelectRuntime(group)}
+          ariaLabel={translate(
+            'auto.components.status.bar.StatusBar.11e2354daf',
+            'Claude usage runtime'
+          )}
+        />
+      }
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <DropdownMenuLabel>Claude Account</DropdownMenuLabel>
+      <DropdownMenuLabel>
+        {translate('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
+      </DropdownMenuLabel>
       <DropdownMenuItem
         onSelect={(event) => {
           event.preventDefault()
-          setAccountsExpanded((prev) => !prev)
+          handleAccountsExpandedToggle()
         }}
       >
         <span className="max-w-[180px] truncate text-[12px] text-foreground">
-          {activeAccountLabel}
+          {activeTarget?.label ??
+            translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')}
         </span>
         {accountsExpanded ? (
           <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
@@ -223,33 +805,44 @@ function ClaudeSwitcherMenu({
       {accountsExpanded ? (
         <div className="px-1 pb-1">
           <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Switch to
+            {translate('auto.components.status.bar.StatusBar.9332ba8684', 'Switch to')}
           </div>
           <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
-            {availableSwitchTargets.length === 0 ? (
-              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
+            {selectedGroup?.targets.length === 0 ? (
+              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
+                {translate('auto.components.status.bar.StatusBar.c98ea88392', 'No other accounts')}
+              </div>
             ) : null}
-            {availableSwitchTargets.map((target) => {
+            {selectedGroup?.targets.map((target) => {
               const inactiveUsage = target.id
                 ? inactiveClaudeAccounts.find((a) => a.accountId === target.id)
                 : null
 
               return (
                 <DropdownMenuItem
-                  key={target.id ?? 'system'}
-                  disabled={isSwitching}
+                  key={`${selectedGroup.key}:${target.id ?? 'system'}`}
+                  disabled={isSwitching || target.active}
                   onSelect={(event) => {
                     event.preventDefault()
-                    void handleSelectAccount(target.id)
+                    if (!target.active) {
+                      void handleSelectAccount(target.id, target.runtimeTarget)
+                    }
                   }}
                 >
                   <div className="flex w-full flex-col gap-0.5">
-                    <span className="max-w-[220px] truncate">{target.label}</span>
-                    {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate">{target.label}</span>
+                      {target.active ? (
+                        <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                          {translate('auto.components.status.bar.StatusBar.ff0fbe9311', 'Active')}
+                        </span>
+                      ) : null}
+                    </div>
+                    {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
                       <InlineUsageSkeleton />
-                    ) : inactiveUsage?.claude ? (
+                    ) : inactiveUsage?.rateLimits ? (
                       <InlineUsageBars
-                        limits={inactiveUsage.claude}
+                        limits={inactiveUsage.rateLimits}
                         isFetching={inactiveUsage.isFetching}
                       />
                     ) : null}
@@ -259,7 +852,10 @@ function ClaudeSwitcherMenu({
             })}
           </div>
           <div className="px-2 py-1.5 text-[10px] leading-4 text-muted-foreground">
-            Restart live Claude terminals before continuing old conversations after switching.
+            {translate(
+              'auto.components.status.bar.StatusBar.8295903d17',
+              'Restart live Claude terminals before continuing old conversations after switching.'
+            )}
           </div>
         </div>
       ) : null}
@@ -274,7 +870,7 @@ function ClaudeSwitcherMenu({
           openSettingsPage()
         }}
       >
-        Manage Accounts…
+        {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
       </DropdownMenuItem>
     </ProviderDetailsMenu>
   )
@@ -322,7 +918,8 @@ function InlineUsageBars({
             />
           </div>
           <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
-            {sessionLeft}% 5h
+            {sessionLeft}
+            {translate('auto.components.status.bar.StatusBar.d79c3362c4', '% 5h')}
           </span>
         </div>
       )}
@@ -335,13 +932,66 @@ function InlineUsageBars({
             />
           </div>
           <span className="text-[10px] tabular-nums text-muted-foreground shrink-0">
-            {weeklyLeft}% wk
+            {weeklyLeft}
+            {translate('auto.components.status.bar.StatusBar.5c938d39ac', '% wk')}
           </span>
         </div>
       )}
       {limits.status === 'error' && !limits.session && !limits.weekly && (
-        <span className="text-[10px] text-muted-foreground">Sign in to see usage</span>
+        <span className="text-[10px] text-muted-foreground">
+          {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
+        </span>
       )}
+    </div>
+  )
+}
+
+function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
+  return limits?.status === 'error' && !limits.session && !limits.weekly
+}
+
+function InlineUsageSignInAction({
+  isFetching,
+  isSigningIn,
+  disabled,
+  onSignInPointerDown,
+  onSignIn
+}: {
+  isFetching: boolean
+  isSigningIn: boolean
+  disabled: boolean
+  onSignInPointerDown?: () => void
+  onSignIn: () => void
+}): React.JSX.Element {
+  return (
+    <div className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse' : ''}`}>
+      <span className="min-w-0 flex-1 text-[10px] text-muted-foreground">
+        {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
+      </span>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        disabled={disabled}
+        className="h-6 shrink-0 px-2 text-muted-foreground hover:text-foreground"
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onSignInPointerDown?.()
+        }}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onSignIn()
+        }}
+      >
+        {isSigningIn ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <RefreshCw className="size-3" />
+        )}
+        {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
+      </Button>
     </div>
   )
 }
@@ -384,14 +1034,14 @@ function ProviderSegment({
   compact: boolean
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
-  const statusLabel = p?.error && /rate limit/i.test(p.error) ? 'Limited' : 'Unavailable'
+  const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
 
   // Idle / initial load
   if (!p || p.status === 'idle') {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        <span className="animate-pulse">&middot;&middot;&middot;</span>
+        <span className="animate-pulse">···</span>
       </span>
     )
   }
@@ -401,7 +1051,7 @@ function ProviderSegment({
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        <span className="animate-pulse">&middot;&middot;&middot;</span>
+        <span className="animate-pulse">···</span>
       </span>
     )
   }
@@ -438,7 +1088,7 @@ function ProviderSegment({
           const left = Math.max(0, Math.round(100 - bucket.usedPercent))
           return (
             <React.Fragment key={bucket.name}>
-              {i > 0 && <span className="text-muted-foreground">&middot;</span>}
+              {i > 0 && <span className="text-muted-foreground">·</span>}
               <span className="tabular-nums">
                 {bucket.name} {left}%
               </span>
@@ -460,7 +1110,7 @@ function ProviderSegment({
       {p.session && (
         <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
       )}
-      {p.session && p.weekly && <span className="text-muted-foreground">&middot;</span>}
+      {p.session && p.weekly && <span className="text-muted-foreground">·</span>}
       {p.weekly && <WindowLabel w={p.weekly} label={formatWindowLabel(p.weekly.windowMinutes)} />}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
@@ -478,29 +1128,71 @@ function CodexSwitcherMenu({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [accountsExpanded, setAccountsExpanded] = useState(false)
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+  const [skipFutureResetConfirm, setSkipFutureResetConfirm] = useState(false)
   const [accounts, setAccounts] = useState<CodexRateLimitAccountsState>({
     accounts: [],
     activeAccountId: null
   })
   const [isSwitching, setIsSwitching] = useState(false)
+  const [isRedeemingReset, setIsRedeemingReset] = useState(false)
+  const [reauthenticatingAccountId, setReauthenticatingAccountId] = useState<string | null>(null)
+  const mountedRef = useRef(true)
+  const accountsExpandedRef = useRef(accountsExpanded)
+  // Why: Radix item selection is separate from the nested button click, so
+  // propagation stops alone do not prevent the row switch action.
+  const suppressNextAccountSelectRef = useRef(false)
+  const suppressNextAccountSelect = useCallback(() => {
+    suppressNextAccountSelectRef.current = true
+    window.setTimeout(() => {
+      suppressNextAccountSelectRef.current = false
+    }, 0)
+  }, [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const refreshCodexRateLimitsForTarget = useAppStore((s) => s.refreshCodexRateLimitsForTarget)
+  const consumeCodexRateLimitResetCredit = useAppStore((s) => s.consumeCodexRateLimitResetCredit)
   const fetchInactiveCodexAccountUsage = useAppStore((s) => s.fetchInactiveCodexAccountUsage)
   const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
+  const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
+  const settings = useAppStore((s) => s.settings)
+  const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
+    navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
+    false,
+    getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId),
+    runtimeTarget
+  )
   const codexAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
     if (!settings) {
       return 'no-settings'
     }
-    return `${settings.activeCodexManagedAccountId ?? 'system'}:${settings.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+    return `${settings.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeCodexManagedAccountIdsByRuntime ?? null)}:${settings.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
   })
+  const accountState = getCodexStatusAccountsFromSettings(settings) ?? accounts
 
   const loadAccounts = useCallback(async () => {
     const next = await window.api.codexAccounts.list()
-    setAccounts(next)
+    if (mountedRef.current) {
+      setAccounts(next)
+    }
   }, [])
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    accountsExpandedRef.current = accountsExpanded
+  }, [accountsExpanded])
 
   useEffect(() => {
     // Why: the status bar keeps its own lightweight account snapshot for the
@@ -512,32 +1204,128 @@ function CodexSwitcherMenu({
     })
   }, [loadAccounts, open, codexAccountSyncKey])
 
-  const handleSelectAccount = async (accountId: string | null): Promise<void> => {
-    if (isSwitching) {
+  const handleSelectAccount = async (
+    accountId: string | null,
+    target: CodexStatusRuntimeTarget
+  ): Promise<void> => {
+    if (isSwitching || reauthenticatingAccountId !== null) {
       return
     }
-    const previousActiveAccountId = accounts.activeAccountId
+    const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
-      const next = await window.api.codexAccounts.select({ accountId })
+      const next = await window.api.codexAccounts.select({
+        accountId,
+        runtime: target.runtime,
+        wslDistro: target.wslDistro
+      })
       recordFeatureInteraction('codex-account-switching')
-      setAccounts(next)
+      if (mountedRef.current) {
+        setAccounts(next)
+      }
       await fetchSettings()
-      if (previousActiveAccountId !== next.activeAccountId) {
+      const nextActiveAccountId = getCodexStatusActiveId(next, target)
+      if (previousActiveAccountId !== nextActiveAccountId) {
         await markLiveCodexSessionsForRestart({
-          previousAccountLabel: getCodexAccountLabel(accounts, previousActiveAccountId),
-          nextAccountLabel: getCodexAccountLabel(next, next.activeAccountId)
+          previousAccountLabel: getCodexAccountLabel(accountState, previousActiveAccountId),
+          nextAccountLabel: getCodexAccountLabel(next, nextActiveAccountId)
         })
         // Why: account switching can require a second explicit recovery step
         // for live Codex terminals. Keeping the switcher open and collapsing
         // back to the summary row lets the follow-up "restart open tabs"
         // prompt appear in the same flow instead of feeling detached.
-        setAccountsExpanded(false)
+        if (mountedRef.current) {
+          setAccountsExpanded(false)
+        }
       }
     } catch (error) {
       console.error('Failed to switch Codex account from status bar:', error)
     } finally {
-      setIsSwitching(false)
+      if (mountedRef.current) {
+        setIsSwitching(false)
+      }
+    }
+  }
+
+  const handleSignInAccount = async (accountId: string): Promise<void> => {
+    if (isSwitching || reauthenticatingAccountId !== null) {
+      return
+    }
+    setReauthenticatingAccountId(accountId)
+    try {
+      const next = await window.api.codexAccounts.reauthenticate({ accountId })
+      recordFeatureInteraction('codex-account-switching')
+      if (mountedRef.current) {
+        setAccounts(next)
+      }
+      await fetchSettings()
+      if (mountedRef.current && accountsExpandedRef.current) {
+        await fetchInactiveCodexAccountUsage()
+      }
+    } catch (error) {
+      console.error('Failed to re-authenticate Codex account from status bar:', error)
+    } finally {
+      if (mountedRef.current) {
+        setReauthenticatingAccountId(null)
+      }
+    }
+  }
+
+  const handleSelectRuntime = async (group: CodexStatusSwitchGroup): Promise<void> => {
+    const currentKey = getCodexStatusRuntimeKey(
+      normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
+    )
+    if (group.key === currentKey) {
+      return
+    }
+    setAccountsExpanded(false)
+    try {
+      await refreshCodexRateLimitsForTarget(group.runtimeTarget)
+    } catch (error) {
+      console.error('Failed to switch Codex usage runtime:', error)
+    }
+  }
+
+  const handleRedeemReset = async (): Promise<void> => {
+    if (isRedeemingReset) {
+      return
+    }
+    setIsRedeemingReset(true)
+    try {
+      await consumeCodexRateLimitResetCredit()
+    } catch (error) {
+      console.error('Failed to redeem Codex rate-limit reset from status bar:', error)
+    } finally {
+      if (mountedRef.current) {
+        setIsRedeemingReset(false)
+      }
+    }
+  }
+
+  const handleResetMenuSelect = (): void => {
+    if (settings?.skipCodexRateLimitResetConfirm) {
+      void handleRedeemReset()
+      return
+    }
+    setSkipFutureResetConfirm(false)
+    setResetConfirmOpen(true)
+  }
+
+  const handleConfirmReset = async (): Promise<void> => {
+    if (isRedeemingReset) {
+      return
+    }
+    if (skipFutureResetConfirm) {
+      try {
+        await updateSettings({ skipCodexRateLimitResetConfirm: true })
+      } catch (error) {
+        console.error('Failed to save Codex reset confirmation preference:', error)
+      }
+    }
+    await handleRedeemReset()
+    if (mountedRef.current) {
+      setResetConfirmOpen(false)
+      setSkipFutureResetConfirm(false)
     }
   }
 
@@ -548,50 +1336,149 @@ function CodexSwitcherMenu({
     }
   }, [])
 
-  useEffect(() => {
-    if (accountsExpanded) {
+  const handleAccountsExpandedToggle = useCallback((): void => {
+    const nextExpanded = !accountsExpanded
+    setAccountsExpanded(nextExpanded)
+    if (nextExpanded) {
+      // Why: inactive-account usage is needed only for the explicit switcher
+      // expansion, so fetch it on that event instead of one render later.
       void fetchInactiveCodexAccountUsage()
     }
   }, [accountsExpanded, fetchInactiveCodexAccountUsage])
 
-  const activeAccountLabel =
-    accounts.activeAccountId === null
-      ? 'System default'
-      : (accounts.accounts.find((account) => account.id === accounts.activeAccountId)?.email ??
-        'Managed')
-  const availableSwitchTargets = [
-    ...(accounts.activeAccountId === null
-      ? []
-      : [{ id: null as string | null, label: 'System default' }]),
-    ...accounts.accounts
-      .filter((account) => account.id !== accounts.activeAccountId)
-      .map((account) => ({
-        id: account.id,
-        label: account.workspaceLabel
-          ? `${account.email} (${account.workspaceLabel})`
-          : account.email
-      }))
-  ]
+  const selectedRuntimeKey = getCodexStatusRuntimeKey(
+    normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
+  )
+  const fallbackWslDistro = getStatusBarPreferredWslDistro(
+    settings,
+    windowsTerminalCapabilities.wslDistros
+  )
+  const switchGroups = buildCodexStatusSwitchGroups(
+    accountState,
+    toCodexStatusRuntimeTarget(codexTarget),
+    {
+      fallbackWslDistro,
+      includeFallbackWsl: shouldIncludeSettingsWslRuntime(settings)
+    }
+  )
+  const selectedGroup =
+    switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
+  const activeTarget = selectedGroup?.targets.find((target) => target.active)
+  const resetCreditCount = codex.rateLimitResetCredits?.availableCount ?? null
+  const canRedeemReset = resetCreditCount !== null && resetCreditCount > 0
 
   return (
     <ProviderDetailsMenu
       provider={codex}
       compact={compact}
       iconOnly={iconOnly}
-      ariaLabel="Open Codex details and account switcher"
+      ariaLabel={translate(
+        'auto.components.status.bar.StatusBar.ba55303942',
+        'Open Codex details and account switcher'
+      )}
+      topContent={
+        <AccountRuntimeToggle
+          groups={switchGroups}
+          value={selectedGroup?.key ?? selectedRuntimeKey}
+          onChange={(group) => void handleSelectRuntime(group)}
+          ariaLabel={translate(
+            'auto.components.status.bar.StatusBar.38b5647724',
+            'Codex usage runtime'
+          )}
+        />
+      }
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <DropdownMenuLabel>Codex Account</DropdownMenuLabel>
+      <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>
+              {translate('auto.components.status.bar.StatusBar.972a1ff497', 'Reset Codex limits?')}
+            </DialogTitle>
+            <DialogDescription>
+              {translate(
+                'auto.components.status.bar.StatusBar.6d1042aa6f',
+                'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-xs text-foreground/80 transition-colors hover:text-foreground">
+            <Checkbox
+              checked={skipFutureResetConfirm}
+              onCheckedChange={(checked) => setSkipFutureResetConfirm(checked === true)}
+            />
+            <span>
+              {translate('auto.components.status.bar.StatusBar.f077f586db', "Don't ask again")}
+            </span>
+          </label>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetConfirmOpen(false)}>
+              {translate('auto.components.status.bar.StatusBar.c0e972d726', 'Cancel')}
+            </Button>
+            <Button onClick={() => void handleConfirmReset()} disabled={isRedeemingReset}>
+              {isRedeemingReset ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RotateCcw className="size-4" />
+              )}
+              {isRedeemingReset
+                ? translate('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
+                : translate('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {resetCreditCount !== null ? (
+        <>
+          <DropdownMenuLabel>
+            {resetCreditCount === 1
+              ? translate(
+                  'auto.components.status.bar.StatusBar.5e5f9f5160',
+                  '1 rate-limit reset available'
+                )
+              : translate(
+                  'auto.components.status.bar.StatusBar.5ecae9197c',
+                  '{{value0}} rate-limit resets available',
+                  { value0: resetCreditCount }
+                )}
+          </DropdownMenuLabel>
+          {canRedeemReset ? (
+            <DropdownMenuItem
+              disabled={isRedeemingReset}
+              onSelect={(event) => {
+                event.preventDefault()
+                handleResetMenuSelect()
+              }}
+            >
+              {isRedeemingReset ? (
+                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+              ) : null}
+              {isRedeemingReset
+                ? translate('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
+                : translate('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuSeparator />
+        </>
+      ) : null}
+      <DropdownMenuLabel>
+        {translate('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
+      </DropdownMenuLabel>
       <DropdownMenuItem
         onSelect={(event) => {
           event.preventDefault()
-          setAccountsExpanded((prev) => !prev)
+          handleAccountsExpandedToggle()
         }}
       >
-        <span className="max-w-[180px] truncate text-[12px] text-foreground">
-          {activeAccountLabel}
-        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5 text-[12px]">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 flex-1 truncate text-foreground">
+              {activeTarget?.label ??
+                translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')}
+            </span>
+          </div>
+        </div>
         {accountsExpanded ? (
           <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
         ) : (
@@ -600,45 +1487,78 @@ function CodexSwitcherMenu({
       </DropdownMenuItem>
       {accountsExpanded ? (
         <div className="px-1 pb-1">
-          <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-            Switch to
-          </div>
           <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
-            {availableSwitchTargets.length === 0 ? (
-              <div className="px-2 py-1.5 text-[11px] text-muted-foreground">No other accounts</div>
-            ) : null}
-            {availableSwitchTargets.map((target) => {
-              const inactiveUsage = target.id
-                ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
-                : null
+            {selectedGroup ? (
+              <>
+                {selectedGroup.targets.map((target) => {
+                  const inactiveUsage = target.id
+                    ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
+                    : null
+                  const showSignInAction =
+                    !target.active &&
+                    target.id !== null &&
+                    isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
+                  const isSigningIn = reauthenticatingAccountId === target.id
+                  const isBusy = isSwitching || reauthenticatingAccountId !== null
 
-              return (
-                <DropdownMenuItem
-                  key={target.id ?? 'system'}
-                  onSelect={(event) => {
-                    // Why: account switching may need an immediate follow-up
-                    // restart action for live Codex tabs. Prevent the menu from
-                    // auto-closing so that prompt can stay within the same
-                    // account-switcher interaction instead of jumping elsewhere.
-                    event.preventDefault()
-                    void handleSelectAccount(target.id)
-                  }}
-                  disabled={isSwitching}
-                >
-                  <div className="flex w-full flex-col gap-0.5">
-                    <span className="truncate">{target.label}</span>
-                    {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
-                      <InlineUsageSkeleton />
-                    ) : inactiveUsage?.claude ? (
-                      <InlineUsageBars
-                        limits={inactiveUsage.claude}
-                        isFetching={inactiveUsage.isFetching}
-                      />
-                    ) : null}
-                  </div>
-                </DropdownMenuItem>
-              )
-            })}
+                  return (
+                    <DropdownMenuItem
+                      key={`${selectedGroup.key}:${target.id ?? 'system'}`}
+                      onSelect={(event) => {
+                        // Why: account switching may need an immediate follow-up
+                        // restart action for live Codex tabs. Prevent the menu from
+                        // auto-closing so that prompt can stay within the same
+                        // account-switcher interaction instead of jumping elsewhere.
+                        event.preventDefault()
+                        if (suppressNextAccountSelectRef.current) {
+                          suppressNextAccountSelectRef.current = false
+                          return
+                        }
+                        if (!target.active) {
+                          void handleSelectAccount(target.id, target.runtimeTarget)
+                        }
+                      }}
+                      disabled={isBusy || target.active}
+                    >
+                      <div className="flex w-full min-w-0 flex-col gap-0.5">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate">{target.label}</span>
+                          {target.active ? (
+                            <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
+                              {translate(
+                                'auto.components.status.bar.StatusBar.ff0fbe9311',
+                                'Active'
+                              )}
+                            </span>
+                          ) : null}
+                        </div>
+                        {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
+                          <InlineUsageSkeleton />
+                        ) : showSignInAction ? (
+                          <InlineUsageSignInAction
+                            isFetching={inactiveUsage?.isFetching ?? false}
+                            isSigningIn={isSigningIn}
+                            disabled={isBusy}
+                            onSignInPointerDown={suppressNextAccountSelect}
+                            onSignIn={() => {
+                              suppressNextAccountSelect()
+                              if (target.id !== null) {
+                                void handleSignInAccount(target.id)
+                              }
+                            }}
+                          />
+                        ) : inactiveUsage?.rateLimits ? (
+                          <InlineUsageBars
+                            limits={inactiveUsage.rateLimits}
+                            isFetching={inactiveUsage.isFetching}
+                          />
+                        ) : null}
+                      </div>
+                    </DropdownMenuItem>
+                  )
+                })}
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -654,17 +1574,18 @@ function CodexSwitcherMenu({
           openSettingsPage()
         }}
       >
-        Manage Accounts…
+        {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
       </DropdownMenuItem>
     </ProviderDetailsMenu>
   )
 }
 
-function ProviderDetailsMenu({
+export function ProviderDetailsMenu({
   provider,
   compact,
   iconOnly,
   ariaLabel,
+  topContent,
   open,
   onOpenChange,
   children
@@ -673,21 +1594,24 @@ function ProviderDetailsMenu({
   compact: boolean
   iconOnly: boolean
   ariaLabel: string
+  topContent?: React.ReactNode
   open?: boolean
   onOpenChange?: (open: boolean) => void
   children?: React.ReactNode
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const skipCloseAutoFocusRef = useRef(false)
 
   const handleOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
+      skipCloseAutoFocusRef.current = false
       recordFeatureInteraction('usage-tracking')
     }
     onOpenChange?.(nextOpen)
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -706,7 +1630,9 @@ function ProviderDetailsMenu({
                     ? 'G'
                     : provider.provider === 'opencode-go'
                       ? 'O'
-                      : 'X'}
+                      : provider.provider === 'kimi'
+                        ? 'K'
+                        : 'X'}
               </span>
             </span>
           ) : (
@@ -714,7 +1640,25 @@ function ProviderDetailsMenu({
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-[260px]">
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="w-[260px]"
+        onPointerDownOutside={() => {
+          skipCloseAutoFocusRef.current = true
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!skipCloseAutoFocusRef.current) {
+            return
+          }
+          skipCloseAutoFocusRef.current = false
+          // Why: click-away should focus the clicked surface, especially xterm;
+          // Radix's default trigger restore steals that first click.
+          event.preventDefault()
+        }}
+      >
+        {topContent}
         <div className="p-2">
           <ProviderPanel p={provider} />
         </div>
@@ -738,14 +1682,14 @@ const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Element | null {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const rateLimits = useAppStore((s) => s.rateLimits)
+  const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const floatingTerminalEnabled = useAppStore((s) => s.settings?.floatingTerminalEnabled === true)
-  const floatingTerminalTriggerLocation = useAppStore(
-    (s) => s.settings?.floatingTerminalTriggerLocation ?? 'floating-button'
-  )
+  const floatingTerminalEnabled = settings?.floatingTerminalEnabled === true
+  const floatingTerminalTriggerLocation =
+    settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   // Why: usage bars exist to surface CLI rate limits — showing one for an
   // agent that isn't on the user's PATH is just noise (e.g. a fresh Ubuntu
   // install showing "Gemini Usage" with no Gemini CLI installed). We gate
@@ -759,13 +1703,22 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // purely by the experimentalPet settings flag.
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
+  const usageEmptyStateDismissed = useAppStore((s) => s.usageEmptyStateDismissed)
   const containerRef = useRef<HTMLDivElement>(null)
+  const mountedRef = useRef(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
 
   const [containerWidth, setContainerWidth] = useState(900)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -810,7 +1763,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       // appears (and a removed CLI's bar hides) without restarting Orca.
       await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
     } finally {
-      setIsRefreshing(false)
+      if (mountedRef.current) {
+        setIsRefreshing(false)
+      }
     }
   }, [isRefreshing, refreshRateLimits, refreshDetectedAgents])
 
@@ -818,44 +1773,58 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi } = rateLimits
 
-  // Why: hiding `unavailable` providers makes the status bar appear to lose a
-  // provider at random after refreshes or wake/resume. Keeping the slot visible
-  // preserves layout stability and makes it obvious that the provider is still
-  // configured but currently unavailable. Detection-gating (see
-  // status-bar-agent-gating) hides the per-CLI bars when the agent isn't
-  // installed on PATH — this is what stops a fresh install from showing
-  // "Gemini Usage" when Gemini isn't installed.
+  // Why: a provider earns a bar from either a usable live snapshot or durable
+  // setup in Settings. The durable path keeps account switchers visible while
+  // usage snapshots hydrate, fail, or temporarily report unavailable.
+  // Detection-gating (see status-bar-agent-gating) additionally hides per-CLI
+  // bars when the agent isn't installed on PATH.
+  const visibleClaude = getVisibleUsageProvider('claude', claude, settings)
+  const visibleCodex = getVisibleUsageProvider('codex', codex, settings)
+  const visibleGemini = getVisibleUsageProvider('gemini', gemini, settings)
+  const visibleKimi = getVisibleUsageProvider('kimi', kimi, settings)
   const showClaude =
-    !!claude &&
+    visibleClaude !== null &&
     statusBarItems.includes('claude') &&
     isStatusBarItemAvailable('claude', detectedAgentIds)
   const showCodex =
-    !!codex &&
+    visibleCodex !== null &&
     statusBarItems.includes('codex') &&
     isStatusBarItemAvailable('codex', detectedAgentIds)
-  // Why: hide only when the state hasn't loaded yet (null), not when unavailable.
-  // Gemini shows if credentials exist; OpenCode Go shows always so users can see
-  // the provider and know to configure the cookie in Settings.
   const showGemini =
-    gemini !== null &&
+    visibleGemini !== null &&
     statusBarItems.includes('gemini') &&
     isStatusBarItemAvailable('gemini', detectedAgentIds)
+  const showKimi =
+    visibleKimi !== null &&
+    statusBarItems.includes('kimi') &&
+    isStatusBarItemAvailable('kimi', detectedAgentIds)
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
-  const showOpencodeGo = opencodeGo !== null && statusBarItems.includes('opencode-go')
+  const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, settings)
+  const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
-  const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showResourceUsage
+  const anyVisible =
+    showClaude || showCodex || showGemini || showOpencodeGo || showKimi || showResourceUsage
+  // Why: a brand-new user with no provider configured would otherwise see an
+  // empty left side of the status bar and wonder what's missing. Settings are
+  // included because managed accounts are durable even when live usage
+  // snapshots are still hydrating or unavailable after an update.
+  const isEmptyUsageState = isUsageEmptyState({ claude, codex, gemini, opencodeGo, kimi }, settings)
+  // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
+  // hidden even after providers are disconnected again.
+  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
     gemini?.status === 'fetching' ||
-    opencodeGo?.status === 'fetching'
+    opencodeGo?.status === 'fetching' ||
+    kimi?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -885,32 +1854,64 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       }}
     >
       <div className="flex items-center gap-3">
-        {showClaude && <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />}
-        {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
-        {showGemini && (
-          <ProviderDetailsMenu
-            provider={gemini}
-            compact={compact}
-            iconOnly={iconOnly}
-            ariaLabel="Open Gemini usage details"
-          />
+        {isEmptyUsageState ? (
+          showEmptyUsageCta ? (
+            <StatusBarUsageEmptyCta />
+          ) : null
+        ) : (
+          <>
+            {showClaude && (
+              <ClaudeSwitcherMenu claude={visibleClaude} compact={compact} iconOnly={iconOnly} />
+            )}
+            {showCodex && (
+              <CodexSwitcherMenu codex={visibleCodex} compact={compact} iconOnly={iconOnly} />
+            )}
+            {showGemini && (
+              <ProviderDetailsMenu
+                provider={visibleGemini}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.d2375976eb',
+                  'Open Gemini usage details'
+                )}
+              />
+            )}
+            {showOpencodeGo && (
+              <ProviderDetailsMenu
+                provider={visibleOpencodeGo}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.629251f4b6',
+                  'Open OpenCode Go usage details'
+                )}
+              />
+            )}
+            {showKimi && (
+              <ProviderDetailsMenu
+                provider={visibleKimi}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.fda8146810',
+                  'Open Kimi usage details'
+                )}
+              />
+            )}
+          </>
         )}
-        {showOpencodeGo && (
-          <ProviderDetailsMenu
-            provider={opencodeGo}
-            compact={compact}
-            iconOnly={iconOnly}
-            ariaLabel="Open OpenCode Go usage details"
-          />
-        )}
-        {anyVisible && (
+        {anyVisible && !isEmptyUsageState && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
                 className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                aria-label="Refresh rate limits"
+                aria-label={translate(
+                  'auto.components.status.bar.StatusBar.3325d996cb',
+                  'Refresh rate limits'
+                )}
               >
                 <RefreshCw
                   size={11}
@@ -919,7 +1920,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               </button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6}>
-              Refresh usage data
+              {translate('auto.components.status.bar.StatusBar.c8857b40f7', 'Refresh usage data')}
             </TooltipContent>
           </Tooltip>
         )}
@@ -929,10 +1930,14 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
       <div className="flex items-center gap-3">
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
-        {petEnabled && <PetStatusSegment />}
-        {showResourceUsage && <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />}
-        {showPorts && <PortsStatusSegment compact={compact} iconOnly={iconOnly} />}
-        {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
+        <React.Suspense fallback={null}>
+          {petEnabled ? <PetStatusSegment /> : null}
+          {showResourceUsage ? (
+            <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
+          ) : null}
+          {showPorts ? <PortsStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
+          {showSsh ? <SshStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
+        </React.Suspense>
         {showFloatingTerminalToggle && (
           <FloatingTerminalIconContextMenu currentLocation="status-bar" className="relative">
             <Tooltip>
@@ -975,7 +1980,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               }}
             >
               <ClaudeIcon size={14} />
-              Claude Usage
+              {translate('auto.components.status.bar.StatusBar.3885eb74d8', 'Claude Usage')}
             </DropdownMenuCheckboxItem>
           )}
           {isStatusBarItemAvailable('codex', detectedAgentIds) && (
@@ -987,7 +1992,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               }}
             >
               <OpenAIIcon size={14} />
-              Codex Usage
+              {translate('auto.components.status.bar.StatusBar.c0909c686e', 'Codex Usage')}
             </DropdownMenuCheckboxItem>
           )}
           {isStatusBarItemAvailable('gemini', detectedAgentIds) && (
@@ -999,7 +2004,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               }}
             >
               <GeminiIcon size={14} />
-              Gemini Usage
+              {translate('auto.components.status.bar.StatusBar.c1df0d67ec', 'Gemini Usage')}
             </DropdownMenuCheckboxItem>
           )}
           <DropdownMenuCheckboxItem
@@ -1010,8 +2015,20 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             }}
           >
             <OpenCodeGoIcon size={14} />
-            OpenCode Go Usage
+            {translate('auto.components.status.bar.StatusBar.8c86cd77b0', 'OpenCode Go Usage')}
           </DropdownMenuCheckboxItem>
+          {isStatusBarItemAvailable('kimi', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('kimi')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('kimi')
+              }}
+            >
+              <AgentIcon agent="kimi" size={14} />
+              {translate('auto.components.status.bar.StatusBar.5e59007df4', 'Kimi Usage')}
+            </DropdownMenuCheckboxItem>
+          )}
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}
             onCheckedChange={() => {
@@ -1020,7 +2037,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             }}
           >
             <Server className="size-3.5" />
-            SSH Status
+            {translate('auto.components.status.bar.StatusBar.24ac89df1a', 'Remote Hosts')}
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('resource-usage')}
@@ -1030,7 +2047,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             }}
           >
             <Activity className="size-3.5" />
-            Resource Manager
+            {translate('auto.components.status.bar.StatusBar.d1e1a7a6bf', 'Resource Manager')}
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ports')}
@@ -1040,7 +2057,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             }}
           >
             <Plug className="size-3.5" />
-            Ports
+            {translate('auto.components.status.bar.StatusBar.9659e38343', 'Ports')}
           </DropdownMenuCheckboxItem>
         </DropdownMenuContent>
       </DropdownMenu>

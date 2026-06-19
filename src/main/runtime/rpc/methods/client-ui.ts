@@ -4,27 +4,42 @@ import {
   type FeatureInteractionId
 } from '../../../../shared/feature-interactions'
 import { isFeatureTipId } from '../../../../shared/feature-tips'
+import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../../shared/tui-agent-launch-defaults'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTaskProvider } from '../../../../shared/task-providers'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
-import type { PersistedUIState } from '../../../../shared/types'
+import { normalizeWorktreeCardProperties } from '../../../../shared/worktree-card-properties'
+import type { PersistedUIState, TaskProvider } from '../../../../shared/types'
 import { defineMethod, type RpcMethod } from '../core'
 
 const NullableString = z.string().nullable()
 const StringArray = z.array(z.string())
+const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
+  message: 'Unknown task provider'
+})
 const FeatureTipIds = z.array(z.custom(isFeatureTipId, { message: 'Unknown feature tip id' }))
 const UnknownRecord = z.record(z.string(), z.unknown())
 const UnknownRecordArray = z.array(UnknownRecord)
-const WorktreeCardProperty = z.enum([
+const LegacyWorktreeCardProperty = z.enum([
   'status',
   'unread',
   'ci',
+  'branch',
   'issue',
   'linear-issue',
   'pr',
+  'automation',
   'comment',
   'ports',
   'inline-agents'
 ])
+const WorktreeCardProperties = z
+  .array(LegacyWorktreeCardProperty)
+  .transform((value) => normalizeWorktreeCardProperties(value))
+const AgentActivityDisplayMode = z.enum(['compact', 'full'])
 const StatusBarItem = z.enum(['claude', 'codex', 'gemini', 'opencode-go', 'ssh', 'resource-usage'])
 const WorkspaceStatusDefinition = z.object({
   id: z.string(),
@@ -109,13 +124,24 @@ const SettingsUpdate = z
       .unknown()
       .transform((value) => normalizeDisabledTuiAgents(value))
       .optional(),
-    defaultTaskSource: z.enum(['github', 'gitlab', 'linear']).optional(),
+    agentDefaultArgs: z
+      .unknown()
+      .transform((value) => normalizeTuiAgentArgsRecord(value))
+      .optional(),
+    agentDefaultEnv: z
+      .unknown()
+      .transform((value) => normalizeTuiAgentEnvRecord(value))
+      .optional(),
+    defaultTaskSource: TaskProviderParam.optional(),
+    visibleTaskProviders: z.array(TaskProviderParam).optional(),
     defaultTaskViewPreset: z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
       .optional(),
+    experimentalNewWorktreeCardStyle: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
+    compactWorktreeCards: z.boolean().optional(),
     githubProjects: GitHubProjectSettings.optional()
   })
   .strict()
@@ -127,25 +153,36 @@ const UiUpdate = z
     lastActiveWorktreeId: NullableString.optional(),
     sidebarWidth: z.number().finite().optional(),
     rightSidebarOpen: z.boolean().optional(),
-    rightSidebarTab: z.enum(['explorer', 'search', 'source-control', 'checks', 'ports']).optional(),
+    rightSidebarTab: z
+      .enum(['explorer', 'search', 'vault', 'source-control', 'checks', 'ports'])
+      .optional(),
+    rightSidebarExplorerView: z.enum(['files', 'search']).optional(),
     rightSidebarWidth: z.number().finite().optional(),
+    markdownTocPanelWidth: z.number().finite().optional(),
     groupBy: z.enum(['none', 'workspace-status', 'repo', 'pr-status']).optional(),
     showWorkspaceLineage: z.boolean().optional(),
     sortBy: z.enum(['name', 'smart', 'recent', 'repo', 'manual']).optional(),
+    projectOrderBy: z.enum(['manual', 'recent']).optional(),
     showActiveOnly: z.boolean().optional(),
     hideSleepingWorkspaces: z.boolean().optional(),
     showSleepingWorkspaces: z.boolean().optional(),
     showInactiveWorkspaces: z.boolean().optional(),
+    workspaceHostScope: z.string().optional(),
+    visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
+    workspaceHostOrder: z.array(z.string()).optional(),
     hideDefaultBranchWorkspace: z.boolean().optional(),
+    hideAutomationGeneratedWorkspaces: z.boolean().optional(),
     filterRepoIds: StringArray.optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
     editorFontZoomLevel: z.number().finite().optional(),
-    worktreeCardProperties: z.array(WorktreeCardProperty).optional(),
+    worktreeCardProperties: WorktreeCardProperties.optional(),
+    _worktreeCardModeDefaulted: z.boolean().optional(),
+    agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
-    workspaceBoardCompact: z.boolean().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),
+    syncTaskStatusFromWorkspaceBoard: z.boolean().optional(),
     _workspaceStatusesDefaultOrderMigrated: z.boolean().optional(),
     _workspaceStatusesDefaultWorkflowMigrated: z.boolean().optional(),
     _workspaceStatusesDefaultVisualsMigrated: z.boolean().optional(),
@@ -163,6 +200,7 @@ const UiUpdate = z
       .enum(['google', 'duckduckgo', 'bing', 'kagi'])
       .nullable()
       .optional(),
+    browserDefaultZoomLevel: z.number().finite().optional(),
     browserKagiSessionLink: NullableString.optional(),
     windowBounds: z
       .object({
@@ -177,12 +215,10 @@ const UiUpdate = z
     _sortBySmartMigrated: z.boolean().optional(),
     _inlineAgentsDefaultedForExperiment: z.boolean().optional(),
     _inlineAgentsDefaultedForAllUsers: z.boolean().optional(),
-    starNagBaselineAgents: z.number().finite().nullable().optional(),
-    starNagAppVersion: NullableString.optional(),
-    starNagNextThreshold: z.number().finite().optional(),
-    starNagCompleted: z.boolean().optional(),
     trustedOrcaHooks: z.record(z.string(), z.unknown()).optional(),
     setupScriptPromptDismissedRepoIds: StringArray.optional(),
+    projectOrderManualDefaultNoticeDismissed: z.boolean().optional(),
+    usageEmptyStateDismissed: z.boolean().optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),
@@ -194,7 +230,9 @@ const UiUpdate = z
     taskResumeState: TaskResumeState.optional(),
     workspaceCleanup: WorkspaceCleanup.optional(),
     featureTipsSeenIds: FeatureTipIds.optional(),
-    featureInteractions: FeatureInteractions.optional()
+    featureInteractions: FeatureInteractions.optional(),
+    contextualToursSeenIds: StringArray.optional(),
+    contextualToursAutoEligible: z.boolean().optional()
   })
   .strict()
   .default({})

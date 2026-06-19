@@ -1,13 +1,20 @@
 import type { ITheme } from '@xterm/xterm'
 import { getTheme, getThemeNames } from './terminal-themes-data'
 import type { GlobalSettings } from '../../../shared/types'
+import {
+  makeCustomTerminalThemeSelection,
+  normalizeTerminalCustomThemes,
+  parseCustomTerminalThemeSelection,
+  terminalCustomThemeToXtermTheme,
+  type TerminalCustomTheme
+} from '../../../shared/terminal-custom-themes'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
 export const DEFAULT_TERMINAL_THEME_DARK = 'Ghostty Default Style Dark'
 export const DEFAULT_TERMINAL_THEME_LIGHT = 'Builtin Tango Light'
 export const DEFAULT_TERMINAL_DIVIDER_DARK = '#3f3f46'
-export const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
+const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
 
 export type EffectiveTerminalAppearance = {
   mode: 'dark' | 'light'
@@ -16,6 +23,15 @@ export type EffectiveTerminalAppearance = {
   dividerColor: string
   theme: ITheme | null
   systemPrefersDark: boolean
+}
+
+export type TerminalThemeOption = {
+  value: string
+  label: string
+  group: 'built-in' | 'imported'
+  sourceLabel?: string
+  mode?: TerminalCustomTheme['mode']
+  previewTheme: ITheme | null
 }
 
 export function getSystemPrefersDark(): boolean {
@@ -29,12 +45,67 @@ export function getBuiltinTheme(name: string): ITheme | null {
   return getTheme(name)
 }
 
-export function getTerminalThemePreview(name: string): ITheme | null {
-  const theme = getTheme(name)
+function findCustomTheme(
+  settings: Pick<GlobalSettings, 'terminalCustomThemes'> | undefined,
+  selection: string
+): TerminalCustomTheme | null {
+  const customId = parseCustomTerminalThemeSelection(selection)
+  if (!customId || !settings) {
+    return null
+  }
+  return (
+    normalizeTerminalCustomThemes(settings.terminalCustomThemes).find(
+      (theme) => theme.id === customId
+    ) ?? null
+  )
+}
+
+export function getTerminalTheme(
+  settings: Pick<GlobalSettings, 'terminalCustomThemes'> | undefined,
+  selection: string
+): ITheme | null {
+  const customTheme = findCustomTheme(settings, selection)
+  if (customTheme) {
+    return terminalCustomThemeToXtermTheme(customTheme)
+  }
+  return getTheme(selection)
+}
+
+export function getTerminalThemePreview(
+  name: string,
+  settings?: Pick<GlobalSettings, 'terminalCustomThemes'>,
+  fallbackMode: 'dark' | 'light' = 'dark'
+): ITheme | null {
+  const theme = getTerminalTheme(settings, name)
   if (theme) {
     return theme
   }
-  return getTheme(DEFAULT_TERMINAL_THEME_DARK)
+  return getTheme(
+    fallbackMode === 'light' ? DEFAULT_TERMINAL_THEME_LIGHT : DEFAULT_TERMINAL_THEME_DARK
+  )
+}
+
+export function getAvailableTerminalThemeOptions(
+  settings: Pick<GlobalSettings, 'terminalCustomThemes'>
+): TerminalThemeOption[] {
+  const builtinOptions = BUILTIN_TERMINAL_THEME_NAMES.map((name) => ({
+    value: name,
+    label: name,
+    group: 'built-in' as const,
+    previewTheme: getTheme(name)
+  }))
+  const customOptions = normalizeTerminalCustomThemes(settings.terminalCustomThemes).map(
+    (theme) => ({
+      value: makeCustomTerminalThemeSelection(theme.id),
+      label: theme.name,
+      group: 'imported' as const,
+      sourceLabel:
+        theme.source === 'warp' ? 'Warp' : theme.source === 'ghostty' ? 'Ghostty' : 'Manual',
+      mode: theme.mode,
+      previewTheme: terminalCustomThemeToXtermTheme(theme)
+    })
+  )
+  return [...builtinOptions, ...customOptions]
 }
 
 export function resolveEffectiveTerminalAppearance(
@@ -45,6 +116,7 @@ export function resolveEffectiveTerminalAppearance(
     | 'terminalDividerColorDark'
     | 'terminalUseSeparateLightTheme'
     | 'terminalThemeLight'
+    | 'terminalCustomThemes'
     | 'terminalDividerColorLight'
   >,
   systemPrefersDark = getSystemPrefersDark()
@@ -64,7 +136,7 @@ export function resolveEffectiveTerminalAppearance(
     sourceTheme: settings.theme,
     themeName,
     dividerColor,
-    theme: getTerminalThemePreview(themeName),
+    theme: getTerminalThemePreview(themeName, settings, useLightVariant ? 'light' : 'dark'),
     systemPrefersDark
   }
 }
@@ -75,25 +147,6 @@ export function normalizeColor(value: string | undefined, fallback: string): str
     return fallback
   }
   return trimmed
-}
-
-export function buildTerminalFontMatchers(fontFamily: string): string[] {
-  const trimmed = fontFamily.trim()
-  const normalized = trimmed.toLowerCase()
-  const matchers = trimmed ? [trimmed, normalized] : []
-  return Array.from(
-    new Set([
-      ...matchers,
-      'sf mono',
-      'sfmono-regular',
-      'menlo',
-      'menlo regular',
-      'dejavu sans mono',
-      'liberation mono',
-      'ubuntu mono',
-      'monospace'
-    ])
-  )
 }
 
 export function clampNumber(value: number, min: number, max: number): number {
@@ -120,71 +173,4 @@ export function resolvePaneStyleOptions(
   }
 }
 
-export function getCursorStyleSequence(
-  style: 'bar' | 'block' | 'underline',
-  blinking: boolean
-): string {
-  const code =
-    style === 'block'
-      ? blinking
-        ? 1
-        : 2
-      : style === 'underline'
-        ? blinking
-          ? 3
-          : 4
-        : blinking
-          ? 5
-          : 6
-
-  return `\u001b[${code} q`
-}
-
-export function colorToCss(
-  color: { r: number; g: number; b: number; a?: number } | string | undefined,
-  fallback: string
-): string {
-  if (!color) {
-    return fallback
-  }
-  if (typeof color === 'string') {
-    return color
-  }
-  const alpha = typeof color.a === 'number' ? color.a / 255 : 1
-  return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`
-}
-
 export { isTerminalBackgroundLight } from './terminal-title-contrast'
-
-const PALETTE_KEYS = [
-  'black',
-  'red',
-  'green',
-  'yellow',
-  'blue',
-  'magenta',
-  'cyan',
-  'white',
-  'brightBlack',
-  'brightRed',
-  'brightGreen',
-  'brightYellow',
-  'brightBlue',
-  'brightMagenta',
-  'brightCyan',
-  'brightWhite'
-] as const
-
-export function terminalPalettePreview(theme: ITheme | null): string[] {
-  if (!theme) {
-    return []
-  }
-  const swatches: string[] = []
-  for (const key of PALETTE_KEYS) {
-    const color = theme[key]
-    if (color) {
-      swatches.push(color)
-    }
-  }
-  return swatches
-}

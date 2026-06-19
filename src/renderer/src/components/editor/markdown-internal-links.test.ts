@@ -19,6 +19,19 @@ describe('resolveMarkdownLinkTarget', () => {
     })
   })
 
+  it('classifies relative .md inside a UNC worktree as markdown', () => {
+    const r = resolveMarkdownLinkTarget(
+      './guide.md',
+      '\\\\server\\share\\repo\\docs\\note.md',
+      '\\\\server\\share\\repo'
+    )
+    expect(r).toEqual({
+      kind: 'markdown',
+      absolutePath: '//server/share/repo/docs/guide.md',
+      relativePath: 'docs/guide.md'
+    })
+  })
+
   it('classifies relative .md outside worktree as file', () => {
     const r = resolveMarkdownLinkTarget('../../other/guide.md', SOURCE, ROOT)
     expect(r?.kind).toBe('file')
@@ -27,6 +40,33 @@ describe('resolveMarkdownLinkTarget', () => {
   it('classifies absolute .md inside worktree as markdown', () => {
     const r = resolveMarkdownLinkTarget('/repo/docs/guide.md', SOURCE, ROOT)
     expect(r?.kind).toBe('markdown')
+  })
+
+  it('classifies Windows drive-letter absolute .md links inside worktree as markdown', () => {
+    const r = resolveMarkdownLinkTarget(
+      'C:\\repo\\docs\\guide.md',
+      'C:\\repo\\docs\\note.md',
+      'C:\\repo'
+    )
+    expect(r).toEqual({
+      kind: 'markdown',
+      absolutePath: 'C:/repo/docs/guide.md',
+      relativePath: 'docs/guide.md'
+    })
+  })
+
+  it('extracts hash line anchors from Windows drive-letter absolute .md links', () => {
+    const r = resolveMarkdownLinkTarget(
+      'C:\\repo\\docs\\guide.md#L10',
+      'C:\\repo\\docs\\note.md',
+      'C:\\repo'
+    )
+    expect(r).toMatchObject({
+      kind: 'markdown',
+      absolutePath: 'C:/repo/docs/guide.md',
+      relativePath: 'docs/guide.md',
+      line: 10
+    })
   })
 
   it('extracts line from #L10', () => {
@@ -100,6 +140,20 @@ describe('resolveMarkdownLinkTarget', () => {
     })
   })
 
+  it('classifies explicit UNC file URLs without losing the server name', () => {
+    const r = resolveMarkdownLinkTarget(
+      'file://server/share/repo/docs/image.png',
+      '\\\\server\\share\\repo\\docs\\note.md',
+      '\\\\server\\share\\repo'
+    )
+    expect(r).toMatchObject({
+      kind: 'file',
+      uri: 'file://server/share/repo/docs/image.png',
+      absolutePath: '//server/share/repo/docs/image.png',
+      relativePath: 'docs/image.png'
+    })
+  })
+
   it('classifies explicit file URLs outside the worktree without a relative path', () => {
     const r = resolveMarkdownLinkTarget('file:///tmp/image.png', SOURCE, ROOT)
     expect(r).toMatchObject({
@@ -121,6 +175,10 @@ describe('resolveMarkdownLinkTarget', () => {
       kind: 'markdown',
       absolutePath: '/repo/docs/my note.md'
     })
+  })
+
+  it('returns null for malformed percent-encoded file URL paths', () => {
+    expect(resolveMarkdownLinkTarget('file:///repo/docs/%zz.md', SOURCE, ROOT)).toBeNull()
   })
 
   it('returns null for empty href', () => {

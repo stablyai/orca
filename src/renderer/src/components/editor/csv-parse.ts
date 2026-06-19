@@ -122,7 +122,27 @@ export function detectCsvDelimiter(filePath: string, content: string): string {
       break
     }
   }
-  const tabs = (firstLine.match(/\t/g) ?? []).length
-  const commas = (firstLine.match(/,/g) ?? []).length
+  const tabs = countDelimiterOutsideQuotes(firstLine, '\t')
+  const commas = countDelimiterOutsideQuotes(firstLine, ',')
   return tabs > commas ? '\t' : ','
+}
+
+function countDelimiterOutsideQuotes(line: string, delimiter: string): number {
+  let count = 0
+  let inQuotes = false
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i]
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        i += 1
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+    if (!inQuotes && ch === delimiter) {
+      count += 1
+    }
+  }
+  return count
 }

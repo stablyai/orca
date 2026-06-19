@@ -40,6 +40,13 @@ afterEach(async () => {
 })
 
 describe('discardChanges symlink safety', () => {
+  const globNamedFile = '[k]eep.log'
+  const globMatchedFile = 'keep.log'
+
+  function gitLiteralPathspec(filePath: string): string {
+    return `:(literal)${filePath}`
+  }
+
   it('rejects an untracked child path through a symlinked parent', async () => {
     const { repo, outsideDir, outsideFile } = await createRepoWithOutsideDirectory()
     await createDirectoryLink(outsideDir, path.join(repo, 'link'))
@@ -89,6 +96,53 @@ describe('discardChanges symlink safety', () => {
     await discardChanges(repo, 'ignored')
 
     await expect(access(path.join(repo, 'ignored'))).rejects.toThrow()
+  })
+
+  it('treats untracked discard paths with Git glob characters as literal paths', async () => {
+    const { repo } = await createRepoWithOutsideDirectory()
+    await writeFile(path.join(repo, '.gitignore'), 'ignored.log\n')
+    execFileSync('git', ['add', '.gitignore'], { cwd: repo })
+    execFileSync('git', ['commit', '-q', '-m', 'ignore log fixture'], { cwd: repo })
+    await writeFile(path.join(repo, globNamedFile), 'selected')
+    await writeFile(path.join(repo, globMatchedFile), 'unrelated')
+    await writeFile(path.join(repo, 'ignored.log'), 'ignored')
+
+    await discardChanges(repo, globNamedFile)
+
+    await expect(access(path.join(repo, globNamedFile))).rejects.toThrow()
+    await expect(access(path.join(repo, globMatchedFile))).resolves.toBeUndefined()
+    await expect(access(path.join(repo, 'ignored.log'))).resolves.toBeUndefined()
+  })
+
+  it('treats tracked discard paths with Git glob characters as literal paths', async () => {
+    const { repo } = await createRepoWithOutsideDirectory()
+    await writeFile(path.join(repo, globNamedFile), 'selected')
+    await writeFile(path.join(repo, globMatchedFile), 'keep')
+    execFileSync('git', ['add', gitLiteralPathspec(globNamedFile), globMatchedFile], { cwd: repo })
+    execFileSync('git', ['commit', '-q', '-m', 'track log fixtures'], { cwd: repo })
+    await writeFile(path.join(repo, globNamedFile), 'selected modified')
+    await writeFile(path.join(repo, globMatchedFile), 'keep modified')
+
+    await discardChanges(repo, globNamedFile)
+
+    await expect(readFile(path.join(repo, globNamedFile), 'utf8')).resolves.toBe('selected')
+    await expect(readFile(path.join(repo, globMatchedFile), 'utf8')).resolves.toBe('keep modified')
+  })
+
+  it('treats bulk untracked discard paths with Git glob characters as literal paths', async () => {
+    const { repo } = await createRepoWithOutsideDirectory()
+    await writeFile(path.join(repo, '.gitignore'), 'ignored.log\n')
+    execFileSync('git', ['add', '.gitignore'], { cwd: repo })
+    execFileSync('git', ['commit', '-q', '-m', 'ignore log fixture'], { cwd: repo })
+    await writeFile(path.join(repo, globNamedFile), 'selected')
+    await writeFile(path.join(repo, globMatchedFile), 'unrelated')
+    await writeFile(path.join(repo, 'ignored.log'), 'ignored')
+
+    await bulkDiscardChanges(repo, [globNamedFile])
+
+    await expect(access(path.join(repo, globNamedFile))).rejects.toThrow()
+    await expect(access(path.join(repo, globMatchedFile))).resolves.toBeUndefined()
+    await expect(access(path.join(repo, 'ignored.log'))).resolves.toBeUndefined()
   })
 
   it('removes untracked nested git repos selected for discard', async () => {

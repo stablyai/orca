@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { translate } from '@/i18n/i18n'
 
 type ProjectGroupNameDialogProps = {
   open: boolean
@@ -35,7 +36,14 @@ export function ProjectGroupNameDialog({
   const [name, setName] = useState(initialName)
   const [submitting, setSubmitting] = useState(false)
   const [previousOpenState, setPreviousOpenState] = useState({ open, initialName })
+  const mountedRef = useRef(true)
   const trimmedName = name.trim()
+
+  const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
+    // Why: save can finish after the dialog closes; the content ref keeps late
+    // completions from mutating stale dialog state without an Effect.
+    mountedRef.current = node !== null
+  }, [])
 
   // Why: the input should mount already seeded and selectable for the active
   // group; Effect-based hydration shows one frame with the prior draft.
@@ -56,10 +64,14 @@ export function ProjectGroupNameDialog({
       setSubmitting(true)
       try {
         await onSubmit(trimmedName)
-        onOpenChange(false)
+        if (mountedRef.current) {
+          onOpenChange(false)
+        }
       } catch (error) {
         console.error('Failed to save project group name:', error)
-        setSubmitting(false)
+        if (mountedRef.current) {
+          setSubmitting(false)
+        }
       }
     },
     [onOpenChange, onSubmit, submitting, trimmedName]
@@ -68,6 +80,7 @@ export function ProjectGroupNameDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        ref={handleDialogContentRef}
         className="max-w-sm sm:max-w-sm"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
@@ -82,7 +95,7 @@ export function ProjectGroupNameDialog({
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
             <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
-              Group Name
+              {translate('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
             </Label>
             <Input
               id={inputId}
@@ -100,7 +113,7 @@ export function ProjectGroupNameDialog({
               className="text-xs"
               onClick={() => onOpenChange(false)}
             >
-              Cancel
+              {translate('auto.components.sidebar.ProjectGroupNameDialog.d99a034073', 'Cancel')}
             </Button>
             <Button
               type="submit"
@@ -108,7 +121,12 @@ export function ProjectGroupNameDialog({
               className="text-xs"
               disabled={!trimmedName || submitting}
             >
-              {submitting ? 'Saving...' : confirmLabel}
+              {submitting
+                ? translate(
+                    'auto.components.sidebar.ProjectGroupNameDialog.4a64e78822',
+                    'Saving...'
+                  )
+                : confirmLabel}
             </Button>
           </DialogFooter>
         </form>

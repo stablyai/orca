@@ -1,12 +1,22 @@
+/* eslint-disable max-lines -- Why: Linear cache and fallback tests share one
+   mocked slice harness, keeping failure-mode coverage easy to compare. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
 import type {
   LinearConnectionStatus,
+  LinearCollectionResult,
   LinearIssue,
+  LinearProjectDetail,
+  LinearProjectSummary,
   LinearTeam,
   LinearViewer
 } from '../../../../shared/types'
+import {
+  getTaskSourceCacheScope,
+  type TaskSourceContext
+} from '../../../../shared/task-source-context'
+import { credentialDecryptionMessage } from '../../../../shared/integration-credential-errors'
 import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
@@ -15,14 +25,29 @@ const linearDisconnect = vi.fn()
 const linearListIssues = vi.fn()
 const linearSearchIssues = vi.fn()
 const linearListTeams = vi.fn()
+const linearGetIssue = vi.fn()
+const linearListProjects = vi.fn()
+const linearGetCustomView = vi.fn()
+const linearGetProject = vi.fn()
+const linearListProjectIssues = vi.fn()
+const linearListCustomViews = vi.fn()
+const linearListCustomViewIssues = vi.fn()
+const linearListCustomViewProjects = vi.fn()
 const linearTestConnection = vi.fn()
 
 vi.mock('@/runtime/runtime-linear-client', () => ({
   linearConnect: (...args: unknown[]) => linearConnect(...args),
   linearDisconnect: (...args: unknown[]) => linearDisconnect(...args),
   linearDisconnectWorkspace: vi.fn(),
-  linearGetIssue: vi.fn(),
+  linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
+  linearGetProject: (...args: unknown[]) => linearGetProject(...args),
+  linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
+  linearListCustomViewIssues: (...args: unknown[]) => linearListCustomViewIssues(...args),
+  linearListCustomViewProjects: (...args: unknown[]) => linearListCustomViewProjects(...args),
+  linearListCustomViews: (...args: unknown[]) => linearListCustomViews(...args),
   linearListIssues: (...args: unknown[]) => linearListIssues(...args),
+  linearListProjectIssues: (...args: unknown[]) => linearListProjectIssues(...args),
+  linearListProjects: (...args: unknown[]) => linearListProjects(...args),
   linearListTeams: (...args: unknown[]) => linearListTeams(...args),
   linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
   linearSelectWorkspace: vi.fn(),
@@ -63,6 +88,26 @@ function team(id: string): LinearTeam {
   return { id, name: id, key: id, workspaceId: 'workspace-1', workspaceName: 'Workspace' }
 }
 
+function project(id: string): LinearProjectSummary {
+  return { id, name: id, workspaceId: 'workspace-1', workspaceName: 'Workspace' }
+}
+
+function linearSourceContext(
+  environmentId: string,
+  workspaceId = 'workspace-1'
+): TaskSourceContext {
+  return {
+    kind: 'task-source',
+    provider: 'linear',
+    projectId: 'logical-project',
+    hostId: `runtime:${environmentId}`,
+    providerIdentity: {
+      provider: 'linear',
+      workspaceId
+    }
+  }
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((res) => {
@@ -81,17 +126,19 @@ describe('createLinearSlice caching', () => {
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
     })
-    linearListIssues.mockResolvedValueOnce([issue('LIN-1')]).mockResolvedValueOnce([issue('LIN-2')])
+    linearListIssues
+      .mockResolvedValueOnce({ items: [issue('LIN-1')] })
+      .mockResolvedValueOnce({ items: [issue('LIN-2')] })
 
-    await expect(store.getState().listLinearIssues('all', 36)).resolves.toMatchObject([
-      { id: 'LIN-1' }
-    ])
-    await expect(store.getState().listLinearIssues('all', 36)).resolves.toMatchObject([
-      { id: 'LIN-1' }
-    ])
+    await expect(store.getState().listLinearIssues('all', 36)).resolves.toMatchObject({
+      items: [{ id: 'LIN-1' }]
+    })
+    await expect(store.getState().listLinearIssues('all', 36)).resolves.toMatchObject({
+      items: [{ id: 'LIN-1' }]
+    })
     await expect(
       store.getState().listLinearIssues('all', 36, { force: true })
-    ).resolves.toMatchObject([{ id: 'LIN-2' }])
+    ).resolves.toMatchObject({ items: [{ id: 'LIN-2' }] })
 
     expect(linearListIssues).toHaveBeenCalledTimes(2)
   })
@@ -101,8 +148,8 @@ describe('createLinearSlice caching', () => {
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
     })
-    const staleRequest = deferred<LinearIssue[]>()
-    const forcedRequest = deferred<LinearIssue[]>()
+    const staleRequest = deferred<LinearCollectionResult<LinearIssue>>()
+    const forcedRequest = deferred<LinearCollectionResult<LinearIssue>>()
     linearListIssues
       .mockReturnValueOnce(staleRequest.promise)
       .mockReturnValueOnce(forcedRequest.promise)
@@ -112,17 +159,17 @@ describe('createLinearSlice caching', () => {
 
     expect(linearListIssues).toHaveBeenCalledTimes(2)
 
-    forcedRequest.resolve([issue('LIN-FORCED')])
-    await expect(forcedPromise).resolves.toMatchObject([{ id: 'LIN-FORCED' }])
+    forcedRequest.resolve({ items: [issue('LIN-FORCED')] })
+    await expect(forcedPromise).resolves.toMatchObject({ items: [{ id: 'LIN-FORCED' }] })
     expect(
       store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
-    ).toMatchObject([{ id: 'LIN-FORCED' }])
+    ).toMatchObject({ items: [{ id: 'LIN-FORCED' }] })
 
-    staleRequest.resolve([issue('LIN-STALE')])
-    await expect(stalePromise).resolves.toMatchObject([{ id: 'LIN-STALE' }])
+    staleRequest.resolve({ items: [issue('LIN-STALE')] })
+    await expect(stalePromise).resolves.toMatchObject({ items: [{ id: 'LIN-STALE' }] })
     expect(
       store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
-    ).toMatchObject([{ id: 'LIN-FORCED' }])
+    ).toMatchObject({ items: [{ id: 'LIN-FORCED' }] })
   })
 
   it('lets forced search refresh bypass older in-flight reads without stale cache overwrite', async () => {
@@ -158,15 +205,504 @@ describe('createLinearSlice caching', () => {
     const store = createTestStore()
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
-      linearSearchCache: {
-        'workspace-1::list::all::36': { data: [issue('LIN-CACHED')], fetchedAt: 1 }
+      linearListCache: {
+        'workspace-1::list::all::36': { data: { items: [issue('LIN-CACHED')] }, fetchedAt: 1 }
       }
     })
     linearListIssues.mockRejectedValueOnce(new Error('network down'))
 
     await expect(
       store.getState().listLinearIssues('all', 36, { force: true })
-    ).resolves.toMatchObject([{ id: 'LIN-CACHED' }])
+    ).resolves.toMatchObject({ items: [{ id: 'LIN-CACHED' }] })
+  })
+
+  it('returns an empty list and refreshes status on Linear decrypt errors during list reads', async () => {
+    const store = createTestStore()
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
+      linearListCache: {
+        'workspace-1::list::all::36': { data: { items: [issue('LIN-CACHED')] }, fetchedAt: 1 }
+      }
+    })
+    linearStatus.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      credentialError: error.message
+    })
+    linearListIssues.mockRejectedValueOnce(error)
+
+    await expect(
+      store.getState().listLinearIssues('all', 36, { force: true })
+    ).resolves.toMatchObject({ items: [] })
+    expect(linearStatus).toHaveBeenCalled()
+  })
+
+  it('returns an empty list and refreshes status on Linear decrypt errors during searches', async () => {
+    const store = createTestStore()
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
+    })
+    linearStatus.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      credentialError: error.message
+    })
+    linearSearchIssues.mockRejectedValueOnce(error)
+
+    await expect(store.getState().searchLinearIssues('bug', 36)).resolves.toEqual([])
+    expect(linearStatus).toHaveBeenCalled()
+  })
+
+  it('clears stale Linear credential errors after successful workspace list reads', async () => {
+    const store = createTestStore()
+    const staleError = credentialDecryptionMessage('Linear')
+    store.setState({
+      linearStatus: {
+        connected: true,
+        viewer: null,
+        selectedWorkspaceId: 'workspace-1',
+        credentialError: staleError
+      }
+    })
+    linearListIssues.mockResolvedValueOnce({ items: [issue('LIN-OK')] })
+    linearStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'workspace-1'
+    })
+
+    await expect(
+      store.getState().listLinearIssues('all', 36, { force: true })
+    ).resolves.toMatchObject({ items: [{ id: 'LIN-OK' }] })
+    await vi.waitFor(() => {
+      expect(store.getState().linearStatus.credentialError).toBeUndefined()
+    })
+  })
+
+  it('clears stale Linear credential errors after successful issue detail reads', async () => {
+    const store = createTestStore()
+    const staleError = credentialDecryptionMessage('Linear')
+    store.setState({
+      linearStatus: {
+        connected: true,
+        viewer: null,
+        selectedWorkspaceId: 'workspace-1',
+        credentialError: staleError
+      }
+    })
+    linearGetIssue.mockResolvedValueOnce(issue('LIN-OK'))
+    linearStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'workspace-1'
+    })
+
+    await expect(store.getState().fetchLinearIssue('LIN-OK', 'workspace-1')).resolves.toMatchObject(
+      {
+        id: 'LIN-OK'
+      }
+    )
+    await vi.waitFor(() => {
+      expect(store.getState().linearStatus.credentialError).toBeUndefined()
+    })
+  })
+
+  it('clears stale Linear credential errors after successful scoped collection reads', async () => {
+    const store = createTestStore()
+    const staleError = credentialDecryptionMessage('Linear')
+    store.setState({
+      linearStatus: {
+        connected: true,
+        viewer: null,
+        selectedWorkspaceId: 'workspace-1',
+        credentialError: staleError
+      }
+    })
+    linearListProjectIssues.mockResolvedValueOnce({ items: [issue('LIN-OK')] })
+    linearStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'workspace-1'
+    })
+
+    await expect(
+      store.getState().listLinearProjectIssues('project-1', 'workspace-1', 20, { force: true })
+    ).resolves.toMatchObject({ items: [{ id: 'LIN-OK' }] })
+    await vi.waitFor(() => {
+      expect(store.getState().linearStatus.credentialError).toBeUndefined()
+    })
+  })
+
+  it('surfaces scoped project issue failures alongside cached rows', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearProjectIssueCache: {
+        'workspace-1::project-issues::project-1::20': {
+          data: { items: [issue('LIN-CACHED')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearListProjectIssues.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().listLinearProjectIssues('project-1', 'workspace-1', 20, { force: true })
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-CACHED' }],
+      errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
+    })
+    expect(linearListProjectIssues.mock.calls[0][4]).toEqual({ force: true })
+  })
+
+  it('surfaces Linear decrypt errors as workspace errors on project issue reads', async () => {
+    const store = createTestStore()
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    store.setState({
+      linearProjectIssueCache: {
+        'workspace-1::project-issues::project-1::20': {
+          data: { items: [issue('LIN-CACHED')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearStatus.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      credentialError: error.message
+    })
+    linearListProjectIssues.mockRejectedValueOnce(error)
+
+    await expect(
+      store.getState().listLinearProjectIssues('project-1', 'workspace-1', 20, { force: true })
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-CACHED' }],
+      errors: [{ message: error.message }]
+    })
+    expect(linearStatus).toHaveBeenCalled()
+  })
+
+  it('falls back to the largest smaller cached project issue limit when expansion fails', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearProjectIssueCache: {
+        'workspace-1::project-issues::project-1::20': {
+          data: { items: [issue('LIN-SMALLER')] },
+          fetchedAt: 1
+        },
+        'workspace-1::project-issues::project-1::36': {
+          data: { items: [issue('LIN-CACHED-36')] },
+          fetchedAt: 1
+        },
+        'workspace-1::project-issues::project-2::36': {
+          data: { items: [issue('LIN-OTHER-PROJECT')] },
+          fetchedAt: 1
+        },
+        'workspace-2::project-issues::project-1::36': {
+          data: { items: [issue('LIN-OTHER-WORKSPACE')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearListProjectIssues.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().listLinearProjectIssues('project-1', 'workspace-1', 72, {
+        force: true
+      })
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-CACHED-36' }],
+      errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
+    })
+    expect(linearListProjectIssues.mock.calls[0][2]).toBe(72)
+  })
+
+  it('caches project issue reads by the expanded effective limit', async () => {
+    const store = createTestStore()
+    linearListProjectIssues.mockResolvedValueOnce({ items: [issue('LIN-120')], hasMore: true })
+
+    await expect(
+      store.getState().listLinearProjectIssues('project-1', 'workspace-1', 120)
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-120' }],
+      hasMore: true
+    })
+
+    expect(linearListProjectIssues).toHaveBeenCalledWith(null, 'project-1', 120, 'workspace-1', {
+      force: undefined
+    })
+    expect(
+      store.getState().linearProjectIssueCache['workspace-1::project-issues::project-1::120']?.data
+    ).toMatchObject({ items: [{ id: 'LIN-120' }] })
+  })
+
+  it('surfaces scoped custom-view project failures alongside cached rows', async () => {
+    const store = createTestStore()
+    const rateLimitError = Object.assign(new Error('slow down'), { status: 429 })
+    store.setState({
+      linearCustomViewProjectCache: {
+        'workspace-1::custom-view-projects::view-1::20': {
+          data: { items: [project('project-cached')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearListCustomViewProjects.mockRejectedValueOnce(rateLimitError)
+
+    await expect(
+      store.getState().listLinearCustomViewProjects('view-1', 'workspace-1', 20, {
+        force: true
+      })
+    ).resolves.toMatchObject({
+      items: [{ id: 'project-cached' }],
+      errors: [{ workspaceId: 'workspace-1', type: 'rate_limited', message: 'slow down' }]
+    })
+    expect(linearListCustomViewProjects.mock.calls[0][4]).toEqual({ force: true })
+  })
+
+  it('surfaces scoped custom-view issue failures alongside cached rows', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearCustomViewIssueCache: {
+        'workspace-1::custom-view-issues::view-1::20': {
+          data: { items: [issue('LIN-CACHED')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearListCustomViewIssues.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().listLinearCustomViewIssues('view-1', 'workspace-1', 20, {
+        force: true
+      })
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-CACHED' }],
+      errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
+    })
+    expect(linearListCustomViewIssues.mock.calls[0][4]).toEqual({ force: true })
+  })
+
+  it('falls back to the largest smaller cached custom-view issue limit when expansion fails', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearCustomViewIssueCache: {
+        'workspace-1::custom-view-issues::view-1::20': {
+          data: { items: [issue('LIN-SMALLER')] },
+          fetchedAt: 1
+        },
+        'workspace-1::custom-view-issues::view-1::36': {
+          data: { items: [issue('LIN-CACHED-36')] },
+          fetchedAt: 1
+        },
+        'workspace-1::custom-view-issues::view-2::36': {
+          data: { items: [issue('LIN-OTHER-VIEW')] },
+          fetchedAt: 1
+        },
+        'workspace-2::custom-view-issues::view-1::36': {
+          data: { items: [issue('LIN-OTHER-WORKSPACE')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearListCustomViewIssues.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().listLinearCustomViewIssues('view-1', 'workspace-1', 72, {
+        force: true
+      })
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-CACHED-36' }],
+      errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
+    })
+    expect(linearListCustomViewIssues.mock.calls[0][2]).toBe(72)
+  })
+
+  it('caches issue custom-view reads by the expanded effective limit', async () => {
+    const store = createTestStore()
+    linearListCustomViewIssues.mockResolvedValueOnce({ items: [issue('LIN-120')], hasMore: true })
+
+    await expect(
+      store.getState().listLinearCustomViewIssues('view-1', 'workspace-1', 120)
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-120' }],
+      hasMore: true
+    })
+
+    expect(linearListCustomViewIssues).toHaveBeenCalledWith(null, 'view-1', 120, 'workspace-1', {
+      force: undefined
+    })
+    expect(
+      store.getState().linearCustomViewIssueCache['workspace-1::custom-view-issues::view-1::120']
+        ?.data
+    ).toMatchObject({ items: [{ id: 'LIN-120' }] })
+  })
+
+  it('surfaces top-level project list failures alongside cached rows', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
+      linearProjectCache: {
+        'workspace-1::projects::::20': {
+          data: { items: [project('project-cached')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearListProjects.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().listLinearProjects(undefined, 20, undefined, { force: true })
+    ).resolves.toMatchObject({
+      items: [{ id: 'project-cached' }],
+      errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
+    })
+  })
+
+  it('surfaces top-level custom-view failures alongside cached rows', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
+      linearCustomViewCache: {
+        'workspace-1::custom-views::project::20': {
+          data: {
+            items: [{ id: 'view-cached', name: 'Cached view', model: 'project' }]
+          },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearListCustomViews.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().listLinearCustomViews('project', 20, undefined, { force: true })
+    ).resolves.toMatchObject({
+      items: [{ id: 'view-cached' }],
+      errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
+    })
+    expect(linearListCustomViews.mock.calls[0][4]).toEqual({ force: true })
+  })
+
+  it('fetches custom views by exact id and clears stale credential errors', async () => {
+    const store = createTestStore()
+    const staleError = credentialDecryptionMessage('Linear')
+    store.setState({
+      linearStatus: {
+        connected: true,
+        viewer: null,
+        selectedWorkspaceId: 'workspace-1',
+        credentialError: staleError
+      }
+    })
+    linearGetCustomView.mockResolvedValueOnce({
+      id: 'view-1',
+      name: 'Burn views',
+      model: 'project',
+      workspaceId: 'workspace-1'
+    })
+    linearStatus.mockResolvedValueOnce({
+      connected: true,
+      viewer: null,
+      selectedWorkspaceId: 'workspace-1'
+    })
+
+    await expect(
+      store.getState().fetchLinearCustomView('view-1', 'workspace-1', 'project', { force: true })
+    ).resolves.toMatchObject({ id: 'view-1' })
+
+    expect(linearGetCustomView).toHaveBeenCalledWith(null, 'view-1', 'project', 'workspace-1', {
+      force: true
+    })
+    await vi.waitFor(() => {
+      expect(store.getState().linearStatus.credentialError).toBeUndefined()
+    })
+  })
+
+  it('fails forced exact custom-view validation instead of reopening stale cache', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearCustomViewDetailCache: {
+        'workspace-1::custom-view-detail::project::view-1': {
+          data: {
+            id: 'view-1',
+            name: 'Stale view',
+            model: 'project',
+            workspaceId: 'workspace-1'
+          },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearGetCustomView.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().fetchLinearCustomView('view-1', 'workspace-1', 'project', { force: true })
+    ).rejects.toThrow('network down')
+  })
+
+  it('prevents stale detail reads from overwriting forced refresh caches', async () => {
+    const store = createTestStore()
+    const staleProject = deferred<LinearProjectDetail | null>()
+    const freshProject = deferred<LinearProjectDetail | null>()
+    const staleView = deferred<{
+      id: string
+      name: string
+      model: 'project'
+      workspaceId: string
+    }>()
+    const freshView = deferred<{
+      id: string
+      name: string
+      model: 'project'
+      workspaceId: string
+    }>()
+    linearGetProject
+      .mockReturnValueOnce(staleProject.promise)
+      .mockReturnValueOnce(freshProject.promise)
+    linearGetCustomView
+      .mockReturnValueOnce(staleView.promise)
+      .mockReturnValueOnce(freshView.promise)
+
+    const staleProjectPromise = store.getState().fetchLinearProject('project-1', 'workspace-1')
+    const freshProjectPromise = store
+      .getState()
+      .fetchLinearProject('project-1', 'workspace-1', { force: true })
+    const staleViewPromise = store
+      .getState()
+      .fetchLinearCustomView('view-1', 'workspace-1', 'project')
+    const freshViewPromise = store
+      .getState()
+      .fetchLinearCustomView('view-1', 'workspace-1', 'project', { force: true })
+
+    freshProject.resolve({ ...project('project-1'), name: 'Fresh project' })
+    freshView.resolve({
+      id: 'view-1',
+      name: 'Fresh view',
+      model: 'project',
+      workspaceId: 'workspace-1'
+    })
+    await freshProjectPromise
+    await freshViewPromise
+
+    staleProject.resolve({ ...project('project-1'), name: 'Stale project' })
+    staleView.resolve({
+      id: 'view-1',
+      name: 'Stale view',
+      model: 'project',
+      workspaceId: 'workspace-1'
+    })
+    await staleProjectPromise
+    await staleViewPromise
+
+    expect(
+      store.getState().linearProjectDetailCache['workspace-1::project-detail::project-1'].data?.name
+    ).toBe('Fresh project')
+    expect(
+      store.getState().linearCustomViewDetailCache[
+        'workspace-1::custom-view-detail::project::view-1'
+      ].data?.name
+    ).toBe('Fresh view')
   })
 
   it('preserves cached search rows when forced revalidation fails transiently', async () => {
@@ -188,22 +724,22 @@ describe('createLinearSlice caching', () => {
     const store = createTestStore()
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
-      linearSearchCache: {
-        'workspace-1::list::all::36': { data: [issue('LIN-1')], fetchedAt: 1 }
+      linearListCache: {
+        'workspace-1::list::all::36': { data: { items: [issue('LIN-1')] }, fetchedAt: 1 }
       }
     })
 
     expect(
       store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
-    ).toEqual([issue('LIN-1')])
+    ).toEqual({ items: [issue('LIN-1')] })
   })
 
   it('keeps literal search queries separate from list cache keys', async () => {
     const store = createTestStore()
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
-      linearSearchCache: {
-        'workspace-1::list::all::36': { data: [issue('LIST')], fetchedAt: Date.now() }
+      linearListCache: {
+        'workspace-1::list::all::36': { data: { items: [issue('LIST')] }, fetchedAt: Date.now() }
       }
     })
     linearSearchIssues.mockResolvedValueOnce([issue('SEARCH')])
@@ -218,7 +754,7 @@ describe('createLinearSlice caching', () => {
     ).toMatchObject([{ id: 'SEARCH' }])
     expect(
       store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
-    ).toMatchObject([{ id: 'LIST' }])
+    ).toMatchObject({ items: [{ id: 'LIST' }] })
   })
 
   it('caches teams by workspace and dedupes fresh reads', async () => {
@@ -236,11 +772,110 @@ describe('createLinearSlice caching', () => {
     expect(store.getState().getCachedLinearTeams('workspace-1')).toMatchObject([{ id: 'team-1' }])
   })
 
+  it('routes explicit source reads through their source context when focused runtime changes', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
+    })
+    const sourceContext = linearSourceContext('source-runtime')
+    const sourceResult = deferred<LinearCollectionResult<LinearIssue>>()
+    linearListIssues.mockReturnValueOnce(sourceResult.promise)
+
+    const request = store.getState().listLinearIssues('all', 36, { sourceContext })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as never })
+
+    sourceResult.resolve({ items: [issue('LIN-SOURCE')] })
+    await expect(request).resolves.toMatchObject({ items: [{ id: 'LIN-SOURCE' }] })
+    expect(linearListIssues).toHaveBeenCalledWith(sourceContext, 'all', 36, 'workspace-1')
+    expect(
+      store
+        .getState()
+        .getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { sourceContext })
+    ).toMatchObject({ items: [{ id: 'LIN-SOURCE' }] })
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
+    ).toBeNull()
+  })
+
+  it('scopes cached Linear teams, projects, and views to the explicit source context', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' }
+    })
+    const localSource = linearSourceContext('local-runtime')
+    const remoteSource = linearSourceContext('remote-runtime')
+    const localScope = getTaskSourceCacheScope(localSource)
+    const remoteScope = getTaskSourceCacheScope(remoteSource)
+    const fetchedAt = Date.now()
+
+    store.setState({
+      linearTeamCache: {
+        [`${localScope}::workspace-1::teams`]: { data: [team('local-team')], fetchedAt },
+        [`${remoteScope}::workspace-1::teams`]: { data: [team('remote-team')], fetchedAt }
+      },
+      linearProjectCache: {
+        [`${localScope}::workspace-1::projects::::20`]: {
+          data: { items: [project('local-project')] },
+          fetchedAt
+        },
+        [`${remoteScope}::workspace-1::projects::::20`]: {
+          data: { items: [project('remote-project')] },
+          fetchedAt
+        }
+      },
+      linearCustomViewCache: {
+        [`${localScope}::workspace-1::custom-views::issue::20`]: {
+          data: { items: [{ id: 'local-view', name: 'Local view', model: 'issue' }] },
+          fetchedAt
+        },
+        [`${remoteScope}::workspace-1::custom-views::issue::20`]: {
+          data: { items: [{ id: 'remote-view', name: 'Remote view', model: 'issue' }] },
+          fetchedAt
+        }
+      }
+    })
+
+    expect(
+      store.getState().getCachedLinearTeams('workspace-1', { sourceContext: remoteSource })
+    ).toMatchObject([{ id: 'remote-team' }])
+    expect(
+      store
+        .getState()
+        .getCachedLinearProjects(undefined, 20, 'workspace-1', { sourceContext: remoteSource })
+    ).toMatchObject({ items: [{ id: 'remote-project' }] })
+    expect(
+      store
+        .getState()
+        .getCachedLinearCustomViews('issue', 20, 'workspace-1', { sourceContext: remoteSource })
+    ).toMatchObject({ items: [{ id: 'remote-view' }] })
+    expect(store.getState().getCachedLinearTeams('workspace-1')).toBeNull()
+    expect(store.getState().getCachedLinearProjects(undefined, 20, 'workspace-1')).toBeNull()
+    expect(store.getState().getCachedLinearCustomViews('issue', 20, 'workspace-1')).toBeNull()
+  })
+
   it('patches issue-cache entries keyed by workspace-qualified ids', () => {
     const store = createTestStore()
     store.setState({
       linearIssueCache: {
         'workspace-1::issue-id': { data: issue('issue-id'), fetchedAt: Date.now() }
+      },
+      linearListCache: {
+        'workspace-1::list::all::36': {
+          data: { items: [issue('issue-id')] },
+          fetchedAt: Date.now()
+        }
+      },
+      linearProjectIssueCache: {
+        'workspace-1::project-issues::project-1::20': {
+          data: { items: [issue('issue-id')] },
+          fetchedAt: Date.now()
+        }
+      },
+      linearCustomViewIssueCache: {
+        'workspace-1::custom-view-issues::view-1::20': {
+          data: { items: [issue('issue-id')] },
+          fetchedAt: Date.now()
+        }
       }
     })
 
@@ -248,6 +883,89 @@ describe('createLinearSlice caching', () => {
 
     expect(store.getState().linearIssueCache['workspace-1::issue-id'].data?.title).toBe('Updated')
     expect(store.getState().linearIssueCache['workspace-1::issue-id'].fetchedAt).toBe(0)
+    expect(
+      store.getState().linearListCache['workspace-1::list::all::36'].data?.items[0]?.title
+    ).toBe('Updated')
+    expect(
+      store.getState().linearProjectIssueCache['workspace-1::project-issues::project-1::20'].data
+        ?.items[0]?.title
+    ).toBe('Updated')
+    expect(
+      store.getState().linearCustomViewIssueCache['workspace-1::custom-view-issues::view-1::20']
+        .data?.items[0]?.title
+    ).toBe('Updated')
+  })
+
+  it('scopes optimistic issue patches to the selected Linear source context', () => {
+    const store = createTestStore()
+    const localSource = linearSourceContext('local-runtime')
+    const remoteSource = linearSourceContext('remote-runtime')
+    const localScope = getTaskSourceCacheScope(localSource)
+    const remoteScope = getTaskSourceCacheScope(remoteSource)
+
+    store.setState({
+      linearIssueCache: {
+        [`${localScope}::workspace-1::issue-id`]: {
+          data: { ...issue('issue-id'), title: 'Local title' },
+          fetchedAt: Date.now()
+        },
+        [`${remoteScope}::workspace-1::issue-id`]: {
+          data: { ...issue('issue-id'), title: 'Remote title' },
+          fetchedAt: Date.now()
+        }
+      },
+      linearSearchCache: {
+        [`${localScope}::workspace-1::search::query::20`]: {
+          data: [{ ...issue('issue-id'), title: 'Local title' }],
+          fetchedAt: Date.now()
+        },
+        [`${remoteScope}::workspace-1::search::query::20`]: {
+          data: [{ ...issue('issue-id'), title: 'Remote title' }],
+          fetchedAt: Date.now()
+        }
+      },
+      linearListCache: {
+        [`${localScope}::workspace-1::list::all::36`]: {
+          data: { items: [{ ...issue('issue-id'), title: 'Local title' }] },
+          fetchedAt: Date.now()
+        },
+        [`${remoteScope}::workspace-1::list::all::36`]: {
+          data: { items: [{ ...issue('issue-id'), title: 'Remote title' }] },
+          fetchedAt: Date.now()
+        }
+      }
+    })
+
+    store.getState().patchLinearIssue(
+      'issue-id',
+      { title: 'Patched local title' },
+      {
+        sourceContext: localSource
+      }
+    )
+
+    expect(
+      store.getState().linearIssueCache[`${localScope}::workspace-1::issue-id`]?.data?.title
+    ).toBe('Patched local title')
+    expect(
+      store.getState().linearIssueCache[`${remoteScope}::workspace-1::issue-id`]?.data?.title
+    ).toBe('Remote title')
+    expect(
+      store.getState().linearSearchCache[`${localScope}::workspace-1::search::query::20`]?.data?.[0]
+        ?.title
+    ).toBe('Patched local title')
+    expect(
+      store.getState().linearSearchCache[`${remoteScope}::workspace-1::search::query::20`]
+        ?.data?.[0]?.title
+    ).toBe('Remote title')
+    expect(
+      store.getState().linearListCache[`${localScope}::workspace-1::list::all::36`]?.data?.items[0]
+        ?.title
+    ).toBe('Patched local title')
+    expect(
+      store.getState().linearListCache[`${remoteScope}::workspace-1::list::all::36`]?.data?.items[0]
+        ?.title
+    ).toBe('Remote title')
   })
 })
 
@@ -256,6 +974,10 @@ describe('createLinearSlice', () => {
     linearStatus.mockReset()
     linearConnect.mockReset()
     linearDisconnect.mockReset()
+    linearListIssues.mockReset()
+    linearSearchIssues.mockReset()
+    linearListTeams.mockReset()
+    linearGetIssue.mockReset()
     linearTestConnection.mockReset()
   })
 
@@ -282,6 +1004,84 @@ describe('createLinearSlice', () => {
     expect(store.getState().linearStatusChecked).toBe(true)
   })
 
+  it('ignores stale forced connection checks when a newer forced check finishes first', async () => {
+    const staleCheck = deferred<LinearConnectionStatus>()
+    const freshCheck = deferred<LinearConnectionStatus>()
+    const viewer = {
+      displayName: 'Test User',
+      email: 'test@example.com',
+      organizationName: 'Test Org'
+    }
+    linearStatus.mockReturnValueOnce(staleCheck.promise).mockReturnValueOnce(freshCheck.promise)
+    const store = createTestStore()
+
+    const stalePromise = store.getState().checkLinearConnection(true)
+    const freshPromise = store.getState().checkLinearConnection(true)
+
+    freshCheck.resolve({ connected: true, viewer })
+    await freshPromise
+    staleCheck.resolve({ connected: false, viewer: null })
+    await stalePromise
+
+    expect(store.getState().linearStatus.connected).toBe(true)
+    expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')
+  })
+
+  it('ignores stale status responses after the active runtime changes', async () => {
+    const localStatus = deferred<LinearConnectionStatus>()
+    const remoteStatus = deferred<LinearConnectionStatus>()
+    const localViewer = {
+      displayName: 'Local User',
+      email: 'local@example.com',
+      organizationName: 'Local Org'
+    }
+    const remoteViewer = {
+      displayName: 'Remote User',
+      email: 'remote@example.com',
+      organizationName: 'Remote Org'
+    }
+    linearStatus.mockReturnValueOnce(localStatus.promise).mockReturnValueOnce(remoteStatus.promise)
+    const store = createTestStore()
+
+    const localRequest = store.getState().checkLinearConnection()
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
+    const remoteRequest = store.getState().checkLinearConnection()
+
+    remoteStatus.resolve({ connected: true, viewer: remoteViewer })
+    await remoteRequest
+    expect(store.getState().linearStatus.viewer?.email).toBe('remote@example.com')
+    expect(store.getState().linearStatusContextKey).toBe('runtime:runtime-1#0')
+
+    localStatus.resolve({ connected: true, viewer: localViewer })
+    await localRequest
+    expect(store.getState().linearStatus.viewer?.email).toBe('remote@example.com')
+    expect(store.getState().linearStatusContextKey).toBe('runtime:runtime-1#0')
+  })
+
+  it('ignores stale list cache writes after the active runtime changes', async () => {
+    const localList = deferred<LinearCollectionResult<LinearIssue>>()
+    const remoteList = deferred<LinearCollectionResult<LinearIssue>>()
+    linearListIssues.mockReturnValueOnce(localList.promise).mockReturnValueOnce(remoteList.promise)
+    const store = createTestStore()
+    store.setState({ linearStatus: { connected: true, viewer: null } })
+
+    const localRequest = store.getState().listLinearIssues('assigned', 20)
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
+    const remoteRequest = store.getState().listLinearIssues('assigned', 20)
+
+    remoteList.resolve({ items: [issue('LIN-REMOTE')] })
+    await remoteRequest
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'assigned', limit: 20 })
+    ).toMatchObject({ items: [{ id: 'LIN-REMOTE' }] })
+
+    localList.resolve({ items: [issue('LIN-LOCAL')] })
+    await localRequest
+    expect(
+      store.getState().getCachedLinearIssues({ kind: 'list', filter: 'assigned', limit: 20 })
+    ).toMatchObject({ items: [{ id: 'LIN-REMOTE' }] })
+  })
+
   it('ignores stale status checks after a successful connect', async () => {
     const staleMountCheck = deferred<LinearConnectionStatus>()
     const freshConnectCheck = deferred<LinearConnectionStatus>()
@@ -297,16 +1097,71 @@ describe('createLinearSlice', () => {
     const store = createTestStore()
 
     const mountCheck = store.getState().checkLinearConnection()
-    await store.getState().connectLinear('linear-key')
+    const connectPromise = store.getState().connectLinear('linear-key')
+    await Promise.resolve()
 
     expect(linearStatus).toHaveBeenCalledTimes(2)
-    expect(store.getState().linearStatus.connected).toBe(true)
 
     freshConnectCheck.resolve({ connected: true, viewer })
-    await Promise.resolve()
+    await connectPromise
 
     staleMountCheck.resolve({ connected: false, viewer: null })
     await mountCheck
+
+    expect(store.getState().linearStatus.connected).toBe(true)
+    expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')
+  })
+
+  it('ignores stale connect results after the active runtime changes', async () => {
+    const connectResult = deferred<{ ok: true; viewer: LinearViewer }>()
+    const viewer = {
+      displayName: 'Local User',
+      email: 'local@example.com',
+      organizationName: 'Local Org'
+    }
+    linearConnect.mockReturnValueOnce(connectResult.promise)
+    const store = createTestStore()
+
+    const connectPromise = store.getState().connectLinear('linear-key')
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'runtime-1' } as never })
+
+    connectResult.resolve({ ok: true, viewer })
+    await expect(connectPromise).resolves.toEqual({
+      ok: false,
+      error: 'Linear connection was superseded by a newer request.'
+    })
+
+    expect(store.getState().linearStatus.connected).toBe(false)
+    expect(store.getState().linearStatusContextKey).toBeNull()
+  })
+
+  it('does not let a background status refresh cancel an in-flight connect', async () => {
+    const connectResult = deferred<{ ok: true; viewer: LinearViewer }>()
+    const backgroundStatus = deferred<LinearConnectionStatus>()
+    const connectStatus = deferred<LinearConnectionStatus>()
+    const viewer = {
+      displayName: 'Test User',
+      email: 'test@example.com',
+      organizationName: 'Test Org'
+    }
+    linearConnect.mockReturnValueOnce(connectResult.promise)
+    linearStatus
+      .mockReturnValueOnce(backgroundStatus.promise)
+      .mockReturnValueOnce(connectStatus.promise)
+    const store = createTestStore()
+
+    const connectPromise = store.getState().connectLinear('linear-key')
+    const refreshPromise = store.getState().checkLinearConnection(true)
+
+    backgroundStatus.resolve({ connected: false, viewer: null })
+    await refreshPromise
+
+    connectResult.resolve({ ok: true, viewer })
+    await Promise.resolve()
+    expect(linearStatus).toHaveBeenCalledTimes(2)
+
+    connectStatus.resolve({ connected: true, viewer })
+    await connectPromise
 
     expect(store.getState().linearStatus.connected).toBe(true)
     expect(store.getState().linearStatus.viewer?.email).toBe('test@example.com')

@@ -6,11 +6,17 @@ import { rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 type UrlLinkHitTestDeps = {
   worktreeId: string
   forceSystemBrowser?: boolean
+  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
 }
 
 type UrlLinkClickFallbackDeps = {
   worktreeId: string
+  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
 }
+
+export type TerminalLinkRoutingPreferenceRequester = (
+  url: string
+) => boolean | Promise<boolean> | null | undefined
 
 type ParsedTerminalHttpLink = {
   url: string
@@ -41,11 +47,13 @@ function extractTerminalHttpLinks(lineText: string): ParsedTerminalHttpLink[] {
   return links
 }
 
-function isTerminalLinkActivation(
-  event: Pick<MouseEvent, 'metaKey' | 'ctrlKey'> | undefined
-): boolean {
-  const isMac = navigator.userAgent.includes('Mac')
-  return isMac ? Boolean(event?.metaKey) : Boolean(event?.ctrlKey)
+function isPrimaryHttpLinkFallbackActivation(event: MouseEvent): boolean {
+  if (event.defaultPrevented || event.button !== 0) {
+    return false
+  }
+  // Why: URL links now open on ordinary clicks, but macOS Ctrl-click must stay
+  // available for context menus even when Chromium reports it as button 0.
+  return !(navigator.userAgent.includes('Mac') && event.ctrlKey && !event.metaKey)
 }
 
 function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
@@ -85,7 +93,7 @@ export function installHttpLinkClickFallback(
   deps: UrlLinkClickFallbackDeps
 ): IDisposable {
   const handleMouseUp = (event: MouseEvent): void => {
-    if (event.defaultPrevented || event.button !== 0 || !isTerminalLinkActivation(event)) {
+    if (!isPrimaryHttpLinkFallbackActivation(event)) {
       return
     }
 
@@ -95,12 +103,12 @@ export function installHttpLinkClickFallback(
     }
 
     // Why: xterm's WebLinksAddon only activates after hover state exists. This
-    // direct mouseup fallback preserves Cmd/Ctrl-click when the hover link was
-    // never established, while defaultPrevented avoids double-opening links
-    // that xterm already handled.
+    // direct mouseup fallback preserves ordinary link clicks when the hover link
+    // was never established, while defaultPrevented avoids duplicate opens.
     const opened = openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, {
       worktreeId: deps.worktreeId,
-      forceSystemBrowser: event.shiftKey
+      forceSystemBrowser: event.shiftKey,
+      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
     })
     if (opened) {
       event.preventDefault()
@@ -134,15 +142,39 @@ export function openHttpLinkAtBufferPosition(
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
-      openHttpLink(parsed.url, {
-        worktreeId: deps.worktreeId,
-        forceSystemBrowser: deps.forceSystemBrowser
-      })
+      openTerminalHttpLink(parsed.url, deps)
       return true
     }
   }
 
   return false
+}
+
+export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): void {
+  if (deps.forceSystemBrowser) {
+    openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true })
+    return
+  }
+
+  const preferenceDecision = deps.requestOpenLinksInAppPreference?.(url)
+  if (preferenceDecision === null || preferenceDecision === undefined) {
+    openHttpLink(url, { worktreeId: deps.worktreeId })
+    return
+  }
+
+  // Why: the first terminal link click may need an async preference dialog.
+  // Suppress the browser's default link handling first, then route after the
+  // persisted choice is available.
+  void Promise.resolve(preferenceDecision)
+    .then((openInOrca) => {
+      openHttpLink(url, {
+        worktreeId: deps.worktreeId,
+        forceSystemBrowser: !openInOrca
+      })
+    })
+    .catch(() => {
+      openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true })
+    })
 }
 
 function rangeContainsBufferPosition(

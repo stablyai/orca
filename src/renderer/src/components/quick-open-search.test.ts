@@ -108,8 +108,8 @@ describe('quick-open-search', () => {
       },
       {
         path: 'legacy\\provider\\raw-path.ts',
-        lowerPath: 'legacy\\provider\\raw-path.ts',
-        lowerFilename: 'legacy\\provider\\raw-path.ts',
+        lowerPath: 'legacy/provider/raw-path.ts',
+        lowerFilename: 'raw-path.ts',
         inputIndex: 3
       }
     ])
@@ -120,5 +120,18 @@ describe('quick-open-search', () => {
 
     expect(rankQuickOpenFiles('a', files, 0)).toEqual([])
     expect(rankQuickOpenFiles('a', files, -1)).toEqual([])
+  })
+
+  it('matches Windows-style path queries against slash-normalized file paths', () => {
+    const files = prepareQuickOpenFiles([
+      'src/components/Button.tsx',
+      'src/components/ButtonGroup.tsx',
+      'src/routes/About.tsx'
+    ])
+
+    expect(rankQuickOpenFiles('src\\components\\button', files).map((item) => item.path)).toEqual([
+      'src/components/Button.tsx',
+      'src/components/ButtonGroup.tsx'
+    ])
   })
 })

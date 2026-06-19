@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: scan gating, pricing, and automation
+usage attribution share one stateful Claude usage store fixture. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from './types'
 
@@ -208,12 +210,72 @@ describe('ClaudeUsageStore', () => {
     ).toBeCloseTo(36.75)
   })
 
-  it('does not collapse older Opus 4.1 usage into current Opus 4.7 pricing', async () => {
+  it('prices Claude Opus 4.8 with current Anthropic rates', async () => {
     const store = createStoreWithState({
       dailyAggregates: [
         {
           day: '2026-04-09',
-          model: 'claude-opus-4-1-20250805',
+          model: 'anthropic/claude-opus-4-8-20260528',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        },
+        {
+          day: '2026-04-09',
+          model: 'claude-opus-4.8-20260528',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(summary.estimatedCostUsd).toBeCloseTo(73.5)
+    expect(
+      breakdown.find((row) => row.key === 'anthropic/claude-opus-4-8-20260528')?.estimatedCostUsd
+    ).toBeCloseTo(36.75)
+    expect(
+      breakdown.find((row) => row.key === 'claude-opus-4.8-20260528')?.estimatedCostUsd
+    ).toBeCloseTo(36.75)
+  })
+
+  it('prices unknown newer Opus 4 point releases with current Opus rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'claude-opus-4-9-20260630',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        },
+        {
+          day: '2026-04-09',
+          model: 'claude-opus-4.10-20260715',
           projectKey: 'worktree:repo-1::/workspace/repo-a',
           projectLabel: 'Repo A',
           repoId: 'repo-1',
@@ -230,7 +292,46 @@ describe('ClaudeUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(110.25)
+    expect(summary.estimatedCostUsd).toBeCloseTo(73.5)
+  })
+
+  it('does not collapse older Opus 4.1 or base Opus 4 usage into current Opus pricing', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'claude-opus-4-1-20250805',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        },
+        {
+          day: '2026-04-09',
+          model: 'claude-opus-4-20250514',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+
+    expect(summary.estimatedCostUsd).toBeCloseTo(220.5)
   })
 
   it('prices Sonnet long-context usage with threshold rates', async () => {
@@ -238,7 +339,7 @@ describe('ClaudeUsageStore', () => {
       dailyAggregates: [
         {
           day: '2026-04-09',
-          model: 'claude-sonnet-4-6',
+          model: 'claude-sonnet-4.6-20260217',
           projectKey: 'worktree:repo-1::/workspace/repo-a',
           projectLabel: 'Repo A',
           repoId: 'repo-1',
@@ -260,6 +361,7 @@ describe('ClaudeUsageStore', () => {
 
   it('returns automation usage for a single matching worktree session', async () => {
     const worktreeId = 'repo-1::/workspace/repo-a'
+    const completedAt = Date.parse('2026-04-09T15:06:00.000Z')
     const store = createStoreWithState({
       scanState: {
         enabled: true,
@@ -298,7 +400,7 @@ describe('ClaudeUsageStore', () => {
         }
       ]
     })
-    ;(store as unknown as { refresh: typeof store.refresh }).refresh = vi.fn().mockResolvedValue({
+    const refreshMock = vi.fn().mockResolvedValue({
       enabled: true,
       isScanning: false,
       lastScanStartedAt: 1,
@@ -306,17 +408,28 @@ describe('ClaudeUsageStore', () => {
       lastScanError: null,
       hasAnyClaudeData: true
     })
-
-    const usage = await store.getAutomationRunUsage({
+    ;(store as unknown as { refresh: typeof store.refresh }).refresh = refreshMock
+    const request = {
       worktreeId,
       terminalSessionId: 'tab-1',
-      startedAt: new Date('2026-04-09T14:59:00.000Z').getTime(),
-      completedAt: new Date('2026-04-09T15:06:00.000Z').getTime()
-    })
+      startedAt: completedAt - 7 * 60_000,
+      completedAt
+    }
+
+    const usage = await store.getAutomationRunUsage(request)
 
     expect(usage.status).toBe('known')
     expect(usage.providerSessionId).toBe('session-1')
     expect(usage.totalTokens).toBe(1800)
     expect(usage.estimatedCostUsd).toBeCloseTo(0.010935)
+    expect(refreshMock).toHaveBeenCalledWith(true)
+
+    ;(
+      store as unknown as { state: ClaudeUsagePersistedState }
+    ).state.scanState.lastScanCompletedAt = completedAt + 1000
+    refreshMock.mockClear()
+    await store.getAutomationRunUsage(request)
+
+    expect(refreshMock).toHaveBeenCalledWith(false)
   })
 })

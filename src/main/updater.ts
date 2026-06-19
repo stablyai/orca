@@ -35,11 +35,12 @@ const AUTO_UPDATE_RETRY_INTERVAL_MS = 60 * 60 * 1000
 const NUDGE_POLL_INTERVAL_MS = 30 * 60 * 1000
 const NUDGE_ACTIVATION_COOLDOWN_MS = 5 * 60 * 1000
 const QUIT_AND_INSTALL_DELAY_MS = 100
+const PRE_QUIT_CLEANUP_TIMEOUT_MS = 2_500
 
 let mainWindowRef: BrowserWindow | null = null
 let currentStatus: UpdateStatus = { state: 'idle' }
 let userInitiatedCheck = false
-let onBeforeQuitCleanup: (() => void) | null = null
+let onBeforeQuitCleanup: (() => void | Promise<void>) | null = null
 let autoUpdaterInitialized = false
 // Why: Shift-clicking "Check for Updates" opts the user into the RC release
 // channel for the rest of this process. The generic feed still gets pinned to
@@ -52,12 +53,14 @@ let pendingCheckFailurePromise: Promise<void> | null = null
 let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
 let nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
 let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
+let quitAndInstallInProgress = false
 let persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
 let _getLastUpdateCheckAt: (() => number | null) | null = null
 let backgroundCheckLaunchPending = false
 // Why: a manually promoted background check can emit an error event before the
 // paired promise catch runs; keep the promotion attached to that launch.
 let backgroundCheckPromotedToUserInitiated = false
+let pendingPrereleaseUserInitiatedCheckAfterInFlight = false
 let activeUpdateNudgeId: string | null = null
 let awaitingNudgeCheckOutcome = false
 let nudgeCheckInFlight = false
@@ -144,6 +147,12 @@ function decorateStatusWithActiveNudge(status: UpdateStatus): UpdateStatus {
 }
 
 function sendStatus(status: UpdateStatus): void {
+  const shouldLaunchPendingPrereleaseCheck =
+    pendingPrereleaseUserInitiatedCheckAfterInFlight &&
+    (status.state === 'idle' ||
+      status.state === 'not-available' ||
+      status.state === 'available' ||
+      status.state === 'error')
   const shouldPreserveNudgeForPublishingWindow =
     publishingWindowLastGoodCheck !== null &&
     (status.state === 'idle' ||
@@ -203,11 +212,28 @@ function sendStatus(status: UpdateStatus): void {
   ) {
     downloadInFlight = false
   }
+  if (shouldLaunchPendingPrereleaseCheck) {
+    launchPendingPrereleaseUserInitiatedCheckAfterInFlight()
+    return
+  }
   if (statusesEqual(currentStatus, decoratedStatus)) {
     return
   }
   currentStatus = decoratedStatus
   mainWindowRef?.webContents.send('updater:status', decoratedStatus)
+}
+
+function launchPendingPrereleaseUserInitiatedCheckAfterInFlight(): void {
+  pendingPrereleaseUserInitiatedCheckAfterInFlight = false
+  setTimeout(() => {
+    // Why: electron-updater clears its in-flight promise after emitting the
+    // terminal event. Deferring one tick lets the queued RC check start fresh
+    // instead of being deduped into the just-finished stable check.
+    if (currentStatus.state === 'checking') {
+      currentStatus = { state: 'idle' }
+    }
+    checkForUpdatesFromMenu({ includePrerelease: true })
+  }, 0)
 }
 
 function clearBackgroundCheckLaunchPending(): void {
@@ -259,7 +285,12 @@ function clearPrereleaseFallbackContextIfSettled(): void {
   }
 }
 
-function performQuitAndInstall(): void {
+async function performQuitAndInstall(): Promise<void> {
+  if (quitAndInstallInProgress) {
+    return
+  }
+  quitAndInstallInProgress = true
+
   if (pendingQuitAndInstallTimer) {
     clearTimeout(pendingQuitAndInstallTimer)
     pendingQuitAndInstallTimer = null
@@ -275,14 +306,45 @@ function performQuitAndInstall(): void {
   // either can't replace it or the user ends up on the old version.
   quittingForUpdate = true
 
+  await runBeforeUpdateQuitCleanup()
   killAllPty()
-  onBeforeQuitCleanup?.()
 
   for (const win of BrowserWindow.getAllWindows()) {
     win.removeAllListeners('close')
   }
 
   getAutoUpdater().quitAndInstall(false, true)
+}
+
+async function runBeforeUpdateQuitCleanup(): Promise<void> {
+  if (!onBeforeQuitCleanup) {
+    return
+  }
+
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  const cleanup = Promise.resolve()
+    .then(() => onBeforeQuitCleanup?.())
+    .catch((error) => {
+      console.warn(
+        '[updater] Pre-quit cleanup failed; continuing update install:',
+        error instanceof Error ? error.name : typeof error
+      )
+    })
+  const timeoutResult = new Promise<'timeout'>((resolve) => {
+    timeout = setTimeout(() => resolve('timeout'), PRE_QUIT_CLEANUP_TIMEOUT_MS)
+  })
+
+  const result = await Promise.race([cleanup.then(() => 'done' as const), timeoutResult])
+  if (result === 'timeout') {
+    console.warn(
+      `[updater] Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; continuing update install`
+    )
+    return
+  }
+
+  if (timeout) {
+    clearTimeout(timeout)
+  }
 }
 
 async function sendCheckFailureStatus(
@@ -696,6 +758,11 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
   sendStatus({ state: 'checking', userInitiated: true })
   if (checkAlreadyInFlight) {
     backgroundCheckPromotedToUserInitiated = true
+    if (options?.includePrerelease) {
+      // Why: the in-flight check may have already pinned the stable feed.
+      // Queue a fresh RC check so Shift-click doesn't inherit a stable result.
+      pendingPrereleaseUserInitiatedCheckAfterInFlight = true
+    }
     return
   }
 
@@ -713,7 +780,7 @@ export function isQuittingForUpdate(): boolean {
 }
 
 export function quitAndInstall(): void {
-  if (pendingQuitAndInstallTimer) {
+  if (pendingQuitAndInstallTimer || quitAndInstallInProgress) {
     return
   }
 
@@ -733,7 +800,7 @@ export function quitAndInstall(): void {
   // a moment to flush dismissals/state updates before windows start closing,
   // and centralizing it avoids drift between the toast flow and settings UI.
   pendingQuitAndInstallTimer = setTimeout(() => {
-    performQuitAndInstall()
+    void performQuitAndInstall()
   }, QUIT_AND_INSTALL_DELAY_MS)
 }
 
@@ -806,7 +873,7 @@ export function setupAutoUpdater(
   mainWindow: BrowserWindow,
   opts?: {
     getLastUpdateCheckAt?: () => number | null
-    onBeforeQuit?: () => void
+    onBeforeQuit?: () => void | Promise<void>
     setLastUpdateCheckAt?: (timestamp: number) => void
     getPendingUpdateNudgeId?: () => string | null
     getDismissedUpdateNudgeId?: () => string | null
@@ -847,19 +914,12 @@ export function setupAutoUpdater(
     debug: (m: unknown) => console.debug('[autoUpdater]', m)
   } as never
 
-  // Why: no Windows Authenticode certificate exists for this project.
-  // electron-builder embeds the code-signing publisherName into the app's
-  // bundled app-update.yml at build time. Versions that were incorrectly
-  // signed with the macOS Apple Developer ID cert (issue #631) baked in a
-  // publisherName whose chain Windows cannot validate, and even after the
-  // CI fix the installed app's app-update.yml still contains the stale
-  // publisherName. Skip Windows code signing verification — update
-  // integrity is still guaranteed by the SHA-512 hash check in latest.yml.
+  // Why: older Windows installs either have no publisherName or have the
+  // stale macOS Apple Developer ID publisherName from issue #631. Keep the
+  // migration path open while SignPath-signed builds roll out.
   //
-  // TODO: remove this override once a Windows Authenticode certificate is
-  // purchased and WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD are added to CI.
-  // At that point electron-builder will embed the correct publisherName
-  // and the default verification should be re-enabled.
+  // TODO: re-enable after SignPath-signed builds with the explicit Windows
+  // publisherName have been the minimum supported updater source for a while.
   if (process.platform === 'win32') {
     ;(autoUpdater as NsisUpdater).verifyUpdateCodeSignature = () => Promise.resolve(null)
   }

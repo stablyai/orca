@@ -1,7 +1,22 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
+// The in-WebView JS lives in terminal-webview-html.ts; the RN wrapper in
+// TerminalWebView.tsx. Concatenate both so assertions resolve regardless of file.
+const source =
+  readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-pending-messages.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-url-tap.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-tap-dispatch-injected.ts', import.meta.url), 'utf8') +
+  readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8')
+const sessionSource = readFileSync(
+  new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
+  'utf8'
+)
+const sessionHelperSource = readFileSync(
+  new URL('../session/mobile-session-route-helpers.ts', import.meta.url),
+  'utf8'
+)
 
 function sliceBetween(startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -74,6 +89,36 @@ describe('TerminalWebView scroll routing', () => {
     expect(resetBlock).toContain('cancelAnimationFrame(normalScrollFrameId);')
   })
 
+  it('drains terminal writes without shifting the queued array', () => {
+    expect(source).toContain('var writeQueueHead = 0;')
+    expect(source).toContain('function nextQueuedWrite()')
+    expect(source).toContain('writeQueueHead++;')
+    expect(source).toContain('writeQueue = writeQueue.slice(writeQueueHead);')
+    expect(source).not.toContain('writeQueue.shift()')
+  })
+
+  it('bounds native-side pending WebView writes while preserving control messages', () => {
+    expect(source).toContain('const MAX_PENDING_WEB_WRITE_BYTES = 1_000_000')
+    expect(source).toContain('const MAX_PENDING_WEB_WRITE_MESSAGES = 4096')
+    expect(source).toContain('let pendingWriteBytes = 0')
+    expect(source).toContain('let pendingWriteCount = 0')
+    expect(source).toContain('const queue = (msg: TerminalWebViewCommand)')
+    expect(source).toContain('pendingWriteCount > MAX_PENDING_WEB_WRITE_MESSAGES')
+    expect(source).toContain("candidate.type === 'write'")
+    expect(source).toContain('pendingMessages.queue(msg)')
+    expect(source).toContain('pendingMessages.clear()')
+  })
+
+  it('clears WebView await timers when the real response wins', () => {
+    const measureBlock = sliceBetween('measureFitDimensions(', 'resetZoom()')
+    expect(measureBlock).toContain('clearTimeout(timeout)')
+    expect(measureBlock).toContain('measureResolveRef.current === finish')
+
+    const readyBlock = sliceBetween('async awaitReady()', '})')
+    expect(readyBlock).toContain('clearTimeout(timeout)')
+    expect(readyBlock).toContain('void p.finally')
+  })
+
   it('hides xterm scrollbars and drives the mobile scroll indicator from committed rows', () => {
     expect(source).toContain('<div id="scroll-indicator"><div id="scroll-thumb"></div></div>')
     expect(source).toContain('.xterm .xterm-viewport::-webkit-scrollbar')
@@ -106,5 +151,85 @@ describe('TerminalWebView scroll routing', () => {
     expect(source).toContain('ts.velY * 0.55 + instantVelocity * 0.45')
     expect(source).toContain('var FRICTION = 0.972;')
     expect(source).toContain('var MIN_VEL = 0.012;')
+  })
+
+  it('keeps selection edge autoscroll active and extends the dragged endpoint', () => {
+    const startBlock = sliceBetween('function startEdgeScroll(dir)', 'function stopEdgeScroll()')
+    expect(startBlock.indexOf('stopEdgeScroll();')).toBeLessThan(
+      startBlock.indexOf('edgeScrollDir = dir;')
+    )
+    expect(startBlock.indexOf('term.scrollLines(edgeScrollDir);')).toBeLessThan(
+      startBlock.indexOf('syncEdgeScrollSelectionEndpoint();')
+    )
+
+    const dragMoveBlock = sliceBetween(
+      'function handleDragMove(handle, clientX, clientY)',
+      '  // Latching document-level touch dispatcher: see'
+    )
+    expect(dragMoveBlock).toContain('edgeScrollClientX = clientX;')
+    expect(dragMoveBlock).toContain('edgeScrollClientY = clientY;')
+    expect(dragMoveBlock).toContain('syncSelectionHandleToViewportPoint(handle, clientX, clientY)')
+  })
+
+  it('opens links and paths from surface taps before mouse/focus fallback', () => {
+    expect(source).toContain('function buildMouseClickInput(clientX, clientY)')
+    expect(source).toContain('function isClickMouseTrackingMode(mode)')
+    expect(source).toContain("return mode !== 'none';")
+    expect(source).toContain('var pixelX = cell.x;')
+    expect(source).toContain('var pixelY = cell.y;')
+    expect(source).toContain(
+      'if (!isSafeSgrMouseCoordinate(cell.x) || !isSafeSgrMouseCoordinate(cell.y)) return'
+    )
+    expect(source).toContain(
+      'if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) return'
+    )
+    expect(source).toContain("if (mouseTrackingMode === 'x10') return pixelPress;")
+    expect(source).toContain("if (mouseTrackingMode === 'x10') return sgrPress;")
+    expect(source).toContain("if (mouseTrackingMode === 'x10') return press;")
+    expect(source).toContain("if (col > 126 || row > 126) return '';")
+
+    const touchEndBlock = sliceBetween(
+      "document.addEventListener('touchend'",
+      '}, { capture: true, passive: true });'
+    )
+    expect(touchEndBlock).toContain('notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y)')
+
+    const tapHandlerBlock = sliceBetween(
+      'function notifyTerminalSurfaceTap(originX, originY)',
+      "document.addEventListener('touchstart'"
+    )
+    expect(tapHandlerBlock.indexOf('oscLinkAtViewportPoint')).toBeLessThan(
+      tapHandlerBlock.indexOf('urlAtViewportPoint')
+    )
+    expect(tapHandlerBlock.indexOf('urlAtViewportPoint')).toBeLessThan(
+      tapHandlerBlock.indexOf('filePathAtViewportPoint')
+    )
+    expect(tapHandlerBlock.indexOf('filePathAtViewportPoint')).toBeLessThan(
+      tapHandlerBlock.indexOf('var clickInput = buildMouseClickInput')
+    )
+    expect(tapHandlerBlock).toContain("notify({ type: 'open-url', url: tappedUrl });")
+    expect(tapHandlerBlock).toContain("notify({ type: 'terminal-input', bytes: clickInput });")
+    expect(tapHandlerBlock).toContain("notify({ type: 'terminal-tap' });")
+  })
+
+  it('allows x10 mouse gesture reports through the mobile session gate', () => {
+    expect(sessionHelperSource).toContain('function isGestureMouseTrackingMode')
+    expect(sessionHelperSource).toContain(
+      "return mode === 'x10' || mode === 'vt200' || mode === 'drag' || mode === 'any'"
+    )
+
+    const inputBlockStart = sessionSource.indexOf('const handleTerminalInput = useCallback')
+    expect(inputBlockStart).toBeGreaterThanOrEqual(0)
+    const inputBlockEnd = sessionSource.indexOf(
+      'async function handleClearTerminal',
+      inputBlockStart
+    )
+    expect(inputBlockEnd).toBeGreaterThan(inputBlockStart)
+    const inputBlock = sessionSource.slice(inputBlockStart, inputBlockEnd)
+    expect(inputBlock).toContain('!isGestureMouseTrackingMode(modes?.mouseTrackingMode)')
+    expect(inputBlock).toContain('const sequenceCount = countTerminalGestureInputSequences(bytes)')
+    expect(inputBlock.indexOf('countTerminalGestureInputSequences')).toBeLessThan(
+      inputBlock.indexOf('enqueueTerminalGestureInput')
+    )
   })
 })

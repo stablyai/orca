@@ -2,6 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { existsSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,7 +12,7 @@ const scriptPath = fileURLToPath(import.meta.url)
 const projectDir = resolve(dirname(scriptPath), '../..')
 const runtime = readRuntimeArg()
 
-const NATIVE_MODULES = ['better-sqlite3', 'node-pty']
+const NATIVE_MODULES = ['node-pty']
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
@@ -50,7 +51,18 @@ function readRuntimeArg() {
 
 function ensureNodeRuntime() {
   const initial = runNodeCheck()
-  if (initial.ok) {
+  const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
+  if (initial.ok && !patchedNodePtyRebuildReason) {
+    return
+  }
+
+  if (patchedNodePtyRebuildReason) {
+    console.warn(`[native-runtime] ${patchedNodePtyRebuildReason}`)
+    if (!initial.ok) {
+      printCheckError(initial)
+    }
+    runPnpm(['rebuild', 'node-pty'])
+    verifyNodeRuntimeAfterRebuild()
     return
   }
 
@@ -60,7 +72,10 @@ function ensureNodeRuntime() {
   )
   printCheckError(initial)
   runPnpm(['rebuild', ...failedModules])
+  verifyNodeRuntimeAfterRebuild()
+}
 
+function verifyNodeRuntimeAfterRebuild() {
   const final = runNodeCheck()
   if (!final.ok) {
     console.error(
@@ -73,14 +88,22 @@ function ensureNodeRuntime() {
 
 function ensureElectronRuntime() {
   const initial = runElectronCheck()
-  if (initial.ok) {
+  const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
+  if (initial.ok && !patchedNodePtyRebuildReason) {
     return
   }
 
-  console.warn(
-    `[native-runtime] ${formatRuntimeLabel('electron')} cannot load native modules; rebuilding native deps for Electron.`
-  )
-  printCheckError(initial)
+  if (patchedNodePtyRebuildReason) {
+    console.warn(`[native-runtime] ${patchedNodePtyRebuildReason}`)
+    if (!initial.ok) {
+      printCheckError(initial)
+    }
+  } else {
+    console.warn(
+      `[native-runtime] ${formatRuntimeLabel('electron')} cannot load native modules; rebuilding native deps for Electron.`
+    )
+    printCheckError(initial)
+  }
   runNodeScript(['config/scripts/rebuild-native-deps.mjs'])
 
   const final = runElectronCheck()
@@ -106,14 +129,12 @@ function runNodeCheck() {
 }
 
 function runElectronCheck() {
-  let electronExecutable
-  try {
-    electronExecutable = require('electron')
-  } catch (error) {
-    return { ok: false, error }
+  const electronExecutable = resolveInstalledElectronExecutable()
+  if (!electronExecutable.ok) {
+    return { ok: false, error: electronExecutable.error }
   }
 
-  const result = spawnSync(electronExecutable, [scriptPath, CHILD_CHECK_FLAG], {
+  const result = spawnSync(electronExecutable.path, [scriptPath, CHILD_CHECK_FLAG], {
     cwd: projectDir,
     env: {
       ...process.env,
@@ -124,6 +145,63 @@ function runElectronCheck() {
   })
 
   return parseChildCheckResult(result)
+}
+
+function resolveInstalledElectronExecutable() {
+  const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+  try {
+    const electronVersion = JSON.parse(
+      readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')
+    ).version
+    const platformPath = getElectronPlatformPath()
+    const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
+      .trim()
+      .replace(/^v/, '')
+    if (installedVersion !== electronVersion) {
+      return {
+        ok: false,
+        error: new Error(
+          `Electron package binary version ${installedVersion} does not match ${electronVersion}.`
+        )
+      }
+    }
+    const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
+    if (installedPlatformPath !== platformPath) {
+      return {
+        ok: false,
+        error: new Error(
+          `Electron package path.txt points at ${installedPlatformPath}, expected ${platformPath}.`
+        )
+      }
+    }
+    const electronPath = process.env.ELECTRON_OVERRIDE_DIST_PATH
+      ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
+      : resolve(electronPackageDir, 'dist', platformPath)
+    if (!existsSync(electronPath)) {
+      return { ok: false, error: new Error(`Electron executable is missing at ${electronPath}.`) }
+    }
+    return { ok: true, path: electronPath }
+  } catch (error) {
+    return { ok: false, error }
+  }
+}
+
+function getElectronPlatformPath() {
+  const targetPlatform =
+    process.env.ELECTRON_INSTALL_PLATFORM || process.env.npm_config_platform || process.platform
+  switch (targetPlatform) {
+    case 'mas':
+    case 'darwin':
+      return 'Electron.app/Contents/MacOS/Electron'
+    case 'freebsd':
+    case 'openbsd':
+    case 'linux':
+      return 'electron'
+    case 'win32':
+      return 'electron.exe'
+    default:
+      throw new Error(`Electron builds are not available on platform: ${targetPlatform}`)
+  }
 }
 
 function parseChildCheckResult(result) {
@@ -163,15 +241,6 @@ function collectNativeModuleFailures() {
 }
 
 function loadNativeModule(moduleName) {
-  if (moduleName === 'better-sqlite3') {
-    const Database = require(moduleName)
-    // Why: better-sqlite3 defers loading its .node binding until Database is
-    // constructed, so a plain require() misses Node ABI mismatches.
-    const db = new Database(':memory:')
-    db.close()
-    return
-  }
-
   if (moduleName === 'node-pty') {
     loadNodePtyNativeModule()
     return
@@ -187,7 +256,12 @@ function loadNodePtyNativeModule() {
   const nativeName = getNodePtyNativeModuleName()
   // Why: node-pty's Windows JS wrapper defers conpty.node/pty.node until a
   // terminal is created, so require('node-pty') alone can miss ABI mismatches.
-  loadNativeModule(nativeName)
+  const native = loadNativeModule(nativeName)
+  if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native.dir)) {
+    throw new Error(
+      `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`
+    )
+  }
 }
 
 function getNodePtyNativeModuleName() {
@@ -196,6 +270,43 @@ function getNodePtyNativeModuleName() {
   }
 
   return getWindowsBuildNumber() >= 18309 ? 'conpty' : 'pty'
+}
+
+function getPatchedNodePtyRebuildReason() {
+  if (!requiresPatchedNodePtySourceBuild()) {
+    return null
+  }
+
+  // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix
+  // patch only lands in the source-built build/Release artifacts.
+  const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
+  const missingArtifact = [
+    resolve(nodePtyDir, 'build', 'Release', 'pty.node'),
+    resolve(nodePtyDir, 'build', 'Release', 'spawn-helper')
+  ].find((artifactPath) => !existsSync(artifactPath))
+
+  if (!missingArtifact) {
+    return null
+  }
+
+  return 'Patched node-pty build artifacts are missing; rebuilding native deps.'
+}
+
+function requiresPatchedNodePtySourceBuild() {
+  if (process.platform === 'win32') {
+    return false
+  }
+
+  const nodePtyPatchPath = resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')
+  if (!existsSync(nodePtyPatchPath)) {
+    return false
+  }
+
+  return existsSync(resolve(projectDir, 'node_modules', 'node-pty'))
+}
+
+function isNodePtyReleaseBuildDir(nativeDir) {
+  return typeof nativeDir === 'string' && nativeDir.replace(/\\/g, '/').includes('build/Release/')
 }
 
 function getWindowsBuildNumber() {
@@ -208,7 +319,7 @@ function runPnpm(args) {
   const result = spawnSync(command, args, {
     cwd: projectDir,
     stdio: 'inherit',
-    shell: false
+    shell: process.platform === 'win32'
   })
 
   if (result.error || result.status !== 0) {

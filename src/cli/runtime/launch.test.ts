@@ -1,3 +1,4 @@
+import { EventEmitter } from 'events'
 import { resolve } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -9,7 +10,12 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-import { serveOrcaApp } from './launch'
+import { launchOrcaApp, serveOrcaApp } from './launch'
+
+class FakeChildProcess extends EventEmitter {
+  kill = vi.fn()
+  unref = vi.fn()
+}
 
 describe('serveOrcaApp', () => {
   beforeEach(() => {
@@ -145,5 +151,29 @@ describe('serveOrcaApp', () => {
         Object.defineProperty(process, 'platform', platformDescriptor)
       }
     }
+  })
+})
+
+describe('launchOrcaApp', () => {
+  beforeEach(() => {
+    spawnMock.mockReset()
+  })
+
+  afterEach(() => {
+    delete process.env.ORCA_OPEN_COMMAND
+    delete process.env.ORCA_APP_EXECUTABLE
+    delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
+  })
+
+  it('handles asynchronous detached spawn errors without throwing', async () => {
+    process.env.ORCA_APP_EXECUTABLE = '/missing/Orca'
+    const child = new FakeChildProcess()
+    spawnMock.mockReturnValue(child)
+
+    launchOrcaApp()
+    child.emit('error', new Error('ENOENT'))
+    await Promise.resolve()
+
+    expect(child.unref).toHaveBeenCalled()
   })
 })

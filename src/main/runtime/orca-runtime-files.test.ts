@@ -1,8 +1,12 @@
-/* eslint-disable max-lines */
+/* eslint-disable max-lines -- Why: runtime file command tests share mocked fs,
+   authorization, and watcher lifecycle fixtures; splitting would duplicate the
+   setup that makes cross-command filesystem behavior comparable. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import type * as Fs from 'fs'
 import type * as FsPromises from 'fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
+import type * as GitRunner from '../git/runner'
 
 const {
   lstatMock,
@@ -10,15 +14,21 @@ const {
   renameMock,
   resolveAuthorizedPathMock,
   statMock,
-  subscribeParcelWatcherMock,
+  watchInWorkerMock,
+  checkRgAvailableMock,
+  getLocalGitOptionsForRegisteredWorktreeMock,
+  wslAwareSpawnMock,
   watchMock
 } = vi.hoisted(() => ({
+  checkRgAvailableMock: vi.fn(),
+  getLocalGitOptionsForRegisteredWorktreeMock: vi.fn(),
   lstatMock: vi.fn(),
   readdirMock: vi.fn(),
   renameMock: vi.fn(),
   resolveAuthorizedPathMock: vi.fn(),
   statMock: vi.fn(),
-  subscribeParcelWatcherMock: vi.fn(),
+  watchInWorkerMock: vi.fn(),
+  wslAwareSpawnMock: vi.fn(),
   watchMock: vi.fn()
 }))
 
@@ -41,8 +51,8 @@ vi.mock('fs/promises', async () => {
   }
 })
 
-vi.mock('@parcel/watcher', () => ({
-  subscribe: subscribeParcelWatcherMock
+vi.mock('./file-watcher-host', () => ({
+  watchFileExplorerInWorker: watchInWorkerMock
 }))
 
 vi.mock('../ipc/filesystem-auth', async () => {
@@ -53,6 +63,22 @@ vi.mock('../ipc/filesystem-auth', async () => {
   }
 })
 
+vi.mock('../git/runner', async () => {
+  const actual = await vi.importActual<typeof GitRunner>('../git/runner')
+  return {
+    ...actual,
+    wslAwareSpawn: wslAwareSpawnMock
+  }
+})
+
+vi.mock('../ipc/rg-availability', () => ({
+  checkRgAvailable: checkRgAvailableMock
+}))
+
+vi.mock('../ipc/local-worktree-runtime-options', () => ({
+  getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock
+}))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn(),
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE:
@@ -61,6 +87,13 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 
 import { awaitRuntimeFileWatcherUnsubscribes, RuntimeFileCommands } from './orca-runtime-files'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { SEARCH_TIMEOUT_MS } from '../../shared/text-search'
+
+type MockRuntimeSearchChild = EventEmitter & {
+  stdout: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> }
+  stderr: EventEmitter
+  kill: ReturnType<typeof vi.fn>
+}
 
 function enoent(): Error {
   return Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
@@ -78,22 +111,49 @@ function dirEntry(args: { name: string; directory?: boolean; symlink?: boolean }
   }
 }
 
-function createRuntimeFileCommands() {
+function mockLocalPathStats(entries: Record<string, [number, number]>) {
+  resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+  lstatMock.mockImplementation(async (p: string) => {
+    const entry = entries[p]
+    if (entry) {
+      return mockStats(entry[0], entry[1])
+    }
+    throw enoent()
+  })
+}
+
+function createRuntimeFileCommands(options?: {
+  path?: string
+  openFile?: ReturnType<typeof vi.fn>
+  openDiff?: ReturnType<typeof vi.fn>
+  resolveRuntimeGitTarget?: ReturnType<typeof vi.fn>
+}) {
   const store = {
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
   }
+  const path = options?.path ?? '/repo'
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,
     resolveWorktreeSelector: vi.fn(async () => ({
       id: 'wt-1',
       repoId: 'repo-1',
-      path: '/repo'
+      path
     })),
-    resolveRuntimeGitTarget: vi.fn(),
-    openFile: vi.fn()
+    resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
+    openFile: options?.openFile ?? vi.fn(),
+    ...(options?.openDiff ? { openDiff: options.openDiff } : {})
   } as never)
   return { commands, store }
+}
+
+function createRuntimeSearchChild(): MockRuntimeSearchChild {
+  const child = new EventEmitter() as MockRuntimeSearchChild
+  child.stdout = new EventEmitter() as MockRuntimeSearchChild['stdout']
+  child.stdout.setEncoding = vi.fn()
+  child.stderr = new EventEmitter()
+  child.kill = vi.fn()
+  return child
 }
 
 describe('RuntimeFileCommands', () => {
@@ -106,8 +166,12 @@ describe('RuntimeFileCommands', () => {
     renameMock.mockReset()
     resolveAuthorizedPathMock.mockReset()
     statMock.mockReset()
-    subscribeParcelWatcherMock.mockReset()
+    watchInWorkerMock.mockReset()
     watchMock.mockReset()
+    checkRgAvailableMock.mockReset()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReset()
+    wslAwareSpawnMock.mockReset()
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
     readdirMock.mockResolvedValue([])
     lstatMock.mockRejectedValue(enoent())
     renameMock.mockResolvedValue(undefined)
@@ -126,29 +190,79 @@ describe('RuntimeFileCommands', () => {
     vi.useRealTimers()
   })
 
-  it('opens source control diffs through the renderer host', async () => {
+  it('opens source control diffs through the renderer host (inheriting active runtime env)', async () => {
     const openDiff = vi.fn()
-    const commands = new RuntimeFileCommands({
-      getRuntimeId: () => 'runtime-1',
-      requireStore: () => ({ getRepo: vi.fn(() => undefined) }),
-      resolveWorktreeSelector: vi.fn(async () => ({
-        id: 'wt-1',
-        repoId: 'repo-1',
-        path: '/repo'
-      })),
-      resolveRuntimeGitTarget: vi.fn(),
-      openFile: vi.fn(),
-      openDiff
-    } as never)
+    const { commands } = createRuntimeFileCommands({ openDiff })
 
     const result = await commands.openMobileDiff('id:wt-1', 'docs/readme.md', true)
 
-    expect(openDiff).toHaveBeenCalledWith('wt-1', '/repo/docs/readme.md', 'docs/readme.md', true)
+    expect(openDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/readme.md',
+      'docs/readme.md',
+      true,
+      undefined
+    )
     expect(result).toEqual({
       worktree: 'wt-1',
       relativePath: 'docs/readme.md',
       kind: 'markdown',
       opened: true
+    })
+  })
+
+  it('opens text files through the renderer host (inheriting active runtime env)', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'docs/readme.md')
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/readme.md',
+      'docs/readme.md',
+      undefined
+    )
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'docs/readme.md',
+      kind: 'markdown',
+      opened: true
+    })
+  })
+
+  it('opens previewable images through the renderer host as an image tab', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'assets/logo.png')
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/assets/logo.png',
+      'assets/logo.png',
+      undefined
+    )
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'assets/logo.png',
+      kind: 'image',
+      opened: true
+    })
+  })
+
+  it('leaves non-previewable binaries unavailable on mobile', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'dist/bundle.zip')
+
+    expect(openFile).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'dist/bundle.zip',
+      kind: 'binary',
+      opened: false
     })
   })
 
@@ -180,12 +294,9 @@ describe('RuntimeFileCommands', () => {
 
   it('allows runtime-local case-only rename with IPC parity guard behavior', async () => {
     const { commands } = createRuntimeFileCommands()
-    resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === '/repo/README.md' || p === '/repo/readme.md') {
-        return mockStats(10, 100)
-      }
-      throw enoent()
+    mockLocalPathStats({
+      '/repo/README.md': [10, 100],
+      '/repo/readme.md': [10, 100]
     })
 
     await commands.renameFileExplorerPath('id:wt-1', 'README.md', 'readme.md')
@@ -195,15 +306,9 @@ describe('RuntimeFileCommands', () => {
 
   it('rejects runtime-local true destination collisions', async () => {
     const { commands } = createRuntimeFileCommands()
-    resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === '/repo/old.ts') {
-        return mockStats(11, 110)
-      }
-      if (p === '/repo/new.ts') {
-        return mockStats(11, 111)
-      }
-      throw enoent()
+    mockLocalPathStats({
+      '/repo/old.ts': [11, 110],
+      '/repo/new.ts': [11, 111]
     })
 
     await expect(commands.renameFileExplorerPath('id:wt-1', 'old.ts', 'new.ts')).rejects.toThrow(
@@ -215,12 +320,9 @@ describe('RuntimeFileCommands', () => {
 
   it('rejects runtime-local hard-link alias collisions', async () => {
     const { commands } = createRuntimeFileCommands()
-    resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === '/repo/README.md' || p === '/repo/README-hardlink.md') {
-        return mockStats(12, 120)
-      }
-      throw enoent()
+    mockLocalPathStats({
+      '/repo/README.md': [12, 120],
+      '/repo/README-hardlink.md': [12, 120]
     })
 
     await expect(
@@ -232,12 +334,9 @@ describe('RuntimeFileCommands', () => {
 
   it('rejects runtime-local cross-parent case-only collisions', async () => {
     const { commands } = createRuntimeFileCommands()
-    resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-    lstatMock.mockImplementation(async (p: string) => {
-      if (p === '/repo/src/README.md' || p === '/repo/docs/readme.md') {
-        return mockStats(13, 130)
-      }
-      throw enoent()
+    mockLocalPathStats({
+      '/repo/src/README.md': [13, 130],
+      '/repo/docs/readme.md': [13, 130]
     })
 
     await expect(
@@ -277,7 +376,6 @@ describe('RuntimeFileCommands', () => {
       value: 'win32'
     })
 
-    const store = { getRepo: vi.fn(() => undefined) }
     const close = vi.fn()
     const on = vi.fn()
     let listener: (() => void) | null = null
@@ -287,18 +385,7 @@ describe('RuntimeFileCommands', () => {
     })
     resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
-
-    const commands = new RuntimeFileCommands({
-      getRuntimeId: () => 'runtime-1',
-      requireStore: () => store,
-      resolveWorktreeSelector: vi.fn(async () => ({
-        id: 'wt-1',
-        repoId: 'repo-1',
-        path: 'C:\\repo'
-      })),
-      resolveRuntimeGitTarget: vi.fn(),
-      openFile: vi.fn()
-    } as never)
+    const { commands } = createRuntimeFileCommands({ path: 'C:\\repo' })
     const onEvents = vi.fn()
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', onEvents)
@@ -320,33 +407,206 @@ describe('RuntimeFileCommands', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
-  it('tracks native Parcel watcher unsubscribe work so shutdown can await it', async () => {
-    const { commands } = createRuntimeFileCommands()
+  it('delegates local recursive watching to the worker thread', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
-    let resolveUnsubscribe: () => void = () => {}
-    const unsubscribeMock = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveUnsubscribe = resolve
-        })
-    )
-    subscribeParcelWatcherMock.mockResolvedValue({ unsubscribe: unsubscribeMock })
+    const dispose = vi.fn()
+    watchInWorkerMock.mockResolvedValue(dispose)
+    const { commands } = createRuntimeFileCommands()
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
-    unsubscribe()
+    expect(watchInWorkerMock).toHaveBeenCalledWith('/repo', expect.any(Function))
 
-    let drained = false
-    const drainPromise = awaitRuntimeFileWatcherUnsubscribes().then(() => {
-      drained = true
+    unsubscribe()
+    await awaitRuntimeFileWatcherUnsubscribes()
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('settles and detaches runtime rg searches when timeout kill is ignored', async () => {
+    const resolveRuntimeGitTarget = vi.fn(async () => ({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: '/repo'
+      },
+      connectionId: null
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeGitTarget })
+    const child = createRuntimeSearchChild()
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    checkRgAvailableMock.mockResolvedValue(true)
+    wslAwareSpawnMock.mockReturnValue(child)
+
+    const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+      query: 'needle',
+      maxResults: 10
+    })
+    await vi.advanceTimersByTimeAsync(SEARCH_TIMEOUT_MS)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      files: [],
+      totalMatches: 0,
+      truncated: true
+    })
+    expect(child.kill).toHaveBeenCalledTimes(1)
+    expect(child.stdout.listenerCount('data')).toBe(0)
+    expect(child.stderr.listenerCount('data')).toBe(0)
+    expect(child.listenerCount('error')).toBe(0)
+    expect(child.listenerCount('close')).toBe(0)
+  })
+
+  it('routes runtime rg searches through the registered WSL project runtime', async () => {
+    const resolveRuntimeGitTarget = vi.fn(async () => ({
+      worktree: {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        path: 'C:\\repo'
+      },
+      connectionId: null
+    }))
+    const { commands, store } = createRuntimeFileCommands({ resolveRuntimeGitTarget })
+    const child = createRuntimeSearchChild()
+    resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
+    checkRgAvailableMock.mockResolvedValue(true)
+    getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    wslAwareSpawnMock.mockReturnValue(child)
+
+    const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
+      query: 'needle',
+      maxResults: 10
     })
     await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    child.emit('close')
 
-    expect(unsubscribeMock).toHaveBeenCalledTimes(1)
-    expect(drained).toBe(false)
+    await expect(resultPromise).resolves.toMatchObject({ files: [] })
+    expect(getLocalGitOptionsForRegisteredWorktreeMock).toHaveBeenCalledWith(
+      store,
+      'C:\\repo',
+      'C:\\repo'
+    )
+    expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      'rg',
+      expect.any(Array),
+      expect.objectContaining({
+        cwd: 'C:\\repo',
+        wslDistro: 'Ubuntu'
+      })
+    )
+  })
 
-    resolveUnsubscribe()
-    await drainPromise
-    expect(drained).toBe(true)
+  describe('resolveTerminalPath', () => {
+    function statAsFile() {
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockResolvedValue({ isDirectory: () => false })
+    }
+
+    it('resolves an absolute path inside the worktree to a relative path', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '/repo/src/index.ts')
+
+      expect(result).toEqual({
+        worktree: 'wt-1',
+        relativePath: 'src/index.ts',
+        absolutePath: '/repo/src/index.ts',
+        exists: true,
+        isDirectory: false
+      })
+    })
+
+    it('resolves a relative path against the provided cwd', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath('id:wt-1', 'index.ts', '/repo/src')
+
+      expect(result).toMatchObject({ relativePath: 'src/index.ts', exists: true })
+    })
+
+    it('resolves a relative path against the worktree root when no cwd is given', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      statAsFile()
+
+      const result = await commands.resolveTerminalPath('id:wt-1', 'docs/readme.md')
+
+      expect(result).toMatchObject({ relativePath: 'docs/readme.md', exists: true })
+    })
+
+    it('reports a directory', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockResolvedValue({ isDirectory: () => true })
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '/repo/src')
+
+      expect(result).toMatchObject({ relativePath: 'src', isDirectory: true, exists: true })
+    })
+
+    it('returns null relativePath for a path outside the worktree', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '/etc/passwd')
+
+      expect(result).toEqual({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: null,
+        exists: false,
+        isDirectory: false
+      })
+      expect(statMock).not.toHaveBeenCalled()
+    })
+
+    it('reports a nonexistent in-worktree path as not existing', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+
+      const result = await commands.resolveTerminalPath('id:wt-1', 'src/missing.ts')
+
+      expect(result).toMatchObject({ relativePath: 'src/missing.ts', exists: false })
+    })
+
+    it('does not expand ~/ on a remote worktree (home is unknown)', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const stat = vi.fn()
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat } as never)
+
+      const result = await commands.resolveTerminalPath('id:wt-1', '~/notes.md')
+
+      expect(result).toMatchObject({ relativePath: null, exists: false })
+      expect(stat).not.toHaveBeenCalled()
+    })
+
+    it('reports a missing remote file as not existing', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat } as never)
+
+      const result = await commands.resolveTerminalPath('id:wt-1', 'src/missing.ts')
+
+      expect(result).toMatchObject({ relativePath: 'src/missing.ts', exists: false })
+    })
+
+    it('rethrows a remote transport error instead of reporting not-found', async () => {
+      const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      const stat = vi.fn().mockRejectedValue(new Error('Remote connection dropped'))
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat } as never)
+
+      await expect(commands.resolveTerminalPath('id:wt-1', 'src/x.ts')).rejects.toThrow(
+        'Remote connection dropped'
+      )
+    })
   })
 })

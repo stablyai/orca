@@ -83,7 +83,7 @@ describe('finalizeImportedRepoAfterSkip', () => {
     expect(state.setHideDefaultBranchWorkspace).toHaveBeenCalledWith(false)
   })
 
-  it('does nothing when the imported repo has no discovered worktrees yet', () => {
+  it('still reveals the imported repo when it has no discovered worktrees yet', () => {
     const state = makeState({
       activeRepoId: 'repo-old',
       filterRepoIds: ['repo-old'],
@@ -94,9 +94,9 @@ describe('finalizeImportedRepoAfterSkip', () => {
 
     finalizeImportedRepoAfterSkip(state, 'repo-new')
 
-    expect(state.setActiveRepo).not.toHaveBeenCalled()
-    expect(state.setFilterRepoIds).not.toHaveBeenCalled()
-    expect(state.setShowActiveOnly).not.toHaveBeenCalled()
+    expect(state.setActiveRepo).toHaveBeenCalledWith('repo-new')
+    expect(state.setFilterRepoIds).toHaveBeenCalledWith([])
+    expect(state.setShowActiveOnly).toHaveBeenCalledWith(false)
     expect(state.setHideDefaultBranchWorkspace).not.toHaveBeenCalled()
   })
 })

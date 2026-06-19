@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 
 const {
   removeHandlerMock,
@@ -131,6 +132,10 @@ describe('registerClipboardHandlers', () => {
 
   it('saves clipboard images to a local temp file when no connection is provided', async () => {
     const png = Buffer.from([0, 1, 2, 3])
+    const expectedPath = join(
+      '/tmp',
+      'orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
+    )
     clipboardReadImageMock.mockReturnValue({
       isEmpty: () => false,
       toPNG: () => png
@@ -140,12 +145,9 @@ describe('registerClipboardHandlers', () => {
 
     const handlers = getRegisteredHandlers()
     await expect(handlers.get('clipboard:saveImageAsTempFile')?.({}, undefined)).resolves.toBe(
-      '/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
+      expectedPath
     )
-    expect(fsWriteFileMock).toHaveBeenCalledWith(
-      '/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
-      png
-    )
+    expect(fsWriteFileMock).toHaveBeenCalledWith(expectedPath, png)
     expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
   })
 

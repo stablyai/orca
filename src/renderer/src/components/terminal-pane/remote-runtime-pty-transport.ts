@@ -18,6 +18,7 @@ import {
   getRemoteRuntimeTerminalMultiplexer,
   type RemoteRuntimeMultiplexedTerminal
 } from '../../runtime/remote-runtime-terminal-multiplexer'
+import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher
@@ -46,6 +47,7 @@ export function createRemoteRuntimePtyTransport(
 ): PtyTransport {
   const {
     command,
+    startupCommandDelivery,
     env,
     worktreeId,
     tabId,
@@ -64,9 +66,6 @@ export function createRemoteRuntimePtyTransport(
   let destroyed = false
   let handle: string | null = null
   let remotePtyId: string | null = null
-  // Why: web session mirrors attach to host-owned handles; only terminals this
-  // transport created should be closed by this transport's teardown path.
-  let ownsRemoteTerminal = false
   let currentRuntimeEnvironmentId = runtimeEnvironmentId
   let multiplexedStream: RemoteRuntimeMultiplexedTerminal | null = null
   let desiredViewport: { cols: number; rows: number } | null = null
@@ -87,17 +86,16 @@ export function createRemoteRuntimePtyTransport(
     hostTabId: string
   ): string | null {
     const terminalTabs = snapshot.tabs.filter((tab) => tab.type === 'terminal')
+    if (leafId) {
+      const requestedLeaf = terminalTabs.find(
+        (tab) => tab.status === 'ready' && tab.parentTabId === hostTabId && tab.leafId === leafId
+      )
+      return requestedLeaf?.terminal ?? null
+    }
     const preferred =
       terminalTabs.find(
-        (tab) =>
-          tab.status === 'ready' &&
-          tab.parentTabId === hostTabId &&
-          (!leafId || tab.leafId === leafId)
-      ) ??
-      terminalTabs.find(
         (tab) => tab.status === 'ready' && tab.parentTabId === hostTabId && tab.isActive
-      ) ??
-      terminalTabs.find((tab) => tab.status === 'ready' && tab.parentTabId === hostTabId)
+      ) ?? terminalTabs.find((tab) => tab.status === 'ready' && tab.parentTabId === hostTabId)
     return preferred?.terminal ?? null
   }
 
@@ -106,7 +104,10 @@ export function createRemoteRuntimePtyTransport(
     hostTabId: string
   ): boolean {
     return snapshot.tabs.some(
-      (tab) => tab.type === 'terminal' && (tab.parentTabId === hostTabId || tab.id === hostTabId)
+      (tab) =>
+        tab.type === 'terminal' &&
+        (tab.parentTabId === hostTabId || tab.id === hostTabId) &&
+        (!leafId || tab.leafId === leafId)
     )
   }
 
@@ -114,10 +115,11 @@ export function createRemoteRuntimePtyTransport(
     if (!worktreeId) {
       return null
     }
-    const worktree = `id:${worktreeId}`
+    const worktree = toRuntimeWorktreeSelector(worktreeId)
     const activated = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.activate', {
       worktree,
-      tabId: hostTabId
+      tabId: hostTabId,
+      ...(leafId ? { leafId } : {})
     })
     const immediate = findReadyHostSessionHandle(activated, hostTabId)
     if (immediate) {
@@ -165,7 +167,6 @@ export function createRemoteRuntimePtyTransport(
     }
 
     handle = hostHandle
-    ownsRemoteTerminal = false
     remotePtyId = toRemoteRuntimePtyId(hostHandle, currentRuntimeEnvironmentId)
     connected = true
     desiredViewport = {
@@ -306,7 +307,7 @@ export function createRemoteRuntimePtyTransport(
       client: { id: clientId, type: 'desktop' },
       viewport: desiredViewport ?? undefined,
       callbacks: {
-        onData: (data) => outputProcessor.processData(data, storedCallbacks),
+        onData: (data, meta) => outputProcessor.processData(data, storedCallbacks, undefined, meta),
         onSnapshot: (data) => {
           if (data) {
             outputProcessor.processData(data, storedCallbacks, {
@@ -373,8 +374,9 @@ export function createRemoteRuntimePtyTransport(
         }
 
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-          worktree: worktreeId,
+          worktree: toRuntimeWorktreeSelector(worktreeId),
           command,
+          startupCommandDelivery,
           env,
           tabId,
           leafId,
@@ -382,8 +384,9 @@ export function createRemoteRuntimePtyTransport(
           ...(activate === true ? { activate: true } : {})
         })
         handle = created.terminal.handle
-        ownsRemoteTerminal = true
         if (destroyed) {
+          // Why: this is a cancelled launch, not a connected shared session.
+          // Close the server PTY so rapid tab-open/tab-close does not leak.
           await closeRemoteTerminal(created.terminal.handle)
           return
         }
@@ -423,7 +426,6 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       remotePtyId = options.existingPtyId
-      ownsRemoteTerminal = false
       connected = true
       desiredViewport = {
         cols: options.cols ?? 80,
@@ -445,12 +447,8 @@ export function createRemoteRuntimePtyTransport(
       const id = remotePtyId
       multiplexedStream?.close()
       multiplexedStream = null
-      if (ownsRemoteTerminal) {
-        void closeRemoteTerminal()
-      }
       handle = null
       remotePtyId = null
-      ownsRemoteTerminal = false
       storedCallbacks.onDisconnect?.()
       if (id) {
         onPtyExit?.(id)
@@ -464,7 +462,6 @@ export function createRemoteRuntimePtyTransport(
       connected = false
       multiplexedStream?.close()
       multiplexedStream = null
-      ownsRemoteTerminal = false
       storedCallbacks = {}
     },
 
@@ -500,6 +497,13 @@ export function createRemoteRuntimePtyTransport(
 
     getPtyId() {
       return remotePtyId
+    },
+
+    async serializeBuffer(opts) {
+      if (!connected || !multiplexedStream) {
+        return null
+      }
+      return multiplexedStream.serializeBuffer(opts)
     },
 
     destroy() {

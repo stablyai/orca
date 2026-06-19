@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 
 export type ActivityTerminalPortalTarget = {
   slotId: string
@@ -15,7 +15,8 @@ export type ActivityTerminalPortalTarget = {
 }
 
 let currentTargets: ActivityTerminalPortalTarget[] = []
-const subscribers = new Set<(targets: ActivityTerminalPortalTarget[]) => void>()
+const emptyTargets: ActivityTerminalPortalTarget[] = []
+const subscribers = new Set<() => void>()
 
 // Why: the portal target is published with its {worktreeId, tabId} already
 // attached so consumers don't have to derive routing from the global
@@ -30,29 +31,29 @@ export function setActivityTerminalPortals(targets: ActivityTerminalPortalTarget
   }
   currentTargets = targets
   for (const subscriber of subscribers) {
-    subscriber(targets)
+    subscriber()
+  }
+}
+
+function subscribeActivityTerminalPortals(onStoreChange: () => void): () => void {
+  subscribers.add(onStoreChange)
+  return () => {
+    subscribers.delete(onStoreChange)
   }
 }
 
 export function useActivityTerminalPortals(enabled: boolean): ActivityTerminalPortalTarget[] {
-  const [targets, setTargets] = useState<ActivityTerminalPortalTarget[]>(
-    enabled ? currentTargets : []
+  // Why: portal targets live in module state so Terminal can consume them
+  // without routing through the app store; subscribe as an external store.
+  const subscribe = useCallback(
+    (onStoreChange: () => void): (() => void) =>
+      enabled ? subscribeActivityTerminalPortals(onStoreChange) : () => {},
+    [enabled]
   )
 
-  useLayoutEffect(() => {
-    if (!enabled) {
-      setTargets([])
-      return
-    }
-    setTargets(currentTargets)
-    const subscriber = (next: ActivityTerminalPortalTarget[]): void => setTargets(next)
-    subscribers.add(subscriber)
-    return () => {
-      subscribers.delete(subscriber)
-    }
-  }, [enabled])
+  const getSnapshot = useCallback(() => (enabled ? currentTargets : emptyTargets), [enabled])
 
-  return targets
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
 export function findActivityTerminalPortal(

@@ -20,15 +20,22 @@ import {
   isTransientError,
   isAuthError,
   isAgentFallbackError,
+  isSystemSshFallbackError,
   isPassphraseError,
   sleep,
   buildConnectConfig,
   resolveEffectiveProxy,
   spawnProxyCommand,
   wrapRemoteCommandForPosixShell,
+  type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import type { RemoteHostPlatform } from './ssh-remote-platform'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
+
+type SshRemoteFileOptions = {
+  hostPlatform?: RemoteHostPlatform
+}
 
 export class SshConnection {
   private client: SshClient | null = null
@@ -84,18 +91,22 @@ export class SshConnection {
     return this.cachedPassphrase != null || this.cachedPassword != null
   }
 
-  async exec(cmd: string): Promise<ClientChannel> {
+  async exec(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
     if (this.useSystemSshTransport) {
       if (this.disposed || this.state.status !== 'connected') {
         throw new Error('Not connected')
       }
-      return this.spawnTrackedSystemSshCommand(cmd)
+      return this.spawnTrackedSystemSshCommand(cmd, options)
     }
     if (!this.client) {
       throw new Error('Not connected')
     }
-    return new Promise((res, rej) =>
-      this.client!.exec(wrapRemoteCommandForPosixShell(cmd), (e, ch) => (e ? rej(e) : res(ch)))
+    const client = this.client
+    const remoteCommand = options?.wrapCommand === false ? cmd : wrapRemoteCommandForPosixShell(cmd)
+    return this.waitForSshCallback(
+      'SSH exec channel timed out',
+      (callback) => client.exec(remoteCommand, callback),
+      (channel) => channel.close()
     )
   }
 
@@ -106,10 +117,63 @@ export class SshConnection {
     if (!this.client) {
       throw new Error('Not connected')
     }
-    return new Promise((res, rej) => this.client!.sftp((e, s) => (e ? rej(e) : res(s))))
+    const client = this.client
+    return this.waitForSshCallback(
+      'SSH SFTP channel timed out',
+      (callback) => client.sftp(callback),
+      (sftp) => sftp.end()
+    )
   }
 
-  async uploadDirectory(localDir: string, remoteDir: string): Promise<void> {
+  private waitForSshCallback<T>(
+    timeoutMessage: string,
+    register: (callback: (error: Error | undefined, value: T) => void) => void,
+    cleanupLateValue?: (value: T) => void
+  ): Promise<T> {
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const timer = setTimeout(() => {
+        settled = true
+        reject(new Error(timeoutMessage))
+      }, CONNECT_TIMEOUT_MS)
+      const finish = (error: Error | undefined, value?: T): void => {
+        if (settled) {
+          // Why: ssh2 can invoke the open callback after our timeout has
+          // rejected. Close that late resource so the remote channel is not
+          // left open with no owner.
+          if (!error && value !== undefined) {
+            try {
+              cleanupLateValue?.(value)
+            } catch {
+              /* best effort */
+            }
+          }
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve(value as T)
+      }
+
+      try {
+        // Why: higher-level channel timers start only after ssh2 invokes its
+        // open callback. A stale SSH socket can otherwise keep exec/sftp stuck.
+        register(finish)
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
+  }
+
+  async uploadDirectory(
+    localDir: string,
+    remoteDir: string,
+    options?: SshRemoteFileOptions
+  ): Promise<void> {
     if (!this.useSystemSshTransport) {
       const sftp = await this.sftp()
       try {
@@ -121,11 +185,16 @@ export class SshConnection {
       return
     }
     await uploadDirectoryViaSystemSsh(this.target, localDir, remoteDir, {
-      signal: this.systemOperationAbortController.signal
+      signal: this.systemOperationAbortController.signal,
+      hostPlatform: options?.hostPlatform
     })
   }
 
-  async writeFile(remotePath: string, contents: string): Promise<void> {
+  async writeFile(
+    remotePath: string,
+    contents: string,
+    options?: SshRemoteFileOptions
+  ): Promise<void> {
     if (!this.useSystemSshTransport) {
       const sftp = await this.sftp()
       const swallowLateSftpError = (): void => {}
@@ -169,7 +238,8 @@ export class SshConnection {
       return
     }
     await writeFileViaSystemSsh(this.target, remotePath, contents, {
-      signal: this.systemOperationAbortController.signal
+      signal: this.systemOperationAbortController.signal,
+      hostPlatform: options?.hostPlatform
     })
   }
 
@@ -247,6 +317,20 @@ export class SshConnection {
         this.proxyProcess?.kill()
         this.proxyProcess = null
         throw err
+      }
+
+      if (isSystemSshFallbackError(err)) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        try {
+          // Why: on macOS, per-app network policy can block Orca's direct
+          // TCP socket while the system OpenSSH binary is still allowed.
+          await this.doSystemSshProbe(connectGeneration)
+          return
+        } catch {
+          this.useSystemSshTransport = false
+          throw err
+        }
       }
 
       let authError = err
@@ -366,53 +450,70 @@ export class SshConnection {
     this.proxyProcess?.kill()
     this.proxyProcess = null
 
-    const channel = this.spawnTrackedSystemSshCommand('printf ORCA-SYSTEM-SSH-OK')
+    // Why: this probe runs before remote platform detection. A raw echo works
+    // under POSIX shells, cmd.exe, and PowerShell; `/bin/sh` wrapping does not.
+    const channel = this.spawnTrackedSystemSshCommand('echo ORCA-SYSTEM-SSH-OK', {
+      wrapCommand: false
+    })
     try {
       await new Promise<void>((resolve, reject) => {
         let stdout = ''
         let stderr = ''
         let settled = false
-        const timeout = setTimeout(() => {
+        const cleanup = (): void => {
+          clearTimeout(timeout)
+          channel.off('data', onStdoutData)
+          channel.stderr.off('data', onStderrData)
+          channel.off('error', onError)
+          channel.off('close', onClose)
+          this.systemCommandChannels.delete(channel)
+        }
+        const settle = (callback: () => void): void => {
+          if (settled) {
+            return
+          }
           settled = true
-          channel.close()
-          reject(new Error('System SSH connection timed out'))
+          cleanup()
+          callback()
+        }
+        const onStdoutData = (data: Buffer): void => {
+          stdout += data.toString('utf-8')
+        }
+        const onStderrData = (data: Buffer): void => {
+          stderr += data.toString('utf-8')
+        }
+        const onError = (err: Error): void => {
+          settle(() => reject(err))
+        }
+        const onClose = (code: number | null): void => {
+          settle(() => {
+            if (this.disposed || connectGeneration !== this.connectGeneration) {
+              reject(new Error('SSH connection attempt was cancelled'))
+              return
+            }
+            if (code !== 0 || !stdout.includes('ORCA-SYSTEM-SSH-OK')) {
+              reject(
+                new Error(
+                  `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
+                )
+              )
+              return
+            }
+            this.setState('connected')
+            resolve()
+          })
+        }
+        const timeout = setTimeout(() => {
+          settle(() => {
+            channel.close()
+            reject(new Error('System SSH connection timed out'))
+          })
         }, CONNECT_TIMEOUT_MS)
 
-        channel.on('data', (data: Buffer) => {
-          stdout += data.toString('utf-8')
-        })
-        channel.stderr.on('data', (data: Buffer) => {
-          stderr += data.toString('utf-8')
-        })
-        channel.on('error', (err: Error) => {
-          if (settled) {
-            return
-          }
-          settled = true
-          clearTimeout(timeout)
-          reject(err)
-        })
-        channel.on('close', (code: number | null) => {
-          if (settled) {
-            return
-          }
-          settled = true
-          clearTimeout(timeout)
-          if (this.disposed || connectGeneration !== this.connectGeneration) {
-            reject(new Error('SSH connection attempt was cancelled'))
-            return
-          }
-          if (code !== 0 || !stdout.includes('ORCA-SYSTEM-SSH-OK')) {
-            reject(
-              new Error(
-                `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
-              )
-            )
-            return
-          }
-          this.setState('connected')
-          resolve()
-        })
+        channel.on('data', onStdoutData)
+        channel.stderr.on('data', onStderrData)
+        channel.on('error', onError)
+        channel.on('close', onClose)
       })
     } catch (err) {
       this.useSystemSshTransport = false
@@ -420,8 +521,11 @@ export class SshConnection {
     }
   }
 
-  private spawnTrackedSystemSshCommand(command: string): ClientChannel {
-    const channel = spawnSystemSshCommand(this.target, command)
+  private spawnTrackedSystemSshCommand(command: string, options?: SshExecOptions): ClientChannel {
+    const channel =
+      options === undefined
+        ? spawnSystemSshCommand(this.target, command)
+        : spawnSystemSshCommand(this.target, command, options)
     this.systemCommandChannels.add(channel)
     const cleanup = (): void => {
       this.systemCommandChannels.delete(channel)
@@ -695,10 +799,17 @@ export class SshConnection {
 }
 
 export function shouldUseSystemSshTransport(
-  _target: SshTarget,
-  resolved: Pick<SshResolvedConfig, 'proxyUseFdpass'> | null
+  target: SshTarget,
+  resolved: Pick<SshResolvedConfig, 'proxyUseFdpass' | 'proxyCommand' | 'proxyJump'> | null
 ): boolean {
-  return process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' || resolved?.proxyUseFdpass === true
+  return (
+    process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' ||
+    target.proxyCommand != null ||
+    target.jumpHost != null ||
+    resolved?.proxyUseFdpass === true ||
+    resolved?.proxyCommand != null ||
+    resolved?.proxyJump != null
+  )
 }
 
 export { SshConnectionManager } from './ssh-connection-manager'

@@ -7,6 +7,7 @@ import {
   sidebarHasActiveFilters
 } from './visible-worktrees'
 import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
   return {
@@ -80,7 +81,10 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     ptyIdsByTabId: {},
     browserTabsByWorktree: {},
     hideDefaultBranchWorkspace: false,
+    hideAutomationGeneratedWorkspaces: false,
     repoMap,
+    workspaceHostScope: 'all',
+    defaultHostId: LOCAL_EXECUTION_HOST_ID,
     worktreeLineageById: {},
     ...overrides
   }
@@ -93,6 +97,7 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
     showSleepingWorkspaces: true,
     filterRepoIds: [],
     hideDefaultBranchWorkspace: false,
+    hideAutomationGeneratedWorkspaces: false,
     ...overrides
   }
 }
@@ -127,6 +132,36 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([])
   })
 
+  it('hides automation-created workspaces when the automation filter is enabled', () => {
+    const manual = makeWorktree('manual')
+    const automationCreated = {
+      ...makeWorktree('automation-created'),
+      automationProvenance: {
+        kind: 'created-by-automation' as const,
+        automationId: 'automation-1',
+        automationNameSnapshot: 'Nightly review',
+        automationRunId: 'run-1',
+        automationRunTitleSnapshot: 'Nightly review run',
+        createdAt: 123,
+        executionTargetType: 'local' as const,
+        executionTargetId: 'local',
+        projectId: 'repo1',
+        repoId: 'repo1',
+        hostId: 'local' as const
+      }
+    }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [manual, automationCreated] },
+      [manual.id, automationCreated.id],
+      visibleOptions({
+        hideAutomationGeneratedWorkspaces: true
+      })
+    )
+
+    expect(result).toEqual([manual.id])
+  })
+
   it('does not treat slept wake-hint tabs as live surfaces', () => {
     const wt = makeWorktree('wt-slept')
 
@@ -144,7 +179,7 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([])
   })
 
-  it('treats paired web host terminal mirrors as active while their stream handle is pending', () => {
+  it('hides paired web host terminal mirrors while their stream handle is pending', () => {
     const wt = makeWorktree('wt-web-pending')
 
     const result = computeVisibleWorktreeIds(
@@ -154,6 +189,22 @@ describe('computeVisibleWorktreeIds', () => {
         showSleepingWorkspaces: false,
         tabsByWorktree: { [wt.id]: [makeTab('web-terminal-host-tab-1', wt.id, null)] },
         ptyIdsByTabId: {}
+      })
+    )
+
+    expect(result).toEqual([])
+  })
+
+  it('keeps paired web host terminal mirrors visible after their stream handle is ready', () => {
+    const wt = makeWorktree('wt-web-ready')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showSleepingWorkspaces: false,
+        tabsByWorktree: { [wt.id]: [makeTab('web-terminal-host-tab-1', wt.id, null)] },
+        ptyIdsByTabId: { 'web-terminal-host-tab-1': ['pty-web-ready'] }
       })
     )
 
@@ -188,6 +239,122 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([folder.id])
+  })
+
+  it('filters worktrees to a selected SSH host scope', () => {
+    const local = makeWorktree('local', 'repo1')
+    const remote = makeWorktree('remote', 'repo2')
+    const scopedRepoMap = new Map(repoMap)
+    scopedRepoMap.set('repo2', {
+      ...makeRepo('repo2', 'Repo 2', '#111'),
+      connectionId: 'win vm'
+    })
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [local], repo2: [remote] },
+      [local.id, remote.id],
+      visibleOptions({
+        repoMap: scopedRepoMap,
+        workspaceHostScope: 'ssh:win%20vm'
+      })
+    )
+
+    expect(result).toEqual([remote.id])
+  })
+
+  it('filters non-SSH worktrees to the focused runtime host compatibility scope', () => {
+    const runtime = makeWorktree('runtime', 'repo1')
+    const ssh = makeWorktree('ssh', 'repo2')
+    const scopedRepoMap = new Map(repoMap)
+    scopedRepoMap.set('repo2', {
+      ...makeRepo('repo2', 'Repo 2', '#111'),
+      connectionId: 'ssh-1'
+    })
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [runtime], repo2: [ssh] },
+      [runtime.id, ssh.id],
+      visibleOptions({
+        repoMap: scopedRepoMap,
+        defaultHostId: 'runtime:env-1',
+        workspaceHostScope: 'runtime:env-1'
+      })
+    )
+
+    expect(result).toEqual([runtime.id])
+  })
+
+  it('filters explicit runtime-owned repos independently of the focused default host', () => {
+    const local = makeWorktree('local', 'repo1')
+    const runtime = makeWorktree('runtime', 'repo2')
+    const scopedRepoMap = new Map(repoMap)
+    scopedRepoMap.set('repo1', {
+      ...makeRepo('repo1', 'Repo 1', '#000'),
+      executionHostId: 'local'
+    })
+    scopedRepoMap.set('repo2', {
+      ...makeRepo('repo2', 'Repo 2', '#111'),
+      executionHostId: 'runtime:env-1'
+    })
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [local], repo2: [runtime] },
+      [local.id, runtime.id],
+      visibleOptions({
+        repoMap: scopedRepoMap,
+        defaultHostId: 'runtime:env-1',
+        workspaceHostScope: 'local'
+      })
+    )
+
+    expect(result).toEqual([local.id])
+  })
+
+  it('keeps every host visible when workspace host scope is all', () => {
+    const local = makeWorktree('local', 'repo1')
+    const remote = makeWorktree('remote', 'repo2')
+    const scopedRepoMap = new Map(repoMap)
+    scopedRepoMap.set('repo2', {
+      ...makeRepo('repo2', 'Repo 2', '#111'),
+      connectionId: 'ssh-1'
+    })
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [local], repo2: [remote] },
+      [local.id, remote.id],
+      visibleOptions({
+        repoMap: scopedRepoMap,
+        workspaceHostScope: 'all'
+      })
+    )
+
+    expect(result).toEqual([local.id, remote.id])
+  })
+
+  it('filters worktrees to a selected set of visible hosts', () => {
+    const local = makeWorktree('local', 'repo1')
+    const ssh = makeWorktree('ssh', 'repo2')
+    const runtime = makeWorktree('runtime', 'repo3')
+    const scopedRepoMap = new Map(repoMap)
+    scopedRepoMap.set('repo2', {
+      ...makeRepo('repo2', 'Repo 2', '#111'),
+      connectionId: 'ssh-1'
+    })
+    scopedRepoMap.set('repo3', {
+      ...makeRepo('repo3', 'Repo 3', '#222'),
+      executionHostId: 'runtime:env-1'
+    })
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [local], repo2: [ssh], repo3: [runtime] },
+      [local.id, ssh.id, runtime.id],
+      visibleOptions({
+        repoMap: scopedRepoMap,
+        visibleWorkspaceHostIds: ['local', 'ssh:ssh-1']
+      })
+    )
+
+    expect(result).toEqual([local.id, ssh.id])
   })
 
   it('hides branch-backed mains across every repo in a multi-repo workspace', () => {
@@ -382,12 +549,22 @@ describe('sidebarHasActiveFilters', () => {
     expect(sidebarHasActiveFilters(filterState({ hideDefaultBranchWorkspace: true }))).toBe(true)
   })
 
+  it('returns true when only automation-created workspaces are hidden', () => {
+    expect(sidebarHasActiveFilters(filterState({ hideAutomationGeneratedWorkspaces: true }))).toBe(
+      true
+    )
+  })
+
   it('returns true when sleeping workspaces are hidden', () => {
     expect(sidebarHasActiveFilters(filterState({ showSleepingWorkspaces: false }))).toBe(true)
   })
 
   it('returns true when only filterRepoIds is non-empty', () => {
     expect(sidebarHasActiveFilters(filterState({ filterRepoIds: ['repo1'] }))).toBe(true)
+  })
+
+  it('returns true when only host visibility is narrowed', () => {
+    expect(sidebarHasActiveFilters(filterState({ visibleWorkspaceHostIds: ['local'] }))).toBe(true)
   })
 })
 
@@ -396,7 +573,9 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState())).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: false
+      resetHideDefaultBranchWorkspace: false,
+      resetHideAutomationGeneratedWorkspaces: false,
+      resetVisibleWorkspaceHostIds: false
     })
   })
 
@@ -407,7 +586,21 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState({ hideDefaultBranchWorkspace: true }))).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
-      resetHideDefaultBranchWorkspace: true
+      resetHideDefaultBranchWorkspace: true,
+      resetHideAutomationGeneratedWorkspaces: false,
+      resetVisibleWorkspaceHostIds: false
+    })
+  })
+
+  it('flags only hideAutomationGeneratedWorkspaces for reset when it is the sole filter', () => {
+    expect(
+      computeClearFilterActions(filterState({ hideAutomationGeneratedWorkspaces: true }))
+    ).toEqual({
+      resetShowSleepingWorkspaces: false,
+      resetFilterRepoIds: false,
+      resetHideDefaultBranchWorkspace: false,
+      resetHideAutomationGeneratedWorkspaces: true,
+      resetVisibleWorkspaceHostIds: false
     })
   })
 
@@ -430,13 +623,17 @@ describe('computeClearFilterActions', () => {
         filterState({
           showSleepingWorkspaces: false,
           filterRepoIds: ['repo1', 'repo2'],
-          hideDefaultBranchWorkspace: true
+          hideDefaultBranchWorkspace: true,
+          hideAutomationGeneratedWorkspaces: true,
+          visibleWorkspaceHostIds: ['local']
         })
       )
     ).toEqual({
       resetShowSleepingWorkspaces: true,
       resetFilterRepoIds: true,
-      resetHideDefaultBranchWorkspace: true
+      resetHideDefaultBranchWorkspace: true,
+      resetHideAutomationGeneratedWorkspaces: true,
+      resetVisibleWorkspaceHostIds: true
     })
   })
 })

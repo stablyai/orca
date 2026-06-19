@@ -64,12 +64,20 @@ function expandSshConfigFile(
 
     for (const includeArg of includeArgs) {
       for (const matchedPath of resolveIncludePaths(includeArg, context)) {
-        expandedLines.push(...expandSshConfigFile(matchedPath, context, nextStack))
+        appendExpandedLines(expandedLines, expandSshConfigFile(matchedPath, context, nextStack))
       }
     }
   }
 
   return expandedLines
+}
+
+function appendExpandedLines(target: string[], lines: readonly string[]): void {
+  // Why: SSH config includes are user-controlled files, and a large included
+  // file can exceed the JavaScript call argument limit when spread into push.
+  for (const line of lines) {
+    target.push(line)
+  }
 }
 
 function readCachedFile(filePath: string, context: IncludeExpansionContext): string | null {

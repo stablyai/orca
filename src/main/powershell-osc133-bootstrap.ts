@@ -1,4 +1,5 @@
 import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
+export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
 const POWERSHELL_OSC133_BOOTSTRAP = `# Orca OSC 133 shell integration for PowerShell.
 if ((Test-Path variable:global:__OrcaOsc133State) -and
@@ -23,10 +24,6 @@ try {
 
 # Profiles can re-export user defaults after Orca's spawn env is set.
 if ($env:ORCA_OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR }
-if ($env:ORCA_PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR = $env:ORCA_PI_CODING_AGENT_DIR }
-if (-not $env:ORCA_PI_CODING_AGENT_DIR -and $env:ORCA_OMP_CODING_AGENT_DIR) {
-    $env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_CODING_AGENT_DIR
-}
 ${getPowerShellOmpShellWrapper()}
 if ($env:ORCA_CODEX_HOME) { $env:CODEX_HOME = $env:ORCA_CODEX_HOME }
 
@@ -72,10 +69,6 @@ if ($Global:__OrcaOsc133State.HasPSReadLine -and
 
 export function getPowerShellOsc133Bootstrap(): string {
   return POWERSHELL_OSC133_BOOTSTRAP
-}
-
-export function encodePowerShellCommand(command: string): string {
-  return Buffer.from(command, 'utf16le').toString('base64')
 }
 
 export function isPowerShellExecutableName(shellName: string): boolean {

@@ -1,12 +1,21 @@
 /* oxlint-disable max-lines */
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, shell } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Menu,
+  nativeTheme,
+  Notification,
+  screen,
+  shell
+} from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import icon from '../../../resources/icon.png?asset'
-import devIcon from '../../../resources/icon-dev.png?asset'
 import type { Store } from '../persistence'
+import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { translateMain } from '../i18n/main-i18n'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl
@@ -16,8 +25,13 @@ import {
   getWindowShortcutActionId,
   matchesRecentTabSwitcherChord,
   resolveWindowShortcutAction,
-  windowShortcutActionCapturesTerminal
+  windowShortcutActionCapturesTerminal,
+  type WindowShortcutAction
 } from '../../shared/window-shortcut-policy'
+import {
+  ModifierDoubleTapDetector,
+  toModifierDoubleTapEvent
+} from '../../shared/modifier-double-tap-detector'
 import {
   keybindingMatchesAction,
   normalizeTerminalShortcutPolicy,
@@ -42,10 +56,6 @@ function forceRepaint(window: BrowserWindow): void {
       window.setSize(width, height)
     }
   }, 32)
-}
-
-function isControlKeyRelease(input: Electron.Input): boolean {
-  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
 }
 
 function nativeZoomCommandMatchesKeybindings(
@@ -235,6 +245,10 @@ export function createMainWindow(
     minHeight: MIN_HEIGHT,
     title: opts?.title ?? 'Orca',
     show: false,
+    // Why: macOS swallows the app-activating click by default, so clicking
+    // back into Orca (e.g. the floating workspace) needed a second click.
+    // macOS-only option; Windows/Linux already deliver that click.
+    acceptFirstMouse: true,
     // Why: on macOS the menu lives in the system menu bar, so the in-window
     // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
     // doesn't consume a dedicated row of vertical space on every launch —
@@ -254,6 +268,12 @@ export function createMainWindow(
         : process.platform === 'win32'
           ? 'hidden'
           : undefined,
+    // Why: Linux ignores titleBarStyle: 'hidden', so without this the native
+    // WM title bar stays and stacks on top of our renderer titlebar (double
+    // title bar). frame: false drops the native frame; the renderer draws its
+    // own titlebar + window controls (see WindowControls in App.tsx), matching
+    // the Windows custom-titlebar path.
+    ...(process.platform === 'linux' ? { frame: false } : {}),
     // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts
     // dynamically when the user changes UI zoom.
     ...(process.platform === 'darwin'
@@ -264,7 +284,7 @@ export function createMainWindow(
           }
         }
       : {}),
-    icon: is.dev ? devIcon : icon,
+    icon: getAppIconPath(settings?.appIcon),
     ...platformBlurOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -275,11 +295,11 @@ export function createMainWindow(
   const rendererWebContentsId = mainWindow.webContents.id
 
   if (process.platform === 'darwin') {
-    // Why: persistent parked webviews use separate compositor layers, and on
+    // Why: persistent browser webviews use separate compositor layers, and on
     // recent macOS releases those layers can fail to repaint after occlusion or
     // restore. Disabling main-window throttling and forcing a repaint on
-    // visibility transitions hardens Orca against the same black-surface
-    // failure mode seen during browser-tab restore and tab switching.
+    // visibility transitions hardens Orca against black-surface failures during
+    // browser-tab restore and tab switching.
     mainWindow.webContents.setBackgroundThrottling(false)
     mainWindow.on('restore', () => {
       forceRepaint(mainWindow)
@@ -624,10 +644,17 @@ export function createMainWindow(
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
-    if (opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false) {
+    // Why: macOS can report BrowserWindow teardown as renderer `killed`/SIGKILL
+    // after a confirmed close; that is window lifecycle noise, not a crash.
+    if (
+      !windowClosing &&
+      opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false
+    ) {
       opts?.onRendererProcessGone?.(details, rendererWebContentsId)
     }
-    console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+    if (!windowClosing) {
+      console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+    }
     scheduleRendererRecovery(details)
   })
   mainWindow.webContents.on('destroyed', () => {
@@ -649,7 +676,127 @@ export function createMainWindow(
     clearRendererRecoveryTimer()
   })
 
-  let ctrlTabSwitching = false
+  const doubleTapDetector = new ModifierDoubleTapDetector()
+
+  // Why: one place maps a resolved window-shortcut action to its IPC/side effect,
+  // reused by the normal keydown path and the double-tap path so they cannot drift.
+  const sendResolvedWindowShortcutAction = (action: WindowShortcutAction): void => {
+    switch (action.type) {
+      // The renderer's DictationController re-checks enabled/sttModel and ignores
+      // hold mode, so this path needs no voice guards.
+      case 'dictationKeyDown':
+        mainWindow.webContents.send('ui:dictationKeyDown')
+        return
+      case 'zoom':
+        mainWindow.webContents.send('terminal:zoom', action.direction)
+        return
+      case 'openSettings':
+        mainWindow.webContents.send('ui:openSettings')
+        return
+      case 'forceReload':
+        opts?.onBeforeReload?.({ ignoreCache: true, webContentsId: mainWindow.webContents.id })
+        mainWindow.webContents.reloadIgnoringCache()
+        return
+      case 'toggleLeftSidebar':
+        mainWindow.webContents.send('ui:toggleLeftSidebar')
+        return
+      case 'toggleRightSidebar':
+        mainWindow.webContents.send('ui:toggleRightSidebar')
+        return
+      case 'toggleWorktreePalette':
+        mainWindow.webContents.send('ui:toggleWorktreePalette')
+        return
+      case 'toggleFloatingTerminal':
+        mainWindow.webContents.send('ui:toggleFloatingTerminal')
+        return
+      case 'openQuickOpen':
+        mainWindow.webContents.send('ui:openQuickOpen')
+        return
+      case 'openNewWorkspace':
+        mainWindow.webContents.send('ui:openNewWorkspace')
+        return
+      case 'deleteCurrentWorkspace':
+        mainWindow.webContents.send('ui:deleteCurrentWorkspace')
+        return
+      case 'openWorkspaceBoard':
+        mainWindow.webContents.send('ui:openWorkspaceBoard')
+        return
+      case 'openTasks':
+        mainWindow.webContents.send('ui:openTasks')
+        return
+      case 'switchRecentTab':
+        mainWindow.webContents.send('ui:switchRecentTab')
+        return
+      case 'jumpToWorktreeIndex':
+        mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
+        return
+      case 'jumpToTabIndex':
+        mainWindow.webContents.send('ui:jumpToTabIndex', action.index)
+        return
+      case 'worktreeHistoryNavigate':
+        mainWindow.webContents.send('ui:worktreeHistoryNavigate', action.direction)
+    }
+  }
+
+  const dispatchResolvedWindowShortcutAction = (
+    event: Electron.Event,
+    action: WindowShortcutAction,
+    options: {
+      isAutoRepeat: boolean
+      focusedShortcutContext: KeybindingMatchOptions
+    }
+  ): boolean => {
+    const { focusedShortcutContext, isAutoRepeat } = options
+    if (
+      floatingTerminalInputFocused &&
+      (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
+    ) {
+      return false
+    }
+
+    const capturedTerminalActionId =
+      focusedShortcutContext.context === 'terminal' &&
+      focusedShortcutContext.terminalShortcutPolicy === 'orca-first' &&
+      windowShortcutActionCapturesTerminal(action)
+        ? getWindowShortcutActionId(action)
+        : null
+
+    // Why: hold-mode dictation needs renderer keyup events, so the main process
+    // may only consume shortcuts that toggle dictation from a single keydown.
+    if (action.type === 'dictationKeyDown') {
+      const voiceSettings = store?.getSettings().voice
+      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
+        return false
+      }
+      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
+      if (dictationMode === 'hold') {
+        return false
+      }
+      if (isAutoRepeat) {
+        event.preventDefault()
+        return true
+      }
+      event.preventDefault()
+      if (capturedTerminalActionId) {
+        mainWindow.webContents.send('ui:terminalShortcutCaptured', {
+          actionId: capturedTerminalActionId
+        })
+      }
+      mainWindow.webContents.send('ui:dictationKeyDown')
+      return true
+    }
+
+    event.preventDefault()
+    if (capturedTerminalActionId) {
+      mainWindow.webContents.send('ui:terminalShortcutCaptured', {
+        actionId: capturedTerminalActionId
+      })
+    }
+
+    sendResolvedWindowShortcutAction(action)
+    return true
+  }
+
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (shortcutRecorderFocused) {
       return
@@ -672,24 +819,57 @@ export function createMainWindow(
         store?.getSettings().terminalShortcutPolicy
       )
     }
-    if (
-      matchesRecentTabSwitcherChord(input, process.platform, keybindings, terminalShortcutContext)
-    ) {
-      // Why: Ctrl+Tab is a held-key interaction. Route both press and release
-      // through IPC so renderer keyup suppression from preventDefault cannot
-      // leave the switcher overlay stranded.
-      event.preventDefault()
-      if (input.type === 'keyDown') {
-        ctrlTabSwitching = true
-        mainWindow.webContents.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
-      }
-      return
+    const appShortcutContext: KeybindingMatchOptions = {
+      context: 'app',
+      terminalShortcutPolicy: terminalShortcutContext.terminalShortcutPolicy
     }
 
-    if (ctrlTabSwitching && isControlKeyRelease(input)) {
-      event.preventDefault()
-      ctrlTabSwitching = false
-      mainWindow.webContents.send('ui:ctrlTabKeyUp')
+    // Why: detect double-tap-modifier gestures on the raw key stream. A bare
+    // modifier emits no terminal bytes, so this never steals readline input.
+    if (input.type === 'keyDown' || input.type === 'keyUp') {
+      const detected = doubleTapDetector.process(
+        toModifierDoubleTapEvent({
+          type: input.type,
+          code: input.code,
+          key: input.key,
+          shift: input.shift,
+          control: input.control,
+          alt: input.alt,
+          meta: input.meta,
+          isAutoRepeat: input.isAutoRepeat
+        }),
+        Date.now()
+      )
+      if (detected) {
+        const doubleTapAction = resolveWindowShortcutAction(
+          { type: 'keyDown', doubleTapModifier: detected.modifier },
+          process.platform,
+          keybindings,
+          appShortcutContext
+        )
+        if (
+          doubleTapAction &&
+          dispatchResolvedWindowShortcutAction(event, doubleTapAction, {
+            isAutoRepeat: false,
+            focusedShortcutContext: terminalShortcutContext
+          })
+        ) {
+          // Only preventDefault the emitting keydown — never the first tap's
+          // down/up. This suppresses the renderer DOM keydown so the renderer
+          // detector cannot also fire for the same gesture.
+          return
+        }
+        // No allowlisted action: let the keydown reach the renderer, whose
+        // detector completes and dispatches inline.
+      }
+    }
+
+    if (
+      input.type === 'keyDown' &&
+      matchesRecentTabSwitcherChord(input, process.platform, keybindings, terminalShortcutContext)
+    ) {
+      // Why: the held switcher commits on modifier keyup. If main prevents the
+      // keydown, Electron can suppress the renderer keyup and strand the overlay.
       return
     }
 
@@ -722,145 +902,19 @@ export function createMainWindow(
       return
     }
 
-    // Why: keep global app routing for non-terminal actions, but let floating
-    // xterm own shell control chars that overlap sidebar chrome shortcuts.
-    if (
-      floatingTerminalInputFocused &&
-      (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
-    ) {
-      return
-    }
-
     if (input.type !== 'keyDown') {
       return
     }
 
-    const capturedTerminalActionId =
-      terminalShortcutContext.context === 'terminal' &&
-      terminalShortcutContext.terminalShortcutPolicy === 'orca-first' &&
-      windowShortcutActionCapturesTerminal(action)
-        ? getWindowShortcutActionId(action)
-        : null
-
-    // Why: in hold mode, Cmd+E must NOT be intercepted here. Calling
-    // preventDefault() in before-input-event suppresses ALL subsequent DOM
-    // events for the key combo — including the keyUp the renderer needs to
-    // detect release. By letting the event through, the renderer's
-    // capture-phase DOM listeners handle both keydown and keyup normally.
-    // Toggle mode still uses the IPC path since it doesn't need keyUp.
-    if (action.type === 'dictationKeyDown') {
-      const voiceSettings = store?.getSettings().voice
-      if (!voiceSettings?.enabled || !voiceSettings.sttModel) {
-        return
-      }
-      const dictationMode = voiceSettings.dictationMode ?? 'toggle'
-      if (dictationMode === 'hold') {
-        return
-      }
-      if (input.isAutoRepeat) {
-        event.preventDefault()
-        return
-      }
-      event.preventDefault()
-      if (capturedTerminalActionId) {
-        mainWindow.webContents.send('ui:terminalShortcutCaptured', {
-          actionId: capturedTerminalActionId
-        })
-      }
-      mainWindow.webContents.send('ui:dictationKeyDown')
-      return
-    }
-
-    event.preventDefault()
-    if (capturedTerminalActionId) {
-      mainWindow.webContents.send('ui:terminalShortcutCaptured', {
-        actionId: capturedTerminalActionId
-      })
-    }
-
-    if (action.type === 'zoom') {
-      mainWindow.webContents.send('terminal:zoom', action.direction)
-      return
-    }
-
-    if (action.type === 'openSettings') {
-      mainWindow.webContents.send('ui:openSettings')
-      return
-    }
-
-    if (action.type === 'exportPdf') {
-      mainWindow.webContents.send('export:requestPdf')
-      return
-    }
-
-    if (action.type === 'forceReload') {
-      opts?.onBeforeReload?.({
-        ignoreCache: true,
-        webContentsId: mainWindow.webContents.id
-      })
-      mainWindow.webContents.reloadIgnoringCache()
-      return
-    }
-
-    if (action.type === 'toggleLeftSidebar') {
-      mainWindow.webContents.send('ui:toggleLeftSidebar')
-      return
-    }
-
-    if (action.type === 'toggleRightSidebar') {
-      mainWindow.webContents.send('ui:toggleRightSidebar')
-      return
-    }
-
-    if (action.type === 'toggleWorktreePalette') {
-      // Why: embedded browser guests can keep keyboard focus inside Chromium's
-      // guest webContents, which bypasses the renderer's window-level keydown
-      // listener. Forward the worktree-switch shortcut through the main window
-      // so Cmd+J (macOS) or Ctrl+Shift+J (Win/Linux) works consistently from browser tabs too.
-      mainWindow.webContents.send('ui:toggleWorktreePalette')
-      return
-    }
-
-    if (action.type === 'toggleFloatingTerminal') {
-      mainWindow.webContents.send('ui:toggleFloatingTerminal')
-      return
-    }
-
-    if (action.type === 'openQuickOpen') {
-      mainWindow.webContents.send('ui:openQuickOpen')
-      return
-    }
-
-    if (action.type === 'openNewWorkspace') {
-      // Why: routed through the main process so focus contexts that bypass
-      // the renderer's window-level keydown (contentEditable markdown editor,
-      // browser-guest webContents) still reach the new-workspace composer.
-      mainWindow.webContents.send('ui:openNewWorkspace')
-      return
-    }
-
-    if (action.type === 'openTasks') {
-      mainWindow.webContents.send('ui:openTasks')
-      return
-    }
-
-    if (action.type === 'switchRecentTab') {
-      mainWindow.webContents.send('ui:switchRecentTab')
-      return
-    }
-
-    if (action.type === 'jumpToWorktreeIndex') {
-      mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
-      return
-    }
-
-    if (action.type === 'worktreeHistoryNavigate') {
-      // Why: routed through main so the chord reaches the renderer even when
-      // a terminal (xterm.js) or a browser guest has focus — both surfaces
-      // otherwise absorb Arrow keys before the renderer's window listener.
-      mainWindow.webContents.send('ui:worktreeHistoryNavigate', action.direction)
-    }
+    dispatchResolvedWindowShortcutAction(event, action, {
+      isAutoRepeat: Boolean(input.isAutoRepeat),
+      focusedShortcutContext: terminalShortcutContext
+    })
   })
+
+  // Why: a mid-gesture focus loss must not leave the detector armed so the next
+  // unrelated modifier press completes a phantom double-tap.
+  mainWindow.on('blur', () => doubleTapDetector.reset())
 
   mainWindow.webContents.on('zoom-changed', (event, zoomDirection) => {
     // Why: Some keyboard layouts/platforms consume Ctrl/Cmd+Minus before
@@ -894,7 +948,50 @@ export function createMainWindow(
   let windowCloseConfirmed = false
   const confirmCloseChannel = 'window:confirm-close'
 
+  // Why: Windows minimize-to-tray. Hides the window instead of closing when the
+  // setting is on, this isn't a real quit (Ctrl+Q / tray "Quit" set
+  // getIsQuitting), and the renderer is alive. Returns true when it handled the
+  // close by hiding, so callers skip their normal close path. Shared by BOTH the
+  // renderer-drawn X (window:request-close) and the native close event (Alt+F4).
+  const hideToTrayIfEnabled = (): boolean => {
+    const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
+    if (
+      process.platform !== 'win32' ||
+      rendererProcessGone ||
+      isRendererCrashed ||
+      opts?.getIsQuitting?.() === true ||
+      store?.getSettings().minimizeToTrayOnClose !== true
+    ) {
+      return false
+    }
+    mainWindow.hide()
+    // Why: tell the user once that closing only hid the window; the persisted
+    // flag stops the notice from repeating on every later minimize.
+    if (store.getUI().trayMinimizeNoticeShown !== true) {
+      try {
+        new Notification({
+          title: 'Orca',
+          body: translateMain(
+            'tray.minimizeNotice.body',
+            'Orca is still running in the system tray'
+          )
+        }).show()
+      } catch {
+        // Notification is best-effort — never block hiding the window.
+      }
+      store.updateUI({ trayMinimizeNoticeShown: true })
+    }
+    return true
+  }
+
   mainWindow.on('close', (e) => {
+    // Why: Alt+F4 and programmatic closes reach the native event; apply the same
+    // minimize-to-tray guard the renderer-drawn X uses via onRequestClose.
+    if (!windowCloseConfirmed && hideToTrayIfEnabled()) {
+      e.preventDefault()
+      return
+    }
+    const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
     if (windowCloseConfirmed) {
       windowCloseConfirmed = false
       // Why: past this point Electron/OS may emit resize/move/unmaximize as
@@ -909,7 +1006,6 @@ export function createMainWindow(
       }
       return
     }
-    const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
     if (rendererProcessGone || isRendererCrashed) {
       // Why: after a native renderer crash the renderer cannot answer
       // window:close-requested. Let Cmd+Q / OS close complete instead of
@@ -922,6 +1018,9 @@ export function createMainWindow(
       return
     }
     e.preventDefault()
+    // Why: the renderer owns the close decision (dirty-file save dialogs,
+    // running-process confirmation). The subscription lives at the always-
+    // mounted App root, so even pre-workspace states reply — see #5144.
     mainWindow.webContents.send('window:close-requested', {
       isQuitting: opts?.getIsQuitting?.() ?? false
     })
@@ -946,8 +1045,8 @@ export function createMainWindow(
   }
   ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
-  // Why: renderer-drawn window controls on Windows send these to replicate the
-  // native title bar buttons that 'hidden' titleBarStyle removes.
+  // Why: renderer-drawn window controls on Windows/Linux desktop send these to
+  // replicate the native title bar buttons hidden by custom chrome.
   const minimizeChannel = 'window:minimize'
   const onMinimize = (): void => {
     if (!mainWindow.isDestroyed()) {
@@ -975,13 +1074,20 @@ export function createMainWindow(
   // with windowCloseConfirmed = true.
   const requestCloseChannel = 'window:request-close'
   const onRequestClose = (): void => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+    if (mainWindow.isDestroyed()) {
+      return
     }
+    // Why: the renderer-drawn X on Windows routes here (not the native close
+    // event), so the minimize-to-tray guard must run on this path too — hide
+    // instead of asking the renderer to close.
+    if (hideToTrayIfEnabled()) {
+      return
+    }
+    mainWindow.webContents.send('window:close-requested', { isQuitting: false })
   }
-  // Why: the ··· button in the renderer-drawn title bar on Windows pops up
-  // the application menu at the cursor position, replicating the Alt-key
-  // reveal that autoHideMenuBar normally provides.
+  // Why: the ··· button in the renderer-drawn title bar on Windows/Linux
+  // desktop pops up the application menu at the cursor position, replicating
+  // the Alt-key reveal that autoHideMenuBar normally provides.
   const popupMenuChannel = 'menu:popup'
   const onPopupMenu = (): void => {
     Menu.getApplicationMenu()?.popup({ window: mainWindow })

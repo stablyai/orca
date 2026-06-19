@@ -45,10 +45,20 @@ const actions: CmdJQuickAction[] = [
   {
     id: 'create-workspace',
     kind: 'action',
-    title: 'Create Workspace',
-    description: 'Create workspace.',
+    title: 'Create Worktree',
+    description: 'Create worktree.',
     icon: Globe,
-    verbKeywords: ['create workspace', 'add workspace', 'new workspace'],
+    verbKeywords: ['create worktree', 'add worktree', 'new worktree'],
+    isAvailable: available,
+    run: noopRun
+  },
+  {
+    id: 'delete-workspace',
+    kind: 'action',
+    title: 'Delete Worktree',
+    description: 'Delete the current worktree.',
+    icon: Globe,
+    verbKeywords: ['delete worktree', 'delete current worktree', 'remove worktree'],
     isAvailable: available,
     run: noopRun
   },
@@ -66,6 +76,22 @@ const actions: CmdJQuickAction[] = [
 
 const sections: SettingsNavSection[] = [
   {
+    id: 'general',
+    title: 'General',
+    description: 'Workspace defaults.',
+    icon: Settings,
+    searchEntries: [
+      {
+        title: 'Orca CLI',
+        description: 'Register or remove the orca shell command.',
+        keywords: ['cli', 'path', 'terminal', 'command', 'shell command'],
+        cmdJKeywords: ['cli', 'path', 'command', 'shell command'],
+        targetSectionId: 'cli'
+      }
+    ],
+    group: 'setup'
+  },
+  {
     id: 'terminal',
     title: 'Terminal',
     description: 'Shell configuration.',
@@ -82,11 +108,19 @@ const sections: SettingsNavSection[] = [
     group: 'workflows'
   },
   {
+    id: 'servers',
+    title: 'Remote Orca Servers',
+    description: 'Pair remote Orca runtimes.',
+    icon: Settings,
+    searchEntries: [{ title: 'Remote Orca Servers' }],
+    group: 'remote'
+  },
+  {
     id: 'ssh',
     title: 'SSH Hosts',
-    description: 'Remote hosts.',
+    description: 'Remote hosts over SSH.',
     icon: Settings,
-    searchEntries: [{ title: 'Remote Shell' }],
+    searchEntries: [{ title: 'SSH Connections' }],
     group: 'remote'
   },
   {
@@ -128,9 +162,11 @@ describe('Cmd+J palette middle-band ranking', () => {
     ['new terminal', 'new-terminal-tab'],
     ['new markdown', 'new-markdown-file'],
     ['new browser', 'new-browser-tab'],
-    ['create workspace', 'create-workspace'],
-    ['add workspace', 'create-workspace'],
-    ['new workspace', 'create-workspace'],
+    ['create worktree', 'create-workspace'],
+    ['add worktree', 'create-workspace'],
+    ['new worktree', 'create-workspace'],
+    ['delete worktree', 'delete-workspace'],
+    ['remove worktree', 'delete-workspace'],
     ['terminal settings', 'settings:terminal'],
     ['browser settings', 'settings:browser'],
     ['ssh', 'settings:ssh'],
@@ -141,9 +177,24 @@ describe('Cmd+J palette middle-band ranking', () => {
     ['terminal', 'settings:terminal'],
     ['browser', 'settings:browser'],
     ['quick commands', 'settings:quick-commands'],
-    ['add quick command', 'add-quick-command']
+    ['add quick command', 'add-quick-command'],
+    ['orca cli', 'settings:general:cli'],
+    ['shell command', 'settings:general:cli']
   ])('ranks %s first', (query, expectedId) => {
     expect(top(query)).toBe(expectedId)
+  })
+
+  it('builds targeted settings rows for Settings subsections', () => {
+    const cliResult = buildCmdJSettingsResults(sections).find(
+      (result) => result.id === 'settings:general:cli'
+    )
+
+    expect(cliResult).toMatchObject({
+      title: 'Orca CLI',
+      description: 'Register or remove the orca shell command.',
+      sectionId: 'general',
+      targetSectionId: 'cli'
+    })
   })
 
   it('does not match settings on one-character or description-only queries', () => {

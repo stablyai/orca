@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks'
 import { describe, expect, it } from 'vitest'
 import {
   extractTerminalFileLinks,
@@ -11,6 +12,22 @@ describe('terminal path helpers', () => {
   it('keeps worktree-relative paths on Windows external files', () => {
     expect(isPathInsideWorktree('C:\\repo\\src\\file.ts', 'C:\\repo')).toBe(true)
     expect(toWorktreeRelativePath('C:\\repo\\src\\file.ts', 'C:\\repo')).toBe('src/file.ts')
+  })
+
+  it('keeps worktree-relative paths for forward-slash Windows UNC paths', () => {
+    expect(isPathInsideWorktree('//server/share/repo/src/file.ts', '\\\\server\\share\\repo')).toBe(
+      true
+    )
+    expect(
+      toWorktreeRelativePath('//server/share/repo/src/file.ts', '\\\\server\\share\\repo')
+    ).toBe('src/file.ts')
+
+    expect(isPathInsideWorktree('//server/share/repo/src/file.ts', '//Server/Share/Repo')).toBe(
+      true
+    )
+    expect(toWorktreeRelativePath('//server/share/repo/src/file.ts', '//Server/Share/Repo')).toBe(
+      'src/file.ts'
+    )
   })
 
   describe('extractTerminalFileLinks bare-filename tokens', () => {
@@ -60,6 +77,16 @@ describe('terminal path helpers', () => {
       expect(links).toHaveLength(1)
       expect(links[0]).toMatchObject({ pathText: 'foo.ts', line: 12, column: 3 })
     })
+
+    it('keeps huge no-separator terminal tokens off the hover hot path', () => {
+      const line = `${'b'.repeat(80 * 500)} package.json`
+      const startedAt = performance.now()
+
+      const links = extractTerminalFileLinks(line)
+
+      expect(performance.now() - startedAt).toBeLessThan(100)
+      expect(links.map((link) => link.displayText)).toEqual(['package.json'])
+    })
   })
 
   describe('extractTerminalFileLinks local path tokens', () => {
@@ -101,6 +128,24 @@ describe('terminal path helpers', () => {
       })
     })
 
+    it('keeps trailing separators on directory-like absolute paths', () => {
+      const links = extractTerminalFileLinks('/Users/alice/worktree/')
+      expect(links).toHaveLength(1)
+      expect(links[0]).toMatchObject({
+        pathText: '/Users/alice/worktree/',
+        displayText: '/Users/alice/worktree/'
+      })
+    })
+
+    it('does not linkify root-only or relative trailing separator tokens', () => {
+      expect(extractTerminalFileLinks('progress 1 / 3')).toEqual([])
+      expect(extractTerminalFileLinks('/')).toEqual([])
+      expect(extractTerminalFileLinks('./')).toEqual([])
+      expect(extractTerminalFileLinks('../')).toEqual([])
+      expect(extractTerminalFileLinks('~/')).toEqual([])
+      expect(extractTerminalFileLinks('C:\\')).toEqual([])
+    })
+
     it('detects an extensionless relative path ending in a spaced segment', () => {
       const links = extractTerminalFileLinks('./My Folder')
       expect(links).toHaveLength(1)
@@ -109,6 +154,28 @@ describe('terminal path helpers', () => {
         displayText: './My Folder'
       })
     })
+
+    it('detects framework route paths with bracket and paren segments', () => {
+      const links = extractTerminalFileLinks(
+        'Error in app/(shop)/products/[productId]/page.tsx:42:7'
+      )
+      expect(links).toHaveLength(1)
+      expect(links[0]).toMatchObject({
+        pathText: 'app/(shop)/products/[productId]/page.tsx',
+        line: 42,
+        column: 7,
+        displayText: 'app/(shop)/products/[productId]/page.tsx:42:7'
+      })
+    })
+
+    it('handles large spaced path lists without quadratic overlap scans', () => {
+      const line = Array.from({ length: 20_000 }, () => '/tmp/Foo Bar/file').join(', ')
+
+      const links = extractTerminalFileLinks(line)
+
+      expect(links).toHaveLength(20_000)
+      expect(links[0].pathText).toBe('/tmp/Foo Bar/file')
+    }, 5_000)
   })
 
   it('supports Windows cwd resolution for terminal file links', () => {

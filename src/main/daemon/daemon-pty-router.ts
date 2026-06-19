@@ -121,10 +121,10 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
-    const results = await Promise.allSettled(
-      this.allAdapters().map((adapter) => adapter.listProcesses())
-    )
-    return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+    // Why: runtime exact-stop/liveness flows must fail closed if any adapter
+    // cannot provide a trustworthy process list.
+    const results = await Promise.all(this.allAdapters().map((adapter) => adapter.listProcesses()))
+    return results.flat()
   }
 
   async getDefaultShell(): Promise<string> {
@@ -175,8 +175,14 @@ export class DaemonPtyRouter implements IPtyProvider {
     const killed: string[] = []
     for (const adapter of this.allAdapters()) {
       const result = await adapter.reconcileOnStartup(validWorktreeIds)
-      alive.push(...result.alive)
-      killed.push(...result.killed)
+      // Why: daemon startup can reconcile many restored sessions; spreading
+      // those arrays into push can exceed JavaScript's argument limit.
+      for (const id of result.alive) {
+        alive.push(id)
+      }
+      for (const id of result.killed) {
+        killed.push(id)
+      }
       for (const id of result.alive) {
         this.sessionAdapters.set(id, adapter)
       }

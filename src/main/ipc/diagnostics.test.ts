@@ -13,11 +13,9 @@ const {
   writeFileSyncMock,
   showMessageBoxMock,
   openPathMock,
-  showItemInFolderMock,
   collectDiagnosticBundleMock,
   deleteDiagnosticBundleMock,
   getDiagnosticsStatusMock,
-  getTraceFilePathMock,
   uploadDiagnosticBundleMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -26,11 +24,9 @@ const {
   writeFileSyncMock: vi.fn(),
   showMessageBoxMock: vi.fn(),
   openPathMock: vi.fn(),
-  showItemInFolderMock: vi.fn(),
   collectDiagnosticBundleMock: vi.fn(),
   deleteDiagnosticBundleMock: vi.fn(),
   getDiagnosticsStatusMock: vi.fn(),
-  getTraceFilePathMock: vi.fn(),
   uploadDiagnosticBundleMock: vi.fn()
 }))
 
@@ -48,15 +44,13 @@ vi.mock('electron', () => ({
   app: { getPath: () => '/tmp', getVersion: () => '1.2.3-test' },
   dialog: { showMessageBox: showMessageBoxMock },
   ipcMain: { handle: handleMock },
-  shell: { openPath: openPathMock, showItemInFolder: showItemInFolderMock }
+  shell: { openPath: openPathMock }
 }))
 
 vi.mock('../observability', () => ({
-  clearLocalTraces: vi.fn(),
   collectDiagnosticBundle: collectDiagnosticBundleMock,
   deleteDiagnosticBundle: deleteDiagnosticBundleMock,
   getDiagnosticsStatus: getDiagnosticsStatusMock,
-  getTraceFilePath: getTraceFilePathMock,
   uploadDiagnosticBundle: uploadDiagnosticBundleMock
 }))
 
@@ -93,20 +87,16 @@ describe('diagnostics IPC handlers', () => {
     showMessageBoxMock.mockResolvedValue({ response: 0 })
     openPathMock.mockReset()
     openPathMock.mockResolvedValue('')
-    showItemInFolderMock.mockReset()
     collectDiagnosticBundleMock.mockReset()
     deleteDiagnosticBundleMock.mockReset()
     getDiagnosticsStatusMock.mockReset()
-    getTraceFilePathMock.mockReset()
     uploadDiagnosticBundleMock.mockReset()
     delete (globalThis as { ORCA_BUILD_IDENTITY?: unknown }).ORCA_BUILD_IDENTITY
     delete (globalThis as { ORCA_DIAGNOSTICS_TOKEN_URL?: unknown }).ORCA_DIAGNOSTICS_TOKEN_URL
     process.env.ORCA_DIAGNOSTICS_TOKEN_URL = 'https://diagnostics.example.com/diagnostics/token'
     getDiagnosticsStatusMock.mockReturnValue({
       localFileEnabled: true,
-      otlpEnabled: false,
       bundleEnabled: true,
-      otlpStatus: 'Disabled',
       traceFilePath: '/tmp/main.trace.ndjson',
       traceFamilySize: 0
     })
@@ -175,7 +165,7 @@ describe('diagnostics IPC handlers', () => {
     })
   })
 
-  it('requires main-owned user confirmation before upload', async () => {
+  it('returns a quiet cancellation when the user declines upload confirmation', async () => {
     const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
     collectDiagnosticBundleMock.mockReturnValue(bundle)
     showMessageBoxMock.mockResolvedValue({ response: 1 })
@@ -185,7 +175,7 @@ describe('diagnostics IPC handlers', () => {
 
     await collect({}, 30)
     await openPreview({}, bundle.bundleSubmissionId)
-    await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/cancelled/)
+    await expect(upload({}, bundle.bundleSubmissionId)).resolves.toEqual({ canceled: true })
     expect(showMessageBoxMock).toHaveBeenCalledTimes(1)
     expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
   })
@@ -244,14 +234,14 @@ describe('diagnostics IPC handlers', () => {
     )
   })
 
-  it('requires opening the retained preview before upload', async () => {
+  it('requires opening the retained review file before sending', async () => {
     const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
     collectDiagnosticBundleMock.mockReturnValue(bundle)
     const collect = handlers.get('diagnostics:collectBundle')!
     const upload = handlers.get('diagnostics:uploadBundle')!
 
     await collect({}, 30)
-    await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/open.*preview/)
+    await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/open.*review file/)
     expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
   })
 
@@ -268,17 +258,21 @@ describe('diagnostics IPC handlers', () => {
     await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/expired/)
   })
 
-  it('clears retained previews when local traces are cleared', async () => {
-    const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
-    collectDiagnosticBundleMock.mockReturnValue(bundle)
-    const collect = handlers.get('diagnostics:collectBundle')!
-    const clear = handlers.get('diagnostics:clearTraces')!
-    const upload = handlers.get('diagnostics:uploadBundle')!
+  it('expires retained bundle previews without another diagnostics call', async () => {
+    vi.useFakeTimers()
+    try {
+      const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
+      collectDiagnosticBundleMock.mockReturnValue(bundle)
+      const collect = handlers.get('diagnostics:collectBundle')!
+      const upload = handlers.get('diagnostics:uploadBundle')!
 
-    await collect({}, 30)
-    await clear({})
+      await collect({}, 30)
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 1)
 
-    await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/expired/)
+      await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/expired/)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('writes retained preview files with private permissions', async () => {

@@ -328,11 +328,6 @@ class AudioEngine (context: Context) {
         audioSampleQueue.add(data)
         playbackEvents += 1
         playbackQueuedBytes += data.size.toLong()
-        Log.d(
-            "AudioEngine",
-            "playPCMData queued bytes=${data.size} queueSize=${audioSampleQueue.size} " +
-                "head=${data.take(12).joinToString(" ") { byte -> "%02x".format(byte.toInt() and 0xff) }}"
-        )
         flushBridgeStats("queue")
         if (playbackRunning.compareAndSet(false, true)) {
             playAudioFromSampleQueue()
@@ -367,11 +362,6 @@ class AudioEngine (context: Context) {
         val written = audioTrack.write(data, 0, data.size)
         playbackWrites += 1
         playbackWriteBytes += written.coerceAtLeast(0).toLong()
-        Log.d(
-            "AudioEngine",
-            "playSample wrote=$written requested=${data.size} playState=${audioTrack.playState} " +
-                "queueSize=${audioSampleQueue.size}"
-        )
         flushBridgeStats("write")
     }
 
@@ -455,18 +445,18 @@ class AudioEngine (context: Context) {
 
     private fun calculateRMSLevel(buffer: ByteArray): Float {
         val epsilon = 1e-5f // To avoid log(0)
-
-        // Convert ByteArray to FloatArray by treating each pair of bytes as a single 16-bit PCM sample
-        val floatBuffer = FloatArray(buffer.size / 2)
-        for (i in floatBuffer.indices) {
-            // Combine two bytes into a 16-bit signed integer
+        val sampleCount = buffer.size / 2
+        var sumSquares = 0.0f
+        for (i in 0 until sampleCount) {
+            // Why: preserve Android's existing signed-byte decode while avoiding
+            // a temporary sample array on every mic/playback audio buffer.
             val sample = (buffer[i * 2].toInt() or (buffer[i * 2 + 1].toInt() shl 8)).toShort()
-            // Normalize sample to -1.0 to 1.0 range for FloatArray
-            floatBuffer[i] = sample / 32768.0f
+            val normalizedSample = sample / 32768.0f
+            sumSquares += normalizedSample * normalizedSample
         }
 
         // Calculate RMS value
-        val rmsValue = kotlin.math.sqrt(floatBuffer.fold(0f) { acc, sample -> acc + sample * sample } / floatBuffer.size)
+        val rmsValue = kotlin.math.sqrt(sumSquares / sampleCount)
 
         // Convert to decibels
         val dbValue = 20 * kotlin.math.log10(maxOf(rmsValue, epsilon))

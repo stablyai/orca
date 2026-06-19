@@ -24,8 +24,21 @@ describe('buildPullRequestFieldsPrompt', () => {
     expect(prompt).toContain('Return ONLY compact JSON')
     expect(prompt).toContain('Head branch: feature/pr-details')
     expect(prompt).toContain('Current base: main')
-    expect(prompt).toContain('Additional instructions from user:')
+    expect(prompt).toContain('Additional user prompt:')
     expect(prompt).toContain('Use conventional PR titles.')
+  })
+
+  it('tells the agent to preserve existing review templates', () => {
+    const prompt = buildPullRequestFieldsPrompt(
+      {
+        ...context,
+        currentBody: '## Summary\n\n## Testing\n\n- [ ] Required checks'
+      },
+      ''
+    )
+
+    expect(prompt).toContain('preserve its headings, required sections, and checklists')
+    expect(prompt).toContain('Leave genuinely unknown template items as TODO or unchecked')
   })
 })
 

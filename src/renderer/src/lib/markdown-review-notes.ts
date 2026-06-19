@@ -2,6 +2,7 @@ import type { DiffComment } from '../../../shared/types'
 import { getDiffCommentLineLabel } from './diff-comment-compat'
 
 const MAX_EXCERPT_LINES = 8
+const MAX_CARD_QUOTE_LENGTH = 60
 
 export type MarkdownReviewNote = DiffComment & { source: 'markdown' }
 
@@ -65,31 +66,70 @@ export function getMarkdownReviewHighlightedText(
     .trim()
 }
 
+export function formatMarkdownReviewCardQuote(text: string | null | undefined): string | undefined {
+  const normalized = text?.replace(/\s+/g, ' ').trim()
+  if (!normalized) {
+    return undefined
+  }
+  if (normalized.length <= MAX_CARD_QUOTE_LENGTH) {
+    return normalized
+  }
+  return `${normalized.slice(0, MAX_CARD_QUOTE_LENGTH - 3).trimEnd()}...`
+}
+
+export function getMarkdownReviewCardQuote(
+  content: string,
+  note: Pick<DiffComment, 'lineNumber' | 'selectedText' | 'startLine'>
+): string | undefined {
+  return formatMarkdownReviewCardQuote(getMarkdownReviewHighlightedText(content, note))
+}
+
+function escapeMarkdownReviewNoteBody(body: string): string {
+  return body
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')
+}
+
+function formatMarkdownReviewNoteDetails(note: MarkdownReviewNote, content: string): string {
+  const excerpt = note.selectedText
+    ? getMarkdownReviewHighlightedText(content, note)
+        .split(/\r\n|\r|\n/)
+        .map((line) => `> ${line}`)
+        .join('\n')
+    : getMarkdownReviewExcerpt(content, note)
+  const parts = [
+    getDiffCommentLineLabel(note),
+    excerpt ? `Excerpt:\n${excerpt}` : null,
+    `User comment: "${escapeMarkdownReviewNoteBody(note.body)}"`
+  ]
+  return parts.filter((part): part is string => part !== null).join('\n')
+}
+
 export function formatMarkdownReviewNotes(
   notes: readonly MarkdownReviewNote[],
   content: string
 ): string {
-  return sortMarkdownReviewNotes(notes)
-    .map((note) => {
-      const escapedBody = note.body
-        .replace(/\\/g, '\\\\')
-        .replace(/"/g, '\\"')
-        .replace(/\r/g, '\\r')
-        .replace(/\n/g, '\\n')
-      const excerpt = note.selectedText
-        ? getMarkdownReviewHighlightedText(content, note)
-            .split(/\r\n|\r|\n/)
-            .map((line) => `> ${line}`)
-            .join('\n')
-        : getMarkdownReviewExcerpt(content, note)
-      const parts = [
-        `File: ${note.filePath}`,
+  const groups = new Map<string, MarkdownReviewNote[]>()
+  for (const note of sortMarkdownReviewNotes(notes)) {
+    const group = groups.get(note.filePath)
+    if (group) {
+      group.push(note)
+    } else {
+      groups.set(note.filePath, [note])
+    }
+  }
+
+  return [...groups.entries()]
+    .map(([filePath, fileNotes]) => {
+      // Why: agents need the file once; repeated markdown note blocks waste prompt context.
+      return [
+        `File: ${filePath}`,
         'Source: markdown',
-        getDiffCommentLineLabel(note),
-        excerpt ? `Excerpt:\n${excerpt}` : null,
-        `User comment: "${escapedBody}"`
-      ]
-      return parts.filter((part): part is string => part !== null).join('\n')
+        '',
+        fileNotes.map((note) => formatMarkdownReviewNoteDetails(note, content)).join('\n\n')
+      ].join('\n')
     })
     .join('\n\n')
 }

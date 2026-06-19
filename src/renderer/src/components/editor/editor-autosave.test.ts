@@ -3,6 +3,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
+  isExternalReloadableEditorTab,
   normalizeAutoSaveDelayMs,
   ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
   ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT,
@@ -157,6 +158,32 @@ describe('requestEditorFileClose', () => {
   })
 })
 
+describe('isExternalReloadableEditorTab', () => {
+  it('includes edit, preview, and single-file staged/unstaged diff tabs', () => {
+    expect(isExternalReloadableEditorTab(makeOpenFile())).toBe(true)
+    expect(
+      isExternalReloadableEditorTab(
+        makeOpenFile({ mode: 'markdown-preview', language: 'markdown' })
+      )
+    ).toBe(true)
+    expect(
+      isExternalReloadableEditorTab(
+        makeOpenFile({ mode: 'diff', diffSource: 'unstaged', id: 'diff-unstaged' })
+      )
+    ).toBe(true)
+    expect(
+      isExternalReloadableEditorTab(
+        makeOpenFile({ mode: 'diff', diffSource: 'staged', id: 'diff-staged' })
+      )
+    ).toBe(true)
+    expect(
+      isExternalReloadableEditorTab(
+        makeOpenFile({ mode: 'diff', diffSource: 'combined-uncommitted', id: 'combined' })
+      )
+    ).toBe(false)
+  })
+})
+
 describe('getOpenFilesForExternalFileChange', () => {
   it('matches edit tabs and unstaged diff tabs for the same worktree file', () => {
     const matchingEdit = makeOpenFile()
@@ -191,6 +218,40 @@ describe('getOpenFilesForExternalFileChange', () => {
           relativePath: 'file.ts'
         }
       ).map((file) => file.id)
-    ).toEqual(['/repo/file.ts', 'markdown-preview::/repo/file.ts', 'wt-1::diff::unstaged::file.ts'])
+    ).toEqual([
+      '/repo/file.ts',
+      'markdown-preview::/repo/file.ts',
+      'wt-1::diff::unstaged::file.ts',
+      'wt-1::diff::staged::file.ts'
+    ])
+  })
+
+  it('filters same-path matches by runtime owner when the watcher supplies one', () => {
+    const localEdit = makeOpenFile({ id: 'local-edit', runtimeEnvironmentId: null })
+    const runtimeEdit = makeOpenFile({ id: 'runtime-edit', runtimeEnvironmentId: 'env-1' })
+    const runtimeDiff = makeOpenFile({
+      id: 'runtime-diff',
+      mode: 'diff',
+      diffSource: 'unstaged',
+      runtimeEnvironmentId: 'env-1'
+    })
+
+    expect(
+      getOpenFilesForExternalFileChange([localEdit, runtimeEdit, runtimeDiff], {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        relativePath: 'file.ts',
+        runtimeEnvironmentId: null
+      }).map((file) => file.id)
+    ).toEqual(['local-edit'])
+
+    expect(
+      getOpenFilesForExternalFileChange([localEdit, runtimeEdit, runtimeDiff], {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        relativePath: 'file.ts',
+        runtimeEnvironmentId: 'env-1'
+      }).map((file) => file.id)
+    ).toEqual(['runtime-edit', 'runtime-diff'])
   })
 })

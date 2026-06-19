@@ -31,6 +31,7 @@ import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { cn } from '@/lib/utils'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { projectViewCacheKey } from '@/store/slices/github'
 import type {
   GetProjectViewTableResult,
@@ -47,6 +48,16 @@ import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import { filterProjectTableRowsByOpenRepos } from './project-row-filtering'
+import {
+  resolveMissingRepoProjectDialogState,
+  resolveRepoBackedProjectDialogState
+} from './project-dialog-state'
+import {
+  getNextVisibleProjectTableCache,
+  getVisibleProjectTable,
+  type CachedVisibleProjectTable
+} from './project-visible-table-cache'
+import { translate } from '@/i18n/i18n'
 
 type Props = Record<string, never>
 
@@ -64,6 +75,11 @@ function listProjectViewsForRuntime(
     : window.api.gh.listProjectViews(args)
 }
 
+function getProjectViewSourceScope(settings: Parameters<typeof getActiveRuntimeTarget>[0]): string {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+}
+
 export default function ProjectViewWrapper(_props: Props = {} as Props): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const projectViewCache = useAppStore((s) => s.projectViewCache)
@@ -75,8 +91,10 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   const addRepoFromStore = useAppStore((s) => s.addRepo)
   const repos = useAppStore((s) => s.repos)
   const { lookupSlug, ready: slugIndexReady } = useRepoSlugIndex()
+  const mountedRef = useMountedRef()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
+  const projectViewSourceScope = useMemo(() => getProjectViewSourceScope(settings), [settings])
   const lastViewByProject = useMemo(
     () => settings?.githubProjects?.lastViewByProject ?? {},
     [settings?.githubProjects?.lastViewByProject]
@@ -126,18 +144,21 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           },
           { force }
         )
+        if (!mountedRef.current || fetchRunIdRef.current !== runId) {
+          return
+        }
         if (!res.ok) {
           setError({ error: res.error, totalCount: res.totalCount })
         }
       } finally {
         // Why: a manual refresh can overlap with a tab/search fetch; an older
         // request finishing first must not clear the newer refresh indicator.
-        if (fetchRunIdRef.current === runId) {
+        if (mountedRef.current && fetchRunIdRef.current === runId) {
           setLoading(false)
         }
       }
     },
-    [fetchProjectViewTable]
+    [fetchProjectViewTable, mountedRef]
   )
 
   const handleSelect = useCallback(
@@ -157,14 +178,15 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     if (!viewId) {
       return
     }
-    const projectViewKey = `${key}:${viewId}`
+    const projectViewKey = `${projectViewSourceScope}:${key}:${viewId}`
     const queryOverride = appliedQueryByView[projectViewKey]
     const cacheKey = projectViewCacheKey(
       activeProject.ownerType,
       activeProject.owner,
       activeProject.number,
       viewId,
-      queryOverride
+      queryOverride,
+      projectViewSourceScope
     )
     if (projectViewCache[cacheKey]?.data) {
       return
@@ -179,7 +201,14 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       false,
       queryOverride
     )
-  }, [activeProject, lastViewByProject, projectViewCache, doFetch, appliedQueryByView])
+  }, [
+    activeProject,
+    lastViewByProject,
+    projectViewCache,
+    doFetch,
+    appliedQueryByView,
+    projectViewSourceScope
+  ])
 
   // Load the project's view list whenever the active project changes so the
   // tab strip can render. The list is small and rarely changes — fetched once
@@ -188,7 +217,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     if (!activeProject) {
       return
     }
-    const projectKey = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
+    const projectKey = `${projectViewSourceScope}:${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
     if (viewListByProject[projectKey]) {
       return
     }
@@ -219,7 +248,7 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     return () => {
       cancelled = true
     }
-  }, [activeProject, viewListByProject, settings])
+  }, [activeProject, viewListByProject, settings, projectViewSourceScope])
 
   const handleSwitchView = useCallback(
     async (viewId: string) => {
@@ -271,8 +300,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     if (!viewId) {
       return null
     }
-    return `${key}:${viewId}`
-  }, [activeProject, lastViewByProject])
+    return `${projectViewSourceScope}:${key}:${viewId}`
+  }, [activeProject, lastViewByProject, projectViewSourceScope])
 
   const currentAppliedOverride = currentProjectViewKey
     ? appliedQueryByView[currentProjectViewKey]
@@ -292,9 +321,10 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       activeProject.owner,
       activeProject.number,
       viewId,
-      currentAppliedOverride
+      currentAppliedOverride,
+      projectViewSourceScope
     )
-  }, [activeProject, lastViewByProject, currentAppliedOverride])
+  }, [activeProject, lastViewByProject, currentAppliedOverride, projectViewSourceScope])
 
   const table: GitHubProjectTable | null = currentCacheKey
     ? (projectViewCache[currentCacheKey]?.data ?? null)
@@ -303,27 +333,23 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     () => (table && slugIndexReady ? filterProjectTableRowsByOpenRepos(table, lookupSlug) : null),
     [table, slugIndexReady, lookupSlug]
   )
-  const [lastFilteredTable, setLastFilteredTable] = useState<{
-    cacheKey: string
-    table: GitHubProjectTable
-  } | null>(null)
-
-  useEffect(() => {
-    if (!currentCacheKey || !table) {
-      setLastFilteredTable(null)
-      return
-    }
-    if (slugIndexReady && filteredTable) {
-      setLastFilteredTable({ cacheKey: currentCacheKey, table: filteredTable })
-    }
-  }, [currentCacheKey, table, slugIndexReady, filteredTable])
-
-  const visibleTable =
-    slugIndexReady || !currentCacheKey
-      ? filteredTable
-      : lastFilteredTable?.cacheKey === currentCacheKey
-        ? lastFilteredTable.table
-        : null
+  const lastFilteredTableRef = useRef<CachedVisibleProjectTable | null>(null)
+  // Why: this cache only prevents a blank table while the repo slug index
+  // rebuilds; a ref preserves the previous render value without scheduling
+  // a second render after every filtered-table change.
+  lastFilteredTableRef.current = getNextVisibleProjectTableCache({
+    currentCacheKey,
+    sourceTable: table,
+    slugIndexReady,
+    filteredTable,
+    previous: lastFilteredTableRef.current
+  })
+  const visibleTable = getVisibleProjectTable({
+    currentCacheKey,
+    slugIndexReady,
+    filteredTable,
+    cachedTable: lastFilteredTableRef.current
+  })
 
   // Parent-dropped toast, once per table.
   useEffect(() => {
@@ -333,7 +359,12 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     if (parentDroppedToasted.has(currentCacheKey)) {
       return
     }
-    toast.message('Sub-issue data is unavailable for your token.')
+    toast.message(
+      translate(
+        'auto.components.github.project.ProjectViewWrapper.22df63c393',
+        'Sub-issue data is unavailable for your token.'
+      )
+    )
     setParentDroppedToasted((prev) => {
       const next = new Set(prev)
       next.add(currentCacheKey)
@@ -370,26 +401,27 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   } | null>(null)
   const liveRepoIds = useMemo(() => new Set(repos.map((repo) => repo.id)), [repos])
 
-  useEffect(() => {
-    if (dialogRepoItem && !liveRepoIds.has(dialogRepoItem.repoId)) {
-      setDialogRepoItem(null)
-    }
-  }, [dialogRepoItem, liveRepoIds])
+  const resolvedDialogRepoItem = resolveRepoBackedProjectDialogState(dialogRepoItem, liveRepoIds)
+  if (resolvedDialogRepoItem !== dialogRepoItem) {
+    // Why: repo-backed Project dialogs cannot edit after their repo leaves
+    // Orca; clear them before the modal tree receives stale repo ids.
+    setDialogRepoItem(resolvedDialogRepoItem)
+  }
 
-  useEffect(() => {
-    if (!slugIndexReady) {
-      return
-    }
-    if (
-      slugDialog &&
-      lookupSlug(`${slugDialog.origin.owner}/${slugDialog.origin.repo}`).length > 0
-    ) {
-      setSlugDialog(null)
-    }
-    if (repoNotInOrca && lookupSlug(`${repoNotInOrca.owner}/${repoNotInOrca.repo}`).length > 0) {
-      setRepoNotInOrca(null)
-    }
-  }, [slugIndexReady, lookupSlug, slugDialog, repoNotInOrca])
+  const resolvedMissingRepoDialogs = resolveMissingRepoProjectDialogState({
+    slugIndexReady,
+    slugDialog,
+    repoNotInOrca,
+    lookupSlug
+  })
+  if (resolvedMissingRepoDialogs.slugDialog !== slugDialog) {
+    // Why: once a previously missing repo is registered, Project rows should
+    // use the full repo-backed dialog instead of the slug fallback.
+    setSlugDialog(resolvedMissingRepoDialogs.slugDialog)
+  }
+  if (resolvedMissingRepoDialogs.repoNotInOrca !== repoNotInOrca) {
+    setRepoNotInOrca(resolvedMissingRepoDialogs.repoNotInOrca)
+  }
 
   const buildWorkItem = useCallback(
     (row: GitHubProjectRow, repoId: string): GitHubWorkItem | null => {
@@ -663,7 +695,10 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => void window.api.shell.openUrl(selectedViewUrl)}
-                aria-label="Open view in GitHub"
+                aria-label={translate(
+                  'auto.components.github.project.ProjectViewWrapper.fd15491034',
+                  'Open view in GitHub'
+                )}
               >
                 <ExternalLink className="size-3.5" />
               </Button>
@@ -694,8 +729,28 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
               }}
               disabled={loading}
               aria-busy={loading}
-              aria-label={loading ? 'Refreshing' : 'Refresh'}
-              title={loading ? 'Refreshing' : 'Refresh'}
+              aria-label={
+                loading
+                  ? translate(
+                      'auto.components.github.project.ProjectViewWrapper.a8fa0d2bf5',
+                      'Refreshing'
+                    )
+                  : translate(
+                      'auto.components.github.project.ProjectViewWrapper.71fb69926c',
+                      'Refresh'
+                    )
+              }
+              title={
+                loading
+                  ? translate(
+                      'auto.components.github.project.ProjectViewWrapper.a8fa0d2bf5',
+                      'Refreshing'
+                    )
+                  : translate(
+                      'auto.components.github.project.ProjectViewWrapper.71fb69926c',
+                      'Refresh'
+                    )
+              }
             >
               <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
             </Button>
@@ -706,7 +761,8 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       {activeProject
         ? (() => {
             const projectKey = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
-            const views = viewListByProject[projectKey] ?? []
+            const scopedProjectKey = `${projectViewSourceScope}:${projectKey}`
+            const views = viewListByProject[scopedProjectKey] ?? []
             const activeViewId = lastViewByProject[projectKey]?.viewId ?? null
             return (
               <ViewTabStrip
@@ -720,7 +776,10 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
 
       {!activeProject ? (
         <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-          Choose a project to get started.
+          {translate(
+            'auto.components.github.project.ProjectViewWrapper.512fc171d6',
+            'Choose a project to get started.'
+          )}
         </div>
       ) : loading && !table ? (
         <ProjectTableSkeleton />
@@ -733,6 +792,33 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
               void window.api.shell.openUrl(selectedViewUrl)
             }
           }}
+        />
+      ) : visibleTable && resolvedDialogRepoItem ? (
+        <GitHubItemDialog
+          workItem={resolvedDialogRepoItem.workItem}
+          repoPath={resolvedDialogRepoItem.repoPath}
+          repoId={resolvedDialogRepoItem.repoId}
+          projectOrigin={resolvedDialogRepoItem.origin}
+          backLabel={translate(
+            'auto.components.github.project.ProjectViewWrapper.1aa7c952b9',
+            'Project view'
+          )}
+          onUse={(item) => {
+            const current = resolvedDialogRepoItem
+            setDialogRepoItem(null)
+            void launchWorkItemDirect({
+              item,
+              repoId: current.workItem.repoId,
+              launchSource: 'task_page',
+              telemetrySource: 'sidebar',
+              openModalFallback: () => {
+                if (item.url) {
+                  void window.api.shell.openUrl(item.url)
+                }
+              }
+            })
+          }}
+          onClose={() => setDialogRepoItem(null)}
         />
       ) : visibleTable ? (
         <ProjectViewList
@@ -748,38 +834,9 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
             }
           }}
           onStartWork={handleStartWork}
+          sourceSettings={settings}
         />
       ) : null}
-
-      {/* Full repo-backed dialog — writes still go through slug-addressed
-          mutation helpers (see design §Dialog editing from Project rows, line
-          707) so a row from another repo cannot accidentally edit the active
-          workspace. */}
-      <GitHubItemDialog
-        workItem={dialogRepoItem?.workItem ?? null}
-        repoPath={dialogRepoItem?.repoPath ?? null}
-        repoId={dialogRepoItem?.repoId ?? null}
-        projectOrigin={dialogRepoItem?.origin}
-        onUse={(item) => {
-          const current = dialogRepoItem
-          setDialogRepoItem(null)
-          if (!current) {
-            return
-          }
-          void launchWorkItemDirect({
-            item,
-            repoId: current.workItem.repoId,
-            launchSource: 'task_page',
-            telemetrySource: 'sidebar',
-            openModalFallback: () => {
-              if (item.url) {
-                void window.api.shell.openUrl(item.url)
-              }
-            }
-          })
-        }}
-        onClose={() => setDialogRepoItem(null)}
-      />
 
       {/* Slug-only simplified dialog for rows whose repo isn't added to Orca.
           Why: no Start-work affordance lives inside the slug dialog — the
@@ -787,39 +844,55 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           having a duplicate (always-disabled or always-routing-to-fallback)
           button here would only confuse the user. */}
       <ProjectItemSlugDialog
-        projectOrigin={slugDialog?.origin ?? null}
+        projectOrigin={resolvedMissingRepoDialogs.slugDialog?.origin ?? null}
+        sourceSettings={settings}
         onClose={() => setSlugDialog(null)}
       />
 
       {/* repo-not-in-orca prompt: see design doc Interaction States. */}
       <Dialog
-        open={repoNotInOrca !== null}
+        open={resolvedMissingRepoDialogs.repoNotInOrca !== null}
         onOpenChange={(open) => !open && setRepoNotInOrca(null)}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Repository not in Orca</DialogTitle>
+            <DialogTitle>
+              {translate(
+                'auto.components.github.project.ProjectViewWrapper.7037c8f5f1',
+                'Repository not in Orca'
+              )}
+            </DialogTitle>
             <DialogDescription>
-              {repoNotInOrca
-                ? `${repoNotInOrca.owner}/${repoNotInOrca.repo} isn't added to Orca. Add it to start work, or open in GitHub.`
+              {resolvedMissingRepoDialogs.repoNotInOrca
+                ? translate(
+                    'auto.components.github.project.ProjectViewWrapper.1850fceac8',
+                    "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub.",
+                    {
+                      value0: resolvedMissingRepoDialogs.repoNotInOrca.owner,
+                      value1: resolvedMissingRepoDialogs.repoNotInOrca.repo
+                    }
+                  )
                 : null}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:justify-end">
             <Button variant="ghost" onClick={() => setRepoNotInOrca(null)}>
-              Cancel
+              {translate('auto.components.github.project.ProjectViewWrapper.dffa899f36', 'Cancel')}
             </Button>
-            {repoNotInOrca?.url ? (
+            {resolvedMissingRepoDialogs.repoNotInOrca?.url ? (
               <Button
                 variant="outline"
                 onClick={() => {
-                  if (repoNotInOrca.url) {
-                    void window.api.shell.openUrl(repoNotInOrca.url)
+                  if (resolvedMissingRepoDialogs.repoNotInOrca?.url) {
+                    void window.api.shell.openUrl(resolvedMissingRepoDialogs.repoNotInOrca.url)
                   }
                   setRepoNotInOrca(null)
                 }}
               >
-                Open in GitHub
+                {translate(
+                  'auto.components.github.project.ProjectViewWrapper.23b87ba9f7',
+                  'Open in GitHub'
+                )}
               </Button>
             ) : null}
             <Button
@@ -833,7 +906,10 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
                 await addRepoFromStore()
               }}
             >
-              Add repo
+              {translate(
+                'auto.components.github.project.ProjectViewWrapper.840c268665',
+                'Add repo'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -929,8 +1005,22 @@ function ProjectSearchInput({
             apply(value)
           }
         }}
-        placeholder={viewFilter || 'GitHub search, e.g. assignee:@me is:open'}
-        title={viewFilter ? `View filter: ${viewFilter}` : undefined}
+        placeholder={
+          viewFilter ||
+          translate(
+            'auto.components.github.project.ProjectViewWrapper.067119985c',
+            'GitHub search, e.g. assignee:@me is:open'
+          )
+        }
+        title={
+          viewFilter
+            ? translate(
+                'auto.components.github.project.ProjectViewWrapper.c5bc7ec007',
+                'View filter: {{value0}}',
+                { value0: viewFilter }
+              )
+            : undefined
+        }
         className={cn(
           'h-7 rounded-md border-border/50 bg-background pl-8 pr-7 text-[11px]',
           dirty && 'border-amber-500/50'
@@ -939,7 +1029,10 @@ function ProjectSearchInput({
       {value ? (
         <button
           type="button"
-          aria-label="Clear search"
+          aria-label={translate(
+            'auto.components.github.project.ProjectViewWrapper.7245c3d7ac',
+            'Clear search'
+          )}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             setValue('')
@@ -993,7 +1086,11 @@ function ViewTabStrip({
             title={
               supported
                 ? v.name
-                : `${v.name} — Orca doesn't support ${layoutLabel} project views yet. File a feature request at ${ORCA_FEATURE_REQUEST_URL}.`
+                : translate(
+                    'auto.components.github.project.ProjectViewWrapper.2edf5e7e77',
+                    "{{value0}} — Orca doesn't support {{value1}} project views yet. File a feature request at {{value2}}.",
+                    { value0: v.name, value1: layoutLabel, value2: ORCA_FEATURE_REQUEST_URL }
+                  )
             }
             className={cn(
               'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md border-x border-t px-3 py-1.5 text-xs',
@@ -1017,7 +1114,11 @@ function ViewTabStrip({
             <HoverCardTrigger asChild>
               <span
                 tabIndex={0}
-                aria-label={`${v.name}. ${unsupportedMessage} File a feature request at ${ORCA_FEATURE_REQUEST_URL}.`}
+                aria-label={translate(
+                  'auto.components.github.project.ProjectViewWrapper.55de4fb57a',
+                  '{{value0}}. {{value1}} File a feature request at {{value2}}.',
+                  { value0: v.name, value1: unsupportedMessage, value2: ORCA_FEATURE_REQUEST_URL }
+                )}
                 className="inline-flex shrink-0 cursor-not-allowed rounded-t-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 {tab}
@@ -1026,7 +1127,11 @@ function ViewTabStrip({
             <HoverCardContent side="bottom" align="start" sideOffset={8} className="w-72 p-3">
               <div className="space-y-2">
                 <p className="text-xs leading-5 text-muted-foreground">
-                  {unsupportedMessage} Switch to a Table view to work with this project in Orca.
+                  {unsupportedMessage}{' '}
+                  {translate(
+                    'auto.components.github.project.ProjectViewWrapper.1bf8c01c8b',
+                    'Switch to a Table view to work with this project in Orca.'
+                  )}
                 </p>
                 <Button
                   type="button"
@@ -1034,7 +1139,10 @@ function ViewTabStrip({
                   variant="outline"
                   onClick={() => void window.api.shell.openUrl(ORCA_FEATURE_REQUEST_URL)}
                 >
-                  File feature request
+                  {translate(
+                    'auto.components.github.project.ProjectViewWrapper.4d2a77a119',
+                    'File feature request'
+                  )}
                   <ExternalLink className="size-3" />
                 </Button>
               </div>
@@ -1065,7 +1173,11 @@ function ErrorState({
           error={error as GitHubProjectViewError & { type: 'auth_required' | 'scope_missing' }}
         />
         <Button size="sm" variant="outline" onClick={onOpenInGitHub}>
-          <ExternalLink className="mr-1 size-3.5" /> Open in GitHub
+          <ExternalLink className="mr-1 size-3.5" />{' '}
+          {translate(
+            'auto.components.github.project.ProjectViewWrapper.23b87ba9f7',
+            'Open in GitHub'
+          )}
         </Button>
       </div>
     )
@@ -1085,7 +1197,11 @@ function ErrorState({
       <div className="text-muted-foreground">{copy}</div>
       <div className="flex gap-2">
         <Button size="sm" variant="outline" onClick={onOpenInGitHub}>
-          <ExternalLink className="mr-1 size-3.5" /> Open in GitHub
+          <ExternalLink className="mr-1 size-3.5" />{' '}
+          {translate(
+            'auto.components.github.project.ProjectViewWrapper.23b87ba9f7',
+            'Open in GitHub'
+          )}
         </Button>
       </div>
     </div>
@@ -1101,7 +1217,10 @@ function ProjectTableSkeleton(): React.JSX.Element {
   return (
     <div
       aria-busy="true"
-      aria-label="Loading project view"
+      aria-label={translate(
+        'auto.components.github.project.ProjectViewWrapper.463f1205c0',
+        'Loading project view'
+      )}
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
       <div className="grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2">

@@ -3,11 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session'
 
-function createMockSubprocess(): SubprocessHandle {
+function createMockSubprocess(
+  options: { startupCommandDeliveredInShellArgs?: boolean } = {}
+): SubprocessHandle {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 99999,
+    ...(options.startupCommandDeliveredInShellArgs
+      ? { startupCommandDeliveredInShellArgs: true }
+      : {}),
+    getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => {
@@ -158,7 +164,34 @@ describe('TerminalHost', () => {
 
       lastSubprocess._onDataCb?.('\r\nuser@host $ ')
       await new Promise((r) => setTimeout(r, 40))
-      expect(lastSubprocess.write).toHaveBeenCalledWith('echo hello\n')
+      expect(lastSubprocess.write).toHaveBeenCalledWith(
+        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
+      )
+    })
+
+    it('does not write startup commands already embedded in shell args', async () => {
+      spawnFn = vi.fn(() => {
+        const sub = createMockSubprocess({
+          startupCommandDeliveredInShellArgs: true
+        }) as ReturnType<typeof createMockSubprocess> & {
+          _onDataCb: ((data: string) => void) | null
+          _onExitCb: ((code: number) => void) | null
+        }
+        lastSubprocess = sub
+        return sub
+      })
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        command: 'codex --no-alt-screen',
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(lastSubprocess.write).not.toHaveBeenCalled()
     })
   })
 
@@ -231,6 +264,22 @@ describe('TerminalHost', () => {
 
       host.kill('session-1')
       expect(lastSubprocess.kill).toHaveBeenCalled()
+      expect(host.isKilled('session-1')).toBe(true)
+    })
+
+    it('force-kills immediately when requested', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      host.kill('session-1', { immediate: true })
+
+      expect(lastSubprocess.kill).not.toHaveBeenCalled()
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+      expect(lastSubprocess.dispose).toHaveBeenCalled()
       expect(host.isKilled('session-1')).toBe(true)
     })
 
@@ -349,12 +398,13 @@ describe('TerminalHost', () => {
       expect(host.listSessions()).toEqual([])
     })
 
-    it('skips forceKill on already-exited sessions to avoid recycled-pid SIGKILL', async () => {
+    it('never force-kills an exited session (recycled-pid SIGKILL safety)', async () => {
       // Why: after a session's subprocess has exited (onExit fired), proc.pid
-      // refers to a reaped child whose pid may have been recycled. Calling
-      // forceKillAndDisposeSubprocess() on an exited session would
-      // process.kill(recycled_pid, 'SIGKILL') — killing a stranger. Dispose
-      // must detect isAlive=false and use disposeSubprocess() (fd release only).
+      // refers to a reaped child whose pid may have been recycled. Force-killing
+      // it would process.kill(recycled_pid, 'SIGKILL') — killing a stranger.
+      // The exit now reaps the session via session.dispose(), which skips
+      // forceKill once _state==='exited' (only the fd is released). host.dispose
+      // then only ever sees live sessions.
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -362,11 +412,14 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      // Simulate natural exit — session is retained in map until dispose.
-      lastSubprocess._onExitCb?.(0)
-
-      // Re-create another session so the map has BOTH a live and dead entry.
+      // Natural exit reaps session-1 synchronously: its subprocess fd is
+      // released (dispose) but it is never force-killed, and it is dropped from
+      // the map (so it is not listed and not touched by host.dispose below).
       const exitedSub = lastSubprocess
+      lastSubprocess._onExitCb?.(0)
+      expect(host.listSessions()).toEqual([])
+
+      // A second, live session remains in the map for host.dispose to reap.
       await host.createOrAttach({
         sessionId: 'session-2',
         cols: 80,

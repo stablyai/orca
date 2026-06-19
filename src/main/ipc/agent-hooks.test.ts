@@ -15,6 +15,7 @@ const handleHandlers = new Map<string, (event: unknown, ...args: unknown[]) => u
 const removeHandler = vi.fn()
 const removeAllListeners = vi.fn()
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+const CHILD_PANE_KEY = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -46,6 +47,9 @@ vi.mock('../agent-hooks/server', async () => {
 vi.mock('../claude/hook-service', () => ({
   claudeHookService: { getStatus: vi.fn(() => ({ agent: 'claude', state: 'absent' })) }
 }))
+vi.mock('../openclaude/hook-service', () => ({
+  openClaudeHookService: { getStatus: vi.fn(() => ({ agent: 'openclaude', state: 'absent' })) }
+}))
 vi.mock('../codex/hook-service', () => ({
   codexHookService: { getStatus: vi.fn(() => ({ agent: 'codex', state: 'absent' })) }
 }))
@@ -54,6 +58,9 @@ vi.mock('../gemini/hook-service', () => ({
 }))
 vi.mock('../antigravity/hook-service', () => ({
   antigravityHookService: { getStatus: vi.fn(() => ({ agent: 'antigravity', state: 'absent' })) }
+}))
+vi.mock('../amp/hook-service', () => ({
+  ampHookService: { getStatus: vi.fn(() => ({ agent: 'amp', state: 'absent' })) }
 }))
 vi.mock('../cursor/hook-service', () => ({
   cursorHookService: { getStatus: vi.fn(() => ({ agent: 'cursor', state: 'absent' })) }
@@ -72,6 +79,9 @@ vi.mock('../copilot/hook-service', () => ({
 }))
 vi.mock('../hermes/hook-service', () => ({
   hermesHookService: { getStatus: vi.fn(() => ({ agent: 'hermes', state: 'absent' })) }
+}))
+vi.mock('../devin/hook-service', () => ({
+  devinHookService: { getStatus: vi.fn(() => ({ agent: 'devin', state: 'absent' })) }
 }))
 
 beforeEach(() => {
@@ -108,6 +118,68 @@ describe('agentStatus:getSnapshot IPC', () => {
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual(snapshot)
   })
+
+  it('enriches the hook cache snapshot with runtime lineage metadata', async () => {
+    const snapshot = [
+      {
+        paneKey: PANE_KEY,
+        state: 'done',
+        prompt: 'parent',
+        agentType: 'codex',
+        connectionId: null,
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_699_999_999_000
+      },
+      {
+        paneKey: CHILD_PANE_KEY,
+        state: 'done',
+        prompt: 'child',
+        agentType: 'codex',
+        connectionId: null,
+        receivedAt: 1_700_000_001_000,
+        stateStartedAt: 1_700_000_000_500
+      }
+    ]
+    getStatusSnapshot.mockReturnValue(snapshot)
+    const runtime = {
+      getAgentStatusTerminalHandleForPaneKey: vi.fn((paneKey: string) =>
+        paneKey === PANE_KEY ? 'term-parent' : paneKey === CHILD_PANE_KEY ? 'term-child' : undefined
+      ),
+      getAgentStatusOrchestrationContextForPaneKey: vi.fn((paneKey: string) =>
+        paneKey === CHILD_PANE_KEY
+          ? {
+              taskId: 'task-child',
+              dispatchId: 'dispatch-child',
+              parentTerminalHandle: 'term-parent',
+              parentPaneKey: PANE_KEY,
+              coordinatorHandle: 'term-parent'
+            }
+          : undefined
+      )
+    }
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers(runtime)
+
+    const handler = handleHandlers.get('agentStatus:getSnapshot')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual([
+      {
+        ...snapshot[0],
+        terminalHandle: 'term-parent'
+      },
+      {
+        ...snapshot[1],
+        terminalHandle: 'term-child',
+        orchestration: {
+          taskId: 'task-child',
+          dispatchId: 'dispatch-child',
+          parentTerminalHandle: 'term-parent',
+          parentPaneKey: PANE_KEY,
+          coordinatorHandle: 'term-parent'
+        }
+      }
+    ])
+  })
 })
 
 describe('agentHooks:antigravityStatus IPC', () => {
@@ -121,6 +193,28 @@ describe('agentHooks:antigravityStatus IPC', () => {
   })
 })
 
+describe('agentHooks:ampStatus IPC', () => {
+  it('returns Amp hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:ampStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'amp', state: 'absent' })
+  })
+})
+
+describe('agentHooks:openClaudeStatus IPC', () => {
+  it('returns OpenClaude hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:openClaudeStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'openclaude', state: 'absent' })
+  })
+})
+
 describe('agentHooks:commandCodeStatus IPC', () => {
   it('returns Command Code hook installation status', async () => {
     const { registerAgentHookHandlers } = await import('./agent-hooks')
@@ -129,6 +223,17 @@ describe('agentHooks:commandCodeStatus IPC', () => {
     const handler = handleHandlers.get('agentHooks:commandCodeStatus')
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual({ agent: 'command-code', state: 'absent' })
+  })
+})
+
+describe('agentHooks:devinStatus IPC', () => {
+  it('returns Devin hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:devinStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'devin', state: 'absent' })
   })
 })
 

@@ -13,8 +13,16 @@ describe('selectRefreshedNetworkAddress', () => {
     expect(selectRefreshedNetworkAddress(undefined, [TAILNET, LAN])).toBe(TAILNET.address)
   })
 
+  it('prefers a tailnet address when no address is selected yet', () => {
+    expect(selectRefreshedNetworkAddress(undefined, [LAN, TAILNET])).toBe(TAILNET.address)
+  })
+
   it('moves to the first refreshed interface when the current address disappeared', () => {
     expect(selectRefreshedNetworkAddress('10.0.0.4', [TAILNET, LAN])).toBe(TAILNET.address)
+  })
+
+  it('moves to a tailnet address when the current address disappeared', () => {
+    expect(selectRefreshedNetworkAddress('10.0.0.4', [LAN, TAILNET])).toBe(TAILNET.address)
   })
 
   it('clears the selection when no interfaces are available', () => {

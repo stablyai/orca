@@ -1,3 +1,10 @@
+import {
+  filesystemPathHrefToFileUri,
+  filesystemPathToFileUri,
+  fileUriToFilesystemPath
+} from '../../../../shared/file-uri-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+
 // Pure classifier for markdown link targets. Called by the link-activation
 // dispatcher (activateMarkdownLink slice action) from three call sites —
 // MarkdownPreview, RichMarkdownEditor Cmd-click, RichMarkdownLinkBubble open —
@@ -38,26 +45,11 @@ export function absolutePathToFileUri(filePath: string): string {
 }
 
 function toFileUrl(filePath: string): string {
-  const normalizedPath = filePath.replaceAll('\\', '/')
-  const segments = normalizedPath.split('/').map((segment, index) => {
-    if (index === 0 && /^[A-Za-z]:$/.test(segment)) {
-      return segment
-    }
-    return encodeURIComponent(segment)
-  })
-  if (normalizedPath.startsWith('/')) {
-    return `file://${segments.join('/')}`
-  }
-  return `file:///${segments.join('/')}`
+  return filesystemPathToFileUri(filePath)
 }
 
-function fileUrlToAbsolutePath(url: URL): string {
-  let absolutePath = decodeURIComponent(url.pathname)
-  // Windows: "/C:/foo" → "C:/foo"
-  if (/^\/[A-Za-z]:\//.test(absolutePath)) {
-    absolutePath = absolutePath.slice(1)
-  }
-  return absolutePath
+function fileUrlToAbsolutePath(url: URL): string | null {
+  return fileUriToFilesystemPath(url)
 }
 
 function normalizePathForCompare(p: string): string {
@@ -121,6 +113,11 @@ function extractHashLineCol(hash: string): { line?: number; column?: number } {
 
 function resolveRelativeToSource(rawHref: string, sourceFilePath: string): URL | null {
   try {
+    if (isWindowsAbsolutePathLike(rawHref)) {
+      // Why: URL treats `C:\...` as a custom `c:` scheme unless the Windows
+      // absolute path is first converted to the file URL form used downstream.
+      return new URL(filesystemPathHrefToFileUri(rawHref))
+    }
     return new URL(rawHref, toFileUrl(sourceFilePath))
   } catch {
     return null
@@ -175,6 +172,9 @@ export function resolveMarkdownLinkTarget(
   }
 
   const rawAbsolutePath = fileUrlToAbsolutePath(resolved)
+  if (rawAbsolutePath === null) {
+    return null
+  }
 
   // Why: hash-based line anchor takes precedence; fall back to trailing
   // `:line:col` syntax only if no hash anchor was found.

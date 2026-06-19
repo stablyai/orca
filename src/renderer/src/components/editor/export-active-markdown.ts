@@ -1,28 +1,39 @@
 import { toast } from 'sonner'
 import { getActiveMarkdownExportPayload } from './markdown-export-extract'
+import { translate } from '@/i18n/i18n'
 
 /**
- * Export the currently-active markdown document to PDF via the main-process
- * IPC bridge. Silent no-op when no markdown surface is active — the menu
- * item and overflow action can both share this entry point.
+ * Export the markdown document for a local editor panel through the existing
+ * PDF bridge. Silent no-op when the panel no longer has rendered markdown.
  */
-export async function exportActiveMarkdownToPdf(): Promise<void> {
-  const payload = getActiveMarkdownExportPayload()
+export async function exportActiveMarkdownToPdf(options: {
+  fileId: string
+  root: ParentNode | null
+}): Promise<void> {
+  const payload = getActiveMarkdownExportPayload(options)
   if (!payload) {
-    // Why: design doc §5 — menu-triggered export with no markdown surface is
-    // a silent no-op. The overflow-menu item is disabled in that case so we
-    // only reach this branch for stray menu shortcuts.
+    // Why: stale panel refs can survive a dropdown click; keep export defensive
+    // even though the local Markdown menu disables unreachable states.
     return
   }
 
-  const toastId = toast.loading('Exporting PDF...')
+  const toastId = toast.loading(
+    translate('auto.components.editor.export.active.markdown.d4a901e0ad', 'Exporting PDF...')
+  )
   try {
     const result = await window.api.export.htmlToPdf({
       html: payload.html,
       title: payload.title
     })
     if (result.success) {
-      toast.success(`Exported to ${result.filePath}`, { id: toastId })
+      toast.success(
+        translate(
+          'auto.components.editor.export.active.markdown.51c4244904',
+          'Exported to {{value0}}',
+          { value0: result.filePath }
+        ),
+        { id: toastId }
+      )
       return
     }
     if (result.cancelled) {
@@ -31,7 +42,14 @@ export async function exportActiveMarkdownToPdf(): Promise<void> {
       toast.dismiss(toastId)
       return
     }
-    toast.error(result.error ?? 'Failed to export PDF', { id: toastId })
+    toast.error(
+      result.error ??
+        translate(
+          'auto.components.editor.export.active.markdown.eda2cea3ad',
+          'Failed to export PDF'
+        ),
+      { id: toastId }
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to export PDF'
     toast.error(message, { id: toastId })

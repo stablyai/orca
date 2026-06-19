@@ -32,12 +32,23 @@ const {
 vi.mock('./gh-utils', () => ({
   execFileAsync: execFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
-  githubRepoContext: (repoPath: string, connectionId?: string | null) => ({
+  githubRepoContext: (
+    repoPath: string,
+    connectionId?: string | null,
+    localGitOptions: { wslDistro?: string } = {}
+  ) => ({
     repoPath,
-    connectionId: connectionId ?? null
+    connectionId: connectionId ?? null,
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
   }),
-  ghRepoExecOptions: (context: { repoPath: string; connectionId?: string | null }) =>
-    context.connectionId ? {} : { cwd: context.repoPath },
+  ghRepoExecOptions: (context: {
+    repoPath: string
+    connectionId?: string | null
+    wslDistro?: string
+  }) =>
+    context.connectionId
+      ? {}
+      : { cwd: context.repoPath, ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}) },
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
@@ -58,7 +69,12 @@ vi.mock('./rate-limit', () => ({
   noteRateLimitSpend: noteRateLimitSpendMock
 }))
 
-import { countWorkItems, listWorkItems, _resetOwnerRepoCache } from './client'
+import {
+  countWorkItems,
+  listWorkItems,
+  _resetMergeQueueCacheForTests,
+  _resetOwnerRepoCache
+} from './client'
 
 describe('listWorkItems', () => {
   beforeEach(() => {
@@ -84,6 +100,7 @@ describe('listWorkItems', () => {
     }))
     getOwnerRepoForRemoteMock.mockResolvedValue(null)
     _resetOwnerRepoCache()
+    _resetMergeQueueCacheForTests()
   })
 
   it('runs both issue and PR GitHub searches for a mixed query and merges the results by recency', async () => {
@@ -221,6 +238,99 @@ describe('listWorkItems', () => {
     ])
   })
 
+  it('routes local WSL work-item listing through repo resolution and gh execution options', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    resolveIssueSourceMock.mockResolvedValue({
+      source: { owner: 'acme', repo: 'widgets' },
+      fellBack: false
+    })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoForRemoteMock.mockResolvedValue(null)
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
+
+    await listWorkItems(
+      '/repo-root',
+      5,
+      undefined,
+      undefined,
+      undefined,
+      null,
+      false,
+      localGitOptions
+    )
+
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/repo-root',
+      undefined,
+      null,
+      localGitOptions
+    )
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
+      '/repo-root',
+      'upstream',
+      null,
+      localGitOptions
+    )
+    expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
+    )
+  })
+
+  it('hydrates PR list rows with repository merge metadata', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            number: 42,
+            title: 'Add feature',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/42',
+            labels: [],
+            updatedAt: '2026-03-28T00:00:00Z',
+            author: { login: 'octocat' },
+            isDraft: false,
+            headRefName: 'feature/add-feature',
+            headRefOid: 'head-42',
+            baseRefName: 'main'
+          }
+        ])
+      })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              viewerDefaultMergeMethod: 'REBASE',
+              mergeCommitAllowed: false,
+              rebaseMergeAllowed: true,
+              squashMergeAllowed: true,
+              autoMergeAllowed: false
+            }
+          }
+        })
+      })
+
+    const { items } = await listWorkItems('/repo-root', 10, 'is:pr')
+
+    expect(items).toHaveLength(1)
+    expect(items[0]?.mergeMethodSettings).toEqual({
+      defaultMethod: 'rebase',
+      allowedMethods: {
+        squash: true,
+        merge: false,
+        rebase: true
+      }
+    })
+    expect(items[0]?.autoMergeAllowed).toBe(false)
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      expect.arrayContaining(['api', 'graphql', '-f', 'owner=acme', '-f', 'repo=widgets']),
+      { cwd: '/repo-root' }
+    )
+  })
+
   it('routes draft queries to PR search only', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
@@ -242,7 +352,7 @@ describe('listWorkItems', () => {
       ])
     })
     const { items } = await listWorkItems('/repo-root', 10, 'is:pr is:draft')
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'pr',
@@ -301,7 +411,7 @@ describe('listWorkItems', () => {
 
     const { items } = await listWorkItems('/repo-root', 10, 'is:merged')
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'pr',

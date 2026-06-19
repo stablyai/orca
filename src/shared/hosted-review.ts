@@ -1,4 +1,4 @@
-import type { CheckStatus, PRConflictSummary, PRMergeableState } from './types'
+import type { CheckStatus, PRConflictSummary, PRMergeableState, PRReviewDecision } from './types'
 
 export type HostedReviewProvider =
   | 'github'
@@ -19,7 +19,14 @@ export type HostedReviewInfo = {
   status: CheckStatus
   updatedAt: string
   mergeable: PRMergeableState
+  reviewDecision?: PRReviewDecision | null
+  autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
+  mergeQueueRequired?: boolean | null
+  mergeStateStatus?: string | null
   headSha?: string
+  /** Target branch name for review-created worktree compare-base repair. */
+  baseRefName?: string
   conflictSummary?: PRConflictSummary
 }
 
@@ -53,6 +60,7 @@ export type CreateHostedReviewInput = {
 
 export type CreateHostedReviewArgs = CreateHostedReviewInput & {
   repoPath: string
+  repoId?: string
   connectionId?: string | null
 }
 
@@ -111,6 +119,7 @@ export type HostedReviewCreationEligibility = {
 
 export type HostedReviewCreationEligibilityArgs = {
   repoPath: string
+  repoId?: string
   worktreePath?: string
   connectionId?: string | null
   branch: string
@@ -156,6 +165,7 @@ export type HostedReviewQueueSummary = {
   updatedAt: string
   lastViewedAt?: number
   mergeable: PRMergeableState
+  mergeStateStatus?: string | null
   checksStatus: CheckStatus
   reviewDecision?: HostedReviewDecision
   threadSummary?: HostedReviewThreadSummary

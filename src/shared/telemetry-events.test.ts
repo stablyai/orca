@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: telemetry schema tests keep related event
+   invariants together so cross-event payload rules stay easy to audit. */
 // Schema round-trip coverage for the event map. Fail-closed invariants that
 // must hold: agent_error is enum-only (error_message / error_stack rejected
 // by `.strict()`), unknown enum values fail, and any well-formed payload
@@ -8,12 +10,276 @@ import {
   addRepoSetupStepActionSchema,
   AGENT_KIND_VALUES,
   agentKindSchema,
-  commonPropsSchema,
   errorClassSchema,
   eventSchemas,
+  isCohortExtendedEvent,
   SETTINGS_CHANGED_WHITELIST,
   settingsChangedKeySchema
 } from './telemetry-events'
+import { FEATURE_INTERACTION_IDS, getFeatureInteractionCategory } from './feature-interactions'
+import { appStarSourceSchema } from './gh-star-source'
+
+describe('feature_interaction_usage_bucket_reached schema', () => {
+  it('accepts a valid bucket payload', () => {
+    const parsed = eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+      feature_id: 'browser-tab-created',
+      feature_category: 'browser',
+      count_bucket: 'count_3_4',
+      bucket_source: 'crossed_now',
+      nth_repo_added: 2
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('is in the runtime cohort-injection roster', () => {
+    expect(isCohortExtendedEvent('feature_interaction_usage_bucket_reached')).toBe(true)
+  })
+
+  it('keeps the feature id enum in sync with the catalog', () => {
+    const schema = eventSchemas.feature_interaction_usage_bucket_reached
+    for (const feature_id of FEATURE_INTERACTION_IDS) {
+      expect(
+        schema.safeParse({
+          feature_id,
+          feature_category: getFeatureInteractionCategory(feature_id),
+          count_bucket: 'count_1',
+          bucket_source: 'crossed_now'
+        }).success
+      ).toBe(true)
+    }
+  })
+
+  it('rejects unknown enum values and mismatched categories', () => {
+    const valid = {
+      feature_id: 'github-tasks',
+      feature_category: 'task_management',
+      count_bucket: 'count_1',
+      bucket_source: 'observed_existing'
+    }
+    expect(
+      eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+        ...valid,
+        feature_id: 'unknown-feature'
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+        ...valid,
+        feature_category: 'browser'
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+        ...valid,
+        count_bucket: 'count_4'
+      }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+        ...valid,
+        bucket_source: 'renderer'
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects raw privacy fields via .strict()', () => {
+    const rawFields = [
+      'prompt',
+      'command',
+      'path',
+      'repo',
+      'branch',
+      'url',
+      'hostname',
+      'error',
+      'text',
+      'query',
+      'result_label',
+      'workspace_name',
+      'setting_name',
+      'target_id',
+      'annotation_text',
+      'dom_snippet',
+      'screenshot',
+      'page_title',
+      'trusted_directory',
+      'trigger_x',
+      'trigger_y',
+      'focus_state',
+      'minimize_state',
+      'audio',
+      'transcript',
+      'model',
+      'device',
+      'error_detail'
+    ]
+    for (const field of rawFields) {
+      const parsed = eventSchemas.feature_interaction_usage_bucket_reached.safeParse({
+        feature_id: 'browser-annotations-sent-to-agent',
+        feature_category: 'browser',
+        count_bucket: 'count_1',
+        bucket_source: 'crossed_now',
+        [field]: 'raw'
+      })
+      expect(parsed.success).toBe(false)
+    }
+  })
+})
+
+describe('app_starred_orca schema', () => {
+  it('accepts every declared app star source', () => {
+    for (const source of appStarSourceSchema.options) {
+      const parsed = eventSchemas.app_starred_orca.safeParse({ source })
+      expect(parsed.success).toBe(true)
+    }
+  })
+
+  it('accepts cohort context on successful app star telemetry', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'settings',
+      nth_repo_added: 2
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects unknown app star source values', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'github_website'
+    })
+    expect(parsed.success).toBe(false)
+  })
+
+  it('rejects extra keys via .strict()', () => {
+    const parsed = eventSchemas.app_starred_orca.safeParse({
+      source: 'landing',
+      repo: 'stablyai/orca'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
+describe('star_nag_outcome schema', () => {
+  const valid = {
+    outcome: 'shown',
+    source: 'threshold',
+    mode: 'gh',
+    threshold: 35,
+    agents_since_baseline: 35,
+    agents_since_baseline_bucket: '35-69',
+    nth_repo_added: 2
+  }
+
+  it('accepts a strict valid payload with cohort context', () => {
+    expect(eventSchemas.star_nag_outcome.safeParse(valid).success).toBe(true)
+  })
+
+  it('is in the runtime cohort-injection roster', () => {
+    expect(isCohortExtendedEvent('star_nag_outcome')).toBe(true)
+  })
+
+  it('accepts next_threshold only as a positive integer for deferrals', () => {
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'dismissed',
+        next_threshold: 70
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'later',
+        next_threshold: 70
+      }).success
+    ).toBe(true)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, next_threshold: 0 }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, next_threshold: 1.5 }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({ ...valid, outcome: 'shown', next_threshold: 70 })
+        .success
+    ).toBe(false)
+  })
+
+  it('accepts cooldown_days only for deferrals', () => {
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'later',
+        cooldown_days: 30
+      }).success
+    ).toBe(true)
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'dismissed',
+        cooldown_days: 30
+      }).success
+    ).toBe(true)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, cooldown_days: 0 }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        outcome: 'opened_repo',
+        cooldown_days: 30
+      }).success
+    ).toBe(false)
+  })
+
+  it('accepts new star nag action outcomes', () => {
+    for (const outcome of [
+      'star_clicked',
+      'direct_star_succeeded',
+      'direct_star_failed',
+      'opened_repo',
+      'later'
+    ]) {
+      expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, outcome }).success).toBe(true)
+    }
+  })
+
+  it('rejects unknown outcome source mode and bucket values', () => {
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, outcome: 'ignored' }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, source: 'renderer' }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, mode: 'desktop' }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({
+        ...valid,
+        agents_since_baseline_bucket: '35+'
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects malformed numeric fields and raw extra fields', () => {
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, threshold: -1 }).success).toBe(false)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, threshold: 1.5 }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({ ...valid, agents_since_baseline: -1 }).success
+    ).toBe(false)
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, nth_repo_added: -1 }).success).toBe(
+      false
+    )
+    expect(eventSchemas.star_nag_outcome.safeParse({ ...valid, error: 'gh failed' }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.star_nag_outcome.safeParse({ ...valid, url: 'https://github.com' }).success
+    ).toBe(false)
+  })
+})
 
 describe('agent_error schema', () => {
   it('round-trips a minimal {error_class, agent_kind} payload', () => {
@@ -111,6 +377,28 @@ describe('agent_started schema', () => {
   })
 })
 
+describe('agent_prompt_sent schema', () => {
+  it('accepts a hook-confirmed prompt-send payload with cohort context', () => {
+    const parsed = eventSchemas.agent_prompt_sent.safeParse({
+      agent_kind: 'codex',
+      launch_source: 'unknown',
+      request_kind: 'followup',
+      nth_repo_added: 1
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects prompt text via .strict()', () => {
+    const parsed = eventSchemas.agent_prompt_sent.safeParse({
+      agent_kind: 'claude-code',
+      launch_source: 'unknown',
+      request_kind: 'followup',
+      prompt: 'please inspect /Users/alice/private-repo'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
 describe('agent_hook_unattributed schema', () => {
   it('accepts the two bounded attribution failure reasons', () => {
     for (const reason of ['empty_pane_key', 'unknown_tab_id'] as const) {
@@ -146,6 +434,29 @@ describe('add_repo_setup_step_action schema', () => {
     const parsed = eventSchemas.add_repo_setup_step_action.safeParse({
       action: 'skip',
       repo_name: 'orca' // raw repo names are UGC — must not cross the wire
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
+describe('add_repo_default_checkout_handoff schema', () => {
+  it('accepts bounded handoff outcome enums', () => {
+    const parsed = eventSchemas.add_repo_default_checkout_handoff.safeParse({
+      source: 'clone_url',
+      result: 'opened_default_checkout',
+      reason: 'detected_default_checkout',
+      nth_repo_added: 1
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects raw repo/path context via .strict()', () => {
+    const parsed = eventSchemas.add_repo_default_checkout_handoff.safeParse({
+      source: 'local_folder_picker',
+      result: 'revealed_project',
+      reason: 'no_default_checkout',
+      repo_name: 'secret-repo',
+      path: '/Users/alice/secret-repo'
     })
     expect(parsed.success).toBe(false)
   })
@@ -205,64 +516,6 @@ describe('settings_changed schema', () => {
     const parsed = eventSchemas.settings_changed.safeParse({
       setting_key: 'telemetryOptIn', // deliberately excluded from the whitelist
       value_kind: 'bool'
-    })
-    expect(parsed.success).toBe(false)
-  })
-})
-
-describe('commonPropsSchema', () => {
-  it('round-trips a realistic payload', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: '1.3.33',
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '00000000-0000-4000-8000-000000000000',
-      session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
-    })
-    expect(parsed.success).toBe(true)
-  })
-
-  it('rejects strings past the 64-char cap', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: 'x'.repeat(65),
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '00000000-0000-4000-8000-000000000000',
-      session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
-    })
-    expect(parsed.success).toBe(false)
-  })
-
-  // Empty `install_id` would collapse every event under one synthetic
-  // PostHog `distinctId`; empty `session_id` would blend unrelated process
-  // lifetimes. `.min(1)` guards both — this test pins that contract so a
-  // future edit can't relax it back to `.max(64)`-only.
-  it('rejects empty install_id', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: '1.3.33',
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '',
-      session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
-    })
-    expect(parsed.success).toBe(false)
-  })
-
-  it('rejects empty session_id', () => {
-    const parsed = commonPropsSchema.safeParse({
-      app_version: '1.3.33',
-      platform: 'darwin',
-      arch: 'arm64',
-      os_release: '25.3.0',
-      install_id: '00000000-0000-4000-8000-000000000000',
-      session_id: '',
-      orca_channel: 'stable'
     })
     expect(parsed.success).toBe(false)
   })

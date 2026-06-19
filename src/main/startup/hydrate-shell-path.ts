@@ -86,6 +86,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'`
     let finished = false
     let stdout = ''
+    let timer: ReturnType<typeof setTimeout> | null = null
 
     const child = spawn(shell, ['-ilc', command], {
       // Why: inherit current env so the shell sees the same baseline, then let
@@ -97,11 +98,25 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       detached: false
     })
 
-    const timer = setTimeout(() => {
+    const cleanup = (): void => {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+      child.stdout.off('data', onStdoutData)
+      child.off('error', onError)
+      child.off('close', onClose)
+    }
+    const finish = (result: HydrationResult): void => {
       if (finished) {
         return
       }
       finished = true
+      cleanup()
+      resolve(result)
+    }
+
+    timer = setTimeout(() => {
       // Why: slow rc files (corporate env setup, nvm eager init) can exceed
       // our budget. Kill the shell and fall back to process.env rather than
       // blocking the Agents pane indefinitely.
@@ -110,35 +125,29 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       } catch {
         // ignore
       }
-      resolve({ segments: [], ok: false, failureReason: 'timeout' })
+      finish({ segments: [], ok: false, failureReason: 'timeout' })
     }, SPAWN_TIMEOUT_MS)
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    const onStdoutData = (chunk: Buffer): void => {
       stdout += chunk.toString('utf8')
-    })
+    }
 
-    child.on('error', () => {
-      if (finished) {
-        return
-      }
-      finished = true
-      clearTimeout(timer)
-      resolve({ segments: [], ok: false, failureReason: 'spawn_error' })
-    })
+    const onError = (): void => {
+      finish({ segments: [], ok: false, failureReason: 'spawn_error' })
+    }
 
-    child.on('close', () => {
-      if (finished) {
-        return
-      }
-      finished = true
-      clearTimeout(timer)
+    const onClose = (): void => {
       const segments = parseCapturedPath(stdout)
       if (segments.length === 0) {
-        resolve({ segments: [], ok: false, failureReason: 'empty_path' })
+        finish({ segments: [], ok: false, failureReason: 'empty_path' })
         return
       }
-      resolve({ segments, ok: true, failureReason: 'none' })
-    })
+      finish({ segments, ok: true, failureReason: 'none' })
+    }
+
+    child.stdout.on('data', onStdoutData)
+    child.on('error', onError)
+    child.on('close', onClose)
   })
 }
 
@@ -172,25 +181,31 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
 }
 
 /**
- * Prepend newly-discovered PATH segments to process.env.PATH, preserving
- * existing ordering and avoiding duplicates. Returns the segments that were
- * actually added so callers can log/telemetry on nontrivial hydrations.
+ * Promote shell-discovered PATH segments to the front of process.env.PATH,
+ * preserving shell ordering and avoiding duplicates. Returns the segments that
+ * were newly added so callers can log/telemetry on nontrivial hydrations.
  */
 export function mergePathSegments(segments: string[]): string[] {
   if (segments.length === 0) {
     return []
   }
   const current = process.env.PATH ?? ''
-  const existing = new Set(current.split(delimiter).filter(Boolean))
-  // Why: Node 22+ Set.prototype.difference preserves insertion order of the
-  // receiver, so [...incoming.difference(existing)] gives us the new entries
-  // in the order the shell provided them (first-match-wins on PATH).
-  const added = [...new Set(segments).difference(existing)]
-  if (added.length === 0) {
+  const currentSegments = current.split(delimiter).filter(Boolean)
+  const shellSegments = [...new Set(segments)]
+  const shellSegmentSet = new Set(shellSegments)
+  const existing = new Set(currentSegments)
+  const added = shellSegments.filter((segment) => !existing.has(segment))
+  const merged = [
+    ...shellSegments,
+    ...currentSegments.filter((segment) => !shellSegmentSet.has(segment))
+  ]
+  const next = merged.join(delimiter)
+  if (next === current) {
     return []
   }
-  // Why: prepend so shell-provided entries win over the hardcoded fallbacks.
-  // The user's rc files are the source of truth for `which`-style resolution.
-  process.env.PATH = [...added, ...current.split(delimiter).filter(Boolean)].join(delimiter)
+  // Why: shell-provided entries must win over hardcoded packaged-app fallbacks.
+  // A seeded fallback can point at a stale CLI while the user's shell resolves
+  // a healthy one from the same directory list in a different order.
+  process.env.PATH = next
   return added
 }

@@ -7,18 +7,32 @@ export type WorkspaceSshGate = {
   error: string | null
 }
 
-export function isWorkspaceSshConnectInProgress(status: SshConnectionStatus | null): boolean {
+function isWorkspaceSshConnectInProgress(status: SshConnectionStatus | null): boolean {
   return status === 'connecting' || status === 'deploying-relay' || status === 'reconnecting'
 }
 
 export function workspaceSshStatusLabel(status: SshConnectionStatus | null): string {
-  if (status === 'connected') return 'Connected'
-  if (status === 'connecting') return 'Connecting'
-  if (status === 'deploying-relay') return 'Deploying relay'
-  if (status === 'reconnecting') return 'Reconnecting'
-  if (status === 'auth-failed') return 'Authentication failed'
-  if (status === 'reconnection-failed') return 'Reconnect failed'
-  if (status === 'error') return 'Connection failed'
+  if (status === 'connected') {
+    return 'Connected'
+  }
+  if (status === 'connecting') {
+    return 'Connecting'
+  }
+  if (status === 'deploying-relay') {
+    return 'Deploying relay'
+  }
+  if (status === 'reconnecting') {
+    return 'Reconnecting'
+  }
+  if (status === 'auth-failed') {
+    return 'Authentication failed'
+  }
+  if (status === 'reconnection-failed') {
+    return 'Reconnect failed'
+  }
+  if (status === 'error') {
+    return 'Connection failed'
+  }
   return 'Disconnected'
 }
 

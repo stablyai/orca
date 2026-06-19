@@ -1,14 +1,14 @@
 /* eslint-disable max-lines -- Why: DB tests cover messages, tasks, dispatch contexts, decision gates, coordinator runs, and lifecycle in one suite to share the createDb() helper and afterEach cleanup. */
-import Database from 'better-sqlite3'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
+import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import type { MessageType } from './db'
 
 describe('OrchestrationDb', () => {
-  let db: OrchestrationDb
+  let db: OrchestrationDb | undefined
 
   afterEach(() => {
     db?.close()
@@ -364,6 +364,21 @@ describe('OrchestrationDb', () => {
       expect(d.getActiveDispatchForTerminal('term_b')).toBeUndefined()
     })
 
+    it('getLatestDispatchForTerminal returns the most recent completed dispatch', () => {
+      const d = createDb()
+      const firstTask = d.createTask({ spec: 'first' })
+      const first = d.createDispatchContext(firstTask.id, 'term_a')
+      d.completeDispatch(first.id)
+      const secondTask = d.createTask({ spec: 'second' })
+      const second = d.createDispatchContext(secondTask.id, 'term_a')
+      d.completeDispatch(second.id)
+
+      const latest = d.getLatestDispatchForTerminal('term_a')
+      expect(latest?.id).toBe(second.id)
+      expect(latest?.status).toBe('completed')
+      expect(d.getActiveDispatchForTerminal('term_a')).toBeUndefined()
+    })
+
     it('circuit breaker trips after 3 failures', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'flaky' })
@@ -665,6 +680,10 @@ describe('OrchestrationDb', () => {
     let tempDir: string
 
     afterEach(() => {
+      // Why: Windows keeps the SQLite file locked until the DB handle closes,
+      // so migration temp directories must close before recursive cleanup.
+      db?.close()
+      db = undefined
       if (tempDir) {
         rmSync(tempDir, { recursive: true, force: true })
       }

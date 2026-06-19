@@ -109,6 +109,50 @@ describe('waitForSentinel', () => {
       expect(err).not.toBeInstanceOf(RelayVersionMismatchError)
     })
   })
+
+  it('rejects and closes the channel when pre-sentinel stdout exceeds the startup buffer cap', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    channel.emit('data', Buffer.alloc(65 * 1024, 'a'))
+
+    const outcome = await Promise.race([
+      transportPromise.then(
+        () => 'resolved',
+        (err: Error) => `rejected:${err.message}`
+      ),
+      new Promise<string>((resolve) => setTimeout(() => resolve('pending'), 0))
+    ])
+    if (outcome === 'pending') {
+      channel.emit('close')
+      await transportPromise.catch(() => {})
+    }
+
+    expect(outcome).toContain('Relay startup output exceeded')
+    expect(channel.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not count same-chunk post-sentinel payload against the startup buffer cap', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+    const postSentinelPayload = Buffer.alloc(70 * 1024, 'b')
+
+    channel.emit(
+      'data',
+      Buffer.concat([
+        Buffer.alloc(64 * 1024, 'a'),
+        Buffer.from(RELAY_SENTINEL),
+        postSentinelPayload
+      ])
+    )
+
+    const transport = await transportPromise
+    const chunks: Buffer[] = []
+    transport.onData((chunk) => chunks.push(chunk))
+
+    expect(Buffer.concat(chunks)).toEqual(postSentinelPayload)
+    expect(channel.close).not.toHaveBeenCalled()
+  })
 })
 
 describe('execCommand', () => {
@@ -122,5 +166,78 @@ describe('execCommand', () => {
     await Promise.resolve()
     expect(() => channel.emit('error', new Error('remote host rebooted'))).not.toThrow()
     await expect(commandPromise).rejects.toThrow('remote host rebooted')
+    expect(channel.listenerCount('error')).toBe(0)
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.listenerCount('close')).toBe(0)
+    expect(channel.stderr.listenerCount('error')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('includes stdout in nonzero-exit errors when stderr is empty', async () => {
+    const channel = createMockChannel()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, 'npm install node-pty 2>&1')
+
+    await Promise.resolve()
+    channel.emit('data', Buffer.from('gyp ERR! stack Error: not found: make\n'))
+    channel.emit('close', 1)
+
+    await expect(commandPromise).rejects.toThrow('gyp ERR! stack Error: not found: make')
+    expect(channel.listenerCount('error')).toBe(0)
+    expect(channel.listenerCount('data')).toBe(0)
+    expect(channel.listenerCount('close')).toBe(0)
+    expect(channel.stderr.listenerCount('error')).toBe(0)
+    expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('cleans command channel listeners when a command times out', async () => {
+    vi.useFakeTimers()
+    try {
+      const channel = createMockChannel()
+      const conn = {
+        exec: vi.fn().mockResolvedValue(channel)
+      }
+      const commandPromise = execCommand(conn as never, 'sleep 60')
+
+      await Promise.resolve()
+      const rejection = expect(commandPromise).rejects.toThrow('timed out')
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      await rejection
+      expect(channel.close).toHaveBeenCalledOnce()
+      expect(channel.listenerCount('error')).toBe(0)
+      expect(channel.listenerCount('data')).toBe(0)
+      expect(channel.listenerCount('close')).toBe(0)
+      expect(channel.stderr.listenerCount('error')).toBe(0)
+      expect(channel.stderr.listenerCount('data')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses custom command timeouts without forwarding them to SSH exec', async () => {
+    vi.useFakeTimers()
+    try {
+      const channel = createMockChannel()
+      const conn = {
+        exec: vi.fn().mockResolvedValue(channel)
+      }
+      const commandPromise = execCommand(conn as never, 'npm install', {
+        wrapCommand: false,
+        timeoutMs: 240_000
+      })
+
+      await Promise.resolve()
+      expect(conn.exec).toHaveBeenCalledWith('npm install', { wrapCommand: false })
+      const rejection = expect(commandPromise).rejects.toThrow('timed out after 240s')
+      await vi.advanceTimersByTimeAsync(240_000)
+
+      await rejection
+      expect(channel.close).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

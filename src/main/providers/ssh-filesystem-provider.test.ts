@@ -117,6 +117,7 @@ describe('SshFilesystemProvider', () => {
       const written: Buffer[] = []
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
+        off: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
         end: vi.fn((buffer: Buffer) => {
           written.push(buffer)
           const closeHandler = writeStream.on.mock.calls.find(([event]) => event === 'close')?.[1]
@@ -141,6 +142,7 @@ describe('SshFilesystemProvider', () => {
     it('can append decoded chunks through SFTP', async () => {
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
+        off: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
         end: vi.fn((_buffer: Buffer) => {
           const closeHandler = writeStream.on.mock.calls.find(([event]) => event === 'close')?.[1]
           closeHandler?.()
@@ -156,6 +158,45 @@ describe('SshFilesystemProvider', () => {
       await provider.writeFileBase64Chunk('/home/user/logo.png', 'cG5n', true)
 
       expect(sftp.createWriteStream).toHaveBeenCalledWith('/home/user/logo.png', { flags: 'a' })
+      expect(sftp.end).toHaveBeenCalled()
+    })
+  })
+
+  describe('downloadFile', () => {
+    it('downloads raw bytes through SFTP and closes the session', async () => {
+      const sftp = {
+        fastGet: vi.fn(
+          (_source: string, _destination: string, callback: (err?: Error | null) => void) =>
+            callback()
+        ),
+        end: vi.fn()
+      }
+      provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+
+      await provider.downloadFile('/home/user/archive.zip', '/tmp/archive.zip')
+
+      expect(sftp.fastGet).toHaveBeenCalledWith(
+        '/home/user/archive.zip',
+        '/tmp/archive.zip',
+        expect.any(Function)
+      )
+      expect(sftp.end).toHaveBeenCalled()
+    })
+
+    it('closes the SFTP session when raw download fails', async () => {
+      const sftp = {
+        fastGet: vi.fn(
+          (_source: string, _destination: string, callback: (err?: Error | null) => void) =>
+            callback(new Error('download failed'))
+        ),
+        end: vi.fn()
+      }
+      provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+
+      await expect(
+        provider.downloadFile('/home/user/archive.zip', '/tmp/archive.zip')
+      ).rejects.toThrow('download failed')
+
       expect(sftp.end).toHaveBeenCalled()
     })
   })
@@ -467,6 +508,43 @@ describe('SshFilesystemProvider', () => {
       unsub()
 
       expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+    })
+
+    it('sends fs.unwatch for active roots when disposed', async () => {
+      const callback = vi.fn()
+      await provider.watch('/home/user/project', callback)
+
+      provider.dispose()
+
+      expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('fs.changed', {
+        events: [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      })
+      expect(callback).not.toHaveBeenCalled()
+    })
+
+    it('unwatches when disposed while fs.watch setup is still resolving', async () => {
+      let resolveWatch: () => void = () => {}
+      mux.request.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveWatch = resolve
+          })
+      )
+      const callback = vi.fn()
+      const pendingWatch = provider.watch('/home/user/project', callback)
+
+      provider.dispose()
+      resolveWatch()
+
+      await expect(pendingWatch).rejects.toThrow('SSH filesystem provider disposed')
+      expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('fs.changed', {
+        events: [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      })
+      expect(callback).not.toHaveBeenCalled()
     })
 
     it('does not send fs.unwatch while other roots are watched', async () => {

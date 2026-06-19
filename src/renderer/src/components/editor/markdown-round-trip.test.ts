@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import type { SlashCommandId } from './rich-markdown-commands'
-import { slashCommands } from './rich-markdown-commands'
+import type { SlashCommandId } from './rich-markdown-slash-commands'
+import { slashCommands } from './rich-markdown-slash-commands'
 
 function roundTripMarkdown(content: string): string {
   const editor = new Editor({
@@ -152,6 +152,24 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('| a | b |\n| - | - |\n| 1 | 2 |\n')).toContain('| a')
   })
 
+  it('does not surface Linear issue reference definitions as description text', () => {
+    const input = [
+      '- [x] [H-279]',
+      '- [ ] [H-284]',
+      '',
+      '[H-279]: https://linear.app/acme/issue/H-279/child-one "Child one"',
+      '[H-284]: https://linear.app/acme/issue/H-284/child-two "Child two"',
+      ''
+    ].join('\n')
+
+    expect(roundTripMarkdown(input)).toBe(
+      [
+        '- [x] [H-279](https://linear.app/acme/issue/H-279/child-one "Child one")',
+        '- [ ] [H-284](https://linear.app/acme/issue/H-284/child-two "Child two")'
+      ].join('\n')
+    )
+  })
+
   it('preserves doc links', () => {
     expect(roundTripMarkdown('See [[setup-guide]] for details\n')).toBe(
       'See [[setup-guide]] for details'
@@ -168,10 +186,16 @@ describe('rich markdown round trip', () => {
     )
   })
 
+  it('preserves aliased doc links', () => {
+    expect(roundTripMarkdown('Link to [[docs/setup-guide.md|Setup Guide]]\n')).toBe(
+      'Link to [[docs/setup-guide.md|Setup Guide]]'
+    )
+  })
+
   it('does not encode invalid doc links', () => {
-    const result = roundTripMarkdown('Empty [[]] and piped [[a|b]]\n')
+    const result = roundTripMarkdown('Empty [[]] and blank alias [[a|]]\n')
     expect(result).toContain('[[]]')
-    expect(result).toContain('[[a|b]]')
+    expect(result).toContain('[[a|]]')
   })
 
   it('preserves doc links inside fenced code blocks as plain text', () => {

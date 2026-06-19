@@ -6,6 +6,7 @@ const captureScrollState = vi.hoisted(() => vi.fn())
 const wrapInSplit = vi.hoisted(() => vi.fn())
 const openTerminal = vi.hoisted(() => vi.fn())
 const disposeWebgl = vi.hoisted(() => vi.fn())
+const clearPendingSplitScrollRestore = vi.hoisted(() => vi.fn())
 const scheduleSplitScrollRestore = vi.hoisted(() => vi.fn())
 const updateMultiPaneState = vi.hoisted(() => vi.fn())
 const applyPaneOpacity = vi.hoisted(() => vi.fn())
@@ -30,6 +31,7 @@ vi.mock('./pane-webgl-renderer', () => ({
 }))
 
 vi.mock('./pane-split-scroll', () => ({
+  clearPendingSplitScrollRestore,
   scheduleSplitScrollRestore
 }))
 
@@ -159,6 +161,8 @@ describe('splitManagedPane', () => {
     expect(result?.id).toBe(newPane.id)
     expect(captureScrollState).toHaveBeenCalledWith(fallbackPane.terminal)
     expect(captureScrollState).toHaveBeenCalledWith(siblingPane.terminal)
+    expect(clearPendingSplitScrollRestore).toHaveBeenCalledWith(fallbackPane)
+    expect(clearPendingSplitScrollRestore).toHaveBeenCalledWith(siblingPane)
     expect(fallbackPane.pendingSplitScrollState).toBe(fallbackScrollState)
     expect(siblingPane.pendingSplitScrollState).toBe(siblingScrollState)
     expect(disposeWebgl).toHaveBeenCalledWith(fallbackPane)

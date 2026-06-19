@@ -28,6 +28,45 @@ describe('createCommandCodeOutputStatusDetector', () => {
     expect(onWorking).toHaveBeenCalledWith('')
   })
 
+  it('detects the Command Code banner across PTY chunk boundaries', () => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: null,
+      onWorking
+    })
+
+    expect(detector.observe('# Command')).toBe(false)
+    expect(detector.observe(' Code v0.27.2')).toBe(false)
+    expect(detector.observe('⌘ Parsing...')).toBe(true)
+
+    expect(onWorking).toHaveBeenCalledWith('')
+  })
+
+  it('detects the Command Code banner when ANSI styling splits the words', () => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: null,
+      onWorking
+    })
+
+    expect(detector.observe('# C\x1b[35mommand Co\x1b[0mde v0.27.2')).toBe(false)
+    expect(detector.observe('⌘ Parsing...')).toBe(true)
+
+    expect(onWorking).toHaveBeenCalledWith('')
+  })
+
+  it('does not trust near-miss Command Code banner text', () => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: null,
+      onWorking
+    })
+
+    expect(detector.observe('NotCommand CodeX\r\n⌘ Parsing...')).toBe(false)
+
+    expect(onWorking).not.toHaveBeenCalled()
+  })
+
   it.each([
     'Pondering',
     'Contemplating',

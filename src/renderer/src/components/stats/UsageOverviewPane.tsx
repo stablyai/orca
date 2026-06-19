@@ -1,15 +1,5 @@
-/* eslint-disable max-lines -- Why: the overview keeps its small display components beside the
-   provider fetch wiring so the combined usage surface stays easy to audit. */
 import { useEffect, useMemo } from 'react'
-import {
-  Activity,
-  AlertCircle,
-  CalendarDays,
-  Coins,
-  DatabaseZap,
-  RefreshCw,
-  Sparkles
-} from 'lucide-react'
+import { Activity, CalendarDays, Coins, DatabaseZap, RefreshCw, Sparkles } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -19,21 +9,12 @@ import {
   buildUsageOverview,
   formatUsageCost,
   formatUsageTokens,
-  getRecentUsageDays,
-  type UsageOverviewDailyPoint,
-  type UsageOverviewModel,
-  type UsageProviderOverview
+  getRecentUsageDays
 } from './usage-overview-model'
+import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
+import { translate } from '@/i18n/i18n'
 
 const RECENT_DAY_COUNT = 42
-
-const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
-  0: 'border-border/60 bg-muted/40',
-  1: 'border-border/60 bg-muted-foreground/20',
-  2: 'border-border/60 bg-muted-foreground/35',
-  3: 'border-border/60 bg-muted-foreground/55',
-  4: 'border-border/60 bg-foreground/75'
-}
 
 function formatPercent(value: number | null): string {
   if (value === null) {
@@ -47,200 +28,6 @@ function formatUpdatedAt(timestamp: number | null): string {
     return 'Not scanned yet'
   }
   return `Updated ${new Date(timestamp).toLocaleString()}`
-}
-
-function formatDayLabel(day: string): string {
-  const parsed = new Date(`${day}T12:00:00`)
-  if (Number.isNaN(parsed.getTime())) {
-    return day
-  }
-  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-function TokenMixBar({ overview }: { overview: UsageOverviewModel }): React.JSX.Element {
-  const segments = [
-    {
-      key: 'new-input',
-      label: 'New input',
-      value: overview.newInputTokens,
-      className: 'bg-foreground'
-    },
-    {
-      key: 'output',
-      label: 'Output',
-      value: overview.outputTokens,
-      className: 'bg-muted-foreground'
-    },
-    {
-      key: 'cache',
-      label: 'Cache',
-      value: overview.cacheTokens,
-      className: 'bg-border'
-    }
-  ]
-  // Why: Codex cached input is a subset of input. The overview model normalizes
-  // that into new/cache buckets so the visual mix does not double-count it.
-  const mixTotal = segments.reduce((sum, segment) => sum + segment.value, 0)
-
-  return (
-    <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h4 className="text-sm font-semibold text-foreground">Token mix</h4>
-          <p className="text-xs text-muted-foreground">
-            Combined input, output, and cache tokens across enabled providers.
-          </p>
-        </div>
-        {overview.reasoningTokens > 0 ? (
-          <Badge variant="outline" className="shrink-0">
-            {formatUsageTokens(overview.reasoningTokens)} reasoning
-          </Badge>
-        ) : null}
-      </div>
-
-      {mixTotal > 0 ? (
-        <div
-          className="flex h-3 overflow-hidden rounded-full border border-border/60 bg-muted"
-          aria-label="Combined token mix"
-        >
-          {segments.map((segment) =>
-            segment.value > 0 ? (
-              <div
-                key={segment.key}
-                className={segment.className}
-                style={{ width: `${(segment.value / mixTotal) * 100}%` }}
-                aria-label={`${segment.label}: ${segment.value.toLocaleString()} tokens`}
-              />
-            ) : null
-          )}
-        </div>
-      ) : (
-        <div className="h-3 rounded-full border border-dashed border-border/60 bg-muted/40" />
-      )}
-
-      <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-        {segments.map((segment) => (
-          <div key={segment.key} className="flex min-w-0 items-center gap-2">
-            <span className={`size-2 shrink-0 rounded-full ${segment.className}`} />
-            <span className="min-w-0 truncate">
-              {segment.label}: {formatUsageTokens(segment.value)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function DailyIntensityGrid({
-  days,
-  bestDay
-}: {
-  days: UsageOverviewDailyPoint[]
-  bestDay: UsageOverviewDailyPoint | null
-}): React.JSX.Element {
-  return (
-    <section className="rounded-lg border border-border/60 bg-card/40 p-4">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h4 className="text-sm font-semibold text-foreground">Daily intensity</h4>
-          <p className="text-xs text-muted-foreground">
-            Recent combined Claude, Codex, and OpenCode token activity.
-          </p>
-        </div>
-        {bestDay && bestDay.totalTokens > 0 ? (
-          <Badge variant="outline" className="shrink-0">
-            Best: {formatDayLabel(bestDay.day)}
-          </Badge>
-        ) : null}
-      </div>
-
-      <div
-        className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-1 sm:grid-cols-[repeat(21,minmax(0,1fr))]"
-        aria-label="Recent token activity heatmap"
-      >
-        {days.map((day) => (
-          <div
-            key={day.day}
-            className={`aspect-square min-h-3 rounded-[2px] border ${INTENSITY_CLASS[day.intensity]}`}
-            aria-label={`${day.day}: ${day.totalTokens.toLocaleString()} tokens`}
-          />
-        ))}
-      </div>
-
-      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span>{formatDayLabel(days[0]?.day ?? '')}</span>
-        <span>Less</span>
-        <div className="flex items-center gap-1" aria-hidden>
-          {[0, 1, 2, 3, 4].map((intensity) => (
-            <span
-              key={intensity}
-              className={`size-2 rounded-[2px] border ${INTENSITY_CLASS[intensity as UsageOverviewDailyPoint['intensity']]}`}
-            />
-          ))}
-        </div>
-        <span>More</span>
-        <span>{formatDayLabel(days.at(-1)?.day ?? '')}</span>
-      </div>
-    </section>
-  )
-}
-
-function ProviderRow({
-  provider,
-  totalTokens,
-  onEnable
-}: {
-  provider: UsageProviderOverview
-  totalTokens: number
-  onEnable: () => void
-}): React.JSX.Element {
-  const share = totalTokens > 0 ? provider.totalTokens / totalTokens : 0
-  const status = provider.enabled ? (provider.isScanning ? 'Scanning' : 'Enabled') : 'Off'
-  const statusVariant = provider.enabled ? 'secondary' : 'outline'
-
-  return (
-    <div className="rounded-lg border border-border/60 bg-card/40 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <h5 className="truncate text-sm font-semibold text-foreground">{provider.label}</h5>
-            <Badge variant={statusVariant}>{status}</Badge>
-          </div>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {provider.topModel ?? 'No model yet'}
-            {provider.topProject ? ` - ${provider.topProject}` : ''}
-          </p>
-        </div>
-        {!provider.enabled ? (
-          <Button variant="outline" size="xs" onClick={onEnable}>
-            Enable
-          </Button>
-        ) : null}
-      </div>
-
-      <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
-        <span>{formatUsageTokens(provider.totalTokens)} tokens</span>
-        <span>
-          {provider.sessions.toLocaleString()} sessions - {provider.activityCount.toLocaleString()}{' '}
-          {provider.activityLabel}
-        </span>
-        <span>{formatUsageCost(provider.estimatedCostUsd)}</span>
-      </div>
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-foreground/75"
-          style={{ width: `${Math.max(share * 100, provider.totalTokens > 0 ? 2 : 0)}%` }}
-        />
-      </div>
-      {provider.lastScanError ? (
-        <p className="mt-2 flex items-center gap-1 text-xs text-destructive">
-          <AlertCircle className="size-3" />
-          {provider.lastScanError}
-        </p>
-      ) : null}
-    </div>
-  )
 }
 
 export function UsageOverviewPane(): React.JSX.Element {
@@ -320,10 +107,17 @@ export function UsageOverviewPane(): React.JSX.Element {
       <section className="rounded-lg border border-border/60 bg-card/30 p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-foreground">Usage Overview</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              {translate('auto.components.stats.UsageOverviewPane.c760c481c5', 'Usage Overview')}
+            </h3>
             <p className="mt-1 text-xs text-muted-foreground">
               {formatUpdatedAt(overview.lastUpdatedAt)}
-              {overview.hasPartialCost ? ' - some model prices are unavailable' : ''}
+              {overview.hasPartialCost
+                ? translate(
+                    'auto.components.stats.UsageOverviewPane.55c910f4f1',
+                    '- some model prices are unavailable'
+                  )
+                : ''}
             </p>
           </div>
           <Tooltip>
@@ -333,13 +127,16 @@ export function UsageOverviewPane(): React.JSX.Element {
                 size="icon-xs"
                 onClick={handleRefresh}
                 disabled={!overview.hasAnyEnabledProvider || isScanning}
-                aria-label="Refresh usage overview"
+                aria-label={translate(
+                  'auto.components.stats.UsageOverviewPane.e06d1baf5c',
+                  'Refresh usage overview'
+                )}
               >
                 <RefreshCw className={`size-3.5 ${isScanning ? 'animate-spin' : ''}`} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              Refresh
+              {translate('auto.components.stats.UsageOverviewPane.ca6bc5fded', 'Refresh')}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -348,9 +145,17 @@ export function UsageOverviewPane(): React.JSX.Element {
           <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5">
             <div className="max-w-xl space-y-3">
               <div>
-                <h4 className="text-sm font-semibold text-foreground">Start tracking tokens</h4>
+                <h4 className="text-sm font-semibold text-foreground">
+                  {translate(
+                    'auto.components.stats.UsageOverviewPane.49405ccc8d',
+                    'Start tracking tokens'
+                  )}
+                </h4>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Enable a provider to scan local agent logs and build the combined token ledger.
+                  {translate(
+                    'auto.components.stats.UsageOverviewPane.6c00c46815',
+                    'Enable a provider to scan local agent logs and build the combined token ledger.'
+                  )}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -361,7 +166,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                     void enableClaudeUsage()
                   }}
                 >
-                  Enable Claude
+                  {translate('auto.components.stats.UsageOverviewPane.0ea0cae435', 'Enable Claude')}
                 </Button>
                 <Button
                   variant="secondary"
@@ -371,7 +176,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                     void enableCodexUsage()
                   }}
                 >
-                  Enable Codex
+                  {translate('auto.components.stats.UsageOverviewPane.2f1ee2878b', 'Enable Codex')}
                 </Button>
                 <Button
                   variant="outline"
@@ -381,7 +186,10 @@ export function UsageOverviewPane(): React.JSX.Element {
                     void enableOpenCodeUsage()
                   }}
                 >
-                  Enable OpenCode
+                  {translate(
+                    'auto.components.stats.UsageOverviewPane.2d13e57f72',
+                    'Enable OpenCode'
+                  )}
                 </Button>
               </div>
             </div>
@@ -390,22 +198,31 @@ export function UsageOverviewPane(): React.JSX.Element {
           <>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
-                label="Total tokens"
+                label={translate(
+                  'auto.components.stats.UsageOverviewPane.3887b94ce5',
+                  'Total tokens'
+                )}
                 value={formatUsageTokens(overview.totalTokens)}
                 icon={<Sparkles className="size-4" />}
               />
               <StatCard
-                label="Est. cost"
+                label={translate('auto.components.stats.UsageOverviewPane.0eaf937335', 'Est. cost')}
                 value={formatUsageCost(overview.estimatedCostUsd)}
                 icon={<Coins className="size-4" />}
               />
               <StatCard
-                label="Active days"
+                label={translate(
+                  'auto.components.stats.UsageOverviewPane.327603fe8b',
+                  'Active days'
+                )}
                 value={overview.activeDays.toLocaleString()}
                 icon={<CalendarDays className="size-4" />}
               />
               <StatCard
-                label="Cache share"
+                label={translate(
+                  'auto.components.stats.UsageOverviewPane.70f36452d4',
+                  'Cache share'
+                )}
                 value={formatPercent(overview.cacheShare)}
                 icon={<DatabaseZap className="size-4" />}
               />
@@ -413,8 +230,10 @@ export function UsageOverviewPane(): React.JSX.Element {
 
             {!overview.hasAnyData ? (
               <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
-                No local Claude, Codex, or OpenCode usage found yet. The overview will populate
-                after the next agent session writes token logs.
+                {translate(
+                  'auto.components.stats.UsageOverviewPane.60002bb22f',
+                  'No local Claude, Codex, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.'
+                )}
               </div>
             ) : (
               <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
@@ -429,19 +248,25 @@ export function UsageOverviewPane(): React.JSX.Element {
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h4 className="text-sm font-semibold text-foreground">Providers</h4>
+            <h4 className="text-sm font-semibold text-foreground">
+              {translate('auto.components.stats.UsageOverviewPane.33f7b043d2', 'Providers')}
+            </h4>
             <p className="text-xs text-muted-foreground">
-              {overview.enabledProviderCount} enabled - {overview.dataProviderCount} with data
+              {overview.enabledProviderCount}{' '}
+              {translate('auto.components.stats.UsageOverviewPane.ecb0cd8a4c', 'enabled -')}
+              {overview.dataProviderCount}{' '}
+              {translate('auto.components.stats.UsageOverviewPane.444585cb41', 'with data')}
             </p>
           </div>
           <Badge variant="outline" className="gap-1">
             <Activity className="size-3" />
-            {overview.sessions.toLocaleString()} sessions
+            {overview.sessions.toLocaleString()}{' '}
+            {translate('auto.components.stats.UsageOverviewPane.22ed1b7669', 'sessions')}
           </Badge>
         </div>
         <div className="grid gap-3 xl:grid-cols-2">
           {overview.providers.map((provider) => (
-            <ProviderRow
+            <ProviderUsageRow
               key={provider.id}
               provider={provider}
               totalTokens={overview.totalTokens}

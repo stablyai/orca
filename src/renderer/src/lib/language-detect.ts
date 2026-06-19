@@ -52,6 +52,8 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.bash': 'shell',
   '.zsh': 'shell',
   '.fish': 'shell',
+  '.bat': 'bat',
+  '.cmd': 'bat',
   '.ps1': 'powershell',
   '.yaml': 'yaml',
   '.yml': 'yaml',
@@ -78,6 +80,13 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.vue': 'vue',
   '.svelte': 'svelte',
   '.astro': 'astro',
+  '.sv': 'systemverilog',
+  '.svh': 'systemverilog',
+  '.v': 'verilog',
+  '.vh': 'verilog',
+  '.nim': 'nim',
+  '.nims': 'nim',
+  '.nimble': 'nim',
   '.tf': 'hcl',
   '.hcl': 'hcl',
   '.prisma': 'graphql',
@@ -100,7 +109,7 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
 
 export function detectLanguage(filePath: string): string {
   // Check exact filename first
-  const parts = filePath.split('/')
+  const parts = filePath.split(/[\\/]/)
   const filename = parts.at(-1)!
   if (FILENAME_TO_LANGUAGE[filename]) {
     return FILENAME_TO_LANGUAGE[filename]

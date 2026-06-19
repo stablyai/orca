@@ -46,6 +46,39 @@ export function sanitizeBranchSlug(raw: string, maxWords = MAX_BRANCH_NAME_WORDS
 }
 
 /**
+ * Drop a leading prefix segment the generation model prepended despite the
+ * "no prefixes" instruction — e.g. with a `tmchow/` branch prefix the model
+ * emits `tmchow/worktree-spinner`, which `sanitizeBranchSlug` folds to
+ * `tmchow-worktree-spinner`. Left alone, that leaks the prefix into both the
+ * branch leaf (yielding a doubled `tmchow/tmchow-...`) and the humanized
+ * display name. Strips only when the leading segment matches the *configured*
+ * prefix, so a work-derived name that merely starts with a real word survives.
+ * Prefix-only output (the model echoed just `tmchow`) yields an empty slug so
+ * the caller skips the rename — otherwise it would double-prefix to
+ * `tmchow/tmchow`.
+ */
+export function stripConfiguredBranchPrefix(
+  slug: string,
+  prefix: string | null | undefined
+): string {
+  if (!prefix) {
+    return slug
+  }
+  const prefixSlug = prefix
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  if (!prefixSlug) {
+    return slug
+  }
+  if (slug === prefixSlug) {
+    return ''
+  }
+  return slug.startsWith(`${prefixSlug}-`) ? slug.slice(prefixSlug.length + 1) : slug
+}
+
+/**
  * Turn a branch slug into a readable workspace display label, e.g.
  * `supported-models-list` → `Supported models list`. Used to update the
  * sidebar name alongside the branch so the two stay in sync.
@@ -71,10 +104,7 @@ export type BranchNameWorkContext = {
  * the work into a branch name. Kept in shared so the prompt is identical across
  * local and SSH generation targets.
  */
-export function buildBranchNamePrompt(
-  context: BranchNameWorkContext,
-  customInstructions = ''
-): string {
+export function buildBranchNamePrompt(context: BranchNameWorkContext, customPrompt = ''): string {
   const sections = [
     'Generate a git branch name that summarizes the coding task described below.',
     'Rules:',
@@ -91,9 +121,9 @@ export function buildBranchNamePrompt(
   if (assistant) {
     sections.push('', "Agent's initial response:", assistant)
   }
-  const instructions = customInstructions.trim()
-  if (instructions) {
-    sections.push('', 'Additional user instructions:', instructions)
+  const prompt = customPrompt.trim()
+  if (prompt) {
+    sections.push('', 'Additional user prompt:', prompt)
   }
   return sections.join('\n')
 }

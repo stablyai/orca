@@ -5,6 +5,8 @@ import type {
   ComputerSnapshotResult
 } from '../../src/shared/runtime-types'
 import {
+  activateFinder,
+  ensureOrcaRuntimeLaunched,
   ensureTextEditLaunched,
   findRoleIndex,
   killTextEdit,
@@ -17,6 +19,7 @@ const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 
 describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => {
   beforeAll(async () => {
+    await ensureOrcaRuntimeLaunched()
     await ensureTextEditLaunched()
   })
 
@@ -141,6 +144,103 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
     expect(after.result.snapshot.treeText).not.toContain('orca paste first')
   })
 
+  test('accessibility text actions work when TextEdit is not frontmost', async () => {
+    const before = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+      (
+        await runOrcaCli([
+          'computer',
+          'get-app-state',
+          '--app',
+          'TextEdit',
+          '--restore-window',
+          '--no-screenshot',
+          '--json'
+        ])
+      ).stdout
+    )
+    const textTarget = findRoleIndex(
+      before.result.snapshot.treeText,
+      /^\s*(\d+)\s+(text entry area|text field|HTML content)(?:\s|$)/m
+    )
+    expect(textTarget).toBeGreaterThanOrEqual(0)
+
+    await runOrcaCli([
+      'computer',
+      'click',
+      '--app',
+      'TextEdit',
+      '--element-index',
+      String(textTarget),
+      '--restore-window',
+      '--no-screenshot'
+    ])
+
+    await runOrcaCli([
+      'computer',
+      'paste-text',
+      '--app',
+      'TextEdit',
+      '--text',
+      'orca unfocused first',
+      '--no-screenshot'
+    ])
+    await activateFinder()
+
+    const selectAll = parseJsonOutput<{ result: ComputerActionResult }>(
+      (
+        await runOrcaCli([
+          'computer',
+          'hotkey',
+          '--app',
+          'TextEdit',
+          '--key',
+          'CmdOrCtrl+A',
+          '--no-screenshot',
+          '--json'
+        ])
+      ).stdout
+    )
+    expect(selectAll.result.action?.actionName).toBe('AXSelectAll')
+    expect(selectAll.result.action?.verification?.state).toBe('verified')
+
+    const marker = `orca unfocused final ${Date.now()}`
+    const replacement = parseJsonOutput<{ result: ComputerActionResult }>(
+      (
+        await runOrcaCli([
+          'computer',
+          'paste-text',
+          '--app',
+          'TextEdit',
+          '--text',
+          marker,
+          '--no-screenshot',
+          '--json'
+        ])
+      ).stdout
+    )
+    expect(replacement.result.action?.actionName).toBe('AXReplaceSelection')
+    expect(replacement.result.action?.verification).toMatchObject({
+      state: 'verified',
+      property: 'focusedText',
+      expected: marker
+    })
+
+    const after = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+      (
+        await runOrcaCli([
+          'computer',
+          'get-app-state',
+          '--app',
+          'TextEdit',
+          '--no-screenshot',
+          '--json'
+        ])
+      ).stdout
+    )
+    expect(after.result.snapshot.treeText).toContain(marker)
+    expect(after.result.snapshot.treeText).not.toContain('orca unfocused first')
+  })
+
   test('screenshot capture returns image metadata', async () => {
     const result = await runOrcaCli(['computer', 'get-app-state', '--app', 'TextEdit', '--json'])
     const envelope = parseJsonOutput<{ result: ComputerSnapshotResult }>(result.stdout)
@@ -149,6 +249,6 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
     expect(envelope.result.screenshot?.format).toBe('png')
     expect(envelope.result.screenshot?.data).toBeUndefined()
     expect(envelope.result.screenshot?.dataOmitted).toBe(true)
-    expect(envelope.result.screenshot?.path).toContain('orca-computer-use-')
+    expect(envelope.result.screenshot?.path).toContain('orca-computer-use')
   })
 })

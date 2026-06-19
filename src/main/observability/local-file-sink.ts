@@ -319,18 +319,3 @@ export function listRotatedFiles(filePath: string, maxFiles: number = DEFAULT_MA
   }
   return out
 }
-
-/** Delete every file in the rotated family. Wired up to the "Clear local
- *  traces" button in Settings → Privacy → Diagnostics. */
-export function clearRotatedFamily(filePath: string, maxFiles: number = DEFAULT_MAX_FILES): void {
-  for (let i = 0; i < maxFiles; i++) {
-    const path = i === 0 ? filePath : `${filePath}.${i}`
-    if (existsSync(path)) {
-      try {
-        unlinkSync(path)
-      } catch {
-        /* swallow — best-effort delete; user can always reveal-in-finder */
-      }
-    }
-  }
-}

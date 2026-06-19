@@ -1,6 +1,7 @@
 import type { Repo, WorkspaceSessionState } from './types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 import { getRepoIdFromWorktreeId } from './worktree-id'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT } from './terminal-scrollback-limits'
 
 export type RepoConnection = Pick<Repo, 'id' | 'connectionId'>
 
@@ -34,6 +35,30 @@ export function shouldPreserveTerminalScrollbackBuffers(
   )
 }
 
+export function capTerminalScrollbackSessionBuffer(buffer: string): string {
+  if (buffer.length <= TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT) {
+    return buffer
+  }
+  return buffer.slice(-TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT)
+}
+
+function capTerminalScrollbackLeafBuffers(buffers: Record<string, string> | undefined): {
+  buffers: Record<string, string> | undefined
+  changed: boolean
+} {
+  if (!buffers) {
+    return { buffers: undefined, changed: false }
+  }
+  let changed = false
+  const capped: Record<string, string> = {}
+  for (const [leafId, buffer] of Object.entries(buffers)) {
+    const next = capTerminalScrollbackSessionBuffer(buffer)
+    capped[leafId] = next
+    changed ||= next !== buffer
+  }
+  return { buffers: Object.keys(capped).length > 0 ? capped : undefined, changed }
+}
+
 export function pruneLocalTerminalScrollbackBuffers(
   session: WorkspaceSessionState,
   repos: readonly RepoConnection[]
@@ -48,17 +73,23 @@ export function pruneLocalTerminalScrollbackBuffers(
 
   let terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId)) {
-    if (!layout.buffersByLeafId) {
+    if (!layout.buffersByLeafId && !layout.scrollbackRefsByLeafId) {
       continue
     }
     const worktreeId = worktreeIdByTabId.get(tabId)
     if (shouldPreserveTerminalScrollbackBuffersForRepoMap(worktreeId, connectionIdByRepoId)) {
+      const capped = capTerminalScrollbackLeafBuffers(layout.buffersByLeafId)
+      if (capped.changed) {
+        terminalLayoutsByTabId ??= { ...session.terminalLayoutsByTabId }
+        terminalLayoutsByTabId[tabId] = { ...layout, buffersByLeafId: capped.buffers }
+      }
       continue
     }
 
     terminalLayoutsByTabId ??= { ...session.terminalLayoutsByTabId }
     const layoutWithoutBuffers = { ...layout }
     delete layoutWithoutBuffers.buffersByLeafId
+    delete layoutWithoutBuffers.scrollbackRefsByLeafId
     terminalLayoutsByTabId[tabId] = layoutWithoutBuffers
   }
 

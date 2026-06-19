@@ -3,9 +3,16 @@ import type { AppState } from '@/store/types'
 import type { PersistedTrustedOrcaHooks } from '../../../shared/types'
 import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from './ensure-hooks-confirmed'
 import { hashOrcaHookScript } from './orca-hook-trust'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const hooksCheckMock = vi.fn()
 const readIssueCommandMock = vi.fn()
+const runtimeEnvironmentCallMock = vi.fn()
+const runtimeEnvironmentTransportCallMock = vi.fn()
 
 function installHooksApiMock(): void {
   vi.stubGlobal('window', {
@@ -13,6 +20,9 @@ function installHooksApiMock(): void {
       hooks: {
         check: hooksCheckMock,
         readIssueCommand: readIssueCommandMock
+      },
+      runtimeEnvironments: {
+        call: runtimeEnvironmentTransportCallMock
       }
     }
   })
@@ -45,6 +55,16 @@ describe('ensureHooksConfirmed', () => {
   beforeEach(() => {
     hooksCheckMock.mockReset()
     readIssueCommandMock.mockReset()
+    runtimeEnvironmentCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) => {
+        return (
+          createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCallMock(args)
+        )
+      }
+    )
+    clearRuntimeCompatibilityCacheForTests()
     installHooksApiMock()
     __resetTrustPromptChainForTests()
   })
@@ -92,6 +112,33 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('run')
   })
 
+  it('includes default tab commands in the setup trust prompt', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: { setup: 'pnpm install' },
+        defaultTabs: [
+          { title: 'Server', command: 'pnpm dev' },
+          { title: 'Notes' },
+          { command: 'codex' }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'setup')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    const expectedContent =
+      'pnpm install\n\n# defaultTabs[1] Server\npnpm dev\n\n# defaultTabs[3]\ncodex'
+    expect(pending[0].data.scriptContent).toBe(expectedContent)
+    expect(pending[0].data.contentHash).toBe(await hashOrcaHookScript(expectedContent))
+
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
+  })
+
   it('returns run without inspecting hooks when the repo is always trusted', async () => {
     const { state, pending } = createTestState()
     state.trustedOrcaHooks['repo-1'] = {
@@ -117,6 +164,65 @@ describe('ensureHooksConfirmed', () => {
     const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive')
 
     expect(decision).toBe('run')
+    expect(pending).toHaveLength(0)
+  })
+
+  it('checks SSH repo hooks through local IPC even when a runtime is focused', async () => {
+    const { state, pending } = createTestState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo One',
+          connectionId: 'ssh-1'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: {} },
+      mayNeedUpdate: false
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive')
+
+    expect(decision).toBe('run')
+    expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1' })
+    expect(pending).toHaveLength(0)
+  })
+
+  it('checks runtime-owned repo hooks through the repo owner runtime', async () => {
+    const { state, pending } = createTestState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' },
+      repos: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo One',
+          executionHostId: 'runtime:owner-env'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+    runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-hooks',
+      ok: true,
+      result: {
+        hasHooks: true,
+        hooks: { scripts: {} },
+        mayNeedUpdate: false
+      },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive')
+
+    expect(decision).toBe('run')
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+      selector: 'owner-env',
+      method: 'repo.hooksCheck',
+      params: { repo: 'repo-1' },
+      timeoutMs: 15_000
+    })
+    expect(hooksCheckMock).not.toHaveBeenCalled()
     expect(pending).toHaveLength(0)
   })
 
@@ -189,6 +295,40 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
+  it('still honors local issueCommand overrides when shared inspection reports an error', async () => {
+    const { state, pending } = createTestState()
+    readIssueCommandMock.mockResolvedValue({
+      status: 'error',
+      source: 'local',
+      sharedContent: null,
+      localContent: 'user content',
+      effectiveContent: 'user content',
+      localFilePath: ''
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'issueCommand')
+
+    expect(decision).toBe('run')
+    expect(pending).toHaveLength(0)
+  })
+
+  it('fails closed when issueCommand inspection reports an error status', async () => {
+    const { state, pending } = createTestState()
+    readIssueCommandMock.mockResolvedValue({
+      status: 'error',
+      source: 'none',
+      sharedContent: null,
+      localContent: null,
+      effectiveContent: null,
+      localFilePath: ''
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'issueCommand')
+
+    expect(decision).toBe('skip')
+    expect(pending).toHaveLength(0)
+  })
+
   it('opens a modal with the computed content hash and resolves with the user decision', async () => {
     const { state, pending } = createTestState()
     hooksCheckMock.mockResolvedValue({
@@ -240,6 +380,21 @@ describe('ensureHooksConfirmed', () => {
   it('fails closed when window.api.hooks.check throws', async () => {
     const { state, pending } = createTestState()
     hooksCheckMock.mockRejectedValue(new Error('boom'))
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
+
+    expect(decision).toBe('skip')
+    expect(pending).toHaveLength(0)
+  })
+
+  it('fails closed when hook inspection reports an error status', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      status: 'error',
+      hasHooks: false,
+      hooks: null,
+      mayNeedUpdate: false
+    })
 
     const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
 

@@ -4,6 +4,7 @@ import type * as NodePty from 'node-pty'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
+  resolveDefaultCwd,
   resolveProcessCwd,
   processHasChildren,
   getForegroundProcessName,
@@ -11,6 +12,7 @@ import {
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 
 // Why: node-pty is a native addon that may not be installed on the remote.
 // Dynamic import keeps the require() lazy so loadPty() returns null gracefully
@@ -53,6 +55,10 @@ type ManagedPty = {
   worktreeId?: string
 }
 
+type PendingPtyOutput = {
+  data: string
+}
+
 function disposeManagedPty(managed: ManagedPty): void {
   if (managed.disposed) {
     return
@@ -84,6 +90,14 @@ function disposeManagedPty(managed: ManagedPty): void {
 }
 const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 export const REPLAY_BUFFER_MAX = 100 * 1024
+const PTY_OUTPUT_BATCH_INTERVAL_MS = 8
+const PTY_OUTPUT_DRAIN_CONTINUE_MS = 1
+const PTY_OUTPUT_FLUSH_CHUNK_CHARS = 16 * 1024
+const PTY_OUTPUT_FLUSH_MAX_WRITES = 2
+const INTERACTIVE_OUTPUT_WINDOW_MS = 100
+const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
+const INTERACTIVE_REDRAW_MAX_CHARS = PTY_OUTPUT_FLUSH_CHUNK_CHARS
+const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
 const ALLOWED_SIGNALS = new Set([
   'SIGINT',
   'SIGTERM',
@@ -130,6 +144,10 @@ export class PtyHandler {
   private dispatcher: RelayDispatcher
   private graceTimeMs: number
   private graceTimer: ReturnType<typeof setTimeout> | null = null
+  private outputFlushTimer: ReturnType<typeof setTimeout> | null = null
+  private pendingOutputByPty = new Map<string, PendingPtyOutput>()
+  private lastInputAtByPty = new Map<string, number>()
+  private interactiveOutputCharsByPty = new Map<string, number>()
   // Why: external observers need to drop per-pane state when a PTY exits.
   // Today the relay composes multiple consumers (hook-server cache eviction
   // and plugin-overlay dir cleanup) into a single callback at the call site
@@ -212,7 +230,7 @@ export class PtyHandler {
       if (managed.buffered.length > REPLAY_BUFFER_MAX) {
         managed.buffered = managed.buffered.slice(-REPLAY_BUFFER_MAX)
       }
-      this.dispatcher.notify('pty.data', { id: managed.id, data })
+      this.enqueuePtyOutput(managed.id, data)
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
       if (managed.disposed) {
@@ -235,9 +253,11 @@ export class PtyHandler {
         clearTimeout(managed.killTimer)
         managed.killTimer = undefined
       }
+      this.flushPtyOutput(managed.id)
       this.dispatcher.notify('pty.exit', { id: managed.id, code: exitCode })
       this.notifyExitListener(managed)
       this.ptys.delete(managed.id)
+      this.clearPtyFlowState(managed.id)
       // Why: release the ptmx fd on the natural-exit path. Without this the
       // node-pty wrapper's _socket stays alive until GC and the master fd
       // leaks (see docs/fix-pty-fd-leak.md).
@@ -288,6 +308,103 @@ export class PtyHandler {
     })
   }
 
+  private isLikelyInteractiveRedraw(data: string): boolean {
+    if (data.length <= INTERACTIVE_OUTPUT_MAX_CHARS) {
+      return true
+    }
+    return data.length <= INTERACTIVE_REDRAW_MAX_CHARS && data.includes('\x1b[')
+  }
+
+  private shouldSendInteractiveOutputNow(id: string, data: string): boolean {
+    const lastInputAt = this.lastInputAtByPty.get(id)
+    const now = performance.now()
+    if (lastInputAt === undefined || now - lastInputAt > INTERACTIVE_OUTPUT_WINDOW_MS) {
+      this.interactiveOutputCharsByPty.delete(id)
+      return false
+    }
+    if (!this.isLikelyInteractiveRedraw(data)) {
+      this.interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
+      return false
+    }
+    const usedChars = this.interactiveOutputCharsByPty.get(id) ?? 0
+    if (usedChars + data.length > INTERACTIVE_OUTPUT_BUDGET_CHARS) {
+      this.interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
+      return false
+    }
+    this.interactiveOutputCharsByPty.set(id, usedChars + data.length)
+    return true
+  }
+
+  private enqueuePtyOutput(id: string, data: string): void {
+    const existing = this.pendingOutputByPty.get(id)
+    const pending = { data: (existing?.data ?? '') + data }
+    if (this.shouldSendInteractiveOutputNow(id, pending.data)) {
+      this.pendingOutputByPty.delete(id)
+      this.clearOutputFlushTimerIfIdle()
+      // Why: remote agent TUIs redraw around each keystroke. Background relay
+      // batching should reduce SSH chatter, not add visible input echo delay.
+      this.dispatcher.notify('pty.data', { id, data: pending.data })
+      return
+    }
+    this.pendingOutputByPty.set(id, pending)
+    this.scheduleOutputFlush(PTY_OUTPUT_BATCH_INTERVAL_MS)
+  }
+
+  private scheduleOutputFlush(delayMs: number): void {
+    if (this.outputFlushTimer !== null) {
+      return
+    }
+    this.outputFlushTimer = setTimeout(() => this.flushPendingOutput(), delayMs)
+  }
+
+  private flushPendingOutput(): void {
+    this.outputFlushTimer = null
+    let writes = 0
+    for (const [id, pending] of Array.from(this.pendingOutputByPty.entries())) {
+      if (writes >= PTY_OUTPUT_FLUSH_MAX_WRITES) {
+        break
+      }
+      this.pendingOutputByPty.delete(id)
+      const chunk = pending.data.slice(0, PTY_OUTPUT_FLUSH_CHUNK_CHARS)
+      const remaining = pending.data.slice(PTY_OUTPUT_FLUSH_CHUNK_CHARS)
+      if (remaining) {
+        this.pendingOutputByPty.set(id, { data: remaining })
+      }
+      this.dispatcher.notify('pty.data', { id, data: chunk })
+      writes++
+    }
+    if (this.pendingOutputByPty.size > 0 && writes > 0) {
+      // Why: relay-side output can arrive as a large single PTY chunk. Yield
+      // between slices so client input and control frames can interleave.
+      this.scheduleOutputFlush(PTY_OUTPUT_DRAIN_CONTINUE_MS)
+    }
+  }
+
+  private flushPtyOutput(id: string): void {
+    const pending = this.pendingOutputByPty.get(id)
+    if (!pending) {
+      return
+    }
+    this.pendingOutputByPty.delete(id)
+    this.dispatcher.notify('pty.data', { id, data: pending.data })
+    this.clearOutputFlushTimerIfIdle()
+  }
+
+  private clearOutputFlushTimerIfIdle(): void {
+    if (this.pendingOutputByPty.size > 0 || this.outputFlushTimer === null) {
+      return
+    }
+    clearTimeout(this.outputFlushTimer)
+    this.outputFlushTimer = null
+  }
+
+  private clearPtyFlowState(id: string): void {
+    this.pendingOutputByPty.delete(id)
+    this.lastInputAtByPty.delete(id)
+    this.interactiveOutputCharsByPty.delete(id)
+    this.clearOutputFlushTimerIfIdle()
+  }
+
   private async spawn(
     params: Record<string, unknown>,
     context?: RequestContext
@@ -302,7 +419,7 @@ export class PtyHandler {
 
     const cols = (params.cols as number) || 80
     const rows = (params.rows as number) || 24
-    const cwd = (params.cwd as string) || process.env.HOME || '/'
+    const cwd = (params.cwd as string) || resolveDefaultCwd()
     const env = params.env as Record<string, string> | undefined
     const shell = resolveDefaultShell()
     const id = `pty-${this.nextId++}`
@@ -317,7 +434,15 @@ export class PtyHandler {
     const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
-    const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv)
+    // Why: only explicit shell-ready hints are trusted here; native Codex
+    // prefill detection still auto-enables readiness through the predicate.
+    const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
+      emitReadyMarker: shouldUseShellReadyStartupDelivery({
+        command,
+        startupCommandDelivery:
+          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
+      })
+    })
 
     // Why: SSH exec channels give the relay a minimal environment without
     // .zprofile/.bash_profile sourced. Spawning a login shell ensures PATH
@@ -391,6 +516,11 @@ export class PtyHandler {
     // restart still replays the full terminal history instead of only output
     // generated since the previous attach.
     if (managed.buffered) {
+      // Why: relay batching may still hold bytes that are already included in
+      // the full replay buffer. Drop that pending notification before attach
+      // so reconnect/suppressed replay cannot render the same bytes twice.
+      this.pendingOutputByPty.delete(id)
+      this.clearOutputFlushTimerIfIdle()
       if (params.suppressReplayNotification) {
         return { replay: managed.buffered }
       }
@@ -407,6 +537,8 @@ export class PtyHandler {
     }
     const managed = this.ptys.get(id)
     if (managed && !managed.disposed) {
+      this.lastInputAtByPty.set(id, performance.now())
+      this.interactiveOutputCharsByPty.set(id, 0)
       managed.pty.write(data)
     }
   }
@@ -430,6 +562,7 @@ export class PtyHandler {
     }
 
     if (immediate) {
+      this.flushPtyOutput(id)
       managed.pty.kill('SIGKILL')
       // Why: SIGKILL has already reaped the child; release the ptmx fd on the
       // same tick. Deferring to onExit leaves a window where the fd is live
@@ -446,6 +579,7 @@ export class PtyHandler {
       // a no-op.
       this.notifyExitListener(managed)
       this.ptys.delete(id)
+      this.clearPtyFlowState(id)
     } else {
       managed.pty.kill('SIGTERM')
 
@@ -462,6 +596,7 @@ export class PtyHandler {
         const still = this.ptys.get(id)
         if (still && !still.disposed) {
           still.pty.kill('SIGKILL')
+          this.flushPtyOutput(id)
           // Why: emit pty.exit BEFORE disposeManagedPty sets disposed=true.
           // The natural onExit short-circuits on `managed.disposed`, so
           // without this notify the renderer never learns the pane is dead
@@ -476,6 +611,7 @@ export class PtyHandler {
           this.notifyExitListener(still)
           disposeManagedPty(still)
           this.ptys.delete(id)
+          this.clearPtyFlowState(id)
         }
       }, 5000)
     }
@@ -538,13 +674,14 @@ export class PtyHandler {
     if (!managed || managed.disposed) {
       return null
     }
-    return await getForegroundProcessName(managed.pty.pid)
+    return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
   }
 
   private async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
     const results: { id: string; cwd: string; title: string }[] = []
     for (const [id, managed] of this.ptys) {
-      const title = (await getForegroundProcessName(managed.pty.pid)) || 'shell'
+      const title =
+        (await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
       results.push({ id, cwd: managed.initialCwd, title })
     }
     return results
@@ -608,14 +745,11 @@ export class PtyHandler {
       const shell = resolveDefaultShell()
       // Why: `command` is intentionally absent from this revive path because
       // SerializedPtyEntry (see line 99) does not persist it — ManagedPty
-      // never stored the renderer-chosen launch command. The Pi/OMP overlay
-      // augmenter in src/relay/relay.ts therefore sees `ctx.command ===
-      // undefined` for revived PTYs and falls back to the Pi-default kind
-      // (see detectPiAgentKindFromCommand in src/shared/pi-agent-kind.ts).
-      // Acceptable pre-OMP fallback: a cold-restart revived OMP shell that
-      // later relaunches `omp` keeps the historical behavior of loading the
-      // Pi overlay. Plumbing `command` through serialization is a separate,
-      // larger change (out of scope for PR #2662).
+      // never stored the renderer-chosen launch command. The Pi/OMP extension
+      // installer in src/relay/relay.ts therefore sees `ctx.command ===
+      // undefined` for revived PTYs and prepares the Pi default plus OMP's
+      // typed-command wrapper. Plumbing `command` through serialization is a
+      // separate, larger change.
       const spawnEnv = this.buildSpawnEnv(revivedEnv, {
         id: entry.id,
         paneKey: entry.paneKey,
@@ -675,6 +809,13 @@ export class PtyHandler {
 
   dispose(): void {
     this.cancelGraceTimer()
+    if (this.outputFlushTimer !== null) {
+      clearTimeout(this.outputFlushTimer)
+      this.outputFlushTimer = null
+    }
+    this.pendingOutputByPty.clear()
+    this.lastInputAtByPty.clear()
+    this.interactiveOutputCharsByPty.clear()
     for (const [, managed] of this.ptys) {
       if (managed.killTimer) {
         clearTimeout(managed.killTimer)

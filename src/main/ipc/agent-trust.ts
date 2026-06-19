@@ -1,11 +1,11 @@
 import { ipcMain } from 'electron'
 import {
+  type AgentTrustPreset,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
 } from '../agent-trust-presets'
-
-export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
+import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 
 /**
  * Why: cursor-agent, GitHub Copilot CLI, and Codex gate first-launch in an
@@ -20,12 +20,24 @@ export function registerAgentTrustHandlers(): void {
   ipcMain.removeHandler('agentTrust:markTrusted')
   ipcMain.handle(
     'agentTrust:markTrusted',
-    async (_event, args: { preset: AgentTrustPreset; workspacePath: string }): Promise<void> => {
+    async (
+      _event,
+      args: { preset: AgentTrustPreset; workspacePath: string; connectionId?: string }
+    ): Promise<void> => {
       if (!args || typeof args.workspacePath !== 'string' || !args.workspacePath) {
         return
       }
       try {
-        if (args.preset === 'cursor') {
+        const connectionId = typeof args.connectionId === 'string' ? args.connectionId.trim() : ''
+        if (connectionId) {
+          // Why: SSH-launched agents read trust artifacts from the remote
+          // user's home, not from this desktop process.
+          await markRemoteAgentWorkspaceTrusted({
+            preset: args.preset,
+            connectionId,
+            workspacePath: args.workspacePath
+          })
+        } else if (args.preset === 'cursor') {
           markCursorWorkspaceTrusted(args.workspacePath)
         } else if (args.preset === 'copilot') {
           markCopilotFolderTrusted(args.workspacePath)

@@ -73,6 +73,19 @@ describe('automation run output snapshot buffer', () => {
     })
   })
 
+  it('keeps the tail of earlier chunks when a later chunk crosses the size cap', () => {
+    const buffer = createAutomationRunOutputSnapshotBuffer()
+
+    buffer.append('A'.repeat(256 * 1024))
+    buffer.append('TAIL')
+
+    const snapshot = buffer.snapshot()
+    expect(snapshot?.content).toHaveLength(256 * 1024)
+    expect(snapshot?.content.startsWith('A')).toBe(true)
+    expect(snapshot?.content.endsWith('TAIL')).toBe(true)
+    expect(snapshot?.truncated).toBe(true)
+  })
+
   it('creates a saved snapshot from agent transcript text', () => {
     expect(createAutomationRunOutputSnapshotFromText('\nFinal summary.\n')).toEqual({
       format: 'plain_text',

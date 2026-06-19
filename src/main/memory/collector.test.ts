@@ -1,15 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Store } from '../persistence'
+import type { MemorySnapshotStore } from './collector'
+
+type AppMetricFixture = {
+  pid: number
+  type: string
+  cpu: { percentCPUUsage: number }
+  memory: { workingSetSize: number }
+}
+
+const { appMetricsMock, execMock, listRegisteredPtysMock } = vi.hoisted(() => ({
+  appMetricsMock: vi.fn<() => AppMetricFixture[]>(() => []),
+  execMock: vi.fn(),
+  listRegisteredPtysMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   app: {
-    getAppMetrics: () => []
+    getAppMetrics: appMetricsMock
   }
-}))
-
-const { execMock, listRegisteredPtysMock } = vi.hoisted(() => ({
-  execMock: vi.fn(),
-  listRegisteredPtysMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
@@ -29,7 +37,7 @@ async function loadCollector() {
 const emptyStore = {
   getWorktreeMeta: () => undefined,
   getRepo: () => undefined
-} as unknown as Store
+} satisfies MemorySnapshotStore
 
 describe('parsePsOutput', () => {
   it('parses a well-formed listing into rows', async () => {
@@ -182,13 +190,35 @@ describe('collectSubtree', () => {
 
 describe('collectMemorySnapshot', () => {
   beforeEach(() => {
+    appMetricsMock.mockReset()
+    appMetricsMock.mockReturnValue([])
     execMock.mockReset()
     listRegisteredPtysMock.mockReset()
     listRegisteredPtysMock.mockReturnValue([])
   })
 
   function mockPsResponse(stdout: string) {
-    execMock.mockImplementation((_cmd, _opts, cb) => cb(null, { stdout, stderr: '' }))
+    const processStdout = process.platform === 'win32' ? psFixtureToWmic(stdout) : stdout
+    execMock.mockImplementation((_cmd, _opts, cb) =>
+      cb(null, { stdout: processStdout, stderr: '' })
+    )
+  }
+
+  function psFixtureToWmic(stdout: string): string {
+    return stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [pid, ppid, _cpu, rssKb] = line.split(/\s+/, 4)
+        const memory = Number.parseInt(rssKb ?? '', 10)
+        return [
+          `ParentProcessId=${ppid ?? ''}`,
+          `ProcessId=${pid ?? ''}`,
+          `WorkingSetSize=${Number.isFinite(memory) && memory > 0 ? memory * 1024 : 0}`
+        ].join('\r\n')
+      })
+      .join('\r\n\r\n')
   }
 
   it('coalesces concurrent callers onto a single in-flight sweep', async () => {
@@ -219,6 +249,58 @@ describe('collectMemorySnapshot', () => {
     await collectMemorySnapshot(emptyStore)
 
     expect(execMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses host process RSS for Electron app metrics when available', async () => {
+    mockPsResponse(['10 1 1.5 111', '20 10 2.5 222', '30 10 3.5 333'].join('\n'))
+    appMetricsMock.mockReturnValue([
+      {
+        pid: 10,
+        type: 'Browser',
+        cpu: { percentCPUUsage: 1.5 },
+        memory: { workingSetSize: 9999 }
+      },
+      {
+        pid: 20,
+        type: 'Renderer',
+        cpu: { percentCPUUsage: 2.5 },
+        memory: { workingSetSize: 9999 }
+      },
+      {
+        pid: 30,
+        type: 'Utility',
+        cpu: { percentCPUUsage: 3.5 },
+        memory: { workingSetSize: 9999 }
+      }
+    ])
+
+    const { collectMemorySnapshot } = await loadCollector()
+    const snap = await collectMemorySnapshot(emptyStore)
+
+    expect(snap.app.main.memory).toBe(111 * 1024)
+    expect(snap.app.renderer.memory).toBe(222 * 1024)
+    expect(snap.app.other.memory).toBe(333 * 1024)
+    expect(snap.app.memory).toBe((111 + 222 + 333) * 1024)
+    expect(snap.totalMemory).toBe((111 + 222 + 333) * 1024)
+  })
+
+  it('falls back to Electron working set when a host process row is missing', async () => {
+    mockPsResponse('10 1 1.5 111')
+    appMetricsMock.mockReturnValue([
+      {
+        pid: 999,
+        type: 'Renderer',
+        cpu: { percentCPUUsage: 2 },
+        memory: { workingSetSize: 4096 }
+      }
+    ])
+
+    const { collectMemorySnapshot } = await loadCollector()
+    const snap = await collectMemorySnapshot(emptyStore)
+
+    expect(snap.app.renderer.memory).toBe(4096 * 1024)
+    expect(snap.app.memory).toBe(4096 * 1024)
+    expect(snap.totalMemory).toBe(4096 * 1024)
   })
 
   it('attributes a process shared by two PTYs to the first registrant only', async () => {

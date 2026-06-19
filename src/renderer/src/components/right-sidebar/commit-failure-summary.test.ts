@@ -19,6 +19,13 @@ describe('commit failure summary', () => {
     )
   })
 
+  it('does not treat generic non-lint error counts as lint failures', () => {
+    expect(summarizeCommitFailure('tsc --noEmit\nFound 5 errors in 3 files.')).toBe('tsc --noEmit')
+    expect(summarizeCommitFailure('pre-commit hook failed\ntsc found 5 errors')).toBe(
+      'Pre-commit hook failed.'
+    )
+  })
+
   it('falls back to the first meaningful line for generic failures', () => {
     expect(summarizeCommitFailure('\n fatal: unable to auto-detect email address\nmore')).toBe(
       'fatal: unable to auto-detect email address'

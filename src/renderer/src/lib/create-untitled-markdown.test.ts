@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createUntitledMarkdownFile } from './create-untitled-markdown'
+import {
+  createUntitledMarkdownFile,
+  createUntitledMarkdownFileWithTemplateSelection
+} from './create-untitled-markdown'
+import { subscribeMarkdownTemplatePicker } from './markdown-template-picker-request'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -12,7 +16,11 @@ describe('createUntitledMarkdownFile', () => {
   })
 
   it('retries with the next untitled name when createFile loses the EEXIST race', async () => {
-    const pathExists = vi.fn()
+    const pathExists = vi
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
     const stat = vi.fn(async (args: { filePath: string }) => {
       if (args.filePath.endsWith('untitled.md')) {
         return { size: 0, isDirectory: false, mtime: 1 }
@@ -26,8 +34,8 @@ describe('createUntitledMarkdownFile', () => {
 
     vi.stubGlobal('window', {
       api: {
-        shell: { pathExists },
-        fs: { createFile, stat }
+        shell: { pathExists: vi.fn() },
+        fs: { createFile, pathExists, stat }
       }
     })
 
@@ -42,7 +50,7 @@ describe('createUntitledMarkdownFile', () => {
 
     expect(createFile).toHaveBeenNthCalledWith(1, { filePath: '/repo/untitled-2.md' })
     expect(createFile).toHaveBeenNthCalledWith(2, { filePath: '/repo/untitled-3.md' })
-    expect(pathExists).not.toHaveBeenCalled()
+    expect(pathExists).toHaveBeenCalledTimes(3)
   })
 
   it('throws a descriptive error when untitled names are exhausted', async () => {
@@ -52,8 +60,8 @@ describe('createUntitledMarkdownFile', () => {
 
     vi.stubGlobal('window', {
       api: {
-        shell: { pathExists },
-        fs: { createFile, stat }
+        shell: { pathExists: vi.fn() },
+        fs: { createFile, pathExists, stat }
       }
     })
 
@@ -62,18 +70,18 @@ describe('createUntitledMarkdownFile', () => {
     )
 
     expect(createFile).not.toHaveBeenCalled()
-    expect(pathExists).not.toHaveBeenCalled()
+    expect(pathExists).toHaveBeenCalledTimes(100)
   })
 
-  it('passes connectionId to stat and createFile for SSH worktrees', async () => {
+  it('passes connectionId to pathExists and createFile for SSH worktrees', async () => {
     const pathExists = vi.fn(async () => false)
     const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
     const createFile = vi.fn().mockResolvedValueOnce(undefined)
 
     vi.stubGlobal('window', {
       api: {
-        shell: { pathExists },
-        fs: { createFile, stat }
+        shell: { pathExists: vi.fn() },
+        fs: { createFile, pathExists, stat }
       }
     })
 
@@ -83,15 +91,120 @@ describe('createUntitledMarkdownFile', () => {
 
     // Why: shell.pathExists is main-process local-only; SSH worktrees must
     // probe through the same filesystem API that receives the connectionId.
-    expect(pathExists).not.toHaveBeenCalled()
-    expect(stat).toHaveBeenCalledWith({
+    expect(pathExists).toHaveBeenCalledWith({
       filePath: '/repo/untitled.md',
       connectionId: 'conn-1'
     })
+    expect(stat).not.toHaveBeenCalled()
     expect(createFile).toHaveBeenCalledWith({
       filePath: '/repo/untitled.md',
       connectionId: 'conn-1'
     })
+  })
+
+  it('writes selected template content with placeholders after creating the untitled file', async () => {
+    const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
+    const createFile = vi.fn().mockResolvedValueOnce(undefined)
+    const readFile = vi.fn().mockResolvedValueOnce({
+      content: '# {{ title }}\n{{date}}\n{{filename}}\n',
+      isBinary: false
+    })
+    const writeFile = vi.fn().mockResolvedValueOnce(undefined)
+
+    vi.stubGlobal('window', {
+      api: {
+        shell: { pathExists: vi.fn() },
+        fs: { createFile, pathExists: vi.fn().mockResolvedValue(false), readFile, stat, writeFile }
+      }
+    })
+
+    await expect(
+      createUntitledMarkdownFile('/repo', 'wt-1', undefined, undefined, {
+        now: new Date(2026, 4, 29, 7, 5),
+        template: {
+          id: '.orca/templates/daily.md',
+          name: 'Daily',
+          filePath: '/repo/.orca/templates/daily.md',
+          relativePath: '.orca/templates/daily.md',
+          templateRelativePath: 'daily.md',
+          basename: 'daily.md'
+        }
+      })
+    ).resolves.toMatchObject({
+      filePath: '/repo/untitled.md',
+      relativePath: 'untitled.md',
+      deleteUntouchedOnClose: false
+    })
+
+    expect(readFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/repo/.orca/templates/daily.md' })
+    )
+    expect(createFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/repo/untitled.md' })
+    )
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/repo/untitled.md',
+        content: '# Untitled\n2026-05-29\nuntitled.md\n'
+      })
+    )
+  })
+
+  it('discovers templates before creating a new markdown file and applies the selected template', async () => {
+    const readDir = vi.fn().mockResolvedValueOnce([
+      { name: 'daily.md', isDirectory: false, isSymlink: false },
+      { name: 'draft.txt', isDirectory: false, isSymlink: false }
+    ])
+    const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
+    const createFile = vi.fn().mockResolvedValueOnce(undefined)
+    const readFile = vi.fn().mockResolvedValueOnce({
+      content: '# {{title}}\n',
+      isBinary: false
+    })
+    const writeFile = vi.fn().mockResolvedValueOnce(undefined)
+    const pathExists = vi.fn(async ({ filePath }: { filePath: string }) =>
+      filePath.endsWith('/.orca/templates')
+    )
+    const unsubscribe = subscribeMarkdownTemplatePicker((request) => {
+      const template = request.templates[0]
+      if (!template) {
+        throw new Error('Expected a discovered template')
+      }
+      request.resolve({ type: 'template', template })
+    })
+
+    vi.stubGlobal('window', {
+      api: {
+        shell: { pathExists: vi.fn() },
+        fs: {
+          createFile,
+          pathExists,
+          readDir,
+          readFile,
+          stat,
+          writeFile
+        }
+      }
+    })
+
+    try {
+      await expect(
+        createUntitledMarkdownFileWithTemplateSelection('/repo', 'wt-1')
+      ).resolves.toMatchObject({
+        filePath: '/repo/untitled.md',
+        relativePath: 'untitled.md',
+        deleteUntouchedOnClose: false
+      })
+    } finally {
+      unsubscribe()
+    }
+
+    expect(readDir).toHaveBeenCalledWith(
+      expect.objectContaining({ dirPath: '/repo/.orca/templates' })
+    )
+    expect(writeFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/repo/untitled.md', content: '# Untitled\n' })
+    )
   })
 
   it('creates untitled files through the selected runtime environment', async () => {
@@ -136,13 +249,13 @@ describe('createUntitledMarkdownFile', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
       method: 'files.stat',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md' },
+      params: { worktree: 'id:wt-1', relativePath: 'untitled.md' },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
       method: 'files.createFile',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md' },
+      params: { worktree: 'id:wt-1', relativePath: 'untitled.md' },
       timeoutMs: 15_000
     })
     expect(stat).not.toHaveBeenCalled()

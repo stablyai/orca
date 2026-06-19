@@ -48,6 +48,8 @@ import {
 import type { BrowserManager } from './browser-manager'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 
+const CAPTURE_LOG_LIMIT = 1000
+
 export class BrowserError extends Error {
   constructor(
     readonly code: string,
@@ -61,6 +63,8 @@ type TabState = {
   navigationId: string | null
   snapshotResult: SnapshotResult | null
   debuggerAttached: boolean
+  debuggerDetachListener: (() => void) | null
+  debuggerMessageListener: ((_event: unknown, method: string, params: unknown) => void) | null
   iframeSessions: Map<string, string>
   // Why: capture state is per-tab so console/network events from one tab
   // don't pollute another's capture buffer.
@@ -866,6 +870,7 @@ export class CdpBridge {
       state.capturing = true
       state.consoleLog = []
       state.networkLog = []
+      state.networkRequestMap.clear()
 
       return { capturing: true }
     })
@@ -878,6 +883,7 @@ export class CdpBridge {
       const state = this.getOrCreateTabState(tabId)
 
       state.capturing = false
+      state.networkRequestMap.clear()
 
       return { stopped: true }
     })
@@ -1032,6 +1038,11 @@ export class CdpBridge {
     }
     const tabId = this.resolveTabIdSafe(webContentsId)
     if (tabId) {
+      const state = this.tabState.get(tabId)
+      const guest = webContents.fromId(webContentsId)
+      if (state && guest) {
+        this.removeDebuggerListeners(guest, state)
+      }
       this.tabState.delete(tabId)
       this.commandQueues.delete(tabId)
     }
@@ -1118,6 +1129,8 @@ export class CdpBridge {
         navigationId: null,
         snapshotResult: null,
         debuggerAttached: false,
+        debuggerDetachListener: null,
+        debuggerMessageListener: null,
         iframeSessions: new Map(),
         capturing: false,
         consoleLog: [],
@@ -1132,15 +1145,42 @@ export class CdpBridge {
     return state
   }
 
+  private removeDebuggerListeners(guest: Electron.WebContents, state: TabState): void {
+    const detachListener = state.debuggerDetachListener
+    const messageListener = state.debuggerMessageListener
+    state.debuggerDetachListener = null
+    state.debuggerMessageListener = null
+
+    if (detachListener) {
+      try {
+        guest.debugger.removeListener('detach', detachListener as never)
+      } catch {
+        // guest may already be destroyed
+      }
+    }
+    if (messageListener) {
+      try {
+        guest.debugger.removeListener('message', messageListener as never)
+      } catch {
+        // guest may already be destroyed
+      }
+    }
+  }
+
   private async ensureDebuggerAttached(guest: Electron.WebContents): Promise<void> {
     const tabId = this.resolveTabId(guest.id)
     const state = this.getOrCreateTabState(tabId)
-    if (state.debuggerAttached) {
+    if (state.debuggerAttached && guest.debugger.isAttached()) {
       return
     }
 
     try {
-      guest.debugger.attach('1.3')
+      // Why: browser tabs are already debugger-attached by BrowserManager's
+      // anti-detection injection. Reusing that attachment lets CDP commands
+      // run instead of failing with "another debugger is already attached."
+      if (!guest.debugger.isAttached()) {
+        guest.debugger.attach('1.3')
+      }
     } catch {
       throw new BrowserError(
         'browser_cdp_error',
@@ -1169,20 +1209,18 @@ export class CdpBridge {
       source: ANTI_DETECTION_SCRIPT
     })
 
-    // Why: remove any stale listeners from a previous attach cycle to prevent
-    // listener accumulation. After a detach+reattach, the old handlers would
-    // still fire alongside the new ones, causing duplicate log entries,
-    // duplicate dialog dismissals, and corrupted iframe session maps.
-    guest.debugger.removeAllListeners('detach')
-    guest.debugger.removeAllListeners('message')
+    // Why: only remove CDP bridge listeners from the previous attach cycle.
+    // Screencast/proxy sessions share this debugger and own their teardown hooks.
+    this.removeDebuggerListeners(guest, state)
 
-    guest.debugger.on('detach', () => {
+    const detachListener = (): void => {
       state.debuggerAttached = false
       state.snapshotResult = null
       state.iframeSessions.clear()
-    })
+      this.removeDebuggerListeners(guest, state)
+    }
 
-    guest.debugger.on('message', (_event: unknown, method: string, params: unknown) => {
+    const messageListener = (_event: unknown, method: string, params: unknown): void => {
       if (method === 'Page.frameNavigated') {
         state.snapshotResult = null
         state.navigationId = null
@@ -1246,7 +1284,7 @@ export class CdpBridge {
               url: p.stackTrace?.callFrames?.[0]?.url,
               line: p.stackTrace?.callFrames?.[0]?.lineNumber
             })
-            if (state.consoleLog.length > 1000) {
+            if (state.consoleLog.length > CAPTURE_LOG_LIMIT) {
               state.consoleLog.shift()
             }
           }
@@ -1280,19 +1318,27 @@ export class CdpBridge {
             if (p.requestId) {
               state.networkRequestMap.set(p.requestId, entry)
             }
-            if (state.networkLog.length > 1000) {
-              state.networkLog.shift()
+            if (state.networkLog.length > CAPTURE_LOG_LIMIT) {
+              const evicted = state.networkLog.shift()
+              if (evicted) {
+                for (const [requestId, requestEntry] of state.networkRequestMap) {
+                  if (requestEntry === evicted) {
+                    state.networkRequestMap.delete(requestId)
+                    break
+                  }
+                }
+              }
             }
           }
         }
-        if (method === 'Network.loadingFinished') {
+        if (method === 'Network.loadingFinished' || method === 'Network.loadingFailed') {
           const p = params as { requestId?: string; encodedDataLength?: number } | undefined
-          if (p?.requestId && p.encodedDataLength) {
+          if (p?.requestId) {
             const entry = state.networkRequestMap.get(p.requestId)
-            if (entry) {
+            if (entry && method === 'Network.loadingFinished' && p.encodedDataLength) {
               entry.size = p.encodedDataLength
-              state.networkRequestMap.delete(p.requestId)
             }
+            state.networkRequestMap.delete(p.requestId)
           }
         }
       }
@@ -1316,7 +1362,12 @@ export class CdpBridge {
           })
         }
       }
-    })
+    }
+
+    state.debuggerDetachListener = detachListener
+    state.debuggerMessageListener = messageListener
+    guest.debugger.on('detach', detachListener)
+    guest.debugger.on('message', messageListener)
 
     state.debuggerAttached = true
   }
@@ -1583,28 +1634,51 @@ export class CdpBridge {
 
     // Phase 1: wait for readyState=complete
     await new Promise<void>((resolve, reject) => {
+      let settled = false
+      let pollTimer: ReturnType<typeof setTimeout> | null = null
+
+      const finish = (callback: () => void): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timeout)
+        if (pollTimer) {
+          clearTimeout(pollTimer)
+          pollTimer = null
+        }
+        callback()
+      }
+
       const timeout = setTimeout(() => {
-        reject(new BrowserError('browser_timeout', 'Page load timed out.'))
+        finish(() => reject(new BrowserError('browser_timeout', 'Page load timed out.')))
       }, TIMEOUT_MS)
 
       const check = async (): Promise<void> => {
+        if (settled) {
+          return
+        }
         try {
           const { result } = (await sender('Runtime.evaluate', {
             expression: 'document.readyState',
             returnByValue: true
           })) as { result: { value: string } }
+          if (settled) {
+            return
+          }
           if (result.value === 'complete') {
-            clearTimeout(timeout)
-            resolve()
+            finish(resolve)
           } else {
-            setTimeout(check, 100)
+            pollTimer = setTimeout(() => {
+              pollTimer = null
+              void check()
+            }, 100)
           }
         } catch {
-          clearTimeout(timeout)
-          resolve()
+          finish(resolve)
         }
       }
-      check()
+      void check()
     })
 
     // Phase 2: wait for network idle

@@ -1,5 +1,14 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
 import { Buffer } from 'buffer'
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import {
   ActivityIndicator,
   AppState,
@@ -28,6 +37,11 @@ import {
   buildMobileBrowserScreencastRequest
 } from './browser-screencast-request'
 import {
+  MobileBrowserPointerModifiers,
+  type BrowserPointerModifier
+} from './MobileBrowserPointerModifiers'
+import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
+import {
   clampBrowserZoomState,
   computeBrowserFrameGeometry,
   computeBrowserTouchClickRadiusCss,
@@ -39,6 +53,7 @@ import {
   type BrowserZoomState
 } from './browser-touch-geometry'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
+import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
 
 export type MobileBrowserTab = {
   type: 'browser'
@@ -127,6 +142,10 @@ export function MobileBrowserPane({
   const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
   const [addressValue, setAddressValue] = useState(displayBrowserUrl(tab.url))
   const [addressFocused, setAddressFocused] = useState(false)
+  const [addressSyncState, setAddressSyncState] = useState({
+    focused: false,
+    url: tab.url
+  })
   const [keyboardValue, setKeyboardValue] = useState('')
   const [frameUri, setFrameUri] = useState<string | null>(cachedInitialFrame?.uri ?? null)
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(
@@ -136,6 +155,7 @@ export function MobileBrowserPane({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<BrowserDialogState | null>(null)
+  const [pointerModifiers, setPointerModifiers] = useState<BrowserPointerModifier[]>([])
   const [zoom, setZoom] = useState<BrowserZoomState>(DEFAULT_ZOOM)
   const [layout, setLayout] = useState<BrowserTouchLayout | null>(null)
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
@@ -180,6 +200,17 @@ export function MobileBrowserPane({
     }
   }, [])
 
+  const setRootViewRef = useCallback(
+    (node: View | null) => {
+      // Why: long-press right-click timers belong to this responder surface;
+      // clearing from ref cleanup preserves the same unmount boundary.
+      if (node === null) {
+        clearLongPressTimer()
+      }
+    },
+    [clearLongPressTimer]
+  )
+
   const resetBrowserZoomState = useCallback(() => {
     clearLongPressTimer()
     pinchRef.current = null
@@ -203,27 +234,27 @@ export function MobileBrowserPane({
     }
   }, [worktreeId])
 
-  useEffect(() => {
-    if (!addressFocused) {
+  const addressSync = resolveMobileBrowserAddressSync(addressSyncState, {
+    focused: addressFocused,
+    url: tab.url
+  })
+  if (addressSync.nextState !== addressSyncState) {
+    setAddressSyncState(addressSync.nextState)
+    if (addressSync.shouldSyncValue) {
+      // Why: keep browser stream/goto address updates intact, but avoid a
+      // stale post-blur paint when the tab URL is the source of truth.
       setAddressValue(displayBrowserUrl(tab.url))
     }
-  }, [addressFocused, tab.url])
+  }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Why: gesture and stream handlers need committed values before passive
+    // Effects flush, without leaking refs from an uncommitted render.
     frameMetadataRef.current = frameMetadata
-  }, [frameMetadata])
-
-  useEffect(() => {
     layoutRef.current = layout
-  }, [layout])
-
-  useEffect(() => {
     dialogRef.current = dialog
-  }, [dialog])
-
-  useEffect(() => {
     zoomRef.current = zoom
-  }, [zoom])
+  }, [dialog, frameMetadata, layout, zoom])
 
   useEffect(() => {
     lastZoomResetUrlRef.current = tab.url || 'about:blank'
@@ -406,7 +437,9 @@ export function MobileBrowserPane({
     busyRef.current = true
     setBusy(true)
     let startupTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      if (streamGenerationRef.current !== generation) return
+      if (streamGenerationRef.current !== generation) {
+        return
+      }
       busyRef.current = false
       setBusy(false)
       setError('Browser stream timed out.')
@@ -425,7 +458,9 @@ export function MobileBrowserPane({
         ...streamRequest
       },
       (payload) => {
-        if (streamGenerationRef.current !== generation) return
+        if (streamGenerationRef.current !== generation) {
+          return
+        }
         const event = payload as {
           type?: string
           message?: string
@@ -485,7 +520,9 @@ export function MobileBrowserPane({
       },
       {
         onBinaryFrame: (frame) => {
-          if (streamGenerationRef.current !== generation) return
+          if (streamGenerationRef.current !== generation) {
+            return
+          }
           clearStartupTimer()
           if (cacheKey) {
             applyFrameThrottled(frame, cacheKey)
@@ -621,6 +658,7 @@ export function MobileBrowserPane({
           x: point.x,
           y: point.y,
           button,
+          modifiers: pointerModifiers,
           ...(button === 'left'
             ? {
                 radius: computeBrowserTouchClickRadiusCss(
@@ -634,7 +672,7 @@ export function MobileBrowserPane({
         },
         { suppressError: true, timeoutMs: 5_000 }
       )
-      if (clickResult !== null) {
+      if (clickResult !== null || pointerModifiers.length > 0) {
         return
       }
       try {
@@ -656,8 +694,16 @@ export function MobileBrowserPane({
         // actionable failures still surface through navigation/stream errors.
       }
     },
-    [client, pageParams, sendBrowserRequest]
+    [client, pageParams, pointerModifiers, sendBrowserRequest]
   )
+
+  const togglePointerModifier = useCallback((modifier: BrowserPointerModifier) => {
+    setPointerModifiers((current) =>
+      current.includes(modifier)
+        ? current.filter((candidate) => candidate !== modifier)
+        : [...current, modifier]
+    )
+  }, [])
 
   const sendWheel = useCallback(
     (point: BrowserPoint, screenDx: number, screenDy: number) => {
@@ -692,8 +738,6 @@ export function MobileBrowserPane({
     },
     [client, flushPendingWheelCommand, pageParams]
   )
-
-  useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer])
 
   const mapTouchPoint = useCallback((locationX: number, locationY: number): BrowserPoint | null => {
     return mapScreenToBrowserPoint(
@@ -736,9 +780,13 @@ export function MobileBrowserPane({
       clearLongPressTimer()
       longPressTimerRef.current = setTimeout(() => {
         const start = startPointRef.current
-        if (!start) return
+        if (!start) {
+          return
+        }
         const point = mapTouchPoint(start.x, start.y)
-        if (!point) return
+        if (!point) {
+          return
+        }
         rightClickSentRef.current = true
         void sendPointerClick(point, 'right')
         onToast('Right click')
@@ -1016,7 +1064,7 @@ export function MobileBrowserPane({
   )
 
   return (
-    <View style={styles.root}>
+    <View ref={setRootViewRef} style={styles.root}>
       <View style={styles.toolbar}>
         <ToolbarIconButton
           disabled={controlsDisabled || !tab.canGoBack}
@@ -1190,24 +1238,15 @@ export function MobileBrowserPane({
           { paddingBottom: bottomInset, transform: [{ translateY: -keyboardLift }] }
         ]}
       >
-        <View style={styles.keyRow}>
-          {['Enter', 'Backspace', 'Tab', 'Escape'].map((key) => (
-            <Pressable
-              key={key}
-              style={({ pressed }) => [
-                styles.keyButton,
-                pressed && styles.keyButtonPressed,
-                controlsDisabled && styles.disabled
-              ]}
-              disabled={controlsDisabled}
-              onPress={() => void sendKeypress(key)}
-            >
-              <Text style={[styles.keyButtonText, controlsDisabled && styles.disabledText]}>
-                {key === 'Backspace' ? '⌫' : key === 'Escape' ? 'Esc' : key}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <MobileBrowserPointerModifiers
+          disabled={controlsDisabled}
+          selectedModifiers={pointerModifiers}
+          onToggle={togglePointerModifier}
+        />
+        <MobileBrowserKeyRow
+          disabled={controlsDisabled}
+          onKeypress={(key) => void sendKeypress(key)}
+        />
         <View style={styles.inputRow}>
           <TextInput
             style={styles.keyboardInput}
@@ -1594,29 +1633,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
-  },
-  keyRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.xs
-  },
-  keyButton: {
-    minHeight: 30,
-    minWidth: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm
-  },
-  keyButtonPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  keyButtonText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: typography.monoFamily
   },
   inputRow: {
     flexDirection: 'row',

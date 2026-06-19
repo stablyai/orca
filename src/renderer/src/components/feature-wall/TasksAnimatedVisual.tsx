@@ -1,9 +1,11 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this visual is a timed storyboard; phase and cursor state intentionally advance from animation effects and reduced-motion gates. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ArrowRight, CircleDot } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { ClaudeIcon } from '../status-bar/icons'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
+import { translate } from '@/i18n/i18n'
 
 type Issue = {
   number: number
@@ -11,9 +13,15 @@ type Issue = {
 }
 
 const ISSUES: readonly Issue[] = [
-  { number: 1842, title: 'Worktree picker truncates names' },
-  { number: 1799, title: 'Sleep workspace keeps scrollback' },
-  { number: 1721, title: 'Bulk archive in source control' }
+  {
+    number: 1842,
+    get title() {
+      return translate(
+        'auto.components.feature.wall.TasksAnimatedVisual.b13375617e',
+        'Worktree picker truncates names'
+      )
+    }
+  }
 ]
 
 type Phase =
@@ -141,7 +149,8 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
       timeouts.push(id)
     }
 
-    function runCycle(issueIdx: number): void {
+    function runCycle(): void {
+      const issueIdx = 0
       // 1. Cursor enters and travels toward the row.
       setPhase({ kind: 'idle' })
       setCursorTarget({ kind: 'row', issueIdx, settle: false })
@@ -186,10 +195,10 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
         setPhase({ kind: 'idle' })
       }, teardown)
       schedule(() => {
-        runCycle((issueIdx + 1) % ISSUES.length)
+        runCycle()
       }, teardown + RESET_MS)
     }
-    runCycle(0)
+    runCycle()
     return () => {
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
@@ -246,7 +255,10 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
               <div className="relative flex items-center justify-end">
                 {!isActive ? (
                   <span className="inline-flex items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 py-px text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
-                    Open
+                    {translate(
+                      'auto.components.feature.wall.TasksAnimatedVisual.4331c4d0f8',
+                      'Open'
+                    )}
                   </span>
                 ) : (
                   <button
@@ -260,7 +272,10 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
                       isPressing ? 'scale-[0.94] brightness-[1.4]' : 'scale-100'
                     }`}
                   >
-                    Start workspace
+                    {translate(
+                      'auto.components.feature.wall.TasksAnimatedVisual.b68c92fbdc',
+                      'Start workspace'
+                    )}
                     <ArrowRight className="size-2.5" aria-hidden />
                   </button>
                 )}
@@ -283,7 +298,17 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
           ) : (
             <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
           )}
-          <span>{workspaceCreating ? 'Creating workspace' : 'Workspace ready'}</span>
+          <span>
+            {workspaceCreating
+              ? translate(
+                  'auto.components.feature.wall.TasksAnimatedVisual.61ffda7601',
+                  'Creating workspace'
+                )
+              : translate(
+                  'auto.components.feature.wall.TasksAnimatedVisual.fe47c9c9e8',
+                  'Workspace ready'
+                )}
+          </span>
         </div>
         {workspaceIssue ? (
           <div
@@ -305,7 +330,11 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
                 </span>
                 <ClaudeIcon size={14} />
                 <span className="truncate font-mono text-[11px] leading-[1.2] text-muted-foreground">
-                  Reading issue #{workspaceIssue.number}…
+                  {translate(
+                    'auto.components.feature.wall.TasksAnimatedVisual.efba6f77eb',
+                    'Reading issue #'
+                  )}
+                  {workspaceIssue.number}…
                 </span>
               </div>
             </div>

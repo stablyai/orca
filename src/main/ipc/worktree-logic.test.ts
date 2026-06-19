@@ -1,14 +1,19 @@
 /* eslint-disable max-lines -- Why: these worktree path/name tests share a
 single setup-free pure-logic module, and splitting them would make the related
 edge cases harder to audit together. */
-import { join, resolve } from 'path'
+import { posix, resolve } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
   sanitizeWorktreeDisplayName,
   ensurePathWithinWorkspace,
   computeBranchName,
+  getConfiguredBranchPrefix,
   computeWorktreePath,
+  computeRemoteWorktreePath,
+  computeWorkspaceRoot,
+  getWorktreeCreationLayout,
+  getWorktreePathSettings,
   shouldSetDisplayName,
   mergeWorktree,
   parseWorktreeId,
@@ -111,6 +116,12 @@ describe('ensurePathWithinWorkspace', () => {
       'Invalid worktree path'
     )
   })
+
+  it('allows workspace children whose names start with dot-dot text', () => {
+    const result = ensurePathWithinWorkspace('/workspace/..repo/feature', '/workspace')
+
+    expect(result).toBe(resolve('/workspace/..repo/feature'))
+  })
 })
 
 describe('computeBranchName', () => {
@@ -141,6 +152,32 @@ describe('computeBranchName', () => {
   })
 })
 
+describe('getConfiguredBranchPrefix', () => {
+  it('returns the git username for the git-username strategy', () => {
+    expect(getConfiguredBranchPrefix({ branchPrefix: 'git-username' }, 'jdoe')).toBe('jdoe')
+  })
+
+  it('returns null for git-username when no username is available', () => {
+    expect(getConfiguredBranchPrefix({ branchPrefix: 'git-username' }, null)).toBeNull()
+  })
+
+  it('returns the custom value for the custom strategy', () => {
+    expect(
+      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: 'team' }, null)
+    ).toBe('team')
+  })
+
+  it('returns null for custom strategy with an empty value', () => {
+    expect(
+      getConfiguredBranchPrefix({ branchPrefix: 'custom', branchPrefixCustom: '' }, null)
+    ).toBeNull()
+  })
+
+  it('returns null when no prefix strategy applies', () => {
+    expect(getConfiguredBranchPrefix({ branchPrefix: 'none' }, 'jdoe')).toBeNull()
+  })
+})
+
 describe('computeWorktreePath', () => {
   it('nests under repo name when nestWorkspaces is true', () => {
     expect(
@@ -148,7 +185,7 @@ describe('computeWorktreePath', () => {
         nestWorkspaces: true,
         workspaceDir: '/workspaces'
       })
-    ).toBe(join('/workspaces', 'my-project', 'feature'))
+    ).toBe(posix.join('/workspaces', 'my-project', 'feature'))
   })
 
   it('uses flat layout when nestWorkspaces is false', () => {
@@ -157,7 +194,7 @@ describe('computeWorktreePath', () => {
         nestWorkspaces: false,
         workspaceDir: '/workspaces'
       })
-    ).toBe(join('/workspaces', 'feature'))
+    ).toBe(posix.join('/workspaces', 'feature'))
   })
 
   it('strips .git suffix from repo path when nesting', () => {
@@ -166,7 +203,79 @@ describe('computeWorktreePath', () => {
         nestWorkspaces: true,
         workspaceDir: '/workspaces'
       })
-    ).toBe(join('/workspaces', 'my-project', 'feature'))
+    ).toBe(posix.join('/workspaces', 'my-project', 'feature'))
+  })
+
+  it('resolves relative workspace directories from the repo path', () => {
+    expect(computeWorkspaceRoot('/projects/app/repo', { workspaceDir: '../worktrees' })).toBe(
+      posix.resolve('/projects/app/worktrees')
+    )
+    expect(
+      computeWorktreePath('feature', '/projects/app/repo', {
+        nestWorkspaces: false,
+        workspaceDir: '../worktrees'
+      })
+    ).toBe(posix.resolve('/projects/app/worktrees/feature'))
+  })
+
+  it('scopes the same relative repo override to each repo root', () => {
+    const settings = { nestWorkspaces: false, workspaceDir: '/global/workspaces' }
+    const repoA = { path: '/projects/a/repo', worktreeBasePath: '../worktrees' }
+    const repoB = { path: '/projects/b/repo', worktreeBasePath: '../worktrees' }
+
+    expect(
+      computeWorktreePath('feature', repoA.path, getWorktreePathSettings(repoA, settings))
+    ).toBe(posix.resolve('/projects/a/worktrees/feature'))
+    expect(
+      computeWorktreePath('feature', repoB.path, getWorktreePathSettings(repoB, settings))
+    ).toBe(posix.resolve('/projects/b/worktrees/feature'))
+    expect(getWorktreeCreationLayout(repoA, settings)).toEqual({
+      path: '../worktrees',
+      nestWorkspaces: false
+    })
+  })
+
+  it('resolves Windows-style relative workspace directories with Windows separators', () => {
+    expect(
+      computeWorktreePath('feature', 'C:\\Projects\\app\\repo', {
+        nestWorkspaces: false,
+        workspaceDir: '..\\worktrees'
+      })
+    ).toBe('C:\\Projects\\app\\worktrees\\feature')
+  })
+
+  it('keeps legacy SSH sibling paths for global absolute workspace directories', () => {
+    expect(
+      computeRemoteWorktreePath('feature', '/remote/repo', {
+        nestWorkspaces: false,
+        workspaceDir: '/local/workspaces'
+      })
+    ).toBe('/remote/feature')
+  })
+
+  it('applies repo-specific SSH workspace directories on the remote path', () => {
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        '/remote/project/repo',
+        {
+          nestWorkspaces: false,
+          workspaceDir: '../worktrees'
+        },
+        { useConfiguredAbsolutePath: true }
+      )
+    ).toBe('/remote/project/worktrees/feature')
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        'C:\\Remote\\repo',
+        {
+          nestWorkspaces: false,
+          workspaceDir: '..\\worktrees'
+        },
+        { useConfiguredAbsolutePath: true }
+      )
+    ).toBe('C:\\Remote\\worktrees\\feature')
   })
 })
 
@@ -183,6 +292,24 @@ describe('areWorktreePathsEqual', () => {
 
   it('keeps POSIX path comparison case-sensitive', () => {
     expect(areWorktreePathsEqual('/tmp/Worktree', '/tmp/worktree', 'linux')).toBe(false)
+  })
+
+  it('keeps WSL-owned POSIX paths case-sensitive on Windows', () => {
+    expect(areWorktreePathsEqual('/home/dev/Repo', '/home/dev/repo', 'win32')).toBe(false)
+  })
+
+  it('does not collapse WSL POSIX paths with Windows drive paths', () => {
+    expect(areWorktreePathsEqual('/home/dev/repo', 'C:\\home\\dev\\repo', 'win32')).toBe(false)
+  })
+
+  it('treats macOS /private/tmp git paths as matching /tmp workspace paths', () => {
+    expect(
+      areWorktreePathsEqual(
+        '/private/tmp/orca-proof/worktrees/repo/feature',
+        '/tmp/orca-proof/worktrees/repo/feature',
+        'darwin'
+      )
+    ).toBe(true)
   })
 })
 
@@ -216,6 +343,9 @@ describe('mergeWorktree', () => {
       linkedIssue: 42,
       linkedPR: 10,
       linkedLinearIssue: null,
+      projectId: 'github:stablyai/orca',
+      hostId: 'ssh:openclaw-2' as const,
+      projectHostSetupId: 'remote-repo',
       linkedGitLabMR: null,
       linkedGitLabIssue: null,
       isArchived: true,
@@ -224,7 +354,20 @@ describe('mergeWorktree', () => {
       sortOrder: 5,
       lastActivityAt: 1000,
       workspaceStatus: 'in-review',
-      diffComments: []
+      diffComments: [],
+      automationProvenance: {
+        kind: 'created-by-automation' as const,
+        automationId: 'automation-1',
+        automationNameSnapshot: 'Nightly review',
+        automationRunId: 'run-1',
+        automationRunTitleSnapshot: 'Nightly review run',
+        createdAt: 123,
+        executionTargetType: 'ssh' as const,
+        executionTargetId: 'openclaw-2',
+        projectId: 'github:stablyai/orca',
+        repoId: 'repo1',
+        hostId: 'ssh:openclaw-2' as const
+      }
     }
     const result = mergeWorktree('repo1', baseGit, meta)
     expect(result).toEqual({
@@ -240,15 +383,37 @@ describe('mergeWorktree', () => {
       linkedIssue: 42,
       linkedPR: 10,
       linkedLinearIssue: null,
+      linkedLinearIssueWorkspaceId: null,
+      linkedLinearIssueOrganizationUrlKey: null,
       linkedGitLabMR: null,
       linkedGitLabIssue: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null,
+      mobileDiffReview: undefined,
+      projectId: 'github:stablyai/orca',
+      hostId: 'ssh:openclaw-2',
+      projectHostSetupId: 'remote-repo',
       isArchived: true,
       isUnread: true,
       isPinned: true,
       sortOrder: 5,
       lastActivityAt: 1000,
       workspaceStatus: 'in-review',
-      diffComments: []
+      diffComments: [],
+      automationProvenance: {
+        kind: 'created-by-automation',
+        automationId: 'automation-1',
+        automationNameSnapshot: 'Nightly review',
+        automationRunId: 'run-1',
+        automationRunTitleSnapshot: 'Nightly review run',
+        createdAt: 123,
+        executionTargetType: 'ssh',
+        executionTargetId: 'openclaw-2',
+        projectId: 'github:stablyai/orca',
+        repoId: 'repo1',
+        hostId: 'ssh:openclaw-2'
+      }
     })
   })
 

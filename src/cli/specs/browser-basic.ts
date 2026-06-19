@@ -161,7 +161,7 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
     path: ['tab', 'show'],
     summary: 'Show one browser tab by page id',
     usage: 'orca tab show --page <id> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'page', 'worktree']
   },
   {
     path: ['tab', 'current'],
@@ -173,7 +173,7 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
     path: ['tab', 'switch'],
     summary: 'Switch the active browser tab',
     usage: 'orca tab switch (--index <n> | --page <id>) [--worktree <selector>] [--focus] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'index', 'worktree', 'focus']
+    allowedFlags: [...GLOBAL_FLAGS, 'index', 'page', 'worktree', 'focus']
   },
   {
     path: ['tab', 'create'],
@@ -203,25 +203,25 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
     path: ['tab', 'profile', 'set'],
     summary: 'Switch a browser tab to a different browser profile',
     usage: 'orca tab profile set (--page <id> | --worktree <selector>) --profile <id> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'profile', 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'profile', 'page', 'worktree']
   },
   {
     path: ['tab', 'profile', 'show'],
     summary: 'Show the browser profile bound to a tab',
     usage: 'orca tab profile show --page <id> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'page', 'worktree']
   },
   {
     path: ['tab', 'profile', 'use-default'],
     summary: 'Switch a browser tab back to the default browser profile',
     usage: 'orca tab profile use-default --page <id> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'page', 'worktree']
   },
   {
     path: ['tab', 'profile', 'clone'],
     summary: 'Clone a browser tab into a different browser profile',
     usage: 'orca tab profile clone --profile <id> [--page <id>] [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'profile', 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'profile', 'page', 'worktree']
   },
   {
     path: ['tab', 'close'],

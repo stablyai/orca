@@ -19,12 +19,14 @@ import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   killWorkspacePortForTarget,
+  getPortOpenBrowserTooltipLabel,
   openWorkspacePortInBrowser,
   refreshWorkspacePortScanAfterStop,
+  resolvePortOpenInOrcaBrowser,
   scanWorkspacePortsForTarget,
-  shouldOpenWorkspacePortInOrcaBrowser,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
 import {
@@ -34,6 +36,7 @@ import {
   advertisedBrowserUrlForForwardedRow,
   browserUrlForPortForwardEntry
 } from '@/lib/workspace-port-urls'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   Dialog,
   DialogContent,
@@ -53,6 +56,7 @@ import {
 } from '@/components/ui/context-menu'
 import type { PortForwardEntry, EnrichedDetectedPort } from '../../../../shared/ssh-types'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import { translate } from '@/i18n/i18n'
 
 export {
   killWorkspacePortForTarget,
@@ -158,9 +162,10 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
   const settings = useAppStore((s) => s.settings)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
-  const scan = useAppStore((s) => s.workspacePortScan)
+  const scansByKey = useAppStore((s) => s.workspacePortScansByKey)
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const [detailsPort, setDetailsPort] = useState<WorkspacePort | null>(null)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -168,7 +173,15 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
     external: true
   })
 
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const runtimeTarget = useMemo(() => {
+    const activeRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
+      useAppStore.getState(),
+      activeWorktree?.id
+    )
+    // Why: the Ports panel acts on the active workspace; use that workspace's
+    // host owner even if the sidebar is focused elsewhere.
+    return getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId })
+  }, [activeWorktree?.id, settings])
   const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`
 
   const refresh = useCallback(() => {
@@ -178,23 +191,42 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
     setWorkspacePortScanRefreshing(true)
     const promise = scanWorkspacePortsForTarget(runtimeTarget)
       .then((nextScan) => {
+        setWorkspacePortScanForKey(scanKey, nextScan)
         setWorkspacePortScan({ key: scanKey, result: nextScan })
       })
       .catch((error) => {
         const message = error instanceof Error ? error.message : String(error)
-        toast.error('Failed to refresh ports', {
-          description: message || 'Workspace port scan failed.'
-        })
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.PortsPanel.a00f3a2840',
+            'Failed to refresh ports'
+          ),
+          {
+            description:
+              message ||
+              translate(
+                'auto.components.right.sidebar.PortsPanel.740aca88ab',
+                'Workspace port scan failed.'
+              )
+          }
+        )
       })
       .finally(() => {
         setWorkspacePortScanRefreshing(false)
       })
     return promise
-  }, [activeRepo, runtimeTarget, scanKey, setWorkspacePortScan, setWorkspacePortScanRefreshing])
+  }, [
+    activeRepo,
+    runtimeTarget,
+    scanKey,
+    setWorkspacePortScan,
+    setWorkspacePortScanForKey,
+    setWorkspacePortScanRefreshing
+  ])
 
   // Why: WorkspacePortScanner already owns the 30s all-worktree poll. The
   // panel scopes that shared result instead of starting a second scan loop.
-  const displayScan = scan?.key === scanKey && isVisible ? scan.result : null
+  const displayScan = isVisible ? (scansByKey[scanKey] ?? null) : null
 
   const toggleSection = useCallback((sectionId: string) => {
     setCollapsedSections((current) => ({ ...current, [sectionId]: !current[sectionId] }))
@@ -214,33 +246,63 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         toast.error(result.reason)
         return
       }
-      toast.success(`Stopped process on :${port.port}`)
+      toast.success(
+        translate(
+          'auto.components.right.sidebar.PortsPanel.97b562d21d',
+          'Stopped process on :{{value0}}',
+          { value0: port.port }
+        )
+      )
       const refreshResult = await refreshWorkspacePortScanAfterStop({
         runtimeTarget,
         setWorkspacePortScan,
+        setWorkspacePortScanForKey,
+        getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
         setWorkspacePortScanRefreshing
       })
       if (!refreshResult.ok) {
-        toast.error('Failed to refresh ports', {
-          description: refreshResult.reason
-        })
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.PortsPanel.a00f3a2840',
+            'Failed to refresh ports'
+          ),
+          {
+            description: refreshResult.reason
+          }
+        )
       }
     },
-    [activeRepo, runtimeTarget, setWorkspacePortScan, setWorkspacePortScanRefreshing]
+    [
+      activeRepo,
+      runtimeTarget,
+      setWorkspacePortScan,
+      setWorkspacePortScanForKey,
+      setWorkspacePortScanRefreshing
+    ]
   )
 
   const handleOpenPortInBrowser = useCallback(
-    async (port: WorkspacePort) => {
+    async (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => {
       const result = await openWorkspacePortInBrowser({
         port,
         activeWorktreeId: activeWorktree?.id,
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser: shouldOpenWorkspacePortInOrcaBrowser(settings)
+        openInOrcaBrowser: resolvePortOpenInOrcaBrowser({
+          settings,
+          event,
+          isMac: navigator.userAgent.includes('Mac')
+        })
       })
       if (!result.ok) {
-        toast.error('Failed to open browser', { description: result.reason })
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.PortsPanel.98e9a414f8',
+            'Failed to open browser'
+          ),
+          { description: result.reason }
+        )
       }
     },
     [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle, settings]
@@ -255,7 +317,12 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
     return (
       <div className="flex flex-col items-center justify-center h-full px-4 text-center text-muted-foreground">
         <Server size={32} className="mb-3 opacity-50" />
-        <p className="text-sm">No workspace selected</p>
+        <p className="text-sm">
+          {translate(
+            'auto.components.right.sidebar.PortsPanel.c1b115c375',
+            'No workspace selected'
+          )}
+        </p>
       </div>
     )
   }
@@ -264,7 +331,7 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
     <div className="flex flex-col h-full overflow-y-auto scrollbar-sleek">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Ports
+          {translate('auto.components.right.sidebar.PortsPanel.6bc058dbe1', 'Ports')}
         </span>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -275,20 +342,30 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
               className="text-muted-foreground hover:text-foreground"
               onClick={() => void refresh()}
               disabled={refreshing}
-              aria-label="Refresh Ports"
+              aria-label={translate(
+                'auto.components.right.sidebar.PortsPanel.7822e3edc6',
+                'Refresh Ports'
+              )}
             >
               <RefreshCw size={14} className={cn(refreshing && 'animate-spin')} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            Refresh Ports
+            {translate('auto.components.right.sidebar.PortsPanel.7822e3edc6', 'Refresh Ports')}
           </TooltipContent>
         </Tooltip>
       </div>
 
       {displayScan?.unavailableReason && (
         <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border">
-          Port scan unavailable on {displayScan.platform}: {displayScan.unavailableReason}
+          {translate(
+            'auto.components.right.sidebar.PortsPanel.f59c783b7a',
+            'Port scan unavailable on {{value0}}: {{value1}}',
+            {
+              value0: displayScan.platform,
+              value1: displayScan.unavailableReason
+            }
+          )}
         </div>
       )}
 
@@ -296,9 +373,19 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         <>
           <LocalPortSection
             id="active"
-            title="Active Workspace"
+            title={translate(
+              'auto.components.right.sidebar.PortsPanel.935dda7718',
+              'Active Workspace'
+            )}
             ports={activePorts}
-            emptyText={refreshing && !displayScan ? 'Scanning...' : 'No ports detected'}
+            emptyText={
+              refreshing && !displayScan
+                ? translate('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
+                : translate(
+                    'auto.components.right.sidebar.PortsPanel.38b16cfbef',
+                    'No ports detected'
+                  )
+            }
             collapsed={collapsedSections.active ?? false}
             onToggle={() => toggleSection('active')}
             onStopPort={(port) => void handleStopPort(port)}
@@ -307,7 +394,10 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
           />
           <LocalPortSection
             id="other"
-            title="Other Workspaces"
+            title={translate(
+              'auto.components.right.sidebar.PortsPanel.4db4b5e435',
+              'Other Workspaces'
+            )}
             ports={otherWorkspacePorts}
             collapsed={collapsedSections.other ?? false}
             onToggle={() => toggleSection('other')}
@@ -317,7 +407,7 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
           />
           <LocalPortSection
             id="external"
-            title="External"
+            title={translate('auto.components.right.sidebar.PortsPanel.d32820d3e2', 'External')}
             ports={externalPorts}
             collapsed={collapsedSections.external ?? false}
             onToggle={() => toggleSection('external')}
@@ -335,7 +425,12 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         externalPorts.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 px-4 text-center text-muted-foreground">
             <Server size={32} className="mb-3 opacity-50" />
-            <p className="text-sm">No local ports detected</p>
+            <p className="text-sm">
+              {translate(
+                'auto.components.right.sidebar.PortsPanel.a2a9fc6899',
+                'No local ports detected'
+              )}
+            </p>
           </div>
         )}
 
@@ -363,7 +458,7 @@ function LocalPortSection({
   onToggle: () => void
   onStopPort: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
-  onOpenInBrowser: (port: WorkspacePort) => void
+  onOpenInBrowser: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element | null {
   if (ports.length === 0 && !emptyText) {
     return null
@@ -417,15 +512,18 @@ function LocalPortRow({
   port: WorkspacePort
   onStop: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
-  onOpenInBrowser: (port: WorkspacePort) => void
+  onOpenInBrowser: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
   const handleCopy = useCallback(() => {
     void window.api.ui.writeClipboardText(addressForPort(port))
   }, [port])
 
-  const handleOpenBrowser = useCallback(() => {
-    void onOpenInBrowser(port)
-  }, [onOpenInBrowser, port])
+  const handleOpenBrowser = useCallback(
+    (event?: React.MouseEvent<HTMLButtonElement>) => {
+      void onOpenInBrowser(port, event)
+    },
+    [onOpenInBrowser, port]
+  )
 
   const handleCopyButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -439,7 +537,9 @@ function LocalPortRow({
 
   const handleOpenBrowserButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
-      handleOpenBrowser()
+      // Why: keyboard activations have detail=0; only pointer clicks carry
+      // the modifier intent for the system-browser escape hatch.
+      handleOpenBrowser(event.detail > 0 ? event : undefined)
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -465,6 +565,10 @@ function LocalPortRow({
       : port.kind === 'container'
         ? 'Container or forwarded service'
         : 'Unassigned'
+  const openBrowserLabel = translate(
+    'auto.components.right.sidebar.PortsPanel.b22b128b2a',
+    'Open in Browser'
+  )
   const confidenceLabel =
     port.kind === 'workspace' ? (port.owner.confidence === 'cwd' ? 'cwd' : 'command') : null
   const canStopProcess =
@@ -477,7 +581,11 @@ function LocalPortRow({
           <div
             className="flex min-w-0 flex-1 items-center gap-2 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             tabIndex={0}
-            aria-label={`Port ${port.port} menu`}
+            aria-label={translate(
+              'auto.components.right.sidebar.PortsPanel.5be4f7f727',
+              'Port {{value0}} menu',
+              { value0: port.port }
+            )}
           >
             <div className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
               {port.kind === 'container' ? <Box size={13} /> : <Server size={13} />}
@@ -500,7 +608,7 @@ function LocalPortRow({
           </div>
         </ContextMenuTrigger>
         <TooltipProvider delayDuration={400}>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          <div className="flex items-center gap-0.5 can-hover:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -509,13 +617,13 @@ function LocalPortRow({
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
                   onClick={handleOpenBrowserButtonClick}
-                  aria-label="Open in Browser"
+                  aria-label={openBrowserLabel}
                 >
                   <ExternalLink size={13} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                Open in Browser
+                {getPortOpenBrowserTooltipLabel(openBrowserLabel)}
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -526,13 +634,21 @@ function LocalPortRow({
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
                   onClick={handleCopyButtonClick}
-                  aria-label={`Copy ${address}`}
+                  aria-label={translate(
+                    'auto.components.right.sidebar.PortsPanel.fe2730d050',
+                    'Copy {{value0}}',
+                    { value0: address }
+                  )}
                 >
                   <Copy size={13} />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                Copy {address}
+                {translate(
+                  'auto.components.right.sidebar.PortsPanel.1004af16ab',
+                  'Copy {{value0}}',
+                  { value0: address }
+                )}
               </TooltipContent>
             </Tooltip>
             {canStopProcess && (
@@ -544,13 +660,16 @@ function LocalPortRow({
                     size="icon-xs"
                     className="text-muted-foreground hover:text-destructive"
                     onClick={handleStopButtonClick}
-                    aria-label="Stop Process"
+                    aria-label={translate(
+                      'auto.components.right.sidebar.PortsPanel.f9528da632',
+                      'Stop Process'
+                    )}
                   >
                     <Trash2 size={13} />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  Stop Process
+                  {translate('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -561,13 +680,16 @@ function LocalPortRow({
         <ContextMenuLabel
           className={LOCAL_PORT_MENU_LABEL_CLASS}
         >{`:${port.port}`}</ContextMenuLabel>
-        <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleOpenBrowser}>
+        <ContextMenuItem
+          className={LOCAL_PORT_MENU_ITEM_CLASS}
+          onSelect={() => handleOpenBrowser()}
+        >
           <ExternalLink size={13} />
-          Open in Browser
+          {openBrowserLabel}
         </ContextMenuItem>
         <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleCopy}>
           <Copy size={13} />
-          Copy Address
+          {translate('auto.components.right.sidebar.PortsPanel.792baeb7ed', 'Copy Address')}
         </ContextMenuItem>
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
@@ -576,14 +698,14 @@ function LocalPortRow({
           }}
         >
           <Copy size={13} />
-          Copy Details
+          {translate('auto.components.right.sidebar.PortsPanel.bdac206faf', 'Copy Details')}
         </ContextMenuItem>
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
           onSelect={() => onShowDetails(port)}
         >
           <Info size={13} />
-          Show Details
+          {translate('auto.components.right.sidebar.PortsPanel.a223459512', 'Show Details')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
@@ -593,7 +715,7 @@ function LocalPortRow({
           onSelect={() => onStop(port)}
         >
           <Trash2 size={13} />
-          Stop Process
+          {translate('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -611,30 +733,60 @@ function LocalPortDetailsDialog({
     <Dialog open={Boolean(port)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{port ? `Port :${port.port}` : 'Port'}</DialogTitle>
+          <DialogTitle>
+            {port
+              ? translate(
+                  'auto.components.right.sidebar.PortsPanel.472054d94c',
+                  'Port :{{value0}}',
+                  { value0: port.port }
+                )
+              : translate('auto.components.right.sidebar.PortsPanel.d41a8241ec', 'Port')}
+          </DialogTitle>
           <DialogDescription>
             {port ? `${port.processName ?? 'Unknown process'} · ${addressForPort(port)}` : ''}
           </DialogDescription>
         </DialogHeader>
         {port && (
           <dl className="grid grid-cols-[88px_1fr] gap-x-3 gap-y-2 text-xs">
-            <dt className="text-muted-foreground">Address</dt>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.right.sidebar.PortsPanel.1c1c18cefc', 'Address')}
+            </dt>
             <dd className="min-w-0 break-all text-foreground">{addressForPort(port)}</dd>
-            <dt className="text-muted-foreground">Bind</dt>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.right.sidebar.PortsPanel.0f1d8cd324', 'Bind')}
+            </dt>
             <dd className="min-w-0 break-all text-foreground">{`${port.bindHost}:${port.port}`}</dd>
-            <dt className="text-muted-foreground">Kind</dt>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.right.sidebar.PortsPanel.729be0b4e5', 'Kind')}
+            </dt>
             <dd className="text-foreground">{port.kind}</dd>
-            <dt className="text-muted-foreground">Protocol</dt>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.right.sidebar.PortsPanel.b1ff94fa27', 'Protocol')}
+            </dt>
             <dd className="text-foreground">{port.protocol}</dd>
-            <dt className="text-muted-foreground">Process</dt>
-            <dd className="min-w-0 break-all text-foreground">{port.processName ?? 'Unknown'}</dd>
-            <dt className="text-muted-foreground">PID</dt>
-            <dd className="text-foreground">{port.pid ?? 'Unknown'}</dd>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.right.sidebar.PortsPanel.5dd86dcf2f', 'Process')}
+            </dt>
+            <dd className="min-w-0 break-all text-foreground">
+              {port.processName ??
+                translate('auto.components.right.sidebar.PortsPanel.3e13cb63ee', 'Unknown')}
+            </dd>
+            <dt className="text-muted-foreground">
+              {translate('auto.components.right.sidebar.PortsPanel.57d930fa45', 'PID')}
+            </dt>
+            <dd className="text-foreground">
+              {port.pid ??
+                translate('auto.components.right.sidebar.PortsPanel.3e13cb63ee', 'Unknown')}
+            </dd>
             {port.kind === 'workspace' && (
               <>
-                <dt className="text-muted-foreground">Workspace</dt>
+                <dt className="text-muted-foreground">
+                  {translate('auto.components.right.sidebar.PortsPanel.c7b4702b7b', 'Workspace')}
+                </dt>
                 <dd className="min-w-0 break-all text-foreground">{port.owner.displayName}</dd>
-                <dt className="text-muted-foreground">Evidence</dt>
+                <dt className="text-muted-foreground">
+                  {translate('auto.components.right.sidebar.PortsPanel.153145e675', 'Evidence')}
+                </dt>
                 <dd className="text-foreground">{port.owner.confidence}</dd>
               </>
             )}
@@ -709,14 +861,25 @@ function SshPortsPanel(): React.JSX.Element {
   }, [])
 
   const handleOpenForwardInBrowser = useCallback(
-    (entry: PortForwardEntry) => {
+    (entry: PortForwardEntry, event?: React.MouseEvent<HTMLButtonElement>) => {
       const url = browserUrlForPortForwardEntry(entry)
-      if (!shouldOpenWorkspacePortInOrcaBrowser(settings)) {
+      if (
+        !resolvePortOpenInOrcaBrowser({
+          settings,
+          event,
+          isMac: navigator.userAgent.includes('Mac')
+        })
+      ) {
         void window.api.shell.openUrl(url)
         return
       }
       if (!activeWorktree?.id) {
-        toast.error('No workspace selected for the browser.')
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.PortsPanel.409afcc145',
+            'No workspace selected for the browser.'
+          )
+        )
         return
       }
       createBrowserTab(activeWorktree.id, url, {
@@ -734,8 +897,12 @@ function SshPortsPanel(): React.JSX.Element {
     return (
       <div className="flex flex-col items-center justify-center h-full px-4 text-center text-muted-foreground">
         <Unplug size={32} className="mb-3 opacity-50" />
-        <p className="text-sm font-medium">SSH connection lost</p>
-        <p className="text-xs mt-1">Reconnecting...</p>
+        <p className="text-sm font-medium">
+          {translate('auto.components.right.sidebar.PortsPanel.a2f1a47f42', 'SSH connection lost')}
+        </p>
+        <p className="text-xs mt-1">
+          {translate('auto.components.right.sidebar.PortsPanel.d4c3cd679c', 'Reconnecting...')}
+        </p>
       </div>
     )
   }
@@ -745,7 +912,7 @@ function SshPortsPanel(): React.JSX.Element {
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Ports
+          {translate('auto.components.right.sidebar.PortsPanel.6bc058dbe1', 'Ports')}
         </span>
         <button
           type="button"
@@ -755,7 +922,7 @@ function SshPortsPanel(): React.JSX.Element {
           }
         >
           <Plus size={14} />
-          Add
+          {translate('auto.components.right.sidebar.PortsPanel.a103dae837', 'Add')}
         </button>
       </div>
 
@@ -775,7 +942,7 @@ function SshPortsPanel(): React.JSX.Element {
               )}
             />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Forwarded
+              {translate('auto.components.right.sidebar.PortsPanel.ddbe58d74e', 'Forwarded')}
             </span>
             <span className="text-[10px] text-muted-foreground/60 ml-1">{allForwards.length}</span>
           </button>
@@ -785,7 +952,7 @@ function SshPortsPanel(): React.JSX.Element {
                 key={entry.id}
                 entry={entry}
                 onEdit={() => handleEdit(entry)}
-                onOpenInBrowser={() => handleOpenForwardInBrowser(entry)}
+                onOpenInBrowser={(event) => handleOpenForwardInBrowser(entry, event)}
               />
             ))}
         </div>
@@ -807,7 +974,7 @@ function SshPortsPanel(): React.JSX.Element {
               )}
             />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Detected
+              {translate('auto.components.right.sidebar.PortsPanel.36b1b2984a', 'Detected')}
             </span>
             <span className="text-[10px] text-muted-foreground/60 ml-1">{allDetected.length}</span>
           </button>
@@ -825,9 +992,14 @@ function SshPortsPanel(): React.JSX.Element {
       {/* Empty state */}
       {allForwards.length === 0 && allDetected.length === 0 && (
         <div className="flex flex-col items-center justify-center flex-1 px-4 text-center text-muted-foreground">
-          <p className="text-sm">No forwarded ports</p>
+          <p className="text-sm">
+            {translate('auto.components.right.sidebar.PortsPanel.1f0d2a24f9', 'No forwarded ports')}
+          </p>
           <p className="text-xs mt-1 mb-3">
-            Forward a port to access remote services on your local machine.
+            {translate(
+              'auto.components.right.sidebar.PortsPanel.04efd3dad4',
+              'Forward a port to access remote services on your local machine.'
+            )}
           </p>
           <button
             type="button"
@@ -839,7 +1011,7 @@ function SshPortsPanel(): React.JSX.Element {
               })
             }
           >
-            Forward a Port
+            {translate('auto.components.right.sidebar.PortsPanel.907eb53ed2', 'Forward a Port')}
           </button>
         </div>
       )}
@@ -860,9 +1032,10 @@ function ForwardedPortRow({
 }: {
   entry: PortForwardEntry
   onEdit: () => void
-  onOpenInBrowser: () => void
+  onOpenInBrowser: (event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
   const [removing, setRemoving] = useState(false)
+  const mountedRef = useMountedRef()
   const forwardedAddress = addressForPortForwardEntry(entry)
 
   const handleRemove = useCallback(async () => {
@@ -872,16 +1045,21 @@ function ForwardedPortRow({
     } catch {
       // broadcast will update state
     }
-    setRemoving(false)
-  }, [entry.id])
+    if (mountedRef.current) {
+      setRemoving(false)
+    }
+  }, [entry.id, mountedRef])
 
   const handleCopy = useCallback(() => {
     void window.api.ui.writeClipboardText(forwardedAddress)
   }, [forwardedAddress])
 
-  const handleOpenBrowser = useCallback(() => {
-    onOpenInBrowser()
-  }, [onOpenInBrowser])
+  const handleOpenBrowser = useCallback(
+    (event?: React.MouseEvent<HTMLButtonElement>) => {
+      onOpenInBrowser(event)
+    },
+    [onOpenInBrowser]
+  )
 
   const handleCopyButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -895,7 +1073,9 @@ function ForwardedPortRow({
 
   const handleOpenBrowserButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
-      handleOpenBrowser()
+      // Why: keyboard activations have detail=0; only pointer clicks carry
+      // the modifier intent for the system-browser escape hatch.
+      handleOpenBrowser(event.detail > 0 ? event : undefined)
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -924,6 +1104,21 @@ function ForwardedPortRow({
   )
 
   const advertisedBrowserUrl = advertisedBrowserUrlForForwardedRow(entry)
+  const openBrowserLabel = translate(
+    'auto.components.right.sidebar.PortsPanel.b22b128b2a',
+    'Open in Browser'
+  )
+  const openBrowserTitle = getPortOpenBrowserTooltipLabel(
+    advertisedBrowserUrl
+      ? translate(
+          'auto.components.right.sidebar.PortsPanel.75aeea592f',
+          'Open {{value0}} in Browser',
+          {
+            value0: advertisedBrowserUrl
+          }
+        )
+      : openBrowserLabel
+  )
 
   return (
     <div className="group flex items-center gap-2 py-1 px-1 -mx-1 rounded hover:bg-accent/50 transition-colors">
@@ -943,18 +1138,18 @@ function ForwardedPortRow({
         </div>
         {advertisedBrowserUrl && (
           <div className="text-[11px] text-muted-foreground/70 truncate">
-            opens {advertisedBrowserUrl}
+            {translate('auto.components.right.sidebar.PortsPanel.de349d4560', 'opens {{value0}}', {
+              value0: advertisedBrowserUrl
+            })}
           </div>
         )}
       </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+      <div className="flex items-center gap-0.5 can-hover:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
         <button
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleOpenBrowserButtonClick}
-          title={
-            advertisedBrowserUrl ? `Open ${advertisedBrowserUrl} in Browser` : 'Open in Browser'
-          }
+          title={openBrowserTitle}
         >
           <ExternalLink size={13} />
         </button>
@@ -962,7 +1157,11 @@ function ForwardedPortRow({
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleCopyButtonClick}
-          title={`Copy ${forwardedAddress}`}
+          title={translate(
+            'auto.components.right.sidebar.PortsPanel.1004af16ab',
+            'Copy {{value0}}',
+            { value0: forwardedAddress }
+          )}
         >
           <Copy size={13} />
         </button>
@@ -970,7 +1169,7 @@ function ForwardedPortRow({
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleEditButtonClick}
-          title="Edit"
+          title={translate('auto.components.right.sidebar.PortsPanel.b3548e59f4', 'Edit')}
         >
           <Pencil size={13} />
         </button>
@@ -982,7 +1181,7 @@ function ForwardedPortRow({
           )}
           onClick={handleRemoveButtonClick}
           disabled={removing}
-          title="Remove"
+          title={translate('auto.components.right.sidebar.PortsPanel.e740075063', 'Remove')}
         >
           <Trash2 size={13} />
         </button>
@@ -1010,16 +1209,20 @@ function DetectedPortRow({
         </div>
         {advertisedBrowserUrl && (
           <div className="text-[11px] text-muted-foreground/70 truncate">
-            advertised as {advertisedBrowserUrl}
+            {translate(
+              'auto.components.right.sidebar.PortsPanel.c7e920aa7c',
+              'advertised as {{value0}}',
+              { value0: advertisedBrowserUrl }
+            )}
           </div>
         )}
       </div>
       <button
         type="button"
-        className="text-[11px] px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-accent hover:bg-accent/80 text-foreground"
+        className="text-[11px] px-2 py-0.5 rounded can-hover:opacity-0 group-hover:opacity-100 transition-opacity bg-accent hover:bg-accent/80 text-foreground"
         onClick={onForward}
       >
-        Forward
+        {translate('auto.components.right.sidebar.PortsPanel.c9d106547a', 'Forward')}
       </button>
     </div>
   )
@@ -1094,12 +1297,23 @@ function PortForwardDialog({
       <DialogContent showCloseButton={false} className="max-w-[340px]">
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {isEdit ? 'Edit Port Forward' : 'Forward a Port'}
+            {isEdit
+              ? translate(
+                  'auto.components.right.sidebar.PortsPanel.80206251c8',
+                  'Edit Port Forward'
+                )
+              : translate('auto.components.right.sidebar.PortsPanel.907eb53ed2', 'Forward a Port')}
           </DialogTitle>
           <DialogDescription className="text-xs">
             {isEdit
-              ? 'Update the port forwarding configuration.'
-              : 'Forward a remote port to your local machine.'}
+              ? translate(
+                  'auto.components.right.sidebar.PortsPanel.10360598a4',
+                  'Update the port forwarding configuration.'
+                )
+              : translate(
+                  'auto.components.right.sidebar.PortsPanel.31e80cff2d',
+                  'Forward a remote port to your local machine.'
+                )}
           </DialogDescription>
         </DialogHeader>
         {isOpen && (
@@ -1205,7 +1419,9 @@ function PortForwardForm({
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="space-y-2">
         <label className="block">
-          <span className="text-[11px] text-muted-foreground">Remote Port</span>
+          <span className="text-[11px] text-muted-foreground">
+            {translate('auto.components.right.sidebar.PortsPanel.9e5a4118b0', 'Remote Port')}
+          </span>
           <input
             type="text"
             inputMode="numeric"
@@ -1228,36 +1444,51 @@ function PortForwardForm({
         </label>
 
         <label className="block">
-          <span className="text-[11px] text-muted-foreground">Local Port</span>
+          <span className="text-[11px] text-muted-foreground">
+            {translate('auto.components.right.sidebar.PortsPanel.b950b1948b', 'Local Port')}
+          </span>
           <input
             type="text"
             inputMode="numeric"
             value={localPort}
             onChange={(e) => setLocalPort(digitsOnly(e.target.value))}
             className={INPUT_CLASS}
-            placeholder="Same as remote"
+            placeholder={translate(
+              'auto.components.right.sidebar.PortsPanel.d57545ff92',
+              'Same as remote'
+            )}
           />
         </label>
 
         <label className="block">
-          <span className="text-[11px] text-muted-foreground">Remote Host</span>
+          <span className="text-[11px] text-muted-foreground">
+            {translate('auto.components.right.sidebar.PortsPanel.a3721a50b0', 'Remote Host')}
+          </span>
           <input
             type="text"
             value={remoteHost}
             onChange={(e) => setRemoteHost(e.target.value)}
             className={INPUT_CLASS}
-            placeholder="localhost"
+            placeholder={translate(
+              'auto.components.right.sidebar.PortsPanel.17bea6e391',
+              'localhost'
+            )}
           />
         </label>
 
         <label className="block">
-          <span className="text-[11px] text-muted-foreground">Label (optional)</span>
+          <span className="text-[11px] text-muted-foreground">
+            {translate('auto.components.right.sidebar.PortsPanel.8dfed0a15c', 'Label (optional)')}
+          </span>
           <input
             type="text"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             className={INPUT_CLASS}
-            placeholder="dev-server"
+            placeholder={translate(
+              'auto.components.right.sidebar.PortsPanel.4eb801ce93',
+              'dev-server'
+            )}
           />
         </label>
       </div>
@@ -1266,16 +1497,16 @@ function PortForwardForm({
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onClose}>
-          Cancel
+          {translate('auto.components.right.sidebar.PortsPanel.3ea4a02a8f', 'Cancel')}
         </Button>
         <Button type="submit" size="sm" disabled={submitting || !remotePort}>
           {submitting
             ? mode === 'edit'
-              ? 'Saving...'
-              : 'Forwarding...'
+              ? translate('auto.components.right.sidebar.PortsPanel.d7c83cfd24', 'Saving...')
+              : translate('auto.components.right.sidebar.PortsPanel.9f475dc994', 'Forwarding...')
             : mode === 'edit'
-              ? 'Save'
-              : 'Forward'}
+              ? translate('auto.components.right.sidebar.PortsPanel.9079776663', 'Save')
+              : translate('auto.components.right.sidebar.PortsPanel.c9d106547a', 'Forward')}
         </Button>
       </div>
     </form>

@@ -3,6 +3,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeBrowserDriverState,
   RuntimeStatus,
+  RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
 } from '../../shared/runtime-types'
@@ -16,7 +17,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
-    (event, graph: RuntimeSyncWindowGraph): RuntimeStatus => {
+    (event, graph: RuntimeSyncWindowGraph): RuntimeSyncWindowGraphResult => {
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')

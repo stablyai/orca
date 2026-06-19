@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { EyeOff, PanelBottom, PanelTop } from 'lucide-react'
 import {
   DropdownMenu,
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import type { FloatingTerminalTriggerLocation } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type FloatingTerminalIconContextMenuProps = {
   children: React.ReactNode
@@ -26,18 +27,34 @@ export function FloatingTerminalIconContextMenu({
   const updateSettings = useAppStore((s) => s.updateSettings)
   const [open, setOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+  const reopenFrameRef = useRef<number | null>(null)
+
+  const setTriggerRef = useCallback((node: HTMLSpanElement | null): void => {
+    if (node === null) {
+      if (reopenFrameRef.current !== null) {
+        window.cancelAnimationFrame(reopenFrameRef.current)
+        reopenFrameRef.current = null
+      }
+    }
+  }, [])
 
   const moveAction = useMemo(() => {
     if (currentLocation === 'floating-button') {
       return {
         icon: <PanelBottom className="size-3.5" />,
-        label: 'Move to Status Bar',
+        label: translate(
+          'auto.components.floating.terminal.FloatingTerminalIconContextMenu.0ee79e0674',
+          'Move to Status Bar'
+        ),
         location: 'status-bar' as const
       }
     }
     return {
       icon: <PanelTop className="size-3.5" />,
-      label: 'Move to Floating Button',
+      label: translate(
+        'auto.components.floating.terminal.FloatingTerminalIconContextMenu.763f5fa2c1',
+        'Move to Floating Button'
+      ),
       location: 'floating-button' as const
     }
   }, [currentLocation])
@@ -45,6 +62,7 @@ export function FloatingTerminalIconContextMenu({
   return (
     <>
       <span
+        ref={setTriggerRef}
         className={className}
         style={style}
         data-floating-terminal-toggle
@@ -55,7 +73,13 @@ export function FloatingTerminalIconContextMenu({
           event.stopPropagation()
           setMenuPoint({ x: event.clientX, y: event.clientY })
           setOpen(false)
-          window.requestAnimationFrame(() => setOpen(true))
+          if (reopenFrameRef.current !== null) {
+            window.cancelAnimationFrame(reopenFrameRef.current)
+          }
+          reopenFrameRef.current = window.requestAnimationFrame(() => {
+            reopenFrameRef.current = null
+            setOpen(true)
+          })
         }}
         onContextMenu={(event) => {
           event.preventDefault()
@@ -87,11 +111,15 @@ export function FloatingTerminalIconContextMenu({
           <DropdownMenuItem
             className="whitespace-nowrap"
             onSelect={() => {
+              useAppStore.getState().recordFeatureInteraction('floating-workspace-hidden')
               void updateSettings({ floatingTerminalEnabled: false })
             }}
           >
             <EyeOff className="size-3.5" />
-            Hide Floating Workspace
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalIconContextMenu.8e7d775287',
+              'Hide Floating Workspace'
+            )}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

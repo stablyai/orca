@@ -272,7 +272,7 @@ export function mapGhosttyToOrca(
   }
 
   for (const [key, rawValue] of Object.entries(parsed)) {
-    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue
+    const value = Array.isArray(rawValue) ? (rawValue.at(-1) ?? '') : rawValue
 
     // Why: Ghostty's selection-word-chars defines characters that ARE part of a
     // word, while xterm.js wordSeparator defines characters that BREAK words.

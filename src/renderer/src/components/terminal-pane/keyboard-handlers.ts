@@ -2,7 +2,7 @@
  * precedence in one ordered handler so shell input, pane commands, search, and
  * split actions do not race across separate window listeners. */
 import { useEffect } from 'react'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
@@ -16,6 +16,20 @@ import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
+import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
+import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { useAppStore } from '@/store'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+
+export function recordKeyboardCreatedTerminalPaneSplit(
+  createdPane: unknown,
+  args: {
+    source: 'contextual_tour' | 'keyboard'
+    direction: 'vertical' | 'horizontal'
+  }
+): boolean {
+  return recordCreatedTerminalPaneSplit(createdPane, args)
+}
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -91,6 +105,7 @@ export function matchFileSearchShortcut(
 }
 
 type KeyboardHandlersDeps = {
+  tabId: string
   isActive: boolean
   keyboardScopeRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
@@ -107,6 +122,7 @@ type KeyboardHandlersDeps = {
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
   onSearchSelectedText: (text: string) => void
   onRequestClosePane: (paneId: number) => void
+  onClearPaneScrollback: (pane: ManagedPane) => void
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
@@ -115,6 +131,7 @@ type KeyboardHandlersDeps = {
 }
 
 export function useTerminalKeyboardShortcuts({
+  tabId,
   isActive,
   keyboardScopeRef,
   managerRef,
@@ -130,6 +147,7 @@ export function useTerminalKeyboardShortcuts({
   setSearchOpen,
   onSearchSelectedText,
   onRequestClosePane,
+  onClearPaneScrollback,
   searchOpenRef,
   searchStateRef,
   macOptionAsAltRef,
@@ -211,6 +229,10 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
+        return
+      }
+
       const action = resolveTerminalShortcutAction(
         e,
         isMac,
@@ -230,7 +252,10 @@ export function useTerminalKeyboardShortcuts({
         if (!pane) {
           return
         }
-        paneTransportsRef.current.get(pane.id)?.sendInput(action.data)
+        const sent = paneTransportsRef.current.get(pane.id)?.sendInput(action.data) === true
+        if (sent) {
+          recordTerminalUserInputForLeaf(tabId, pane.leafId)
+        }
         return
       }
 
@@ -272,7 +297,7 @@ export function useTerminalKeyboardShortcuts({
         e.stopImmediatePropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (pane) {
-          pane.terminal.clear()
+          onClearPaneScrollback(pane)
         }
         return
       }
@@ -368,7 +393,8 @@ export function useTerminalKeyboardShortcuts({
           return
         }
         const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
-        if (splitWebRuntimeTerminal(ptyId, action.direction)) {
+        const telemetrySource = getKeyboardSplitTelemetrySource()
+        if (splitWebRuntimeTerminal(ptyId, action.direction, telemetrySource)) {
           return
         }
         // Split-pane CWD inheritance (docs/ssh-split-pane-inherit-cwd.md):
@@ -377,7 +403,11 @@ export function useTerminalKeyboardShortcuts({
         // back to an async resolve that queries pty.getCwd.
         const cached = paneCwdRef.current.get(pane.id)
         if (cached?.confirmed && cached.cwd) {
-          manager.splitPane(pane.id, action.direction, { cwd: cached.cwd })
+          const createdPane = manager.splitPane(pane.id, action.direction, { cwd: cached.cwd })
+          recordKeyboardCreatedTerminalPaneSplit(createdPane, {
+            source: telemetrySource,
+            direction: action.direction
+          })
           return
         }
         const paneIdAtDispatch = pane.id
@@ -389,7 +419,13 @@ export function useTerminalKeyboardShortcuts({
             sourcePtyId: ptyId,
             fallbackCwd
           })
-          managerRef.current?.splitPane(paneIdAtDispatch, directionAtDispatch, { cwd })
+          const createdPane = managerRef.current?.splitPane(paneIdAtDispatch, directionAtDispatch, {
+            cwd
+          })
+          recordKeyboardCreatedTerminalPaneSplit(createdPane, {
+            source: telemetrySource,
+            direction: directionAtDispatch
+          })
         })()
       }
     }
@@ -418,10 +454,18 @@ export function useTerminalKeyboardShortcuts({
     setSearchOpen,
     onSearchSelectedText,
     onRequestClosePane,
+    onClearPaneScrollback,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
     keybindings,
-    terminalShortcutPolicy
+    terminalShortcutPolicy,
+    tabId
   ])
+}
+
+function getKeyboardSplitTelemetrySource(): 'contextual_tour' | 'keyboard' {
+  return useAppStore.getState().activeContextualTourId === 'workspace-agent-sessions'
+    ? 'contextual_tour'
+    : 'keyboard'
 }

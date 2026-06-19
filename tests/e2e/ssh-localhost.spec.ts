@@ -108,6 +108,9 @@ async function postCodexHook(
   markerName: string
 ): Promise<void> {
   const hookPostedMarker = marker(markerName)
+  // Why: a foreground curl command emits the shell's command-finished marker
+  // immediately after the hook, which correctly clears a same-turn agent row.
+  // Post from a delayed background subshell so this test observes hook routing.
   await execInTerminal(
     page,
     ptyId,
@@ -116,17 +119,20 @@ async function postCodexHook(
       '  echo __ORCA_AGENT_HOOK_ENV_MISSING__',
       'else',
       `  hook_payload=${shellQuote(JSON.stringify(payload))}`,
-      '  if curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
-      '    -H "Content-Type: application/x-www-form-urlencoded" \\',
-      '    -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-      '    --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-      '    --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-      '    --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-      '    --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-      '    --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-      '    --data-urlencode "payload=${hook_payload}" >/dev/null; then',
-      `    ${emitMarkerCommand(hookPostedMarker)}`,
-      '  fi',
+      '  (',
+      '    sleep 0.1',
+      '    if curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
+      '      -H "Content-Type: application/x-www-form-urlencoded" \\',
+      '      -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
+      '      --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
+      '      --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+      '      --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
+      '      --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
+      '      --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+      '      --data-urlencode "payload=${hook_payload}" >/dev/null; then',
+      `      ${emitMarkerCommand(hookPostedMarker)}`,
+      '    fi',
+      '  ) &',
       'fi'
     ].join('\n')
   )
@@ -301,11 +307,11 @@ test.describe('Localhost SSH', () => {
       ptyId,
       [
         'opencode_status_file="$OPENCODE_CONFIG_DIR/plugins/orca-opencode-status.js"',
-        'pi_status_file="$PI_CODING_AGENT_DIR/extensions/orca-agent-status.ts"',
-        'if [ -n "$OPENCODE_CONFIG_DIR" ] && [ -f "$opencode_status_file" ] && [ -n "$PI_CODING_AGENT_DIR" ] && [ -f "$pi_status_file" ]; then',
+        'pi_status_file="$HOME/.pi/agent/extensions/orca-agent-status.ts"',
+        'if [ -n "$OPENCODE_CONFIG_DIR" ] && [ -f "$opencode_status_file" ] && [ -f "$pi_status_file" ]; then',
         `  ${emitMarkerCommand(pluginOverlayMarker)}`,
         'else',
-        `  printf '%s opencode=%s opencode_file=%s pi=%s pi_file=%s\\n' ${shellQuote(pluginOverlayFailedMarker)} "$OPENCODE_CONFIG_DIR" "$opencode_status_file" "$PI_CODING_AGENT_DIR" "$pi_status_file"`,
+        `  printf '%s opencode=%s opencode_file=%s pi_file=%s\\n' ${shellQuote(pluginOverlayFailedMarker)} "$OPENCODE_CONFIG_DIR" "$opencode_status_file" "$pi_status_file"`,
         'fi'
       ].join('\n')
     )

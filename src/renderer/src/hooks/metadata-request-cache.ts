@@ -1,4 +1,5 @@
 const METADATA_TTL = 300_000 // 5 min
+const MAX_METADATA_CACHE_ENTRIES = 500
 
 type CachedMetadata<T> = { data: T; fetchedAt: number }
 
@@ -22,11 +23,31 @@ export function clearMetadataRequestStore<T>(store: MetadataRequestStore<T>): vo
   store.inflight.clear()
 }
 
+function pruneMetadataCache<T>(
+  store: MetadataRequestStore<T>,
+  now: number,
+  maxEntries = MAX_METADATA_CACHE_ENTRIES
+): void {
+  for (const [key, entry] of store.cache) {
+    if (now - entry.fetchedAt >= METADATA_TTL) {
+      store.cache.delete(key)
+    }
+  }
+  if (store.cache.size <= maxEntries) {
+    return
+  }
+  const sorted = [...store.cache.entries()].sort((a, b) => b[1].fetchedAt - a[1].fetchedAt)
+  for (const [key] of sorted.slice(maxEntries)) {
+    store.cache.delete(key)
+  }
+}
+
 export function getFreshMetadata<T>(
   store: MetadataRequestStore<T>,
   key: string,
   now = Date.now()
 ): CachedMetadata<T> | null {
+  pruneMetadataCache(store, now)
   const entry = store.cache.get(key)
   if (!entry || now - entry.fetchedAt >= METADATA_TTL) {
     return null
@@ -56,7 +77,12 @@ export function loadMetadata<T>(
   const promise = fetcher()
     .then((data) => {
       if (store.generation === generation) {
-        store.cache.set(key, { data, fetchedAt: now() })
+        const fetchedAt = now()
+        store.cache.set(key, { data, fetchedAt })
+        // Why: these module-level stores are reused across dialogs and
+        // repo/runtime keys; TTL controls freshness but also needs pruning so
+        // long sessions do not retain stale metadata indefinitely.
+        pruneMetadataCache(store, fetchedAt)
       }
       return data
     })

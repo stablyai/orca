@@ -42,7 +42,9 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
         code.push(lines[index] ?? '')
         index += 1
       }
-      if (index < lines.length) index += 1
+      if (index < lines.length) {
+        index += 1
+      }
       blocks.push({ type: 'code', text: code.join('\n'), language: fence[1] })
       continue
     }

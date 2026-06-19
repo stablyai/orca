@@ -28,7 +28,7 @@ type UpdaterHandlerContext = {
   getUserInitiatedCheck: () => boolean
   hasNewerDownloadedVersion: () => boolean
   markMissingManifestPrereleaseFallbackChecking: () => void
-  performQuitAndInstall: () => void
+  performQuitAndInstall: () => void | Promise<void>
   recordCompletedUpdateCheck: () => void
   sendCheckFailureStatus: (
     message: string,

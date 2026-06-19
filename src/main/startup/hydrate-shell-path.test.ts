@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'events'
+import { delimiter } from 'node:path'
+import type { ChildProcessWithoutNullStreams } from 'child_process'
 import {
   _resetHydrateShellPathCache,
   hydrateShellPath,
@@ -6,13 +9,33 @@ import {
   type HydrationResult
 } from './hydrate-shell-path'
 
+const { spawnMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn()
+}))
+
+vi.mock('child_process', () => ({
+  spawn: spawnMock
+}))
+
 type HydrationSpawner = (shell: string) => Promise<HydrationResult>
+
+function createMockShellProcess(): ChildProcessWithoutNullStreams {
+  const proc = new EventEmitter() as ChildProcessWithoutNullStreams
+  Object.assign(proc, {
+    stdout: new EventEmitter(),
+    stderr: new EventEmitter(),
+    stdin: new EventEmitter(),
+    kill: vi.fn()
+  })
+  return proc
+}
 
 describe('hydrateShellPath', () => {
   const originalPath = process.env.PATH
 
   beforeEach(() => {
     _resetHydrateShellPathCache()
+    spawnMock.mockReset()
   })
 
   afterEach(() => {
@@ -109,6 +132,31 @@ describe('hydrateShellPath', () => {
     })
     expect(result).toEqual({ segments: [], ok: false, failureReason: 'empty_path' })
   })
+
+  it('cleans up shell listeners when hydration times out', async () => {
+    vi.useFakeTimers()
+    const proc = createMockShellProcess()
+    spawnMock.mockReturnValue(proc)
+
+    try {
+      const resultPromise = hydrateShellPath({ shellOverride: '/bin/zsh', force: true })
+      const assertion = expect(resultPromise).resolves.toEqual({
+        segments: [],
+        ok: false,
+        failureReason: 'timeout'
+      })
+
+      await vi.advanceTimersByTimeAsync(5000)
+
+      await assertion
+      expect(proc.kill).toHaveBeenCalledWith('SIGKILL')
+      expect(proc.stdout.listenerCount('data')).toBe(0)
+      expect(proc.listenerCount('error')).toBe(0)
+      expect(proc.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('mergePathSegments', () => {
@@ -122,30 +170,48 @@ describe('mergePathSegments', () => {
     }
   })
 
+  // Why: mergePathSegments joins with the platform PATH delimiter, so the
+  // expectations must too — hardcoding ':' made this suite fail on Windows
+  // dev machines even though the code under test was correct.
+  const joinPath = (...segments: string[]): string => segments.join(delimiter)
+
   it('prepends new segments ahead of existing PATH entries', () => {
-    process.env.PATH = '/usr/bin:/bin'
+    process.env.PATH = joinPath('/usr/bin', '/bin')
 
     const added = mergePathSegments(['/Users/tester/.opencode/bin', '/Users/tester/.cargo/bin'])
 
     expect(added).toEqual(['/Users/tester/.opencode/bin', '/Users/tester/.cargo/bin'])
     expect(process.env.PATH).toBe(
-      '/Users/tester/.opencode/bin:/Users/tester/.cargo/bin:/usr/bin:/bin'
+      joinPath('/Users/tester/.opencode/bin', '/Users/tester/.cargo/bin', '/usr/bin', '/bin')
     )
   })
 
-  it('skips segments already on PATH so re-hydration is a no-op', () => {
-    process.env.PATH = '/Users/tester/.cargo/bin:/usr/bin'
+  it('promotes shell segments already on PATH so shell ordering wins', () => {
+    process.env.PATH = joinPath('/Users/tester/.cargo/bin', '/usr/bin')
 
     const added = mergePathSegments(['/Users/tester/.cargo/bin', '/Users/tester/.opencode/bin'])
 
     expect(added).toEqual(['/Users/tester/.opencode/bin'])
-    expect(process.env.PATH).toBe('/Users/tester/.opencode/bin:/Users/tester/.cargo/bin:/usr/bin')
+    expect(process.env.PATH).toBe(
+      joinPath('/Users/tester/.cargo/bin', '/Users/tester/.opencode/bin', '/usr/bin')
+    )
+  })
+
+  it('moves user-local shell paths ahead of packaged Homebrew fallbacks', () => {
+    process.env.PATH = joinPath('/opt/homebrew/bin', '/Users/tester/.local/bin', '/usr/bin', '/bin')
+
+    const added = mergePathSegments(['/Users/tester/.local/bin', '/opt/homebrew/bin'])
+
+    expect(added).toEqual([])
+    expect(process.env.PATH).toBe(
+      joinPath('/Users/tester/.local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin')
+    )
   })
 
   it('returns [] and leaves PATH untouched when given nothing', () => {
-    process.env.PATH = '/usr/bin:/bin'
+    process.env.PATH = joinPath('/usr/bin', '/bin')
 
     expect(mergePathSegments([])).toEqual([])
-    expect(process.env.PATH).toBe('/usr/bin:/bin')
+    expect(process.env.PATH).toBe(joinPath('/usr/bin', '/bin'))
   })
 })

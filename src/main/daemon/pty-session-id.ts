@@ -15,8 +15,8 @@ export { parsePtySessionId } from '../../shared/pty-session-id-format'
  *
  * Both pty.ts (host-daemon spawn path) and DaemonPtyAdapter.doSpawn
  * (fallback when opts.sessionId is absent) must use this helper — a
- * drifted format would break cold-restore mapping and Pi overlay
- * keying.
+ * drifted format would break cold-restore mapping and legacy Pi overlay
+ * cleanup keying.
  */
 export function mintPtySessionId(worktreeId?: string): string {
   return worktreeId
@@ -25,18 +25,17 @@ export function mintPtySessionId(worktreeId?: string): string {
 }
 
 /**
- * Why: `effectiveSessionId` is used as a filesystem key (Pi overlay
- * directory under app.getPath('userData')). The security property we
- * want is containment: the derived overlay path must be strictly
- * inside the userData root so a crafted IPC payload (args.sessionId
- * or args.worktreeId forwarded from the renderer) cannot make us
- * write overlay files outside userData.
+ * Why: `effectiveSessionId` is used as a filesystem key for provider hook
+ * state and legacy Pi overlay cleanup under app.getPath('userData'). The
+ * security property we want is containment: derived paths must be strictly
+ * inside the userData root so a crafted IPC payload (args.sessionId or
+ * args.worktreeId forwarded from the renderer) cannot make us write outside
+ * userData.
  *
  * Callers pass `app.getPath('userData')` as `userDataPath`. Any
- * subpath inside userData is acceptable as a filesystem key since
- * the Pi overlay path lives deeper inside userData — enforcing
- * "id cannot escape userData" is a superset of "id cannot escape Pi
- * overlay root".
+ * subpath inside userData is acceptable as a filesystem key since callers use
+ * deeper roots under userData — enforcing "id cannot escape userData" is a
+ * superset of the per-feature containment checks.
  *
  * Note: real worktreeIds are `${repo.id}::${absolutePath}` so minted
  * session ids contain `/` on POSIX and `\` on Windows. Rejecting
@@ -61,7 +60,7 @@ export function isSafePtySessionId(id: string, userDataPath: string): boolean {
   // from C:\userdata to D:\evil yields "D:\evil", which does NOT start with
   // ".."). Reject any absolute result — a legitimate subpath under
   // userData always produces a relative result on every platform.
-  if (rel === '' || isAbsolute(rel) || rel.startsWith('..') || rel.includes(`..${sep}`)) {
+  if (rel === '' || isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
     return false
   }
   return true

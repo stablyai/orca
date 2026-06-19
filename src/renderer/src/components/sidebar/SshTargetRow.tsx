@@ -1,12 +1,13 @@
 /**
- * Row used in the "Open remote project" step to pick an SSH target.
+ * Row used in the "Open project on SSH host" step to pick an SSH target.
  *
  * Why extracted: keeps AddRepoSteps.tsx under the 400-line oxlint limit
  * while isolating the inline-connect interaction logic.
  */
-import React, { useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
+import { translate } from '@/i18n/i18n'
 
 type Props = {
   target: SshTarget & { state?: SshConnectionState }
@@ -22,6 +23,7 @@ export function SshTargetRow({
   onConnect
 }: Props): React.JSX.Element {
   const [connecting, setConnecting] = useState(false)
+  const mountedRef = useRef(true)
   const status = target.state?.status ?? 'disconnected'
   const isConnected = status === 'connected'
   const isBusy =
@@ -49,11 +51,22 @@ export function SshTargetRow({
       return
     }
     setConnecting(true)
-    void onConnect(target.id).finally(() => setConnecting(false))
+    void onConnect(target.id).finally(() => {
+      if (mountedRef.current) {
+        setConnecting(false)
+      }
+    })
   }
+
+  const handleRowRootRef = useCallback((node: HTMLDivElement | null): void => {
+    // Why: SSH connects can resolve after this row is removed; the row ref
+    // gives the async completion the same guard without a mount-only Effect.
+    mountedRef.current = node !== null
+  }, [])
 
   return (
     <div
+      ref={handleRowRootRef}
       role={isConnected ? 'button' : undefined}
       tabIndex={isConnected ? 0 : undefined}
       className={`w-full flex items-center gap-2 px-3 py-2 rounded-md border text-xs transition-colors ${
@@ -83,10 +96,10 @@ export function SshTargetRow({
           {isBusy ? (
             <>
               <Loader2 className="size-3 animate-spin" />
-              Connecting…
+              {translate('auto.components.sidebar.SshTargetRow.4677394048', 'Connecting…')}
             </>
           ) : (
-            'Connect'
+            translate('auto.components.sidebar.SshTargetRow.75ad429b5d', 'Connect')
           )}
         </button>
       )}

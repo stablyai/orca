@@ -62,3 +62,12 @@ export type OpenCodeUsageSessionRow = {
   reasoningOutputTokens: number
   totalTokens: number
 }
+
+export type OpenCodeUsageSnapshot = {
+  scanState: OpenCodeUsageScanState
+  summary: OpenCodeUsageSummary
+  daily: OpenCodeUsageDailyPoint[]
+  modelBreakdown: OpenCodeUsageBreakdownRow[]
+  projectBreakdown: OpenCodeUsageBreakdownRow[]
+  recentSessions: OpenCodeUsageSessionRow[]
+}

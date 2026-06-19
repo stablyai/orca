@@ -1,13 +1,16 @@
 /* eslint-disable max-lines -- Why: external automation mapping and lifecycle IPC share fixtures. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createExternalAutomation,
+  listExternalAutomationManagers,
   listExternalAutomationRuns,
   runExternalAutomationAction,
   updateExternalAutomation
 } from './external-manager'
 import { mapHermesJobs, mapOpenClawJobs } from './external-job-mappers'
 import { getActiveMultiplexer } from '../ipc/ssh'
+import type { Store } from '../persistence'
+import type * as Fs from 'fs'
 
 const execFileMock = vi.hoisted(() =>
   vi.fn((...args: unknown[]) => {
@@ -16,18 +19,62 @@ const execFileMock = vi.hoisted(() =>
       const execCallback = callback as (error: Error | null, stdout: string, stderr: string) => void
       execCallback(null, '', '')
     }
+    return { kill: vi.fn() }
   })
 )
+const existsSyncMock = vi.hoisted(() => vi.fn(() => false))
+
+function resolveExecFileMock(...args: unknown[]) {
+  const callback = args.at(-1)
+  if (typeof callback === 'function') {
+    const execCallback = callback as (error: Error | null, stdout: string, stderr: string) => void
+    execCallback(null, '', '')
+  }
+  return { kill: vi.fn() }
+}
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+vi.mock('fs', async () => {
+  const actual = await vi.importActual<typeof Fs>('fs')
+  return {
+    ...actual,
+    existsSync: existsSyncMock
+  }
+})
 
 vi.mock('../ipc/ssh', () => ({
   getActiveMultiplexer: vi.fn()
 }))
 
 beforeEach(() => {
-  execFileMock.mockClear()
+  execFileMock.mockReset()
+  execFileMock.mockImplementation(resolveExecFileMock)
+  existsSyncMock.mockReturnValue(false)
   vi.mocked(getActiveMultiplexer).mockReset()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+describe('listExternalAutomationManagers', () => {
+  it('settles when a local command lookup hangs', async () => {
+    vi.useFakeTimers()
+    execFileMock.mockImplementation(() => ({ kill: vi.fn() }))
+    const promise = listExternalAutomationManagers({
+      getSshTargets: () => []
+    } as unknown as Store)
+    let settled = false
+    void promise.finally(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    await Promise.resolve()
+
+    expect(settled).toBe(true)
+    await expect(promise).resolves.toEqual([])
+  })
 })
 
 describe('mapHermesJobs', () => {
@@ -177,9 +224,38 @@ describe('createExternalAutomation', () => {
         '--workdir',
         '/repo'
       ],
-      { encoding: 'utf-8' },
+      { encoding: 'utf-8', timeout: 30_000 },
       expect.any(Function)
     )
+  })
+
+  it('settles when local Hermes cron creation hangs', async () => {
+    vi.useFakeTimers()
+    const killMock = vi.fn()
+    execFileMock.mockImplementation(() => ({ kill: killMock }))
+
+    const promise = createExternalAutomation({
+      managerId: 'hermes:local',
+      provider: 'hermes',
+      target: { type: 'local' },
+      name: 'Nightly audit',
+      prompt: 'Audit the repo',
+      schedule: '0 9 * * 1-5',
+      workdir: null
+    })
+    let settled = false
+    void promise
+      .catch(() => undefined)
+      .finally(() => {
+        settled = true
+      })
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    await Promise.resolve()
+
+    expect(settled).toBe(true)
+    await expect(promise).rejects.toThrow('Local automation command timed out')
+    expect(killMock).toHaveBeenCalled()
   })
 
   it('updates local Hermes cron jobs through the CLI', async () => {
@@ -209,7 +285,7 @@ describe('createExternalAutomation', () => {
         '--workdir',
         '/repo'
       ],
-      { encoding: 'utf-8' },
+      { encoding: 'utf-8', timeout: 30_000 },
       expect.any(Function)
     )
   })
@@ -228,7 +304,7 @@ describe('runExternalAutomationAction', () => {
     expect(execFileMock).toHaveBeenCalledWith(
       'hermes',
       ['cron', 'run', 'job-1'],
-      { encoding: 'utf-8' },
+      { encoding: 'utf-8', timeout: 30_000 },
       expect.any(Function)
     )
   })
@@ -259,7 +335,7 @@ describe('runExternalAutomationAction', () => {
     expect(execFileMock).toHaveBeenCalledWith(
       'openclaw',
       ['cron', 'disable', 'job-1'],
-      { encoding: 'utf-8' },
+      { encoding: 'utf-8', timeout: 30_000 },
       expect.any(Function)
     )
   })

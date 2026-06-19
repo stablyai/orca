@@ -20,17 +20,29 @@ import {
   RuntimeRpcEnvelopeSchema,
   type RuntimeRpcResponse
 } from './runtime-rpc-envelope'
+// Re-export so existing value importers of `RemoteRuntimeClientError` are
+// unaffected; the class lives in a ws-free module so type-only consumers
+// (and mobile's typecheck) don't compile this file's Node-only deps.
+import { RemoteRuntimeClientError } from './remote-runtime-client-error'
+
+export { RemoteRuntimeClientError } from './remote-runtime-client-error'
 
 type HandshakeState = 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 
-export class RemoteRuntimeClientError extends Error {
-  readonly code: string
+function ignoreSettledRemoteRuntimeSocketError(): void {}
 
-  constructor(code: string, message: string) {
-    super(message)
-    this.name = 'RemoteRuntimeClientError'
-    this.code = code
+function formatRemoteRuntimeCloseMessage(code: number, reason: Buffer): string {
+  const suffixParts: string[] = []
+  if (code !== 1005 && code !== 1006) {
+    suffixParts.push(String(code))
   }
+  const reasonText = reason.toString().trim()
+  if (reasonText) {
+    suffixParts.push(reasonText)
+  }
+  return suffixParts.length > 0
+    ? `Remote Orca runtime closed the connection (${suffixParts.join(': ')}).`
+    : 'Remote Orca runtime closed the connection.'
 }
 
 export type RemoteRuntimeSubscription = {
@@ -61,7 +73,25 @@ export async function sendRemoteRuntimeRequest<TResult>(
     let settled = false
     let ws: WebSocket | null = null
 
-    const timeout = setTimeout(() => {
+    const cleanupSocketListeners = (): void => {
+      const socket = ws
+      if (!socket) {
+        return
+      }
+      socket.off('open', onOpen)
+      socket.off('error', onError)
+      socket.off('close', onClose)
+      socket.off('message', onMessage)
+      // Why: the settled one-shot no longer needs Orca callbacks, but a ws
+      // can still report a late transport error after close is requested.
+      if (socket.readyState !== WebSocket.CLOSED) {
+        socket.on('error', ignoreSettledRemoteRuntimeSocketError)
+      }
+    }
+
+    let timeout = setTimeout(onTimeout, timeoutMs)
+
+    function onTimeout(): void {
       finish({
         ok: false,
         error: new RemoteRuntimeClientError(
@@ -69,7 +99,19 @@ export async function sendRemoteRuntimeRequest<TResult>(
           'Timed out waiting for the remote Orca runtime to respond.'
         )
       })
-    }, timeoutMs)
+    }
+
+    function refreshTimeout(): void {
+      const refreshableTimeout = timeout as { refresh?: () => void }
+      if (typeof refreshableTimeout.refresh === 'function') {
+        refreshableTimeout.refresh()
+        return
+      }
+      // Why: mobile typechecks shared code with DOM timer types, where
+      // setTimeout returns a number and Node's Timeout.refresh is absent.
+      clearTimeout(timeout)
+      timeout = setTimeout(onTimeout, timeoutMs)
+    }
 
     const finish = (
       result: { ok: true; response: RuntimeRpcResponse<TResult> } | { ok: false; error: Error }
@@ -80,6 +122,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
       settled = true
       clearTimeout(timeout)
       try {
+        cleanupSocketListeners()
         ws?.close()
       } catch {
         // ignore best-effort close
@@ -105,16 +148,16 @@ export async function sendRemoteRuntimeRequest<TResult>(
       return
     }
 
-    ws.once('open', () => {
+    function onOpen(): void {
       ws?.send(
         JSON.stringify({
           type: 'e2ee_hello',
           publicKeyB64: publicKeyToBase64(keyPair.publicKey)
         })
       )
-    })
+    }
 
-    ws.once('error', () => {
+    function onError(): void {
       finish({
         ok: false,
         error: new RemoteRuntimeClientError(
@@ -122,21 +165,21 @@ export async function sendRemoteRuntimeRequest<TResult>(
           'Could not connect to the remote Orca runtime.'
         )
       })
-    })
+    }
 
-    ws.on('close', () => {
+    function onClose(code: number, reason: Buffer): void {
       if (!settled) {
         finish({
           ok: false,
           error: new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
-            'Remote Orca runtime closed the connection.'
+            formatRemoteRuntimeCloseMessage(code, reason)
           )
         })
       }
-    })
+    }
 
-    ws.on('message', (data, isBinary) => {
+    function onMessage(data: WebSocket.RawData, isBinary: boolean): void {
       if (settled) {
         return
       }
@@ -175,7 +218,12 @@ export async function sendRemoteRuntimeRequest<TResult>(
       }
 
       handleRpcFrame(plaintext)
-    })
+    }
+
+    ws.once('open', onOpen)
+    ws.once('error', onError)
+    ws.on('close', onClose)
+    ws.on('message', onMessage)
 
     function handleReadyFrame(frame: string): void {
       let ready: unknown
@@ -271,7 +319,7 @@ export async function sendRemoteRuntimeRequest<TResult>(
         return
       }
       if (isKeepaliveFrame(raw)) {
-        timeout.refresh()
+        refreshTimeout()
         return
       }
       const parsed = RuntimeRpcEnvelopeSchema.safeParse(raw)
@@ -317,6 +365,33 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
     let settled = false
     let ws: WebSocket | null = null
 
+    const cleanupSocketListeners = (): WebSocket | null => {
+      const socket = ws
+      if (!socket) {
+        return null
+      }
+      socket.off('open', onOpen)
+      socket.off('error', onError)
+      socket.off('close', onClose)
+      socket.off('message', onMessage)
+      ws = null
+      // Why: startup failures detach Orca callbacks before closing the ws,
+      // but ws can still emit a late transport error while close is in flight.
+      if (socket.readyState !== WebSocket.CLOSED) {
+        socket.on('error', ignoreSettledRemoteRuntimeSocketError)
+      }
+      return socket
+    }
+
+    const closeSocketAfterCleanup = (): void => {
+      const socket = cleanupSocketListeners()
+      try {
+        socket?.close()
+      } catch {
+        // ignore best-effort close
+      }
+    }
+
     const timeout = setTimeout(() => {
       fail(
         new RemoteRuntimeClientError(
@@ -355,11 +430,16 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       if (!settled) {
         settled = true
         clearTimeout(timeout)
-        close()
+        closeSocketAfterCleanup()
         reject(error)
         return
       }
       callbacks.onError(error)
+      // Why: after a subscription is established, protocol failures are
+      // terminal for this socket. Closing here releases the WebSocket listeners
+      // and lets the IPC subscription registry drop its retained callbacks.
+      closeSocketAfterCleanup()
+      callbacks.onClose?.()
     }
 
     try {
@@ -370,39 +450,41 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       return
     }
 
-    ws.once('open', () => {
+    function onOpen(): void {
       ws?.send(
         JSON.stringify({
           type: 'e2ee_hello',
           publicKeyB64: publicKeyToBase64(keyPair.publicKey)
         })
       )
-    })
+    }
 
-    ws.once('error', () => {
+    function onError(): void {
       fail(
         new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
           'Could not connect to the remote Orca runtime.'
         )
       )
-    })
+    }
 
-    ws.on('close', () => {
+    function onClose(code: number, reason: Buffer): void {
       clearTimeout(timeout)
+      cleanupSocketListeners()
       if (!settled) {
+        settled = true
         reject(
           new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
-            'Remote Orca runtime closed the connection.'
+            formatRemoteRuntimeCloseMessage(code, reason)
           )
         )
         return
       }
       callbacks.onClose?.()
-    })
+    }
 
-    ws.on('message', (data, isBinary) => {
+    function onMessage(data: WebSocket.RawData, isBinary: boolean): void {
       if (isBinary) {
         handleBinaryFrame(new Uint8Array(data as Buffer))
         return
@@ -431,7 +513,12 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       }
 
       handleRpcFrame(plaintext)
-    })
+    }
+
+    ws.once('open', onOpen)
+    ws.once('error', onError)
+    ws.on('close', onClose)
+    ws.on('message', onMessage)
 
     function handleReadyFrame(frame: string): void {
       let ready: unknown

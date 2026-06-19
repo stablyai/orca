@@ -4,10 +4,12 @@ import { useAppStore } from '@/store'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-dispatcher'
 import {
   isRemoteRuntimePtyId,
-  sendRuntimePtyInput,
   sendRuntimePtyInputVerified
 } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
+import { waitForAgentReady } from './agent-ready-wait'
+import { getSettingsForWorktreeRuntimeOwner } from './worktree-runtime-owner'
+import type { GlobalSettings } from '../../../shared/types'
 
 // Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Pi /
 // OpenCode / Gemini / cursor-agent / copilot) treat the inserted text as a
@@ -15,6 +17,7 @@ import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-strea
 // line-edit shortcuts. Callers choose whether to append Enter after the paste.
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
+const POST_PASTE_SUBMIT_DELAY_MS = 50
 
 // Why: every prefill-capable TUI we ship support for (claude / codex / pi /
 // opencode / gemini / cursor-agent / copilot) emits `CSI ? 2004 h` (DECSET
@@ -42,6 +45,20 @@ const BRACKETED_PASTE_QUIET_MS = 1500
 // or (2) the launch fails outright. The hard timeout caps the wait so a
 // stuck launch doesn't pin a Promise forever.
 const READINESS_TIMEOUT_MS = 8000
+
+export function getSettingsForAgentTabRuntimeOwner(
+  tabId: string
+): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
+  const store = useAppStore.getState()
+  for (const [worktreeId, tabs] of Object.entries(store.tabsByWorktree ?? {})) {
+    if (tabs?.some((tab) => tab.id === tabId)) {
+      // Why: legacy remote PTY ids may not embed their runtime owner. The tab's
+      // worktree still identifies which host should receive readiness/send RPCs.
+      return getSettingsForWorktreeRuntimeOwner(store, worktreeId)
+    }
+  }
+  return store.settings
+}
 
 /**
  * Wait until the agent on `tabId` has rendered its input-accepting TUI,
@@ -89,18 +106,28 @@ export async function pasteDraftWhenAgentReady(args: {
     return false
   }
 
-  const ready = await waitForInputBoxReady(ptyId, budget, readySignal)
+  const settings = getSettingsForAgentTabRuntimeOwner(tabId)
+  const ready = await waitForInputBoxReady(ptyId, budget, readySignal, settings)
   if (!ready) {
-    onTimeout?.()
-    return false
+    // Why: fast-starting TUIs can emit the paste-ready escape sequence before
+    // this sidecar subscription attaches. If process/title inspection says the
+    // launched agent owns the PTY, fall back to a best-effort paste instead of
+    // silently dropping generated prompts.
+    const fallbackReady = agentConfig
+      ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
+      : { ready: false }
+    if (!fallbackReady.ready) {
+      onTimeout?.()
+      return false
+    }
   }
 
-  sendRuntimePtyInput(
-    useAppStore.getState().settings,
+  return await sendBracketedPasteToAgent({
+    settings,
     ptyId,
-    `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}${submit ? '\r' : ''}`
-  )
-  return true
+    content,
+    submit: submit === true
+  })
 }
 
 export async function submitPromptToAgentTab(args: {
@@ -113,11 +140,46 @@ export async function submitPromptToAgentTab(args: {
   if (!ptyId) {
     return false
   }
-  return await sendRuntimePtyInputVerified(
-    useAppStore.getState().settings,
+  return await sendBracketedPasteToAgent({
+    settings: getSettingsForAgentTabRuntimeOwner(tabId),
     ptyId,
-    `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}\r`
-  )
+    content,
+    submit: true
+  })
+}
+
+export async function sendBracketedPasteToRunningAgent(args: {
+  ptyId: string
+  content: string
+}): Promise<boolean> {
+  return await sendBracketedPasteToAgent({ ptyId: args.ptyId, content: args.content, submit: true })
+}
+
+async function sendBracketedPasteToAgent(args: {
+  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  ptyId: string
+  content: string
+  submit: boolean
+}): Promise<boolean> {
+  const { settings = useAppStore.getState().settings, ptyId, content, submit } = args
+  const pastePayload = `${BRACKETED_PASTE_BEGIN}${content}${BRACKETED_PASTE_END}`
+  try {
+    const pasted = await sendRuntimePtyInputVerified(settings, ptyId, pastePayload)
+    if (!pasted) {
+      return false
+    }
+    if (!submit) {
+      return true
+    }
+
+    // Why: Claude Code can leave a prompt as editable text when paste-end and
+    // Enter arrive in the same PTY write. Split the submit into the next turn so
+    // the TUI processes bracketed-paste termination before handling Enter.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
+    return await sendRuntimePtyInputVerified(settings, ptyId, '\r')
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -137,7 +199,8 @@ export async function submitPromptToAgentTab(args: {
 function waitForInputBoxReady(
   ptyId: string,
   timeoutMs: number,
-  readySignal: DraftPasteReadySignal
+  readySignal: DraftPasteReadySignal,
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     let settled = false
@@ -218,7 +281,7 @@ function waitForInputBoxReady(
 
     if (isRemoteRuntimePtyId(ptyId)) {
       void subscribeToRuntimeTerminalData(
-        useAppStore.getState().settings,
+        settings,
         ptyId,
         `desktop:paste-ready:${ptyId}`,
         observeData

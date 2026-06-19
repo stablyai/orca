@@ -7,11 +7,12 @@ import { clearLiveBrowserUrl } from './browser-runtime'
 // destroyPersistentWebview lived in BrowserPane.tsx.
 export const webviewRegistry = new Map<string, Electron.WebviewTag>()
 export const registeredWebContentsIds = new Map<string, number>()
-export const parkedAtByTabId = new Map<string, number>()
 
-export const MAX_PARKED_WEBVIEWS = 6
+export type BrowserWebviewMemoryProfile = {
+  browserWebviewCount: number
+  registeredBrowserGuestCount: number
+}
 
-let hiddenContainer: HTMLDivElement | null = null
 const DRAG_LISTENER_KEY = '__orcaBrowserPaneDragListeners'
 let dragListenersAttached = false
 let nativeDragPassthroughRelease: (() => void) | null = null
@@ -69,19 +70,11 @@ function ensureDragListeners(): void {
   dragListenersAttached = true
 }
 
-export function getHiddenContainer(): HTMLDivElement {
-  if (!hiddenContainer) {
-    hiddenContainer = document.createElement('div')
-    hiddenContainer.style.position = 'fixed'
-    hiddenContainer.style.left = '-9999px'
-    hiddenContainer.style.top = '-9999px'
-    hiddenContainer.style.width = '100vw'
-    hiddenContainer.style.height = '100vh'
-    hiddenContainer.style.overflow = 'hidden'
-    hiddenContainer.style.pointerEvents = 'none'
-    document.body.appendChild(hiddenContainer)
+export function getBrowserWebviewMemoryProfile(): BrowserWebviewMemoryProfile {
+  return {
+    browserWebviewCount: webviewRegistry.size,
+    registeredBrowserGuestCount: registeredWebContentsIds.size
   }
-  return hiddenContainer
 }
 
 function applyWebviewsDragPassthrough(): void {
@@ -198,7 +191,6 @@ export function destroyPersistentWebview(browserTabId: string): void {
   const webview = webviewRegistry.get(browserTabId)
   if (!webview) {
     registeredWebContentsIds.delete(browserTabId)
-    parkedAtByTabId.delete(browserTabId)
     clearLiveBrowserUrl(browserTabId)
     return
   }
@@ -207,6 +199,5 @@ export function destroyPersistentWebview(browserTabId: string): void {
   webview.remove()
   unregisterPersistentWebview(browserTabId)
   registeredWebContentsIds.delete(browserTabId)
-  parkedAtByTabId.delete(browserTabId)
   clearLiveBrowserUrl(browserTabId)
 }

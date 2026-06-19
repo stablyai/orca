@@ -1,9 +1,13 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
+    "baseUrl": ".",
     "strict": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "tweetnacl": ["./node_modules/tweetnacl"],
+      "ws": ["./node_modules/@types/ws"],
+      "zod": ["./node_modules/zod"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],

@@ -1,67 +1,37 @@
-/* eslint-disable max-lines -- Why: the card metadata hover keeps compact badge rendering,
-   provider-specific action rows, and markdown note preview together so the sidebar
-   card has one metadata contract. */
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { CircleDot, ExternalLink, GitMerge, MonitorUp, Pencil, StickyNote } from 'lucide-react'
+import { CalendarClock, CircleDot, ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import CommentMarkdown from './CommentMarkdown'
-import { PullRequestIcon } from './WorktreeCardHelpers'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent
 } from './WorktreeCardDetailSection'
-import {
-  IssueStateBadge,
-  LinearStateBadge,
-  ReviewChecksBadge,
-  ReviewStateBadge
-} from './WorktreeCardMetadataStatusBadges'
-import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import type { IssueInfo } from '../../../../shared/types'
+import { DetailHeader, MetaIconBadge, MetadataActionIcon } from './WorktreeCardMetadataControls'
+import { IssueStateBadge, LinearStateBadge } from './WorktreeCardMetadataStatusBadges'
+import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
+import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
+import type {
+  WorktreeCardIssueDisplay,
+  WorktreeCardLinearIssueDisplay,
+  WorktreeCardMetaBadgesProps,
+  WorktreeCardMetaBadgesRootProps,
+  WorktreeCardDetailsHoverProps
+} from './worktree-card-meta-types'
+import { translate } from '@/i18n/i18n'
+import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSection'
+import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 
-export type WorktreeCardIssueDisplay =
-  | IssueInfo
-  | {
-      number: number
-      title: string
-      state?: IssueInfo['state']
-      url?: string
-      labels?: string[]
-    }
-
-export type WorktreeCardLinearIssueDisplay = {
-  identifier: string
-  title: string
-  url?: string
-  stateName?: string
-  labels?: string[]
-}
-
-type WorktreeCardMetaBadgesProps = {
-  issue: WorktreeCardIssueDisplay | null
-  linearIssue: WorktreeCardLinearIssueDisplay | null
-  review: WorktreeCardPrDisplay | null
-  comment: string | null
-}
-
-type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
-  React.HTMLAttributes<HTMLDivElement>
-
-type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
-  children: React.ReactElement
-  detailsAfter?: React.ReactNode
-  onEditIssue: (event: React.MouseEvent) => void
-  onEditComment: (event: React.MouseEvent) => void
-  onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
-  onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
-  onOpenReviewInOrca?: (event: React.MouseEvent) => void
+export type {
+  WorktreeCardIssueDisplay,
+  WorktreeCardLinearIssueDisplay,
+  WorktreeCardMetaBadgesProps,
+  WorktreeCardMetaBadgesRootProps,
+  WorktreeCardDetailsHoverProps
 }
 
 function hasComment(comment: string | null): boolean {
@@ -72,158 +42,20 @@ export function hasWorktreeCardDetails({
   issue,
   linearIssue,
   review,
-  comment
+  comment,
+  automationProvenance
 }: WorktreeCardMetaBadgesProps): boolean {
-  return Boolean(issue || linearIssue || review || hasComment(comment))
-}
-
-function getReviewLabel(review: WorktreeCardPrDisplay): 'MR' | 'PR' {
-  return review.provider === 'gitlab' ? 'MR' : 'PR'
-}
-
-function getProviderName(review: WorktreeCardPrDisplay): string {
-  if (review.provider === 'gitlab') {
-    return 'GitLab'
-  }
-  if (review.provider === 'bitbucket') {
-    return 'Bitbucket'
-  }
-  if (review.provider === 'azure-devops') {
-    return 'Azure DevOps'
-  }
-  if (review.provider === 'gitea') {
-    return 'Gitea'
-  }
-  return 'GitHub'
-}
-
-function ReviewIcon({
-  review,
-  className
-}: {
-  review: WorktreeCardPrDisplay
-  className?: string
-}): React.JSX.Element {
-  const Icon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  // Why: the standalone CI glyph was removed from the card header, so linked
-  // PR metadata carries check health unless the review is already merged.
-  const checkTone =
-    review.state !== 'merged' && review.status === 'failure'
-      ? 'text-rose-500/85'
-      : review.state !== 'merged' && review.status === 'pending'
-        ? 'text-amber-500/85'
-        : review.state === 'open' && review.status === 'success'
-          ? 'text-emerald-500/80'
-          : null
-  return (
-    <Icon
-      className={cn(
-        className,
-        checkTone,
-        review.state === 'merged' && 'text-purple-600/70 dark:text-purple-400/70',
-        !checkTone && review.state === 'open' && 'text-emerald-500/80',
-        !checkTone && review.state === 'closed' && 'text-muted-foreground/60',
-        !checkTone && review.state === 'draft' && 'text-muted-foreground/50',
-        !checkTone &&
-          (!review.state || !['merged', 'open', 'closed', 'draft'].includes(review.state)) &&
-          'text-muted-foreground opacity-70'
-      )}
-    />
-  )
-}
-
-function MetaIconBadge({
-  label,
-  children
-}: {
-  label: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground/70 hover:text-foreground [&>svg]:size-3.5">
-      {children}
-      <span className="sr-only">{label}</span>
-    </span>
-  )
-}
-
-function DetailHeader({
-  icon,
-  label,
-  actions
-}: {
-  icon: React.ReactNode
-  label: string
-  actions?: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {icon}
-        <span className="truncate">{label}</span>
-      </div>
-      {actions && <div className="flex shrink-0 items-center gap-0.5">{actions}</div>}
-    </div>
-  )
-}
-
-function MetadataActionIcon({
-  label,
-  href,
-  onClick,
-  children
-}: {
-  label: string
-  href?: string
-  onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  const trigger = href ? (
-    <Button asChild variant="ghost" size="icon-xs" className="size-6">
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        aria-label={label}
-        onClick={(event) => event.stopPropagation()}
-      >
-        {children}
-      </a>
-    </Button>
-  ) : (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon-xs"
-      className="size-6"
-      aria-label={label}
-      onClick={(event) => {
-        event.stopPropagation()
-        onClick?.(event)
-      }}
-    >
-      {children}
-    </Button>
-  )
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
+  return Boolean(issue || linearIssue || review || hasComment(comment) || automationProvenance)
 }
 
 export const WorktreeCardMetaBadges = React.forwardRef<
   HTMLDivElement,
   WorktreeCardMetaBadgesRootProps
 >(function WorktreeCardMetaBadges(
-  { issue, linearIssue, review, comment, className, ...props },
+  { issue, linearIssue, review, comment, automationProvenance, className, ...props },
   ref
 ): React.JSX.Element | null {
-  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment })) {
+  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment, automationProvenance })) {
     return null
   }
 
@@ -234,25 +66,61 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       ref={ref}
       {...props}
       className={cn('ml-auto flex shrink-0 items-center gap-1 pr-1.5', className)}
-      aria-label="Workspace metadata"
+      aria-label={translate(
+        'auto.components.sidebar.WorktreeCardMeta.3e65e11cc6',
+        'Workspace metadata'
+      )}
     >
       {hasComment(comment) && (
-        <MetaIconBadge label="Workspace notes">
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.fe075cb851',
+            'Workspace notes'
+          )}
+        >
           <StickyNote className="text-muted-foreground" />
         </MetaIconBadge>
       )}
+      {automationProvenance && (
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.automationCreated',
+            'Created by automation'
+          )}
+        >
+          <CalendarClock className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
       {issue && (
-        <MetaIconBadge label={`Linked issue #${issue.number}`}>
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.3f2649eeb8',
+            'Linked issue #{{value0}}',
+            { value0: issue.number }
+          )}
+        >
           <CircleDot className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {linearIssue && (
-        <MetaIconBadge label={`Linked Linear ${linearIssue.identifier}`}>
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.b105fd3057',
+            'Linked Linear {{value0}}',
+            { value0: linearIssue.identifier }
+          )}
+        >
           <LinearIcon className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {review && (
-        <MetaIconBadge label={`Linked ${getReviewLabel(review)} #${review.number}`}>
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.3ea2702e62',
+            'Linked {{value0}} #{{value1}}',
+            { value0: getReviewLabel(review), value1: review.number }
+          )}
+        >
           <ReviewIcon review={review} />
         </MetaIconBadge>
       )}
@@ -265,33 +133,81 @@ export function WorktreeCardDetailsHover({
   linearIssue,
   review,
   comment,
+  automationProvenance,
   children,
+  branchName,
+  workspaceTitle,
+  identityOrder = 'workspace-first',
+  automationHostId,
   detailsAfter,
+  openDelay = 250,
+  closeDelay = 120,
   onEditIssue,
   onEditComment,
   onOpenGitHubIssueInOrca,
   onOpenLinearIssueInOrca,
-  onOpenReviewInOrca
+  onOpenReviewInOrca,
+  onUnlinkReview,
+  onOpenAutomation,
+  onOpenAutomationRun,
+  hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
-  const [open, setOpen] = React.useState(false)
+  const internalHoverControl = useWorktreeCardDetailsHoverControl()
+  const {
+    hoverOpen,
+    reviewMenuOpen,
+    handleHoverOpenChange,
+    handleReviewMenuOpenChange,
+    closeHover
+  } = hoverControl ?? internalHoverControl
   const dismissAndRun = React.useCallback(
     (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
-      setOpen(false)
+      closeHover()
       handler?.(event)
     },
-    []
+    [closeHover]
   )
 
-  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment }) && !detailsAfter) {
+  const showIdentityHeader = Boolean(branchName || workspaceTitle)
+
+  if (
+    !showIdentityHeader &&
+    !hasWorktreeCardDetails({ issue, linearIssue, review, comment, automationProvenance }) &&
+    !detailsAfter
+  ) {
     return children
   }
 
-  const reviewLabel = review ? getReviewLabel(review) : null
-  const reviewProvider = review ? getProviderName(review) : null
   const issueLabels = issue?.labels ?? []
+  const branchIdentity = branchName ? (
+    <div
+      className={cn(
+        'truncate font-mono text-[11px] leading-none text-muted-foreground',
+        identityOrder === 'workspace-first' && 'mt-1'
+      )}
+    >
+      {branchName}
+    </div>
+  ) : null
+  const workspaceIdentity =
+    workspaceTitle && workspaceTitle !== branchName ? (
+      <div
+        className={cn(
+          'truncate text-[13px] font-semibold leading-snug text-foreground',
+          identityOrder === 'branch-first' && 'mt-1'
+        )}
+      >
+        {workspaceTitle}
+      </div>
+    ) : null
 
   return (
-    <HoverCard open={open} onOpenChange={setOpen} openDelay={250} closeDelay={120}>
+    <HoverCard
+      open={hoverOpen}
+      onOpenChange={handleHoverOpenChange}
+      openDelay={openDelay}
+      closeDelay={closeDelay}
+    >
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent
         side="right"
@@ -303,29 +219,59 @@ export function WorktreeCardDetailsHover({
         onDoubleClick={(event) => event.stopPropagation()}
       >
         <SelectedTextCopyMenu className="space-y-3">
+          {showIdentityHeader && (
+            <div className="min-w-0 border-l border-border/70 pl-2">
+              {/* Why: the closed card no longer carries a branch row; custom-titled
+                  worktrees still need their git branch available in the hover. */}
+              {identityOrder === 'branch-first' ? branchIdentity : workspaceIdentity}
+              {identityOrder === 'branch-first' ? workspaceIdentity : branchIdentity}
+            </div>
+          )}
+
           {issue && (
             <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<CircleDot className="size-3 text-muted-foreground" />}
-                label={`Issue #${issue.number}`}
+                label={translate(
+                  'auto.components.sidebar.WorktreeCardMeta.e97d8f2876',
+                  'Issue #{{value0}}',
+                  { value0: issue.number }
+                )}
                 actions={
                   <>
+                    {onEditIssue && (
+                      <MetadataActionIcon
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.807b13b9ec',
+                          'Edit issue'
+                        )}
+                        onClick={onEditIssue}
+                      >
+                        <Pencil className="size-3" />
+                      </MetadataActionIcon>
+                    )}
                     {issue.url && onOpenGitHubIssueInOrca && (
                       <MetadataActionIcon
-                        label="Open in Orca"
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
+                          'Open in Orca'
+                        )}
                         onClick={dismissAndRun(onOpenGitHubIssueInOrca)}
                       >
                         <MonitorUp className="size-3" />
                       </MetadataActionIcon>
                     )}
                     {issue.url && (
-                      <MetadataActionIcon label="View on GitHub" href={issue.url}>
+                      <MetadataActionIcon
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.b22f058067',
+                          'View on GitHub'
+                        )}
+                        href={issue.url}
+                      >
                         <ExternalLink className="size-3" />
                       </MetadataActionIcon>
                     )}
-                    <MetadataActionIcon label="Edit issue" onClick={onEditIssue}>
-                      <Pencil className="size-3" />
-                    </MetadataActionIcon>
                   </>
                 }
               />
@@ -351,19 +297,32 @@ export function WorktreeCardDetailsHover({
             <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<LinearIcon className="size-3 text-muted-foreground" />}
-                label={`Linear ${linearIssue.identifier}`}
+                label={translate(
+                  'auto.components.sidebar.WorktreeCardMeta.5e982e6128',
+                  'Linear {{value0}}',
+                  { value0: linearIssue.identifier }
+                )}
                 actions={
                   <>
                     {linearIssue.url && onOpenLinearIssueInOrca && (
                       <MetadataActionIcon
-                        label="Open in Orca"
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
+                          'Open in Orca'
+                        )}
                         onClick={dismissAndRun(onOpenLinearIssueInOrca)}
                       >
                         <MonitorUp className="size-3" />
                       </MetadataActionIcon>
                     )}
                     {linearIssue.url && (
-                      <MetadataActionIcon label="View on Linear" href={linearIssue.url}>
+                      <MetadataActionIcon
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.e42941631a',
+                          'View on Linear'
+                        )}
+                        href={linearIssue.url}
+                      >
                         <ExternalLink className="size-3" />
                       </MetadataActionIcon>
                     )}
@@ -391,52 +350,43 @@ export function WorktreeCardDetailsHover({
             </WorktreeCardDetailSection>
           )}
 
-          {review && reviewLabel && reviewProvider && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<ReviewIcon review={review} className="size-3" />}
-                label={`${reviewLabel} #${review.number}`}
-                actions={
-                  <>
-                    {review.url && onOpenReviewInOrca && (
-                      <MetadataActionIcon
-                        label="Open in Orca"
-                        onClick={dismissAndRun(onOpenReviewInOrca)}
-                      >
-                        <MonitorUp className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {review.url && (
-                      <MetadataActionIcon label={`View on ${reviewProvider}`} href={review.url}>
-                        <ExternalLink className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                  </>
-                }
-              />
-              <WorktreeCardDetailSectionContent className="space-y-1.5">
-                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                  {review.title}
-                </div>
-                {(review.state || (review.status && review.status !== 'neutral')) && (
-                  <div className="flex flex-wrap gap-1">
-                    <ReviewStateBadge state={review.state} label={reviewLabel} />
-                    <ReviewChecksBadge status={review.status} />
-                  </div>
-                )}
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
+          <WorktreeCardReviewDetailSection
+            review={review}
+            reviewMenuOpen={reviewMenuOpen}
+            onReviewMenuOpenChange={handleReviewMenuOpenChange}
+            onOpenReviewInOrca={onOpenReviewInOrca}
+            onUnlinkReview={onUnlinkReview}
+            closeHover={closeHover}
+          />
+
+          {automationProvenance && (
+            <WorktreeCardAutomationDetailSection
+              provenance={automationProvenance}
+              worktreeHostId={automationHostId}
+              onOpenAutomation={onOpenAutomation ? dismissAndRun(onOpenAutomation) : undefined}
+              onOpenAutomationRun={
+                onOpenAutomationRun ? dismissAndRun(onOpenAutomationRun) : undefined
+              }
+            />
           )}
 
           {hasComment(comment) && (
             <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<StickyNote className="size-3 text-muted-foreground" />}
-                label="Notes"
+                label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
                 actions={
-                  <MetadataActionIcon label="Edit notes" onClick={onEditComment}>
-                    <Pencil className="size-3" />
-                  </MetadataActionIcon>
+                  onEditComment ? (
+                    <MetadataActionIcon
+                      label={translate(
+                        'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
+                        'Edit notes'
+                      )}
+                      onClick={onEditComment}
+                    >
+                      <Pencil className="size-3" />
+                    </MetadataActionIcon>
+                  ) : null
                 }
               />
               <WorktreeCardDetailSectionContent className="space-y-2">

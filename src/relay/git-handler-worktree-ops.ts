@@ -1,15 +1,8 @@
-/**
- * Worktree management and commit operations for the relay git handler.
- *
- * Why: extracted from git-handler-ops.ts to keep all relay files under
- * the oxlint max-lines (300) limit.
- */
 import * as path from 'path'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
-import { parseWorktreeList } from './git-handler-utils'
-
-// ─── Worktree management ─────────────────────────────────────────────
+import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
+export { removeWorktreeOp } from './git-handler-worktree-remove'
 
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
@@ -118,100 +111,63 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   }
 }
 
-export async function removeWorktreeOp(
-  git: GitExec,
-  params: Record<string, unknown>
-): Promise<void> {
-  const worktreePath = params.worktreePath as string
-  const force = params.force as boolean | undefined
-  const deleteBranch = params.deleteBranch !== false
-  const forceBranchDelete = params.forceBranchDelete === true
-
-  let repoPath = worktreePath
-  try {
-    const { stdout } = await git(['rev-parse', '--git-common-dir'], worktreePath)
-    const commonDir = stdout.trim()
-    if (commonDir && commonDir !== '.git') {
-      repoPath = path.resolve(worktreePath, commonDir, '..')
-    }
-  } catch {
-    // fall through with worktreePath as repo
-  }
-
-  const worktreesBeforeRemoval = await listRelayWorktrees(git, repoPath)
-  const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
-    areRelayWorktreePathsEqual(worktree.path, worktreePath)
-  )
-  const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
-
-  const args = ['worktree', 'remove']
-  if (force) {
-    args.push('--force')
-  }
-  args.push(worktreePath)
-  await git(args, repoPath)
-  await git(['worktree', 'prune'], repoPath)
-
-  if (!branchName) {
-    return
-  }
-  if (!deleteBranch) {
-    return
-  }
-
-  // Why: SSH worktree deletion should mirror local deletion. Dropping the
-  // branch also removes its upstream config, which lets fork-remotes cleanup
-  // after the last PR review worktree is gone.
-  const worktreesAfterPrune = await listRelayWorktrees(git, repoPath)
-  const branchStillInUse = worktreesAfterPrune.some(
-    (worktree) => normalizeLocalBranchRef(worktree.branch ?? '') === branchName
-  )
-  if (branchStillInUse) {
-    return
-  }
-
-  try {
-    // Why: use `-d` (not `-D`) to mirror the local removeWorktree fix — Git
-    // refuses to delete a branch with commits not merged into its upstream or
-    // HEAD, so unpublished work on a remote worktree is preserved rather than
-    // force-deleted. forceBranchDelete is reserved for failed create rollback.
-    await git(['branch', forceBranchDelete ? '-D' : '-d', branchName], repoPath)
-  } catch (error) {
-    // Expected when the branch still has unmerged/unpublished commits: keep it.
-    console.warn(
-      `relay removeWorktree: preserved local branch "${branchName}" after removing worktree (not fully merged)`,
-      error
-    )
-  }
-}
-
 type RelayWorktreeInfo = {
   path: string
   branch?: string
+  head?: string
 }
 
-async function listRelayWorktrees(git: GitExec, repoPath: string): Promise<RelayWorktreeInfo[]> {
+export async function readRelayWorktreeList(
+  git: GitExec,
+  repoPath: string
+): Promise<RelayWorktreeInfo[]> {
   try {
-    const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
-    return parseWorktreeList(stdout)
-      .map((worktree) => ({
-        path: typeof worktree.path === 'string' ? worktree.path : '',
-        branch: typeof worktree.branch === 'string' ? worktree.branch : undefined
-      }))
-      .filter((worktree) => worktree.path.length > 0)
-  } catch {
-    return []
+    const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
+    return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
+  } catch (error) {
+    if (!isUnsupportedWorktreeListZError(error)) {
+      throw error
+    }
   }
+
+  // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
+  const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+  return normalizeRelayWorktrees(parseWorktreeList(stdout))
 }
 
-function normalizeLocalBranchRef(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
+function normalizeRelayWorktrees(worktrees: Record<string, unknown>[]): RelayWorktreeInfo[] {
+  return worktrees
+    .map((worktree) => ({
+      path: typeof worktree.path === 'string' ? worktree.path : '',
+      head: typeof worktree.head === 'string' ? worktree.head : undefined,
+      branch: typeof worktree.branch === 'string' ? worktree.branch : undefined
+    }))
+    .filter((worktree) => worktree.path.length > 0)
 }
 
-function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolean {
-  const left = path.normalize(path.resolve(leftPath))
-  const right = path.normalize(path.resolve(rightPath))
-  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
+function isPosixAbsolutePath(value: string): boolean {
+  return value.startsWith('/')
+}
+
+function isWindowsAbsolutePath(value: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\')
+}
+
+function normalizeRelayWorktreePathForCompare(value: string): string {
+  if (isPosixAbsolutePath(value)) {
+    return path.posix.normalize(path.posix.resolve(value))
+  }
+  if (isWindowsAbsolutePath(value)) {
+    return path.win32.normalize(path.win32.resolve(value))
+  }
+  return path.normalize(path.resolve(value))
+}
+
+export function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolean {
+  const left = normalizeRelayWorktreePathForCompare(leftPath)
+  const right = normalizeRelayWorktreePathForCompare(rightPath)
+  const compareCaseInsensitive = isWindowsAbsolutePath(leftPath) && isWindowsAbsolutePath(rightPath)
+  return compareCaseInsensitive ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
 export async function worktreeIsCleanOp(
@@ -219,12 +175,14 @@ export async function worktreeIsCleanOp(
   params: Record<string, unknown>
 ): Promise<{ clean: boolean; stdout?: string }> {
   const worktreePath = params.worktreePath as string
-  const { stdout } = await git(['status', '--porcelain', '--untracked-files=all'], worktreePath)
+  const includeUntracked = params.includeUntracked !== false
+  const { stdout } = await git(
+    ['status', '--porcelain', includeUntracked ? '--untracked-files=all' : '--untracked-files=no'],
+    worktreePath
+  )
   const clean = !stdout.trim()
   return { clean, stdout: clean ? undefined : stdout }
 }
-
-// ─── Commit ──────────────────────────────────────────────────────────
 
 export async function commitChangesRelay(
   git: GitExec,

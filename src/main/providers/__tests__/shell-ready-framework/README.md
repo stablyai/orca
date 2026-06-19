@@ -25,8 +25,7 @@ EOF
 
   expect(stdout).toMatchInlineSnapshot(`
     "HOME=<HOME>
-    ORCA_ORIG_ZDOTDIR=<HOME>/.config/zsh
-    ZDOTDIR=<WRAPPER_DIR>
+    ZDOTDIR=<HOME>/.config/zsh
     "
   `)
 })
@@ -93,8 +92,7 @@ Use `toMatchInlineSnapshot()` to keep expected output visible in the test file:
 ```typescript
 expect(stdout).toMatchInlineSnapshot(`
   "HOME=<HOME>
-  ORCA_ORIG_ZDOTDIR=<HOME>/.config/zsh
-  ZDOTDIR=<WRAPPER_DIR>
+  ZDOTDIR=<HOME>/.config/zsh
   "
 `)
 ```
@@ -104,6 +102,7 @@ Update snapshots with `vitest -u`.
 ## When to use this framework
 
 Use this framework for **new shell-ready tests** where:
+
 - You want the test to be easy to replicate manually
 - The setup is shell-script-based (file creation, env vars)
 - You want a declarative snapshot-driven style

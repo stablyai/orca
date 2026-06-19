@@ -65,10 +65,10 @@ test.describe('Create Workspace', () => {
       await expect(dialog).toBeVisible()
 
       // Wait for the composer to settle. The card fires several async effects
-      // on mount (detected-agent probe, repo combobox autofocus + hydration,
+      // on mount (detected-agent probe, name-field autofocus + hydration,
       // setup-hooks fetch). Clicking before those settle can race Radix's
       // FocusScope reparenting.
-      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
       // Force the `getBaseRefDefault` IPC to round-trip so any consumer that
       // renders the envelope (e.g. SourceControl) has a chance to crash
@@ -152,20 +152,82 @@ test.describe('Create Workspace', () => {
     }
   })
 
+  test('shows a failed workspace entry when worktree creation fails', async ({ orcaPage }) => {
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('window.__store is not available')
+      }
+      const originalCreateWorktree = store.getState().createWorktree
+      ;(
+        window as unknown as {
+          __restoreCreateWorktree?: () => void
+        }
+      ).__restoreCreateWorktree = () => {
+        store.setState({ createWorktree: originalCreateWorktree })
+      }
+      store.setState({
+        createWorktree: async () => {
+          throw new Error('could not resolve a default base ref for the E2E fixture')
+        }
+      })
+    })
+
+    try {
+      const workspaceName = `e2e-create-failure-${Date.now()}`
+
+      await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+
+      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+      await expect(dialog).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
+
+      const nameInput = dialog.getByPlaceholder(/Type a name/i)
+      await expect(nameInput).toBeVisible()
+      await nameInput.fill(workspaceName)
+
+      const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
+      await expect(createButton).toBeEnabled()
+      await createButton.click()
+
+      await expect(dialog).toBeHidden()
+      const failedWorkspace = orcaPage.getByRole('button', {
+        name: new RegExp(`${workspaceName} No base branch found`)
+      })
+      await expect(failedWorkspace).toBeVisible()
+      await expect(orcaPage.getByText('Couldn’t create worktree')).toBeVisible()
+      await expect(failedWorkspace).toContainText('No base branch found')
+      await expect(orcaPage.getByRole('button', { name: 'Retry' })).toBeVisible()
+    } finally {
+      await orcaPage
+        .evaluate(() => {
+          ;(
+            window as unknown as {
+              __restoreCreateWorktree?: () => void
+            }
+          ).__restoreCreateWorktree?.()
+          window.__store?.getState().closeModal()
+        })
+        .catch(() => {
+          /* page may already be torn down */
+        })
+    }
+  })
+
   test('reuses a resolved pasted GitHub URL when quick create submits', async ({
     electronApp,
     orcaPage
   }) => {
     const title = `E2E smart URL resolution ${Date.now()}`
     const url = 'https://github.com/stablyai/orca/pull/2049'
-    const titlePattern = new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const linkedWorkspacePattern = new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
 
     try {
       await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
 
       const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
       await expect(dialog).toBeVisible()
-      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
 
       await electronApp.evaluate(
         ({ ipcMain }, { title, url }) => {
@@ -232,9 +294,11 @@ test.describe('Create Workspace', () => {
       await createButton.click()
 
       await expect(dialog).toBeHidden({ timeout: 15_000 })
-      await expect(orcaPage.getByRole('option', { name: titlePattern })).toBeVisible({
+      await expect(orcaPage.getByRole('option', { name: linkedWorkspacePattern })).toBeVisible({
         timeout: 10_000
       })
+      await expect(orcaPage.getByRole('option', { name: url })).toHaveCount(0)
+      await expect(orcaPage.getByText('Linked PR #2049')).toBeVisible()
       await expect
         .poll(() =>
           electronApp.evaluate(() => {
@@ -249,6 +313,80 @@ test.describe('Create Workspace', () => {
           })
         )
         .toEqual({ githubLookupCount: 1, resolvePrBaseCount: 0 })
+    } finally {
+      await orcaPage
+        .evaluate(() => {
+          window.__store?.getState().closeModal()
+        })
+        .catch(() => {
+          /* page may already be torn down */
+        })
+    }
+  })
+
+  test('names the workspace after the PR title when the pasted URL suggestion is selected', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    const title = `E2E selected URL resolution ${Date.now()}`
+    const url = 'https://github.com/stablyai/orca/pull/2050'
+    const linkedWorkspacePattern = new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
+    try {
+      await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+
+      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+      await expect(dialog).toBeVisible()
+      await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible()
+
+      await electronApp.evaluate(
+        ({ ipcMain }, { title, url }) => {
+          ipcMain.removeHandler('gh:workItemByOwnerRepo')
+          ipcMain.handle(
+            'gh:workItemByOwnerRepo',
+            (_event: unknown, args: { number: number; repoId?: string }) => ({
+              id: `e2e-pr-${args.number}`,
+              type: 'pr',
+              number: args.number,
+              title,
+              state: 'open',
+              url,
+              labels: [],
+              updatedAt: '2026-05-26T00:00:00.000Z',
+              author: 'e2e',
+              repoId: args.repoId ?? 'e2e-repo'
+            })
+          )
+          ipcMain.removeHandler('worktrees:resolvePrBase')
+          // Why: the fixture repo's default branch is master and has no
+          // remote; resolve the PR base to a ref that actually exists.
+          ipcMain.handle('worktrees:resolvePrBase', () => ({ baseBranch: 'master' }))
+        },
+        { title, url }
+      )
+
+      const nameInput = dialog.getByPlaceholder(/Type a name/i)
+      await expect(nameInput).toBeVisible()
+      await nameInput.fill(url)
+
+      // Why: this is the regression PR #4900 missed — selecting the resolved
+      // suggestion row (instead of submitting the raw URL) must not leave the
+      // pasted URL behind as the workspace name. The suggestion popover is
+      // portaled outside the dialog element, so locate it page-wide.
+      const suggestion = orcaPage.getByRole('option', { name: linkedWorkspacePattern })
+      await expect(suggestion).toBeVisible()
+      await suggestion.click()
+
+      const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
+      await expect(createButton).toBeEnabled()
+      await createButton.click()
+
+      await expect(dialog).toBeHidden({ timeout: 15_000 })
+      await expect(orcaPage.getByRole('option', { name: linkedWorkspacePattern })).toBeVisible({
+        timeout: 10_000
+      })
+      await expect(orcaPage.getByRole('option', { name: /https-github/i })).toHaveCount(0)
+      await expect(orcaPage.getByText('Linked PR #2050')).toBeVisible()
     } finally {
       await orcaPage
         .evaluate(() => {

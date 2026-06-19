@@ -2,8 +2,14 @@ import { ipcMain, BrowserWindow, systemPreferences, app } from 'electron'
 import { join } from 'path'
 import { writeFile, unlink } from 'fs/promises'
 import { createHash } from 'crypto'
-import { SPEECH_MODEL_CATALOG, getCatalogModel } from '../speech/model-catalog'
+import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
+import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
+import {
+  clearOpenAiSpeechApiKey,
+  hasOpenAiSpeechApiKey,
+  saveOpenAiSpeechApiKey
+} from '../speech/openai-api-key-store'
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -15,19 +21,48 @@ export function registerSpeechHandlers(store: Store): void {
     return getSpeechModelManager(store).getModelStates()
   })
 
+  ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
+    return { configured: hasOpenAiSpeechApiKey() }
+  })
+
+  ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
+    saveOpenAiSpeechApiKey(apiKey)
+    return { configured: true }
+  })
+
+  ipcMain.handle('speech:clearOpenAiApiKey', async () => {
+    clearOpenAiSpeechApiKey()
+    return { configured: false }
+  })
+
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
     const manager = getSpeechModelManager(store)
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) {
       return
     }
-    manager.setProgressCallback((id, progress) => {
+    const clearProgressCallback = manager.setProgressCallback((id, progress) => {
       if (!window.isDestroyed()) {
         window.webContents.send('speech:downloadProgress', { modelId: id, progress })
       }
     })
-
-    await manager.downloadModel(modelId)
+    // Why: ModelManager is process-wide; scope this BrowserWindow closure to
+    // the download/window lifetime so stale windows are not retained.
+    let progressCallbackCleared = false
+    const cleanupProgressCallback = (): void => {
+      if (progressCallbackCleared) {
+        return
+      }
+      progressCallbackCleared = true
+      window.off('closed', cleanupProgressCallback)
+      clearProgressCallback()
+    }
+    window.once('closed', cleanupProgressCallback)
+    try {
+      await manager.downloadModel(modelId)
+    } finally {
+      cleanupProgressCallback()
+    }
   })
 
   ipcMain.handle('speech:cancelDownload', async (_event, modelId: string) => {
@@ -35,10 +70,12 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:deleteModel', async (_event, modelId: string) => {
-    if (!getCatalogModel(modelId)) {
-      throw new Error(`Unknown model: ${modelId}`)
-    }
-    await getSpeechModelManager(store).deleteModel(modelId)
+    await deleteLocalSpeechModel({
+      store,
+      modelManager: getSpeechModelManager(store),
+      sttService: getSpeechSttService(store),
+      modelId
+    })
   })
 
   const getHotwordsFilePath = (content: string): string => {

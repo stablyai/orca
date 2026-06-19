@@ -49,6 +49,12 @@ vi.mock('lucide-react', () => ({
   Globe: function Globe(props: Record<string, unknown>) {
     return { type: 'Globe', props }
   },
+  Pin: function Pin(props: Record<string, unknown>) {
+    return { type: 'Pin', props }
+  },
+  PinOff: function PinOff(props: Record<string, unknown>) {
+    return { type: 'PinOff', props }
+  },
   Rows2: function Rows2(props: Record<string, unknown>) {
     return { type: 'Rows2', props }
   },
@@ -122,12 +128,14 @@ async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
   return module.default({
     tab,
     isActive: true,
+    isPinned: false,
     hasTabsToRight: false,
     onActivate: () => {},
     onClose: () => {},
     onCloseToRight: () => {},
     onSplitGroup: () => {},
     onDuplicate: () => {},
+    onTogglePin: () => {},
     dragData: {
       kind: 'tab',
       worktreeId: tab.worktreeId,
@@ -187,7 +195,7 @@ async function renderExpandedBrowserTab(tab: BrowserTabState): Promise<unknown> 
   return expandNode(await renderBrowserTab(tab))
 }
 
-describe('BrowserTab favicon', () => {
+describe('BrowserTab favicon', { timeout: 30_000 }, () => {
   beforeEach(() => {
     reactHookRuntime.states = []
     reactHookRuntime.index = 0

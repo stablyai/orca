@@ -93,6 +93,26 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('does not schedule PTY side-effect drains for ordinary output with no working title', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onBell = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onBell })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('plain command output\r\n'.repeat(50), callbacks)
+
+      expect(callbacks.onData).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(onTitleChange).not.toHaveBeenCalled()
+      expect(onBell).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves stale-title detection after compacting deferred side effects', async () => {
     vi.useFakeTimers()
     try {
@@ -726,6 +746,27 @@ describe('createIpcPtyTransport', () => {
     expect(onPtyExit).toHaveBeenCalledWith('pty-1')
   })
 
+  it('restores data handlers when an intentional shutdown fails before exit', async () => {
+    const {
+      createIpcPtyTransport,
+      restorePtyDataHandlersAfterFailedShutdown,
+      unregisterPtyDataHandlers
+    } = await import('./pty-transport')
+    const onDataCallback = vi.fn()
+    const transport = createIpcPtyTransport()
+
+    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
+
+    const snapshots = unregisterPtyDataHandlers(['pty-1'])
+    onData?.({ id: 'pty-1', data: 'final burst while detached' })
+    expect(onDataCallback).not.toHaveBeenCalled()
+
+    restorePtyDataHandlersAfterFailedShutdown(snapshots)
+    onData?.({ id: 'pty-1', data: 'live again' })
+
+    expect(onDataCallback).toHaveBeenCalledWith('live again')
+  })
+
   it('unregisterPtyDataHandlers cancels staleTitleTimer so it cannot fire stale idle transition', async () => {
     vi.useFakeTimers()
     try {
@@ -1030,7 +1071,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       selector: 'env-1',
       method: 'terminal.create',
       params: {
-        worktree: 'repo1::/remote/wt',
+        worktree: 'id:repo1::/remote/wt',
         command: 'claude',
         env: { ORCA_TAB_ID: 'tab-1' },
         tabId: 'tab-1',
@@ -1084,10 +1125,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     expect(onReplayData).toHaveBeenCalledWith('hello')
     expect(onConnect).toHaveBeenCalled()
-    expect(onData).toHaveBeenCalledWith(' world')
+    expect(onData).toHaveBeenCalledWith(' world', expect.objectContaining({ seq: 4 }))
   })
 
-  it('forwards input and cleanup through runtime RPC', async () => {
+  it('forwards input over the stream and disconnects without closing shared remote sessions', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -1115,12 +1156,11 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       transport.disconnect()
       expect(unsubscribeFn).toHaveBeenCalled()
-      expect(runtimeCall).toHaveBeenCalledWith({
-        selector: 'env-1',
-        method: 'terminal.close',
-        params: { terminal: 'term-remote' },
-        timeoutMs: 15_000
-      })
+      expect(runtimeCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'terminal.close'
+        })
+      )
     } finally {
       vi.useRealTimers()
     }

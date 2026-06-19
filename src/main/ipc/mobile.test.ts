@@ -34,7 +34,7 @@ describe('registerMobileHandlers', () => {
     })
   })
 
-  it('re-reads system network interfaces on each request', () => {
+  it('re-reads system network interfaces on each request and prefers tailnet addresses', () => {
     networkInterfacesMock
       .mockReturnValueOnce({
         en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
@@ -51,9 +51,39 @@ describe('registerMobileHandlers', () => {
     })
     expect(handlers.get('mobile:listNetworkInterfaces')?.()).toEqual({
       interfaces: [
-        { name: 'en0', address: '192.168.1.24' },
-        { name: 'tailscale0', address: '100.64.1.20' }
+        { name: 'tailscale0', address: '100.64.1.20' },
+        { name: 'en0', address: '192.168.1.24' }
       ]
+    })
+  })
+
+  it('generates mobile pairing urls with the tailnet address by default', async () => {
+    networkInterfacesMock.mockReturnValue({
+      en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }],
+      utun4: [{ family: 'IPv4', internal: false, address: '100.102.47.57' }]
+    })
+    const createPairingOffer = vi.fn().mockReturnValue({
+      available: true,
+      pairingUrl: 'orca://pair#mobile',
+      endpoint: 'ws://100.102.47.57:6768',
+      deviceId: 'mobile-1'
+    })
+    const rpcServer = { createPairingOffer }
+
+    registerMobileHandlers(rpcServer as never)
+
+    await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toMatchObject({
+      available: true,
+      pairingUrl: 'orca://pair#mobile',
+      endpoint: 'ws://100.102.47.57:6768',
+      deviceId: 'mobile-1'
+    })
+
+    expect(createPairingOffer).toHaveBeenCalledWith({
+      address: '100.102.47.57',
+      rotate: undefined,
+      name: expect.stringMatching(/^Mobile /),
+      scope: 'mobile'
     })
   })
 

@@ -137,4 +137,42 @@ describe('captureTerminalShutdownLayout', () => {
     expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'pty-1' })
     expect(layout.titlesByLeafId).toEqual({ [LEAF_ID]: 'local shell' })
   })
+
+  it('does not preserve prior scrollback buffers or refs for a cleared leaf', async () => {
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      stablePaneId: LEAF_ID,
+      terminal: { options: { scrollback: 1_000 } },
+      serializeAddon: {
+        serialize: vi.fn(() => '')
+      }
+    }
+    const manager = {
+      getPanes: vi.fn(() => [pane]),
+      getActivePane: vi.fn(() => pane)
+    }
+
+    const layout = captureTerminalShutdownLayout({
+      manager: manager as never,
+      container: mockRootForPane(1),
+      expandedPaneId: null,
+      paneTransports: new Map([[1, { getPtyId: vi.fn(() => 'pty-1') }]]),
+      paneTitlesByPaneId: { 1: 'local shell' },
+      existingLayout: {
+        root: null,
+        activeLeafId: null,
+        expandedLeafId: null,
+        buffersByLeafId: { [LEAF_ID]: 'previous-scrollback' },
+        scrollbackRefsByLeafId: { [LEAF_ID]: 'v1-previous' }
+      },
+      clearedScrollbackLeafIds: new Set([LEAF_ID])
+    })
+
+    expect(layout.buffersByLeafId).toBeUndefined()
+    expect(layout.scrollbackRefsByLeafId).toBeUndefined()
+    expect(layout.ptyIdsByLeafId).toEqual({ [LEAF_ID]: 'pty-1' })
+    expect(layout.titlesByLeafId).toEqual({ [LEAF_ID]: 'local shell' })
+  })
 })

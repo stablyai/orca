@@ -16,6 +16,7 @@ export type XtermBypassEvent = {
   type: string
   key: string
   code?: string
+  keyCode?: number
   defaultPrevented?: boolean
   metaKey: boolean
   ctrlKey: boolean
@@ -31,6 +32,9 @@ export type XtermBypassOptions = {
   hasSelection: boolean
 }
 
+export const TERMINAL_INTERRUPT_INPUT = '\x03'
+const TERMINAL_MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift'])
+
 function isSingleNonAsciiPrintableText(key: string): boolean {
   const chars = Array.from(key)
   if (chars.length !== 1) {
@@ -44,12 +48,61 @@ function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
 }
 
+function isTerminalInterruptCKey(event: XtermBypassEvent): boolean {
+  const normalizedKey = event.key.toLowerCase()
+  const logicalKeyAvailable = normalizedKey !== '' && normalizedKey !== 'unidentified'
+  return logicalKeyAvailable ? normalizedKey === 'c' : event.code === 'KeyC' || event.keyCode === 67
+}
+
+function isPlainCtrlC(event: XtermBypassEvent): boolean {
+  return (
+    isTerminalInterruptCKey(event) &&
+    event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey
+  )
+}
+
 function matchesClipboardBinding(
   binding: string,
   event: XtermBypassEvent,
   platform: NodeJS.Platform
 ): boolean {
   return keybindingMatchesInput(binding, event, platform)
+}
+
+/**
+ * Decide whether plain Ctrl+C should bypass xterm's kitty CSI-u encoder and
+ * be sent as ETX through Terminal.input() instead.
+ */
+export function shouldHandleTerminalInterruptKeyboardEvent(
+  event: XtermBypassEvent,
+  options: XtermBypassOptions
+): boolean {
+  if (!isXtermHandledKeyEvent(event.type) || !isPlainCtrlC(event)) {
+    return false
+  }
+
+  if (options.isMac) {
+    return true
+  }
+
+  return !options.hasSelection
+}
+
+export function shouldSuppressTerminalInterruptKeyup(event: XtermBypassEvent): boolean {
+  return (
+    event.type === 'keyup' &&
+    isTerminalInterruptCKey(event) &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey
+  )
+}
+
+export function shouldSuppressTerminalModifierKeyboardEvent(event: XtermBypassEvent): boolean {
+  return isXtermHandledKeyEvent(event.type) && TERMINAL_MODIFIER_KEYS.has(event.key)
 }
 
 /**
@@ -92,8 +145,12 @@ export function shouldBypassXtermKeyboardEvent(
 
   if (isMac) {
     // Why: window-level handlers already consume other Cmd chords before xterm
-    // sees them; this path covers native copy, which must bubble to Chromium.
-    return matchesClipboardBinding('Mod+C', event, 'darwin')
+    // sees them in Electron. Web clients still need paste to bubble to
+    // Chromium's native paste event instead of xterm's Kitty encoder.
+    return (
+      matchesClipboardBinding('Mod+C', event, 'darwin') ||
+      matchesClipboardBinding('Mod+V', event, 'darwin')
+    )
   }
 
   // Windows/Linux: standard clipboard bindings bubble; Ctrl+C only bubbles

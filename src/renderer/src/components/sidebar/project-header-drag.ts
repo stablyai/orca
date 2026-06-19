@@ -52,6 +52,18 @@ export type RepoHeaderDragController = {
 // Pixels the pointer must travel before we promote a pending press into a
 // real drag. Below this we treat the press as a normal click (toggle group).
 const DRAG_THRESHOLD_PX = 4
+const REPO_HEADER_ACTION_SELECTOR =
+  '[data-repo-header-action], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
+
+export function isRepoHeaderActionTarget(
+  target: EventTarget | null,
+  currentTarget: HTMLElement
+): boolean {
+  if (!(target instanceof HTMLElement) || target === currentTarget) {
+    return false
+  }
+  return currentTarget.contains(target) && target.closest(REPO_HEADER_ACTION_SELECTOR) !== null
+}
 
 export function useRepoHeaderDrag({
   orderedRepoIds,
@@ -118,10 +130,15 @@ export function useRepoHeaderDrag({
       // indicator just above the target header keeps it at the visual top of
       // where the dragged group would land.
       const INDICATOR_GAP_PX = 4
-      const indicatorY =
+      const rawIndicatorY =
         insertBefore >= rects.length
           ? rects.at(-1)!.bottom + INDICATOR_GAP_PX
           : Math.max(0, rects[insertBefore].top - INDICATOR_GAP_PX)
+      // Why: while scrolled, the topmost mounted header is pinned flush at the
+      // container top, so `top - GAP` lands above the overflow clip region and
+      // the line is painted invisibly. Floor the indicator at the current
+      // scroll offset so a top-of-list drop stays visible just below the edge.
+      const indicatorY = Math.max(container.scrollTop, rawIndicatorY)
       return { dropIndex: insertBefore, dropIndicatorY: indicatorY }
     },
     []
@@ -281,11 +298,9 @@ export function useRepoHeaderDrag({
       if (event.button !== 0) {
         return
       }
-      // Don't intercept presses that originated on a nested control (the
-      // `+` create-worktree button or the chevron). Those have their own
-      // click semantics and shouldn't arm a drag.
-      const target = event.target as HTMLElement | null
-      if (target && target !== event.currentTarget && target.closest('button')) {
+      // Don't intercept presses from nested action surfaces; Radix triggers
+      // and disabled wrappers are not always plain button descendants.
+      if (isRepoHeaderActionTarget(event.target, event.currentTarget)) {
         return
       }
       const container = getContainerRef.current()

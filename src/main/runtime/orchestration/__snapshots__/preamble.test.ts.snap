@@ -20,10 +20,14 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   #
   # RULE: send worker_done exactly once. Failure is still a worker_done
   # with subject like "Failed: <reason>" — never silently exit.
+  # Include BOTH taskId and dispatchId in the payload so a late completion
+  # from a failed retry cannot complete the current dispatch.
   orca orchestration send --to term_COORD \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
-    --payload '{"taskId":"task_SNAP","filesModified":["path/a","path/b"],"reportPath":"<optional: path to the full artifact>"}'
+    --task-id task_SNAP --dispatch-id ctx_SNAP \\
+    --files-modified "path/a,path/b" \\
+    --report-path "<optional: path to the full artifact>"
 
   # BEHAVIOR RULE: send a heartbeat every 5 minutes
   # while actively working on the task. The coordinator uses this to
@@ -37,7 +41,8 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # cannot mask a hung retry.
   orca orchestration send --to term_COORD \\
     --type heartbeat --subject "alive" \\
-    --payload '{"taskId":"task_SNAP","dispatchId":"ctx_SNAP","phase":"<short: investigating|implementing|reviewing|waiting>"}'
+    --task-id task_SNAP --dispatch-id ctx_SNAP \\
+    --phase "<short: investigating|implementing|reviewing|waiting>"
 
   # Ask the coordinator a question and block until it answers.
   #
@@ -61,7 +66,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   orca orchestration send --to term_COORD \\
     --type escalation --subject "Blocked: <reason>" \\
     --body "<details>" \\
-    --payload '{"taskId":"task_SNAP"}'
+    --task-id task_SNAP
 
   # Check for messages from the coordinator:
   orca orchestration check

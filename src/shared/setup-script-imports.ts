@@ -1,4 +1,5 @@
 import { inspectCodexEnvironmentConfig } from './setup-script-import-codex-environment'
+import { inspectPackageManagerSetupCandidate } from './setup-script-package-manager-suggestion'
 import type { SetupScriptImportProvider } from './setup-script-import-providers'
 
 export type SetupScriptImportCandidate = {
@@ -11,6 +12,7 @@ export type SetupScriptImportCandidate = {
 }
 
 export type SetupScriptImportFileRead = (relativePath: string) => Promise<string | null>
+export type SetupScriptImportFileExists = (relativePath: string) => Promise<boolean>
 
 const SUPERSET_CONFIG_PATH = '.superset/config.json'
 const SUPERSET_LOCAL_CONFIG_PATH = '.superset/config.local.json'
@@ -18,13 +20,15 @@ const CONDUCTOR_CONFIG_PATH = 'conductor.json'
 const CMUX_CONFIG_PATHS = ['.cmux/cmux.json', 'cmux.json'] as const
 
 export async function inspectSetupScriptImportCandidates(
-  readFile: SetupScriptImportFileRead
+  readFile: SetupScriptImportFileRead,
+  options?: { fileExists?: SetupScriptImportFileExists }
 ): Promise<SetupScriptImportCandidate[]> {
   const candidates = await Promise.all([
     inspectSupersetConfig(readFile),
     inspectConductorConfig(readFile),
     inspectCodexEnvironmentConfig(readFile),
-    inspectCmuxConfig(readFile)
+    inspectCmuxConfig(readFile),
+    inspectPackageManagerSetupCandidate(readFile, options?.fileExists)
   ])
   return candidates.filter(
     (candidate): candidate is SetupScriptImportCandidate => candidate != null

@@ -76,6 +76,76 @@ describe('gitlab issue operations', () => {
     )
   })
 
+  it('routes local WSL issue operations through project resolution and glab execution options', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    getIssueProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'stablyai/orca' })
+    resolveIssueSourceMock.mockResolvedValue({
+      source: { host: 'gitlab.com', path: 'stablyai/orca' },
+      fellBack: false
+    })
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          iid: 923,
+          title: 'Use WSL',
+          state: 'opened',
+          web_url: 'https://gitlab.com/stablyai/orca/-/issues/923',
+          labels: []
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '[]' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          iid: 924,
+          web_url: 'https://gitlab.com/stablyai/orca/-/issues/924'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '{}' })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          id: 1,
+          author: { username: 'octo', avatar_url: '', state: 'active' },
+          body: 'Comment',
+          created_at: '2026-06-16T00:00:00.000Z'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: 'bug\nfrontend\n' })
+      .mockResolvedValueOnce({ stdout: '{"id":1,"username":"octo","avatar_url":""}\n' })
+
+    await getIssue('/repo-root', 923, null, localGitOptions)
+    await listIssues('/repo-root', 5, undefined, 'opened', undefined, null, localGitOptions)
+    await createIssue('/repo-root', 'New issue', 'Body', undefined, null, localGitOptions)
+    await updateIssue(
+      '/repo-root',
+      923,
+      { body: 'Updated' },
+      undefined,
+      null,
+      null,
+      localGitOptions
+    )
+    await addIssueComment('/repo-root', 923, 'Comment', undefined, null, null, localGitOptions)
+    await listLabels('/repo-root', undefined, null, localGitOptions)
+    await listAssignableUsers('/repo-root', undefined, null, localGitOptions)
+
+    expect(getIssueProjectRefMock).toHaveBeenCalledWith(
+      '/repo-root',
+      ['gitlab.com'],
+      null,
+      localGitOptions
+    )
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/repo-root',
+      undefined,
+      ['gitlab.com'],
+      null,
+      localGitOptions
+    )
+    expect(glabExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
+    )
+  })
+
   it('encodes nested group paths', async () => {
     getIssueProjectRefMock.mockResolvedValueOnce({
       host: 'gitlab.com',
@@ -256,7 +326,8 @@ describe('gitlab issue operations', () => {
     glabExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'bug\nfeature\n' })
       .mockResolvedValueOnce({
-        stdout: '{"username":"alice","name":"Alice","avatar_url":"https://example.com/a.png"}\n'
+        stdout:
+          '{"id":12,"username":"alice","name":"Alice","avatar_url":"https://example.com/a.png","state":"active"}\n'
       })
 
     await expect(listLabels('/repo-root', 'upstream', 'conn-1')).resolves.toEqual([
@@ -265,9 +336,11 @@ describe('gitlab issue operations', () => {
     ])
     await expect(listAssignableUsers('/repo-root', 'upstream', 'conn-1')).resolves.toEqual([
       {
+        id: 12,
         username: 'alice',
         name: 'Alice',
-        avatarUrl: 'https://example.com/a.png'
+        avatarUrl: 'https://example.com/a.png',
+        state: 'active'
       }
     ])
 
@@ -287,7 +360,7 @@ describe('gitlab issue operations', () => {
       '--paginate',
       'projects/stablyai%2Forca/members/all?per_page=100',
       '--jq',
-      '.[] | {username, name, avatar_url}'
+      '.[] | {id, username, name, avatar_url, state}'
     ])
   })
 

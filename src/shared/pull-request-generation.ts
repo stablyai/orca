@@ -29,7 +29,7 @@ function limitSection(value: string, maxChars: number): string {
 
 export function buildPullRequestFieldsPrompt(
   context: PullRequestDraftContext,
-  customInstructions: string
+  customPrompt: string
 ): string {
   const base = [
     'You are generating pull request details.',
@@ -41,6 +41,8 @@ export function buildPullRequestFieldsPrompt(
     '- Keep the base branch as the current base unless the diff clearly targets a different branch.',
     '- Title: concise, specific, no trailing period.',
     '- Body: useful Markdown summary for reviewers. Include testing notes only when evidence exists.',
+    '- If Current description contains a pull request or merge request template, preserve its headings, required sections, and checklists while filling relevant sections from the branch changes.',
+    '- Leave genuinely unknown template items as TODO or unchecked instead of deleting them.',
     '- draft: true only when the changes clearly look unfinished, WIP, or unsafe to review.',
     '- Do not include labels, reviewers, code fences, prose, or any keys beyond base/title/body/draft.',
     '',
@@ -62,8 +64,8 @@ export function buildPullRequestFieldsPrompt(
     '```'
   ].join('\n')
 
-  const trimmedInstructions = customInstructions.trim()
-  if (!trimmedInstructions) {
+  const trimmedPrompt = customPrompt.trim()
+  if (!trimmedPrompt) {
     return [
       base,
       '',
@@ -74,8 +76,8 @@ export function buildPullRequestFieldsPrompt(
   return [
     base,
     '',
-    'Additional instructions from user:',
-    limitSection(trimmedInstructions, 4_000),
+    'Additional user prompt:',
+    limitSection(trimmedPrompt, 4_000),
     '',
     'Final output requirement:',
     'Return compact JSON only with keys base, title, body, and draft. No prose or code fences.'

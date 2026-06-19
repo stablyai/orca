@@ -14,6 +14,7 @@ function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActio
   return {
     stagedCount: 1,
     hasUnstagedChanges: false,
+    hasStageableChanges: false,
     hasPartiallyStagedChanges: false,
     hasMessage: true,
     hasUnresolvedConflicts: false,
@@ -40,6 +41,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     isGenerating: false,
     generateError: null as string | null,
     stagedCount: inputs.stagedCount,
+    hasPartiallyStagedChanges: inputs.hasPartiallyStagedChanges,
     hasUnresolvedConflicts: inputs.hasUnresolvedConflicts,
     isRemoteOperationActive: inputs.isRemoteOperationActive,
     inFlightRemoteOpKind: inputs.inFlightRemoteOpKind ?? null,
@@ -123,6 +125,7 @@ describe('CommitArea primary action icons', () => {
         baseProps({
           stagedCount: 0,
           hasUnstagedChanges: true,
+          hasStageableChanges: true,
           hasMessage: false,
           upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
         })

@@ -5,8 +5,8 @@
  * These functions have no side-effects and depend only on their arguments,
  * making them easy to test independently.
  */
-import * as path from 'path'
 import { existsSync } from 'fs'
+import * as path from 'path'
 import { isBinaryBuffer } from '../shared/binary-buffer'
 import type { GitLineStats } from '../shared/git-uncommitted-line-stats'
 
@@ -133,15 +133,37 @@ export function parseBranchDiff(
 
 // ─── Worktree parsing ────────────────────────────────────────────────
 
-export function parseWorktreeList(output: string): Record<string, unknown>[] {
-  const worktrees: Record<string, unknown>[] = []
-  const blocks = output.trim().split(/\r?\n\r?\n/)
+function getErrorText(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const parts: string[] = []
+    if ('message' in error && typeof error.message === 'string') {
+      parts.push(error.message)
+    }
+    if ('stderr' in error && typeof error.stderr === 'string') {
+      parts.push(error.stderr)
+    }
+    return parts.join('\n')
+  }
+  return String(error)
+}
 
-  for (const block of blocks) {
-    if (!block.trim()) {
+export function isUnsupportedWorktreeListZError(error: unknown): boolean {
+  return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
+    getErrorText(error)
+  )
+}
+
+export function parseWorktreeList(
+  output: string,
+  options: { nulDelimited?: boolean } = {}
+): Record<string, unknown>[] {
+  const worktrees: Record<string, unknown>[] = []
+  const blocks = options.nulDelimited ? splitNulWorktreeList(output) : splitLineWorktreeList(output)
+
+  for (const lines of blocks) {
+    if (lines.length === 0) {
       continue
     }
-    const lines = block.trim().split(/\r?\n/)
     let wtPath = ''
     let head = ''
     let branch = ''
@@ -172,6 +194,39 @@ export function parseWorktreeList(output: string): Record<string, unknown>[] {
   return worktrees
 }
 
+function splitLineWorktreeList(output: string): string[][] {
+  return output
+    .trim()
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.trim().split(/\r?\n/))
+}
+
+function splitNulWorktreeList(output: string): string[][] {
+  if (!output.includes('\0')) {
+    return splitLineWorktreeList(output)
+  }
+
+  const blocks: string[][] = []
+  let currentBlock: string[] = []
+
+  for (const field of output.split('\0')) {
+    if (field) {
+      currentBlock.push(field)
+      continue
+    }
+    if (currentBlock.length > 0) {
+      blocks.push(currentBlock)
+      currentBlock = []
+    }
+  }
+
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock)
+  }
+
+  return blocks
+}
+
 // ─── Binary / blob helpers ───────────────────────────────────────────
 
 export const PREVIEWABLE_MIME: Record<string, string> = {
@@ -197,36 +252,4 @@ export function bufferToBlob(
     return { content: previewable ? buffer.toString('base64') : '', isBinary: true }
   }
   return { content: buffer.toString('utf-8'), isBinary: false }
-}
-
-/**
- * Build a diff result object from original/modified content.
- * Used by both working-tree diffs and branch diffs.
- */
-export function buildDiffResult(
-  originalContent: string,
-  modifiedContent: string,
-  originalIsBinary: boolean,
-  modifiedIsBinary: boolean,
-  filePath?: string
-) {
-  if (originalIsBinary || modifiedIsBinary) {
-    const ext = filePath ? path.extname(filePath).toLowerCase() : ''
-    const mimeType = PREVIEWABLE_MIME[ext]
-    return {
-      kind: 'binary' as const,
-      originalContent,
-      modifiedContent,
-      originalIsBinary,
-      modifiedIsBinary,
-      ...(mimeType ? { isImage: true, mimeType } : {})
-    }
-  }
-  return {
-    kind: 'text' as const,
-    originalContent,
-    modifiedContent,
-    originalIsBinary: false,
-    modifiedIsBinary: false
-  }
 }

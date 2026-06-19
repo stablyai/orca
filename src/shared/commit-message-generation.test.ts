@@ -17,10 +17,10 @@ describe('buildCommitMessagePrompt', () => {
     expect(prompt).toContain('Staged patch:\n```diff')
     expect(prompt).toContain('+hello')
     expect(prompt).toContain('Use only the staged changes below as context.')
-    expect(prompt).not.toContain('Additional instructions from user:')
+    expect(prompt).not.toContain('Additional user prompt:')
   })
 
-  it('keeps custom instructions in a separate bounded section', () => {
+  it('keeps a custom prompt in a separate bounded section', () => {
     const prompt = buildCommitMessagePrompt(
       {
         branch: null,
@@ -31,7 +31,21 @@ describe('buildCommitMessagePrompt', () => {
     )
 
     expect(prompt).toContain('Branch: (detached)')
-    expect(prompt).toContain('Additional instructions from user:\nUse Conventional Commits.')
+    expect(prompt).toContain('Additional user prompt:\nUse Conventional Commits.')
+  })
+
+  it('notes when the diff was omitted so the agent relies on the file list', () => {
+    const prompt = buildCommitMessagePrompt(
+      {
+        branch: 'feature/big-diff',
+        stagedSummary: 'A\thuge.jsonl',
+        stagedPatch: ''
+      },
+      ''
+    )
+
+    expect(prompt).toContain('Staged files:\nA\thuge.jsonl')
+    expect(prompt).toContain('diff omitted — too large to read')
   })
 })
 

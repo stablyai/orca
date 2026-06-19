@@ -14,6 +14,7 @@ function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActio
   return {
     stagedCount: 1,
     hasUnstagedChanges: false,
+    hasStageableChanges: false,
     hasPartiallyStagedChanges: false,
     hasMessage: true,
     hasUnresolvedConflicts: false,
@@ -40,6 +41,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     isGenerating: false,
     generateError: null as string | null,
     stagedCount: inputs.stagedCount,
+    hasPartiallyStagedChanges: inputs.hasPartiallyStagedChanges,
     hasUnresolvedConflicts: inputs.hasUnresolvedConflicts,
     isRemoteOperationActive: inputs.isRemoteOperationActive,
     inFlightRemoteOpKind: inputs.inFlightRemoteOpKind ?? null,
@@ -107,6 +109,21 @@ describe('CommitArea chevron spinner', () => {
         inFlightRemoteOpKind: 'sync'
       })
     )
+    expect(primary).toContain('animate-spin')
+    expect(chevron).not.toContain('animate-spin')
+  })
+
+  it('does not spin the chevron when Force Push is mirrored onto the push primary slot', () => {
+    const [primary, chevron] = renderButtons(
+      baseProps({
+        stagedCount: 0,
+        hasMessage: false,
+        upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
+        isRemoteOperationActive: true,
+        inFlightRemoteOpKind: 'force_push'
+      })
+    )
+    expect(primary).toContain('Force Push')
     expect(primary).toContain('animate-spin')
     expect(chevron).not.toContain('animate-spin')
   })

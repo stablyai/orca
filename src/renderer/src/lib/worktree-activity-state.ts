@@ -1,5 +1,4 @@
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { TerminalTab } from '../../../shared/types'
 
 type TerminalLikeTab = Pick<TerminalTab, 'id'>
@@ -18,9 +17,8 @@ export function hasActiveWorkspaceActivity(
   const tabs = tabsByWorktree?.[worktreeId] ?? []
   const hasLiveTerminal =
     ptyIdsByTabId != null && tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
-  const hasHostMirroredTerminal = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
   const hasBrowser = (browserTabsByWorktree?.[worktreeId] ?? []).length > 0
-  return hasLiveTerminal || hasHostMirroredTerminal || hasBrowser
+  return hasLiveTerminal || hasBrowser
 }
 
 export function isInactiveWorkspace(

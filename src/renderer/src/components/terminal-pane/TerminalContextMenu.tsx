@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import {
   Clipboard,
   Copy,
   Eraser,
+  GitFork,
   Maximize2,
   Minimize2,
   PanelBottomClose,
@@ -26,7 +28,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/types'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
+import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
+import { AgentIcon } from '@/lib/agent-catalog'
+import type { KeybindingOverrides } from '../../../../shared/keybindings'
+import { translate } from '@/i18n/i18n'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -40,10 +46,12 @@ type TerminalContextMenuProps = {
   onPaste: () => void
   onSplitRight: () => void
   onSplitDown: () => void
+  keybindings: KeybindingOverrides
   canEqualizePaneSizes: boolean
   onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
+  onForkAgentSession: () => void
   repoQuickCommands: TerminalQuickCommand[]
   globalQuickCommands: TerminalQuickCommand[]
   quickCommandRepoLabel: string | null
@@ -51,6 +59,7 @@ type TerminalContextMenuProps = {
   onAddQuickCommand: () => void
   onToggleExpand: () => void
   onSetTitle: () => void
+  onCopyPaneId: () => void
 }
 
 export default function TerminalContextMenu({
@@ -65,27 +74,56 @@ export default function TerminalContextMenu({
   onPaste,
   onSplitRight,
   onSplitDown,
+  keybindings,
   canEqualizePaneSizes,
   onEqualizePaneSizes,
   onClosePane,
   onClearScreen,
+  onForkAgentSession,
   repoQuickCommands,
   globalQuickCommands,
   quickCommandRepoLabel,
   onQuickCommand,
   onAddQuickCommand,
   onToggleExpand,
-  onSetTitle
+  onSetTitle,
+  onCopyPaneId
 }: TerminalContextMenuProps): React.JSX.Element {
-  const copyShortcut = useShortcutLabel('terminal.copySelection')
-  const pasteShortcut = useShortcutLabel('terminal.paste')
-  const splitRightShortcut = useShortcutLabel('terminal.splitRight')
-  const splitDownShortcut = useShortcutLabel('terminal.splitDown')
-  const equalizeShortcut = useShortcutLabel('terminal.equalizePaneSizes')
-  const expandShortcut = useShortcutLabel('terminal.expandPane')
-  const closeShortcut = useShortcutLabel('terminal.closePane')
+  const shortcuts = useMemo(
+    () => ({
+      copy: formatShortcutLabel('terminal.copySelection', keybindings),
+      paste: formatShortcutLabel('terminal.paste', keybindings),
+      splitRight: formatShortcutLabel('terminal.splitRight', keybindings),
+      splitDown: formatShortcutLabel('terminal.splitDown', keybindings),
+      equalize: formatShortcutLabel('terminal.equalizePaneSizes', keybindings),
+      expand: formatShortcutLabel('terminal.expandPane', keybindings),
+      close: formatShortcutLabel('terminal.closePane', keybindings)
+    }),
+    [keybindings]
+  )
   const hasQuickCommands = repoQuickCommands.length > 0 || globalQuickCommands.length > 0
-  const showEqualizeShortcut = equalizeShortcut !== 'Unassigned'
+  const showEqualizeShortcut = shortcuts.equalize !== 'Unassigned'
+  const renderQuickCommandItem = (command: TerminalQuickCommand): React.JSX.Element => (
+    <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
+      {isTerminalAgentQuickCommand(command) ? (
+        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
+          <AgentIcon agent={command.agent} size={14} />
+        </span>
+      ) : (
+        <Play
+          className="size-3.5 shrink-0 text-muted-foreground"
+          fill="currentColor"
+          strokeWidth={0}
+        />
+      )}
+      <span className="min-w-0 flex-1 truncate">{command.label}</span>
+      {!isTerminalAgentQuickCommand(command) && !command.appendEnter ? (
+        <DropdownMenuShortcut className="shrink-0">
+          {translate('auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d', 'Insert')}
+        </DropdownMenuShortcut>
+      ) : null}
+    </DropdownMenuItem>
+  )
 
   return (
     <DropdownMenu
@@ -133,18 +171,21 @@ export default function TerminalContextMenu({
       >
         <DropdownMenuItem onSelect={onCopy}>
           <Copy />
-          Copy
-          <DropdownMenuShortcut>{copyShortcut}</DropdownMenuShortcut>
+          {translate('auto.components.terminal.pane.TerminalContextMenu.f3eeb1de13', 'Copy')}
+          <DropdownMenuShortcut>{shortcuts.copy}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onPaste}>
           <Clipboard />
-          Paste
-          <DropdownMenuShortcut>{pasteShortcut}</DropdownMenuShortcut>
+          {translate('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
+          <DropdownMenuShortcut>{shortcuts.paste}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <Play fill="currentColor" strokeWidth={0} />
-            Quick Commands
+            {translate(
+              'auto.components.terminal.pane.TerminalContextMenu.ec85df5914',
+              'Quick Commands'
+            )}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-60">
             {hasQuickCommands ? (
@@ -154,36 +195,30 @@ export default function TerminalContextMenu({
                     <DropdownMenuLabel className="truncate">
                       {quickCommandRepoLabel}
                     </DropdownMenuLabel>
-                    {repoQuickCommands.map((command) => (
-                      <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
-                        <span className="truncate">{command.label}</span>
-                        {!command.appendEnter ? (
-                          <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
-                        ) : null}
-                      </DropdownMenuItem>
-                    ))}
+                    {repoQuickCommands.map(renderQuickCommandItem)}
                   </>
                 ) : null}
                 {globalQuickCommands.length > 0 ? (
                   <>
                     {repoQuickCommands.length > 0 ? <DropdownMenuSeparator /> : null}
                     {repoQuickCommands.length > 0 ? (
-                      <DropdownMenuLabel>Global</DropdownMenuLabel>
+                      <DropdownMenuLabel>
+                        {translate(
+                          'auto.components.terminal.pane.TerminalContextMenu.3ce594a4a0',
+                          'Global'
+                        )}
+                      </DropdownMenuLabel>
                     ) : null}
-                    {globalQuickCommands.map((command) => (
-                      <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
-                        <span className="truncate">{command.label}</span>
-                        {!command.appendEnter ? (
-                          <DropdownMenuShortcut className="shrink-0">Insert</DropdownMenuShortcut>
-                        ) : null}
-                      </DropdownMenuItem>
-                    ))}
+                    {globalQuickCommands.map(renderQuickCommandItem)}
                   </>
                 ) : null}
               </>
             ) : (
               <DropdownMenuItem disabled className="text-muted-foreground">
-                No quick commands
+                {translate(
+                  'auto.components.terminal.pane.TerminalContextMenu.9528a65ef8',
+                  'No quick commands'
+                )}
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
@@ -196,56 +231,96 @@ export default function TerminalContextMenu({
               }}
             >
               <Plus />
-              Add Quick Command…
+              {translate(
+                'auto.components.terminal.pane.TerminalContextMenu.0a82b0608c',
+                'Add Quick Command…'
+              )}
             </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+        <DropdownMenuItem onSelect={onForkAgentSession}>
+          <GitFork />
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.8a7ddb8b8a',
+            'Fork Agent Session…'
+          )}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightClose />
-          Split Terminal Right
-          <DropdownMenuShortcut>{splitRightShortcut}</DropdownMenuShortcut>
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
+            'Split Terminal Right'
+          )}
+          <DropdownMenuShortcut>{shortcuts.splitRight}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSplitDown}>
           <PanelBottomClose />
-          Split Terminal Down
-          <DropdownMenuShortcut>{splitDownShortcut}</DropdownMenuShortcut>
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.98bccf4fa2',
+            'Split Terminal Down'
+          )}
+          <DropdownMenuShortcut>{shortcuts.splitDown}</DropdownMenuShortcut>
         </DropdownMenuItem>
         {canEqualizePaneSizes && (
           <DropdownMenuItem onSelect={onEqualizePaneSizes}>
             <PanelsTopLeft />
-            Equalize Pane Sizes
+            {translate(
+              'auto.components.terminal.pane.TerminalContextMenu.06c2b0f043',
+              'Equalize Pane Sizes'
+            )}
             {showEqualizeShortcut ? (
-              <DropdownMenuShortcut>{equalizeShortcut}</DropdownMenuShortcut>
+              <DropdownMenuShortcut>{shortcuts.equalize}</DropdownMenuShortcut>
             ) : null}
           </DropdownMenuItem>
         )}
         {canExpandPane && (
           <DropdownMenuItem onSelect={onToggleExpand}>
             {menuPaneIsExpanded ? <Minimize2 /> : <Maximize2 />}
-            {menuPaneIsExpanded ? 'Collapse Pane' : 'Expand Pane'}
-            <DropdownMenuShortcut>{expandShortcut}</DropdownMenuShortcut>
+            {menuPaneIsExpanded
+              ? translate(
+                  'auto.components.terminal.pane.TerminalContextMenu.df766809e0',
+                  'Collapse Pane'
+                )
+              : translate(
+                  'auto.components.terminal.pane.TerminalContextMenu.925f49f210',
+                  'Expand Pane'
+                )}
+            <DropdownMenuShortcut>{shortcuts.expand}</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSetTitle}>
           <Pencil />
-          Set Title…
+          {translate('auto.components.terminal.pane.TerminalContextMenu.39809d152f', 'Set Title…')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onCopyPaneId}>
+          <Copy />
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.2cf85a6a55',
+            'Copy Pane ID'
+          )}
         </DropdownMenuItem>
         {canClosePane && (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={onClosePane}>
               <X />
-              Close Pane
-              <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut>
+              {translate(
+                'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
+                'Close Pane'
+              )}
+              <DropdownMenuShortcut>{shortcuts.close}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onClearScreen}>
           <Eraser />
-          Clear Screen
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.b4cdd9314e',
+            'Clear Screen'
+          )}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

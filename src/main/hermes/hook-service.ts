@@ -289,9 +289,16 @@ import json
 import os
 import urllib.error
 import urllib.request
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 EVENTS = ${JSON.stringify(HERMES_EVENTS)}
+# Why: hook args/results can include full tool payloads. Bound traversal before
+# JSON encoding so status hooks stay best-effort and cheap.
+MAX_JSONABLE_DEPTH = 5
+MAX_JSONABLE_ITEMS = 50
+MAX_JSONABLE_NODES = 500
+MAX_JSONABLE_STRING = 8192
+TRUNCATED = "...[truncated]"
 SELECTED_KEYS = {
     "on_session_start": ("session_id", "model", "platform"),
     "pre_llm_call": ("session_id", "user_message", "is_first_turn", "model", "platform", "sender_id"),
@@ -306,16 +313,41 @@ SELECTED_KEYS = {
 }
 
 
-def _jsonable(value: Any, depth: int = 0) -> Any:
-    if depth > 5:
-        return repr(value)
-    if value is None or isinstance(value, (str, int, float, bool)):
+def _truncate_string(value: str) -> str:
+    if len(value) <= MAX_JSONABLE_STRING:
         return value
+    return value[:MAX_JSONABLE_STRING] + TRUNCATED
+
+
+def _jsonable(value: Any, depth: int = 0, budget: Optional[list[int]] = None) -> Any:
+    if budget is None:
+        budget = [MAX_JSONABLE_NODES]
+    if budget[0] <= 0:
+        return TRUNCATED
+    budget[0] -= 1
+    if depth > MAX_JSONABLE_DEPTH:
+        return _truncate_string(repr(value))
+    if value is None or isinstance(value, (int, float, bool)):
+        return value
+    if isinstance(value, str):
+        return _truncate_string(value)
     if isinstance(value, dict):
-        return {str(k): _jsonable(v, depth + 1) for k, v in value.items()}
+        out: dict[str, Any] = {}
+        for index, (k, v) in enumerate(value.items()):
+            if index >= MAX_JSONABLE_ITEMS:
+                out[TRUNCATED] = True
+                break
+            out[_truncate_string(str(k))] = _jsonable(v, depth + 1, budget)
+        return out
     if isinstance(value, (list, tuple, set)):
-        return [_jsonable(v, depth + 1) for v in value]
-    return repr(value)
+        out = []
+        for index, item in enumerate(value):
+            if index >= MAX_JSONABLE_ITEMS:
+                out.append(TRUNCATED)
+                break
+            out.append(_jsonable(item, depth + 1, budget))
+        return out
+    return _truncate_string(repr(value))
 
 
 def _endpoint_env() -> dict[str, str]:

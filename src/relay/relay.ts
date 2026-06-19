@@ -23,7 +23,15 @@ import { createServer, createConnection, type Socket, type Server } from 'net'
 import { homedir } from 'os'
 import { resolve, join } from 'path'
 import { unlinkSync, existsSync, statSync } from 'fs'
-import { RELAY_SENTINEL } from './protocol'
+import {
+  RELAY_SENTINEL,
+  FrameDecoder,
+  MessageType,
+  encodeJsonRpcFrame,
+  parseJsonRpcMessage,
+  type DecodedFrame,
+  type JsonRpcResponse
+} from './protocol'
 import { readLaunchVersion, runConnectHandshake, setupDaemonHandshake } from './relay-handshake'
 import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
@@ -49,6 +57,9 @@ import {
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
 import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
+import { pickRemoteCliEnv } from './remote-cli-env'
+import { remoteCliRequestTimeoutMs } from './remote-cli-timeout'
+import { shouldReadRemoteCliStdin } from './remote-cli-stdin'
 
 const DEFAULT_GRACE_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 const SOCK_NAME = 'relay.sock'
@@ -79,6 +90,9 @@ function parseNonNegativeIntEnv(name: string, fallback: number): number {
 }
 
 function readSocketIdentity(sockPath: string): SocketIdentity | null {
+  if (isWindowsNamedPipePath(sockPath)) {
+    return null
+  }
   try {
     const stat = statSync(sockPath, { bigint: true })
     return { dev: stat.dev, ino: stat.ino, ctimeNs: stat.ctimeNs }
@@ -87,16 +101,24 @@ function readSocketIdentity(sockPath: string): SocketIdentity | null {
   }
 }
 
+function isWindowsNamedPipePath(sockPath: string): boolean {
+  return process.platform === 'win32' && /^\\\\[.?]\\pipe\\/i.test(sockPath)
+}
+
 function parseArgs(argv: string[]): {
   graceTimeMs: number
   connectMode: boolean
   detached: boolean
+  cliMode: boolean
   sockPath: string
+  endpointDir?: string
 } {
   let graceTimeMs = DEFAULT_GRACE_MS
   let connectMode = false
   let detached = false
+  let cliMode = false
   let sockPath = ''
+  let endpointDir: string | undefined
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
       const parsed = parseInt(argv[i + 1], 10)
@@ -109,17 +131,22 @@ function parseArgs(argv: string[]): {
       i++
     } else if (argv[i] === '--connect') {
       connectMode = true
+    } else if (argv[i] === '--orca-cli') {
+      cliMode = true
     } else if (argv[i] === '--detached') {
       detached = true
     } else if (argv[i] === '--sock-path' && argv[i + 1]) {
       sockPath = argv[i + 1]
+      i++
+    } else if (argv[i] === '--endpoint-dir' && argv[i + 1]) {
+      endpointDir = argv[i + 1]
       i++
     }
   }
   if (!sockPath) {
     sockPath = join(process.cwd(), SOCK_NAME)
   }
-  return { graceTimeMs, connectMode, detached, sockPath }
+  return { graceTimeMs, connectMode, detached, cliMode, sockPath, endpointDir }
 }
 
 // ── Connect mode ─────────────────────────────────────────────────────
@@ -187,19 +214,128 @@ function runConnectMode(sockPath: string): void {
   })
 }
 
+async function runOrcaCliMode(sockPath: string, argv: string[]): Promise<void> {
+  const myVersion = readLaunchVersion()
+  const stdin = shouldReadRemoteCliStdin(argv) ? await readOrcaCliStdin() : undefined
+  const sock = createConnection({ path: sockPath })
+  let nextSeq = 1
+  let highestReceivedSeq = 0
+  const requestId = 1
+
+  const sendRequest = (): void => {
+    const env = pickRemoteCliEnv(process.env)
+    const frame = encodeJsonRpcFrame(
+      {
+        jsonrpc: '2.0',
+        id: requestId,
+        method: 'orca.cli',
+        params: {
+          argv,
+          cwd: process.cwd(),
+          env,
+          ...(stdin !== undefined ? { stdin } : {})
+        }
+      },
+      nextSeq++,
+      highestReceivedSeq
+    )
+    sock.write(frame)
+  }
+
+  const decoder = new FrameDecoder((frame: DecodedFrame) => {
+    if (frame.id > highestReceivedSeq) {
+      highestReceivedSeq = frame.id
+    }
+    if (frame.type !== MessageType.Regular) {
+      return
+    }
+    const msg = parseJsonRpcMessage(frame.payload)
+    if (!('id' in msg) || msg.id !== requestId || !('result' in msg || 'error' in msg)) {
+      return
+    }
+    const response = msg as JsonRpcResponse
+    if (response.error) {
+      process.stderr.write(`${response.error.message}\n`)
+      sock.destroy()
+      process.exit(1)
+    }
+    const result = (response.result ?? {}) as {
+      stdout?: unknown
+      stderr?: unknown
+      exitCode?: unknown
+    }
+    if (typeof result.stdout === 'string' && result.stdout.length > 0) {
+      process.stdout.write(result.stdout)
+    }
+    if (typeof result.stderr === 'string' && result.stderr.length > 0) {
+      process.stderr.write(result.stderr)
+    }
+    sock.destroy()
+    process.exit(typeof result.exitCode === 'number' ? result.exitCode : 0)
+  })
+
+  const connectTimeout = setTimeout(() => {
+    process.stderr.write(`[orca-cli] Relay connection timed out after ${CONNECT_TIMEOUT_MS}ms\n`)
+    sock.destroy()
+    process.exit(1)
+  }, CONNECT_TIMEOUT_MS)
+
+  sock.on('connect', () => {
+    clearTimeout(connectTimeout)
+    runConnectHandshake(sock, myVersion, {
+      onAccepted: (leftover) => {
+        if (leftover.length > 0) {
+          decoder.feed(leftover)
+        }
+        sock.on('data', (chunk) =>
+          decoder.feed(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+        )
+        sendRequest()
+      }
+    })
+  })
+
+  sock.on('error', (err) => {
+    clearTimeout(connectTimeout)
+    process.stderr.write(`[orca-cli] Relay socket error: ${err.message}\n`)
+    process.exit(1)
+  })
+}
+
+async function readOrcaCliStdin(): Promise<string | undefined> {
+  if (process.stdin.isTTY) {
+    return undefined
+  }
+  const chunks: Buffer[] = []
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
 // ── Normal mode ──────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { graceTimeMs, connectMode, detached, sockPath } = parseArgs(process.argv)
+  const { graceTimeMs, connectMode, detached, cliMode, sockPath, endpointDir } = parseArgs(
+    process.argv
+  )
 
   if (connectMode) {
     runConnectMode(sockPath)
+    return
+  }
+  if (cliMode) {
+    const marker = process.argv.indexOf('--orca-cli')
+    await runOrcaCliMode(sockPath, marker >= 0 ? process.argv.slice(marker + 1) : [])
     return
   }
 
   let ownsSocketPath = false
   let ownedSocketIdentity: SocketIdentity | null = null
   const ownsCurrentSocketPath = (): boolean => {
+    if (isWindowsNamedPipePath(sockPath)) {
+      return ownsSocketPath
+    }
     const currentIdentity = readSocketIdentity(sockPath)
     return (
       ownsSocketPath &&
@@ -306,6 +442,13 @@ async function main(): Promise<void> {
   const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
   void _workspaceSessionHandler
 
+  dispatcher.onRequest('orca.cli', async (params, context) => {
+    return await dispatcher.requestAnyClient('orca.cli', params, {
+      excludeClientId: context.clientId,
+      timeoutMs: remoteCliRequestTimeoutMs(params)
+    })
+  })
+
   function configureRelayGraceTime(params: Record<string, unknown>): { graceTimeMs: number } {
     const seconds = Number(params.graceTimeSeconds)
     if (Number.isFinite(seconds) && seconds >= 0) {
@@ -333,7 +476,7 @@ async function main(): Promise<void> {
     // Why: a remote account can host multiple target-specific relay daemons.
     // Scope endpoint.env/cmd by the daemon socket path so their hook tokens
     // cannot overwrite each other.
-    endpointDir: endpointDirForRelaySocket(sockPath),
+    endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
     forward: (envelope) => {
       // Why: dispatcher.notify is fire-and-forget — when the SSH channel is
       // mid-reconnect the write callback no-ops and the notification is
@@ -367,14 +510,9 @@ async function main(): Promise<void> {
   // restart.
   ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
 
-  // Why: per-PTY plugin overlays for OpenCode and Pi. `OPENCODE_CONFIG_DIR`
-  // and `PI_CODING_AGENT_DIR` only make sense on the relay's own filesystem
-  // — paths the renderer would synthesize for the Orca host's userData are
-  // meaningless on the remote. The overlay manager materializes a per-PTY
-  // dir on the remote (rooted at $HOME/.orca-relay/) so the agent CLI inside
-  // the relay-spawned PTY loads the bundled status plugin and posts to the
-  // relay's hook server. Source bodies arrive over JSON-RPC (see
-  // `agent_hook.installPlugins` below) — not bundled with the relay binary.
+  // Why: plugin install paths must be resolved on the relay host. OpenCode
+  // still needs a relay-local config overlay, while Pi/OMP receive guarded
+  // status extensions in their real remote agent dirs.
   const pluginOverlay = new PluginOverlayManager()
   ptyHandler.addEnvAugmenter((ctx) => {
     const env: Record<string, string> = {}
@@ -396,9 +534,8 @@ async function main(): Promise<void> {
     }
     if (pluginOverlay.hasPiSource()) {
       // Why: source-dir defaulting is keyed on which Pi-compatible agent is
-      // being launched (Pi vs OMP). The renderer-supplied `command` is the
-      // only signal - disk-presence guessing silently shadows the other
-      // agent's extensions when both `~/.pi/agent` and `~/.omp/agent` exist.
+      // being launched (Pi vs OMP). Install Orca's guarded extension into that
+      // real remote agent dir without redirecting PI_CODING_AGENT_DIR.
       const kind = detectPiAgentKindFromCommand(ctx.command)
       const hasLaunchCommand = typeof ctx.command === 'string' && ctx.command.trim().length > 0
       const shouldPrepareOmpShadow = kind === 'omp' || !hasLaunchCommand
@@ -406,33 +543,20 @@ async function main(): Promise<void> {
         const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'pi')
         const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'pi')
         if (dir) {
-          env.PI_CODING_AGENT_DIR = dir
-          // Why: shadow var is agent-scoped so remote shell-ready wrappers can
-          // restore Pi by default while the `omp` wrapper switches on demand.
-          env.ORCA_PI_CODING_AGENT_DIR = dir
-          if (sourceDir) {
-            env.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
-          }
+          env.ORCA_PI_SOURCE_AGENT_DIR = dir
         }
       }
       if (shouldPrepareOmpShadow) {
-        // Why: in a bare shell, PI_CODING_AGENT_DIR is historically Pi's
-        // default. Do not mirror it into OMP; use OMP's own default unless an
-        // OMP-scoped source shadow is already present from a nested Orca shell.
+        // Why: in a bare shell, prepare OMP's status extension so a typed
+        // `omp` gets integration, but do not make OMP the shell's home.
         const sourceDir =
           kind === 'omp'
             ? resolvePiSourceAgentDir(ctx.env, ctx.shell, 'omp')
             : ctx.env.ORCA_OMP_SOURCE_AGENT_DIR
         const dir = pluginOverlay.materializePi(overlayId, sourceDir, 'omp')
         if (dir) {
-          if (kind === 'omp') {
-            env.PI_CODING_AGENT_DIR = dir
-          }
-          env.ORCA_OMP_CODING_AGENT_DIR = dir
           env.ORCA_OMP_STATUS_EXTENSION = getRelayPiStatusExtensionPath(dir)
-          if (sourceDir) {
-            env.ORCA_OMP_SOURCE_AGENT_DIR = sourceDir
-          }
+          env.ORCA_OMP_SOURCE_AGENT_DIR = dir
         }
       }
     }
@@ -465,8 +589,8 @@ async function main(): Promise<void> {
   // the wire at session-ready (the renderer's bundled hook-service strings
   // change as new agent events are added — pinning them to the relay binary
   // would force a relay redeploy on every Orca update). Cache them so each
-  // subsequent PTY spawn can materialize a per-PTY overlay rooted under
-  // $HOME/.orca-relay/. See docs/design/agent-status-over-ssh.md §4.
+  // subsequent PTY spawn can materialize the remote OpenCode overlay and
+  // install Pi/OMP managed extensions. See docs/design/agent-status-over-ssh.md §4.
   // Why: bound the per-source size so a buggy/hostile Orca can't OOM the
   // relay by pushing a giant string. The HTTP path has HOOK_REQUEST_MAX_BYTES
   // = 1 MB; the JSON-RPC path needs an equivalent ceiling. Real plugin sources
@@ -610,10 +734,11 @@ async function main(): Promise<void> {
     // created with 0o600 permissions atomically. The previous approach
     // (chmod after listen) had a TOCTOU window where another local user
     // could connect to the socket before chmod ran.
-    const prevUmask = process.umask(0o177)
+    const shouldSetSocketUmask = !isWindowsNamedPipePath(sockPath)
+    const prevUmask = shouldSetSocketUmask ? process.umask(0o177) : 0
     let umaskRestored = false
     const restoreUmask = (): void => {
-      if (!umaskRestored) {
+      if (shouldSetSocketUmask && !umaskRestored) {
         process.umask(prevUmask)
         umaskRestored = true
       }
@@ -684,6 +809,10 @@ async function main(): Promise<void> {
       // the existing "duplicate detected" rejection.
       function onInitialError(err: NodeJS.ErrnoException): void {
         if (err.code !== 'EADDRINUSE' || staleRetryAttempted) {
+          failInitial(err)
+          return
+        }
+        if (isWindowsNamedPipePath(sockPath)) {
           failInitial(err)
           return
         }
@@ -857,6 +986,9 @@ async function main(): Promise<void> {
 }
 
 function cleanupSocket(sockPath: string): void {
+  if (isWindowsNamedPipePath(sockPath)) {
+    return
+  }
   try {
     if (existsSync(sockPath)) {
       unlinkSync(sockPath)

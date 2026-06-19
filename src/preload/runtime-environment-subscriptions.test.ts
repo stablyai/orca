@@ -100,4 +100,42 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
       on.mock.calls[0][1]
     )
   })
+
+  it('removes the listener when main reports the remote subscription closed', async () => {
+    const subscription = deferred<{ subscriptionId: string; requestId: string }>()
+    const invoke = vi.fn(() => subscription.promise as Promise<unknown>)
+    const send = vi.fn()
+    const on = vi.fn()
+    const removeListener = vi.fn()
+    const onClose = vi.fn()
+
+    const cleanupPromise = subscribeRuntimeEnvironmentFromPreload(
+      { invoke, send, on, removeListener },
+      { selector: 'desk', method: 'terminal.subscribe' },
+      { onResponse: vi.fn(), onClose },
+      () => 'sub-closed'
+    )
+
+    const listener = on.mock.calls[0][1] as (
+      _event: unknown,
+      payload: { subscriptionId: string; type: 'close' }
+    ) => void
+
+    listener(null, { subscriptionId: 'other-sub', type: 'close' })
+    expect(onClose).not.toHaveBeenCalled()
+    expect(removeListener).not.toHaveBeenCalled()
+
+    listener(null, { subscriptionId: 'sub-closed', type: 'close' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(removeListener).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', listener)
+
+    subscription.resolve({ subscriptionId: 'sub-closed', requestId: 'rpc-closed' })
+    const cleanup = await cleanupPromise
+    cleanup.unsubscribe()
+
+    expect(removeListener).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledWith('runtimeEnvironments:unsubscribe', {
+      subscriptionId: 'sub-closed'
+    })
+  })
 })

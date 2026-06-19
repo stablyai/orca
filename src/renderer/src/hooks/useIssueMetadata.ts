@@ -1,19 +1,21 @@
 /* eslint-disable max-lines -- Why: repo metadata hooks share TTL caches and
 Linear/GitHub cache invalidation entrypoints used by the issue dialog. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: issue metadata hooks clear stale rows and track loading while async provider cache requests are in flight. */
 import { useEffect, useRef, useState } from 'react'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   linearTeamLabels,
   linearTeamMembers,
-  linearTeamStates
+  linearTeamStates,
+  type RuntimeLinearSettings
 } from '@/runtime/runtime-linear-client'
 import type {
   GitHubAssignableUser,
-  GlobalSettings,
   LinearWorkflowState,
   LinearLabel,
   LinearMember
 } from '../../../shared/types'
+import { getTaskSourceRuntimeSettings } from '../../../shared/task-source-context'
 import {
   clearMetadataRequestStore,
   createMetadataRequestStore,
@@ -27,6 +29,11 @@ type MetadataState<T> = {
   error: string | null
 }
 
+type GitHubMetadataOptions = {
+  runtimeEnvironmentId?: string | null
+  activeRuntimeEnvironmentId?: string | null
+}
+
 // ─── GitHub ────────────────────────────────────────────────
 
 const ghLabelStore = createMetadataRequestStore<string[]>()
@@ -34,7 +41,8 @@ const ghAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
 
 export function useRepoLabels(
   repoPath: string | null,
-  repoId?: string | null
+  repoId?: string | null,
+  options?: GitHubMetadataOptions
 ): MetadataState<string[]> {
   const [state, setState] = useState<MetadataState<string[]>>({
     data: [],
@@ -47,7 +55,14 @@ export function useRepoLabels(
     if (!repoPath && !repoId) {
       return
     }
-    const cacheKey = repoId ?? repoPath ?? ''
+    const runtimeEnvironmentId =
+      options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
+    const repoSelector = repoId ?? repoPath ?? ''
+    // Why: SSH/runtime metadata must not reuse host-path cache entries; the same
+    // repo id may resolve through a different credential/runtime boundary.
+    const cacheKey = runtimeEnvironmentId
+      ? `runtime:${runtimeEnvironmentId}:${repoSelector}`
+      : repoSelector
     const cached = getFreshMetadata(ghLabelStore, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
@@ -66,9 +81,16 @@ export function useRepoLabels(
       error: null
     }))
     loadMetadata(ghLabelStore, cacheKey, () =>
-      window.api.gh
-        .listLabels({ repoPath: repoPath ?? '', repoId: repoId ?? undefined })
-        .then((labels) => labels as string[])
+      runtimeEnvironmentId
+        ? callRuntimeRpc<string[]>(
+            { kind: 'environment', environmentId: runtimeEnvironmentId },
+            'github.listLabels',
+            { repo: repoSelector },
+            { timeoutMs: 15_000 }
+          )
+        : window.api.gh
+            .listLabels({ repoPath: repoPath ?? '', repoId: repoId ?? undefined })
+            .then((labels) => labels as string[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -87,14 +109,15 @@ export function useRepoLabels(
           error: err instanceof Error ? err.message : 'Failed to load labels'
         }))
       })
-  }, [repoPath, repoId])
+  }, [repoPath, repoId, options?.runtimeEnvironmentId, options?.activeRuntimeEnvironmentId])
 
   return state
 }
 
 export function useRepoAssignees(
   repoPath: string | null,
-  repoId?: string | null
+  repoId?: string | null,
+  options?: GitHubMetadataOptions
 ): MetadataState<GitHubAssignableUser[]> {
   const [state, setState] = useState<MetadataState<GitHubAssignableUser[]>>({
     data: [],
@@ -107,7 +130,14 @@ export function useRepoAssignees(
     if (!repoPath && !repoId) {
       return
     }
-    const cacheKey = repoId ?? repoPath ?? ''
+    const runtimeEnvironmentId =
+      options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
+    const repoSelector = repoId ?? repoPath ?? ''
+    // Why: SSH/runtime metadata must not reuse host-path cache entries; the same
+    // repo id may resolve through a different credential/runtime boundary.
+    const cacheKey = runtimeEnvironmentId
+      ? `runtime:${runtimeEnvironmentId}:${repoSelector}`
+      : repoSelector
     const cached = getFreshMetadata(ghAssigneeStore, cacheKey)
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
@@ -126,9 +156,16 @@ export function useRepoAssignees(
       error: null
     }))
     loadMetadata(ghAssigneeStore, cacheKey, () =>
-      window.api.gh
-        .listAssignableUsers({ repoPath: repoPath ?? '', repoId: repoId ?? undefined })
-        .then((users) => users as GitHubAssignableUser[])
+      runtimeEnvironmentId
+        ? callRuntimeRpc<GitHubAssignableUser[]>(
+            { kind: 'environment', environmentId: runtimeEnvironmentId },
+            'github.listAssignableUsers',
+            { repo: repoSelector },
+            { timeoutMs: 15_000 }
+          )
+        : window.api.gh
+            .listAssignableUsers({ repoPath: repoPath ?? '', repoId: repoId ?? undefined })
+            .then((users) => users as GitHubAssignableUser[])
     )
       .then((data) => {
         if (activeKeyRef.current !== requestKey) {
@@ -147,7 +184,7 @@ export function useRepoAssignees(
           error: err instanceof Error ? err.message : 'Failed to load assignees'
         }))
       })
-  }, [repoPath, repoId])
+  }, [repoPath, repoId, options?.runtimeEnvironmentId, options?.activeRuntimeEnvironmentId])
 
   return state
 }
@@ -160,10 +197,12 @@ const linearMemberStore = createMetadataRequestStore<LinearMember[]>()
 
 function linearMetadataCacheKey(
   teamId: string,
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  settings: RuntimeLinearSettings,
   workspaceId?: string | null
 ): string {
-  const target = getActiveRuntimeTarget(settings)
+  const runtimeSettings =
+    settings && 'kind' in settings ? getTaskSourceRuntimeSettings(settings) : settings
+  const target = getActiveRuntimeTarget(runtimeSettings)
   const workspaceKey = workspaceId ?? 'selected'
   return target.kind === 'environment'
     ? `runtime:${target.environmentId}:${workspaceKey}:${teamId}`
@@ -183,7 +222,7 @@ export function clearGitHubMetadataCache(): void {
 
 export function useTeamStates(
   teamId: string | null,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  settings?: RuntimeLinearSettings,
   workspaceId?: string | null
 ): MetadataState<LinearWorkflowState[]> {
   const [state, setState] = useState<MetadataState<LinearWorkflowState[]>>({
@@ -245,7 +284,7 @@ export function useTeamStates(
 
 export function useTeamLabels(
   teamId: string | null,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  settings?: RuntimeLinearSettings,
   workspaceId?: string | null
 ): MetadataState<LinearLabel[]> {
   const [state, setState] = useState<MetadataState<LinearLabel[]>>({
@@ -305,7 +344,7 @@ export function useTeamLabels(
 
 export function useTeamMembers(
   teamId: string | null,
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null,
+  settings?: RuntimeLinearSettings,
   workspaceId?: string | null
 ): MetadataState<LinearMember[]> {
   const [state, setState] = useState<MetadataState<LinearMember[]>>({

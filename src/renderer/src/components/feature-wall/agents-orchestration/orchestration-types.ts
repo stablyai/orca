@@ -2,6 +2,8 @@
 export const BUBBLE_FLIGHT_MS = 1600
 export const BUBBLE_LAND_MS = BUBBLE_FLIGHT_MS + 360
 export const BUBBLE_GAP_MS = 3400
+export const ORCHESTRATION_CLI_COMMAND_TIMINGS_MS = [250, 2500, 5200, 8600] as const
+export const ORCHESTRATION_CLI_COMMAND_LOOP_MS = 12800
 
 export type AgentKey = 'coord-claude' | 'child-codex' | 'child-claude'
 

@@ -1,15 +1,77 @@
 import { app } from 'electron'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
+const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
+const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
+const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off'])
+let devParentShutdownRequested = false
+
+type NetworkCompatibilityOptions = {
+  env?: NodeJS.ProcessEnv
+  userDataPath?: string
+}
+
+function parseBooleanEnvFlag(value: string | undefined): boolean | null {
+  if (value === undefined) {
+    return null
+  }
+  const normalized = value.trim().toLowerCase()
+  if (TRUE_ENV_VALUES.has(normalized)) {
+    return true
+  }
+  if (FALSE_ENV_VALUES.has(normalized)) {
+    return false
+  }
+  return null
+}
+
+function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
+  const dataFile = join(userDataPath, 'orca-data.json')
+  if (!existsSync(dataFile)) {
+    return false
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as {
+      settings?: { electronHttp1CompatibilityMode?: unknown }
+    }
+    return parsed.settings?.electronHttp1CompatibilityMode === true
+  } catch {
+    return false
+  }
+}
+
+export function shouldDisableHttp2ForElectronNetworking(
+  options: NetworkCompatibilityOptions = {}
+): boolean {
+  const envValue = parseBooleanEnvFlag(options.env?.[HTTP1_COMPATIBILITY_ENV_VAR])
+  if (envValue !== null) {
+    return envValue
+  }
+  return readPersistedHttp1CompatibilityMode(options.userDataPath ?? app.getPath('userData'))
+}
+
+export function configureElectronNetworkCompatibility(
+  options: NetworkCompatibilityOptions = {}
+): void {
+  if (!shouldDisableHttp2ForElectronNetworking(options)) {
+    return
+  }
+  // Why: Chromium's HTTP/2 switch is process-wide and only works before the
+  // first session exists, so read the persisted setting during early startup.
+  app.commandLine.appendSwitch('disable-http2')
+}
 
 function getProcessPathDelimiter(): string {
   return process.platform === 'win32' ? ';' : ':'
 }
 
 function requestDevParentShutdown(): void {
+  devParentShutdownRequested = true
   app.quit()
 
   const forceExitTimer = setTimeout(() => {
@@ -22,6 +84,14 @@ function requestDevParentShutdown(): void {
   }, DEV_PARENT_SHUTDOWN_GRACE_MS)
 
   forceExitTimer.unref()
+}
+
+export function isDevParentShutdownRequested(): boolean {
+  return devParentShutdownRequested
+}
+
+export function resetDevParentShutdownRequestForTests(): void {
+  devParentShutdownRequested = false
 }
 
 export function installUncaughtPipeErrorGuard(): void {
@@ -135,6 +205,13 @@ export function configureDevUserDataPath(isDev: boolean): void {
   app.setPath('userData', join(app.getPath('appData'), 'orca-dev'))
 }
 
+export function configureOrcaUserDataPathEnv(): void {
+  // Why: app relaunches can inherit an ORCA_USER_DATA_PATH from an older CLI or
+  // updater process. Main must canonicalize it before CLI-shared modules build
+  // runtime-home paths, or migrations can bridge two Orca app-data directories.
+  process.env.ORCA_USER_DATA_PATH = app.getPath('userData')
+}
+
 export function shouldInstallManagedHooks(isDev: boolean): boolean {
   void isDev
   // Why: managed hook installation now targets Orca-owned, environment-scoped
@@ -201,6 +278,22 @@ export function installDevParentWatchdog(isDev: boolean): void {
   }, 1000)
 
   timer.unref()
+}
+
+export function installDevParentSignalQuit(isDev: boolean): void {
+  if (!isDev) {
+    return
+  }
+
+  const onSignal = (): void => {
+    // Why: run-electron-vite-dev forwards terminal shutdown signals to the
+    // Electron process group; those are dev-supervisor shutdowns too, so the
+    // detached daemon should not be preserved for warm reattach.
+    requestDevParentShutdown()
+  }
+
+  process.once('SIGINT', onSignal)
+  process.once('SIGTERM', onSignal)
 }
 
 export function enableMainProcessGpuFeatures(): void {

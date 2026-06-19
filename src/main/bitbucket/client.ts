@@ -8,6 +8,10 @@ import {
   type RawBitbucketPullRequest
 } from './pull-request-mappers'
 import { getBitbucketRepoRef, type BitbucketRepoRef } from './repository-ref'
+import {
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from '../source-control/hosted-review-git-options'
 
 const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
 const REQUEST_TIMEOUT_MS = 5000
@@ -159,9 +163,15 @@ export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
 
 export async function getBitbucketPullRequest(
   repoPath: string,
-  prNumber: number
+  prNumber: number,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<BitbucketPullRequestInfo | null> {
-  const repo = await getBitbucketRepoRef(repoPath)
+  const repo = await getBitbucketRepoRef(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   if (!repo) {
     return null
   }
@@ -174,14 +184,20 @@ export async function getBitbucketPullRequest(
 export async function getBitbucketPullRequestForBranch(
   repoPath: string,
   branch: string,
-  linkedPRNumber?: number | null
+  linkedPRNumber?: number | null,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<BitbucketPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
     return null
   }
 
-  const repo = await getBitbucketRepoRef(repoPath)
+  const repo = await getBitbucketRepoRef(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   if (!repo) {
     return null
   }
@@ -217,6 +233,10 @@ export async function getBitbucketPullRequestForBranch(
   return raw ? normalizePullRequest(repo, raw) : null
 }
 
-export async function getBitbucketRepoSlug(repoPath: string): Promise<BitbucketRepoRef | null> {
-  return getBitbucketRepoRef(repoPath)
+export async function getBitbucketRepoSlug(
+  repoPath: string,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
+): Promise<BitbucketRepoRef | null> {
+  return getBitbucketRepoRef(repoPath, connectionId, getHostedReviewLocalGitOptions(options))
 }

@@ -36,13 +36,15 @@ import type { Store } from '../persistence'
 import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
 import { listRegisteredPtys } from './pty-registry'
 
+export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
+
 // ─── Module state ───────────────────────────────────────────────────
 
 let inflight: Promise<MemorySnapshot> | null = null
 
 // ─── Public API ─────────────────────────────────────────────────────
 
-export async function collectMemorySnapshot(store: Store): Promise<MemorySnapshot> {
+export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   // Why: coalescing relies on the persistence store being a process-wide
   // singleton at runtime. Concurrent callers all hand in the same instance,
   // so it is safe to return the existing in-flight promise (which was
@@ -320,16 +322,28 @@ export function collectSubtree(index: ProcIndex, root: number): number[] {
 
 type AppBucketsRaw = Omit<AppMemory, 'history'>
 
-function bucketElectronMetrics(): AppBucketsRaw {
+function electronMetricMemoryBytes(
+  proc: ReturnType<typeof app.getAppMetrics>[number],
+  processIndex: ProcIndex
+): number {
+  const hostMemory = processIndex.byPid.get(proc.pid)?.memory
+  if (typeof hostMemory === 'number' && Number.isFinite(hostMemory) && hostMemory > 0) {
+    return hostMemory
+  }
+  // Why: on macOS, app.getAppMetrics().workingSetSize can include large shared
+  // Chromium/Electron mappings. Prefer the host RSS sweep used elsewhere, but
+  // keep workingSetSize as a fallback when the process disappears mid-snapshot.
+  return clampNumber(proc.memory?.workingSetSize) * 1024
+}
+
+function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
   const main = { cpu: 0, memory: 0 }
   const renderer = { cpu: 0, memory: 0 }
   const other = { cpu: 0, memory: 0 }
 
   for (const proc of app.getAppMetrics()) {
     const cpu = clampNumber(proc.cpu?.percentCPUUsage)
-    // Electron reports workingSetSize in KB. Convert up front so every
-    // memory value in the snapshot is in bytes.
-    const memoryBytes = clampNumber(proc.memory?.workingSetSize) * 1024
+    const memoryBytes = electronMetricMemoryBytes(proc, processIndex)
 
     // Why: lowercase once so future Electron versions emitting different
     // casing ('browser' vs 'Browser') still bucket correctly.
@@ -368,7 +382,7 @@ type WorktreeBucket = {
 
 function resolveWorktreeNames(
   worktreeId: string,
-  store: Store
+  store: MemorySnapshotStore
 ): {
   worktreeName: string
   repoId: string
@@ -401,9 +415,9 @@ function makeEmptyBucket(
 
 // ─── Main collection path ───────────────────────────────────────────
 
-async function runSnapshot(store: Store): Promise<MemorySnapshot> {
+async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
   const processIndex = await enumerateProcesses()
-  const appBuckets = bucketElectronMetrics()
+  const appBuckets = bucketElectronMetrics(processIndex)
   const ptys = listRegisteredPtys()
 
   // Why: when two PTYs share an ancestor in the process tree (e.g. a

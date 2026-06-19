@@ -226,7 +226,9 @@ describe('createSparsePresetsSlice', () => {
     mockApi.sparsePresets.remove.mockRejectedValueOnce(new Error('disk failed'))
     store.setState({ sparsePresetsByRepo: { 'repo-1': [preset] } } as Partial<AppState>)
 
-    await store.getState().removeSparsePreset({ repoId: 'repo-1', presetId: 'preset-1' })
+    await expect(
+      store.getState().removeSparsePreset({ repoId: 'repo-1', presetId: 'preset-1' })
+    ).rejects.toThrow('disk failed')
 
     expect(store.getState().sparsePresetsByRepo['repo-1']).toEqual([preset])
   })

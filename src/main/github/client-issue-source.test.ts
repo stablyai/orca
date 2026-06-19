@@ -173,8 +173,13 @@ describe('GitHub issue source split', () => {
 
     await listWorkItems('/home/jinwoo/orca', 10, undefined, undefined, 'auto', 'openclaw-2')
 
-    expect(resolveIssueSourceMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'auto', 'openclaw-2')
-    expect(getOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2')
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/home/jinwoo/orca',
+      'auto',
+      'openclaw-2',
+      {}
+    )
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2', {})
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       [
@@ -220,6 +225,98 @@ describe('GitHub issue source split', () => {
       expect.arrayContaining(['--repo', 'fork/orca']),
       { cwd: '/repo-root' }
     )
+  })
+
+  it("uses upstream for recent PRs when preference='upstream'", async () => {
+    resolveIssueSourceMock.mockResolvedValueOnce({
+      source: { owner: 'stablyai', repo: 'orca' },
+      fellBack: false
+    })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+      stdout: '[]'
+    })
+
+    await listWorkItems('/repo-root', 10, undefined, undefined, 'upstream')
+
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'api',
+        '--cache',
+        '120s',
+        'repos/stablyai/orca/pulls?per_page=10&state=open&sort=updated&direction=desc'
+      ],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it("uses upstream for queried PRs when preference='upstream'", async () => {
+    resolveIssueSourceMock.mockResolvedValueOnce({
+      source: { owner: 'stablyai', repo: 'orca' },
+      fellBack: false
+    })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    await listWorkItems('/repo-root', 10, 'is:pr is:open', undefined, 'upstream')
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['--repo', 'stablyai/orca']),
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it("uses upstream for PR counts when preference='upstream'", async () => {
+    resolveIssueSourceMock.mockResolvedValueOnce({
+      source: { owner: 'stablyai', repo: 'orca' },
+      fellBack: false
+    })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '9\n' })
+
+    const count = await countWorkItems('/repo-root', 'is:pr is:open', 'upstream')
+
+    expect(count).toBe(9)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'api',
+        '--cache',
+        '120s',
+        `search/issues?q=${encodeURIComponent('repo:stablyai/orca is:pull-request is:open')}&per_page=1`,
+        '--jq',
+        '.total_count'
+      ],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it("falls back to origin for PRs when preference='upstream' and upstream is missing", async () => {
+    resolveIssueSourceMock.mockResolvedValueOnce({
+      source: { owner: 'fork', repo: 'orca' },
+      fellBack: true
+    })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    const result = await listWorkItems('/repo-root', 10, 'is:pr', undefined, 'upstream')
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['--repo', 'fork/orca']),
+      { cwd: '/repo-root' }
+    )
+    expect(result.sources).toEqual({
+      issues: { owner: 'fork', repo: 'orca' },
+      prs: { owner: 'fork', repo: 'orca' },
+      originCandidate: { owner: 'fork', repo: 'orca' },
+      upstreamCandidate: null
+    })
+    expect(result.issueSourceFellBack).toBe(true)
   })
 
   it('counts default work items across upstream issues and origin PRs', async () => {
@@ -278,9 +375,18 @@ describe('GitHub issue source split', () => {
     const item = await getWorkItem('/repo-root', 42, 'pr')
 
     expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(['api', 'repos/fork/orca/pulls/42'], {
-      cwd: '/repo-root'
-    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'pr',
+        'view',
+        '42',
+        '--repo',
+        'fork/orca',
+        '--json',
+        expect.stringContaining('reviewDecision')
+      ],
+      { cwd: '/repo-root' }
+    )
     expect(item?.type).toBe('pr')
   })
 
@@ -311,9 +417,19 @@ describe('GitHub issue source split', () => {
       ['api', 'repos/stablyai/orca/issues/42'],
       { cwd: '/repo-root' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/fork/orca/pulls/42'], {
-      cwd: '/repo-root'
-    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'pr',
+        'view',
+        '42',
+        '--repo',
+        'fork/orca',
+        '--json',
+        expect.stringContaining('reviewDecision')
+      ],
+      { cwd: '/repo-root' }
+    )
     expect(item?.type).toBe('pr')
   })
 
@@ -401,7 +517,7 @@ describe('GitHub issue source split', () => {
 
       const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
 
-      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto', undefined)
+      expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto', undefined, {})
       expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
         1,
         [
@@ -544,6 +660,28 @@ describe('GitHub issue source split', () => {
       expect(result.sources).toEqual({
         issues: { owner: 'fork', repo: 'orca' },
         prs: { owner: 'fork', repo: 'orca' },
+        originCandidate: { owner: 'fork', repo: 'orca' },
+        upstreamCandidate: { owner: 'stablyai', repo: 'orca' }
+      })
+    })
+
+    it('keeps raw origin metadata when effective PR source is upstream', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: { owner: 'stablyai', repo: 'orca' },
+        fellBack: false
+      })
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+      getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
+        stdout: '[]'
+      })
+
+      const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'upstream')
+
+      expect(result.sources).toEqual({
+        issues: { owner: 'stablyai', repo: 'orca' },
+        prs: { owner: 'stablyai', repo: 'orca' },
+        originCandidate: { owner: 'fork', repo: 'orca' },
         upstreamCandidate: { owner: 'stablyai', repo: 'orca' }
       })
     })

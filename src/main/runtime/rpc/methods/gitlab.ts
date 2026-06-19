@@ -7,6 +7,15 @@ const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
 })
 
+const EmptyParams = z.object({}).optional().default({})
+const GitLabRateLimit = z
+  .object({
+    force: z.boolean().optional(),
+    host: OptionalString
+  })
+  .optional()
+  .default({})
+
 const GitLabProjectRef = z
   .object({
     host: requiredString('Missing GitLab host'),
@@ -65,6 +74,12 @@ const UpdateMr = RepoSelector.extend({
   projectRef: GitLabProjectRef
 })
 
+const UpdateMrReviewers = RepoSelector.extend({
+  iid: z.number().int().positive(),
+  reviewerIds: z.array(z.number().int().nonnegative()),
+  projectRef: GitLabProjectRef
+})
+
 const MergeMr = RepoSelector.extend({
   iid: z.number().int().positive(),
   method: z.enum(['merge', 'squash', 'rebase']).optional(),
@@ -80,6 +95,37 @@ const AddIssueComment = RepoSelector.extend({
 const AddMRComment = RepoSelector.extend({
   iid: z.number().int().positive(),
   body: requiredString('Comment body is required'),
+  projectRef: GitLabProjectRef
+})
+
+const AddMRInlineComment = RepoSelector.extend({
+  iid: z.number().int().positive(),
+  input: z.object({
+    body: requiredString('Comment body is required'),
+    path: requiredString('File path is required'),
+    oldPath: z.string().optional(),
+    line: z.number().int().positive(),
+    baseSha: requiredString('Base SHA is required'),
+    startSha: requiredString('Start SHA is required'),
+    headSha: requiredString('Head SHA is required')
+  }),
+  projectRef: GitLabProjectRef
+})
+
+const ResolveMRDiscussion = RepoSelector.extend({
+  iid: z.number().int().positive(),
+  discussionId: requiredString('Discussion id is required'),
+  resolved: z.boolean(),
+  projectRef: GitLabProjectRef
+})
+
+const JobTrace = RepoSelector.extend({
+  jobId: z.number().int().positive(),
+  projectRef: GitLabProjectRef
+})
+
+const RetryJob = RepoSelector.extend({
+  jobId: z.number().int().positive(),
   projectRef: GitLabProjectRef
 })
 
@@ -140,6 +186,21 @@ export const GITLAB_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.listGitLabRepoTodos(params.repo)
   }),
   defineMethod({
+    name: 'gitlab.diagnoseAuth',
+    params: EmptyParams,
+    handler: async (_params, { runtime }) => runtime.diagnoseGitLabAuth()
+  }),
+  defineMethod({
+    name: 'gitlab.rateLimit',
+    params: GitLabRateLimit,
+    handler: async (params, { runtime }) => runtime.getGitLabRateLimit(params)
+  }),
+  defineMethod({
+    name: 'gitlab.listLabels',
+    params: RepoSelector,
+    handler: async (params, { runtime }) => runtime.listGitLabRepoLabels(params.repo)
+  }),
+  defineMethod({
     name: 'gitlab.createIssue',
     params: CreateIssue,
     handler: async (params, { runtime }) =>
@@ -164,6 +225,36 @@ export const GITLAB_METHODS: RpcMethod[] = [
       runtime.addGitLabRepoMRComment(params.repo, params.iid, params.body, params.projectRef)
   }),
   defineMethod({
+    name: 'gitlab.addMRInlineComment',
+    params: AddMRInlineComment,
+    handler: async (params, { runtime }) =>
+      runtime.addGitLabRepoMRInlineComment(params.repo, params.iid, params.input, params.projectRef)
+  }),
+  defineMethod({
+    name: 'gitlab.resolveMRDiscussion',
+    params: ResolveMRDiscussion,
+    handler: async (params, { runtime }) =>
+      runtime.resolveGitLabRepoMRDiscussion(
+        params.repo,
+        params.iid,
+        params.discussionId,
+        params.resolved,
+        params.projectRef
+      )
+  }),
+  defineMethod({
+    name: 'gitlab.jobTrace',
+    params: JobTrace,
+    handler: async (params, { runtime }) =>
+      runtime.getGitLabRepoJobTrace(params.repo, params.jobId, params.projectRef)
+  }),
+  defineMethod({
+    name: 'gitlab.retryJob',
+    params: RetryJob,
+    handler: async (params, { runtime }) =>
+      runtime.retryGitLabRepoJob(params.repo, params.jobId, params.projectRef)
+  }),
+  defineMethod({
     name: 'gitlab.mergeMR',
     params: MergeMr,
     handler: async (params, { runtime }) =>
@@ -180,6 +271,17 @@ export const GITLAB_METHODS: RpcMethod[] = [
     params: UpdateMr,
     handler: async (params, { runtime }) =>
       runtime.updateGitLabRepoMR(params.repo, params.iid, params.updates, params.projectRef)
+  }),
+  defineMethod({
+    name: 'gitlab.updateMRReviewers',
+    params: UpdateMrReviewers,
+    handler: async (params, { runtime }) =>
+      runtime.updateGitLabRepoMRReviewers(
+        params.repo,
+        params.iid,
+        params.reviewerIds,
+        params.projectRef
+      )
   }),
   defineMethod({
     name: 'gitlab.workItemDetails',

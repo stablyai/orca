@@ -1,66 +1,162 @@
-import type { SettingsSearchEntry } from './settings-search'
+import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+export const getCommitMessageAiPaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: 'Enable Source Control AI',
-    description:
-      'Adds AI generation to Source Control commit, pull request, and branch-name flows.',
+    title: translate(
+      'auto.components.settings.commit.message.ai.search.24dbdfca78',
+      'Show Source Control AI actions'
+    ),
+    description: translate(
+      'auto.components.settings.commit.message.ai.search.0b946b2abe',
+      'Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.'
+    ),
     keywords: [
-      'ai',
-      'commit',
-      'message',
-      'generate',
-      'agent',
-      'claude',
-      'codex',
-      'source control',
-      'enabled'
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.c33cb1b982',
+        'ai'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.127d512e75',
+        'commit'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.93e5210da8',
+        'message'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.8e9cc598d7',
+        'generate'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.3766941527',
+        'agent'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.f121bec167',
+        'claude'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.542e1a00a7',
+        'codex'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.82109d627d',
+        'source control'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.ee14a9e9f7',
+        'enabled'
+      )
     ]
   },
   {
-    title: 'Agent',
-    description: 'Which agent to invoke for Source Control text generation.',
-    keywords: ['agent', 'claude', 'codex', 'source control']
+    title: translate(
+      'auto.components.settings.commit.message.ai.search.3c4e5e5938',
+      'Action recipes'
+    ),
+    description: translate(
+      'auto.components.settings.commit.message.ai.search.18b6d38835',
+      'Agent, CLI arguments, and command template used by each Source Control AI button.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.3766941527',
+        'agent'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.0f29331fed',
+        'arguments'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.61117e57f3',
+        'args'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.57c851a68c',
+        'cli'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.f4731b22bf',
+        'command'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.8e0bcc5d99',
+        'model'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.b7d50da4d8',
+        'template'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.402f101af8',
+        'prompt'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.37c65bbb44',
+        'fix'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.c46e665f7e',
+        'checks'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.53e8504fb2',
+        'ci'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.d22a6459e4',
+        'conflicts'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.127d512e75',
+        'commit'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.110be48b81',
+        'pull request'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.d32936bb2a',
+        'branch'
+      )
+    ]
   },
   {
-    title: 'Default model',
-    description: 'Which model Source Control AI uses unless an operation override exists.',
-    keywords: ['model', 'haiku', 'sonnet', 'opus', 'gpt']
-  },
-  {
-    title: 'Thinking effort',
-    description: 'Reasoning effort level for the selected model. Higher levels are slower.',
-    keywords: ['thinking', 'effort', 'reasoning']
-  },
-  {
-    title: 'Advanced model overrides',
-    description:
-      'Optional per-operation model choices for commit messages, PR details, and branch names.',
-    keywords: ['model', 'override', 'commit', 'pull request', 'pr', 'branch', 'thinking']
-  },
-  {
-    title: 'Commit message instructions',
-    description: 'Optional instructions appended only to commit-message prompts.',
-    keywords: ['prompt', 'instructions', 'conventional commits', 'gitmoji', 'style']
-  },
-  {
-    title: 'Pull request instructions',
-    description: 'Optional instructions appended only to pull-request detail prompts.',
-    keywords: ['prompt', 'instructions', 'pull request', 'pr', 'description', 'template']
-  },
-  {
-    title: 'Branch name instructions',
-    description: 'Optional instructions appended only to auto branch-name prompts.',
-    keywords: ['prompt', 'instructions', 'branch', 'branch name', 'rename', 'slug']
-  },
-  {
-    title: 'PR creation defaults',
-    description: 'Defaults used when the Create PR composer opens.',
-    keywords: ['pull request', 'pr', 'draft', 'template', 'generate', 'open']
-  },
-  {
-    title: 'Custom command',
-    description: 'Command line Orca runs to generate the commit message.',
-    keywords: ['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder', 'ollama']
+    title: translate(
+      'auto.components.settings.commit.message.ai.search.eefd33788c',
+      'PR creation defaults'
+    ),
+    description: translate(
+      'auto.components.settings.commit.message.ai.search.001ca3f2af',
+      'Defaults used when the Create PR composer opens.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.110be48b81',
+        'pull request'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.b261c88609',
+        'pr'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.7e264b926b',
+        'draft'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.b7d50da4d8',
+        'template'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.8e9cc598d7',
+        'generate'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.commit.message.ai.search.181cdb0637',
+        'open'
+      )
+    ]
   }
-]
+])

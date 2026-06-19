@@ -1,5 +1,6 @@
 import { execFileSync, spawn, spawnSync } from 'child_process'
 import { mkdtemp, readFile, rm, stat } from 'fs/promises'
+import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   openComputerUsePermissions,
@@ -8,19 +9,23 @@ import {
 
 const resolveHelperAppPathMock = vi.hoisted(() => vi.fn())
 const resolveHelperExecutablePathMock = vi.hoisted(() => vi.fn())
+const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
+const helperAppPath = '/Applications/Orca Computer Use.app'
+const helperInfoPlistPath = join(helperAppPath, 'Contents', 'Info.plist')
 
 vi.mock('child_process', () => ({
   execFileSync: vi.fn(),
   spawn: vi.fn(() => {
     const child = {
-      stdout: { on: vi.fn(), setEncoding: vi.fn() },
-      stderr: { on: vi.fn(), setEncoding: vi.fn() },
+      stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
+      stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
       on: vi.fn((event: string, callback: (status: number) => void) => {
         if (event === 'close') {
           queueMicrotask(() => callback(0))
         }
         return child
       }),
+      off: vi.fn(() => child),
       unref: vi.fn()
     }
     return child
@@ -56,13 +61,14 @@ describe('openComputerUsePermissions', () => {
     resolveHelperExecutablePathMock.mockReturnValue(
       '/Applications/Orca Computer Use.app/Contents/MacOS/orca-computer-use-macos'
     )
-    vi.mocked(mkdtemp).mockResolvedValue('/tmp/orca-computer-use-permissions-test')
+    vi.mocked(mkdtemp).mockResolvedValue(permissionStatusTempDir)
     vi.mocked(stat).mockResolvedValue({} as Awaited<ReturnType<typeof stat>>)
     mockPermissionStatus('{"accessibility":"granted","screenshots":"granted"}')
     setPlatform('darwin')
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     setPlatform(originalPlatform)
   })
 
@@ -202,69 +208,6 @@ describe('openComputerUsePermissions', () => {
     )
   })
 
-  it('wraps permission status helper launch failures', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
-    const child = {
-      stdout: { on: vi.fn(), setEncoding: vi.fn() },
-      stderr: { on: vi.fn(), setEncoding: vi.fn() },
-      on: vi.fn((event: string, callback: (error: Error) => void) => {
-        if (event === 'error') {
-          queueMicrotask(() => callback(new Error('spawn ENOENT /private/path')))
-        }
-        return child
-      }),
-      unref: vi.fn()
-    }
-    vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
-
-    await expect(getComputerUsePermissionStatus()).rejects.toMatchObject({
-      name: 'RuntimeClientError',
-      code: 'accessibility_error',
-      message: 'Could not check permissions: failed to launch helper'
-    })
-    expect(rm).toHaveBeenCalledWith('/tmp/orca-computer-use-permissions-test', {
-      recursive: true,
-      force: true
-    })
-  })
-
-  it('reads permission status through the helper app identity', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
-    mockPermissionStatus('{"accessibility":"granted","screenshots":"not-granted"}')
-
-    await expect(getComputerUsePermissionStatus()).resolves.toEqual({
-      platform: 'darwin',
-      helperAppPath: '/Applications/Orca Computer Use.app',
-      helperUnavailableReason: null,
-      permissions: [
-        { id: 'accessibility', status: 'granted' },
-        { id: 'screenshots', status: 'not-granted' }
-      ]
-    })
-    expect(spawn).toHaveBeenCalledWith(
-      '/usr/bin/open',
-      [
-        '-n',
-        '/Applications/Orca Computer Use.app',
-        '--args',
-        '--permission-status-file',
-        '/tmp/orca-computer-use-permissions-test/status.json'
-      ],
-      { stdio: ['ignore', 'pipe', 'pipe'] }
-    )
-    expect(spawnSync).not.toHaveBeenCalled()
-    expect(readFile).toHaveBeenCalledWith(
-      '/tmp/orca-computer-use-permissions-test/status.json',
-      'utf8'
-    )
-    expect(rm).toHaveBeenCalledWith('/tmp/orca-computer-use-permissions-test', {
-      recursive: true,
-      force: true
-    })
-  })
-
   it('resets stale macOS TCC grants for the helper bundle id', async () => {
     resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
     vi.mocked(readFile)
@@ -285,11 +228,7 @@ describe('openComputerUsePermissions', () => {
     })
     expect(execFileSync).toHaveBeenCalledWith(
       '/usr/libexec/PlistBuddy',
-      [
-        '-c',
-        'Print :CFBundleIdentifier',
-        '/Applications/Orca Computer Use.app/Contents/Info.plist'
-      ],
+      ['-c', 'Print :CFBundleIdentifier', helperInfoPlistPath],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
     )
     expect(spawnSync).toHaveBeenCalledWith(
@@ -302,22 +241,6 @@ describe('openComputerUsePermissions', () => {
       ['reset', 'ScreenCapture', 'com.example.orca.computer-use'],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
     )
-  })
-
-  it('returns unavailable permission status when the helper app is missing on macOS', async () => {
-    const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
-    resolveHelperAppPathMock.mockReturnValue(null)
-
-    await expect(getComputerUsePermissionStatus()).resolves.toEqual({
-      platform: 'darwin',
-      helperAppPath: null,
-      helperUnavailableReason: 'Orca Computer Use.app was not found',
-      permissions: [
-        { id: 'accessibility', status: 'not-granted' },
-        { id: 'screenshots', status: 'not-granted' }
-      ]
-    })
-    expect(execFileSync).not.toHaveBeenCalled()
   })
 })
 

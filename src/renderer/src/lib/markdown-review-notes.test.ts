@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { DiffComment } from '../../../shared/types'
 import {
+  formatMarkdownReviewCardQuote,
   formatMarkdownReviewNotes,
+  getMarkdownReviewCardQuote,
   getMarkdownReviewExcerpt,
   getMarkdownReviewHighlightedText,
   sortMarkdownReviewNotes,
@@ -61,6 +63,16 @@ describe('markdown review notes', () => {
     expect(highlighted).toBe('two\nthree')
   })
 
+  it('normalizes card quote text into a short single-line preview', () => {
+    expect(formatMarkdownReviewCardQuote('  Hiring\nupdate   for the team  ')).toBe(
+      'Hiring update for the team'
+    )
+    expect(
+      getMarkdownReviewCardQuote('one\ntwo broad line\nthree', note({ selectedText: 'broad' }))
+    ).toBe('broad')
+    expect(formatMarkdownReviewCardQuote('a'.repeat(120))).toBe(`${'a'.repeat(57)}...`)
+  })
+
   it('formats a deterministic prompt for terminal agents', () => {
     const formatted = formatMarkdownReviewNotes(
       [note({ startLine: 2, lineNumber: 3, body: 'replace "maybe"\nwith specifics' })],
@@ -71,6 +83,7 @@ describe('markdown review notes', () => {
       [
         'File: README.md',
         'Source: markdown',
+        '',
         'Lines 2-3',
         'Excerpt:',
         '> two',
@@ -87,5 +100,32 @@ describe('markdown review notes', () => {
     )
 
     expect(formatted).toContain('Excerpt:\n> specific phrase')
+  })
+
+  it('groups multiple notes for one markdown file under a single header', () => {
+    const formatted = formatMarkdownReviewNotes(
+      [
+        note({ id: 'a', lineNumber: 2, body: 'is this part of the command?' }),
+        note({ id: 'b', lineNumber: 3, body: 'what are these fields?' })
+      ],
+      'one\ntwo\nthree'
+    )
+
+    expect(formatted).toBe(
+      [
+        'File: README.md',
+        'Source: markdown',
+        '',
+        'Line 2',
+        'Excerpt:',
+        '> two',
+        'User comment: "is this part of the command?"',
+        '',
+        'Line 3',
+        'Excerpt:',
+        '> three',
+        'User comment: "what are these fields?"'
+      ].join('\n')
+    )
   })
 })

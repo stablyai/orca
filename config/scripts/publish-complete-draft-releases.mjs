@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { verifyRequiredReleaseAssets } from './verify-release-required-assets.mjs'
@@ -19,6 +20,28 @@ export function isReleaseCutDraft(release) {
 
 function isRcTag(tag) {
   return tag.includes('-rc.')
+}
+
+function gitOutput(args, cwd) {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore']
+  }).trim()
+}
+
+export function isTagBuiltFromCurrentRef(tag, { cwd = process.cwd() } = {}) {
+  try {
+    const tagCommit = gitOutput(['rev-parse', `${tag}^{}`], cwd)
+    const currentCommit = gitOutput(['rev-parse', 'HEAD'], cwd)
+    if (tagCommit === currentCommit) {
+      return true
+    }
+
+    return gitOutput(['rev-parse', `${tagCommit}^`], cwd) === currentCommit
+  } catch {
+    return false
+  }
 }
 
 async function githubJson(fetchImpl, url, token, options = {}) {
@@ -55,6 +78,7 @@ export async function publishCompleteDraftReleases({
   token,
   fetchImpl = fetch,
   verifyReleaseAssets = verifyRequiredReleaseAssets,
+  isDraftBuiltFromCurrentRef = ({ tag }) => isTagBuiltFromCurrentRef(tag),
   log = console.log
 }) {
   if (!repo) {
@@ -74,6 +98,13 @@ export async function publishCompleteDraftReleases({
 
   for (const release of candidates) {
     const tag = release.tag_name
+    if (!(await isDraftBuiltFromCurrentRef({ tag, release }))) {
+      const reason = 'tag is not built from the current release ref'
+      skipped.push({ tag, reason })
+      log(`Skipping stale RC draft release ${tag}: ${reason}`)
+      continue
+    }
+
     try {
       await verifyReleaseAssets({ repo, tag, token })
     } catch (error) {
@@ -85,13 +116,18 @@ export async function publishCompleteDraftReleases({
 
     // Why: only release-cut-authored RC drafts with a complete asset set are
     // resumed here; incomplete drafts stay private for the normal rebuild path.
-    await githubJson(fetchImpl, `https://api.github.com/repos/${repo}/releases/${release.id}`, token, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        draft: false,
-        prerelease: isRcTag(tag)
-      })
-    })
+    await githubJson(
+      fetchImpl,
+      `https://api.github.com/repos/${repo}/releases/${release.id}`,
+      token,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          draft: false,
+          prerelease: isRcTag(tag)
+        })
+      }
+    )
     published.push(tag)
     log(`Published complete RC draft release ${tag}`)
   }
@@ -112,6 +148,7 @@ export function writeGithubOutputs({ published, skipped }, outputPath = process.
     `${[
       `published_count=${published.length}`,
       `skipped_count=${skipped.length}`,
+      `latest_published_tag=${published.at(-1) ?? ''}`,
       `published_tags=${published.join(',')}`,
       `skipped_tags=${skipped.map((item) => item.tag).join(',')}`
     ].join('\n')}\n`

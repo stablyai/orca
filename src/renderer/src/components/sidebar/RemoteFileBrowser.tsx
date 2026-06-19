@@ -15,9 +15,13 @@ import {
   resolveSegmentStep,
   type DirEntry
 } from './remote-file-browser-helpers'
+import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
+import { translate } from '@/i18n/i18n'
 
-type RemoteFileBrowserProps = {
-  targetId: string
+type RemoteFileBrowserProps = (
+  | { targetId: string; runtimeEnvironmentId?: never }
+  | { runtimeEnvironmentId: string; targetId?: never }
+) & {
   initialPath?: string
   onSelect: (path: string) => void
   onCancel: () => void
@@ -39,6 +43,7 @@ type PreviewState = {
 
 export function RemoteFileBrowser({
   targetId,
+  runtimeEnvironmentId,
   initialPath = '~',
   onSelect,
   onCancel
@@ -58,6 +63,10 @@ export function RemoteFileBrowser({
   const inputRef = useRef<HTMLInputElement>(null)
   const fileHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Why: paste resolution intentionally runs next tick; closing the picker
+  // before then should cancel stale preview work.
+  const pasteResolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Cache directory listings by absolute resolved path for the lifetime of
   // the picker so ordinary typing issues at most one remote call per newly
   // committed segment. targetId does not change within a picker instance.
@@ -78,16 +87,33 @@ export function RemoteFileBrowser({
     setFileHint(false)
   }, [])
 
-  useEffect(() => {
-    return () => {
-      if (fileHintTimerRef.current) {
-        clearTimeout(fileHintTimerRef.current)
-      }
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current)
-      }
-    }
+  const invalidateBrowseRequests = useCallback(() => {
+    genRef.current++
+    previewGenRef.current++
   }, [])
+
+  const setBrowserRootRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      if (node !== null) {
+        return
+      }
+      // Why: remote browse generations and input timers are scoped to this
+      // picker owner; clear them when the owner detaches.
+      invalidateBrowseRequests()
+      for (const timerRef of [
+        fileHintTimerRef,
+        debounceTimerRef,
+        pasteResolveTimerRef,
+        clickTimerRef
+      ]) {
+        if (timerRef.current) {
+          clearTimeout(timerRef.current)
+          timerRef.current = null
+        }
+      }
+    },
+    [invalidateBrowseRequests]
+  )
 
   const fetchListing = useCallback(
     async (dirPath: string): Promise<BrowseResult> => {
@@ -95,7 +121,12 @@ export function RemoteFileBrowser({
       if (cached) {
         return cached
       }
-      const result = await window.api.ssh.browseDir({ targetId, dirPath })
+      const result = targetId
+        ? await window.api.ssh.browseDir({ targetId, dirPath })
+        : await browseRuntimeServerDirectory(
+            requireRuntimeEnvironmentId(runtimeEnvironmentId),
+            dirPath
+          )
       listingCacheRef.current.set(result.resolvedPath, result)
       // Also cache under the requested dirPath when it differs from the
       // server-resolved canonical path (e.g. `~`, `~/foo`, or a relative
@@ -106,7 +137,7 @@ export function RemoteFileBrowser({
       }
       return result
     },
-    [targetId]
+    [runtimeEnvironmentId, targetId]
   )
 
   const loadDir = useCallback(
@@ -382,7 +413,11 @@ export function RemoteFileBrowser({
       // Paste resolves immediately; no debounce. React's onChange still fires
       // after the paste is applied to the input value, so we defer to the
       // next tick so `filter` reflects the pasted value.
-      setTimeout(() => {
+      if (pasteResolveTimerRef.current) {
+        clearTimeout(pasteResolveTimerRef.current)
+      }
+      pasteResolveTimerRef.current = setTimeout(() => {
+        pasteResolveTimerRef.current = null
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current)
           debounceTimerRef.current = null
@@ -404,15 +439,6 @@ export function RemoteFileBrowser({
   }, [resolvedPath, onSelect])
 
   // Single-click navigates; double-click on a folder selects it.
-  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => {
-    return () => {
-      if (clickTimerRef.current) {
-        clearTimeout(clickTimerRef.current)
-      }
-    }
-  }, [])
-
   // When preview is active, row clicks must be relative to the preview path,
   // not the committed `resolvedPath`.
   const listParentPath = preview?.resolvedPath ?? resolvedPath
@@ -557,7 +583,7 @@ export function RemoteFileBrowser({
   const selectDisabled = loading || (isPreviewActive && filter !== '')
 
   return (
-    <div className="flex flex-col gap-2 min-w-0 w-full">
+    <div ref={setBrowserRootRef} className="flex flex-col gap-2 min-w-0 w-full">
       {/* Breadcrumb bar */}
       <div className="flex items-center gap-0.5 min-h-[28px] overflow-x-auto scrollbar-none">
         <button
@@ -613,7 +639,10 @@ export function RemoteFileBrowser({
           onChange={(e) => handleInputChange(e.target.value)}
           onPaste={handleInputPaste}
           onKeyDown={handleFilterKeyDown}
-          placeholder="Type to filter or enter a path…"
+          placeholder={translate(
+            'auto.components.sidebar.RemoteFileBrowser.2300612806',
+            'Type to filter or enter a path…'
+          )}
           aria-invalid={!!preview?.error}
           aria-describedby={preview?.error ? 'remote-file-browser-path-error' : undefined}
           className={cn(
@@ -657,15 +686,24 @@ export function RemoteFileBrowser({
             </div>
           ) : !isPreviewActive && entries.length === 0 ? (
             <div className="flex items-center justify-center h-full">
-              <p className="text-xs text-muted-foreground">Empty directory</p>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.sidebar.RemoteFileBrowser.51001182e3',
+                  'Empty directory'
+                )}
+              </p>
             </div>
           ) : displayEntries.length === 0 && !preview?.error ? (
             // Directory has contents; filter hides them all. Distinguishing
             // filter emptiness from directory emptiness keeps copy accurate.
             <div className="flex items-center justify-center h-full">
-              <p className="text-xs text-muted-foreground">{`No matches for '${
-                isPreviewActive ? preview!.filter : filter
-              }'`}</p>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.sidebar.RemoteFileBrowser.00c4235c10',
+                  "No matches for '{{value0}}'",
+                  { value0: isPreviewActive ? preview!.filter : filter }
+                )}
+              </p>
             </div>
           ) : (
             displayEntries.map((entry) => {
@@ -706,11 +744,17 @@ export function RemoteFileBrowser({
         className="block text-[10px] text-muted-foreground truncate w-full"
         title={fileHint ? undefined : resolvedPath}
       >
-        {fileHint ? FILE_HINT_TEXT : `Opens as a remote project · ${resolvedPath}`}
+        {fileHint
+          ? FILE_HINT_TEXT
+          : translate(
+              'auto.components.sidebar.RemoteFileBrowser.971d85cc84',
+              'Opens as a project on this host · {{value0}}',
+              { value0: resolvedPath }
+            )}
       </p>
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onCancel}>
-          Cancel
+          {translate('auto.components.sidebar.RemoteFileBrowser.f8b1deb1a4', 'Cancel')}
         </Button>
         <Button
           size="sm"
@@ -719,7 +763,7 @@ export function RemoteFileBrowser({
           disabled={selectDisabled}
           title={resolvedPath}
         >
-          Select folder
+          {translate('auto.components.sidebar.RemoteFileBrowser.9e060f5815', 'Select folder')}
         </Button>
       </div>
     </div>
@@ -732,4 +776,11 @@ export function RemoteFileBrowser({
 function committedPrefix(raw: string): string {
   const i = raw.lastIndexOf('/')
   return i === -1 ? '' : raw.slice(0, i + 1)
+}
+
+function requireRuntimeEnvironmentId(runtimeEnvironmentId: string | undefined): string {
+  if (!runtimeEnvironmentId) {
+    throw new Error('Runtime environment is required')
+  }
+  return runtimeEnvironmentId
 }

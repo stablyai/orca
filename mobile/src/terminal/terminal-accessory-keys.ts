@@ -1,4 +1,5 @@
 export type TerminalAccessoryKey = {
+  id: string
   label: string
   bytes: string
   accessibilityLabel?: string
@@ -199,25 +200,51 @@ export const TERMINAL_SHORTCUT_SPECIAL_KEYS: TerminalShortcutSpecialKey[] = [
 }))
 
 export const TERMINAL_ACCESSORY_KEYS: TerminalAccessoryKey[] = [
-  { label: 'Esc', bytes: '\x1b' },
-  { label: 'Tab', bytes: '\t' },
+  { id: 'escape', label: 'Esc', bytes: '\x1b', accessibilityLabel: 'Escape' },
+  { id: 'tab', label: 'Tab', bytes: '\t', accessibilityLabel: 'Tab' },
+  { id: 'enter', label: 'Enter', bytes: '\r', accessibilityLabel: 'Enter' },
   // Why: terminal apps recognize ESC [ Z as the reverse-tab sequence.
-  { label: 'Shift+Tab', bytes: '\x1b[Z', accessibilityLabel: 'Shift Tab' },
-  { label: '⌫', bytes: '\x7f', accessibilityLabel: 'Backspace', repeatable: true },
-  { label: 'Del', bytes: '\x1b[3~', accessibilityLabel: 'Forward delete', repeatable: true },
-  { label: '↑', bytes: '\x1b[A', repeatable: true },
-  { label: '↓', bytes: '\x1b[B', repeatable: true },
-  { label: '←', bytes: '\x1b[D', repeatable: true },
-  { label: '→', bytes: '\x1b[C', repeatable: true },
-  { label: 'Ctrl+C', bytes: '\x03', accessibilityLabel: 'Interrupt terminal' },
-  { label: 'Ctrl+D', bytes: '\x04', accessibilityLabel: 'Send EOF' },
-  { label: 'Ctrl+L', bytes: '\x0c', accessibilityLabel: 'Clear screen' },
-  { label: 'Ctrl+Z', bytes: '\x1a', accessibilityLabel: 'Suspend process' },
-  { label: 'Ctrl+R', bytes: '\x12', accessibilityLabel: 'Reverse search' },
-  { label: 'Ctrl+A', bytes: '\x01', accessibilityLabel: 'Start of line' },
-  { label: 'Ctrl+E', bytes: '\x05', accessibilityLabel: 'End of line' },
-  { label: 'Ctrl+W', bytes: '\x17', accessibilityLabel: 'Delete word backward' },
-  { label: 'Ctrl+U', bytes: '\x15', accessibilityLabel: 'Clear line before cursor' }
+  { id: 'shiftTab', label: 'Shift+Tab', bytes: '\x1b[Z', accessibilityLabel: 'Shift Tab' },
+  { id: 'space', label: 'Space', bytes: ' ', accessibilityLabel: 'Space' },
+  { id: 'backspace', label: '⌫', bytes: '\x7f', accessibilityLabel: 'Backspace', repeatable: true },
+  {
+    id: 'delete',
+    label: 'Del',
+    bytes: '\x1b[3~',
+    accessibilityLabel: 'Forward delete',
+    repeatable: true
+  },
+  { id: 'arrowUp', label: '↑', bytes: '\x1b[A', accessibilityLabel: 'Arrow Up', repeatable: true },
+  {
+    id: 'arrowDown',
+    label: '↓',
+    bytes: '\x1b[B',
+    accessibilityLabel: 'Arrow Down',
+    repeatable: true
+  },
+  {
+    id: 'arrowLeft',
+    label: '←',
+    bytes: '\x1b[D',
+    accessibilityLabel: 'Arrow Left',
+    repeatable: true
+  },
+  {
+    id: 'arrowRight',
+    label: '→',
+    bytes: '\x1b[C',
+    accessibilityLabel: 'Arrow Right',
+    repeatable: true
+  },
+  { id: 'ctrlC', label: 'Ctrl+C', bytes: '\x03', accessibilityLabel: 'Interrupt terminal' },
+  { id: 'ctrlD', label: 'Ctrl+D', bytes: '\x04', accessibilityLabel: 'Send EOF' },
+  { id: 'ctrlL', label: 'Ctrl+L', bytes: '\x0c', accessibilityLabel: 'Clear screen' },
+  { id: 'ctrlZ', label: 'Ctrl+Z', bytes: '\x1a', accessibilityLabel: 'Suspend process' },
+  { id: 'ctrlR', label: 'Ctrl+R', bytes: '\x12', accessibilityLabel: 'Reverse search' },
+  { id: 'ctrlA', label: 'Ctrl+A', bytes: '\x01', accessibilityLabel: 'Start of line' },
+  { id: 'ctrlE', label: 'Ctrl+E', bytes: '\x05', accessibilityLabel: 'End of line' },
+  { id: 'ctrlW', label: 'Ctrl+W', bytes: '\x17', accessibilityLabel: 'Delete word backward' },
+  { id: 'ctrlU', label: 'Ctrl+U', bytes: '\x15', accessibilityLabel: 'Clear line before cursor' }
 ]
 
 export function buildTerminalShortcutKey(
@@ -267,27 +294,23 @@ function buildShortcutBytes(key: string, modifiers: TerminalShortcutModifier[]):
     return buildCsiTildeShortcut(csiTilde, modifiers)
   }
   if (key === 'tab') {
-    if (
-      hasModifier(modifiers, 'shift') &&
-      !hasModifier(modifiers, 'ctrl') &&
-      !hasModifier(modifiers, 'alt')
-    ) {
+    if (modifiers.includes('shift') && !modifiers.includes('ctrl') && !modifiers.includes('alt')) {
       return `${ESC}[Z`
     }
     const bytes = '\t'
-    return hasModifier(modifiers, 'alt') ? `${ESC}${bytes}` : bytes
+    return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (key === 'escape') {
     const bytes = ESC
-    return hasModifier(modifiers, 'alt') ? `${ESC}${bytes}` : bytes
+    return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (key === 'enter') {
     const bytes = '\r'
-    return hasModifier(modifiers, 'alt') ? `${ESC}${bytes}` : bytes
+    return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (key === 'backspace') {
-    const bytes = hasModifier(modifiers, 'ctrl') ? '\b' : '\x7f'
-    return hasModifier(modifiers, 'alt') ? `${ESC}${bytes}` : bytes
+    const bytes = modifiers.includes('ctrl') ? '\b' : '\x7f'
+    return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
   }
   if (isPrintableShortcutKey(key)) {
     return buildPrintableShortcutBytes(key, modifiers)
@@ -299,16 +322,16 @@ function buildPrintableShortcutBytes(
   key: string,
   modifiers: TerminalShortcutModifier[]
 ): string | null {
-  const shifted = hasModifier(modifiers, 'shift') ? applyShift(key) : key
+  const shifted = modifiers.includes('shift') ? applyShift(key) : key
   let bytes = shifted
-  if (hasModifier(modifiers, 'ctrl')) {
+  if (modifiers.includes('ctrl')) {
     const ctrlBytes = controlBytesForPrintable(shifted)
     if (ctrlBytes == null) {
       return null
     }
     bytes = ctrlBytes
   }
-  return hasModifier(modifiers, 'alt') ? `${ESC}${bytes}` : bytes
+  return modifiers.includes('alt') ? `${ESC}${bytes}` : bytes
 }
 
 function buildCsiFinalShortcut(final: string, modifiers: TerminalShortcutModifier[]): string {
@@ -323,13 +346,13 @@ function buildCsiTildeShortcut(code: number, modifiers: TerminalShortcutModifier
 
 function csiModifierParameter(modifiers: TerminalShortcutModifier[]): number {
   let parameter = 1
-  if (hasModifier(modifiers, 'shift')) {
+  if (modifiers.includes('shift')) {
     parameter += 1
   }
-  if (hasModifier(modifiers, 'alt')) {
+  if (modifiers.includes('alt')) {
     parameter += 2
   }
-  if (hasModifier(modifiers, 'ctrl')) {
+  if (modifiers.includes('ctrl')) {
     parameter += 4
   }
   return parameter
@@ -385,11 +408,4 @@ function displayKeyLabel(key: string): string {
     return 'Space'
   }
   return key.length === 1 && key >= 'a' && key <= 'z' ? key.toUpperCase() : key
-}
-
-function hasModifier(
-  modifiers: TerminalShortcutModifier[],
-  modifier: TerminalShortcutModifier
-): boolean {
-  return modifiers.includes(modifier)
 }

@@ -9,9 +9,39 @@
 // scrubbing passwords on any scheme and HTTPS token-only forms.
 const USERPASS_URL_PATTERN = /([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi
 const HTTPS_TOKEN_URL_PATTERN = /(https?:\/\/)[^\s/@:]+@/gi
+const SUBMODULE_PUSH_FAILURE_PATTERN = /Unable to push submodule ['"](.+?)['"]/i
+const SUBMODULE_PUSH_FAILURE_SENTINEL_PATTERN =
+  /failed to push all needed submodules|Unable to push submodule/i
+const SUBMODULE_REMOTE_CHANGED_PATTERN =
+  /non-fast-forward|fetch first|updates were rejected|remote contains work that you do not have/i
+const NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN =
+  /(?:^|:\s)((?:Submodule '[^'\n]+'|A submodule) (?:has remote changes\. Pull inside the submodule, then try again\.|could not be pushed\. Resolve the submodule push error, then try again\.))(?:$|\s)/i
+const DIVERGENT_PULL_RECONCILIATION_PATTERN =
+  /Need to specify how to reconcile divergent branches|divergent branches and need to specify how to reconcile them/i
 
 export function stripCredentialsFromMessage(message: string): string {
   return message.replace(USERPASS_URL_PATTERN, '$1').replace(HTTPS_TOKEN_URL_PATTERN, '$1')
+}
+
+export function formatSubmodulePushFailureDetail(message: string): string | null {
+  const raw = stripCredentialsFromMessage(message)
+  const normalized = raw.replace(/\r\n/g, '\n').trim()
+  const normalizedMatch = normalized.match(NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN)
+  if (normalizedMatch) {
+    return normalizedMatch[1]
+  }
+  if (!SUBMODULE_PUSH_FAILURE_SENTINEL_PATTERN.test(normalized)) {
+    return null
+  }
+
+  // Why: recursive push can hide the actionable nested rejection behind a
+  // top-level "failed to push all needed submodules" fatal line.
+  const submoduleName = normalized.match(SUBMODULE_PUSH_FAILURE_PATTERN)?.[1]?.trim()
+  const subject = submoduleName ? `Submodule '${submoduleName}'` : 'A submodule'
+  if (SUBMODULE_REMOTE_CHANGED_PATTERN.test(normalized)) {
+    return `${subject} has remote changes. Pull inside the submodule, then try again.`
+  }
+  return `${subject} could not be pushed. Resolve the submodule push error, then try again.`
 }
 
 function extractTailLine(message: string): string {
@@ -39,6 +69,11 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
   // literals today, but this hardens against accidental leakage later.
   const raw = stripCredentialsFromMessage(error.message)
 
+  const submodulePushFailureDetail = formatSubmodulePushFailureDetail(raw)
+  if ((operation === 'push' || operation === undefined) && submodulePushFailureDetail) {
+    return submodulePushFailureDetail
+  }
+
   // Why: `non-fast-forward` / `fetch first` can appear on fetch (after a
   // remote force-push updating a tracking ref) and on pull (with
   // `pull.ff=only`), so the "pull or sync first" guidance only makes sense
@@ -62,6 +97,14 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
 
   if (raw.includes('no tracking information') || raw.includes('no upstream')) {
     return 'Branch has no upstream. Publish the branch first.'
+  }
+
+  if (operation === 'pull' && DIVERGENT_PULL_RECONCILIATION_PATTERN.test(raw)) {
+    return (
+      'Pull needs a Git pull policy for divergent branches. Configure one for this repository ' +
+      'or host, then try again: git config pull.rebase false (merge), ' +
+      'git config pull.rebase true (rebase), or git config pull.ff only (fast-forward only).'
+    )
   }
 
   if (

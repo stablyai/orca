@@ -18,28 +18,41 @@ export function getStoreWorkspacePortProbes(
   store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>,
   repoId?: string
 ): WorkspacePortProbe[] {
-  const reposById = new Map(store.getRepos().map((repo) => [repo.id, repo]))
-  return Object.entries(store.getAllWorktreeMeta()).flatMap(([worktreeId, meta]) => {
+  const repos = store.getRepos()
+  const repoForFilter = repoId ? repos.find((repo) => repo.id === repoId) : undefined
+  if (repoId && (!repoForFilter || repoForFilter.connectionId)) {
+    return []
+  }
+  const reposById = repoForFilter ? undefined : new Map(repos.map((repo) => [repo.id, repo]))
+  const probes: WorkspacePortProbe[] = []
+  const allMeta = store.getAllWorktreeMeta()
+  for (const worktreeId in allMeta) {
+    if (!Object.hasOwn(allMeta, worktreeId)) {
+      continue
+    }
     const parsed = splitWorktreeId(worktreeId)
     if (!parsed || (repoId && parsed.repoId !== repoId)) {
-      return []
+      continue
     }
-    const repo = reposById.get(parsed.repoId)
+    const repo = repoForFilter ?? reposById?.get(parsed.repoId)
     if (!repo || repo.connectionId) {
-      return []
+      continue
+    }
+    const meta = allMeta[worktreeId]
+    if (!meta) {
+      continue
     }
     const worktreePath = isFolderRepo(repo)
       ? (splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? parsed.worktreePath)
       : parsed.worktreePath
-    return [
-      {
-        id: worktreeId,
-        repoId: parsed.repoId,
-        displayName: meta.displayName || path.basename(worktreePath),
-        path: worktreePath
-      }
-    ]
-  })
+    probes.push({
+      id: worktreeId,
+      repoId: parsed.repoId,
+      displayName: meta.displayName || path.basename(worktreePath),
+      path: worktreePath
+    })
+  }
+  return probes
 }
 
 export function filterWorkspacePortProbes(

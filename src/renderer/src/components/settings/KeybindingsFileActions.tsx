@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
+import { translate } from '@/i18n/i18n'
 
 function openFailureMessage(reason: string): string {
   switch (reason) {
@@ -41,6 +42,25 @@ export function KeybindingsFileActions(): React.JSX.Element {
   const floatingTerminalEnabled = useAppStore(
     (state) => state.settings?.floatingTerminalEnabled === true
   )
+  const floatingTerminalToggleFrameRef = React.useRef<number | null>(null)
+
+  const cancelFloatingTerminalToggleFrame = React.useCallback((): void => {
+    if (floatingTerminalToggleFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(floatingTerminalToggleFrameRef.current)
+    floatingTerminalToggleFrameRef.current = null
+  }, [])
+
+  const setActionsRootNode = React.useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the deferred floating-terminal toggle belongs to this settings control.
+      if (!node) {
+        cancelFloatingTerminalToggleFrame()
+      }
+    },
+    [cancelFloatingTerminalToggleFrame]
+  )
 
   const prepareKeybindingsPath = async (): Promise<string | null> => {
     const snapshot = await ensureKeybindingsFile()
@@ -51,7 +71,12 @@ export function KeybindingsFileActions(): React.JSX.Element {
     try {
       const filePath = await prepareKeybindingsPath()
       if (!filePath) {
-        toast.error('Keybindings file is not available.')
+        toast.error(
+          translate(
+            'auto.components.settings.KeybindingsFileActions.cdf794f46d',
+            'Keybindings file is not available.'
+          )
+        )
         return
       }
       const existingFile = openFiles.find(
@@ -76,13 +101,22 @@ export function KeybindingsFileActions(): React.JSX.Element {
       if (!floatingTerminalEnabled) {
         await updateSettings({ floatingTerminalEnabled: true })
       }
-      requestAnimationFrame(() => {
+      cancelFloatingTerminalToggleFrame()
+      floatingTerminalToggleFrameRef.current = requestAnimationFrame(() => {
+        floatingTerminalToggleFrameRef.current = null
         if (!isFloatingWorkspacePanelVisible()) {
           window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
         }
       })
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to open keybindings in Orca.')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.KeybindingsFileActions.dd532a01ce',
+              'Failed to open keybindings in Orca.'
+            )
+      )
     }
   }
 
@@ -90,7 +124,12 @@ export function KeybindingsFileActions(): React.JSX.Element {
     try {
       const filePath = await prepareKeybindingsPath()
       if (!filePath) {
-        toast.error('Keybindings file is not available.')
+        toast.error(
+          translate(
+            'auto.components.settings.KeybindingsFileActions.cdf794f46d',
+            'Keybindings file is not available.'
+          )
+        )
         return
       }
       const result = await window.api.shell.openInExternalEditor(filePath, command)
@@ -98,88 +137,89 @@ export function KeybindingsFileActions(): React.JSX.Element {
         toast.error(openFailureMessage(result.reason))
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to open external editor.')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.KeybindingsFileActions.c5886a31cc',
+              'Failed to open external editor.'
+            )
+      )
     }
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-border bg-card px-3 py-2 text-card-foreground shadow-xs">
-      <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-        <div className="min-w-0">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <p className="shrink-0 text-xs font-medium">Keybindings JSON</p>
-          </div>
-          <p className="truncate font-mono text-[11px] leading-4 text-muted-foreground">
-            {keybindingSnapshot?.path ?? '~/.orca/keybindings.json'}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-1.5 sm:justify-end">
-          <div className="inline-flex overflow-hidden rounded-md border border-border bg-background shadow-xs">
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="rounded-none border-0 shadow-none"
-              onClick={() => void editKeybindingsInOrca()}
-            >
-              <FileText className="size-3" />
-              Edit File in Orca
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="rounded-none border-l border-border"
-                  aria-label="Open keybindings file menu"
-                >
-                  <ChevronDown className="size-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuItem onSelect={() => void openKeybindingsFile()}>
-                  <ExternalLink className="size-3.5" />
-                  Open with Default App
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void openKeybindingsInExternalEditor('code')}>
-                  <Code2 className="size-3.5" />
-                  Open in VS Code
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void openKeybindingsInExternalEditor('cursor')}>
-                  <Code2 className="size-3.5" />
-                  Open in Cursor
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => void revealKeybindingsFile()}>
-                  <FolderOpen className="size-3.5" />
-                  Reveal in File Manager
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => void reloadKeybindings()}>
-                  <RefreshCw className="size-3.5" />
-                  Reload from Disk
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
-      {keybindingSnapshot?.diagnostics.length ? (
-        <div className="space-y-1 border-t border-border/50 pt-2">
-          {keybindingSnapshot.diagnostics.map((diagnostic, index) => (
-            <p
-              key={`${diagnostic.section ?? 'root'}-${diagnostic.actionId ?? index}`}
-              className={
-                diagnostic.severity === 'error'
-                  ? 'text-xs text-destructive'
-                  : 'text-xs text-muted-foreground'
-              }
-            >
-              {diagnostic.message}
-            </p>
-          ))}
-        </div>
-      ) : null}
+    <div
+      ref={setActionsRootNode}
+      className="inline-flex shrink-0 overflow-hidden rounded-md border border-border bg-background shadow-xs"
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        className="rounded-none border-0 shadow-none"
+        onClick={() => void editKeybindingsInOrca()}
+      >
+        <FileText className="size-3" />
+        {translate(
+          'auto.components.settings.KeybindingsFileActions.1c2be2b2c6',
+          'Edit File in Orca'
+        )}
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="rounded-none border-l border-border"
+            aria-label={translate(
+              'auto.components.settings.KeybindingsFileActions.400397a10d',
+              'Open keybindings file menu'
+            )}
+          >
+            <ChevronDown className="size-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => void openKeybindingsFile()}>
+            <ExternalLink className="size-3.5" />
+            {translate(
+              'auto.components.settings.KeybindingsFileActions.98f1a23e1c',
+              'Open with Default App'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void openKeybindingsInExternalEditor('code')}>
+            <Code2 className="size-3.5" />
+            {translate(
+              'auto.components.settings.KeybindingsFileActions.1637f64033',
+              'Open in VS Code'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void openKeybindingsInExternalEditor('cursor')}>
+            <Code2 className="size-3.5" />
+            {translate(
+              'auto.components.settings.KeybindingsFileActions.9e24c0e858',
+              'Open in Cursor'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => void revealKeybindingsFile()}>
+            <FolderOpen className="size-3.5" />
+            {translate(
+              'auto.components.settings.KeybindingsFileActions.a8a8d6b9d3',
+              'Reveal in File Manager'
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void reloadKeybindings()}>
+            <RefreshCw className="size-3.5" />
+            {translate(
+              'auto.components.settings.KeybindingsFileActions.abc49853fb',
+              'Reload from Disk'
+            )}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

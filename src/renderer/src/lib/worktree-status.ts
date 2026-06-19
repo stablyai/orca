@@ -1,9 +1,19 @@
 import { detectAgentStatusFromTitle } from '@/lib/agent-status'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
-import type { TerminalTab } from '../../../shared/types'
+import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../../shared/types'
 
 export type WorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
+
+type WorktreeStatusHeuristicOptions = {
+  agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
+  terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
+}
 
 const STATUS_LABELS: Record<WorktreeStatus, string> = {
   active: 'Active',
@@ -14,10 +24,11 @@ const STATUS_LABELS: Record<WorktreeStatus, string> = {
 }
 
 export function getWorktreeStatus(
-  tabs: Pick<TerminalTab, 'id' | 'title'>[],
-  browserTabs: { id: string }[],
+  tabs: readonly Pick<TerminalTab, 'id' | 'title'>[],
+  browserTabs: readonly { id: string }[],
   ptyIdsByTabId: Record<string, string[]>,
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>> = {}
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>> = {},
+  options: WorktreeStatusHeuristicOptions = {}
 ): WorktreeStatus {
   // Why: liveness gates every promotion. tab.ptyId is the wake-hint sessionId
   // preserved across sleep (so wake can reattach to the same daemon history
@@ -36,7 +47,7 @@ export function getWorktreeStatus(
   // titles first (same pattern as countWorkingAgentsForTab) and only fall back
   // to `tab.title` for tabs that have no mounted panes yet.
   const hasStatus = (status: 'permission' | 'working'): boolean =>
-    liveTabs.some((tab) => tabHasStatus(tab, runtimePaneTitlesByTabId, status))
+    liveTabs.some((tab) => tabHasStatus(tab, runtimePaneTitlesByTabId, status, options))
 
   if (hasStatus('permission')) {
     return 'permission'
@@ -51,27 +62,45 @@ export function getWorktreeStatus(
     // that rule instead of showing a misleading inactive dot.
     return 'active'
   }
-  if (tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))) {
-    // Why: paired web mirrors can know a host terminal tab exists before the
-    // runtime has issued a stream handle. Match desktop sidebar parity without
-    // treating ordinary slept wake-hint tabs as active.
-    return 'active'
-  }
   return 'inactive'
 }
 
 function tabHasStatus(
   tab: Pick<TerminalTab, 'id' | 'title'>,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
-  status: 'permission' | 'working'
+  status: 'permission' | 'working',
+  options: WorktreeStatusHeuristicOptions
 ): boolean {
+  const agentStatusPaneIds = options.agentStatusPaneIdsByTabId?.[tab.id]
   const paneTitles = runtimePaneTitlesByTabId[tab.id]
   if (paneTitles && Object.keys(paneTitles).length > 0) {
-    for (const title of Object.values(paneTitles)) {
+    const tabLayoutRoot =
+      options.terminalLayoutRootsByTabId?.[tab.id] ?? options.terminalLayoutsByTabId?.[tab.id]?.root
+    const paneTitleEntries = Object.entries(paneTitles)
+    for (const [runtimePaneId, title] of paneTitleEntries) {
+      const leafId = resolveRuntimePaneTitleLeafIdFromRoot(tabLayoutRoot, runtimePaneId)
+      // Why: runtime titles can arrive before layout hydration in SSH/replay
+      // paths. With exactly one title and one authoritative agent row, the tab
+      // is unambiguous enough to prefer that row over a stale spinner.
+      const hasSingleUnmappedAgentStatusPane =
+        leafId === null && agentStatusPaneIds?.size === 1 && paneTitleEntries.length === 1
+      if (
+        agentStatusPaneIds?.has(runtimePaneId) ||
+        (leafId !== null && agentStatusPaneIds?.has(leafId)) ||
+        hasSingleUnmappedAgentStatusPane
+      ) {
+        continue
+      }
       if (detectAgentStatusFromTitle(title) === status) {
         return true
       }
     }
+    return false
+  }
+  // Why: a tab-level title does not identify which split pane it came from.
+  // Once any visible agent row owns a pane in that tab, prefer the row state
+  // to avoid resurrecting stale "working" titles for a completed pane.
+  if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
     return false
   }
   return detectAgentStatusFromTitle(tab.title) === status
@@ -102,12 +131,17 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  *   worktree.
  * - `hasLiveDone`: any fresh hook entry in {done} for a tab in this worktree.
  * - `hasRetainedDone`: any retained-agent snapshot scoped to this worktreeId.
+ * - `agentStatusPaneIdsByTabId`: stable leaf ids and legacy runtime pane ids
+ *   whose visible agent rows should override title-derived heuristics.
  */
 export function resolveWorktreeStatus(args: {
-  tabs: Pick<TerminalTab, 'id' | 'title'>[]
-  browserTabs: { id: string }[]
+  tabs: readonly Pick<TerminalTab, 'id' | 'title'>[]
+  browserTabs: readonly { id: string }[]
   ptyIdsByTabId: Record<string, string[]>
   runtimePaneTitlesByTabId?: Record<string, Record<number, string>>
+  agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
+  terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveDone: boolean
@@ -117,7 +151,12 @@ export function resolveWorktreeStatus(args: {
     args.tabs,
     args.browserTabs,
     args.ptyIdsByTabId,
-    args.runtimePaneTitlesByTabId ?? {}
+    args.runtimePaneTitlesByTabId ?? {},
+    {
+      agentStatusPaneIdsByTabId: args.agentStatusPaneIdsByTabId,
+      terminalLayoutsByTabId: args.terminalLayoutsByTabId,
+      terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
+    }
   )
   if (args.hasPermission) {
     return 'permission'

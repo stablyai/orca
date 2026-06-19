@@ -5,6 +5,8 @@ import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 
+export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
+
 /**
  * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
  * Codex so the agent's "Do you trust this folder?" menu does not fire on
@@ -122,7 +124,7 @@ function canonicalize(p: string): string {
   // (orca caches realpath()'d worktree paths) matches the agent's lookup.
   try {
     if (existsSync(p)) {
-      return realpathSync(p)
+      return realpathSync.native(p)
     }
   } catch {
     // Fall through to the raw input.
@@ -132,6 +134,8 @@ function canonicalize(p: string): string {
 
 function cursorWorkspaceSlug(absPath: string): string {
   const stripped = absPath.replace(/^[\\/]+/, '')
-  const slug = stripped.replace(/[\\/]+/g, '-')
+  // Why: Windows absolute paths include characters such as ":" that cannot
+  // be used in the ~/.cursor/projects/<slug> directory name.
+  const slug = stripped.replace(/[\\/:*?"<>|]+/g, '-')
   return slug
 }

@@ -33,7 +33,8 @@ function createMockProcess(pid = 1234): ChildProcessWithoutNullStreams {
     pid,
     stdout: new EventEmitter(),
     stderr: new EventEmitter(),
-    kill: vi.fn()
+    kill: vi.fn(),
+    unref: vi.fn()
   })
   return proc
 }
@@ -56,7 +57,8 @@ describe('notebook IPC', () => {
 
   it('kills the Python process group when a cell times out', async () => {
     const proc = createMockProcess(4321)
-    spawnMock.mockReturnValue(proc)
+    const killerProc = createMockProcess(4322)
+    spawnMock.mockReturnValueOnce(proc).mockReturnValue(killerProc)
     registerNotebookHandlers({} as never)
 
     const handler = handlers.get('notebook:runPythonCell')
@@ -71,6 +73,10 @@ describe('notebook IPC', () => {
       exitCode: null,
       error: 'Python cell timed out.'
     })
+    expect(proc.stdout.listenerCount('data')).toBe(0)
+    expect(proc.stderr.listenerCount('data')).toBe(0)
+    expect(proc.listenerCount('error')).toBe(0)
+    expect(proc.listenerCount('close')).toBe(0)
 
     if (process.platform !== 'win32') {
       expect(spawnMock).toHaveBeenCalledWith(

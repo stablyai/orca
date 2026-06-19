@@ -30,6 +30,14 @@ type ParsedCron = {
 
 type ParsedSchedule = ParsedRrule | ParsedCron
 
+export type AutomationCronScheduleClassification =
+  | { kind: 'hourly'; minute: number; label: string }
+  | { kind: 'daily'; hour: number; minute: number; label: string }
+  | { kind: 'weekdays'; hour: number; minute: number; label: string }
+  | { kind: 'weekly'; hour: number; minute: number; dayOfWeek: number; label: string }
+  | { kind: 'custom'; label: string }
+  | { kind: 'invalid'; label: string }
+
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR'] as const
 const MONTH_NAMES = new Map([
@@ -78,6 +86,13 @@ function parseRrule(rrule: string): ParsedRrule {
     throw new Error('Invalid recurrence minute.')
   }
   const byDay = (entries.get('BYDAY') ?? '').split(',').filter(Boolean)
+  if (
+    freq === 'WEEKLY' &&
+    (byDay.length === 0 ||
+      byDay.some((day) => !DAY_CODES.includes(day as (typeof DAY_CODES)[number])))
+  ) {
+    throw new Error('Invalid recurrence day.')
+  }
   return { kind: 'rrule', freq, byDay, byHour, byMinute }
 }
 
@@ -213,6 +228,15 @@ export function isValidAutomationSchedule(schedule: string): boolean {
   }
 }
 
+export function isValidAutomationCronSchedule(schedule: string): boolean {
+  try {
+    const parsed = parseCronExpression(schedule.trim())
+    return cronHasPossibleOccurrence(parsed, Date.now())
+  } catch {
+    return false
+  }
+}
+
 export function parseAutomationRrule(rrule: string): {
   preset: AutomationSchedulePreset
   hour: number
@@ -264,11 +288,33 @@ function formatTime(hour: number, minute: number): string {
   }).format(date)
 }
 
-export function formatAutomationSchedule(rrule: string): string {
-  const schedule = tryParseAutomationRrule(rrule)
-  if (!schedule) {
-    return isValidAutomationSchedule(rrule) ? `Custom cron: ${rrule.trim()}` : 'Invalid schedule'
+function getSingleSetValue(values: Set<number>): number | null {
+  if (values.size !== 1) {
+    return null
   }
+  return values.values().next().value as number
+}
+
+function setContainsExactly(values: Set<number>, expected: readonly number[]): boolean {
+  if (values.size !== expected.length) {
+    return false
+  }
+  return expected.every((value) => values.has(value))
+}
+
+function setContainsRange(values: Set<number>, min: number, max: number): boolean {
+  if (values.size !== max - min + 1) {
+    return false
+  }
+  for (let value = min; value <= max; value += 1) {
+    if (!values.has(value)) {
+      return false
+    }
+  }
+  return true
+}
+
+function formatParsedRruleSchedule(schedule: ReturnType<typeof parseAutomationRrule>): string {
   if (schedule.preset === 'hourly') {
     return `Hourly at :${String(schedule.minute).padStart(2, '0')}`
   }
@@ -283,6 +329,76 @@ export function formatAutomationSchedule(rrule: string): string {
     new Date(2026, 0, 4 + schedule.dayOfWeek)
   )
   return `${day}s at ${time}`
+}
+
+function classifyParsedCronSchedule(rule: ParsedCron): AutomationCronScheduleClassification {
+  if (!cronHasPossibleOccurrence(rule, Date.now())) {
+    return { kind: 'invalid', label: 'Invalid schedule' }
+  }
+  const minute = getSingleSetValue(rule.minutes)
+  const hour = getSingleSetValue(rule.hours)
+  const unrestrictedDayOfMonth = !rule.dayOfMonthRestricted
+  const unrestrictedMonth = setContainsRange(rule.months, 1, 12)
+  const unrestrictedDayOfWeek = !rule.dayOfWeekRestricted
+  const unrestrictedCalendar = unrestrictedDayOfMonth && unrestrictedMonth
+  if (
+    minute !== null &&
+    setContainsRange(rule.hours, 0, 23) &&
+    unrestrictedCalendar &&
+    unrestrictedDayOfWeek
+  ) {
+    return {
+      kind: 'hourly',
+      minute,
+      label: `Hourly at :${String(minute).padStart(2, '0')}`
+    }
+  }
+  if (minute !== null && hour !== null && unrestrictedCalendar) {
+    const time = formatTime(hour, minute)
+    if (unrestrictedDayOfWeek) {
+      return { kind: 'daily', hour, minute, label: `Daily at ${time}` }
+    }
+    if (setContainsExactly(rule.daysOfWeek, [1, 2, 3, 4, 5])) {
+      return { kind: 'weekdays', hour, minute, label: `Weekdays at ${time}` }
+    }
+    const dayOfWeek = getSingleSetValue(rule.daysOfWeek)
+    if (dayOfWeek !== null) {
+      const day = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(
+        new Date(2026, 0, 4 + dayOfWeek)
+      )
+      return {
+        kind: 'weekly',
+        hour,
+        minute,
+        dayOfWeek,
+        label: `${day}s at ${time}`
+      }
+    }
+  }
+  return { kind: 'custom', label: 'Custom schedule' }
+}
+
+export function classifyAutomationCronSchedule(
+  schedule: string
+): AutomationCronScheduleClassification {
+  try {
+    return classifyParsedCronSchedule(parseCronExpression(schedule.trim()))
+  } catch {
+    return { kind: 'invalid', label: 'Invalid schedule' }
+  }
+}
+
+export function formatAutomationSchedule(scheduleExpression: string): string {
+  try {
+    const trimmed = scheduleExpression.trim()
+    const schedule = parseSchedule(trimmed)
+    if (schedule.kind === 'cron') {
+      return classifyParsedCronSchedule(schedule).label
+    }
+    return formatParsedRruleSchedule(parseAutomationRrule(trimmed))
+  } catch {
+    return 'Invalid schedule'
+  }
 }
 
 function atLocalTime(dayMs: number, hour: number, minute: number): number {
@@ -381,6 +497,27 @@ export function buildAutomationRrule(args: {
   return `FREQ=DAILY;BYHOUR=${hour};BYMINUTE=${minute}`
 }
 
+export function buildAutomationCronSchedule(args: {
+  preset: Exclude<AutomationSchedulePreset, 'custom'>
+  hour: number
+  minute: number
+  dayOfWeek?: number
+}): string {
+  const hour = Math.max(0, Math.min(23, Math.floor(args.hour)))
+  const minute = Math.max(0, Math.min(59, Math.floor(args.minute)))
+  if (args.preset === 'hourly') {
+    return `${minute} * * * *`
+  }
+  if (args.preset === 'weekdays') {
+    return `${minute} ${hour} * * 1-5`
+  }
+  if (args.preset === 'weekly') {
+    const day = Math.max(0, Math.min(6, Math.floor(args.dayOfWeek ?? 1)))
+    return `${minute} ${hour} * * ${day}`
+  }
+  return `${minute} ${hour} * * *`
+}
+
 export function nextAutomationOccurrenceAfter(
   rrule: string,
   dtstart: number,
@@ -411,10 +548,10 @@ export function nextAutomationOccurrenceAfter(
     const base = new Date(start)
     base.setMinutes(rule.byMinute, 0, 0)
     let candidate = base.getTime()
-    if (candidate <= after) {
+    if (candidate <= after || candidate < dtstart) {
       candidate += HOUR_MS
     }
-    return Math.max(candidate, dtstart)
+    return candidate
   }
   const candidate = scanDayCandidates(rule, Math.max(dtstart - 1, after), 1)
   if (candidate === null) {

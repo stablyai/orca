@@ -1,8 +1,10 @@
+/* eslint-disable max-lines -- Why: PaneManager keeps live pane lifecycle, drag, rendering, and identity callbacks under one owner. */
 import type {
   PaneManagerOptions,
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
+  PaneRenderingDiagnostics,
   DropZone
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
@@ -10,11 +12,13 @@ import {
   createDivider,
   applyDividerStyles,
   applyPaneOpacity,
-  applyRootBackground
+  applyRootBackground,
+  disposeDividersIn
 } from './pane-divider'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
+import { getTerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 import {
   equalizePaneSplitSizes,
   safeFit,
@@ -23,13 +27,16 @@ import {
 } from './pane-tree-ops'
 import { toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
+import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
+  resetPaneWebglTextureAtlases,
   resumePaneRendering,
   setPaneGpuRenderingState,
   suspendPaneRendering
 } from './pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import { closeManagedPane, splitManagedPane } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
@@ -47,6 +54,7 @@ export class PaneManager {
   private destroyed = false
   private renderingSuspended: boolean
   private identities = new PaneIdentityRegistry()
+  private pendingPaneReparentFrameIds = new Set<number>()
 
   // Drag-to-reorder state
   private dragState = createDragReorderState()
@@ -55,6 +63,9 @@ export class PaneManager {
     this.root = root
     this.options = options
     this.renderingSuspended = options.initialRenderingSuspended === true
+    // Why: atlas recovery must reach every live manager — see
+    // resetAllTerminalWebglAtlases for the shared-atlas rationale.
+    registerLivePaneManager(this)
   }
 
   createInitialPane(opts?: { focus?: boolean; leafId?: string }): ManagedPane {
@@ -176,6 +187,19 @@ export class PaneManager {
     return pane ? toPublicPane(pane) : null
   }
 
+  getRenderingDiagnostics(): PaneRenderingDiagnostics[] {
+    return Array.from(this.panes.values()).map((pane) => ({
+      paneId: pane.id,
+      terminalGpuAcceleration: pane.terminalGpuAcceleration,
+      gpuRenderingEnabled: pane.gpuRenderingEnabled,
+      webglAttachmentDeferred: pane.webglAttachmentDeferred,
+      webglDisabledAfterContextLoss: pane.webglDisabledAfterContextLoss,
+      hasComplexScriptOutput: pane.hasComplexScriptOutput,
+      terminalWebglAutoDecision: getTerminalWebglAutoDecision(),
+      hasWebgl: Boolean(pane.webglAddon)
+    }))
+  }
+
   getLeafId(numericPaneId: number): TerminalLeafId | null {
     return this.identities.getLeafId(numericPaneId)
   }
@@ -241,6 +265,18 @@ export class PaneManager {
     markPaneComplexScriptOutput(this.panes, paneId)
   }
 
+  rebuildPaneWebgl(paneId: number): void {
+    const pane = this.panes.get(paneId)
+    if (!pane) {
+      return
+    }
+    rebuildAttachedWebgl(pane)
+  }
+
+  resetWebglTextureAtlases(): void {
+    resetPaneWebglTextureAtlases(this.panes.values())
+  }
+
   suspendRendering(): void {
     this.renderingSuspended = true
     suspendPaneRendering(this.panes.values())
@@ -257,11 +293,14 @@ export class PaneManager {
 
   destroy(): void {
     this.destroyed = true
+    unregisterLivePaneManager(this)
     cancelActivePaneDrag(this.dragState)
+    this.cancelPendingPaneReparentFrames()
     for (const pane of this.panes.values()) {
       disposePane(pane, this.panes)
     }
     this.identities.clear()
+    disposeDividersIn(this.root)
     this.root.innerHTML = ''
     this.activePaneId = null
   }
@@ -335,8 +374,35 @@ export class PaneManager {
         applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions),
       applyDividerStyles: () => applyDividerStyles(this.root, this.styleOptions),
       refitPanesUnder: (el: HTMLElement) => refitPanesUnder(el, this.panes),
+      requestPaneReparentFrame: (callback: FrameRequestCallback) => {
+        this.requestPaneReparentFrame(callback)
+      },
       onLayoutChanged: this.options.onLayoutChanged,
       onDragActiveChange: this.options.onPaneDragActiveChange
     }
+  }
+
+  private requestPaneReparentFrame(callback: FrameRequestCallback): void {
+    let completed = false
+    let frameId: number | undefined
+    frameId = requestAnimationFrame((timestamp) => {
+      completed = true
+      if (frameId !== undefined) {
+        this.pendingPaneReparentFrameIds.delete(frameId)
+      }
+      if (!this.destroyed) {
+        callback(timestamp)
+      }
+    })
+    if (!completed) {
+      this.pendingPaneReparentFrameIds.add(frameId)
+    }
+  }
+
+  private cancelPendingPaneReparentFrames(): void {
+    for (const frameId of this.pendingPaneReparentFrameIds) {
+      cancelAnimationFrame(frameId)
+    }
+    this.pendingPaneReparentFrameIds.clear()
   }
 }

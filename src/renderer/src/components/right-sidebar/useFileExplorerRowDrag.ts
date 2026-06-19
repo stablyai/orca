@@ -16,6 +16,7 @@ type UseFileExplorerRowDragParams = {
 }
 
 type RowDragHandlers = {
+  setRowDragNode: (node: HTMLButtonElement | null) => void
   handleDragOver: (e: React.DragEvent) => void
   handleDragEnter: (e: React.DragEvent) => void
   handleDragLeave: (e: React.DragEvent) => void
@@ -51,6 +52,18 @@ export function useFileExplorerRowDrag({
       nativeExpandTimerRef.current = null
     }
   }, [])
+
+  const setRowDragNode = useCallback(
+    (node: HTMLButtonElement | null): void => {
+      // Why: delayed drag-expand timers target this row; unmounting the row
+      // makes those timers stale even if the browser skips dragleave.
+      if (node === null) {
+        clearExpandTimer()
+        clearNativeExpandTimer()
+      }
+    },
+    [clearExpandTimer, clearNativeExpandTimer]
+  )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
@@ -164,5 +177,5 @@ export function useFileExplorerRowDrag({
     ]
   )
 
-  return { handleDragOver, handleDragEnter, handleDragLeave, handleDrop }
+  return { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop }
 }

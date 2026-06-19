@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseHexAddress } from './port-scan-handler'
+import { parseWindowsNetstatOutput, parseWindowsPowerShellPortRows } from './windows-port-scan'
 
 describe('parseHexAddress', () => {
   it('parses IPv4 localhost (127.0.0.1)', () => {
@@ -64,5 +65,57 @@ describe('parseHexAddress', () => {
   it('parses port 3306 (mysql)', () => {
     const result = parseHexAddress('00000000:0CEA')
     expect(result).toEqual({ host: '0.0.0.0', port: 3306 })
+  })
+})
+
+describe('parseWindowsPowerShellPortRows', () => {
+  it('parses PowerShell JSON arrays', () => {
+    expect(
+      parseWindowsPowerShellPortRows(
+        JSON.stringify([
+          { host: '127.0.0.1', port: 5173, pid: 1234, processName: 'node' },
+          { host: '0.0.0.0', port: 8080, pid: 5678, processName: 'dotnet' }
+        ])
+      )
+    ).toEqual([
+      { host: '127.0.0.1', port: 5173, pid: 1234, processName: 'node' },
+      { host: '0.0.0.0', port: 8080, pid: 5678, processName: 'dotnet' }
+    ])
+  })
+
+  it('parses single-object PowerShell JSON', () => {
+    expect(
+      parseWindowsPowerShellPortRows(
+        JSON.stringify({ host: '::1', port: '3000', pid: '4321', processName: 'node' })
+      )
+    ).toEqual([{ host: '::1', port: 3000, pid: 4321, processName: 'node' }])
+  })
+
+  it('ignores malformed rows', () => {
+    expect(
+      parseWindowsPowerShellPortRows(
+        JSON.stringify([
+          { host: '127.0.0.1', port: 5173, pid: 1234 },
+          { host: '127.0.0.1', port: 'nan', pid: 1234 },
+          { port: 8080, pid: 5678 }
+        ])
+      )
+    ).toEqual([{ host: '127.0.0.1', port: 5173, pid: 1234 }])
+  })
+})
+
+describe('parseWindowsNetstatOutput', () => {
+  it('parses Windows netstat listening rows', () => {
+    const output = [
+      '  Proto  Local Address          Foreign Address        State           PID',
+      '  TCP    0.0.0.0:5173           0.0.0.0:0              LISTENING       1234',
+      '  TCP    127.0.0.1:9229         0.0.0.0:0              ESTABLISHED     1234',
+      '  TCP    [::1]:3000             [::]:0                 LISTENING       5678'
+    ].join('\r\n')
+
+    expect(parseWindowsNetstatOutput(output)).toEqual([
+      { host: '0.0.0.0', port: 5173, pid: 1234 },
+      { host: '::1', port: 3000, pid: 5678 }
+    ])
   })
 })

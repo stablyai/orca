@@ -22,8 +22,16 @@ import {
   attachPaneFitResizeObserver,
   detachPaneFitResizeObserver
 } from './pane-fit-resize-observer'
+import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { buildDefaultTerminalOptions } from './pane-terminal-options'
-import { ENABLE_WEBGL_RENDERER, attachWebgl, disposeWebgl } from './pane-webgl-renderer'
+import { activateOrcaTerminalUnicodeProvider } from './pane-terminal-unicode-provider'
+import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
+import {
+  ENABLE_WEBGL_RENDERER,
+  attachWebgl,
+  cancelPendingWebglRefresh,
+  disposeWebgl
+} from './pane-webgl-renderer'
 import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 
 // ---------------------------------------------------------------------------
@@ -32,8 +40,8 @@ import { shouldFocusTerminalFromPanePointerDown } from './pane-pointer-focus'
 
 function getTerminalUrlOpenHint(): string {
   return navigator.userAgent.includes('Mac')
-    ? '⌘+click to open or ⇧⌘+click for system browser'
-    : 'Ctrl+click to open or Shift+Ctrl+click for system browser'
+    ? 'click to open or ⇧+click for system browser'
+    : 'click to open or Shift+click for system browser'
 }
 
 export function createPaneDOM(
@@ -85,7 +93,7 @@ export function createPaneDOM(
   const dragHandle = document.createElement('div')
   dragHandle.className = 'pane-drag-handle'
   container.appendChild(dragHandle)
-  attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
+  const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 
   const webLinksAddon = new WebLinksAddon(
     options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
@@ -104,6 +112,16 @@ export function createPaneDOM(
 
   const serializeAddon = new SerializeAddon()
 
+  const panePointerDownHandler = (event: PointerEvent): void => {
+    onPointerDown(id, {
+      focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
+    })
+  }
+
+  const paneMouseEnterHandler = (event: MouseEvent): void => {
+    onMouseEnter(id, event)
+  }
+
   const pane: ManagedPaneInternal = {
     id,
     leafId,
@@ -119,6 +137,8 @@ export function createPaneDOM(
     hasComplexScriptOutput: false,
     fitAddon,
     fitResizeObserver: null,
+    pendingInitialFitRafId: null,
+    pendingWebglRefreshRafId: null,
     pendingObservedFitRafId: null,
     searchAddon,
     serializeAddon,
@@ -126,8 +146,15 @@ export function createPaneDOM(
     webLinksAddon,
     webglAddon: null,
     ligaturesAddon: null,
+    panePointerDownHandler,
+    paneMouseEnterHandler,
+    paneDragCleanup,
     compositionHandler: null,
+    focusClassSyncCleanup: null,
     pendingSplitScrollState: null,
+    pendingSplitScrollRafIds: [],
+    pendingSplitScrollTimerId: null,
+    pendingSplitScrollBufferDisposable: null,
     debugLabel: options.debugLabel ?? null
   }
 
@@ -135,19 +162,13 @@ export function createPaneDOM(
   // the terminal. We must call focus: true here because after DOM reparenting
   // (e.g. splitPane moves the original pane into a flex container), xterm.js's
   // native click-to-focus on its internal textarea may not fire reliably.
-  container.addEventListener('pointerdown', (event) => {
-    onPointerDown(id, {
-      focusTerminal: shouldFocusTerminalFromPanePointerDown(event.target)
-    })
-  })
+  container.addEventListener('pointerdown', panePointerDownHandler)
 
   // Focus-follows-mouse handler: when the setting is enabled, hovering a
   // pane makes it active. All gating (feature flag, drag-in-progress,
   // window focus, etc.) lives in the PaneManager callback — this layer
   // just forwards the event.
-  container.addEventListener('mouseenter', (event) => {
-    onMouseEnter(id, event)
-  })
+  container.addEventListener('mouseenter', paneMouseEnterHandler)
 
   return pane
 }
@@ -177,7 +198,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
 
-  // Activate Unicode 11 widths *before* any caller-driven write. CJK / emoji /
+  // Activate Orca's Unicode 11 width shim *before* any caller-driven write. CJK / emoji /
   // ZWJ codepoints get baked into the buffer at the active unicode version on
   // write — if a restore (snapshot, scrollback, cold-restore) writes bytes
   // through xterm while the default v6 width tables are still active, wide
@@ -186,7 +207,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // (replayTerminalLayout → splitPane/createInitialPane → openTerminal,
   // restoreScrollbackBuffers, handleReattachResult) run after openTerminal,
   // so the activation must stay at this position.
-  terminal.unicode.activeVersion = '11'
+  activateOrcaTerminalUnicodeProvider(terminal)
 
   // Why: the OS reads the focused textarea's screen rect at compositionstart to
   // decide where to display the IME candidate window. xterm.js only repositions
@@ -222,6 +243,8 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     pane.compositionHandler = handler
   }
 
+  pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
+
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
   }
@@ -229,7 +252,11 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   attachPaneFitResizeObserver(pane)
 
   // Initial fit (deferred to ensure layout has settled)
-  requestAnimationFrame(() => {
+  if (pane.pendingInitialFitRafId != null) {
+    cancelAnimationFrame(pane.pendingInitialFitRafId)
+  }
+  pane.pendingInitialFitRafId = requestAnimationFrame(() => {
+    pane.pendingInitialFitRafId = null
     safeFit(pane)
   })
 }
@@ -289,10 +316,32 @@ export function disposePane(
   pane: ManagedPaneInternal,
   panes: Map<number, ManagedPaneInternal>
 ): void {
+  if (pane.pendingInitialFitRafId != null) {
+    cancelAnimationFrame(pane.pendingInitialFitRafId)
+    pane.pendingInitialFitRafId = null
+  }
+  cancelPendingWebglRefresh(pane)
   detachPaneFitResizeObserver(pane)
+  if (pane.panePointerDownHandler) {
+    pane.container.removeEventListener('pointerdown', pane.panePointerDownHandler)
+    pane.panePointerDownHandler = null
+  }
+  if (pane.paneMouseEnterHandler) {
+    pane.container.removeEventListener('mouseenter', pane.paneMouseEnterHandler)
+    pane.paneMouseEnterHandler = null
+  }
+  pane.paneDragCleanup?.()
+  pane.paneDragCleanup = null
+  pane.focusClassSyncCleanup?.()
+  pane.focusClassSyncCleanup = null
   if (pane.compositionHandler) {
     pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler, true)
     pane.compositionHandler = null
+  }
+  try {
+    clearPendingSplitScrollRestore(pane)
+  } catch {
+    /* ignore */
   }
   try {
     pane.ligaturesAddon?.dispose()

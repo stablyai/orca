@@ -1,5 +1,12 @@
 import { isNoUpstreamError } from './git-remote-error'
 import type { GitUpstreamStatus } from './types'
+import {
+  getConfiguredBranchRemoteUpstream,
+  hasConfiguredBranchPushTarget
+} from './git-configured-branch-target'
+import { splitRemoteBranchName } from './git-remote-branch-name'
+
+export { gitRefTargetsBranchName, splitRemoteBranchName } from './git-remote-branch-name'
 
 export type GitCommandRunner = (args: string[]) => Promise<{ stdout: string }>
 
@@ -17,17 +24,34 @@ export type EffectiveGitUpstream =
       isConfiguredUpstream: false
     }
 
-export function splitRemoteBranchName(refName: string): {
-  remoteName: string
-  branchName: string
-} | null {
-  const slashIndex = refName.indexOf('/')
-  if (slashIndex <= 0 || slashIndex === refName.length - 1) {
+function hasMultipleSlashSegments(refName: string): boolean {
+  return refName.includes('/') && refName.indexOf('/') !== refName.lastIndexOf('/')
+}
+
+async function splitRemoteBranchNameByKnownRemote(
+  runGit: GitCommandRunner,
+  refName: string
+): Promise<{ remoteName: string; branchName: string } | null> {
+  try {
+    const { stdout } = await runGit(['remote'])
+    const remotes = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)
+    return (
+      remotes
+        .map((remoteName) => {
+          if (refName === remoteName || !refName.startsWith(`${remoteName}/`)) {
+            return null
+          }
+          const branchName = refName.slice(remoteName.length + 1)
+          return branchName ? { remoteName, branchName } : null
+        })
+        .find((parsed) => parsed !== null) ?? null
+    )
+  } catch {
     return null
-  }
-  return {
-    remoteName: refName.slice(0, slashIndex),
-    branchName: refName.slice(slashIndex + 1)
   }
 }
 
@@ -86,13 +110,25 @@ async function remoteTrackingRefExists(
   }
 }
 
-export async function resolveEffectiveGitUpstream(
-  runGit: GitCommandRunner
+async function resolveEffectiveGitUpstreamForBranch(
+  runGit: GitCommandRunner,
+  currentBranchName: string | null
 ): Promise<EffectiveGitUpstream | null> {
-  const currentBranchName = await getCurrentBranchName(runGit)
-  const configured = await getConfiguredUpstream(runGit)
+  let configured = await getConfiguredUpstream(runGit)
 
   if (configured) {
+    if (
+      currentBranchName &&
+      configured.remoteName === 'origin' &&
+      configured.branchName !== currentBranchName &&
+      hasMultipleSlashSegments(configured.upstreamName)
+    ) {
+      const parsed = await splitRemoteBranchNameByKnownRemote(runGit, configured.upstreamName)
+      if (parsed) {
+        configured = { ...configured, ...parsed }
+      }
+    }
+
     if (!currentBranchName || configured.branchName === currentBranchName) {
       return configured
     }
@@ -116,6 +152,19 @@ export async function resolveEffectiveGitUpstream(
     return configured
   }
 
+  if (currentBranchName) {
+    const branchRemoteUpstream = await getConfiguredBranchRemoteUpstream(
+      runGit,
+      currentBranchName,
+      (remoteName, branchName) => remoteTrackingRefExists(runGit, remoteName, branchName)
+    )
+    if (branchRemoteUpstream) {
+      // Why: Git cannot resolve HEAD@{u} when branch.<name>.remote is a URL,
+      // but older fork-review worktrees still carry the usable merge target.
+      return branchRemoteUpstream
+    }
+  }
+
   if (currentBranchName && (await remoteTrackingRefExists(runGit, 'origin', currentBranchName))) {
     return {
       upstreamName: `origin/${currentBranchName}`,
@@ -128,13 +177,28 @@ export async function resolveEffectiveGitUpstream(
   return null
 }
 
+export async function resolveEffectiveGitUpstream(
+  runGit: GitCommandRunner
+): Promise<EffectiveGitUpstream | null> {
+  return resolveEffectiveGitUpstreamForBranch(runGit, await getCurrentBranchName(runGit))
+}
+
 export async function getEffectiveGitUpstreamStatus(
   runGit: GitCommandRunner,
   getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
 ): Promise<GitUpstreamStatus> {
-  const upstream = await resolveEffectiveGitUpstream(runGit)
+  const currentBranchName = await getCurrentBranchName(runGit)
+  const upstream = await resolveEffectiveGitUpstreamForBranch(runGit, currentBranchName)
   if (!upstream) {
-    return { hasUpstream: false, ahead: 0, behind: 0 }
+    const hasConfiguredPushTarget = currentBranchName
+      ? await hasConfiguredBranchPushTarget(runGit, currentBranchName)
+      : false
+    return {
+      hasUpstream: false,
+      ahead: 0,
+      behind: 0,
+      ...(hasConfiguredPushTarget ? { hasConfiguredPushTarget: true } : {})
+    }
   }
 
   const { stdout } = await runGit([

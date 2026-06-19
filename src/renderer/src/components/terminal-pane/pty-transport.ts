@@ -24,7 +24,10 @@ import type {
   PtyDataMeta
 } from './pty-dispatcher'
 import { createBellDetector } from './bell-detector'
-import { createAgentStatusOscProcessor, type ProcessedAgentStatusChunk } from './agent-status-osc'
+import {
+  createAgentStatusOscProcessor,
+  type ProcessedAgentStatusChunk
+} from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 // Re-export public API so existing consumers keep working.
@@ -32,12 +35,14 @@ export {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle,
   registerEagerPtyBuffer,
+  restorePtyDataHandlersAfterFailedShutdown,
   subscribeToPtyExit,
   unregisterPtyDataHandlers
 } from './pty-dispatcher'
 export type {
   EagerPtyHandle,
   PtyTransport,
+  PtyBufferSnapshot,
   PtyConnectResult,
   IpcPtyTransportOptions
 } from './pty-dispatcher'
@@ -101,6 +106,7 @@ export function createPtyOutputProcessor({
   let sideEffectDrainTimer: ReturnType<typeof setTimeout> | null = null
   let pendingSideEffects: PendingPtySideEffect[] = []
   let pendingSideEffectIndex = 0
+  let pendingWorkingTitleSideEffects = 0
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -111,6 +117,20 @@ export function createPtyOutputProcessor({
           onAgentExited
         )
       : null
+
+  function isWorkingTitle(title: string | null): boolean {
+    return title !== null && detectAgentStatusFromTitle(title) === 'working'
+  }
+
+  function countWorkingTitles(titles: string[]): number {
+    let count = 0
+    for (const title of titles) {
+      if (isWorkingTitle(normalizeTerminalTitle(title))) {
+        count += 1
+      }
+    }
+    return count
+  }
 
   function applyObservedTerminalTitle(title: string, suppressAgentTracker = false): void {
     // Why: cursor-agent's native OSC title is the literal string "Cursor Agent"
@@ -152,6 +172,7 @@ export function createPtyOutputProcessor({
   }
 
   function enqueuePtySideEffect(next: PendingPtySideEffect): void {
+    const workingTitleCount = countWorkingTitles(next.titles)
     const prior = pendingSideEffects.at(-1)
     if (
       prior &&
@@ -164,9 +185,11 @@ export function createPtyOutputProcessor({
       !next.containsBell
     ) {
       prior.scannedForTitles ||= next.scannedForTitles
+      pendingWorkingTitleSideEffects += workingTitleCount
       return
     }
     pendingSideEffects.push(next)
+    pendingWorkingTitleSideEffects += workingTitleCount
   }
 
   function schedulePtySideEffects(
@@ -174,14 +197,22 @@ export function createPtyOutputProcessor({
     payloads: ReturnType<typeof processAgentStatusChunk>['payloads'],
     suppressAttentionEvents: boolean
   ): void {
-    const scannedForTitles = Boolean(onTitleChange && data.length > 0)
+    const scannedForTitles = Boolean(onTitleChange && data.includes('\x1b]'))
     const titles = scannedForTitles ? extractAllOscTitles(data) : []
     const deliveredPayloads =
       onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
     const containsBell = Boolean(
       onBell && !suppressAttentionEvents && bellDetector.chunkContainsBell(data)
     )
-    if (!scannedForTitles && deliveredPayloads.length === 0 && !containsBell) {
+    const needsStaleTitleProbe = Boolean(
+      onTitleChange &&
+      data.length > 0 &&
+      titles.length === 0 &&
+      !suppressAttentionEvents &&
+      (isWorkingTitle(lastEmittedTitle) || pendingWorkingTitleSideEffects > 0)
+    )
+    const shouldEmitEmptyTitleScan = scannedForTitles || needsStaleTitleProbe
+    if (!shouldEmitEmptyTitleScan && deliveredPayloads.length === 0 && !containsBell) {
       return
     }
 
@@ -192,7 +223,7 @@ export function createPtyOutputProcessor({
       enqueuePtySideEffect({
         payloads: [],
         titles: [],
-        scannedForTitles,
+        scannedForTitles: shouldEmitEmptyTitleScan,
         containsBell,
         suppressAttentionEvents
       })
@@ -206,11 +237,11 @@ export function createPtyOutputProcessor({
           suppressAttentionEvents
         })
       }
-      if (titles.length === 0 && scannedForTitles) {
+      if (titles.length === 0 && shouldEmitEmptyTitleScan) {
         enqueuePtySideEffect({
           payloads: [],
           titles: [],
-          scannedForTitles: true,
+          scannedForTitles: shouldEmitEmptyTitleScan,
           containsBell: false,
           suppressAttentionEvents
         })
@@ -260,6 +291,10 @@ export function createPtyOutputProcessor({
   }
 
   function applyPtySideEffect(next: PendingPtySideEffect): void {
+    pendingWorkingTitleSideEffects -= countWorkingTitles(next.titles)
+    if (pendingWorkingTitleSideEffects < 0) {
+      pendingWorkingTitleSideEffects = 0
+    }
     if (onAgentStatus) {
       for (const payload of next.payloads) {
         onAgentStatus(payload)
@@ -342,9 +377,9 @@ export function createPtyOutputProcessor({
   ): void {
     const rawLength = meta?.rawLength ?? data.length
     const suppressAttentionEvents = options.suppressAttentionEvents === true
-    // Why: OSC 9999 is a renderer-only control protocol. Parse it before
-    // xterm sees the bytes, and keep parser state across chunks so partial
-    // PTY reads do not drop valid status updates or print escape garbage.
+    // Why: OSC 9999 is an Orca control protocol. Parse it before xterm sees
+    // the bytes, and keep parser state across chunks so partial PTY reads do
+    // not drop valid status updates or print escape garbage.
     const processed = processAgentStatusChunk(data)
     data = processed.cleanData
     // Why: mirror the onBell / onAgentBecameIdle guard below — during eager-buffer
@@ -367,6 +402,7 @@ export function createPtyOutputProcessor({
     clearSideEffectDrainTimer()
     pendingSideEffects.length = 0
     pendingSideEffectIndex = 0
+    pendingWorkingTitleSideEffects = 0
     clearStaleTitleTimer()
     agentTracker?.reset()
     bellDetector.reset()
@@ -386,11 +422,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     cwd,
     env,
     command,
+    startupCommandDelivery,
     connectionId,
     worktreeId,
     tabId,
     leafId,
     shellOverride,
+    projectRuntime,
     telemetry,
     onPtyExit,
     onTitleChange,
@@ -507,12 +545,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           cwd,
           env,
           command,
+          ...(startupCommandDelivery ? { startupCommandDelivery } : {}),
           ...(connectionId ? { connectionId } : {}),
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
           worktreeId,
           ...(tabId ? { tabId } : {}),
           ...(leafId ? { leafId } : {}),
           ...(shellOverride ? { shellOverride } : {}),
+          ...(projectRuntime ? { projectRuntime } : {}),
           ...(telemetry ? { telemetry } : {})
         })
         const spawnResult = result as PtyConnectResult & { isReattach?: boolean }

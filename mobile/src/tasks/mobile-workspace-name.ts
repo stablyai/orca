@@ -5,8 +5,14 @@ export function resolveMobileWorkspaceCreateName(args: {
   return args.draft?.trim() || args.fallback
 }
 
-export function slugifyForWorkspaceName(input: string): string {
-  return input
+// Why: mirrors the desktop issue-name slugger so contractions do not create
+// branch/path names like `can-t-enable` in mobile-created workspaces.
+function removeIntraWordApostrophes(input: string): string {
+  return input.replace(/[‘’]/g, "'").replace(/([\p{L}\p{N}])'(?=[\p{L}\p{N}])/gu, '$1')
+}
+
+function slugifyForWorkspaceName(input: string): string {
+  return removeIntraWordApostrophes(input)
     .trim()
     .toLowerCase()
     .replace(/[\\/]+/g, '-')

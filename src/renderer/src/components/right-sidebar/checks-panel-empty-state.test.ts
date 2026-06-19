@@ -30,6 +30,18 @@ describe('getChecksPanelEmptyStateCopy', () => {
     ).toBe('Branch not published')
   })
 
+  it('does not show unpublished branch copy when HEAD is detached', () => {
+    expect(
+      getChecksPanelEmptyStateCopy({
+        operationLabel: null,
+        prRefreshStatus: 'error',
+        hostedReviewBlockedReason: 'no_upstream',
+        hasUpstream: false,
+        hasCurrentBranch: false
+      }).title
+    ).toBe('Could not refresh pull request')
+  })
+
   it('uses remote status as a fallback when eligibility has no concrete blocker', () => {
     expect(
       getChecksPanelEmptyStateCopy({
@@ -76,6 +88,22 @@ describe('getChecksPanelEmptyStateCopy', () => {
       }).title
     ).toBe('Could not refresh pull request')
   })
+
+  it('uses merge request copy for GitLab review contexts', () => {
+    expect(
+      getChecksPanelEmptyStateCopy({
+        operationLabel: null,
+        prRefreshStatus: undefined,
+        hostedReviewBlockedReason: 'unsupported_provider',
+        hasUpstream: true,
+        reviewLabel: 'merge request',
+        reviewShortLabel: 'MR'
+      })
+    ).toEqual({
+      title: 'No merge request found',
+      description: 'Create a merge request to start checks and review.'
+    })
+  })
 })
 
 describe('shouldShowChecksPanelPublishBranchAction', () => {
@@ -101,5 +129,15 @@ describe('shouldShowChecksPanelPublishBranchAction', () => {
         hasUpstream: false
       })
     ).toBe(true)
+  })
+
+  it('does not show publish when HEAD is detached', () => {
+    expect(
+      shouldShowChecksPanelPublishBranchAction({
+        hostedReviewBlockedReason: 'no_upstream',
+        hasUpstream: false,
+        hasCurrentBranch: false
+      })
+    ).toBe(false)
   })
 })

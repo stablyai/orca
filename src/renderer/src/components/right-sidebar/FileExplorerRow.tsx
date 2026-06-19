@@ -1,10 +1,11 @@
-/* eslint-disable max-lines -- File Explorer rows own dense context-menu and drag/drop interactions. */
-import React, { useCallback, useEffect, useRef } from 'react'
+/* eslint-disable max-lines -- Why: the row owns dense file-tree rendering plus its context menu, drag target, and inline-input sibling contract. */
+import React, { useCallback, useRef } from 'react'
 import { basename } from '@/lib/path'
 import {
   ChevronRight,
   CircleSlash,
   Copy,
+  Download,
   ExternalLink,
   Eye,
   File,
@@ -46,6 +47,9 @@ import { STATUS_LABELS } from './status-display'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import { translate } from '@/i18n/i18n'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/components/tab-bar/SortableTab'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -96,44 +100,84 @@ export function InlineInputRow({
   // has a chance to type. During the grace window we re-focus on blur instead
   // of auto-submitting, which would dismiss the empty input.
   const focusSettled = useRef(false)
+  const focusFrame = useRef<number | null>(null)
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const refocusFrame = useRef<number | null>(null)
+  const inlineInputKey = [
+    inlineInput.type,
+    inlineInput.parentPath,
+    inlineInput.depth,
+    inlineInput.existingPath ?? '',
+    inlineInput.existingName ?? ''
+  ].join('\0')
 
-  useEffect(() => {
-    submitted.current = false
-    focusSettled.current = false
+  const cancelRefocusFrame = useCallback((): void => {
+    if (refocusFrame.current !== null) {
+      cancelAnimationFrame(refocusFrame.current)
+      refocusFrame.current = null
+    }
+  }, [])
 
-    // Schedule focus after any pending focus-restore from menu close
-    const raf = requestAnimationFrame(() => {
-      const el = inputRef.current
+  const scheduleInputRefocus = useCallback((): void => {
+    cancelRefocusFrame()
+    refocusFrame.current = requestAnimationFrame(() => {
+      refocusFrame.current = null
+      inputRef.current?.focus()
+    })
+  }, [cancelRefocusFrame])
+
+  const clearInlineInputTimers = useCallback(() => {
+    if (focusFrame.current !== null) {
+      cancelAnimationFrame(focusFrame.current)
+      focusFrame.current = null
+    }
+    cancelRefocusFrame()
+    if (blurTimeout.current) {
+      clearTimeout(blurTimeout.current)
+      blurTimeout.current = null
+    }
+    if (settleTimer.current) {
+      clearTimeout(settleTimer.current)
+      settleTimer.current = null
+    }
+  }, [cancelRefocusFrame])
+
+  const setInputRef = useCallback(
+    (el: HTMLInputElement | null): void => {
+      inputRef.current = el
+      clearInlineInputTimers()
       if (!el) {
         return
       }
-      el.focus()
-      if (inlineInput.type === 'rename' && inlineInput.existingName) {
-        const dotIndex = inlineInput.existingName.lastIndexOf('.')
-        if (dotIndex > 0) {
-          el.setSelectionRange(0, dotIndex)
-        } else {
-          el.select()
+
+      submitted.current = false
+      focusSettled.current = false
+
+      // Schedule focus after any pending focus-restore from menu close
+      focusFrame.current = requestAnimationFrame(() => {
+        focusFrame.current = null
+        if (inputRef.current !== el) {
+          return
         }
-      }
-      // Allow enough time for the menu close focus management to finish
-      // before treating blur events as intentional user actions.
-      settleTimer.current = setTimeout(() => {
-        settleTimer.current = null
-        focusSettled.current = true
-      }, 200)
-    })
-    return () => {
-      cancelAnimationFrame(raf)
-      if (blurTimeout.current) {
-        clearTimeout(blurTimeout.current)
-      }
-      if (settleTimer.current) {
-        clearTimeout(settleTimer.current)
-      }
-    }
-  }, [inlineInput])
+        el.focus()
+        if (inlineInput.type === 'rename' && inlineInput.existingName) {
+          const dotIndex = inlineInput.existingName.lastIndexOf('.')
+          if (dotIndex > 0) {
+            el.setSelectionRange(0, dotIndex)
+          } else {
+            el.select()
+          }
+        }
+        // Allow enough time for the menu close focus management to finish
+        // before treating blur events as intentional user actions.
+        settleTimer.current = setTimeout(() => {
+          settleTimer.current = null
+          focusSettled.current = true
+        }, 200)
+      })
+    },
+    [clearInlineInputTimers, inlineInput.existingName, inlineInput.type]
+  )
 
   const clearBlurTimeout = useCallback(() => {
     if (blurTimeout.current) {
@@ -166,7 +210,8 @@ export function InlineInputRow({
         <File className="size-3 shrink-0 text-muted-foreground" />
       )}
       <input
-        ref={inputRef}
+        key={inlineInputKey}
+        ref={setInputRef}
         className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
         defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
         onKeyDown={(e) => {
@@ -190,14 +235,14 @@ export function InlineInputRow({
             (e.relatedTarget.closest('[data-slot="context-menu-trigger"]') ||
               e.relatedTarget.closest('[data-slot="dropdown-menu-trigger"]'))
           ) {
-            requestAnimationFrame(() => inputRef.current?.focus())
+            scheduleInputRefocus()
             return
           }
           // During the grace period after mount, menu close focus management
           // may shift focus away (often relatedTarget is null). Re-focus
           // instead of dismissing the still-empty input.
           if (!focusSettled.current) {
-            requestAnimationFrame(() => inputRef.current?.focus())
+            scheduleInputRefocus()
             return
           }
           const value = e.currentTarget.value
@@ -224,6 +269,8 @@ type FileExplorerRowProps = {
   statusColor: string | null
   isIgnored: boolean
   deleteShortcutLabel: string
+  connectionId?: string | null
+  canCollapseFolderSubtree: boolean
   targetDir: string
   targetDepth: number
   selectionSize: number
@@ -234,6 +281,8 @@ type FileExplorerRowProps = {
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void
+  onAddFolderAsProject: () => void
+  canAddAsProject: boolean
   onRequestDelete: () => void
   onCollapseFolderSubtree: () => void
   onFindInFolder: () => void
@@ -253,6 +302,54 @@ export function shouldShowFindInFolderAction(node: TreeNode): boolean {
   return node.isDirectory
 }
 
+export function shouldShowRemoteDownloadAction(
+  node: TreeNode,
+  connectionId?: string | null
+): boolean {
+  // Why: Desktop-only because download depends on Electron's native save dialog.
+  return (
+    !node.isDirectory &&
+    Boolean(connectionId) &&
+    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+  )
+}
+
+export async function downloadRemoteFile(node: TreeNode, connectionId: string): Promise<void> {
+  try {
+    const result = await window.api.fs.downloadFile({ filePath: node.path, connectionId })
+    // Why: Suppress toasts when the user cancels the native save dialog per design.
+    if (result.canceled) {
+      return
+    }
+    toast.success(
+      translate(
+        'auto.components.right.sidebar.FileExplorerRow.bce4d4e44f',
+        "Downloaded '{{value0}}'",
+        { value0: node.name }
+      ),
+      {
+        action: {
+          label: translate('auto.components.right.sidebar.FileExplorerRow.1a3df04ae1', 'Open'),
+          onClick: () => {
+            void window.api.shell.openPath(result.destinationPath)
+          }
+        }
+      }
+    )
+  } catch (error) {
+    toast.error(
+      extractIpcErrorMessage(
+        error,
+        translate(
+          'auto.components.right.sidebar.FileExplorerRow.b3e288bf41',
+          "Failed to download '{{value0}}'.",
+          { value0: node.name }
+        )
+      )
+    )
+  }
+}
+
 export function FileExplorerRow({
   node,
   isExpanded,
@@ -264,6 +361,8 @@ export function FileExplorerRow({
   statusColor,
   isIgnored,
   deleteShortcutLabel,
+  connectionId,
+  canCollapseFolderSubtree,
   targetDir,
   targetDepth,
   selectionSize,
@@ -274,6 +373,8 @@ export function FileExplorerRow({
   onStartNew,
   onStartRename,
   onDuplicate,
+  onAddFolderAsProject,
+  canAddAsProject,
   onRequestDelete,
   onCollapseFolderSubtree,
   onFindInFolder,
@@ -291,17 +392,19 @@ export function FileExplorerRow({
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
-  const { handleDragOver, handleDragEnter, handleDragLeave, handleDrop } = useFileExplorerRowDrag({
-    rowDropDir,
-    isDirectory: node.isDirectory,
-    nodePath: node.path,
-    isExpanded,
-    onDragTargetChange,
-    onDragExpandDir,
-    onNativeDragTargetChange,
-    onNativeDragExpandDir,
-    onMoveDrop
-  })
+  const showRemoteDownloadAction = shouldShowRemoteDownloadAction(node, connectionId)
+  const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
+    useFileExplorerRowDrag({
+      rowDropDir,
+      isDirectory: node.isDirectory,
+      nodePath: node.path,
+      isExpanded,
+      onDragTargetChange,
+      onDragExpandDir,
+      onNativeDragTargetChange,
+      onNativeDragExpandDir,
+      onMoveDrop
+    })
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return
@@ -311,9 +414,23 @@ export function FileExplorerRow({
       toast.error(result.message)
     }
   }, [activeWorktreeId, node.path])
+  const handleDownload = useCallback(() => {
+    if (!connectionId) {
+      return
+    }
+    void downloadRemoteFile(node, connectionId)
+  }, [connectionId, node])
 
   return (
-    <ContextMenu>
+    <ContextMenu
+      onOpenChange={(open) => {
+        if (!open) {
+          return
+        }
+        window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
+        onContextMenuSelect()
+      }}
+    >
       <ContextMenuTrigger asChild>
         <button
           className={cn(
@@ -322,7 +439,11 @@ export function FileExplorerRow({
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
           style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          ref={setRowDragNode}
           data-native-file-drop-dir={rowDropDir}
+          // Why: marks this draggable row so the wheel-capture handler can rescue
+          // scroll Chromium swallows over draggable nodes (file-explorer-drag-scroll-marker).
+          data-explorer-draggable="true"
           draggable
           onDragStart={(event) => {
             const paths =
@@ -387,7 +508,6 @@ export function FileExplorerRow({
           onDrop={handleDrop}
           onClick={(e) => onClick(e)}
           onDoubleClick={onDoubleClick}
-          onContextMenu={onContextMenuSelect}
         >
           {node.isDirectory ? (
             <>
@@ -448,7 +568,10 @@ export function FileExplorerRow({
             </span>
           ) : isIgnored ? (
             <CircleSlash
-              aria-label="Ignored by .gitignore"
+              aria-label={translate(
+                'auto.components.right.sidebar.FileExplorerRow.e26010014a',
+                'Ignored by .gitignore'
+              )}
               className="ml-auto size-3 shrink-0 mr-2"
               style={{ color: 'var(--git-decoration-ignored)' }}
             />
@@ -462,23 +585,33 @@ export function FileExplorerRow({
       >
         <ContextMenuItem onSelect={() => onStartNew('file', targetDir, targetDepth)}>
           <FilePlus />
-          New File
+          {translate('auto.components.right.sidebar.FileExplorerRow.37c875d827', 'New File')}
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => onStartNew('folder', targetDir, targetDepth)}>
           <FolderPlus />
-          New Folder
+          {translate('auto.components.right.sidebar.FileExplorerRow.f61af83316', 'New Folder')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => onCopyPaths('absolute')}>
           <Copy />
-          {selectionSize > 1 ? 'Copy Paths' : 'Copy Path'}
+          {selectionSize > 1
+            ? translate('auto.components.right.sidebar.FileExplorerRow.f9d7ca753d', 'Copy Paths')
+            : translate('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
           {copyPathShortcutLabel !== 'Unassigned' ? (
             <ContextMenuShortcut>{copyPathShortcutLabel}</ContextMenuShortcut>
           ) : null}
         </ContextMenuItem>
         <ContextMenuItem onSelect={() => onCopyPaths('relative')}>
           <Copy />
-          {selectionSize > 1 ? 'Copy Relative Paths' : 'Copy Relative Path'}
+          {selectionSize > 1
+            ? translate(
+                'auto.components.right.sidebar.FileExplorerRow.42e10cbf57',
+                'Copy Relative Paths'
+              )
+            : translate(
+                'auto.components.right.sidebar.FileExplorerRow.66a29dde82',
+                'Copy Relative Path'
+              )}
           {copyRelativePathShortcutLabel !== 'Unassigned' ? (
             <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
           ) : null}
@@ -486,13 +619,25 @@ export function FileExplorerRow({
         {!node.isDirectory && (
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
-            Duplicate
+            {translate('auto.components.right.sidebar.FileExplorerRow.0fec99bfd7', 'Duplicate')}
+          </ContextMenuItem>
+        )}
+        {canAddAsProject && (
+          <ContextMenuItem onSelect={onAddFolderAsProject}>
+            <FolderPlus />
+            {translate(
+              'auto.components.right.sidebar.FileExplorerRow.1bb9be455c',
+              'Add as Project...'
+            )}
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && (
           <ContextMenuItem onSelect={handleOpenInOrcaBrowser}>
             <Globe />
-            Open in Orca Browser
+            {translate(
+              'auto.components.right.sidebar.FileExplorerRow.dd112c81d2',
+              'Open in Orca Browser'
+            )}
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (
@@ -507,19 +652,34 @@ export function FileExplorerRow({
             }
           >
             <Eye />
-            Open Markdown Preview
+            {translate(
+              'auto.components.right.sidebar.FileExplorerRow.d87a4c42e1',
+              'Open Markdown Preview'
+            )}
           </ContextMenuItem>
         )}
-        {shouldShowCollapseFolderAction(node, isExpanded) && (
+        {showRemoteDownloadAction && (
+          <ContextMenuItem onSelect={handleDownload}>
+            <Download />
+            {translate('auto.components.right.sidebar.FileExplorerRow.c2112579f6', 'Download')}
+          </ContextMenuItem>
+        )}
+        {canCollapseFolderSubtree && shouldShowCollapseFolderAction(node, isExpanded) && (
           <ContextMenuItem onSelect={onCollapseFolderSubtree}>
             <ListCollapse />
-            Collapse Folder
+            {translate(
+              'auto.components.right.sidebar.FileExplorerRow.d6a25618aa',
+              'Collapse Folder'
+            )}
           </ContextMenuItem>
         )}
         {shouldShowFindInFolderAction(node) && (
           <ContextMenuItem onSelect={onFindInFolder}>
             <Search />
-            Find in Folder
+            {translate(
+              'auto.components.right.sidebar.FileExplorerRow.0df0e5abac',
+              'Find in Folder'
+            )}
             {findInFolderShortcutLabel !== 'Unassigned' ? (
               <ContextMenuShortcut>{findInFolderShortcutLabel}</ContextMenuShortcut>
             ) : null}
@@ -551,12 +711,16 @@ export function FileExplorerRow({
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => onStartRename(node)}>
           <Pencil />
-          Rename
-          <ContextMenuShortcut>{isMac ? '↩' : 'Enter'}</ContextMenuShortcut>
+          {translate('auto.components.right.sidebar.FileExplorerRow.fc747429bf', 'Rename')}
+          <ContextMenuShortcut>
+            {isMac
+              ? '↩'
+              : translate('auto.components.right.sidebar.FileExplorerRow.a06551beee', 'Enter')}
+          </ContextMenuShortcut>
         </ContextMenuItem>
         <ContextMenuItem variant="destructive" onSelect={onRequestDelete}>
           <Trash2 />
-          Delete
+          {translate('auto.components.right.sidebar.FileExplorerRow.addc01145f', 'Delete')}
           <ContextMenuShortcut>{deleteShortcutLabel}</ContextMenuShortcut>
         </ContextMenuItem>
       </ContextMenuContent>

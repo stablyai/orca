@@ -4,10 +4,12 @@
 // than locking to gitlab.com. Anything matching `/<path>/-/(issues|
 // merge_requests)/<digits>` is treated as a GitLab item URL regardless
 // of host.
-const GL_ITEM_PATH_RE = /\/(?:issues|merge_requests)\/(\d+)(?:\/)?$/i
-const GL_ITEM_PATH_FULL_RE = /^\/(.+)\/-\/(issues|merge_requests)\/(\d+)(?:\/)?$/i
+const GL_ITEM_PATH_RE = /\/(?:issues|merge_requests)\/(\d+)(?:\/.*)?$/i
+const GL_ITEM_PATH_FULL_RE = /^\/(.+)\/-\/(issues|merge_requests)\/(\d+)(?:\/.*)?$/i
 
 export type ProjectSlug = {
+  /** GitLab hostname, preserving self-hosted instances from pasted URLs. */
+  host: string
   /** Full GitLab project path including any nested groups. */
   path: string
 }
@@ -92,7 +94,7 @@ export function parseGitLabIssueOrMRLink(input: string): {
   }
 
   return {
-    slug: { path },
+    slug: { host: url.host, path },
     type: match[2].toLowerCase() === 'merge_requests' ? 'mr' : 'issue',
     number: Number.parseInt(match[3], 10)
   }

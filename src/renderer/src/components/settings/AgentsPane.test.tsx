@@ -1,32 +1,80 @@
+/* eslint-disable max-lines -- Why: Agents pane settings interactions share
+   store-backed queue fixtures that are easier to audit beside the UI helper coverage. */
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
-import { AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
-import { getAgentAwakeDescription } from './agent-awake-copy'
+import { getAgentGeneratedTabTitlesTitle } from './agent-generated-tab-title-copy'
+import { getAgentStatusHooksTitle } from './agent-status-hooks-copy'
+import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import {
   AgentAvailabilityControl,
+  AgentPermissionsSetting,
+  AgentGeneratedTabTitlesSetting,
   AgentStatusHooksSetting,
   AgentsPane,
-  AGENTS_PANE_SEARCH_ENTRIES,
-  buildAgentEnabledSettingsUpdate
+  getAgentsPaneSearchEntries,
+  buildAgentAvailabilitySettingsUpdate,
+  createAgentAvailabilityUpdateQueue
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
+import { TooltipProvider } from '../ui/tooltip'
+
+const detectedAgentsMock = vi.hoisted(() => ({
+  detectedIds: ['claude'] as TuiAgent[] | null,
+  refresh: vi.fn()
+}))
+
+vi.mock('@/hooks/useDetectedAgents', () => ({
+  useDetectedAgents: () => ({
+    detectedIds: detectedAgentsMock.detectedIds,
+    isLoading: detectedAgentsMock.detectedIds === null,
+    isRefreshing: false,
+    refresh: detectedAgentsMock.refresh
+  })
+}))
 
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
 }
 
-function renderPane(settings: GlobalSettings): string {
+type Deferred = {
+  promise: Promise<void>
+  resolve: () => void
+}
+
+function createDeferred(): Deferred {
+  let resolve!: () => void
+  const promise = new Promise<void>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
+
+async function flushPromiseQueue(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
+function renderPane(
+  settings: GlobalSettings,
+  props: Partial<React.ComponentProps<typeof AgentsPane>> = {}
+): string {
   return renderToStaticMarkup(
-    React.createElement(AgentsPane, {
-      settings,
-      updateSettings: vi.fn()
-    })
+    React.createElement(
+      TooltipProvider,
+      null,
+      React.createElement(AgentsPane, {
+        settings,
+        updateSettings: vi.fn(),
+        ...props
+      })
+    )
   )
 }
 
@@ -77,6 +125,8 @@ function findSwitchRow(node: unknown, ariaLabel: string): ReactElementLike {
 
 describe('AgentsPane', () => {
   beforeEach(() => {
+    detectedAgentsMock.detectedIds = ['claude']
+    detectedAgentsMock.refresh.mockReset()
     useAppStore.setState({
       settingsSearchQuery: '',
       detectedAgentIds: ['claude'],
@@ -88,11 +138,39 @@ describe('AgentsPane', () => {
   it('renders the keep-awake toggle from settings', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 
+    expect(markup).not.toContain('Agent location')
+    expect(markup).not.toContain('aria-label="Agent location"')
     expect(markup).toContain('Keep computer awake while agents are working')
     expect(markup).toContain(
       'Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
     )
     expect(markup).toContain('aria-checked="false"')
+  })
+
+  it('does not render the legacy agent location control on Windows', () => {
+    const markup = renderPane(
+      {
+        ...getDefaultSettings('/tmp'),
+        terminalWindowsShell: 'wsl.exe'
+      },
+      { wslSupportedPlatform: true, wslCapabilitiesLoading: true }
+    )
+
+    expect(markup).not.toContain('Agent location')
+    expect(markup).not.toContain('aria-label="Agent location"')
+    expect(markup).not.toContain('Show installed agents from WSL default.')
+  })
+
+  it('hides the WSL agent location controls on platforms without WSL support', () => {
+    const markup = renderPane({
+      ...getDefaultSettings('/tmp'),
+      localAgentRuntime: 'wsl',
+      terminalWindowsShell: 'wsl.exe'
+    })
+
+    expect(markup).not.toContain('Agent location')
+    expect(markup).not.toContain('aria-label="Agent location"')
+    expect(markup).not.toContain('WSL is not available on this machine.')
   })
 
   it('describes Windows lid behavior according to the device', () => {
@@ -111,8 +189,9 @@ describe('AgentsPane', () => {
       updateSettings
     })
 
-    const keepAwakeSwitch = findSwitch(element, 'Keep computer awake while agents are working')
-    expect(keepAwakeSwitch.props['aria-label']).toBe('Keep computer awake while agents are working')
+    const keepAwakeTitle = getAgentAwakeTitle()
+    const keepAwakeSwitch = findSwitch(element, keepAwakeTitle)
+    expect(keepAwakeSwitch.props['aria-label']).toBe(keepAwakeTitle)
     expect(keepAwakeSwitch.props['aria-checked']).toBe(false)
 
     const onClick = keepAwakeSwitch.props.onClick as () => void
@@ -133,7 +212,7 @@ describe('AgentsPane', () => {
       updateSettings
     })
 
-    const statusSwitch = findSwitchRow(element, AGENT_STATUS_HOOKS_TITLE)
+    const statusSwitch = findSwitchRow(element, getAgentStatusHooksTitle())
     expect(statusSwitch.props.checked).toBe(true)
 
     const onChange = statusSwitch.props.onChange as () => void
@@ -144,24 +223,89 @@ describe('AgentsPane', () => {
     })
   })
 
+  it('toggles generated tab titles with the next value', () => {
+    const updateSettings = vi.fn()
+    const element = AgentGeneratedTabTitlesSetting({
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        tabAutoGenerateTitle: false
+      },
+      updateSettings
+    })
+
+    const generatedTitleSwitch = findSwitchRow(element, getAgentGeneratedTabTitlesTitle())
+    expect(generatedTitleSwitch.props.checked).toBe(false)
+
+    const onChange = generatedTitleSwitch.props.onChange as () => void
+    onChange()
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      tabAutoGenerateTitle: true
+    })
+  })
+
   it('includes awake and sleep search metadata for the setting', () => {
-    expect(matchesSettingsSearch('awake', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('sleep', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('lid', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('awake', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('sleep', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('lid', getAgentsPaneSearchEntries())).toBe(true)
   })
 
   it('includes hook search metadata for the status setting', () => {
-    expect(matchesSettingsSearch('hooks', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('waiting', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('codex', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('hooks', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('waiting', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('codex', getAgentsPaneSearchEntries())).toBe(true)
+  })
+
+  it('includes generated title search metadata', () => {
+    expect(matchesSettingsSearch('generated title', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('stable session', getAgentsPaneSearchEntries())).toBe(true)
   })
 
   it('includes enable and hide search metadata for agent visibility', () => {
-    expect(matchesSettingsSearch('disable', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('hide', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('disable', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('hide', getAgentsPaneSearchEntries())).toBe(true)
   })
 
-  it('renders per-agent availability as labeled status choices with explicit row copy', () => {
+  it('includes agent permission search metadata', () => {
+    expect(matchesSettingsSearch('permission', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('yolo', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('manual', getAgentsPaneSearchEntries())).toBe(true)
+  })
+
+  it('applies the selected agent permission mode from settings without a mixed segment', () => {
+    const onChange = vi.fn()
+    const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
+    const props = element.props.children.props.action.props as {
+      value: 'yolo'
+      onChange: (value: 'yolo' | 'manual' | 'mixed') => void
+      options: { value: string }[]
+    }
+
+    expect(props.value).toBe('yolo')
+    expect(props.options.map((option) => option.value)).toEqual(['yolo', 'manual'])
+    props.onChange('mixed')
+    expect(onChange).not.toHaveBeenCalled()
+
+    props.onChange('manual')
+    expect(onChange).toHaveBeenCalledWith('manual')
+  })
+
+  it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {
+    for (const agent of AGENT_CATALOG) {
+      expect(matchesSettingsSearch(agent.id, getAgentsPaneSearchEntries())).toBe(true)
+      expect(matchesSettingsSearch(agent.label, getAgentsPaneSearchEntries())).toBe(true)
+      expect(matchesSettingsSearch(agent.cmd, getAgentsPaneSearchEntries())).toBe(true)
+    }
+
+    expect(matchesSettingsSearch('GitHub Copilot', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('open claude', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('command-code', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('command code', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('agy', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('cursor-agent', getAgentsPaneSearchEntries())).toBe(true)
+  })
+
+  it('renders per-agent availability as labeled status choices without row explanation copy', () => {
     const markup = renderPane({
       ...getDefaultSettings('/tmp'),
       disabledTuiAgents: ['claude']
@@ -170,17 +314,19 @@ describe('AgentsPane', () => {
     expect(markup).toContain('aria-label="Claude availability"')
     expect(markup).toContain('Enabled')
     expect(markup).toContain('Disabled')
-    expect(markup).toContain('Hidden from launch and default choices.')
+    expect(markup).not.toContain('Shown in launch and default choices.')
+    expect(markup).not.toContain('Install to use in launch and default choices.')
+    expect(markup).not.toContain('Hidden from launch and default choices.')
     expect(markup).not.toContain('aria-label="Enable Claude"')
     expect(markup).not.toContain('aria-label="Disable Claude"')
   })
 
   it('only toggles agent availability when the segmented value changes', () => {
-    const onToggleEnabled = vi.fn()
+    const onSetEnabled = vi.fn()
     const control = AgentAvailabilityControl({
       label: 'Claude',
       isEnabled: true,
-      onToggleEnabled
+      onSetEnabled
     })
     const props = control.props as {
       value: 'enabled' | 'disabled'
@@ -192,20 +338,21 @@ describe('AgentsPane', () => {
     expect(props.ariaLabel).toBe('Claude availability')
 
     props.onChange('enabled')
-    expect(onToggleEnabled).not.toHaveBeenCalled()
+    expect(onSetEnabled).not.toHaveBeenCalled()
 
     props.onChange('disabled')
-    expect(onToggleEnabled).toHaveBeenCalledTimes(1)
+    expect(onSetEnabled).toHaveBeenCalledWith(false)
   })
 
   it('clears the default agent when disabling that agent', () => {
     expect(
-      buildAgentEnabledSettingsUpdate(
+      buildAgentAvailabilitySettingsUpdate(
         {
           defaultTuiAgent: 'claude',
           disabledTuiAgents: []
         },
-        'claude'
+        'claude',
+        false
       )
     ).toEqual({
       disabledTuiAgents: ['claude'],
@@ -215,15 +362,128 @@ describe('AgentsPane', () => {
 
   it('keeps the default setting untouched when re-enabling an agent', () => {
     expect(
-      buildAgentEnabledSettingsUpdate(
+      buildAgentAvailabilitySettingsUpdate(
         {
           defaultTuiAgent: null,
           disabledTuiAgents: ['claude']
         },
-        'claude'
+        'claude',
+        true
       )
     ).toEqual({
       disabledTuiAgents: []
     })
+  })
+
+  it('does not include legacy agent location search metadata', () => {
+    expect(matchesSettingsSearch('agent location', getAgentsPaneSearchEntries())).toBe(false)
+    expect(matchesSettingsSearch('installed agents in wsl', getAgentsPaneSearchEntries())).toBe(
+      false
+    )
+  })
+
+  it('serializes rapid availability writes against the latest settings snapshot', async () => {
+    const queueAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
+    const settings: GlobalSettings = {
+      ...getDefaultSettings('/tmp'),
+      defaultTuiAgent: null,
+      disabledTuiAgents: []
+    }
+    const writes: Deferred[] = []
+    const updates: Partial<GlobalSettings>[] = []
+
+    useAppStore.setState({ settings })
+    const updateSettings = vi.fn((update: Partial<GlobalSettings>) => {
+      updates.push(update)
+      const nextSettings = {
+        ...(useAppStore.getState().settings ?? settings),
+        ...update
+      }
+      const write = createDeferred()
+      writes.push(write)
+      return write.promise.then(() => {
+        useAppStore.setState({ settings: nextSettings })
+      })
+    })
+
+    const firstWrite = queueAvailabilityUpdate({
+      getSettings: () => useAppStore.getState().settings,
+      fallbackSettings: settings,
+      updateSettings,
+      agentId: 'claude',
+      enabled: false
+    })
+    const secondWrite = queueAvailabilityUpdate({
+      getSettings: () => useAppStore.getState().settings,
+      fallbackSettings: settings,
+      updateSettings,
+      agentId: 'codex',
+      enabled: false
+    })
+
+    await flushPromiseQueue()
+    expect(updateSettings).toHaveBeenCalledTimes(1)
+    expect(updates[0]).toMatchObject({ disabledTuiAgents: ['claude'] })
+
+    writes[0].resolve()
+    await firstWrite
+    await flushPromiseQueue()
+
+    expect(updateSettings).toHaveBeenCalledTimes(2)
+    expect(updates[1]).toMatchObject({ disabledTuiAgents: ['claude', 'codex'] })
+
+    writes[1].resolve()
+    await secondWrite
+  })
+
+  it('keeps repeated queued availability requests idempotent', async () => {
+    const queueAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
+    const settings: GlobalSettings = {
+      ...getDefaultSettings('/tmp'),
+      defaultTuiAgent: null,
+      disabledTuiAgents: []
+    }
+    const writes: Deferred[] = []
+    const updates: Partial<GlobalSettings>[] = []
+
+    useAppStore.setState({ settings })
+    const updateSettings = vi.fn((update: Partial<GlobalSettings>) => {
+      updates.push(update)
+      const nextSettings = {
+        ...(useAppStore.getState().settings ?? settings),
+        ...update
+      }
+      const write = createDeferred()
+      writes.push(write)
+      return write.promise.then(() => {
+        useAppStore.setState({ settings: nextSettings })
+      })
+    })
+
+    const firstWrite = queueAvailabilityUpdate({
+      getSettings: () => useAppStore.getState().settings,
+      fallbackSettings: settings,
+      updateSettings,
+      agentId: 'claude',
+      enabled: false
+    })
+    const secondWrite = queueAvailabilityUpdate({
+      getSettings: () => useAppStore.getState().settings,
+      fallbackSettings: settings,
+      updateSettings,
+      agentId: 'claude',
+      enabled: false
+    })
+
+    await flushPromiseQueue()
+    writes[0].resolve()
+    await firstWrite
+    await flushPromiseQueue()
+
+    expect(updateSettings).toHaveBeenCalledTimes(2)
+    expect(updates[1]).toMatchObject({ disabledTuiAgents: ['claude'] })
+
+    writes[1].resolve()
+    await secondWrite
   })
 })

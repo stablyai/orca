@@ -6,6 +6,10 @@ import {
   type RawGiteaPullRequest
 } from './pull-request-mappers'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
+import {
+  getHostedReviewLocalGitOptions,
+  type HostedReviewExecutionOptions
+} from '../source-control/hosted-review-git-options'
 
 const REQUEST_TIMEOUT_MS = 5000
 const PULL_REQUEST_PAGE_LIMIT = 50
@@ -186,9 +190,15 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
 
 export async function getGiteaPullRequest(
   repoPath: string,
-  prNumber: number
+  prNumber: number,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<GiteaPullRequestInfo | null> {
-  const repo = await getGiteaRepoRef(repoPath)
+  const repo = await getGiteaRepoRef(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   if (!repo) {
     return null
   }
@@ -202,14 +212,20 @@ export async function getGiteaPullRequest(
 export async function getGiteaPullRequestForBranch(
   repoPath: string,
   branch: string,
-  linkedPRNumber?: number | null
+  linkedPRNumber?: number | null,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
 ): Promise<GiteaPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
     return null
   }
 
-  const repo = await getGiteaRepoRef(repoPath)
+  const repo = await getGiteaRepoRef(
+    repoPath,
+    connectionId,
+    getHostedReviewLocalGitOptions(options)
+  )
   if (!repo) {
     return null
   }
@@ -248,6 +264,10 @@ export async function getGiteaPullRequestForBranch(
   return raw ? normalizePullRequest(repo, raw) : null
 }
 
-export async function getGiteaRepoSlug(repoPath: string): Promise<GiteaRepoRef | null> {
-  return getGiteaRepoRef(repoPath)
+export async function getGiteaRepoSlug(
+  repoPath: string,
+  connectionId?: string | null,
+  options: HostedReviewExecutionOptions = {}
+): Promise<GiteaRepoRef | null> {
+  return getGiteaRepoRef(repoPath, connectionId, getHostedReviewLocalGitOptions(options))
 }

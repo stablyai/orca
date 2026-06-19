@@ -12,6 +12,7 @@ import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-f
 import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import { renameRuntimePath } from '@/runtime/runtime-file-client'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
@@ -123,8 +124,6 @@ export function useFileExplorerDragDrop({
     }
   }, [])
 
-  useEffect(() => () => stopDragEdgeScroll(), [stopDragEdgeScroll])
-
   const clearDragState = useCallback(() => {
     rootDragCounterRef.current = 0
     nativeRootDragCounterRef.current = 0
@@ -153,11 +152,12 @@ export function useFileExplorerDragDrop({
     window.addEventListener('blur', handleGlobalDragFinish)
 
     return () => {
+      stopDragEdgeScroll()
       document.removeEventListener('drop', handleGlobalDragFinish, true)
       document.removeEventListener('dragend', handleGlobalDragFinish, true)
       window.removeEventListener('blur', handleGlobalDragFinish)
     }
-  }, [stopAndClearDragState])
+  }, [stopAndClearDragState, stopDragEdgeScroll])
 
   // requestAnimationFrame + small per-frame deltas avoids choppy jumps from irregular dragover events
   const tickDragEdgeScroll = useCallback(() => {
@@ -234,7 +234,7 @@ export function useFileExplorerDragDrop({
         try {
           const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
           const fileContext = {
-            settings: useAppStore.getState().settings,
+            settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId

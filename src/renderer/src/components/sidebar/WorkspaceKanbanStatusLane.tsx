@@ -10,13 +10,13 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import WorkspaceKanbanCard from './WorkspaceKanbanCard'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
+import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanStatusLaneProps = {
   status: WorkspaceStatusDefinition
   items: readonly Worktree[]
   repoMap: Map<string, Repo>
   activeWorktreeId: string | null
-  compact: boolean
   columnWidth: number
   isResizingColumn: boolean
   isDragTarget: boolean
@@ -43,7 +43,6 @@ export default function WorkspaceKanbanStatusLane({
   items,
   repoMap,
   activeWorktreeId,
-  compact,
   columnWidth,
   isResizingColumn,
   isDragTarget,
@@ -83,12 +82,16 @@ export default function WorkspaceKanbanStatusLane({
     <section
       data-workspace-status-drop-target=""
       data-workspace-status={status.id}
+      data-contextual-tour-target={
+        status.id === 'completed' ? 'workspace-board-done-lane' : undefined
+      }
       className={cn(
         'group/lane',
-        'relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-t-2 border-sidebar-border transition-colors',
+        'relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-t-2 border-worktree-sidebar-border transition-colors',
         meta.border,
         meta.laneTint,
-        isDragTarget && 'border-sidebar-ring bg-sidebar-accent/70'
+        isDragTarget && 'border-worktree-sidebar-ring bg-worktree-sidebar-accent/70',
+        'data-[workspace-board-external-drag-target=true]:border-worktree-sidebar-ring data-[workspace-board-external-drag-target=true]:bg-worktree-sidebar-accent/70'
       )}
       onDragOver={(event) => onDragOver(event, status.id)}
       onDragLeave={onDragLeave}
@@ -98,14 +101,17 @@ export default function WorkspaceKanbanStatusLane({
         data-workspace-board-column-resize-handle=""
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize workspace board columns"
+        aria-label={translate(
+          'auto.components.sidebar.WorkspaceKanbanStatusLane.3611d1ae7f',
+          'Resize workspace board columns'
+        )}
         aria-valuemin={WORKSPACE_BOARD_COLUMN_WIDTH_MIN}
         aria-valuemax={WORKSPACE_BOARD_COLUMN_WIDTH_MAX}
         aria-valuenow={columnWidth}
         tabIndex={0}
         className={cn(
           'group absolute right-0 top-0 z-20 h-9 w-2 cursor-col-resize outline-none',
-          'focus-visible:ring-1 focus-visible:ring-sidebar-ring',
+          'focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
           isResizingColumn && 'cursor-col-resize'
         )}
         onPointerDown={onColumnResizeStart}
@@ -115,8 +121,8 @@ export default function WorkspaceKanbanStatusLane({
         <span
           className={cn(
             'absolute inset-y-2 left-1/2 w-px -translate-x-1/2 rounded-full bg-transparent transition-colors',
-            'group-hover:bg-sidebar-ring/55 group-focus-visible:bg-sidebar-ring',
-            isResizingColumn && 'bg-sidebar-ring'
+            'group-hover:bg-worktree-sidebar-ring/55 group-focus-visible:bg-worktree-sidebar-ring',
+            isResizingColumn && 'bg-worktree-sidebar-ring'
           )}
         />
       </div>
@@ -157,7 +163,6 @@ export default function WorkspaceKanbanStatusLane({
                   selectedWorktrees={
                     isSelected && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
                   }
-                  compact={compact}
                   onActivate={onActivate}
                   onSelectionGesture={onSelectionGesture}
                   onContextMenuSelect={onContextMenuSelect}
@@ -167,7 +172,7 @@ export default function WorkspaceKanbanStatusLane({
           </div>
         ) : (
           <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-border/70 text-[11px] text-muted-foreground">
-            Empty
+            {translate('auto.components.sidebar.WorkspaceKanbanStatusLane.8ad104642b', 'Empty')}
           </div>
         )}
         <Tooltip>
@@ -177,7 +182,7 @@ export default function WorkspaceKanbanStatusLane({
               variant="secondary"
               size="xs"
               className={cn(
-                'mt-2 h-7 w-full opacity-0 transition-opacity',
+                'mt-2 h-7 w-full can-hover:opacity-0 transition-opacity',
                 'group-hover/lane:opacity-100 group-focus-within/lane:opacity-100'
               )}
               aria-label={createTooltip}

@@ -23,6 +23,7 @@
 //   default env is `remote`, a location marker ignored by dev-vs-prod checks.
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
 
 // Why: the local hook server knows the discriminator from URL pathname routing
 // (`/hook/<source>`); the relay equally must tag each forwarded notification
@@ -35,6 +36,7 @@ export type AgentHookSource =
   | 'codex'
   | 'gemini'
   | 'antigravity'
+  | 'amp'
   | 'opencode'
   | 'cursor'
   | 'pi'
@@ -44,6 +46,7 @@ export type AgentHookSource =
   | 'grok'
   | 'copilot'
   | 'hermes'
+  | 'devin'
 
 /** Env marker used by the remote relay. It is a transport/location marker, not
  *  a dev-vs-prod build tag, so main-process env mismatch diagnostics ignore it. */
@@ -60,6 +63,9 @@ export type AgentHookRelayEnvelope = {
   /** Preserved from the relay-side normalized hook event so Orca can
    *  distinguish a true same-prompt retry from a cached-prompt tool ping. */
   hasExplicitPrompt?: boolean
+  /** Optional stable per-turn key from the relay-side listener. Used only for
+   *  in-memory dedupe; never included in product telemetry payloads. */
+  promptInteractionKey?: string
   /** Hook discriminator preserved for main-process transition rules. */
   hookEventName?: string
   /** Claude tool execution id, when the source hook provides one. */
@@ -68,6 +74,8 @@ export type AgentHookRelayEnvelope = {
   toolAgentId?: string
   /** Claude agent type, used only as a lower-confidence identity fallback. */
   toolAgentType?: string
+  /** Provider-owned conversation/session id needed to resume a sleeping agent. */
+  providerSession?: AgentProviderSessionMetadata
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
@@ -91,7 +99,7 @@ export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as co
 
 /** JSON-RPC request method Orca issues at session-ready to ship the
  *  OpenCode/Pi plugin source files to the relay so it can materialize the
- *  per-PTY overlay dirs on the remote. */
+ *  overlay dirs on the remote. */
 export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as const
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.

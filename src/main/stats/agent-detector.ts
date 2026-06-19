@@ -1,5 +1,6 @@
 import { extractLastOscTitle, detectAgentStatusFromTitle } from '../../shared/agent-detection'
 import type { AgentStatus } from '../../shared/agent-detection'
+import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
 import type { StatsCollector } from './collector'
 
 type PtyAgentState = 'unknown' | 'agent' | 'stopped'
@@ -18,6 +19,10 @@ type PtyRecord = {
   lastMeaningfulOutputAt: number | null
 }
 
+type MeaningfulContentDetector = (chunk: string) => boolean
+
+const MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT = 4096
+
 /**
  * Lightweight normalization to detect whether a PTY data chunk contains
  * meaningful (non-ANSI, non-OSC) output. Mirrors the regex passes in
@@ -28,7 +33,13 @@ function hasMeaningfulContent(chunk: string): boolean {
   // chain just to prove they contain visible output.
   for (let index = 0; index < chunk.length; index++) {
     const code = chunk.charCodeAt(index)
-    if (code === 0x1b || code < 0x09 || (code > 0x0d && code < 0x20) || code > 0x7e) {
+    if (
+      code === 0x1b ||
+      code === 0x7f ||
+      code < 0x09 ||
+      (code > 0x0d && code < 0x20) ||
+      (code >= 0x80 && code <= 0x9f)
+    ) {
       break
     }
     if (code > 0x20) {
@@ -42,13 +53,19 @@ function hasMeaningfulContent(chunk: string): boolean {
     // eslint-disable-next-line no-control-regex
     .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '') // OSC sequences
     // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\][^\x07]*(?:\x1b)?$/g, '') // incomplete OSC tail
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b[PX^_][\s\S]*?\x1b\\/g, '') // ST-terminated string controls
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b[PX^_][\s\S]*(?:\x1b)?$/g, '') // incomplete string-control tail
+    // eslint-disable-next-line no-control-regex
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '') // CSI sequences
     // eslint-disable-next-line no-control-regex
     .replace(/\x1b[@-_]/g, '') // Fe sequences
     // eslint-disable-next-line no-control-regex
     .replace(/\u0008/g, '') // backspace
     // eslint-disable-next-line no-control-regex
-    .replace(/[^\x09\x0a\x20-\x7e]/g, '') // non-printable
+    .replace(/[\x00-\x08\x0b-\x1f\x7f-\x9f]/g, '') // non-printable
     .trim()
   return stripped.length > 0
 }
@@ -69,12 +86,24 @@ function hasMeaningfulContent(chunk: string): boolean {
  * one giant session and we would never emit the idle-time stop boundaries that
  * the stats design relies on.
  */
+// Why: onExit deletes a PTY's record instead of leaving a tombstone, so a data
+// chunk delivered AFTER exit (the exit-then-data race during pty.ts shutdown)
+// would resurrect a fresh record nothing ever deletes. Remember recently-exited
+// ids in a bounded FIFO to refuse resurrection; the cap keeps the guard itself
+// bounded, and per-spawn UUID ptyIds are never reused so aged-out ids are safe.
+const MAX_EXITED_PTY_IDS = 1024
+
 export class AgentDetector {
   private ptys = new Map<string, PtyRecord>()
+  private oscTitleScanTailByPtyId = new Map<string, string>()
+  private meaningfulContentScanTailByPtyId = new Map<string, string>()
+  private exitedPtyIds = new Set<string>()
   private stats: StatsCollector
+  private meaningfulContentDetector: MeaningfulContentDetector
 
-  constructor(stats: StatsCollector) {
+  constructor(stats: StatsCollector, meaningfulContentDetector = hasMeaningfulContent) {
     this.stats = stats
+    this.meaningfulContentDetector = meaningfulContentDetector
   }
 
   /**
@@ -85,6 +114,11 @@ export class AgentDetector {
   onData(ptyId: string, rawData: string, at: number): void {
     let record = this.ptys.get(ptyId)
     if (!record) {
+      // Why: refuse to resurrect a PTY that already exited — a late post-exit
+      // data chunk must not create a new tracked record (which nothing deletes).
+      if (this.exitedPtyIds.has(ptyId)) {
+        return
+      }
       record = {
         state: 'unknown',
         sessionOpen: false,
@@ -99,12 +133,22 @@ export class AgentDetector {
       return
     }
 
-    const hasMeaningfulOutput = hasMeaningfulContent(rawData)
-    if (record.sessionOpen && hasMeaningfulOutput) {
+    let hasMeaningfulOutput: boolean | null = null
+    const previousMeaningfulTail = this.meaningfulContentScanTailByPtyId.get(ptyId)
+    const meaningfulData = previousMeaningfulTail ? `${previousMeaningfulTail}${rawData}` : rawData
+    const getHasMeaningfulOutput = (): boolean => {
+      if (hasMeaningfulOutput === null) {
+        hasMeaningfulOutput = this.meaningfulContentDetector(meaningfulData)
+        this.updateMeaningfulContentScanTail(ptyId, meaningfulData)
+      }
+      return hasMeaningfulOutput
+    }
+
+    if (record.sessionOpen && getHasMeaningfulOutput()) {
       record.lastMeaningfulOutputAt = at
     }
 
-    const title = extractLastOscTitle(rawData)
+    const title = this.extractLastOscTitleForPty(ptyId, rawData)
     if (title === null) {
       return
     }
@@ -119,7 +163,7 @@ export class AgentDetector {
       record.lastStatus = status
       record.sessionOpen = true
       record.sessionStartAt = at
-      record.lastMeaningfulOutputAt = hasMeaningfulOutput ? at : null
+      record.lastMeaningfulOutputAt = getHasMeaningfulOutput() ? at : null
       this.stats.onAgentStart(ptyId, at)
       return
     }
@@ -139,7 +183,7 @@ export class AgentDetector {
       // title is the start boundary for the next tracked session.
       record.sessionOpen = true
       record.sessionStartAt = at
-      record.lastMeaningfulOutputAt = hasMeaningfulOutput ? at : null
+      record.lastMeaningfulOutputAt = getHasMeaningfulOutput() ? at : null
       this.stats.onAgentStart(ptyId, at)
     }
 
@@ -164,5 +208,103 @@ export class AgentDetector {
 
     record.state = 'stopped'
     this.ptys.delete(ptyId)
+    this.oscTitleScanTailByPtyId.delete(ptyId)
+    this.meaningfulContentScanTailByPtyId.delete(ptyId)
+    // Remember this id (bounded FIFO) so a late data chunk can't resurrect it.
+    this.exitedPtyIds.delete(ptyId)
+    this.exitedPtyIds.add(ptyId)
+    while (this.exitedPtyIds.size > MAX_EXITED_PTY_IDS) {
+      const oldest = this.exitedPtyIds.values().next()
+      if (oldest.done) {
+        break
+      }
+      this.exitedPtyIds.delete(oldest.value)
+    }
   }
+
+  private extractLastOscTitleForPty(ptyId: string, rawData: string): string | null {
+    const previousTail = this.oscTitleScanTailByPtyId.get(ptyId)
+    if (!previousTail && !rawData.includes('\x1b')) {
+      return null
+    }
+    const input = `${previousTail ?? ''}${rawData}`
+    const scanTail = extractOscTitleScanTail(input)
+    if (scanTail.length > 0) {
+      this.oscTitleScanTailByPtyId.set(ptyId, scanTail)
+    } else {
+      this.oscTitleScanTailByPtyId.delete(ptyId)
+    }
+    return extractLastOscTitle(input)
+  }
+
+  private updateMeaningfulContentScanTail(ptyId: string, rawData: string): void {
+    const tail = extractMeaningfulContentScanTail(rawData)
+    if (tail.length > 0) {
+      this.meaningfulContentScanTailByPtyId.set(ptyId, tail)
+    } else {
+      this.meaningfulContentScanTailByPtyId.delete(ptyId)
+    }
+  }
+
+  get trackedPtyCount(): number {
+    return this.ptys.size
+  }
+}
+
+function extractMeaningfulContentScanTail(value: string): string {
+  const escapeIndex = value.lastIndexOf('\x1b')
+  if (escapeIndex === -1) {
+    return ''
+  }
+  const parsed = parseMeaningfulControlSequence(value, escapeIndex)
+  return parsed === null ? trimMeaningfulContentScanTail(value.slice(escapeIndex)) : ''
+}
+
+function parseMeaningfulControlSequence(value: string, escapeIndex: number): number | null {
+  const introducer = value[escapeIndex + 1]
+  if (!introducer) {
+    return null
+  }
+  if (introducer === '[') {
+    for (let index = escapeIndex + 2; index < value.length; index += 1) {
+      const code = value.charCodeAt(index)
+      if (code >= 0x40 && code <= 0x7e) {
+        return index
+      }
+    }
+    return null
+  }
+  if (introducer === ']') {
+    for (let index = escapeIndex + 2; index < value.length; index += 1) {
+      if (value[index] === '\u0007') {
+        return index
+      }
+      if (value[index] === '\u001b' && value[index + 1] === '\\') {
+        return index + 1
+      }
+    }
+    return null
+  }
+  if (isStTerminatedStringControlIntroducer(introducer)) {
+    for (let index = escapeIndex + 2; index < value.length; index += 1) {
+      if (value[index] === '\u001b' && value[index + 1] === '\\') {
+        return index + 1
+      }
+    }
+    return null
+  }
+  return escapeIndex + 1
+}
+
+function isStTerminatedStringControlIntroducer(introducer: string): boolean {
+  return introducer === 'P' || introducer === 'X' || introducer === '^' || introducer === '_'
+}
+
+function trimMeaningfulContentScanTail(value: string): string {
+  if (value.length <= MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT) {
+    return value
+  }
+  const introducer = value.slice(0, Math.min(2, value.length))
+  const suffixBudget = Math.max(0, MEANINGFUL_CONTENT_SCAN_TAIL_LIMIT - introducer.length)
+  return `${introducer}${value.slice(-suffixBudget)}`
 }

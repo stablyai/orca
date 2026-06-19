@@ -5,6 +5,7 @@ import type { AgentsStep } from '../../../../shared/agents-orchestration-steps'
 import type { WorkbenchStep } from '../../../../shared/workbench-steps'
 import type { ReviewStep } from '../../../../shared/review-steps'
 import type { GlobalSettings } from '../../../../shared/types'
+import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { cn } from '@/lib/utils'
 import { PreviewMedia, RelatedFeatures } from './FeatureWallPreview'
 import { TasksAnimatedVisual } from './TasksAnimatedVisual'
@@ -20,6 +21,7 @@ import { BrowserUseSkillSetupCard } from './BrowserUseSkillSetupCard'
 import { UsageAccountsCard } from './agents-orchestration/UsageAccountsCard'
 import { AiCommitPrSettingsCard } from './AiCommitPrSettingsCard'
 import { KeepAwakeCard } from './KeepAwakeCard'
+import { translate } from '@/i18n/i18n'
 
 export function FeatureWallBody(props: {
   selected: FeatureWallWorkflow
@@ -31,8 +33,8 @@ export function FeatureWallBody(props: {
   agentsActiveStep: AgentsStep | null
   workbenchActiveStep: WorkbenchStep | null
   reviewActiveStep: ReviewStep | null
-  onOrchestrationSkillInstalledChange: (installed: boolean) => void
-  onBrowserUseSkillInstalledChange: (installed: boolean) => void
+  orchestrationSkill: InstalledAgentSkillState
+  browserUseSkill: InstalledAgentSkillState
   onUsageAccountStateChange: () => void | Promise<void>
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => void
@@ -47,8 +49,8 @@ export function FeatureWallBody(props: {
     agentsActiveStep,
     workbenchActiveStep,
     reviewActiveStep,
-    onOrchestrationSkillInstalledChange,
-    onBrowserUseSkillInstalledChange,
+    orchestrationSkill,
+    browserUseSkill,
     onUsageAccountStateChange
   } = props
   const isWorkspaces = selected.id === 'workspaces'
@@ -65,14 +67,12 @@ export function FeatureWallBody(props: {
   const isReviewShip = isReview && reviewActiveStep?.id === 'ship'
   const hasAnimatedVisual = isWorkspaces || isTasks || isAgents || isWorkbench || isReview
   const isOnboardingUsage = isAgentsUsage && source === 'onboarding'
+  const isOnboardingStatuses = isAgentsStatuses && source === 'onboarding'
   const isOnboardingWorkbenchBrowser = isWorkbenchBrowser && source === 'onboarding'
-  const isReviewSettingBesideVisual = isReviewPrView || isReviewShip
-  const isOnboardingOrchestrationBesideVisual = isAgentsOrchestration && source === 'onboarding'
-  const orchestrationVisualWidthPx = isOnboardingOrchestrationBesideVisual ? 440 : 520
-  const orchestrationVisualHeightPx = 392
-  const isCompactBesideVisual =
-    source === 'onboarding' &&
-    (isAgentsUsage || isReviewSettingBesideVisual || isAgentsOrchestration)
+  const isReviewSettingStep = isReviewPrView || isReviewShip
+  const isOnboardingOrchestration = isAgentsOrchestration && source === 'onboarding'
+  const orchestrationVisualWidthPx = isOnboardingOrchestration ? 440 : 520
+  const orchestrationVisualHeightPx = isOnboardingOrchestration ? 240 : 392
   const animatedVisualWidth = isWorkspaces
     ? 'w-[440px]'
     : isWorkbenchEditor
@@ -87,12 +87,12 @@ export function FeatureWallBody(props: {
             ? 'w-[480px]'
             : isAgentsUsage
               ? isOnboardingUsage
-                ? 'w-[340px]'
+                ? 'w-[360px]'
                 : 'w-[400px]'
               : isAgentsStatuses
                 ? 'w-[420px]'
                 : isAgentsOrchestration
-                  ? isOnboardingOrchestrationBesideVisual
+                  ? isOnboardingOrchestration
                     ? 'w-[440px]'
                     : 'w-[520px]'
                   : 'w-[520px]'
@@ -103,20 +103,21 @@ export function FeatureWallBody(props: {
         ? 'max-w-[400px]'
         : 'max-w-[440px]'
       : isAgentsStatuses
-        ? 'max-w-[520px]'
+        ? isOnboardingStatuses
+          ? 'max-w-[360px]'
+          : 'max-w-[520px]'
         : isAgentsOrchestration
-          ? isOnboardingOrchestrationBesideVisual
+          ? isOnboardingOrchestration
             ? 'max-w-[360px]'
             : 'max-w-[400px]'
-          : isReviewSettingBesideVisual
-            ? isCompactBesideVisual
-              ? 'max-w-[320px]'
-              : 'max-w-[420px]'
+          : isReviewSettingStep
+            ? 'max-w-[420px]'
             : isWorkbenchBrowser
               ? isOnboardingWorkbenchBrowser
                 ? 'max-w-[340px]'
                 : 'max-w-[400px]'
               : 'max-w-[480px]'
+  const setupTerminalHeightPx = source === 'onboarding' ? 140 : 240
   const settingContent = isTasks ? (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <LinearRow compact />
@@ -129,22 +130,23 @@ export function FeatureWallBody(props: {
   ) : isAgentsOrchestration ? (
     <OrchestrationSetupCard
       compact
-      terminalHeightPx={240}
-      onInstalledChange={onOrchestrationSkillInstalledChange}
+      terminalHeightPx={setupTerminalHeightPx}
+      skill={orchestrationSkill}
     />
   ) : isWorkbenchBrowser ? (
     <BrowserUseSkillSetupCard
       compact
-      terminalHeightPx={240}
-      onInstalledChange={onBrowserUseSkillInstalledChange}
+      terminalHeightPx={setupTerminalHeightPx}
+      skill={browserUseSkill}
     />
   ) : isReviewPrView ? (
     <GitHubRow compact />
   ) : isReviewShip ? (
     <AiCommitPrSettingsCard />
   ) : null
-  const settingBesideVisual =
-    isAgentsUsage || isAgentsOrchestration || isWorkbenchBrowser || isReviewSettingBesideVisual
+  const shouldUseOnboardingTourZones =
+    source === 'onboarding' && hasAnimatedVisual && Boolean(settingContent)
+  const shouldStickSetupToBottom = shouldUseOnboardingTourZones
   // Why: several visuals expand/collapse internally; setup controls should sit
   // after a stable stage so they do not jump with the animation loop.
   const visualStageHeight = isTasks
@@ -158,11 +160,17 @@ export function FeatureWallBody(props: {
           : isReview
             ? 'h-[416px]'
             : isAgentsOrchestration
-              ? 'h-[392px]'
+              ? isOnboardingOrchestration
+                ? 'h-[240px]'
+                : 'h-[392px]'
               : isAgentsStatuses
-                ? 'h-[250px]'
+                ? isOnboardingStatuses
+                  ? 'h-[200px]'
+                  : 'h-[250px]'
                 : isAgentsUsage
-                  ? 'h-[392px]'
+                  ? isOnboardingUsage
+                    ? 'h-[320px]'
+                    : 'h-[392px]'
                   : 'h-[330px]'
   const animatedVisual = isWorkspaces ? (
     <WorkspacesAnimatedVisual reducedMotion={prefersReducedMotion} />
@@ -189,32 +197,41 @@ export function FeatureWallBody(props: {
     <AgentsOrchestrationVisual
       reducedMotion={prefersReducedMotion}
       activeStepId={agentsActiveStep.id}
-      widthPx={isAgentsUsage ? (isOnboardingUsage ? 340 : 400) : isAgentsStatuses ? 420 : undefined}
-      heightPx={isAgentsStatuses ? 250 : undefined}
+      widthPx={isAgentsUsage ? (isOnboardingUsage ? 360 : 400) : isAgentsStatuses ? 420 : undefined}
+      heightPx={
+        isAgentsUsage
+          ? isOnboardingUsage
+            ? 320
+            : undefined
+          : isAgentsStatuses
+            ? isOnboardingStatuses
+              ? 200
+              : 250
+            : undefined
+      }
     />
   ) : null
   const animatedVisualNode = (
-    <div
-      className={cn(
-        'flex w-full items-start justify-center',
-        visualStageHeight,
-        settingBesideVisual ? 'self-center' : null
-      )}
-    >
+    <div className={cn('flex w-full items-start justify-center', visualStageHeight)}>
       <div
         className={cn(
           'max-w-full',
           animatedVisualWidth,
-          isAgentsOrchestration ? 'translate-x-6' : null
+          isAgentsOrchestration && !isOnboardingOrchestration ? 'translate-x-6' : null
         )}
       >
         {animatedVisual}
       </div>
     </div>
   )
+  const previewVisualNode = shouldUseOnboardingTourZones ? (
+    <TourZone className="items-center">{animatedVisualNode}</TourZone>
+  ) : (
+    animatedVisualNode
+  )
 
   return (
-    <div className={cn('flex flex-col gap-5 px-9 pt-1', isTasks ? 'pb-3' : 'pb-9')}>
+    <div className="flex min-h-full flex-col gap-4 px-8 pb-0 pt-1">
       <div
         className={cn(
           'grid grid-cols-1 items-start gap-7',
@@ -232,74 +249,7 @@ export function FeatureWallBody(props: {
         ) : null}
 
         {hasAnimatedVisual ? (
-          settingContent && settingBesideVisual ? (
-            <div className="@container w-full">
-              <div
-                className={cn(
-                  'grid w-full items-start',
-                  isOnboardingOrchestrationBesideVisual ||
-                    isOnboardingWorkbenchBrowser ||
-                    (isCompactBesideVisual && isReviewSettingBesideVisual)
-                    ? 'gap-4'
-                    : 'gap-5',
-                  settingBesideVisual ? 'justify-between' : 'justify-center',
-                  isAgentsUsage
-                    ? isOnboardingUsage
-                      ? '@[780px]:grid-cols-[minmax(360px,400px)_minmax(320px,340px)] @[780px]:items-center'
-                      : '@[860px]:grid-cols-[minmax(400px,440px)_minmax(360px,400px)] @[860px]:items-center'
-                    : isWorkbenchBrowser
-                      ? isOnboardingWorkbenchBrowser
-                        ? '@[800px]:grid-cols-[minmax(320px,340px)_minmax(440px,460px)] @[800px]:items-center'
-                        : '@[880px]:grid-cols-[minmax(360px,400px)_minmax(440px,480px)] @[880px]:items-center'
-                      : isOnboardingOrchestrationBesideVisual
-                        ? '@[800px]:grid-cols-[minmax(340px,360px)_minmax(420px,440px)] @[800px]:items-center'
-                        : isReviewSettingBesideVisual
-                          ? isCompactBesideVisual
-                            ? '@[800px]:grid-cols-[minmax(300px,320px)_minmax(460px,480px)] @[800px]:items-center'
-                            : cn(
-                                '@[840px]:grid-cols-[minmax(380px,420px)_minmax(440px,480px)]',
-                                isReviewShip ? '@[840px]:items-start' : '@[840px]:items-center'
-                              )
-                          : isCompactBesideVisual
-                            ? '@[700px]:grid-cols-[minmax(300px,340px)_minmax(320px,340px)] @[700px]:items-center'
-                            : isAgentsOrchestration
-                              ? '@[860px]:grid-cols-[minmax(340px,380px)_auto] @[860px]:items-center'
-                              : '@[760px]:grid-cols-[auto_minmax(320px,420px)] @[760px]:items-center'
-                )}
-              >
-                <div
-                  className={cn(
-                    'w-full',
-                    isReviewShip ? 'translate-y-0.5 self-start' : 'self-center',
-                    isAgentsUsage
-                      ? isOnboardingUsage
-                        ? 'max-w-[400px]'
-                        : 'max-w-[440px]'
-                      : isWorkbenchBrowser
-                        ? isOnboardingWorkbenchBrowser
-                          ? 'max-w-[340px]'
-                          : 'max-w-[400px]'
-                        : isOnboardingOrchestrationBesideVisual
-                          ? 'max-w-[360px]'
-                          : isCompactBesideVisual
-                            ? isReviewSettingBesideVisual
-                              ? 'max-w-[320px]'
-                              : 'max-w-[340px]'
-                            : isAgentsOrchestration
-                              ? 'max-w-[400px]'
-                              : isReviewSettingBesideVisual
-                                ? 'max-w-[420px]'
-                                : 'max-w-[420px]'
-                  )}
-                >
-                  {settingContent}
-                </div>
-                {animatedVisualNode}
-              </div>
-            </div>
-          ) : (
-            animatedVisualNode
-          )
+          previewVisualNode
         ) : (
           <aside className="flex flex-col gap-5">
             {selected.relatedTileIds.length > 0 ? (
@@ -308,9 +258,30 @@ export function FeatureWallBody(props: {
           </aside>
         )}
       </div>
-      {settingContent && !settingBesideVisual ? (
-        <div className={cn('mx-auto w-full', settingWidth)}>{settingContent}</div>
+      {settingContent && shouldStickSetupToBottom ? (
+        <div className="sticky bottom-0 z-10 -mx-8 mt-auto border-t border-border bg-card/95 px-8 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/85">
+          <TourZone
+            className={cn(
+              'scrollbar-sleek mx-auto max-h-[220px] w-full gap-2 overflow-y-auto',
+              settingWidth
+            )}
+          >
+            <>
+              <div className="text-center text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                {translate('auto.components.feature.wall.FeatureWallBody.25ec5356d6', 'Setup')}
+              </div>
+              {settingContent}
+            </>
+          </TourZone>
+        </div>
+      ) : settingContent ? (
+        <TourZone className={cn('mx-auto w-full', settingWidth)}>{settingContent}</TourZone>
       ) : null}
     </div>
   )
+}
+
+function TourZone(props: { className?: string; children: JSX.Element | null }): JSX.Element {
+  const { className, children } = props
+  return <div className={cn('flex min-w-0 flex-col', className)}>{children}</div>
 }

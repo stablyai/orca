@@ -80,6 +80,7 @@ describe('getPRCheckDetails', () => {
         stdout: JSON.stringify({
           jobs: [
             {
+              id: 8801,
               name: 'track-community-pr',
               status: 'completed',
               conclusion: 'success',
@@ -117,8 +118,10 @@ describe('getPRCheckDetails', () => {
       ],
       jobs: [
         {
+          id: 8801,
           name: 'track-community-pr',
           conclusion: 'success',
+          logTail: null,
           steps: [{ name: 'Run tracker', status: 'completed', conclusion: 'success' }]
         }
       ]
@@ -138,5 +141,73 @@ describe('getPRCheckDetails', () => {
       ['api', 'repos/acme/widgets/actions/runs/77/jobs?per_page=100'],
       { cwd: '/repo-root' }
     )
+  })
+
+  it('fetches sliced log tails for failed workflow jobs only', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    const actionUrl = 'https://github.com/acme/widgets/actions/runs/77/job/88'
+    const logLines = Array.from({ length: 210 }, (_, index) => `line ${index} ${'x'.repeat(120)}`)
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          name: 'verify',
+          status: 'completed',
+          conclusion: 'failure',
+          html_url: actionUrl,
+          details_url: actionUrl,
+          check_suite: { workflow_run: { id: 77 } }
+        })
+      })
+      .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          jobs: [
+            {
+              id: 8801,
+              name: 'verify',
+              status: 'completed',
+              conclusion: 'failure',
+              completed_at: '2026-05-18T19:02:00Z',
+              html_url: actionUrl,
+              steps: [{ name: 'Run tests', status: 'completed', conclusion: 'failure' }]
+            },
+            {
+              id: 8802,
+              name: 'lint',
+              status: 'completed',
+              conclusion: 'success',
+              completed_at: '2026-05-18T19:02:00Z',
+              html_url: actionUrl,
+              steps: [{ name: 'Run lint', status: 'completed', conclusion: 'success' }]
+            }
+          ]
+        })
+      })
+      .mockResolvedValueOnce({ stdout: logLines.join('\n') })
+
+    const details = await getPRCheckDetails('/repo-root', { checkRunId: 88 })
+
+    expect(details?.jobs[0]).toMatchObject({
+      id: 8801,
+      name: 'verify',
+      conclusion: 'failure'
+    })
+    expect(details?.jobs[0].logTail).toContain('line 209')
+    expect(details?.jobs[0].logTail).not.toContain('line 0')
+    expect(Buffer.from(details?.jobs[0].logTail ?? '', 'utf8').byteLength).toBeLessThanOrEqual(
+      16 * 1024
+    )
+    expect(details?.jobs[1]).toMatchObject({
+      id: 8802,
+      name: 'lint',
+      conclusion: 'success',
+      logTail: null
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      4,
+      ['api', 'repos/acme/widgets/actions/jobs/8801/logs'],
+      { cwd: '/repo-root' }
+    )
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(4)
   })
 })

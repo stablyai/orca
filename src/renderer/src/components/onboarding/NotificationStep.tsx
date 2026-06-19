@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this onboarding step owns the full notification setup surface, including macOS guidance, sound choices, and upload controls. */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BellRing, FileAudio, Settings, Upload, X } from 'lucide-react'
+import { BellRing, FileAudio, Settings, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings, NotificationPermissionStatusResult } from '../../../../shared/types'
 import { Button } from '@/components/ui/button'
@@ -14,13 +14,8 @@ import {
 } from '@/components/ui/select'
 import { sendNotificationSettingsTestNotification } from '@/components/settings/NotificationsPane'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
-import logo from '../../../../../resources/logo.svg'
-
-export type NotificationDraft = {
-  agentTaskComplete: boolean
-  terminalBell: boolean
-  notifyWhenFocused: boolean
-}
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
 
 type NotificationStepProps = {
   settings: GlobalSettings | null
@@ -48,9 +43,9 @@ export function NotificationStep({
   const [permissionStatus, setPermissionStatus] =
     useState<NotificationPermissionStatusResult | null>(null)
   const [isPickingSound, setIsPickingSound] = useState(false)
-  const [showMacSettingsPreview, setShowMacSettingsPreview] = useState(false)
   const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
   const syncedNotificationSettingsRef = useRef(notificationSettings)
+  const mountedRef = useMountedRef()
 
   if (syncedNotificationSettingsRef.current !== notificationSettings) {
     syncedNotificationSettingsRef.current = notificationSettings
@@ -98,9 +93,10 @@ export function NotificationStep({
     notificationSettingsRef.current?.customSoundVolume ?? 100
 
   const handleMacPermission = async (): Promise<void> => {
-    setShowMacSettingsPreview(true)
     const status = await window.api.notifications.requestPermission()
-    setPermissionStatus(status)
+    if (mountedRef.current) {
+      setPermissionStatus(status)
+    }
     await window.api.notifications.openSystemSettings()
   }
 
@@ -115,7 +111,14 @@ export function NotificationStep({
       volume: getCustomSoundVolume()
     })
     if (!result.played) {
-      toast.error('Notification sound could not be played')
+      if (mountedRef.current) {
+        toast.error(
+          translate(
+            'auto.components.onboarding.NotificationStep.b6a994e36e',
+            'Notification sound could not be played'
+          )
+        )
+      }
     }
   }
 
@@ -128,7 +131,9 @@ export function NotificationStep({
         await previewSound('custom')
       }
     } finally {
-      setIsPickingSound(false)
+      if (mountedRef.current) {
+        setIsPickingSound(false)
+      }
     }
   }
 
@@ -143,7 +148,12 @@ export function NotificationStep({
 
   const handleSendTestNotification = async (): Promise<void> => {
     if (!notificationSettings) {
-      toast.error('Notification settings are still loading')
+      toast.error(
+        translate(
+          'auto.components.onboarding.NotificationStep.3cd5374e22',
+          'Notification settings are still loading'
+        )
+      )
       return
     }
     await sendNotificationSettingsTestNotification(notificationSettings, getCustomSoundVolume())
@@ -152,7 +162,10 @@ export function NotificationStep({
   if (!notificationSettings) {
     return (
       <div className="rounded-xl border border-border bg-muted/20 px-5 py-4 text-sm text-muted-foreground">
-        Loading notification settings…
+        {translate(
+          'auto.components.onboarding.NotificationStep.e52aacf380',
+          'Loading notification settings…'
+        )}
       </div>
     )
   }
@@ -170,10 +183,16 @@ export function NotificationStep({
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <Settings className="size-4" />
-                Allow Orca in macOS
+                {translate(
+                  'auto.components.onboarding.NotificationStep.d2dba86837',
+                  'Allow Orca in macOS'
+                )}
               </div>
               <p className="max-w-[58ch] text-[13px] leading-relaxed text-muted-foreground">
-                Open System Settings and make sure Orca is allowed to send notifications.
+                {translate(
+                  'auto.components.onboarding.NotificationStep.aa36281b00',
+                  'Open System Settings and make sure Orca is allowed to send notifications.'
+                )}
               </p>
             </div>
             <Button
@@ -183,70 +202,35 @@ export function NotificationStep({
               onClick={() => void handleMacPermission()}
             >
               <Settings className="size-3.5" />
-              Open Mac Settings
+              {translate(
+                'auto.components.onboarding.NotificationStep.8124d085a6',
+                'Open Mac Settings'
+              )}
             </Button>
           </div>
-          {showMacSettingsPreview ? (
-            <div className="mt-4 rounded-xl border border-border bg-[#1f1d24] p-3 text-white shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/15">
-                    <img src={logo} alt="" aria-hidden className="size-5 rounded-md" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium leading-tight">Allow notifications</div>
-                    <div className="text-xs leading-tight text-white/55">Orca</div>
-                  </div>
-                </div>
-                <div
-                  aria-hidden
-                  className="relative h-6 w-11 rounded-full bg-[#0a84ff] shadow-inner"
-                >
-                  <div className="absolute right-0.5 top-0.5 size-5 rounded-full bg-white shadow-sm" />
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-4 rounded-lg bg-white/[0.03] px-8 py-5">
-                <div className="h-14 rounded-sm bg-gradient-to-b from-sky-300 to-violet-400">
-                  <div className="ml-auto mr-2 mt-1 h-1.5 w-5 rounded-full bg-white/80" />
-                </div>
-                <div className="h-14 rounded-sm bg-gradient-to-b from-sky-300 to-violet-400">
-                  <div className="ml-auto mr-2 mt-1 h-1.5 w-5 rounded-full bg-white/80" />
-                  <div className="ml-auto mr-2 mt-2 h-1.5 w-6 rounded-full bg-white/80" />
-                  <div className="ml-auto mr-2 mt-1 h-1.5 w-6 rounded-full bg-white/80" />
-                </div>
-                <div className="h-14 rounded-sm bg-gradient-to-b from-sky-300 to-violet-400">
-                  <div className="mr-2 mt-1 text-right text-[10px] font-medium text-white/90">
-                    9:41
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-white/60 hover:text-white"
-                  onClick={() => setShowMacSettingsPreview(false)}
-                >
-                  <X className="size-3.5" />
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          ) : null}
         </section>
       ) : null}
 
       <section className="space-y-3">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-foreground">Choose a sound</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            {translate('auto.components.onboarding.NotificationStep.0af746e41f', 'Choose a sound')}
+          </h2>
           <p className="text-[13px] leading-relaxed text-muted-foreground">
-            Pick the alert Orca plays after a desktop notification is delivered.
+            {translate(
+              'auto.components.onboarding.NotificationStep.0fe570690c',
+              'Pick the alert Orca plays after a desktop notification is delivered.'
+            )}
           </p>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <FileAudio className="size-4" />
-            Notification Sound
+            {translate(
+              'auto.components.onboarding.NotificationStep.53aaffe49a',
+              'Notification Sound'
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select
@@ -257,7 +241,12 @@ export function NotificationStep({
               }
             >
               <SelectTrigger className="w-[360px] max-w-full" size="sm">
-                <SelectValue placeholder="Choose notification sound" />
+                <SelectValue
+                  placeholder={translate(
+                    'auto.components.onboarding.NotificationStep.dc897423e1',
+                    'Choose notification sound'
+                  )}
+                />
               </SelectTrigger>
               <SelectContent
                 portalContainer={selectPortalRoot}
@@ -276,7 +265,17 @@ export function NotificationStep({
                 <SelectSeparator />
                 <SelectItem value={CHOOSE_CUSTOM_SOUND_VALUE}>
                   <Upload className="size-4" />
-                  <span>{customPath ? 'Change Custom File' : 'Choose Custom File'}</span>
+                  <span>
+                    {customPath
+                      ? translate(
+                          'auto.components.onboarding.NotificationStep.ac80d97e02',
+                          'Change Custom File'
+                        )
+                      : translate(
+                          'auto.components.onboarding.NotificationStep.c0692baa52',
+                          'Choose Custom File'
+                        )}
+                  </span>
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -288,7 +287,10 @@ export function NotificationStep({
               onClick={() => void handleSendTestNotification()}
             >
               <BellRing className="size-3.5" />
-              Send Test Notification
+              {translate(
+                'auto.components.onboarding.NotificationStep.3bede04483',
+                'Send Test Notification'
+              )}
             </Button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { AgentsStepId } from '../../../../shared/agents-orchestration-steps'
 import type { FeatureWallWorkflowId } from '../../../../shared/feature-wall-workflows'
@@ -53,9 +53,7 @@ function addToSet<T>(setValue: Dispatch<SetStateAction<Set<T>>>, id: T): void {
   })
 }
 
-export function usePersistedFeatureWallCompletion(
-  isOpen: boolean
-): PersistedFeatureWallCompletionState {
+export function usePersistedFeatureWallCompletion(): PersistedFeatureWallCompletionState {
   const [visitedWorkflows, setVisitedWorkflows] = useState<Set<FeatureWallWorkflowId>>(() =>
     readPersistedVisitedWorkflows()
   )
@@ -80,21 +78,6 @@ export function usePersistedFeatureWallCompletion(
   const [completedReviewSteps, setCompletedReviewSteps] = useState<Set<ReviewStepId>>(() =>
     readPersistedCompletedReviewSteps()
   )
-
-  // Reset from persisted state on close so another window or tab's tour visit
-  // is reflected the next time this modal opens.
-  useEffect(() => {
-    if (!isOpen) {
-      setVisitedWorkflows(readPersistedVisitedWorkflows())
-      setVisitedAgentSteps(readPersistedVisitedAgentSteps())
-      setVisitedWorkbenchSteps(readPersistedVisitedWorkbenchSteps())
-      setVisitedReviewSteps(readPersistedVisitedReviewSteps())
-      setCompletedWorkflows(readPersistedCompletedWorkflows())
-      setCompletedAgentSteps(readPersistedCompletedAgentSteps())
-      setCompletedWorkbenchSteps(readPersistedCompletedWorkbenchSteps())
-      setCompletedReviewSteps(readPersistedCompletedReviewSteps())
-    }
-  }, [isOpen])
 
   const markWorkflowVisited = useCallback((id: FeatureWallWorkflowId): void => {
     persistVisitedWorkflow(id)

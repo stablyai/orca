@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
@@ -10,11 +10,13 @@ import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
+import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
+import { runPreflightCommandInWsl } from './preflight-wsl-command'
+import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
+import { buildLocalPreflightEnv } from './preflight-local-env'
+import { getPreflightWslTarget, type PreflightRuntimeContext } from './preflight-runtime-target'
 const execFileAsync = promisify(execFile)
-
-type PreflightRuntimeContext = {
-  wslDistro?: string | null
-}
+const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -54,21 +56,64 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
-async function execCommandInWsl(
-  distro: string,
-  command: string
-): Promise<{ stdout: string; stderr: string }> {
-  return execFileAsync('wsl.exe', ['-d', distro, '--', 'bash', '-lc', command], {
-    encoding: 'utf-8',
-    timeout: 5000
-  }) as Promise<{ stdout: string; stderr: string }>
+type PreflightCommandResult = { stdout: string; stderr: string }
+
+// Why: a broken PATH shim or auth helper should not keep startup/settings
+// preflight IPC pending forever; WSL probes already use the same deadline.
+async function withPreflightTimeout<T>(command: string, commandPromise: Promise<T>): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      commandPromise,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          const error = Object.assign(new Error(`Timed out running ${command}`), {
+            code: 'ETIMEDOUT'
+          })
+          reject(error)
+        }, PREFLIGHT_COMMAND_TIMEOUT_MS)
+        if (typeof timeout.unref === 'function') {
+          timeout.unref()
+        }
+      })
+    ])
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+  }
 }
 
-async function isCommandAvailable(command: string, wslDistro?: string): Promise<boolean> {
+async function execLocalPreflightCommand(
+  command: string,
+  args: string[]
+): Promise<PreflightCommandResult> {
+  const env = buildLocalPreflightEnv()
+  const commandPromise = execFileAsync(command, args, {
+    encoding: 'utf-8',
+    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS,
+    ...(env ? { env } : {})
+  }) as Promise<PreflightCommandResult>
+
+  return withPreflightTimeout(command, commandPromise)
+}
+
+async function execCommandInWsl(
+  target: WslPreflightTarget,
+  command: string
+): Promise<{ stdout: string; stderr: string }> {
+  const commandPromise = runPreflightCommandInWsl(target, command, PREFLIGHT_COMMAND_TIMEOUT_MS)
+  return withPreflightTimeout('wsl.exe', commandPromise)
+}
+
+async function isCommandAvailable(
+  command: string,
+  wslTarget?: WslPreflightTarget
+): Promise<boolean> {
   try {
-    await (wslDistro
-      ? execCommandInWsl(wslDistro, `${shellQuote(command)} --version`)
-      : execFileAsync(command, ['--version']))
+    await (wslTarget
+      ? execCommandInWsl(wslTarget, `${shellQuote(command)} --version`)
+      : execLocalPreflightCommand(command, ['--version']))
     return true
   } catch {
     return false
@@ -78,12 +123,12 @@ async function isCommandAvailable(command: string, wslDistro?: string): Promise<
 // Why: `which`/`where` is faster than spawning the agent binary itself and avoids
 // triggering any agent-specific startup side-effects. This gives a reliable
 // PATH-based check without requiring `--version` support from each agent.
-async function isCommandOnPath(command: string, wslDistro?: string): Promise<boolean> {
+async function isCommandOnPath(command: string, wslTarget?: WslPreflightTarget): Promise<boolean> {
   const finder = process.platform === 'win32' ? 'where' : 'which'
   try {
-    const { stdout } = wslDistro
-      ? await execCommandInWsl(wslDistro, `command -v ${shellQuote(command)}`)
-      : await execFileAsync(finder, [command], { encoding: 'utf-8' })
+    const { stdout } = wslTarget
+      ? await execCommandInWsl(wslTarget, `command -v ${shellQuote(command)}`)
+      : await execLocalPreflightCommand(finder, [command])
     return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -93,23 +138,26 @@ async function isCommandOnPath(command: string, wslDistro?: string): Promise<boo
   }
 }
 
-const KNOWN_AGENT_COMMANDS = Object.entries(TUI_AGENT_CONFIG).map(([id, config]) => ({
-  id,
-  cmd: config.detectCmd
-}))
+const KNOWN_AGENT_COMMANDS = Object.entries(TUI_AGENT_CONFIG).flatMap(([id, config]) =>
+  getTuiAgentDetectCommands(config).map((cmd) => ({
+    id,
+    cmd
+  }))
+)
 
-function getPreflightWslDistro(context?: PreflightRuntimeContext): string | null {
-  const distro = context?.wslDistro?.trim()
-  return process.platform === 'win32' && distro ? distro : null
+function uniqueAgentIds(ids: Iterable<string>): string[] {
+  return [...new Set(ids)]
 }
 
 async function detectCommandRuntime(
   command: string,
   context?: PreflightRuntimeContext
-): Promise<{ installed: boolean; wslDistro?: string }> {
-  const wslDistro = getPreflightWslDistro(context)
-  if (wslDistro && (await isCommandAvailable(command, wslDistro))) {
-    return { installed: true, wslDistro }
+): Promise<{ installed: boolean; wslTarget?: WslPreflightTarget }> {
+  const wslTarget = getPreflightWslTarget(context)
+  if (wslTarget) {
+    return (await isCommandAvailable(command, wslTarget))
+      ? { installed: true, wslTarget }
+      : { installed: false }
   }
   if (await isCommandAvailable(command)) {
     return { installed: true }
@@ -118,15 +166,33 @@ async function detectCommandRuntime(
 }
 
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
-  const wslDistro = getPreflightWslDistro(context)
-  const checks = await Promise.all(
+  const wslTarget = getPreflightWslTarget(context)
+  if (wslTarget) {
+    const foundCommands = await detectWslCommandsOnPath(
+      wslTarget,
+      KNOWN_AGENT_COMMANDS.map(({ cmd }) => cmd)
+    )
+    return uniqueAgentIds(
+      KNOWN_AGENT_COMMANDS.filter(({ cmd }) => foundCommands.has(cmd)).map(({ id }) => id)
+    )
+  }
+
+  const pathChecks = await Promise.all(
     KNOWN_AGENT_COMMANDS.map(async ({ id, cmd }) => ({
       id,
-      installed:
-        (wslDistro ? await isCommandOnPath(cmd, wslDistro) : false) || (await isCommandOnPath(cmd))
+      cmd,
+      installedOnPath: await isCommandOnPath(cmd)
     }))
   )
-  return checks.filter((c) => c.installed).map((c) => c.id)
+  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
+  // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
+  // computes user install dirs once instead of blocking once per missed CLI.
+  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
+  const checks = pathChecks.map(({ id, cmd, installedOnPath }) => ({
+    id,
+    installed: installedOnPath || installDirCommands.has(cmd)
+  }))
+  return uniqueAgentIds(checks.filter((c) => c.installed).map((c) => c.id))
 }
 
 export type RefreshAgentsResult = {
@@ -155,6 +221,17 @@ export type RefreshAgentsResult = {
 export async function refreshShellPathAndDetectAgents(
   context?: PreflightRuntimeContext
 ): Promise<RefreshAgentsResult> {
+  if (getPreflightWslTarget(context)) {
+    const agents = await detectInstalledAgents(context)
+    return {
+      agents,
+      addedPathSegments: [],
+      shellHydrationOk: true,
+      pathSource: 'sync_seed_only',
+      pathFailureReason: 'none'
+    }
+  }
+
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
   const agents = await detectInstalledAgents(context)
@@ -170,21 +247,21 @@ export async function refreshShellPathAndDetectAgents(
 export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
   const mux = getActiveMultiplexer(args.connectionId)
   if (!mux || mux.isDisposed()) {
-    throw new Error(`No active SSH connection for "${args.connectionId}"`)
+    // Why: remote agent detection is passive UI polling. A disconnected host has
+    // no detectable agents until reconnect, but should not spam IPC errors.
+    return []
   }
   const result = (await mux.request('preflight.detectAgents', {
     commands: KNOWN_AGENT_COMMANDS
   })) as { agents: string[] }
-  return result.agents
+  return uniqueAgentIds(result.agents)
 }
 
-async function isGhAuthenticated(wslDistro?: string): Promise<boolean> {
+async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
   try {
-    await (wslDistro
-      ? execCommandInWsl(wslDistro, `${shellQuote('gh')} auth status`)
-      : execFileAsync('gh', ['auth', 'status'], {
-          encoding: 'utf-8'
-        }))
+    await (wslTarget
+      ? execCommandInWsl(wslTarget, `${shellQuote('gh')} auth status`)
+      : execLocalPreflightCommand('gh', ['auth', 'status']))
     // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
     // authentication issues for the checked hosts/accounts.
     return true
@@ -201,11 +278,11 @@ async function isGhAuthenticated(wslDistro?: string): Promise<boolean> {
 
 // Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
 // status to stderr in some versions and stdout in others; check both.
-async function isGlabAuthenticated(wslDistro?: string): Promise<boolean> {
+async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
   try {
-    await (wslDistro
-      ? execCommandInWsl(wslDistro, `${shellQuote('glab')} auth status`)
-      : execFileAsync('glab', ['auth', 'status'], { encoding: 'utf-8' }))
+    await (wslTarget
+      ? execCommandInWsl(wslTarget, `${shellQuote('glab')} auth status`)
+      : execLocalPreflightCommand('glab', ['auth', 'status']))
     return true
   } catch (error) {
     const stdout = (error as { stdout?: string }).stdout ?? ''
@@ -219,7 +296,7 @@ export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
 ): Promise<PreflightStatus> {
-  const cacheable = !getPreflightWslDistro(context)
+  const cacheable = !getPreflightWslTarget(context)
   if (cacheable && cached && !force) {
     return cached
   }
@@ -241,8 +318,8 @@ export async function runPreflightCheck(
   ])
 
   const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
-    ghProbe.installed ? isGhAuthenticated(ghProbe.wslDistro) : Promise.resolve(false),
-    glabProbe.installed ? isGlabAuthenticated(glabProbe.wslDistro) : Promise.resolve(false),
+    ghProbe.installed ? isGhAuthenticated(ghProbe.wslTarget) : Promise.resolve(false),
+    glabProbe.installed ? isGlabAuthenticated(glabProbe.wslTarget) : Promise.resolve(false),
     getBitbucketAuthStatus(),
     getAzureDevOpsAuthStatus(),
     getGiteaAuthStatus()
@@ -288,8 +365,8 @@ export function registerPreflightHandlers(): void {
 
   // Why: remote worktrees need agent detection on the SSH host, not the local
   // machine. This handler forwards the same KNOWN_AGENT_COMMANDS list to the
-  // relay's preflight.detectAgents RPC, which runs `which` inside a login shell
-  // on the remote host to match the PATH users see in PTY sessions.
+  // relay's preflight.detectAgents RPC, whose lookup command is selected on
+  // the remote host so native Windows OpenSSH does not require a POSIX shell.
   ipcMain.handle(
     'preflight:detectRemoteAgents',
     async (_event, args: { connectionId: string }): Promise<string[]> => {

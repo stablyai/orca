@@ -1,11 +1,20 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import path from 'path'
 import {
   attributePortToWorkspace,
   isContainerProcess,
   parseLsofListeningOutput,
   parseNetstatListeningOutput,
-  parseProcNetTcp
+  parseProcNetTcp,
+  resetWorkspacePortScanTimeoutBackoffForTests,
+  scanWorkspacePorts
 } from './local-workspace-port-scanner'
+
+const execFileMock = vi.hoisted(() => vi.fn())
+
+vi.mock('child_process', () => ({
+  execFile: execFileMock
+}))
 
 const worktrees = [
   {
@@ -132,5 +141,161 @@ describe('container process classification', () => {
       true
     )
     expect(isContainerProcess({ processName: 'node', commandLine: 'node server.js' })).toBe(false)
+  })
+})
+
+describe('scanWorkspacePorts attribution work', () => {
+  afterEach(() => {
+    resetWorkspacePortScanTimeoutBackoffForTests()
+    vi.restoreAllMocks()
+    execFileMock.mockReset()
+  })
+
+  it('normalizes worktree paths once per scan instead of once per port phase', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const win32ResolveSpy = vi.spyOn(path.win32, 'resolve')
+    const posixResolveSpy = vi.spyOn(path.posix, 'resolve')
+    const invokeCallback = (callback: unknown, stdout: string): void => {
+      if (typeof callback !== 'function') {
+        throw new Error('missing execFile callback')
+      }
+      const execCallback = callback as (error: Error | null, stdout: string) => void
+      execCallback(null, stdout)
+    }
+    execFileMock.mockImplementation(
+      (command: string, args: string[], _options: unknown, callback: unknown) => {
+        if (command === 'lsof' && args.includes('-iTCP')) {
+          invokeCallback(
+            callback,
+            ['p123', 'cnode', 'n127.0.0.1:3000', 'p124', 'cnode', 'n127.0.0.1:3001'].join('\n')
+          )
+        } else if (command === 'lsof') {
+          invokeCallback(
+            callback,
+            ['p123', 'n/repo/service', 'p124', 'n/repo/worktrees/feature/app'].join('\n')
+          )
+        } else if (command === 'ps') {
+          invokeCallback(
+            callback,
+            [
+              '123 node /repo/service/server.js',
+              '124 node /repo/worktrees/feature/app/server.js'
+            ].join('\n')
+          )
+        } else {
+          invokeCallback(callback, '')
+        }
+        return { kill: vi.fn() }
+      }
+    )
+
+    const scan = await scanWorkspacePorts(worktrees, {
+      lookup: () => undefined,
+      reconcileScan: vi.fn()
+    })
+
+    expect(scan.ports.filter((port) => port.kind === 'workspace')).toHaveLength(2)
+    const win32WorktreePathResolveCalls = win32ResolveSpy.mock.calls.filter(
+      ([input]) => input === '/repo' || input === '/repo/worktrees/feature'
+    )
+    const posixWorktreePathResolveCalls = posixResolveSpy.mock.calls.filter(
+      ([input]) => input === '/repo' || input === '/repo/worktrees/feature'
+    )
+    expect(win32WorktreePathResolveCalls).toHaveLength(0)
+    expect(posixWorktreePathResolveCalls).toHaveLength(worktrees.length)
+  })
+})
+
+describe('scanWorkspacePorts command timeout', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    resetWorkspacePortScanTimeoutBackoffForTests()
+    vi.restoreAllMocks()
+    execFileMock.mockReset()
+  })
+
+  it('returns an unavailable scan when lsof never reports completion', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const killMock = vi.fn()
+    execFileMock.mockImplementation(() => ({ kill: killMock }))
+
+    let settled = false
+    const scanPromise = scanWorkspacePorts([], {
+      lookup: () => undefined,
+      reconcileScan: vi.fn()
+    }).then((scan) => {
+      settled = true
+      return scan
+    })
+
+    await vi.advanceTimersByTimeAsync(4_000)
+
+    expect(settled).toBe(true)
+    await expect(scanPromise).resolves.toMatchObject({
+      platform: 'darwin',
+      ports: [],
+      unavailableReason: 'Port scanning is unavailable on darwin.'
+    })
+    expect(killMock).toHaveBeenCalled()
+  })
+
+  it('backs off after a command timeout instead of launching lsof on every scan tick', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const killMock = vi.fn()
+    execFileMock.mockImplementation(() => ({ kill: killMock }))
+
+    const firstScanPromise = scanWorkspacePorts([], {
+      lookup: () => undefined,
+      reconcileScan: vi.fn()
+    })
+
+    await vi.advanceTimersByTimeAsync(4_000)
+    await expect(firstScanPromise).resolves.toMatchObject({
+      platform: 'darwin',
+      ports: [],
+      unavailableReason: 'Port scanning is unavailable on darwin.'
+    })
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+
+    const cooldownScans = await Promise.all(
+      Array.from({ length: 10 }, () =>
+        scanWorkspacePorts([], {
+          lookup: () => undefined,
+          reconcileScan: vi.fn()
+        })
+      )
+    )
+
+    expect(cooldownScans).toHaveLength(10)
+    expect(cooldownScans[0]).toMatchObject({
+      platform: 'darwin',
+      ports: []
+    })
+    expect(
+      cooldownScans.every((scan) => scan.unavailableReason?.includes('temporarily paused'))
+    ).toBe(true)
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(65_001)
+    await vi.advanceTimersByTimeAsync(0)
+    execFileMock.mockImplementation(
+      (_command: string, args: string[], _options: unknown, callback: unknown) => {
+        const execCallback = callback as (error: Error | null, stdout: string) => void
+        const output = args.includes('-iTCP') ? 'p123\ncnode\nn127.0.0.1:3000' : ''
+        execCallback(null, output)
+        return { kill: vi.fn() }
+      }
+    )
+
+    const recoveredScan = await scanWorkspacePorts([], {
+      lookup: () => undefined,
+      reconcileScan: vi.fn()
+    })
+
+    expect(recoveredScan.unavailableReason).toBeUndefined()
+    expect(execFileMock).toHaveBeenCalledTimes(4)
   })
 })

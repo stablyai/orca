@@ -118,6 +118,14 @@ describe('HistoryReader', () => {
       expect(info!.rehydrateSequences).toBe('\x1b[?2004h')
     })
 
+    it('restores OSC link ranges from checkpoint', () => {
+      const oscLinks = [{ row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }]
+      writeSessionWithCheckpoint(dir, 'sess-1', makeMeta(), makeCheckpoint({ oscLinks }))
+
+      const info = reader.detectColdRestore('sess-1')
+      expect(info!.oscLinks).toEqual(oscLinks)
+    })
+
     it('returns null for clean shutdown (endedAt is set)', () => {
       writeSessionWithCheckpoint(
         dir,
@@ -270,6 +278,13 @@ describe('HistoryReader', () => {
       writeSessionWithScrollback(dir, sessionId, makeMeta(), 'data')
 
       expect(reader.listRestorable()).toEqual([sessionId])
+    })
+
+    it('skips malformed encoded session directories', () => {
+      mkdirSync(join(dir, '%E0%A4%A'), { recursive: true })
+      writeSessionWithScrollback(dir, 'alive', makeMeta(), 'data')
+
+      expect(reader.listRestorable()).toEqual(['alive'])
     })
   })
 })

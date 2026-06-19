@@ -2,6 +2,7 @@ import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 import { CORE_HANDLERS } from './handlers/core'
 import { AUTOMATION_HANDLERS } from './handlers/automations'
+import { PROJECT_HANDLERS } from './handlers/project'
 import { REPO_HANDLERS } from './handlers/repo'
 import { WORKTREE_HANDLERS } from './handlers/worktree'
 import { FILE_HANDLERS } from './handlers/file'
@@ -18,12 +19,16 @@ import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
 import { COMPUTER_HANDLERS } from './handlers/computer'
 import { ENVIRONMENT_HANDLERS } from './handlers/environment'
 import { AGENT_HOOK_HANDLERS } from './handlers/agent-hooks'
+import { DIAGNOSTICS_HANDLERS } from './handlers/diagnostics'
+import { EMULATOR_HANDLERS } from './handlers/emulator'
+import { LINEAR_HANDLERS } from './handlers/linear'
 
 export type HandlerContext = {
   flags: Map<string, string | boolean>
   client: RuntimeClient
   cwd: string
   json: boolean
+  rawArgs?: string[]
 }
 
 export type CommandHandler = (ctx: HandlerContext) => Promise<void>
@@ -33,6 +38,7 @@ function buildHandlers(): Map<string, CommandHandler> {
   const groups = [
     CORE_HANDLERS,
     AUTOMATION_HANDLERS,
+    PROJECT_HANDLERS,
     REPO_HANDLERS,
     WORKTREE_HANDLERS,
     FILE_HANDLERS,
@@ -46,9 +52,12 @@ function buildHandlers(): Map<string, CommandHandler> {
     BROWSER_ENV_HANDLERS,
     BROWSER_STORAGE_HANDLERS,
     ORCHESTRATION_HANDLERS,
+    EMULATOR_HANDLERS,
     COMPUTER_HANDLERS,
     AGENT_HOOK_HANDLERS,
-    ENVIRONMENT_HANDLERS
+    DIAGNOSTICS_HANDLERS,
+    ENVIRONMENT_HANDLERS,
+    LINEAR_HANDLERS
   ]
   for (const group of groups) {
     for (const [key, handler] of Object.entries(group)) {

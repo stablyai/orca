@@ -17,6 +17,52 @@ export type CommandSpec = {
 }
 
 export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
+export const BOOLEAN_FLAGS = new Set([
+  'all',
+  'attachments',
+  'children',
+  'comments',
+  'current',
+  'dry-run',
+  'enter',
+  'focus',
+  'force',
+  'full',
+  'help',
+  'inject',
+  'interrupt',
+  'json',
+  'messages',
+  'me',
+  'mobile',
+  'mobile-pairing',
+  'no-pairing',
+  'parent-current',
+  'ready',
+  'relations',
+  'restore-window',
+  'return-preamble',
+  'run-hooks',
+  'show-profile',
+  'staged',
+  'tasks',
+  'text-stdin',
+  'unread',
+  'value-stdin',
+  'wait'
+])
+
+export const REPEATED_FLAG_SEPARATOR = '\u0000'
+const REPEATABLE_STRING_FLAGS = new Set(['label'])
+
+function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
+  const existing = flags.get(name)
+  if (typeof existing === 'string' && REPEATABLE_STRING_FLAGS.has(name)) {
+    flags.set(name, `${existing}${REPEATED_FLAG_SEPARATOR}${value}`)
+    return
+  }
+  flags.set(name, value)
+}
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const commandPath: string[] = []
@@ -35,18 +81,22 @@ export function parseArgs(argv: string[]): ParsedArgs {
     // treats a `--`-leading next token as a new flag, so it can't express one.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
-      flags.set(assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      setFlagValue(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
       continue
     }
 
     const flag = assignment
+    if (BOOLEAN_FLAGS.has(flag)) {
+      flags.set(flag, true)
+      continue
+    }
     const hasNext = i + 1 < argv.length
     const next = argv[i + 1]
     if (!hasNext || next.startsWith('--')) {
       flags.set(flag, true)
       continue
     }
-    flags.set(flag, next)
+    setFlagValue(flags, flag, next)
     i += 1
   }
 
@@ -75,9 +125,20 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
     return false
   }
   if (
-    ['automations', 'repo', 'worktree', 'terminal', 'file', 'computer', 'note'].includes(
-      commandPath[0]
-    )
+    [
+      'automations',
+      'project',
+      'repo',
+      'worktree',
+      'terminal',
+      'file',
+      'orchestration',
+      'computer',
+      'emulator',
+      'note',
+      'diagnostics',
+      'linear'
+    ].includes(commandPath[0])
   ) {
     return false
   }
@@ -96,6 +157,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
     (commandPath.length === 1 &&
       [
         'automations',
+        'project',
         'repo',
         'worktree',
         'terminal',
@@ -111,8 +173,11 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'storage',
         'orchestration',
         'computer',
+        'emulator',
         'agent',
-        'environment'
+        'environment',
+        'diagnostics',
+        'linear'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
     (commandPath.length === 2 &&
@@ -174,7 +239,9 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
   }
 
   for (const flag of parsed.flags.keys()) {
+    const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
     if (
+      !isGlobalFlag &&
       !spec.allowedFlags.includes(flag) &&
       !(flag === 'page' && supportsBrowserPageFlag(spec.path))
     ) {

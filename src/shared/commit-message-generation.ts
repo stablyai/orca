@@ -33,9 +33,13 @@ function limitSection(value: string, maxChars: number): string {
 
 export function buildCommitMessagePrompt(
   context: CommitMessageDraftContext,
-  customInstructions: string
+  customPrompt: string
 ): string {
-  const patch = truncateDiffForPrompt(context.stagedPatch)
+  // Why: the staged patch is dropped when it's too large to read, so fall back to
+  // the file summary and tell the agent why the diff is missing.
+  const patch = context.stagedPatch.trim()
+    ? truncateDiffForPrompt(context.stagedPatch)
+    : '(diff omitted — too large to read; infer the change from the staged file list above)'
   const base = [
     'You are generating a single git commit message.',
     'Return only the commit message text. Do not include a preamble, quotes, or code fences.',
@@ -58,16 +62,11 @@ export function buildCommitMessagePrompt(
     '```'
   ].join('\n')
 
-  const trimmedInstructions = customInstructions.trim()
-  if (!trimmedInstructions) {
+  const trimmedPrompt = customPrompt.trim()
+  if (!trimmedPrompt) {
     return base
   }
-  return [
-    base,
-    '',
-    'Additional instructions from user:',
-    limitSection(trimmedInstructions, 4_000)
-  ].join('\n')
+  return [base, '', 'Additional user prompt:', limitSection(trimmedPrompt, 4_000)].join('\n')
 }
 
 export function splitGeneratedCommitMessage(message: string): GeneratedCommitMessage {

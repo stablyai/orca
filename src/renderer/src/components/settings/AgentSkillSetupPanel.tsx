@@ -1,17 +1,24 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { RefreshCw, Terminal } from 'lucide-react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { Copy, RefreshCw, Terminal } from 'lucide-react'
+import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type AgentSkillSetupPanelVariant = 'card' | 'inline'
+type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
 
 type AgentSkillSetupPanelProps = {
   title: string
   description: ReactNode
   command: string
+  installedCommand?: string
   terminalTitle: string
   terminalAriaLabel: string
   terminalWorktreeId: string
@@ -20,20 +27,32 @@ type AgentSkillSetupPanelProps = {
   error: string | null
   installDisabled?: boolean
   terminalHeightPx?: number
+  terminalShellOverride?: string
   leading?: ReactNode
   icon?: ReactNode
   variant?: AgentSkillSetupPanelVariant
   className?: string
+  // Why: when an enclosing surface (e.g. a modal) already shows the title and
+  // status, hide the panel's own header row to avoid a duplicate heading.
+  hideHeader?: boolean
   preInstallNotice?: ReactNode
+  getPrerequisiteStatus?: () => Promise<SkillPrerequisiteStatus>
+  isPrerequisiteAvailable?: (status: SkillPrerequisiteStatus) => boolean
   onBeforeOpenTerminal?: () => void | Promise<void>
+  showInstallWhenInstalled?: boolean
   showRecheckWhenInstalled?: boolean
-  onRecheck: () => void | Promise<void>
+  installLabel?: string
+  installedInstallLabel?: string
+  actionHint?: ReactNode
+  footer?: ReactNode
+  onRecheck: () => void | Promise<unknown>
 }
 
 export function AgentSkillSetupPanel({
   title,
   description,
   command,
+  installedCommand,
   terminalTitle,
   terminalAriaLabel,
   terminalWorktreeId,
@@ -42,17 +61,38 @@ export function AgentSkillSetupPanel({
   error,
   installDisabled = false,
   terminalHeightPx,
+  terminalShellOverride,
   leading,
   icon,
   variant = 'card',
   className,
+  hideHeader = false,
   preInstallNotice,
+  getPrerequisiteStatus,
+  isPrerequisiteAvailable = isOrcaCliAvailableOnPath,
   onBeforeOpenTerminal,
+  showInstallWhenInstalled = true,
   showRecheckWhenInstalled = true,
+  installLabel = 'Install',
+  installedInstallLabel = 'Update',
+  actionHint,
+  footer,
   onRecheck
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
-  const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(Boolean(preInstallNotice))
+  const [terminalCommand, setTerminalCommand] = useState<string | null>(null)
+  const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(
+    Boolean(preInstallNotice && !installed)
+  )
+  const mountedRef = useMountedRef()
+  const readPrerequisiteStatus = useCallback(
+    () => (getPrerequisiteStatus ?? window.api.cli.getInstallStatus)(),
+    [getPrerequisiteStatus]
+  )
+  const activeCommand = installed ? (installedCommand ?? command) : command
+  // Why: the inline terminal auto-inserts when its command changes, so keep an
+  // already-open terminal pinned to the command selected by the user's click.
+  const openTerminalCommand = terminalCommand ?? activeCommand
 
   useEffect(() => {
     if (!preInstallNotice) {
@@ -63,9 +103,9 @@ export function AgentSkillSetupPanel({
     let canceled = false
     const refreshCliNotice = async (): Promise<void> => {
       try {
-        const status = await window.api.cli.getInstallStatus()
+        const status = await readPrerequisiteStatus()
         if (!canceled) {
-          setPreInstallNoticeVisible(!isOrcaCliAvailableOnPath(status))
+          setPreInstallNoticeVisible(!isPrerequisiteAvailable(status))
         }
       } catch {
         if (!canceled) {
@@ -80,40 +120,69 @@ export function AgentSkillSetupPanel({
       canceled = true
       window.removeEventListener('focus', refreshCliNotice)
     }
-  }, [preInstallNotice])
+  }, [isPrerequisiteAvailable, preInstallNotice, readPrerequisiteStatus])
 
   const refreshPreInstallNotice = async (): Promise<void> => {
     if (!preInstallNotice) {
       return
     }
     try {
-      const status = await window.api.cli.getInstallStatus()
-      setPreInstallNoticeVisible(!isOrcaCliAvailableOnPath(status))
+      const status = await readPrerequisiteStatus()
+      if (mountedRef.current) {
+        setPreInstallNoticeVisible(!isPrerequisiteAvailable(status))
+      }
     } catch {
-      setPreInstallNoticeVisible(true)
+      if (mountedRef.current) {
+        setPreInstallNoticeVisible(true)
+      }
     }
   }
+
+  const copyActiveCommand = async (): Promise<void> => {
+    try {
+      await window.api.ui.writeClipboardText(openTerminalCommand)
+      toast.success(
+        translate('auto.components.settings.AgentSkillSetupPanel.copiedCommand', 'Copied command.')
+      )
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.AgentSkillSetupPanel.failedToCopyCommand',
+              'Failed to copy command.'
+            )
+      )
+    }
+  }
+
   const actionRow = (
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          void (async () => {
-            try {
-              await onBeforeOpenTerminal?.()
-              await refreshPreInstallNotice()
-            } finally {
-              setTerminalOpen(true)
-            }
-          })()
-        }}
-        disabled={terminalOpen || installDisabled}
-      >
-        <Terminal className="size-3.5" />
-        Install
-      </Button>
+      {!installed || showInstallWhenInstalled ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            const nextCommand = activeCommand
+            void (async () => {
+              try {
+                await onBeforeOpenTerminal?.()
+                await refreshPreInstallNotice()
+              } finally {
+                if (mountedRef.current) {
+                  setTerminalCommand(nextCommand)
+                  setTerminalOpen(true)
+                }
+              }
+            })()
+          }}
+          disabled={terminalOpen || installDisabled}
+        >
+          <Terminal className="size-3.5" />
+          {installed ? installedInstallLabel : installLabel}
+        </Button>
+      ) : null}
       {!installed || showRecheckWhenInstalled ? (
         <Button
           type="button"
@@ -124,7 +193,7 @@ export function AgentSkillSetupPanel({
           disabled={loading}
         >
           <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-          Re-check
+          {translate('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
         </Button>
       ) : null}
     </div>
@@ -133,54 +202,124 @@ export function AgentSkillSetupPanel({
   return (
     <div
       className={cn(
+        'min-w-0',
         variant === 'card' ? 'rounded-xl border border-border bg-muted/20' : null,
         className
       )}
     >
       <div
-        className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : undefined}
+        className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : 'pt-1.5'}
       >
-        <div className="flex items-center gap-4">
-          {leading}
-          {icon ? (
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
-              {icon}
+        {hideHeader ? (
+          error ? (
+            <p className="text-[12px] text-destructive">{error}</p>
+          ) : null
+        ) : (
+          <div className="flex items-center gap-4">
+            {leading}
+            {icon ? (
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
+                {icon}
+              </div>
+            ) : null}
+            <div className="min-w-0 flex-1 self-center">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
+                {loading && !installed ? (
+                  <IntegrationStatusPill tone="neutral">
+                    {translate(
+                      'auto.components.settings.AgentSkillSetupPanel.68a468752e',
+                      'Checking...'
+                    )}
+                  </IntegrationStatusPill>
+                ) : installed ? (
+                  <IntegrationStatusPill tone="connected">
+                    {translate(
+                      'auto.components.settings.AgentSkillSetupPanel.9fcebceb2a',
+                      'Installed'
+                    )}
+                  </IntegrationStatusPill>
+                ) : (
+                  <IntegrationStatusPill tone="attention">
+                    {translate(
+                      'auto.components.settings.AgentSkillSetupPanel.5289300939',
+                      'Not installed'
+                    )}
+                  </IntegrationStatusPill>
+                )}
+              </div>
+              {error ? <p className="mt-1 text-[12px] text-destructive">{error}</p> : null}
             </div>
-          ) : null}
-          <div className="min-w-0 flex-1 self-center">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
-              {loading && !installed ? (
-                <IntegrationStatusPill tone="neutral">Checking...</IntegrationStatusPill>
-              ) : installed ? (
-                <IntegrationStatusPill tone="connected">Installed</IntegrationStatusPill>
-              ) : (
-                <IntegrationStatusPill tone="attention">Not installed</IntegrationStatusPill>
-              )}
-            </div>
-            {error ? <p className="mt-1 text-[12px] text-destructive">{error}</p> : null}
           </div>
-        </div>
-        <div className="mt-3 max-w-none">
+        )}
+        <div className={cn('max-w-none', hideHeader ? null : 'mt-3')}>
           <p className="text-[13px] leading-snug text-muted-foreground">{description}</p>
           {actionRow}
+          {actionHint ? <div className="mt-2">{actionHint}</div> : null}
           {!installed && preInstallNotice && preInstallNoticeVisible ? (
             <p className="mt-3 text-[12px] leading-snug text-muted-foreground">
               {preInstallNotice}
             </p>
           ) : null}
         </div>
+        {footer ? (
+          <div
+            className={cn('border-t border-border/60', terminalOpen ? 'mt-2 pt-4' : 'mt-5 pt-5')}
+          >
+            {footer}
+          </div>
+        ) : null}
       </div>
       {terminalOpen ? (
-        <div className={cn(variant === 'card' ? 'px-5 pb-5' : 'mt-2')}>
+        <div
+          className={cn(
+            'min-w-0 max-w-full overflow-hidden',
+            variant === 'card' ? 'px-5 pb-5' : 'mt-2'
+          )}
+        >
+          <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border border-border bg-muted/35 px-3 py-2">
+            <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
+              {openTerminalCommand}
+            </code>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0"
+                  aria-label={translate(
+                    'auto.components.settings.AgentSkillSetupPanel.copyCommandAria',
+                    'Copy command'
+                  )}
+                  onClick={() => void copyActiveCommand()}
+                >
+                  <Copy className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                {translate(
+                  'auto.components.settings.AgentSkillSetupPanel.ed197f59a2',
+                  'Copy command'
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </div>
           <OnboardingInlineCommandTerminal
             worktreeId={terminalWorktreeId}
-            command={command}
+            command={openTerminalCommand}
             title={terminalTitle}
+            description={translate(
+              'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
+              'Press Enter to run the command.'
+            )}
             ariaLabel={terminalAriaLabel}
             terminalHeightPx={terminalHeightPx}
-            terminalTopMarginPx={0}
+            shellOverride={terminalShellOverride}
+            terminalTopMarginPx={8}
+            descriptionPaddingClassName="px-4 py-2"
             autoScrollIntoView={false}
+            onTerminalExit={notifyInstalledAgentSkillsChanged}
           />
         </div>
       ) : null}

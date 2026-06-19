@@ -1,10 +1,5 @@
-/* eslint-disable max-lines -- Why: the macOS provider transport owns one lifecycle across stdio fallback and helper-app socket mode. */
-import { spawn } from 'child_process'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { rmSync } from 'fs'
 import type net from 'net'
-import { release, tmpdir } from 'os'
-import { join } from 'path'
-import { randomUUID } from 'crypto'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -14,6 +9,7 @@ import type {
 } from '../../shared/runtime-types'
 import {
   assertMacOSProviderCapability,
+  macOSActionCapabilityKey,
   REQUIRED_MACOS_PROVIDER_PROTOCOL_VERSION,
   type NativeActionMethod,
   type NativeMethod,
@@ -22,31 +18,29 @@ import {
   writeNativeProviderLine
 } from './macos-native-provider-contract'
 import { resolveMacOSComputerUseExecutablePath } from './macos-native-provider-paths'
-import { connectMacOSProviderSocket } from './macos-native-provider-socket'
+import {
+  attachMacOSNativeProviderSocketListeners,
+  consumeNativeProviderLines,
+  startMacOSNativeProviderSocket
+} from './macos-native-provider-transport'
+import { validateComputerProviderActionParams } from './computer-provider-action-validation'
+import { normalizeComputerActionResult } from './computer-action-verification-normalization'
 import { RuntimeClientError } from './runtime-client-error'
 
 const REQUEST_TIMEOUT_MS = 60_000
-const HELPER_CONNECT_TIMEOUT_MS = 10_000
-
-export function shouldUseMacOSNativeProvider(): boolean {
-  return (
-    process.platform === 'darwin' &&
-    isMacOS14OrNewer() &&
-    resolveMacOSComputerUseExecutablePath() !== null
-  )
-}
 
 export class MacOSNativeProviderClient {
   private socket: net.Socket | null = null
   private socketStartPromise: Promise<net.Socket> | null = null
   private socketPath: string | null = null
   private socketDirectory: string | null = null
-  private socketTokenPath: string | null = null
   private socketToken: string | null = null
   private nextId = 1
   private pending = new Map<number, PendingNativeRequest>()
   private socketBuffer = ''
   private providerCapabilities: ComputerProviderCapabilities | null = null
+  private socketListenerCleanup: (() => void) | null = null
+  private socketStartGeneration = 0
   async listApps(): Promise<ComputerListAppsResult> {
     return (await this.call('listApps', {})) as ComputerListAppsResult
   }
@@ -62,14 +56,22 @@ export class MacOSNativeProviderClient {
     return (await this.call('getAppState', params)) as ComputerSnapshotResult
   }
   async action(method: NativeActionMethod, params: unknown): Promise<ComputerActionResult> {
-    return (await this.call(method, params)) as ComputerActionResult
+    validateComputerProviderActionParams(
+      method,
+      params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
+    )
+    await this.ensureActionSupported(method)
+    return normalizeComputerActionResult((await this.call(method, params)) as ComputerActionResult)
   }
   shutdown(): void {
     const socket = this.socket
     const token = this.socketToken
     this.socket = null
     this.socketStartPromise = null
+    this.socketStartGeneration++
     this.providerCapabilities = null
+    this.socketBuffer = ''
+    this.cleanupActiveSocketListeners()
     if (socket && !socket.destroyed) {
       const id = this.nextId++
       socket.write(`${JSON.stringify({ id, method: 'terminate', params: {}, token })}\n`)
@@ -113,15 +115,17 @@ export class MacOSNativeProviderClient {
     try {
       await writeNativeProviderLine(transport, line)
     } catch (error) {
+      const wrapped = new RuntimeClientError(
+        'accessibility_error',
+        error instanceof Error ? error.message : String(error)
+      )
       const pending = this.pending.get(id)
       if (pending) {
         clearTimeout(pending.timer)
         this.pending.delete(id)
       }
-      throw new RuntimeClientError(
-        'accessibility_error',
-        error instanceof Error ? error.message : String(error)
-      )
+      this.invalidateActiveSocketAfterWriteFailure(transport, wrapped)
+      throw wrapped
     }
     return await result
   }
@@ -160,68 +164,60 @@ export class MacOSNativeProviderClient {
       `native macOS provider does not support ${String(group)}.${capability}`
     )
   }
+  private async ensureActionSupported(method: NativeActionMethod): Promise<void> {
+    await this.ensureCapability('actions', macOSActionCapabilityKey(method))
+  }
   private async ensureSocketStarted(helperExecutablePath: string): Promise<net.Socket> {
     if (this.socket && !this.socket.destroyed) {
       return this.socket
     }
+    this.cleanupActiveSocketListeners()
+    this.socket = null
     if (this.socketStartPromise) {
       return await this.socketStartPromise
     }
-    this.socketStartPromise = this.startSocket(helperExecutablePath)
+    const socketStartPromise = this.startSocket(helperExecutablePath)
+    this.socketStartPromise = socketStartPromise
     try {
-      return await this.socketStartPromise
+      return await socketStartPromise
     } finally {
-      this.socketStartPromise = null
+      if (this.socketStartPromise === socketStartPromise) {
+        this.socketStartPromise = null
+      }
     }
   }
   private async startSocket(helperExecutablePath: string): Promise<net.Socket> {
-    this.socketDirectory = mkdtempSync(join(tmpdir(), 'orca-computer-use-'))
-    chmodSync(this.socketDirectory, 0o700)
-    this.socketPath = join(this.socketDirectory, 'provider.sock')
-    this.socketToken = randomUUID()
-    this.socketTokenPath = join(this.socketDirectory, 'provider.token')
-    writeFileSync(this.socketTokenPath, this.socketToken, { encoding: 'utf8', mode: 0o600 })
-    // Why: launching the nested helper via LaunchServices can make TCC evaluate
-    // Orca.app as responsible; the signed helper executable owns this grant.
-    const provider = spawn(
+    const startGeneration = ++this.socketStartGeneration
+    const started = await startMacOSNativeProviderSocket({
       helperExecutablePath,
-      ['--agent', this.socketPath, '--token-file', this.socketTokenPath],
-      { detached: true, stdio: 'ignore' }
-    )
-    provider.unref()
-    try {
-      const socket = await connectMacOSProviderSocket(this.socketPath, HELPER_CONNECT_TIMEOUT_MS)
-      socket.setEncoding('utf8')
-      socket.on('data', (chunk: string) => this.handleSocketData(chunk))
-      socket.on('close', () => this.handleSocketClose())
-      socket.on('error', (error) => this.handleTransportError(error))
-      this.socket = socket
-      return socket
-    } catch (error) {
-      this.cleanupSocketDirectory()
-      this.socketPath = null
-      this.socketTokenPath = null
-      this.socketToken = null
-      throw error
-    }
+      isCurrent: (socketPath) =>
+        this.socketStartGeneration === startGeneration &&
+        (this.socketPath === null || this.socketPath === socketPath)
+    })
+    this.socketDirectory = started.socketDirectory
+    this.socketPath = started.socketPath
+    this.socketToken = started.socketToken
+    const socket = started.socket
+    socket.setEncoding('utf8')
+    this.socketBuffer = ''
+    this.socketListenerCleanup = attachMacOSNativeProviderSocketListeners(socket, {
+      data: (chunk) => this.handleSocketData(socket, chunk),
+      close: () => this.handleSocketClose(socket),
+      error: (error) => this.handleTransportError(socket, error)
+    })
+    this.socket = socket
+    return socket
   }
-  private handleSocketData(chunk: string): void {
+  private handleSocketData(socket: net.Socket, chunk: string): void {
+    // Why: a timed-out helper socket can emit after a replacement starts.
+    // Stale data must not corrupt the replacement socket's line buffer.
+    if (this.socket !== socket) {
+      return
+    }
     this.socketBuffer += chunk
-    this.socketBuffer = this.consumeLines(this.socketBuffer)
-  }
-  private consumeLines(buffer: string): string {
-    let remaining = buffer
-    while (true) {
-      const newline = remaining.indexOf('\n')
-      if (newline < 0) {
-        return remaining
-      }
-      const line = remaining.slice(0, newline)
-      remaining = remaining.slice(newline + 1)
-      if (line.trim()) {
-        this.handleLine(line)
-      }
-    }
+    this.socketBuffer = consumeNativeProviderLines(this.socketBuffer, (line) =>
+      this.handleLine(line)
+    )
   }
   private handleLine(line: string): void {
     let response: NativeResponse
@@ -242,15 +238,49 @@ export class MacOSNativeProviderClient {
     }
     pending.reject(new RuntimeClientError(response.error.code, response.error.message))
   }
-  private handleSocketClose(): void {
+  private handleSocketClose(socket: net.Socket): void {
+    // Why: late close from a prior helper socket must not tear down the active replacement.
+    if (this.socket !== socket) {
+      return
+    }
+    this.cleanupActiveSocketListeners()
     this.socket = null
+    this.socketBuffer = ''
     this.cleanupSocketDirectory()
     this.rejectPending(
       new RuntimeClientError('accessibility_error', 'native macOS helper app connection closed')
     )
   }
-  private handleTransportError(error: Error): void {
+  private handleTransportError(socket: net.Socket, error: Error): void {
+    // Why: stale socket errors can arrive after shutdown/restart.
+    if (this.socket !== socket) {
+      return
+    }
+    this.cleanupActiveSocketListeners()
+    // Why: an active transport error makes the helper socket unreliable for the next request.
+    this.socket = null
+    this.socketBuffer = ''
+    if (!socket.destroyed) {
+      socket.destroy()
+    }
+    this.cleanupSocketDirectory()
     this.rejectPending(new RuntimeClientError('accessibility_error', error.message))
+  }
+  private invalidateActiveSocketAfterWriteFailure(
+    socket: net.Socket,
+    error: RuntimeClientError
+  ): void {
+    if (this.socket !== socket) {
+      return
+    }
+    this.cleanupActiveSocketListeners()
+    this.socket = null
+    this.socketBuffer = ''
+    if (!socket.destroyed) {
+      socket.destroy()
+    }
+    this.cleanupSocketDirectory()
+    this.rejectPending(error)
   }
   private cleanupSocketDirectory(): void {
     if (!this.socketDirectory) {
@@ -259,7 +289,6 @@ export class MacOSNativeProviderClient {
     rmSync(this.socketDirectory, { recursive: true, force: true })
     this.socketDirectory = null
     this.socketPath = null
-    this.socketTokenPath = null
   }
   private rejectPending(error: Error): void {
     for (const [id, pending] of this.pending) {
@@ -268,9 +297,9 @@ export class MacOSNativeProviderClient {
       this.pending.delete(id)
     }
   }
-}
-
-function isMacOS14OrNewer(): boolean {
-  const darwinMajor = Number.parseInt(release().split('.')[0] ?? '', 10)
-  return Number.isFinite(darwinMajor) && darwinMajor >= 23
+  private cleanupActiveSocketListeners(): void {
+    const cleanup = this.socketListenerCleanup
+    this.socketListenerCleanup = null
+    cleanup?.()
+  }
 }

@@ -8,6 +8,16 @@ type AdapterMock = DaemonPtyAdapter & {
   emitExit: (id: string, code: number) => void
 }
 
+const LARGE_RECONCILE_SESSION_COUNT = 150_000
+
+function buildSessionIds(prefix: string, count: number): string[] {
+  const ids: string[] = []
+  for (let index = 0; index < count; index += 1) {
+    ids.push(`${prefix}-${index}`)
+  }
+  return ids
+}
+
 function createAdapter(
   label: string,
   sessions: string[] = [],
@@ -135,6 +145,15 @@ describe('DaemonPtyRouter', () => {
     expect(current.hasPty).not.toHaveBeenCalledWith('legacy-session')
   })
 
+  it('fails listProcesses closed when any routed adapter cannot list sessions', async () => {
+    const current = createAdapter('current', ['current-session'])
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    vi.mocked(legacy.listProcesses).mockRejectedValueOnce(new Error('legacy unavailable'))
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.listProcesses()).rejects.toThrow('legacy unavailable')
+  })
+
   it('merges startup reconciliation and updates route mappings', async () => {
     const current = createAdapter('current', [], {
       alive: ['current-alive'],
@@ -156,6 +175,22 @@ describe('DaemonPtyRouter', () => {
     })
     expect(legacy.write).toHaveBeenCalledWith('legacy-alive', 'old\n')
     expect(current.write).toHaveBeenCalledWith('current-alive', 'new\n')
+  })
+
+  it('merges large startup reconciliation results', async () => {
+    const alive = buildSessionIds('alive', LARGE_RECONCILE_SESSION_COUNT)
+    const killed = buildSessionIds('killed', LARGE_RECONCILE_SESSION_COUNT)
+    const current = createAdapter('current', [], { alive, killed })
+    const router = new DaemonPtyRouter({ current, legacy: [] })
+
+    const result = await router.reconcileOnStartup(new Set(['wt']))
+
+    expect(result.alive).toHaveLength(LARGE_RECONCILE_SESSION_COUNT)
+    expect(result.killed).toHaveLength(LARGE_RECONCILE_SESSION_COUNT)
+    expect(result.alive.at(-1)).toBe(`alive-${LARGE_RECONCILE_SESSION_COUNT - 1}`)
+    expect(result.killed.at(-1)).toBe(`killed-${LARGE_RECONCILE_SESSION_COUNT - 1}`)
+    router.write('alive-0', 'restored\n')
+    expect(current.write).toHaveBeenCalledWith('alive-0', 'restored\n')
   })
 
   it('disposes current and legacy adapters', () => {

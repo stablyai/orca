@@ -133,7 +133,7 @@ async function walkJsonlFiles(dirPath: string): Promise<string[]> {
   for (const entry of entries) {
     const fullPath = join(dirPath, entry.name)
     if (entry.isDirectory()) {
-      files.push(...(await walkJsonlFiles(fullPath)))
+      appendDiscoveredFiles(files, await walkJsonlFiles(fullPath))
       continue
     }
     if (entry.isFile() && entry.name.endsWith('.jsonl')) {
@@ -142,6 +142,14 @@ async function walkJsonlFiles(dirPath: string): Promise<string[]> {
   }
 
   return files
+}
+
+function appendDiscoveredFiles(target: string[], source: readonly string[]): void {
+  // Why: long-lived transcript directories can exceed V8's argument limit if
+  // child file arrays are spread into push().
+  for (const filePath of source) {
+    target.push(filePath)
+  }
 }
 
 export async function listClaudeTranscriptFiles(): Promise<string[]> {
@@ -655,14 +663,6 @@ export async function scanClaudeUsageFiles(
         : left.day.localeCompare(right.day)
     )
   }
-}
-
-export function getClaudeProjectsDirectory(): string {
-  return CLAUDE_PROJECTS_DIR
-}
-
-export function getClaudeTranscriptsDirectory(): string {
-  return CLAUDE_TRANSCRIPTS_DIR
 }
 
 export function createWorktreeRefs(

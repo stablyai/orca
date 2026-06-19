@@ -1,4 +1,6 @@
-/* eslint-disable max-lines */
+/* eslint-disable max-lines -- Why: cleanup scanning, safety review, and
+   confirmation stay together so destructive workspace deletion remains
+   auditable. */
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
@@ -24,6 +26,7 @@ import { Button } from '@/components/ui/button'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -35,14 +38,18 @@ import {
   type WorkspaceCleanupScanError,
   type WorkspaceCleanupTier
 } from '../../../../shared/workspace-cleanup'
+import {
+  resolveWorkspaceCleanupActiveView,
+  type WorkspaceCleanupView,
+  type WorkspaceCleanupViewCounts
+} from './workspace-cleanup-view-selection'
+import { translate } from '@/i18n/i18n'
 
 const TIER_LABELS: Record<WorkspaceCleanupTier, string> = {
   ready: 'Suggested cleanup',
   review: 'Needs a closer look',
   protected: 'Not suggested for cleanup'
 }
-
-type CleanupView = WorkspaceCleanupTier | 'hidden'
 
 const BLOCKER_LABELS: Record<WorkspaceCleanupBlocker, string> = {
   'main-worktree': 'Main workspace',
@@ -182,11 +189,12 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
 
   const open = activeModal === 'workspace-cleanup'
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
-  const [activeView, setActiveView] = useState<CleanupView>('ready')
+  const [activeView, setActiveView] = useState<WorkspaceCleanupView>('ready')
   const [confirming, setConfirming] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [rowFailures, setRowFailures] = useState<Record<string, string>>({})
   const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(() => new Set())
+  const mountedRef = useMountedRef()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const eligibleRepoIds = useMemo(() => eligibleRepos.map((repo) => repo.id), [eligibleRepos])
 
@@ -195,12 +203,20 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       setRowFailures({})
       setActiveView('ready')
       void scanWorkspaceCleanup().catch((err: unknown) => {
-        toast.error('Workspace cleanup scan failed', {
-          description: err instanceof Error ? err.message : String(err)
-        })
+        if (mountedRef.current) {
+          toast.error(
+            translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.662b8ec3f8',
+              'Workspace cleanup scan failed'
+            ),
+            {
+              description: err instanceof Error ? err.message : String(err)
+            }
+          )
+        }
       })
     }
-  }, [open, scanWorkspaceCleanup])
+  }, [mountedRef, open, scanWorkspaceCleanup])
 
   useEffect(() => {
     if (!open) {
@@ -272,6 +288,22 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const hiddenByKeepCount = filteredCandidates.filter((candidate) =>
     candidate.blockers.includes('dismissed')
   ).length
+  const cleanupViewCounts = useMemo<WorkspaceCleanupViewCounts>(
+    () => ({
+      ready: groups.ready.length,
+      review: groups.review.length,
+      protected: groups.protected.length,
+      hidden: hiddenCandidates.length
+    }),
+    [groups.protected.length, groups.ready.length, groups.review.length, hiddenCandidates.length]
+  )
+  const resolvedActiveView = resolveWorkspaceCleanupActiveView({
+    requestedView: activeView,
+    counts: cleanupViewCounts,
+    open,
+    loading,
+    hasScan: scan != null
+  })
   const repoNameById = useMemo(
     () => new Map(repos.map((repo) => [repo.id, repo.displayName || repo.path])),
     [repos]
@@ -289,7 +321,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const inactiveCount = filteredCandidates.length
   const hasAnyCandidates = candidates.length > 0
   const initialLoading = loading && !scan
-  const activeRows = activeView === 'hidden' ? hiddenCandidates : groups[activeView]
+  const activeRows = resolvedActiveView === 'hidden' ? hiddenCandidates : groups[resolvedActiveView]
   const activeQueueableRows = useMemo(
     () => activeRows.filter(canQueueWorkspaceCleanupCandidate),
     [activeRows]
@@ -307,33 +339,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       ? 'mixed'
       : 'unchecked'
 
-  useEffect(() => {
-    if (!open || loading || !scan) {
-      return
-    }
-    if (activeRows.length > 0) {
-      return
-    }
-    if (readyCount > 0) {
-      setActiveView('ready')
-    } else if (groups.review.length > 0) {
-      setActiveView('review')
-    } else if (groups.protected.length > 0) {
-      setActiveView('protected')
-    } else if (hiddenCandidates.length > 0) {
-      setActiveView('hidden')
-    }
-  }, [
-    activeRows.length,
-    groups.protected.length,
-    groups.review.length,
-    hiddenCandidates.length,
-    loading,
-    open,
-    readyCount,
-    scan
-  ])
-
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       if (!nextOpen && !removing) {
@@ -346,11 +351,19 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const refresh = useCallback(() => {
     setRowFailures({})
     void scanWorkspaceCleanup().catch((err: unknown) => {
-      toast.error('Workspace cleanup scan failed', {
-        description: err instanceof Error ? err.message : String(err)
-      })
+      if (mountedRef.current) {
+        toast.error(
+          translate(
+            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.662b8ec3f8',
+            'Workspace cleanup scan failed'
+          ),
+          {
+            description: err instanceof Error ? err.message : String(err)
+          }
+        )
+      }
     })
-  }, [scanWorkspaceCleanup])
+  }, [mountedRef, scanWorkspaceCleanup])
 
   const toggleActiveSelection = useCallback(() => {
     if (activeQueueableRows.length === 0) {
@@ -375,19 +388,29 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     (candidate: WorkspaceCleanupCandidate) => {
       void dismissCandidates([candidate])
         .then(() => {
-          setSelectedIds((current) => {
-            const next = new Set(current)
-            next.delete(candidate.worktreeId)
-            return next
-          })
+          if (mountedRef.current) {
+            setSelectedIds((current) => {
+              const next = new Set(current)
+              next.delete(candidate.worktreeId)
+              return next
+            })
+          }
         })
         .catch((err: unknown) => {
-          toast.error('Could not ignore cleanup suggestion', {
-            description: err instanceof Error ? err.message : String(err)
-          })
+          if (mountedRef.current) {
+            toast.error(
+              translate(
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7f451a3e2c',
+                'Could not ignore cleanup suggestion'
+              ),
+              {
+                description: err instanceof Error ? err.message : String(err)
+              }
+            )
+          }
         })
     },
-    [dismissCandidates]
+    [dismissCandidates, mountedRef]
   )
 
   const confirmRemove = useCallback(async () => {
@@ -404,30 +427,51 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       for (const failure of result.failures) {
         nextFailures[failure.worktreeId] = failure.message
       }
-      setRowFailures(nextFailures)
-      setSelectedIds((current) => {
-        const next = new Set(current)
-        for (const id of result.removedIds) {
-          next.delete(id)
-        }
-        return next
-      })
+      if (mountedRef.current) {
+        setRowFailures(nextFailures)
+        setSelectedIds((current) => {
+          const next = new Set(current)
+          for (const id of result.removedIds) {
+            next.delete(id)
+          }
+          return next
+        })
+      }
       if (result.removedIds.length > 0) {
-        toast.success(
-          `Removed ${result.removedIds.length} workspace${result.removedIds.length === 1 ? '' : 's'}`
-        )
+        if (mountedRef.current) {
+          toast.success(
+            translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0f00612b6d',
+              'Removed {{value0}} workspace{{value1}}',
+              {
+                value0: result.removedIds.length,
+                value1: result.removedIds.length === 1 ? '' : 's'
+              }
+            )
+          )
+        }
       }
       if (result.failures.length > 0) {
-        toast.error(
-          `${result.failures.length} workspace${result.failures.length === 1 ? '' : 's'} could not be removed`
-        )
+        if (mountedRef.current) {
+          toast.error(
+            translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.41d594d01e',
+              '{{value0}} workspace{{value1}} could not be removed',
+              { value0: result.failures.length, value1: result.failures.length === 1 ? '' : 's' }
+            )
+          )
+        }
       } else {
-        setConfirming(false)
+        if (mountedRef.current) {
+          setConfirming(false)
+        }
       }
     } finally {
-      setRemoving(false)
+      if (mountedRef.current) {
+        setRemoving(false)
+      }
     }
-  }, [removeCandidates, selectedCandidates])
+  }, [mountedRef, removeCandidates, selectedCandidates])
 
   const selectedCount = selectedCandidates.length
 
@@ -442,9 +486,17 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
             <DialogHeader className="border-b border-border px-5 py-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <DialogTitle className="text-base">Delete Inactive Workspaces</DialogTitle>
+                  <DialogTitle className="text-base">
+                    {translate(
+                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b2c1331844',
+                      'Delete Inactive Workspaces'
+                    )}
+                  </DialogTitle>
                   <DialogDescription className="mt-1 text-xs">
-                    Review inactive workspaces before deleting their local files and Orca state.
+                    {translate(
+                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e0b5a4deaa',
+                      'Review inactive workspaces before deleting their local files and Orca state.'
+                    )}
                   </DialogDescription>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -453,7 +505,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       <Button
                         variant="outline"
                         size="icon-sm"
-                        aria-label="Refresh"
+                        aria-label={translate(
+                          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7ae2ad30f4',
+                          'Refresh'
+                        )}
                         onClick={refresh}
                         disabled={loading}
                       >
@@ -461,13 +516,19 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" sideOffset={4}>
-                      Refresh
+                      {translate(
+                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7ae2ad30f4',
+                        'Refresh'
+                      )}
                     </TooltipContent>
                   </Tooltip>
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="Close"
+                    aria-label={translate(
+                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.191f0bc98e',
+                      'Close'
+                    )}
                     onClick={() => closeModal()}
                     disabled={removing}
                   >
@@ -482,11 +543,16 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                 <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
                 <div className="min-w-0">
                   <div className="text-xs font-medium text-foreground">
-                    Checking workspace safety
+                    {translate(
+                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7eee951968',
+                      'Checking workspace safety'
+                    )}
                   </div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    Scanning worktrees and git state, then combining open tab, terminal, live agent,
-                    and remote availability signals before suggesting deletions.
+                    {translate(
+                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.8b74d4ea6e',
+                      'Scanning worktrees and git state, then combining open tab, terminal, live agent, and remote availability signals before suggesting deletions.'
+                    )}
                   </div>
                 </div>
               </div>
@@ -494,17 +560,45 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/25 px-4 py-2.5">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <div className="min-w-0 text-sm font-medium text-foreground">
-                    {selectedCount} selected
+                    {selectedCount}{' '}
+                    {translate(
+                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.ac5ba84cc1',
+                      'selected'
+                    )}
                   </div>
-                  <StatusPill>{inactiveCount} inactive</StatusPill>
+                  <StatusPill>
+                    {inactiveCount}{' '}
+                    {translate(
+                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.2b31bf68de',
+                      'inactive'
+                    )}
+                  </StatusPill>
                   {readyCount > 0 ? (
-                    <StatusPill tone="ready">{readyCount} safe to remove</StatusPill>
+                    <StatusPill tone="ready">
+                      {readyCount}{' '}
+                      {translate(
+                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b299f201b9',
+                        'safe to remove'
+                      )}
+                    </StatusPill>
                   ) : null}
                   {groups.review.length > 0 ? (
-                    <StatusPill tone="review">{groups.review.length} need review</StatusPill>
+                    <StatusPill tone="review">
+                      {groups.review.length}{' '}
+                      {translate(
+                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1b18868569',
+                        'need review'
+                      )}
+                    </StatusPill>
                   ) : null}
                   {protectedCount > 0 ? (
-                    <StatusPill>{protectedCount} not suggested</StatusPill>
+                    <StatusPill>
+                      {protectedCount}{' '}
+                      {translate(
+                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.37ab28277e',
+                        'not suggested'
+                      )}
+                    </StatusPill>
                   ) : null}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -526,7 +620,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     disabled={selectedCount === 0}
                   >
                     <Trash2 className="size-3.5" />
-                    Delete selected
+                    {translate(
+                      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b771c92598',
+                      'Delete selected'
+                    )}
                   </Button>
                 </div>
               </div>
@@ -545,19 +642,14 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
 
             <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden md:grid-cols-[185px_minmax(0,1fr)]">
               <CleanupViewNav
-                activeView={activeView}
-                counts={{
-                  ready: groups.ready.length,
-                  review: groups.review.length,
-                  protected: groups.protected.length,
-                  hidden: hiddenByKeepCount
-                }}
+                activeView={resolvedActiveView}
+                counts={cleanupViewCounts}
                 onViewChange={setActiveView}
               />
               <div className="flex min-h-0 min-w-0 flex-col border-t border-border md:border-l md:border-t-0">
                 <div className="flex min-h-10 items-center justify-between gap-3 border-b border-border px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2">
-                    {activeView !== 'hidden' && activeQueueableRows.length > 0 ? (
+                    {resolvedActiveView !== 'hidden' && activeQueueableRows.length > 0 ? (
                       <button
                         type="button"
                         role="checkbox"
@@ -566,8 +658,16 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                         }
                         aria-label={
                           allActiveQueueableSelected
-                            ? `Unselect all in ${TIER_LABELS[activeView]}`
-                            : `Select all in ${TIER_LABELS[activeView]}`
+                            ? translate(
+                                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.73690b0031',
+                                'Unselect all in {{value0}}',
+                                { value0: TIER_LABELS[resolvedActiveView] }
+                              )
+                            : translate(
+                                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.06cf78521e',
+                                'Select all in {{value0}}',
+                                { value0: TIER_LABELS[resolvedActiveView] }
+                              )
                         }
                         onClick={toggleActiveSelection}
                         className="flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent"
@@ -580,23 +680,32 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                       </button>
                     ) : null}
                     <div className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                      {activeView === 'hidden'
-                        ? 'Ignored cleanup suggestions'
-                        : TIER_LABELS[activeView]}
+                      {resolvedActiveView === 'hidden'
+                        ? translate(
+                            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0c6672f5e3',
+                            'Ignored cleanup suggestions'
+                          )
+                        : TIER_LABELS[resolvedActiveView]}
                     </div>
                   </div>
-                  {activeView === 'hidden' && hiddenByKeepCount > 0 ? (
+                  {resolvedActiveView === 'hidden' && hiddenByKeepCount > 0 ? (
                     <Button
                       variant="link"
                       size="xs"
                       className="h-auto shrink-0 px-0 text-xs"
                       onClick={() => void resetDismissals()}
                     >
-                      Restore ignored suggestions
+                      {translate(
+                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.aaee139eab',
+                        'Restore ignored suggestions'
+                      )}
                     </Button>
                   ) : (
                     <div className="shrink-0 text-xs text-muted-foreground">
-                      Sorted by oldest activity
+                      {translate(
+                        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.592fbab446',
+                        'Sorted by oldest activity'
+                      )}
                     </div>
                   )}
                 </div>
@@ -604,17 +713,30 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                   <div>
                     {initialLoading ? <SkeletonRows /> : null}
                     {!loading && scan && candidates.length === 0 && !scanNoticeMessage ? (
-                      <EmptyState title="No inactive workspaces to delete." />
+                      <EmptyState
+                        title={translate(
+                          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.d3eef9463d',
+                          'No inactive workspaces to delete.'
+                        )}
+                      />
                     ) : null}
                     {!loading && scan && candidates.length === 0 && scanNoticeMessage ? (
-                      <EmptyState title="No inactive workspaces found in checked repositories." />
+                      <EmptyState
+                        title={translate(
+                          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.97c772c4fe',
+                          'No inactive workspaces found in checked repositories.'
+                        )}
+                      />
                     ) : null}
                     {!loading &&
                     scan &&
                     candidates.length > 0 &&
                     filteredCandidates.length === 0 ? (
                       <EmptyState
-                        title="No inactive workspaces match the selected repos."
+                        title={translate(
+                          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.a19040cd67',
+                          'No inactive workspaces match the selected repos.'
+                        )}
                         actionLabel="Show all repos"
                         onAction={() => setRepoSelection(new Set(eligibleRepoIds))}
                       />
@@ -624,13 +746,21 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     filteredCandidates.length > 0 &&
                     visibleCandidates.length === 0 ? (
                       <EmptyState
-                        title="All cleanup suggestions are ignored."
+                        title={translate(
+                          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4719327c9c',
+                          'All cleanup suggestions are ignored.'
+                        )}
                         actionLabel="Review ignored workspaces"
                         onAction={() => setActiveView('hidden')}
                       />
                     ) : null}
                     {!loading && scan && activeRows.length === 0 && visibleCandidates.length > 0 ? (
-                      <EmptyState title="No workspaces in this cleanup set." />
+                      <EmptyState
+                        title={translate(
+                          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.f68d538c63',
+                          'No workspaces in this cleanup set.'
+                        )}
+                      />
                     ) : null}
                     {activeRows.map((candidate, index) => (
                       <CandidateRow
@@ -701,15 +831,39 @@ function CleanupViewNav({
   counts,
   onViewChange
 }: {
-  activeView: CleanupView
-  counts: Record<CleanupView, number>
-  onViewChange: (view: CleanupView) => void
+  activeView: WorkspaceCleanupView
+  counts: WorkspaceCleanupViewCounts
+  onViewChange: (view: WorkspaceCleanupView) => void
 }): React.JSX.Element {
-  const items: { view: CleanupView; label: string }[] = [
-    { view: 'ready', label: 'Suggested' },
-    { view: 'review', label: 'Needs review' },
-    { view: 'protected', label: 'Not suggested' },
-    { view: 'hidden', label: 'Ignored' }
+  const items: { view: WorkspaceCleanupView; label: string }[] = [
+    {
+      view: 'ready',
+      label: translate(
+        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4b93a235d8',
+        'Suggested'
+      )
+    },
+    {
+      view: 'review',
+      label: translate(
+        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.d1094dd529',
+        'Needs review'
+      )
+    },
+    {
+      view: 'protected',
+      label: translate(
+        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.c4f4782c02',
+        'Not suggested'
+      )
+    },
+    {
+      view: 'hidden',
+      label: translate(
+        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e8b3741ff7',
+        'Ignored'
+      )
+    }
   ]
 
   return (
@@ -773,7 +927,11 @@ function CandidateRow({
             type="button"
             role="checkbox"
             aria-checked={selected}
-            aria-label={`Select ${candidate.displayName}`}
+            aria-label={translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bbb1ab6a6f',
+              'Select {{value0}}',
+              { value0: candidate.displayName }
+            )}
             onClick={() => onToggleSelected(candidate.worktreeId)}
             className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-border bg-background text-primary hover:bg-accent"
           >
@@ -787,7 +945,11 @@ function CandidateRow({
             <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
             <StatusPill tone={status.tone}>{status.label}</StatusPill>
             <span className="text-xs text-muted-foreground">
-              Last active {formatRelativeTime(candidate.lastActivityAt)}
+              {translate(
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
+                'Last active'
+              )}{' '}
+              {formatRelativeTime(candidate.lastActivityAt)}
             </span>
             {blockers.length > 0 ? (
               <span className="min-w-0 truncate text-xs text-muted-foreground">
@@ -799,8 +961,20 @@ function CandidateRow({
             {candidate.path}
           </div>
           <div className="mt-1 flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            <span className="min-w-0 truncate">Repo {candidate.repoName}</span>
-            <span className="min-w-0 truncate font-mono">Branch {candidate.branch}</span>
+            <span className="min-w-0 truncate">
+              {translate(
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0b1766738a',
+                'Repo'
+              )}{' '}
+              {candidate.repoName}
+            </span>
+            <span className="min-w-0 truncate font-mono">
+              {translate(
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.bef0adef9b',
+                'Branch'
+              )}{' '}
+              {candidate.branch}
+            </span>
             <span>{formatGitStatus(candidate)}</span>
             {branchSafetyDetails.slice(0, 1).map((detail) => (
               <span key={detail}>{detail}</span>
@@ -820,14 +994,21 @@ function CandidateRow({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label={`View ${candidate.displayName}`}
+                aria-label={translate(
+                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1bffc07ba7',
+                  'View {{value0}}',
+                  { value0: candidate.displayName }
+                )}
                 onClick={() => onView(candidate)}
               >
                 <Search className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              View
+              {translate(
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.ee81adfcef',
+                'View'
+              )}
             </TooltipContent>
           </Tooltip>
           {!ignored ? (
@@ -836,14 +1017,21 @@ function CandidateRow({
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={`Ignore ${candidate.displayName}`}
+                  aria-label={translate(
+                    'auto.components.workspace.cleanup.WorkspaceCleanupDialog.a9957007eb',
+                    'Ignore {{value0}}',
+                    { value0: candidate.displayName }
+                  )}
                   onClick={() => onIgnore(candidate)}
                 >
                   <EyeOff className="size-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                Ignore
+                {translate(
+                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4d0b72481c',
+                  'Ignore'
+                )}
               </TooltipContent>
             </Tooltip>
           ) : null}
@@ -853,7 +1041,11 @@ function CandidateRow({
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={`Remove ${candidate.displayName}`}
+                  aria-label={translate(
+                    'auto.components.workspace.cleanup.WorkspaceCleanupDialog.3828408538',
+                    'Remove {{value0}}',
+                    { value0: candidate.displayName }
+                  )}
                   className="text-destructive hover:text-destructive"
                   onClick={() => onRemove(candidate)}
                 >
@@ -861,7 +1053,10 @@ function CandidateRow({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                Remove
+                {translate(
+                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9cc26c019d',
+                  'Remove'
+                )}
               </TooltipContent>
             </Tooltip>
           ) : null}
@@ -876,7 +1071,13 @@ function getCandidateStatus(candidate: WorkspaceCleanupCandidate): {
   tone: 'neutral' | 'ready' | 'review' | 'destructive'
 } {
   if (candidate.blockers.includes('dismissed')) {
-    return { label: 'Ignored', tone: 'neutral' }
+    return {
+      label: translate(
+        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e8b3741ff7',
+        'Ignored'
+      ),
+      tone: 'neutral'
+    }
   }
   if (candidate.tier === 'ready') {
     return { label: candidate.reasons.includes('archived') ? 'Archived' : 'Clean', tone: 'ready' }
@@ -885,15 +1086,39 @@ function getCandidateStatus(candidate: WorkspaceCleanupCandidate): {
     return { label: BLOCKER_LABELS[candidate.blockers[0]], tone: 'neutral' }
   }
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
-    return { label: 'Unpushed commits', tone: 'review' }
+    return {
+      label: translate(
+        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9623a5107d',
+        'Unpushed commits'
+      ),
+      tone: 'review'
+    }
   }
   if (candidate.git.clean === false) {
-    return { label: 'Dirty', tone: 'review' }
+    return {
+      label: translate(
+        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e97e4580c7',
+        'Dirty'
+      ),
+      tone: 'review'
+    }
   }
   if (candidate.tier === 'review') {
-    return { label: 'Review', tone: 'review' }
+    return {
+      label: translate(
+        'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0a2e3c7cba',
+        'Review'
+      ),
+      tone: 'review'
+    }
   }
-  return { label: 'Not suggested', tone: 'neutral' }
+  return {
+    label: translate(
+      'auto.components.workspace.cleanup.WorkspaceCleanupDialog.c4f4782c02',
+      'Not suggested'
+    ),
+    tone: 'neutral'
+  }
 }
 
 function formatGitStatus(candidate: WorkspaceCleanupCandidate): string {
@@ -982,10 +1207,17 @@ function ConfirmRemove({
           </div>
           <div className="min-w-0">
             <DialogTitle className="text-base">
-              Delete {count} {noun}?
+              {translate(
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.cbf2f664e2',
+                'Delete'
+              )}{' '}
+              {count} {noun}?
             </DialogTitle>
             <DialogDescription className="mt-1.5 text-xs leading-5">
-              This permanently deletes their local files. You can&apos;t undo this.
+              {translate(
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.38ca0b1400',
+                "This permanently deletes their local files. You can't undo this."
+              )}
             </DialogDescription>
           </div>
         </div>
@@ -993,9 +1225,18 @@ function ConfirmRemove({
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-border px-5 py-2.5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {count} {noun} to delete
+            {count} {noun}{' '}
+            {translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.dba753e94f',
+              'to delete'
+            )}
           </div>
-          <div className="text-xs text-muted-foreground">Sorted by oldest activity</div>
+          <div className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.592fbab446',
+              'Sorted by oldest activity'
+            )}
+          </div>
         </div>
         <ScrollArea className="min-h-0 flex-1">
           {candidates.map((candidate, index) => (
@@ -1009,11 +1250,18 @@ function ConfirmRemove({
       </div>
       <DialogFooter className="border-t border-border px-5 py-3">
         <Button variant="outline" onClick={onCancel} disabled={removing}>
-          Cancel
+          {translate(
+            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.b6bae1eed1',
+            'Cancel'
+          )}
         </Button>
         <Button variant="destructive" onClick={onConfirm} disabled={removing || count === 0}>
           {removing ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-          Delete {count} {noun}
+          {translate(
+            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.cbf2f664e2',
+            'Delete'
+          )}{' '}
+          {count} {noun}
         </Button>
       </DialogFooter>
     </>
@@ -1034,7 +1282,11 @@ function ConfirmRemoveRow({
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="min-w-0 truncate text-sm font-medium">{candidate.displayName}</span>
         <span className="text-xs text-muted-foreground">
-          Last active {formatRelativeTime(candidate.lastActivityAt)}
+          {translate(
+            'auto.components.workspace.cleanup.WorkspaceCleanupDialog.352f15d6fc',
+            'Last active'
+          )}{' '}
+          {formatRelativeTime(candidate.lastActivityAt)}
         </span>
         {dirtyLabel ? <StatusPill tone="destructive">{dirtyLabel}</StatusPill> : null}
       </div>

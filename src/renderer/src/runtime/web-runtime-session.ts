@@ -9,10 +9,17 @@ import type {
   RuntimeTerminalClose,
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
+import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 import type { AppState } from '../store/types'
+import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { recordWebSessionFocusIntent } from './web-session-focus-intent'
+import { recordWebSessionCloseIntent } from './web-session-close-intent'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
 
 export {
@@ -26,11 +33,14 @@ export {
 export function isWebRuntimeSessionActive(
   activeRuntimeEnvironmentId: string | null | undefined
 ): boolean {
-  return (
-    Boolean((globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) &&
-    Boolean(activeRuntimeEnvironmentId?.trim())
-  )
+  // Why: headless serve sessions are owned by the remote runtime, regardless
+  // of whether the attaching client is web or desktop Electron.
+  return Boolean(activeRuntimeEnvironmentId?.trim())
 }
+
+const pendingWebRuntimeSplitMirrorTelemetry = new Map<string, Set<string>>()
+const WEB_RUNTIME_SPLIT_MIRROR_SUPPRESSION_TTL_MS = 30_000
+let pendingWebRuntimeSplitMirrorTelemetryId = 0
 
 export async function createWebRuntimeSessionTerminal(args: {
   worktreeId: string
@@ -38,6 +48,8 @@ export async function createWebRuntimeSessionTerminal(args: {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  startupCommandDelivery?: StartupCommandDelivery
+  agent?: TuiAgent
   activate?: boolean
   selectWorktree?: boolean
 }): Promise<boolean> {
@@ -57,15 +69,24 @@ export async function createWebRuntimeSessionTerminal(args: {
       selector: environmentId,
       method: 'session.tabs.createTerminal',
       params: {
-        worktree: `id:${args.worktreeId}`,
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         targetGroupId: args.targetGroupId,
         command: args.command,
+        startupCommandDelivery: args.startupCommandDelivery,
+        agent: args.agent,
         activate: args.activate !== false
       },
       timeoutMs: 15_000
     })
-    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>)
+    const createdTerminal = unwrapRuntimeRpcResult(
+      response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
+    )
+    if (args.activate !== false) {
+      // Why: record focus intent so the reconcile follows the snapshot's active
+      // tab to THIS new terminal, instead of sticky-keeping the prior tab.
+      recordWebSessionFocusIntent(args.worktreeId, createdTerminal.tab.id)
+    }
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId)
     return true
   } catch (error) {
@@ -103,9 +124,16 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       selector: environmentId,
       method: 'browser.tabCreate',
       params: {
-        worktree: `id:${args.worktreeId}`,
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
         url: args.url,
         profileId: args.profileId ?? undefined,
+        // Why: this is the user clicking "New Browser Tab", so focus it. On a
+        // headless host this marks the tab active in the session snapshot so the
+        // reconcile keeps focus on it instead of snapping back to a terminal.
+        activate: true,
+        // Why: place the new browser in the split group whose "+" was clicked,
+        // so the host snapshot is authoritative for its group (no left-snap).
+        ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
         // Why: paired web clients need the local tab immediately. The remote
         // pane will stream once the host webview registers; waiting here makes
         // the workspace appear to close while the host finishes mounting.
@@ -114,6 +142,10 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       timeoutMs: 15_000
     })
     const created = unwrapRuntimeRpcResult(response as RuntimeRpcResponse<BrowserTabCreateResult>)
+    // Why: record focus intent (browser session tab id === browserPageId on a
+    // headless host) so the reconcile follows the snapshot's active tab to this
+    // new browser tab rather than sticky-keeping the prior one.
+    recordWebSessionFocusIntent(args.worktreeId, created.browserPageId)
     stageWebRuntimeBrowserTab({
       environmentId,
       worktreeId: args.worktreeId,
@@ -174,6 +206,7 @@ function stageWebRuntimeBrowserTab(args: {
   const browserTab = useAppStore.getState().createBrowserTab(args.worktreeId, url, {
     title: url === 'about:blank' ? 'New Browser Tab' : url,
     focusAddressBar: true,
+    browserRuntimeEnvironmentId: args.environmentId,
     targetGroupId: args.targetGroupId
   })
   const pageId = browserTab.activePageId ?? browserTab.pageIds?.[0] ?? null
@@ -187,9 +220,7 @@ function stageWebRuntimeBrowserTab(args: {
 }
 
 function selectWebRuntimeSessionWorktree(worktreeId: string): void {
-  useAppStore.setState((state) =>
-    state.activeWorktreeId === worktreeId ? state : { activeWorktreeId: worktreeId }
-  )
+  useAppStore.getState().setActiveWorktree(worktreeId)
 }
 
 function findLocalBrowserPageForRemotePage(
@@ -217,7 +248,7 @@ async function refreshWebRuntimeSessionTabsSnapshot(
       selector: environmentId,
       method: 'session.tabs.list',
       params: {
-        worktree: `id:${worktreeId}`
+        worktree: toRuntimeWorktreeSelector(worktreeId)
       },
       timeoutMs: 15_000
     })
@@ -258,7 +289,7 @@ export async function activateWebRuntimeSessionWorktree(args: {
       selector: environmentId,
       method: 'worktree.activate',
       params: {
-        worktree: `id:${args.worktreeId}`
+        worktree: toRuntimeWorktreeSelector(args.worktreeId)
       },
       timeoutMs: 15_000
     })
@@ -338,7 +369,7 @@ export async function moveWebRuntimeSessionTab(
           ? args.index
           : undefined
     const base = {
-      worktree: `id:${args.worktreeId}`,
+      worktree: toRuntimeWorktreeSelector(args.worktreeId),
       tabId: movedHostTabId,
       targetGroupId: args.targetGroupId
     }
@@ -407,16 +438,25 @@ async function callWebRuntimeSessionTabMethod(
         worktreeId: args.worktreeId,
         tabId: args.tabId
       }) ?? toHostSessionTabId(args.tabId)
+    if (method === 'session.tabs.close') {
+      // Why: the local mirror is pruned before this resolves, so suppress this
+      // host tab in the reconcile until the host snapshot confirms removal —
+      // otherwise an in-flight pre-close snapshot makes the tab flash back.
+      recordWebSessionCloseIntent(args.worktreeId, hostTabId, Date.now())
+    }
     const response = await window.api.runtimeEnvironments.call({
       selector: environmentId,
       method,
       params: {
-        worktree: `id:${args.worktreeId}`,
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
         tabId: hostTabId
       },
       timeoutMs: 15_000
     })
     unwrapRuntimeRpcResult(response as RuntimeRpcResponse<unknown>)
+    if (method === 'session.tabs.close') {
+      await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId)
+    }
     return true
   } catch (error) {
     console.warn(
@@ -429,7 +469,8 @@ async function callWebRuntimeSessionTabMethod(
 
 export function splitWebRuntimeTerminal(
   ptyId: string | null | undefined,
-  direction: 'horizontal' | 'vertical'
+  direction: 'horizontal' | 'vertical',
+  telemetrySource: TerminalPaneSplitSource
 ): boolean {
   if (!ptyId) {
     return false
@@ -443,26 +484,109 @@ export function splitWebRuntimeTerminal(
   // Why: split requests from the paired web client must run on the host pane.
   // A local split would mint a web-only pane and the host would mirror it back
   // as a separate tab instead of preserving the terminal split layout.
+  const pendingMirrorSuppressionId = reservePendingWebRuntimeSplitMirrorTelemetry(ptyId, direction)
+  const releasePendingMirrorSuppression = schedulePendingWebRuntimeSplitMirrorTelemetryRelease(
+    ptyId,
+    direction,
+    pendingMirrorSuppressionId
+  )
   void window.api.runtimeEnvironments
     .call({
       selector: environmentId,
       method: 'terminal.split',
       params: {
         terminal: remote.handle,
-        direction
+        direction,
+        telemetrySource
       },
       timeoutMs: 15_000
     })
     .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<RuntimeTerminalSplit>)
+      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ split: RuntimeTerminalSplit }>)
     })
     .catch((error) => {
+      releasePendingMirrorSuppression()
       console.warn(
         '[web-runtime-session] failed to split terminal:',
         error instanceof Error ? error.message : String(error)
       )
     })
   return true
+}
+
+export function consumePendingWebRuntimeSplitMirrorTelemetry(
+  sourcePtyId: string | null | undefined,
+  direction: 'horizontal' | 'vertical'
+): boolean {
+  if (!sourcePtyId) {
+    return false
+  }
+  const key = getPendingWebRuntimeSplitMirrorTelemetryKey(sourcePtyId, direction)
+  const ids = pendingWebRuntimeSplitMirrorTelemetry.get(key)
+  const id = ids?.values().next().value
+  if (!ids || !id) {
+    return false
+  }
+  ids.delete(id)
+  if (ids.size === 0) {
+    pendingWebRuntimeSplitMirrorTelemetry.delete(key)
+  }
+  return true
+}
+
+function reservePendingWebRuntimeSplitMirrorTelemetry(
+  sourcePtyId: string,
+  direction: 'horizontal' | 'vertical'
+): string {
+  const id = String(++pendingWebRuntimeSplitMirrorTelemetryId)
+  const key = getPendingWebRuntimeSplitMirrorTelemetryKey(sourcePtyId, direction)
+  const ids = pendingWebRuntimeSplitMirrorTelemetry.get(key) ?? new Set<string>()
+  ids.add(id)
+  pendingWebRuntimeSplitMirrorTelemetry.set(key, ids)
+  return id
+}
+
+function schedulePendingWebRuntimeSplitMirrorTelemetryRelease(
+  sourcePtyId: string,
+  direction: 'horizontal' | 'vertical',
+  id: string
+): () => void {
+  let released = false
+  const release = (): void => {
+    if (released) {
+      return
+    }
+    released = true
+    releasePendingWebRuntimeSplitMirrorTelemetry(sourcePtyId, direction, id)
+  }
+  const timeout = globalThis.setTimeout(release, WEB_RUNTIME_SPLIT_MIRROR_SUPPRESSION_TTL_MS)
+  return () => {
+    globalThis.clearTimeout(timeout)
+    release()
+  }
+}
+
+function releasePendingWebRuntimeSplitMirrorTelemetry(
+  sourcePtyId: string,
+  direction: 'horizontal' | 'vertical',
+  id: string
+): void {
+  const key = getPendingWebRuntimeSplitMirrorTelemetryKey(sourcePtyId, direction)
+  const ids = pendingWebRuntimeSplitMirrorTelemetry.get(key)
+  if (!ids) {
+    return
+  }
+  ids.delete(id)
+  if (ids.size === 0) {
+    pendingWebRuntimeSplitMirrorTelemetry.delete(key)
+  }
+}
+
+function getPendingWebRuntimeSplitMirrorTelemetryKey(
+  sourcePtyId: string,
+  direction: 'horizontal' | 'vertical'
+): string {
+  return `${direction}:${sourcePtyId}`
 }
 
 export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boolean {
@@ -493,6 +617,121 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
     .catch((error) => {
       console.warn(
         '[web-runtime-session] failed to close terminal pane:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
+  return true
+}
+
+// Why: pane geometry inside a tab (split ratios, expanded pane, pane titles) is
+// host-authoritative for remote-server tabs, so a local-only divider drag /
+// expand / pane-rename reverts on the next snapshot. Push the structure to the
+// host so it persists. tabId is the local web tab id; we resolve the host id.
+export async function updateWebRuntimePaneLayout(args: {
+  worktreeId: string
+  tabId: string
+  root: TerminalPaneLayoutNode | null
+  expandedLeafId: string | null
+  titlesByLeafId?: Record<string, string>
+}): Promise<boolean> {
+  const environmentId =
+    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
+  if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
+    return false
+  }
+  const hostTabId = isWebTerminalSurfaceTabId(args.tabId)
+    ? toHostSessionTabId(args.tabId)
+    : args.tabId
+  try {
+    const response = await window.api.runtimeEnvironments.call({
+      selector: environmentId,
+      method: 'session.tabs.updatePaneLayout',
+      params: {
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+        tabId: hostTabId,
+        root: args.root,
+        expandedLeafId: args.expandedLeafId,
+        ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
+      },
+      timeoutMs: 15_000
+    })
+    unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ updated: true }>)
+    return true
+  } catch (error) {
+    console.warn(
+      '[web-runtime-session] failed to update pane layout:',
+      error instanceof Error ? error.message : String(error)
+    )
+    return false
+  }
+}
+
+// Why: tab color/pin are host-authoritative for remote-server tabs; mirror the
+// change to the host so it persists and survives the next snapshot. Pass only
+// the fields that changed (undefined = leave as-is on the host).
+export function setWebRuntimeTabProps(args: {
+  worktreeId: string
+  tabId: string
+  color?: string | null
+  isPinned?: boolean
+}): boolean {
+  const environmentId =
+    getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
+  if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
+    return false
+  }
+  const hostTabId = isWebTerminalSurfaceTabId(args.tabId)
+    ? toHostSessionTabId(args.tabId)
+    : args.tabId
+  void window.api.runtimeEnvironments
+    .call({
+      selector: environmentId,
+      method: 'session.tabs.setTabProps',
+      params: {
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+        tabId: hostTabId,
+        ...(args.color !== undefined ? { color: args.color } : {}),
+        ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {})
+      },
+      timeoutMs: 15_000
+    })
+    .then((response) => {
+      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ updated: true }>)
+    })
+    .catch((error) => {
+      console.warn(
+        '[web-runtime-session] failed to set tab props:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
+  return true
+}
+
+// Why: clearing scrollback locally (pane.terminal.clear()) is undone by the next
+// host snapshot/re-subscribe, which replays the host buffer. Clear the host
+// buffer too so the clear actually sticks on a remote-server pane.
+export function clearWebRuntimeTerminalBuffer(ptyId: string | null | undefined): boolean {
+  if (!ptyId) {
+    return false
+  }
+  const remote = parseRemoteRuntimePtyId(ptyId)
+  const environmentId = remote?.environmentId?.trim()
+  if (!remote || !environmentId || !isWebRuntimeSessionActive(environmentId)) {
+    return false
+  }
+  void window.api.runtimeEnvironments
+    .call({
+      selector: environmentId,
+      method: 'terminal.clearBuffer',
+      params: { terminal: remote.handle },
+      timeoutMs: 15_000
+    })
+    .then((response) => {
+      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ clear: unknown }>)
+    })
+    .catch((error) => {
+      console.warn(
+        '[web-runtime-session] failed to clear terminal buffer:',
         error instanceof Error ? error.message : String(error)
       )
     })

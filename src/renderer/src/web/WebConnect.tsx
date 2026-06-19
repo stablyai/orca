@@ -12,6 +12,7 @@ import {
 } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
+import { translate } from '@/i18n/i18n'
 
 type WebConnectProps = {
   initialPairingInput: string | null
@@ -70,22 +71,29 @@ export default function WebConnect({
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-6 text-foreground">
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-6 text-foreground">
       <div className="flex w-full max-w-[520px] flex-col gap-5 rounded-lg border border-border bg-card p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted">
             <Server size={18} aria-hidden />
           </div>
           <div className="min-w-0">
-            <h1 className="text-base font-semibold leading-6">Connect to Orca</h1>
+            <h1 className="text-base font-semibold leading-6">
+              {translate('auto.web.WebConnect.e3bcd082ac', 'Connect to Orca')}
+            </h1>
             <p className="mt-1 text-sm leading-5 text-muted-foreground">
-              Paste a pairing URL from an Orca server that this browser can reach.
+              {translate(
+                'auto.web.WebConnect.3affe7de3a',
+                'Paste a pairing URL from an Orca server that this browser can reach.'
+              )}
             </p>
           </div>
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="web-runtime-name">Server name</Label>
+          <Label htmlFor="web-runtime-name">
+            {translate('auto.web.WebConnect.cb4d287238', 'Server name')}
+          </Label>
           <Input
             id="web-runtime-name"
             value={name}
@@ -95,12 +103,14 @@ export default function WebConnect({
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="web-runtime-pairing-code">Pairing URL or code</Label>
+          <Label htmlFor="web-runtime-pairing-code">
+            {translate('auto.web.WebConnect.7a566540de', 'Pairing URL or code')}
+          </Label>
           <Input
             id="web-runtime-pairing-code"
             value={pairingCode}
             onChange={(event) => setPairingCode(event.target.value)}
-            placeholder="orca://pair#..."
+            placeholder={translate('auto.web.WebConnect.27393856e4', 'orca://pair?code=...')}
             autoComplete="off"
             spellCheck={false}
           />
@@ -108,7 +118,7 @@ export default function WebConnect({
 
         {parsedOffer && (
           <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-            Endpoint: {parsedOffer.endpoint}
+            {translate('auto.web.WebConnect.4a4c017be1', 'Endpoint:')} {parsedOffer.endpoint}
           </div>
         )}
 
@@ -121,7 +131,7 @@ export default function WebConnect({
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
           <Button type="button" variant="outline" onClick={clear} className="gap-2">
             <Trash2 size={15} aria-hidden />
-            Clear saved server
+            {translate('auto.web.WebConnect.2cf9e5a294', 'Clear saved server')}
           </Button>
           <Button
             type="button"
@@ -134,7 +144,7 @@ export default function WebConnect({
             ) : (
               <Cable size={15} aria-hidden />
             )}
-            Connect
+            {translate('auto.web.WebConnect.b411ec0069', 'Connect')}
           </Button>
         </div>
       </div>

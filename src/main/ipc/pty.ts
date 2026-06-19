@@ -5,32 +5,41 @@ boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
 import { join, delimiter } from 'path'
 import { randomUUID } from 'crypto'
-import { type BrowserWindow, ipcMain, app } from 'electron'
+import { type BrowserWindow, type WebContents, ipcMain, app } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/types'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import {
+  isWslShellName,
+  resolveLocalWindowsTerminalRuntimeOptions
+} from '../../shared/local-windows-terminal-runtime'
 import { openCodeHookService } from '../opencode/hook-service'
 import { agentHookServer } from '../agent-hooks/server'
 import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { piTitlebarExtensionService } from '../pi/titlebar-extension-service'
-import { ORCA_PI_AGENT_STATUS_EXTENSION_FILE } from '../pi/agent-status-extension-source'
 import { detectPiAgentKindFromCommand, type PiAgentKind } from '../../shared/pi-agent-kind'
 import { isPwshAvailable } from '../pwsh'
 import { LocalPtyProvider } from '../providers/local-pty-provider'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import { SSH_SESSION_EXPIRED_ERROR, isSshPtyNotFoundError } from '../providers/ssh-pty-provider'
-import { toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
+import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
 import { mintPtySessionId, isSafePtySessionId } from '../daemon/pty-session-id'
 import { addNodePtyRecoveryHint } from '../daemon/node-pty-error-hints'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
+import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { CLAUDE_AUTH_ENV_VARS, hasClaudeAuthEnvConflict } from '../claude-accounts/environment'
 import {
   isClaudeAuthSwitchInProgress,
   markClaudePtyExited,
   markClaudePtySpawned
 } from '../claude-accounts/live-pty-gate'
-import { applyTerminalAttributionEnv } from '../attribution/terminal-attribution'
+import {
+  applyTerminalAttributionEnv,
+  resolveAttributionShellFamily
+} from '../attribution/terminal-attribution'
 import { registerPty, unregisterPty } from '../memory/pty-registry'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { track } from '../telemetry/client'
@@ -56,6 +65,17 @@ import {
 } from '../agent-hooks/migration-unsupported-pty-state'
 import { parseWslPath } from '../wsl'
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
+import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
+import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
+import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  assertFolderWorkspacePathUsable,
+  getFolderWorkspacePathStatus
+} from '../project-groups/folder-workspace-path-status'
+import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -75,6 +95,10 @@ const ptySizes = new Map<string, { cols: number; rows: number }>()
 // is PTY-scoped and must be cleared by every teardown path, including SSH and
 // daemon shutdowns that do not flow through the local provider exit listener.
 const lastInputAtByPty = new Map<string, number>()
+const interactiveOutputCharsByPty = new Map<string, number>()
+const activeRendererPtys = new Set<string>()
+const KEEP_HISTORY_STOP_SETTLE_MS = 1_000
+const KEEP_HISTORY_STOP_POLL_MS = 100
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
 // tool) that otherwise grows unbounded as panes come and go. Track the
 // spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
@@ -124,7 +148,8 @@ export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListene
 // still matches, so a remount that pre-signals before the old PTY's teardown
 // runs is preserved. See docs/mobile-prefer-renderer-scrollback.md.
 let pendingSerializerGenSeq = 0
-const pendingByPaneKey = new Map<string, number>()
+const pendingByPaneKey = new Map<string, { gen: number; ownerWebContentsId: number | null }>()
+const pendingPaneSerializerCleanupRegistered = new Set<number>()
 // Why: at PTY spawn time we capture the gen that was pending for the spawn's
 // paneKey, so teardown can settle ONLY that gen. Without this, a paneKey
 // remount that replaces the pending entry with a new gen would still get
@@ -156,14 +181,32 @@ function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
   return normalizedPaneKey
 }
 
-function declarePendingPaneSerializer(paneKey: string): number {
+function cleanupPendingPaneSerializersForSender(ownerWebContentsId: number): void {
+  pendingPaneSerializerCleanupRegistered.delete(ownerWebContentsId)
+  for (const [paneKey, pending] of pendingByPaneKey) {
+    if (pending.ownerWebContentsId === ownerWebContentsId) {
+      pendingByPaneKey.delete(paneKey)
+    }
+  }
+}
+
+function registerPendingPaneSerializerCleanup(sender: WebContents | undefined): void {
+  if (!sender || pendingPaneSerializerCleanupRegistered.has(sender.id)) {
+    return
+  }
+  pendingPaneSerializerCleanupRegistered.add(sender.id)
+  sender.once('destroyed', () => cleanupPendingPaneSerializersForSender(sender.id))
+}
+
+function declarePendingPaneSerializer(paneKey: string, sender: WebContents | undefined): number {
   const gen = ++pendingSerializerGenSeq
-  pendingByPaneKey.set(paneKey, gen)
+  registerPendingPaneSerializerCleanup(sender)
+  pendingByPaneKey.set(paneKey, { gen, ownerWebContentsId: sender?.id ?? null })
   return gen
 }
 
 function settlePendingPaneSerializer(paneKey: string, gen: number): void {
-  if (pendingByPaneKey.get(paneKey) === gen) {
+  if (pendingByPaneKey.get(paneKey)?.gen === gen) {
     pendingByPaneKey.delete(paneKey)
   }
 }
@@ -191,12 +234,39 @@ function getProviderForPty(ptyId: string): IPtyProvider {
   return getProvider(connectionId)
 }
 
+function hasPtyProviderForInspection(ptyId: string): boolean {
+  // Why: process inspection is background polling; disconnected SSH hosts should
+  // read as idle instead of surfacing repeated IPC errors.
+  const connectionId = ptyOwnership.get(ptyId)
+  return connectionId == null || sshProviders.has(connectionId)
+}
+
 function getAppPtyId(connectionId: string | null | undefined, ptyId: string): string {
   return connectionId ? toAppSshPtyId(connectionId, ptyId) : ptyId
 }
 
 function getRelayPtyId(connectionId: string | null | undefined, ptyId: string): string {
   return connectionId ? toRelaySshPtyId(connectionId, ptyId) : ptyId
+}
+
+function stripRemotePaneEnvWhenHooksDisabled(
+  connectionId: string | null | undefined,
+  env: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  if (!connectionId || isRemoteAgentHooksEnabled()) {
+    return env
+  }
+  if (
+    !env ||
+    (!('ORCA_PANE_KEY' in env) && !('ORCA_TAB_ID' in env) && !('ORCA_WORKTREE_ID' in env))
+  ) {
+    return env
+  }
+  const stripped = { ...env }
+  delete stripped.ORCA_PANE_KEY
+  delete stripped.ORCA_TAB_ID
+  delete stripped.ORCA_WORKTREE_ID
+  return stripped
 }
 
 function tryGetProviderForPty(ptyId: string): IPtyProvider | undefined {
@@ -227,6 +297,40 @@ function isPtyAlreadyGoneError(err: unknown): boolean {
   return isSshPtyNotFoundError(err) || /Session not found/i.test(message)
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+  })
+}
+
+async function isProviderPtyLive(provider: IPtyProvider, ptyId: string): Promise<boolean> {
+  return (await provider.listProcesses()).some((session) => session.id === ptyId)
+}
+
+async function verifyPtyStopped(
+  provider: IPtyProvider,
+  ptyId: string,
+  opts: { keepHistory?: boolean } | undefined
+): Promise<boolean> {
+  if (await isProviderPtyLive(provider, ptyId)) {
+    return false
+  }
+  if (!opts?.keepHistory) {
+    return true
+  }
+  const deadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS
+  while (Date.now() < deadline) {
+    await delay(KEEP_HISTORY_STOP_POLL_MS)
+    if (await isProviderPtyLive(provider, ptyId)) {
+      return false
+    }
+  }
+  return true
+}
+
 function finishPtyShutdown(
   id: string,
   connectionId: string | null | undefined,
@@ -243,11 +347,11 @@ function finishPtyShutdown(
 // ─── Host PTY env assembly ──────────────────────────────────────────
 // Why: both the LocalPtyProvider.buildSpawnEnv closure and the daemon-active
 // fallback in pty:spawn need the same set of host-local env injections
-// (OpenCode plugin dir, agent-hook server coordinates, Pi overlay, Codex
-// account home, dev-mode CLI overrides, GitHub attribution shims). They used
-// to be implemented twice, which silently drifted — daemon-backed PTYs never
-// got the OpenCode plugin, Pi overlay, Codex home, or dev CLI PATH prepend,
-// so status dots, per-PTY Pi state, Codex account switching, and CLI→dev
+// (OpenCode plugin dir, agent-hook server coordinates, Pi/OMP managed
+// extensions, Codex account home, dev-mode CLI overrides, GitHub attribution
+// shims). They used to be implemented twice, which silently drifted —
+// daemon-backed PTYs never got the OpenCode plugin, Pi integration, Codex
+// home, or dev CLI PATH prepend, so status dots, Pi state, Codex switching, and CLI→dev
 // routing were all broken for daemon users (the common case).
 //
 // Centralizing the injections here makes future additions fail-safe: a new
@@ -260,22 +364,58 @@ export type BuildPtyHostEnvOptions = {
   skipCodexHomeEnv?: boolean
   githubAttributionEnabled: boolean
   /** The launch command the renderer chose for this PTY (e.g. 'pi', 'omp',
-   *  'claude'). Used to resolve the per-agent overlay source dir for Pi /
-   *  OMP - both consume `PI_CODING_AGENT_DIR` but default to different
+   *  'claude'). Used to resolve the per-agent managed extension target for
+   *  Pi / OMP - both consume `PI_CODING_AGENT_DIR` but default to different
    *  `~/.<kind>/agent` paths. Undefined for bare-shell spawns; defaults
    *  resolve to Pi for back-compat. NEVER infer from disk presence; that's
    *  the bug this option fixes (cross-agent shadowing when both dirs exist). */
   launchCommand?: string
+  shellPath?: string
+  isWsl?: boolean
   agentStatusHooksEnabled: boolean
+  networkProxySettings?: NetworkProxySettings
 }
 
 function readInheritedPath(baseEnv: Record<string, string>): string {
   return baseEnv.PATH ?? baseEnv.Path ?? process.env.PATH ?? process.env.Path ?? ''
 }
 
-function isWslShellName(shellPath: string | undefined): boolean {
-  const shellName = shellPath?.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
-  return shellName === 'wsl.exe' || shellName === 'wsl'
+function firstPathEntry(pathValue: string | undefined): string | null {
+  const first = pathValue?.split(delimiter).find((entry) => entry.trim().length > 0)
+  return first ?? null
+}
+
+function promoteAgentTeamsShimPath(
+  env: Record<string, string> | undefined,
+  requestedPath: string | undefined
+): void {
+  if (!env?.ORCA_AGENT_TEAMS_TEAM_ID) {
+    return
+  }
+  const shimPath = firstPathEntry(requestedPath)
+  if (!shimPath) {
+    return
+  }
+  const currentPathKey = env.PATH !== undefined || env.Path === undefined ? 'PATH' : 'Path'
+  const currentPath = env[currentPathKey] ?? ''
+  const remaining = currentPath
+    .split(delimiter)
+    .filter((entry) => entry.length > 0 && entry !== shimPath)
+  // Why: host env injection can prepend Orca's attribution/dev shims. Claude
+  // Agent Teams must still resolve our fake tmux before any real tmux.
+  env[currentPathKey] = [shimPath, ...remaining].join(delimiter)
+}
+
+function deleteRequestedEnvKeys(
+  env: Record<string, string> | undefined,
+  keys: string[] | undefined
+): void {
+  if (!env || !keys) {
+    return
+  }
+  for (const key of keys) {
+    delete env[key]
+  }
 }
 
 function shouldSkipCodexHomeEnvForWindowsShell(
@@ -286,6 +426,38 @@ function shouldSkipCodexHomeEnvForWindowsShell(
 }
 
 const CODEX_HOME_ENV_KEYS = ['CODEX_HOME', 'ORCA_CODEX_HOME'] as const
+type GetSelectedCodexHomePath = (target?: CodexAccountSelectionTarget) => string | null
+type PrepareClaudeAuth = (
+  target?: ClaudeAccountSelectionTarget
+) => Promise<ClaudeRuntimeAuthPreparation>
+
+function getCodexSelectionTargetForPty(
+  shellPath: string | undefined,
+  cwd: string | undefined,
+  wslDistro?: string | null
+): CodexAccountSelectionTarget {
+  const wslPath = typeof cwd === 'string' ? parseWslPath(cwd) : null
+  if (isWslShellName(shellPath) || wslPath) {
+    return { runtime: 'wsl', wslDistro: wslPath?.distro ?? wslDistro ?? null }
+  }
+  return { runtime: 'host' }
+}
+
+function getCompatibleSelectedCodexHomePath(
+  target: CodexAccountSelectionTarget,
+  selectedCodexHomePath: string | null
+): string | null {
+  if (!selectedCodexHomePath) {
+    return null
+  }
+  const wslInfo = parseWslPath(selectedCodexHomePath)
+  if (target.runtime === 'wsl') {
+    return wslInfo || !isHostCodexHomeForWsl(selectedCodexHomePath) ? selectedCodexHomePath : null
+  }
+  return wslInfo || (process.platform === 'win32' && isWslCodexHomeForHost(selectedCodexHomePath))
+    ? null
+    : selectedCodexHomePath
+}
 
 function readEnvWithProcessFallback(
   baseEnv: Record<string, string>,
@@ -332,10 +504,6 @@ function resolveScopedPiAgentSourceDir(
   return readEnvWithProcessFallback(baseEnv, sourceKey)
 }
 
-function getPiAgentStatusExtensionPath(agentDir: string): string {
-  return join(agentDir, 'extensions', ORCA_PI_AGENT_STATUS_EXTENSION_FILE)
-}
-
 function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKind): void {
   if (kind === 'omp') {
     delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
@@ -347,29 +515,28 @@ function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKin
   delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
 }
 
-function exposePiAgentOverlayEnv(
+function exposePiManagedExtensionEnv(
   baseEnv: Record<string, string>,
   kind: PiAgentKind,
-  overlayDir: string,
-  sourceDir: string | undefined
+  managedEnv: Record<string, string>
 ): void {
   if (kind === 'omp') {
-    baseEnv.ORCA_OMP_CODING_AGENT_DIR = overlayDir
-    baseEnv.ORCA_OMP_STATUS_EXTENSION = getPiAgentStatusExtensionPath(overlayDir)
-    if (sourceDir) {
-      // Why: preserve the original OMP root across nested Orca terminals; the
-      // public env var is intentionally restored to the current PTY overlay.
-      baseEnv.ORCA_OMP_SOURCE_AGENT_DIR = sourceDir
+    delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
+    if (managedEnv.ORCA_OMP_SOURCE_AGENT_DIR) {
+      baseEnv.ORCA_OMP_SOURCE_AGENT_DIR = managedEnv.ORCA_OMP_SOURCE_AGENT_DIR
     } else {
       delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
     }
+    if (managedEnv.ORCA_OMP_STATUS_EXTENSION) {
+      baseEnv.ORCA_OMP_STATUS_EXTENSION = managedEnv.ORCA_OMP_STATUS_EXTENSION
+    } else {
+      delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    }
     return
   }
-  baseEnv.ORCA_PI_CODING_AGENT_DIR = overlayDir
-  if (sourceDir) {
-    // Why: preserve the original Pi root across nested Orca terminals; the
-    // public env var is intentionally restored to the current PTY overlay.
-    baseEnv.ORCA_PI_SOURCE_AGENT_DIR = sourceDir
+  delete baseEnv.ORCA_PI_CODING_AGENT_DIR
+  if (managedEnv.ORCA_PI_SOURCE_AGENT_DIR) {
+    baseEnv.ORCA_PI_SOURCE_AGENT_DIR = managedEnv.ORCA_PI_SOURCE_AGENT_DIR
   } else {
     delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
   }
@@ -396,8 +563,9 @@ function getInheritedAgentHookEnvKeysToDelete(
 }
 
 // Why: when agent status is disabled, a nested Orca terminal can still pass
-// through a prior PTY's OpenCode/Pi overlay env. Restore the user's original
-// source dir when Orca recorded one, otherwise strip only values known to be ours.
+// through prior OpenCode or legacy Pi/OMP overlay env. Restore the user's
+// original source dir when Orca recorded one, otherwise strip only values
+// known to be ours.
 function restoreOrStripOverlayEnv(
   baseEnv: Record<string, string>,
   keys: {
@@ -417,6 +585,33 @@ function restoreOrStripOverlayEnv(
   delete baseEnv[keys.source]
 }
 
+function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
+  const sourceDir =
+    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+  if (sourceDir) {
+    return sourceDir
+  }
+
+  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
+  const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_CONFIG_DIR
+  // Why: nested Orca terminals inherit OPENCODE_CONFIG_DIR from the parent
+  // PTY. If there is no recorded source dir, that value is Orca-owned, not a
+  // user config. Treating it as user config makes child Orcas mirror Orca's
+  // hook dir and can create large OpenCode runtime trees per terminal.
+  if (configDir && orcaConfigDir && configDir === orcaConfigDir) {
+    return undefined
+  }
+
+  return (
+    configDir ??
+    readShellStartupEnvVar(
+      'OPENCODE_CONFIG_DIR',
+      baseEnv.HOME ?? process.env.HOME,
+      baseEnv.SHELL ?? process.env.SHELL
+    )
+  )
+}
+
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
  *
@@ -434,6 +629,7 @@ export function buildPtyHostEnv(
   opts: BuildPtyHostEnvOptions
 ): Record<string, string> {
   mergePersistedWindowsPath(baseEnv)
+  Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
 
   // Why: the Local path passes a baseEnv that already includes process.env
   // (LocalPtyProvider.spawn merges it before calling buildSpawnEnv). The
@@ -442,16 +638,7 @@ export function buildPtyHostEnv(
   // sources when reading a potentially-user-provided value keeps the guards
   // in lock-step across spawn paths without pushing process.env onto the
   // IPC wire unnecessarily.
-  const preexistingOpenCodeConfigDir =
-    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ??
-    process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR ??
-    baseEnv.OPENCODE_CONFIG_DIR ??
-    process.env.OPENCODE_CONFIG_DIR ??
-    readShellStartupEnvVar(
-      'OPENCODE_CONFIG_DIR',
-      baseEnv.HOME ?? process.env.HOME,
-      baseEnv.SHELL ?? process.env.SHELL
-    )
+  const preexistingOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv)
   const piAgentKind = detectPiAgentKindFromCommand(opts.launchCommand)
   const hasLaunchCommand =
     typeof opts.launchCommand === 'string' && opts.launchCommand.trim().length > 0
@@ -467,10 +654,9 @@ export function buildPtyHostEnv(
   if (opts.agentStatusHooksEnabled) {
     // Why: OPENCODE_CONFIG_DIR is a singular path, not a colon-list, so a user
     // value cannot coexist with an Orca-only injection. Hand the user's value
-    // (when present) to the hook service and let it materialize a per-PTY
+    // (when present) to the hook service and let it materialize a source-scoped
     // mirror overlay that lets the user's plugins and Orca's status plugin
-    // load together — same pattern Pi uses below for PI_CODING_AGENT_DIR. See
-    // docs/opencode-config-dir-collision.md.
+    // load together. See docs/opencode-config-dir-collision.md.
     Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
     if (baseEnv.OPENCODE_CONFIG_DIR) {
       // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
@@ -481,6 +667,8 @@ export function buildPtyHostEnv(
         // as OPENCODE_CONFIG_DIR; keep the original source so overlays do not
         // mirror overlays and drop the user's real config.
         baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
+      } else {
+        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
   } else {
@@ -505,40 +693,22 @@ export function buildPtyHostEnv(
     Object.assign(baseEnv, agentHookServer.buildPtyEnv())
   }
 
-  // Why: PI_CODING_AGENT_DIR owns Pi's / OMP's full config/session root (OMP
-  // inherits the env var name from Pi by design; its CHANGELOG documents the
-  // OMP_CODING_AGENT_DIR -> PI_CODING_AGENT_DIR rename. Build a PTY-scoped
-  // overlay from the caller's chosen root so sessions keep their user state
-  // without sharing a mutable overlay across terminals. Under the daemon path,
-  // `id` is the daemon sessionId — the overlay survives daemon cold restore
-  // because the sessionId is stable across restarts by design. A future reader
-  // should NOT "simplify" id allocation back to a fresh UUID per spawn; that
-  // would discard user state on every daemon reconnect.
+  // Why: PI_CODING_AGENT_DIR owns Pi's / OMP's full config/session root. Keep
+  // that home as the user's normal source of truth and install only Orca-owned,
+  // env-guarded extension files into the selected agent's extension dir.
   if (opts.agentStatusHooksEnabled) {
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
     if (piAgentKind === 'pi') {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi')
       Object.assign(baseEnv, piEnv)
-      if (piEnv.PI_CODING_AGENT_DIR) {
-        // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready
-        // wrappers restore this PTY-scoped value after user startup files run.
-        baseEnv.PI_CODING_AGENT_DIR = piEnv.PI_CODING_AGENT_DIR
-        exposePiAgentOverlayEnv(baseEnv, 'pi', piEnv.PI_CODING_AGENT_DIR, preexistingPiAgentDir)
-      }
+      exposePiManagedExtensionEnv(baseEnv, 'pi', piEnv)
     }
 
     if (shouldPrepareOmpShadow) {
       const ompEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmpAgentDir, 'omp')
-      if (ompEnv.PI_CODING_AGENT_DIR) {
-        if (piAgentKind === 'omp') {
-          // Why: an OMP-launched PTY should default the binary-facing env var to
-          // OMP. Bare shells keep the Pi primary and use the `omp` shell wrapper
-          // to switch only while OMP is running.
-          baseEnv.PI_CODING_AGENT_DIR = ompEnv.PI_CODING_AGENT_DIR
-        }
-        exposePiAgentOverlayEnv(baseEnv, 'omp', ompEnv.PI_CODING_AGENT_DIR, preexistingOmpAgentDir)
-      }
+      Object.assign(baseEnv, ompEnv)
+      exposePiManagedExtensionEnv(baseEnv, 'omp', ompEnv)
     }
   } else {
     // Why: when agent status is disabled we must strip BOTH kinds' shadow vars
@@ -601,7 +771,11 @@ export function buildPtyHostEnv(
   }
   applyTerminalAttributionEnv(baseEnv, {
     enabled: opts.githubAttributionEnabled,
-    userDataPath: opts.userDataPath
+    userDataPath: opts.userDataPath,
+    shellFamily: resolveAttributionShellFamily({
+      shellPath: opts.shellPath,
+      isWsl: opts.isWsl
+    })
   })
 
   return baseEnv
@@ -687,8 +861,13 @@ export function clearProviderPtyState(id: string): void {
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
+  // Why: SSH exit and connection-teardown paths bypass pty.ts's local onExit
+  // callback but still need to release Claude account-switch guards.
+  markClaudePtyExited(id)
   ptySizes.delete(id)
   lastInputAtByPty.delete(id)
+  interactiveOutputCharsByPty.delete(id)
+  activeRendererPtys.delete(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
@@ -765,6 +944,7 @@ export function setPtyOwnership(id: string, connectionId: string | null): void {
 let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let didFinishLoadHandler: (() => void) | null = null
+let didFinishLoadWebContents: WebContents | null = null
 
 // Why: the "Restart daemon" path needs to re-bind provider→renderer listeners
 // against the freshly-created adapter after replaceDaemonProvider swaps the
@@ -776,6 +956,59 @@ let rebindProviderListeners: (() => void) | null = null
 
 export function rebindLocalProviderListeners(): void {
   rebindProviderListeners?.()
+}
+
+export type PtyRendererDeliveryDebugSnapshot = {
+  pendingPtyCount: number
+  pendingChars: number
+  maxPendingCharsByPty: number
+  rendererInFlightPtyCount: number
+  rendererInFlightChars: number
+  maxRendererInFlightCharsByPty: number
+  activeRendererPtyCount: number
+  flushScheduled: boolean
+  peakPendingChars: number
+  peakMaxPendingCharsByPty: number
+  peakRendererInFlightChars: number
+  peakMaxRendererInFlightCharsByPty: number
+  ackGatedFlushSkipCount: number
+}
+
+const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapshot = {
+  pendingPtyCount: 0,
+  pendingChars: 0,
+  maxPendingCharsByPty: 0,
+  rendererInFlightPtyCount: 0,
+  rendererInFlightChars: 0,
+  maxRendererInFlightCharsByPty: 0,
+  activeRendererPtyCount: 0,
+  flushScheduled: false,
+  peakPendingChars: 0,
+  peakMaxPendingCharsByPty: 0,
+  peakRendererInFlightChars: 0,
+  peakMaxRendererInFlightCharsByPty: 0,
+  ackGatedFlushSkipCount: 0
+}
+
+let readPtyRendererDeliveryDebugSnapshot = (): PtyRendererDeliveryDebugSnapshot => ({
+  ...EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT
+})
+let resetPtyRendererDeliveryDebugSnapshot = (): void => {}
+
+export function getPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
+  return readPtyRendererDeliveryDebugSnapshot()
+}
+
+export function resetPtyRendererDeliveryDebug(): void {
+  resetPtyRendererDeliveryDebugSnapshot()
+}
+
+function clearDidFinishLoadHandler(): void {
+  if (didFinishLoadHandler && didFinishLoadWebContents) {
+    didFinishLoadWebContents.removeListener('did-finish-load', didFinishLoadHandler)
+  }
+  didFinishLoadHandler = null
+  didFinishLoadWebContents = null
 }
 
 // Why: the "Restart daemon" flow needs to detach listeners from the current
@@ -795,11 +1028,24 @@ export function unbindLocalProviderListeners(): void {
 export function registerPtyHandlers(
   mainWindow: BrowserWindow,
   runtime?: OrcaRuntimeService,
-  getSelectedCodexHomePath?: () => string | null,
+  getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   getSettings?: () => GlobalSettings,
-  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>,
-  store?: Store
+  prepareClaudeAuth?: PrepareClaudeAuth,
+  store?: Store,
+  options?: {
+    awaitLocalPtyStartup?: () => Promise<void>
+  }
 ): void {
+  const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
+    if (connectionId) {
+      return undefined
+    }
+    // Why: during desktop cold start the daemon provider swap now overlaps
+    // first paint. Local spawns must wait before resolving getProvider(), while
+    // SSH/headless paths do not use the desktop daemon.
+    return options?.awaitLocalPtyStartup?.()
+  }
+
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
   ipcMain.removeHandler('pty:spawn')
@@ -812,9 +1058,12 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
   ipcMain.removeHandler('pty:getMainBufferSnapshot')
+  ipcMain.removeHandler('pty:getRendererDeliveryDebugSnapshot')
+  ipcMain.removeHandler('pty:resetRendererDeliveryDebug')
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
+  ipcMain.removeAllListeners('pty:ackData')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
 
   // Configure the local provider with app-specific hooks.
@@ -832,16 +1081,25 @@ export function registerPtyHandlers(
           : undefined,
       pwshAvailable: () => isPwshAvailable(),
       buildSpawnEnv: (id, baseEnv, ctx) => {
+        const codexSelectionTarget: CodexAccountSelectionTarget =
+          ctx?.isWsl === true
+            ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
+            : { runtime: 'host' }
+        const selectedCodexHomePath = getCompatibleSelectedCodexHomePath(
+          codexSelectionTarget,
+          getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
+        )
         const env = buildPtyHostEnv(id, baseEnv, {
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
-          selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
-          // Why: WSL's inner shell cannot use a Windows userData CODEX_HOME.
-          // Leave Linux Codex on its native ~/.codex until we own a WSL home.
-          skipCodexHomeEnv: ctx?.isWsl === true,
+          selectedCodexHomePath,
+          skipCodexHomeEnv: ctx?.isWsl === true && !selectedCodexHomePath,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: ctx?.command,
-          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
+          shellPath: ctx?.shellPath,
+          isWsl: ctx?.isWsl,
+          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+          networkProxySettings: getSettings?.()
         })
         // Why: agents need their own terminal handle at process start so they
         // can self-identify in orchestration messages without an extra RPC.
@@ -855,6 +1113,9 @@ export function registerPtyHandlers(
         }
         if (preAllocatedHandle) {
           env.ORCA_TERMINAL_HANDLE = preAllocatedHandle
+        }
+        if (ctx?.isWsl === true) {
+          addOrcaWslInteropEnv(env)
         }
         return env
       },
@@ -879,16 +1140,114 @@ export function registerPtyHandlers(
   }
 
   const pendingData = new Map<string, PendingPtyData>()
+  const rendererInFlightCharsByPty = new Map<string, number>()
   const trustedTerminalHandleEnv = new Set<string>()
   let flushTimer: ReturnType<typeof setTimeout> | null = null
+  let rendererInFlightTotalChars = 0
   const PTY_BATCH_INTERVAL_MS = 8
   const PTY_BATCH_DRAIN_CONTINUE_MS = 1
   const PTY_BATCH_FLUSH_CHUNK_CHARS = 16 * 1024
   const PTY_BATCH_FLUSH_MAX_WRITES = 2
+  const PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS = 512 * 1024
+  const PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS = 8 * 1024 * 1024
+  const PTY_RENDERER_INTERACTIVE_RESERVE_CHARS = 256 * 1024
+  // Why: active panes need a bounded lane through old hidden bulk output so a
+  // keystroke redraw can reach the renderer before every background ACK lands.
+  const PTY_RENDERER_ACTIVE_PTY_IN_FLIGHT_RESERVE_CHARS = 512 * 1024
   // Why: keep the immediate path bounded to keystroke-sized TUI redraws;
   // large output and non-interactive output must still use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
+  const INTERACTIVE_REDRAW_MAX_CHARS = PTY_BATCH_FLUSH_CHUNK_CHARS
+  const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
+  let peakPendingChars = 0
+  let peakMaxPendingCharsByPty = 0
+  let peakRendererInFlightChars = 0
+  let peakMaxRendererInFlightCharsByPty = 0
+  let ackGatedFlushSkipCount = 0
+
+  function getMaxMapValue(values: Iterable<number>): number {
+    let max = 0
+    for (const value of values) {
+      max = Math.max(max, value)
+    }
+    return max
+  }
+
+  function readCurrentPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
+    let pendingChars = 0
+    let maxPendingCharsByPty = 0
+    for (const pending of pendingData.values()) {
+      const chars = pending.data.length
+      pendingChars += chars
+      maxPendingCharsByPty = Math.max(maxPendingCharsByPty, chars)
+    }
+    return {
+      pendingPtyCount: pendingData.size,
+      pendingChars,
+      maxPendingCharsByPty,
+      rendererInFlightPtyCount: rendererInFlightCharsByPty.size,
+      rendererInFlightChars: rendererInFlightTotalChars,
+      maxRendererInFlightCharsByPty: getMaxMapValue(rendererInFlightCharsByPty.values()),
+      activeRendererPtyCount: activeRendererPtys.size,
+      flushScheduled: flushTimer !== null,
+      peakPendingChars,
+      peakMaxPendingCharsByPty,
+      peakRendererInFlightChars,
+      peakMaxRendererInFlightCharsByPty,
+      ackGatedFlushSkipCount
+    }
+  }
+
+  function recordPtyRendererDeliveryPressure(): void {
+    const current = readCurrentPtyRendererDeliveryDebugSnapshot()
+    peakPendingChars = Math.max(peakPendingChars, current.pendingChars)
+    peakMaxPendingCharsByPty = Math.max(peakMaxPendingCharsByPty, current.maxPendingCharsByPty)
+    peakRendererInFlightChars = Math.max(peakRendererInFlightChars, current.rendererInFlightChars)
+    peakMaxRendererInFlightCharsByPty = Math.max(
+      peakMaxRendererInFlightCharsByPty,
+      current.maxRendererInFlightCharsByPty
+    )
+  }
+
+  readPtyRendererDeliveryDebugSnapshot = readCurrentPtyRendererDeliveryDebugSnapshot
+  resetPtyRendererDeliveryDebugSnapshot = () => {
+    peakPendingChars = 0
+    peakMaxPendingCharsByPty = 0
+    peakRendererInFlightChars = 0
+    peakMaxRendererInFlightCharsByPty = 0
+    ackGatedFlushSkipCount = 0
+    recordPtyRendererDeliveryPressure()
+  }
+
+  function isLikelyInteractiveRedraw(data: string): boolean {
+    if (data.length <= INTERACTIVE_OUTPUT_MAX_CHARS) {
+      return true
+    }
+    // Why: Codex-style TUIs can repaint more than 1 KB per keypress. ANSI
+    // control redraws are still latency-sensitive, while plain command output
+    // should stay on the throughput batch path.
+    return data.length <= INTERACTIVE_REDRAW_MAX_CHARS && data.includes('\x1b[')
+  }
+
+  function shouldSendInteractiveOutputNow(id: string, data: string, now: number): boolean {
+    const lastInputAt = lastInputAtByPty.get(id)
+    if (lastInputAt === undefined || now - lastInputAt > INTERACTIVE_OUTPUT_WINDOW_MS) {
+      interactiveOutputCharsByPty.delete(id)
+      return false
+    }
+    if (!isLikelyInteractiveRedraw(data)) {
+      interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
+      return false
+    }
+    const usedChars = interactiveOutputCharsByPty.get(id) ?? 0
+    if (usedChars + data.length > INTERACTIVE_OUTPUT_BUDGET_CHARS) {
+      interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
+      return false
+    }
+    interactiveOutputCharsByPty.set(id, usedChars + data.length)
+    return true
+  }
 
   function getChunkStartSeq(endSeq: number | undefined, data: string): number | undefined {
     return typeof endSeq === 'number' ? Math.max(0, endSeq - data.length) : undefined
@@ -905,6 +1264,50 @@ export function registerPtyHandlers(
       payload.rawLength = data.length
     }
     return payload
+  }
+
+  function getPtyPayloadCharCount(payload: { data: string; rawLength?: number }): number {
+    return Math.max(0, payload.rawLength ?? payload.data.length)
+  }
+
+  function canSendPtyDataToRenderer(id: string, options: { interactive?: boolean } = {}): boolean {
+    const totalLimit =
+      PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS +
+      (options.interactive === true ? PTY_RENDERER_INTERACTIVE_RESERVE_CHARS : 0)
+    // Why: the reserve is per active PTY, not global; one active pane should
+    // stay responsive without letting every background pane burst past the cap.
+    const ptyLimit =
+      PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS +
+      (options.interactive === true ? PTY_RENDERER_ACTIVE_PTY_IN_FLIGHT_RESERVE_CHARS : 0)
+    return (
+      (rendererInFlightCharsByPty.get(id) ?? 0) < ptyLimit &&
+      rendererInFlightTotalChars < totalLimit
+    )
+  }
+
+  function sendPtyDataToRenderer(
+    id: string,
+    payload: { id: string; data: string; seq?: number; rawLength?: number }
+  ): void {
+    const charCount = getPtyPayloadCharCount(payload)
+    rendererInFlightCharsByPty.set(id, (rendererInFlightCharsByPty.get(id) ?? 0) + charCount)
+    rendererInFlightTotalChars += charCount
+    recordPtyRendererDeliveryPressure()
+    mainWindow.webContents.send('pty:data', payload)
+  }
+
+  function getPendingPtyFlushEntries(): [string, PendingPtyData][] {
+    const entries = Array.from(pendingData.entries())
+    const active: [string, PendingPtyData][] = []
+    const background: [string, PendingPtyData][] = []
+    for (const entry of entries) {
+      if (activeRendererPtys.has(entry[0])) {
+        active.push(entry)
+      } else {
+        background.push(entry)
+      }
+    }
+    return [...active, ...background]
   }
 
   function appendPendingPtyData(
@@ -935,15 +1338,19 @@ export function registerPtyHandlers(
     flushTimer = null
     if (mainWindow.isDestroyed()) {
       pendingData.clear()
+      rendererInFlightCharsByPty.clear()
+      rendererInFlightTotalChars = 0
+      recordPtyRendererDeliveryPressure()
       return
     }
     let writes = 0
-    while (pendingData.size > 0 && writes < PTY_BATCH_FLUSH_MAX_WRITES) {
-      const next = pendingData.entries().next().value
-      if (!next) {
+    for (const [id, pending] of getPendingPtyFlushEntries()) {
+      if (writes >= PTY_BATCH_FLUSH_MAX_WRITES) {
         break
       }
-      const [id, pending] = next
+      if (!canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })) {
+        continue
+      }
       pendingData.delete(id)
       const { data } = pending
       const chunk = data.slice(0, PTY_BATCH_FLUSH_CHUNK_CHARS)
@@ -955,10 +1362,14 @@ export function registerPtyHandlers(
         }
         pendingData.set(id, nextPending)
       }
-      mainWindow.webContents.send('pty:data', makePtyDataPayload(id, chunk, pending.startSeq))
+      sendPtyDataToRenderer(id, makePtyDataPayload(id, chunk, pending.startSeq))
       writes++
     }
-    if (pendingData.size > 0) {
+    if (pendingData.size > 0 && writes === 0) {
+      ackGatedFlushSkipCount++
+    }
+    recordPtyRendererDeliveryPressure()
+    if (pendingData.size > 0 && writes > 0) {
       // Why: a background terminal can dump megabytes at once. Yield between
       // small IPC slices so keystroke writes are not stuck behind one flush.
       schedulePendingDataFlush(PTY_BATCH_DRAIN_CONTINUE_MS)
@@ -1003,22 +1414,33 @@ export function registerPtyHandlers(
           flushTimer = null
         }
         pendingData.clear()
+        rendererInFlightCharsByPty.clear()
+        rendererInFlightTotalChars = 0
+        recordPtyRendererDeliveryPressure()
         return
       }
       const existing = pendingData.get(payload.id)
       const pending = appendPendingPtyData(existing, payload.data, startSeq)
       const nextData = pending.data
-      const lastInputAt = lastInputAtByPty.get(payload.id)
-      const isInteractiveOutput =
-        nextData.length <= INTERACTIVE_OUTPUT_MAX_CHARS &&
-        lastInputAt !== undefined &&
-        performance.now() - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS
+      const isInteractiveOutput = shouldSendInteractiveOutputNow(
+        payload.id,
+        nextData,
+        performance.now()
+      )
       if (isInteractiveOutput) {
+        // Why: user-input echo should not be pinned behind unrelated bulk
+        // terminal output already handed to the renderer. The reserve is
+        // bounded, and the per-PTY cap still prevents an active TUI runaway.
+        if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
+          pendingData.set(payload.id, pending)
+          recordPtyRendererDeliveryPressure()
+          return
+        }
         pendingData.delete(payload.id)
         clearFlushTimerIfIdle()
         // Why: agent TUIs redraw small prompt regions after every keystroke.
         // Waiting for the throughput batch timer adds visible input latency.
-        mainWindow.webContents.send('pty:data', {
+        sendPtyDataToRenderer(payload.id, {
           id: payload.id,
           data: nextData,
           ...(typeof pending.startSeq === 'number'
@@ -1028,6 +1450,7 @@ export function registerPtyHandlers(
         return
       }
       pendingData.set(payload.id, pending)
+      recordPtyRendererDeliveryPressure()
       if (!flushTimer) {
         schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
       }
@@ -1045,13 +1468,20 @@ export function registerPtyHandlers(
         // tears down the terminal on pty:exit before the batch timer fires.
         const remaining = pendingData.get(payload.id)
         if (remaining) {
-          mainWindow.webContents.send(
-            'pty:data',
+          sendPtyDataToRenderer(
+            payload.id,
             makePtyDataPayload(payload.id, remaining.data, remaining.startSeq)
           )
           pendingData.delete(payload.id)
         }
         lastInputAtByPty.delete(payload.id)
+        interactiveOutputCharsByPty.delete(payload.id)
+        rendererInFlightTotalChars = Math.max(
+          0,
+          rendererInFlightTotalChars - (rendererInFlightCharsByPty.get(payload.id) ?? 0)
+        )
+        rendererInFlightCharsByPty.delete(payload.id)
+        recordPtyRendererDeliveryPressure()
         mainWindow.webContents.send('pty:exit', payload)
       }
     })
@@ -1150,11 +1580,9 @@ export function registerPtyHandlers(
   // Why: only applies to LocalPtyProvider where PTYs live in the Electron main
   // process and can become orphaned on page reload. Daemon-backed sessions
   // survive renderer restarts by design — orphan cleanup would kill them.
+  clearDidFinishLoadHandler()
   if (localProvider instanceof LocalPtyProvider) {
     const lp = localProvider
-    if (didFinishLoadHandler) {
-      mainWindow.webContents.removeListener('did-finish-load', didFinishLoadHandler)
-    }
     didFinishLoadHandler = () => {
       const killed = lp.killOrphanedPtys(lp.advanceGeneration() - 1)
       for (const { id } of killed) {
@@ -1164,7 +1592,23 @@ export function registerPtyHandlers(
         runtime?.onPtyExit(id, -1)
       }
     }
+    didFinishLoadWebContents = mainWindow.webContents
     mainWindow.webContents.on('did-finish-load', didFinishLoadHandler)
+  }
+
+  const assertFolderWorkspacePtyPathUsable = async (
+    worktreeId: string | undefined
+  ): Promise<void> => {
+    const workspaceScope = typeof worktreeId === 'string' ? parseWorkspaceKey(worktreeId) : null
+    if (!store || workspaceScope?.type !== 'folder') {
+      return
+    }
+    const status = await getFolderWorkspacePathStatus(
+      store,
+      { scope: 'folder-workspace', folderWorkspaceId: workspaceScope.folderWorkspaceId },
+      { getSshFilesystemProvider }
+    )
+    assertFolderWorkspacePathUsable(status)
   }
 
   // Why: the runtime controller must route through getProviderForPty() so that
@@ -1172,12 +1616,35 @@ export function registerPtyHandlers(
   // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
   runtime?.setPtyController({
     spawn: async (args) => {
+      const startupPromise = getLocalPtyStartupPromise(args.connectionId)
+      if (startupPromise) {
+        await startupPromise
+      }
+      await assertFolderWorkspacePtyPathUsable(args.worktreeId)
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
-      const claudeAuth = isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth() : null
+      // Why: runtime-created terminals do not carry renderer-computed
+      // projectRuntime, so resolve from worktreeId to honor project Windows runtime.
+      const terminalRuntimeOptions =
+        process.platform === 'win32' && !args.connectionId
+          ? resolveLocalWindowsTerminalRuntimeOptions({
+              requestedShellOverride: undefined,
+              settings: getSettings?.(),
+              projectRuntime: resolveLocalProjectRuntimeForWorktreeId(store, args.worktreeId),
+              fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
+            })
+          : { shellOverride: undefined, terminalWindowsWslDistro: null }
+      const daemonShellOverride = terminalRuntimeOptions.shellOverride
+      const codexSelectionTarget = getCodexSelectionTargetForPty(
+        daemonShellOverride,
+        args.cwd,
+        terminalRuntimeOptions.terminalWindowsWslDistro ?? null
+      )
+      const claudeAuth =
+        isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(codexSelectionTarget) : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -1188,19 +1655,58 @@ export function registerPtyHandlers(
       }
 
       const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
-      const sessionId = isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined
+      const requestedSessionId = args.sessionId?.trim()
+      const sessionId =
+        requestedSessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
+      const effectiveSessionRelayId =
+        sessionId !== undefined ? getRelayPtyId(args.connectionId, sessionId) : undefined
+      const effectiveSessionAppId =
+        sessionId !== undefined ? getAppPtyId(args.connectionId, sessionId) : undefined
+      const isMintedSessionId = requestedSessionId === undefined && isDaemonHostSpawn
+      const shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
+      let hostSessionBinding: {
+        store: NonNullable<typeof store>
+        worktreeId: string
+        tabId: string
+        leafId: string
+      } | null = null
+      if (shouldPersistHostSessionBinding) {
+        if (
+          !store ||
+          typeof args.worktreeId !== 'string' ||
+          typeof args.tabId !== 'string' ||
+          typeof args.leafId !== 'string' ||
+          !isTerminalLeafId(args.leafId)
+        ) {
+          throw new Error(
+            'Cannot persist runtime PTY binding without worktreeId, tabId, and leafId'
+          )
+        }
+        hostSessionBinding = {
+          store,
+          worktreeId: args.worktreeId,
+          tabId: args.tabId,
+          leafId: args.leafId
+        }
+      }
+      const sshScopedEnv = stripRemotePaneEnvWhenHooksDisabled(args.connectionId, args.env)
       let env: Record<string, string> | undefined = claudeAuth
-        ? { ...args.env, ...claudeAuth.envPatch }
-        : args.env
+        ? { ...sshScopedEnv, ...claudeAuth.envPatch }
+        : sshScopedEnv
+      const requestedAgentTeamsPath = env?.ORCA_AGENT_TEAMS_TEAM_ID ? env.PATH : undefined
       if (args.preAllocatedHandle) {
         env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
       }
-      const daemonShellOverride =
-        process.platform === 'win32' && !args.connectionId
-          ? getSettings?.()?.terminalWindowsShell
-          : undefined
+      const selectedCodexHomePath = isDaemonHostSpawn
+        ? getCompatibleSelectedCodexHomePath(
+            codexSelectionTarget,
+            getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
+          )
+        : null
       const skipCodexHomeEnv =
-        isDaemonHostSpawn && shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd)
+        isDaemonHostSpawn &&
+        shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd) &&
+        !selectedCodexHomePath
       if (isDaemonHostSpawn && sessionId) {
         if (!isSafePtySessionId(sessionId, app.getPath('userData'))) {
           throw new Error('Invalid PTY session id')
@@ -1208,26 +1714,31 @@ export function registerPtyHandlers(
         env = buildPtyHostEnv(sessionId, env ?? {}, {
           isPackaged: app.isPackaged,
           userDataPath: app.getPath('userData'),
-          selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+          selectedCodexHomePath,
           skipCodexHomeEnv,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: args.command,
-          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
+          shellPath: daemonShellOverride ?? process.env.COMSPEC,
+          isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd),
+          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+          networkProxySettings: getSettings?.()
         })
+        promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
       }
 
+      const authEnvToDelete = claudeAuth?.stripAuthEnv
+        ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
+        : undefined
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
         cwd: args.cwd,
         env,
-        ...(isDaemonHostSpawn ? { isNewSession: true } : {})
+        ...(isMintedSessionId ? { isNewSession: true } : {})
       }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
-        claudeAuth?.stripAuthEnv
-          ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
-          : undefined,
-        args.connectionId ? [] : getInheritedAgentHookEnvKeysToDelete(env)
+        mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
+        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : []
       )
       if (skipCodexHomeEnv) {
         spawnOptions.envToDelete = mergePtyEnvDeletions(
@@ -1235,18 +1746,25 @@ export function registerPtyHandlers(
           CODEX_HOME_ENV_KEYS
         )
       }
+      deleteRequestedEnvKeys(env, spawnOptions.envToDelete)
+      promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
       if (args.command !== undefined) {
         spawnOptions.command = args.command
+      }
+      if (args.startupCommandDelivery !== undefined) {
+        spawnOptions.startupCommandDelivery = args.startupCommandDelivery
       }
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId
       }
       if (sessionId !== undefined) {
         spawnOptions.sessionId = sessionId
-        ptySizes.set(sessionId, { cols: args.cols, rows: args.rows })
+        ptySizes.set(effectiveSessionAppId ?? sessionId, { cols: args.cols, rows: args.rows })
       }
       if (process.platform === 'win32' && !args.connectionId) {
-        spawnOptions.shellOverride = getSettings?.()?.terminalWindowsShell
+        spawnOptions.shellOverride = terminalRuntimeOptions.shellOverride
+        spawnOptions.terminalWindowsWslDistro =
+          terminalRuntimeOptions.terminalWindowsWslDistro ?? null
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
@@ -1259,26 +1777,103 @@ export function registerPtyHandlers(
         }
         result = await provider.spawn(spawnOptions)
       } catch (err) {
-        if (sessionId !== undefined) {
-          ptySizes.delete(sessionId)
+        const rawMessage = err instanceof Error ? err.message : String(err)
+        const spawnError = normalizeNodePtySpawnError(err)
+        if (effectiveSessionAppId !== undefined) {
+          ptySizes.delete(effectiveSessionAppId)
+        }
+        if (
+          args.connectionId &&
+          effectiveSessionRelayId !== undefined &&
+          (spawnError.message.includes(SSH_SESSION_EXPIRED_ERROR) ||
+            rawMessage.includes(SSH_SESSION_EXPIRED_ERROR))
+        ) {
+          if (effectiveSessionAppId !== undefined) {
+            clearProviderPtyState(effectiveSessionAppId)
+            deletePtyOwnership(effectiveSessionAppId)
+          }
+          store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
+        }
+        if (isMintedSessionId && sessionId !== undefined) {
           clearProviderPtyState(sessionId)
         }
-        throw normalizeNodePtySpawnError(err)
+        throw spawnError
       } finally {
         if (args.preAllocatedHandle) {
           trustedTerminalHandleEnv.delete(args.preAllocatedHandle)
         }
       }
       ptyOwnership.set(result.id, args.connectionId ?? null)
+      const relayResultId = getRelayPtyId(args.connectionId, result.id)
+      const persistSshLease = (): void => {
+        if (!store || !args.connectionId) {
+          return
+        }
+        // Why: workspace-session bindings keep app-facing PTY ids for hydration,
+        // while SSH leases keep relay ids for remote lease reconciliation.
+        store.upsertSshRemotePtyLease({
+          targetId: args.connectionId,
+          ptyId: relayResultId,
+          ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
+          ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
+          ...(typeof args.leafId === 'string' && isTerminalLeafId(args.leafId)
+            ? { leafId: args.leafId }
+            : {}),
+          state: 'attached',
+          lastAttachedAt: Date.now()
+        })
+      }
+      if (!hostSessionBinding) {
+        persistSshLease()
+      }
       ptySizes.set(result.id, { cols: args.cols, rows: args.rows })
+      if (effectiveSessionAppId !== undefined && effectiveSessionAppId !== result.id) {
+        ptySizes.delete(effectiveSessionAppId)
+      }
+      if (hostSessionBinding) {
+        try {
+          hostSessionBinding.store.persistPtyBinding({
+            worktreeId: hostSessionBinding.worktreeId,
+            tabId: hostSessionBinding.tabId,
+            leafId: hostSessionBinding.leafId,
+            ptyId: result.id
+          })
+        } catch (err) {
+          console.error('[pty] failed to persist runtime PTY binding after spawn:', err)
+          deletePtyOwnership(result.id)
+          if (!result.isReattach) {
+            try {
+              await provider.shutdown(result.id, { immediate: true })
+            } catch (shutdownErr) {
+              console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
+            }
+            clearProviderPtyState(result.id)
+          }
+          throw new Error(createTerminalSessionStateSaveFailureMessage())
+        }
+        persistSshLease()
+      }
       if (args.preAllocatedHandle) {
         runtime?.registerPreAllocatedHandleForPty(result.id, args.preAllocatedHandle)
       }
       if (args.worktreeId) {
-        runtime?.registerPty(result.id, args.worktreeId)
+        runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
       }
       if (isClaudeLaunch) {
         markClaudePtySpawned(result.id)
+      }
+      if (args.telemetry) {
+        const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
+        const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
+        const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
+        if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
+          track('agent_started', {
+            agent_kind: agentKindParse.data,
+            launch_source: launchSourceParse.data,
+            request_kind: requestKindParse.data,
+            ...getCohortAtEmit()
+          })
+        }
       }
       // Why: runtime-owned CLI PTYs bypass the renderer `pty:spawn` handler,
       // so record their spawn-time paneKey here too. Synthetic hook titles and
@@ -1309,10 +1904,11 @@ export function registerPtyHandlers(
     },
     kill: (ptyId) => {
       let provider: IPtyProvider
-      let connectionId: string | null | undefined
+      let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
+      const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
+      connectionId ??= parsedSshId?.connectionId
       try {
-        connectionId = ptyOwnership.get(ptyId)
-        provider = getProviderForPty(ptyId)
+        provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
       } catch {
         if (connectionId) {
           // Why: runtime/CLI close can target a detached SSH PTY after its
@@ -1350,6 +1946,52 @@ export function registerPtyHandlers(
         })
       return true
     },
+    stopAndWait: async (ptyId, opts) => {
+      let provider: IPtyProvider
+      let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
+      const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
+      connectionId ??= parsedSshId?.connectionId
+      try {
+        provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
+      } catch {
+        if (connectionId) {
+          // Why: an absent SSH provider means there is no live target left to
+          // await, but the relay lease must still be tombstoned.
+          finishPtyShutdown(ptyId, connectionId, store)
+          runtime?.onPtyExit(ptyId, -1)
+          return true
+        }
+        return false
+      }
+      try {
+        await provider.shutdown(ptyId, {
+          immediate: true,
+          keepHistory: opts?.keepHistory ?? false
+        })
+      } catch (err) {
+        if (!isPtyAlreadyGoneError(err)) {
+          console.warn(
+            `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
+          )
+          return false
+        }
+      }
+      try {
+        if (!(await verifyPtyStopped(provider, ptyId, opts))) {
+          return false
+        }
+      } catch (err) {
+        console.warn(
+          `[pty] Failed to verify PTY ${ptyId} stopped: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        )
+        return false
+      }
+      finishPtyShutdown(ptyId, connectionId, store)
+      runtime?.onPtyExit(ptyId, -1)
+      return true
+    },
     getForegroundProcess: async (ptyId) => {
       try {
         return await getProviderForPty(ptyId).getForegroundProcess(ptyId)
@@ -1378,7 +2020,7 @@ export function registerPtyHandlers(
     listProcesses: async () => {
       const providerSessions = await Promise.all([
         localProvider.listProcesses(),
-        ...Array.from(sshProviders.values(), (provider) => provider.listProcesses().catch(() => []))
+        ...Array.from(sshProviders.values(), (provider) => provider.listProcesses())
       ])
       return providerSessions.flat()
     },
@@ -1398,8 +2040,8 @@ export function registerPtyHandlers(
     getSize: (ptyId) => ptySizes.get(ptyId) ?? null,
     resize: (ptyId, cols, rows) => {
       try {
-        ptySizes.set(ptyId, { cols, rows })
         getProviderForPty(ptyId).resize(ptyId, cols, rows)
+        ptySizes.set(ptyId, { cols, rows })
         return true
       } catch {
         return false
@@ -1421,7 +2063,15 @@ export function registerPtyHandlers(
     async (
       _event,
       args: { id?: unknown; opts?: { scrollbackRows?: unknown } }
-    ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> => {
+    ): Promise<{
+      data: string
+      cols: number
+      rows: number
+      cwd?: string | null
+      lastTitle?: string
+      seq?: number
+      source?: 'headless' | 'renderer'
+    } | null> => {
       if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
         return null
       }
@@ -1434,6 +2084,13 @@ export function registerPtyHandlers(
     }
   )
 
+  ipcMain.handle('pty:getRendererDeliveryDebugSnapshot', (): PtyRendererDeliveryDebugSnapshot => {
+    return getPtyRendererDeliveryDebugSnapshot()
+  })
+  ipcMain.handle('pty:resetRendererDeliveryDebug', (): void => {
+    resetPtyRendererDeliveryDebug()
+  })
+
   ipcMain.handle(
     'pty:spawn',
     async (
@@ -1443,11 +2100,14 @@ export function registerPtyHandlers(
         rows: number
         cwd?: string
         env?: Record<string, string>
+        envToDelete?: string[]
         command?: string
+        startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
         worktreeId?: string
         sessionId?: string
         shellOverride?: string
+        projectRuntime?: ProjectExecutionRuntimeResolution
         // Why: closes the SIGKILL race documented in INVESTIGATION.md by
         // letting main patch + sync-flush the (worktreeId, tabId, leafId →
         // ptyId) binding before pty:spawn returns. Only the renderer's
@@ -1469,12 +2129,33 @@ export function registerPtyHandlers(
         }
       }
     ) => {
+      const startupPromise = getLocalPtyStartupPromise(args.connectionId)
+      if (startupPromise) {
+        await startupPromise
+      }
+      await assertFolderWorkspacePtyPathUsable(args.worktreeId)
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
-      const claudeAuth = isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth() : null
+      const terminalRuntimeOptions =
+        process.platform === 'win32' && !args.connectionId
+          ? resolveLocalWindowsTerminalRuntimeOptions({
+              requestedShellOverride: args.shellOverride,
+              settings: getSettings?.(),
+              projectRuntime: args.projectRuntime,
+              fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
+            })
+          : { shellOverride: args.shellOverride, terminalWindowsWslDistro: null }
+      const initialShellOverride = terminalRuntimeOptions.shellOverride
+      const initialSelectionTarget = getCodexSelectionTargetForPty(
+        initialShellOverride,
+        args.cwd,
+        terminalRuntimeOptions.terminalWindowsWslDistro ?? null
+      )
+      const claudeAuth =
+        isClaudeLaunch && prepareClaudeAuth ? await prepareClaudeAuth(initialSelectionTarget) : null
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
         throw new Error('A Claude account switch is in progress. Try again after it finishes.')
       }
@@ -1485,36 +2166,33 @@ export function registerPtyHandlers(
       }
       // Why: the daemon-backed provider replaces LocalPtyProvider and therefore
       // never runs its buildSpawnEnv closure. We must assemble the same
-      // host-local env (OpenCode plugin, agent-hook server, Pi overlay, Codex
-      // home, dev CLI overrides, GitHub attribution shims) here so both spawn
-      // paths behave identically. buildPtyHostEnv is the shared helper that
-      // encapsulates the full set of injections and their order/guards.
+      // host-local env (OpenCode plugin, agent-hook server, Pi/OMP managed
+      // extensions, Codex home, dev CLI overrides, GitHub attribution shims)
+      // here so both spawn paths behave identically. buildPtyHostEnv is the
+      // shared helper that encapsulates the full set of injections and guards.
       //
       // Safety: skip the entire injection when a remote (SSH) connection is in
       // play. Every injection here is either host-loopback (the agent-hook
       // server binds 127.0.0.1, so shipping its token to an SSH host would
       // leak a loopback secret for no functional benefit) or a path on the
-      // local filesystem (OpenCode plugin dir, Pi overlay, Codex home, dev
-      // CLI bin, attribution shim dir) that would resolve to nothing — or
-      // something misleading — on the remote machine.
+      // local filesystem (OpenCode plugin dir, Pi/OMP extension paths, Codex
+      // home, dev CLI bin, attribution shim dir) that would resolve to
+      // nothing — or something misleading — on the remote machine.
       const isDaemonHostSpawn = !args.connectionId && !(provider instanceof LocalPtyProvider)
-      // Why: Pi's PTY overlay is keyed on the id we pass down, and the daemon
-      // path needs a stable id BEFORE provider.spawn so the overlay can be
-      // materialized in buildPtyHostEnv. DaemonPtyAdapter.doSpawn mints an id
-      // the same way when sessionId is absent — lifting the mint here gives
-      // pty.ts the id up-front without changing daemon semantics (the daemon
-      // still honors opts.sessionId ?? mint()).
+      // Why: daemon host-env setup needs a stable id BEFORE provider.spawn so
+      // provider hooks and legacy Pi overlay cleanup can run in buildPtyHostEnv.
+      // DaemonPtyAdapter.doSpawn mints an id the same way when sessionId is
+      // absent — lifting the mint here gives pty.ts the id up-front without
+      // changing daemon semantics (the daemon still honors opts.sessionId ?? mint()).
       //
       // Note: the sessionId is STABLE across daemon restarts by design —
       // DaemonPtyAdapter.reconcileOnStartup reuses it so that users' live
-      // shells survive crashes. Keying the Pi overlay on this same id means
-      // the user's Pi state (auth, sessions, skills) survives daemon cold
-      // restore too. Do NOT "simplify" id allocation back to a fresh UUID
-      // per spawn; that would discard Pi state on every reconnect.
+      // shells survive crashes. Do NOT "simplify" id allocation back to a
+      // fresh UUID per spawn; that would orphan reconnectable terminal state.
       // Why: only state for ids we minted in THIS request should be cleared on
       // spawn failure. If the caller supplied args.sessionId it may refer to
-      // an existing PTY whose state (OpenCode hooks, Pi overlay, agent-hook
-      // pane caches) we must not clobber on a retry/attach failure.
+      // an existing PTY whose state (OpenCode hooks, legacy Pi overlay cleanup,
+      // agent-hook pane caches) we must not clobber on a retry/attach failure.
       const isMintedSessionId = args.sessionId === undefined && isDaemonHostSpawn
       const effectiveSessionId =
         args.sessionId ?? (isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
@@ -1529,21 +2207,7 @@ export function registerPtyHandlers(
       // Why: the renderer sets pane env for SSH too. Only forward it to the
       // remote when the relay hook path is enabled; otherwise a newer relay
       // could emit statuses this Orca build is not prepared to route.
-      let sshSourceEnv = args.env
-      if (args.connectionId && !isRemoteAgentHooksEnabled()) {
-        if (
-          sshSourceEnv &&
-          ('ORCA_PANE_KEY' in sshSourceEnv ||
-            'ORCA_TAB_ID' in sshSourceEnv ||
-            'ORCA_WORKTREE_ID' in sshSourceEnv)
-        ) {
-          const stripped = { ...sshSourceEnv }
-          delete stripped.ORCA_PANE_KEY
-          delete stripped.ORCA_TAB_ID
-          delete stripped.ORCA_WORKTREE_ID
-          sshSourceEnv = stripped
-        }
-      }
+      const sshSourceEnv = stripRemotePaneEnvWhenHooksDisabled(args.connectionId, args.env)
       const baseEnvWithAuth = claudeAuth
         ? { ...sshSourceEnv, ...claudeAuth.envPatch }
         : sshSourceEnv
@@ -1571,6 +2235,7 @@ export function registerPtyHandlers(
           : null
       const stablePaneKey = verifiedPaneKey ?? migrationUnsupportedPaneKey
       const baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+      const requestedAgentTeamsPath = baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID ? baseEnv.PATH : undefined
       if (baseEnv && stablePaneKey) {
         baseEnv.ORCA_PANE_KEY = stablePaneKey
         if (typeof args.tabId === 'string') {
@@ -1597,13 +2262,22 @@ export function registerPtyHandlers(
         runtime && !(provider instanceof LocalPtyProvider)
           ? runtime.createPreAllocatedTerminalHandle()
           : null
-      const effectiveShellOverride =
-        args.shellOverride ??
-        (process.platform === 'win32' && !args.connectionId
-          ? getSettings?.()?.terminalWindowsShell
-          : undefined)
+      const effectiveShellOverride = terminalRuntimeOptions.shellOverride
+      const codexSelectionTarget = getCodexSelectionTargetForPty(
+        effectiveShellOverride,
+        args.cwd,
+        terminalRuntimeOptions.terminalWindowsWslDistro ?? null
+      )
+      const selectedCodexHomePath = isDaemonHostSpawn
+        ? getCompatibleSelectedCodexHomePath(
+            codexSelectionTarget,
+            getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
+          )
+        : null
       const skipCodexHomeEnv =
-        isDaemonHostSpawn && shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd)
+        isDaemonHostSpawn &&
+        shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd) &&
+        !selectedCodexHomePath
       if (isDaemonHostSpawn) {
         if (effectiveSessionId === undefined) {
           // Should be unreachable: the expression above returns a string when
@@ -1612,11 +2286,10 @@ export function registerPtyHandlers(
           throw new Error('Invariant violation: daemon spawn without sessionId')
         }
         const sessionIdForEnv = effectiveSessionId
-        // Why: Pi overlay paths are derived from the session id; reject
-        // traversal sequences / path separators so a crafted IPC payload
-        // cannot escape the overlay root. If the renderer ever forwards a
-        // malicious sessionId or worktreeId the spawn is refused before any
-        // filesystem side-effects run.
+        // Why: this id still reaches filesystem side-effects for provider
+        // hook state and stale pre-migration Pi overlay cleanup; reject
+        // traversal/path separators before a crafted IPC payload can escape
+        // the expected roots.
         if (!isSafePtySessionId(sessionIdForEnv, app.getPath('userData'))) {
           throw new Error('Invalid PTY session id')
         }
@@ -1627,15 +2300,19 @@ export function registerPtyHandlers(
           buildPtyHostEnv(sessionIdForEnv, env, {
             isPackaged: app.isPackaged,
             userDataPath: app.getPath('userData'),
-            selectedCodexHomePath: getSelectedCodexHomePath?.() ?? null,
+            selectedCodexHomePath,
             skipCodexHomeEnv,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
             launchCommand: args.command,
-            agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
+            shellPath: effectiveShellOverride ?? process.env.COMSPEC,
+            isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd),
+            agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+            networkProxySettings: getSettings?.()
           })
+          promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
         } catch (err) {
-          // Why: buildPtyHostEnv has filesystem side-effects (Pi overlay
-          // materialization). If it throws before we reach provider.spawn,
+          // Why: buildPtyHostEnv has filesystem side-effects (Pi/OMP managed
+          // extension installation). If it throws before we reach provider.spawn,
           // clear per-PTY state so the next attempt starts clean.
           //
           // Only sweep state for ids we MINTED in this request — caller-
@@ -1656,11 +2333,13 @@ export function registerPtyHandlers(
         : undefined
       const combinedEnvToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(
-          envToDelete,
-          args.connectionId ? [] : getInheritedAgentHookEnvKeysToDelete(spawnEnv)
+          mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+          isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
         ),
         skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
       )
+      deleteRequestedEnvKeys(spawnEnv, combinedEnvToDelete)
+      promoteAgentTeamsShimPath(spawnEnv, requestedAgentTeamsPath)
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
@@ -1673,6 +2352,9 @@ export function registerPtyHandlers(
       }
       if (args.command !== undefined) {
         spawnOptions.command = args.command
+      }
+      if (args.startupCommandDelivery !== undefined) {
+        spawnOptions.startupCommandDelivery = args.startupCommandDelivery
       }
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId
@@ -1704,6 +2386,8 @@ export function registerPtyHandlers(
         // the persisted implementation choice through spawnOptions so both the
         // in-process and daemon-backed PTY paths can resolve the same effective
         // executable without inventing a fourth top-level shell.
+        spawnOptions.terminalWindowsWslDistro =
+          terminalRuntimeOptions.terminalWindowsWslDistro ?? null
         spawnOptions.terminalWindowsPowerShellImplementation = getSettings
           ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
           : undefined
@@ -1735,8 +2419,8 @@ export function registerPtyHandlers(
           }
           store?.markSshRemotePtyLease(args.connectionId, effectiveSessionRelayId, 'expired')
         }
-        // Why: when buildPtyHostEnv materialized a Pi overlay for this id
-        // but provider.spawn failed, the overlay would leak.
+        // Why: if buildPtyHostEnv materialized provider state for this minted
+        // id but provider.spawn failed, that state would otherwise leak.
         if (isMintedSessionId && effectiveSessionId !== undefined) {
           clearProviderPtyState(effectiveSessionId)
         }
@@ -1840,9 +2524,9 @@ export function registerPtyHandlers(
       // only settles its own generation. A remount that replaces the entry
       // with a new gen must not be stomped by the old PTY's teardown.
       if (validatedPaneKey && rendererPreSignaled) {
-        const gen = pendingByPaneKey.get(validatedPaneKey)
-        if (gen !== undefined) {
-          ptyPendingGenByPtyId.set(result.id, gen)
+        const pending = pendingByPaneKey.get(validatedPaneKey)
+        if (pending) {
+          ptyPendingGenByPtyId.set(result.id, pending.gen)
         }
       }
 
@@ -1869,7 +2553,10 @@ export function registerPtyHandlers(
           typeof result.coldRestore.scrollback === 'string' &&
           result.coldRestore.scrollback.length > 0
         ) {
-          runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, seedSize)
+          runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, seedSize, {
+            cwd: result.coldRestore.cwd,
+            oscLinks: result.coldRestore.oscLinks
+          })
         }
       }
       if (
@@ -1877,7 +2564,7 @@ export function registerPtyHandlers(
         args.worktreeId.length > 0 &&
         args.worktreeId.length <= 512
       ) {
-        runtime?.registerPty(result.id, args.worktreeId)
+        runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
       }
       if (isClaudeLaunch) {
         markClaudePtySpawned(result.id)
@@ -1984,7 +2671,9 @@ export function registerPtyHandlers(
       return false
     }
     try {
-      lastInputAtByPty.set(args.id, performance.now())
+      const now = performance.now()
+      lastInputAtByPty.set(args.id, now)
+      interactiveOutputCharsByPty.set(args.id, 0)
       provider.write(args.id, args.data)
       return true
     } catch {
@@ -2008,7 +2697,9 @@ export function registerPtyHandlers(
       return false
     }
     try {
-      lastInputAtByPty.set(args.id, performance.now())
+      const now = performance.now()
+      lastInputAtByPty.set(args.id, now)
+      interactiveOutputCharsByPty.set(args.id, 0)
       provider.write(args.id, args.data)
       return true
     } catch {
@@ -2046,8 +2737,16 @@ export function registerPtyHandlers(
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return
     }
+    const provider = tryGetProviderForPty(args.id)
+    if (!provider) {
+      return
+    }
+    try {
+      provider.resize(args.id, args.cols, args.rows)
+    } catch {
+      return
+    }
     ptySizes.set(args.id, { cols: args.cols, rows: args.rows })
-    tryGetProviderForPty(args.id)?.resize(args.id, args.cols, args.rows)
     runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
   })
 
@@ -2077,6 +2776,45 @@ export function registerPtyHandlers(
     }
   })
 
+  // Why: renderer ACKs bound main→renderer terminal delivery without stopping
+  // PTY ingestion. Agent/status consumers still see every chunk through the
+  // provider/runtime path while background renderer writes wait their turn.
+  ipcMain.on('pty:ackData', (_event, args: { id: string; charCount: number }) => {
+    const charCount = Number.isFinite(args.charCount) ? Math.max(0, args.charCount) : 0
+    const current = rendererInFlightCharsByPty.get(args.id) ?? 0
+    const acknowledged = Math.min(current, charCount)
+    const next = Math.max(0, current - charCount)
+    rendererInFlightTotalChars = Math.max(0, rendererInFlightTotalChars - acknowledged)
+    if (next === 0) {
+      rendererInFlightCharsByPty.delete(args.id)
+    } else {
+      rendererInFlightCharsByPty.set(args.id, next)
+    }
+    tryGetProviderForPty(args.id)?.acknowledgeDataEvent(args.id, acknowledged)
+    recordPtyRendererDeliveryPressure()
+    if (pendingData.size > 0 && !flushTimer) {
+      schedulePendingDataFlush(0)
+    }
+  })
+
+  ipcMain.removeAllListeners('pty:setActiveRendererPty')
+  ipcMain.on('pty:setActiveRendererPty', (_event, args: { id: string; active: boolean }) => {
+    if (typeof args.id !== 'string' || !args.id) {
+      return
+    }
+    // Why: this is a renderer scheduling hint only. PTY reads, runtime state,
+    // and notifications continue for inactive terminals; active panes merely
+    // get first chance at the bounded renderer output reserve.
+    if (args.active) {
+      activeRendererPtys.add(args.id)
+    } else {
+      activeRendererPtys.delete(args.id)
+    }
+    if (pendingData.size > 0 && !flushTimer) {
+      schedulePendingDataFlush(0)
+    }
+  })
+
   ipcMain.removeAllListeners('pty:signal')
   ipcMain.on('pty:signal', (_event, args: { id: string; signal: string }) => {
     tryGetProviderForPty(args.id)
@@ -2085,13 +2823,16 @@ export function registerPtyHandlers(
   })
 
   ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
-    const connectionId = ptyOwnership.get(args.id)
-    const provider = tryGetProviderForPty(args.id)
+    const ownedConnectionId = ptyOwnership.get(args.id)
+    const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
+    const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
+    const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
     if (!provider && connectionId) {
       // Why: detached SSH PTYs intentionally keep ownership after their
-      // provider is unregistered. If the user closes the pane while detached,
-      // make the lease non-restorable instead of reviving it on reconnect.
+      // provider is unregistered; hydrated app-scoped ids can also arrive
+      // before ownership is rebuilt. Tombstone instead of falling back local.
       finishPtyShutdown(args.id, connectionId, store)
+      runtime?.onPtyExit(args.id, -1)
       return
     }
     try {
@@ -2112,6 +2853,7 @@ export function registerPtyHandlers(
     // and daemon shutdown paths do not emit onExit through the local provider's
     // listener. Explicit cleanup is idempotent and covers already-dead PTYs.
     finishPtyShutdown(args.id, connectionId, store)
+    runtime?.onPtyExit(args.id, -1)
   })
 
   ipcMain.handle(
@@ -2144,6 +2886,9 @@ export function registerPtyHandlers(
   ipcMain.handle(
     'pty:hasChildProcesses',
     async (_event, args: { id: string }): Promise<boolean> => {
+      if (!hasPtyProviderForInspection(args.id)) {
+        return false
+      }
       return getProviderForPty(args.id).hasChildProcesses(args.id)
     }
   )
@@ -2151,6 +2896,9 @@ export function registerPtyHandlers(
   ipcMain.handle(
     'pty:getForegroundProcess',
     async (_event, args: { id: string }): Promise<string | null> => {
+      if (!hasPtyProviderForInspection(args.id)) {
+        return null
+      }
       return getProviderForPty(args.id).getForegroundProcess(args.id)
     }
   )
@@ -2177,11 +2925,11 @@ export function registerPtyHandlers(
   // or pane unmount before settle, renderer calls clear with the same gen.
   ipcMain.handle(
     'pty:declarePendingPaneSerializer',
-    async (_event, args: { paneKey?: unknown }): Promise<number> => {
+    async (event, args: { paneKey?: unknown }): Promise<number> => {
       if (!isValidPaneKey(args.paneKey)) {
         throw new Error('Invalid paneKey')
       }
-      return declarePendingPaneSerializer(args.paneKey)
+      return declarePendingPaneSerializer(args.paneKey, event?.sender)
     }
   )
 
@@ -2217,9 +2965,9 @@ export function registerPtyHandlers(
 
 export function registerHeadlessPtyRuntime(
   runtime: OrcaRuntimeService,
-  getSelectedCodexHomePath?: () => string | null,
+  getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   getSettings?: () => GlobalSettings,
-  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>,
+  prepareClaudeAuth?: PrepareClaudeAuth,
   store?: Store
 ): void {
   // Why: headless `orca serve` has no renderer window, but the runtime still

@@ -83,6 +83,25 @@ describe('file RPC methods', () => {
     })
   })
 
+  it('browses server directories before a project is added', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browseServerDir: vi.fn().mockResolvedValue({
+        resolvedPath: '/home/me',
+        entries: [{ name: 'project', isDirectory: true, isSymlink: false }]
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('files.browseServerDir', { path: '~' }))
+
+    expect(runtime.browseServerDir).toHaveBeenCalledWith('~')
+    expect(response).toMatchObject({
+      ok: true,
+      result: { resolvedPath: '/home/me', entries: [{ name: 'project', isDirectory: true }] }
+    })
+  })
+
   it('streams file watch changes until the subscription is cleaned up', async () => {
     vi.useFakeTimers()
     try {
@@ -194,6 +213,53 @@ describe('file RPC methods', () => {
     expect(replies).toEqual([])
   })
 
+  it('drops queued file watch events when aborted before setup resolves', async () => {
+    vi.useFakeTimers()
+    try {
+      type WatchCallback = (
+        events: { kind: 'update'; absolutePath: string; isDirectory?: boolean }[]
+      ) => void
+      const unwatch = vi.fn()
+      let resolveWatch: (value: () => void) => void = () => {}
+      const watchFileExplorer = vi.fn((_worktree: string, callback: WatchCallback) => {
+        callback([{ kind: 'update', absolutePath: '/repo/queued.ts', isDirectory: false }])
+        return new Promise<() => void>((resolve) => {
+          resolveWatch = resolve
+        })
+      })
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        watchFileExplorer,
+        registerSubscriptionCleanup: vi.fn()
+      } as unknown as OrcaRuntimeService
+      const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+      const abortController = new AbortController()
+      const replies: unknown[] = []
+
+      const dispatch = dispatcher.dispatchStreaming(
+        makeRequest('files.watch', { worktree: 'id:wt-1' }),
+        (response) => replies.push(JSON.parse(response)),
+        { connectionId: 'conn-1', signal: abortController.signal }
+      )
+      await vi.waitFor(() => {
+        expect(watchFileExplorer).toHaveBeenCalled()
+      })
+
+      abortController.abort()
+      await dispatch
+      await vi.runOnlyPendingTimersAsync()
+      resolveWatch(unwatch)
+      await vi.waitFor(() => {
+        expect(unwatch).toHaveBeenCalled()
+      })
+
+      expect(runtime.registerSubscriptionCleanup).not.toHaveBeenCalled()
+      expect(replies).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('reads a relative file path for a selected worktree', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -215,6 +281,37 @@ describe('file RPC methods', () => {
     expect(response).toMatchObject({
       ok: true,
       result: { content: 'export {}\\n', truncated: false }
+    })
+  })
+
+  it('resolves a tapped terminal path for a selected worktree', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      resolveTerminalPath: vi.fn().mockResolvedValue({
+        worktree: 'wt-1',
+        relativePath: 'src/index.ts',
+        exists: true,
+        isDirectory: false
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('files.resolveTerminalPath', {
+        worktree: 'id:wt-1',
+        pathText: '/repo/src/index.ts',
+        cwd: '/repo'
+      })
+    )
+
+    expect(runtime.resolveTerminalPath).toHaveBeenCalledWith(
+      'id:wt-1',
+      '/repo/src/index.ts',
+      '/repo'
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { relativePath: 'src/index.ts', exists: true, isDirectory: false }
     })
   })
 
@@ -391,6 +488,10 @@ describe('file RPC methods', () => {
     [
       'non-string content',
       { worktree: 'id:wt-1', relativePath: 'assets/logo.png', contentBase64: 0 }
+    ],
+    [
+      'malformed content',
+      { worktree: 'id:wt-1', relativePath: 'assets/logo.png', contentBase64: '!!!!' }
     ]
   ])('rejects a base64 write with %s', async (_name, params) => {
     const runtime = {
@@ -454,6 +555,15 @@ describe('file RPC methods', () => {
         worktree: 'id:wt-1',
         relativePath: 'assets/video.mov',
         contentBase64: 0,
+        append: true
+      }
+    ],
+    [
+      'malformed content',
+      {
+        worktree: 'id:wt-1',
+        relativePath: 'assets/video.mov',
+        contentBase64: '!!!!',
         append: true
       }
     ]

@@ -9,6 +9,21 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
     expect(
       buildWindowsPtyCompatibilityOptions({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: null
+      })
+    ).toEqual({
+      windowsPty: { backend: 'conpty', buildNumber: 26100 }
+    })
+  })
+
+  it('keeps ConPTY enabled when the Windows release cannot be parsed', () => {
+    expect(
+      buildWindowsPtyCompatibilityOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: 'bad-release',
         connectionId: null,
         cwd: 'C:\\repo',
         shellOverride: null
@@ -22,6 +37,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
     expect(
       buildWindowsPtyCompatibilityOptions({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
         connectionId: 'ssh-1',
         cwd: 'C:\\repo',
         shellOverride: null
@@ -39,6 +55,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
       expect(
         buildWindowsPtyCompatibilityOptions({
           userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+          osRelease: '10.0.26100',
           connectionId: null,
           cwd,
           shellOverride: null
@@ -51,6 +68,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
     expect(
       buildWindowsPtyCompatibilityOptions({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
         connectionId: null,
         cwd: 'C:\\repo',
         shellOverride: 'C:\\Windows\\System32\\wsl.exe'
@@ -62,6 +80,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
     expect(
       buildWindowsPtyCompatibilityOptions({
         userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)',
+        osRelease: '23.0.0',
         connectionId: null,
         cwd: '/repo',
         shellOverride: null

@@ -4,12 +4,15 @@ export const MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS = 30_000
 
 type Logger = Pick<Console, 'debug' | 'warn'>
 
+type CaffeinateErrorListener = (error: Error) => void
+type CaffeinateExitListener = (code: number | null, signal: NodeJS.Signals | null) => void
+
 type CaffeinateProcess = {
   kill: () => boolean
-  on: {
-    (event: 'error', listener: (error: Error) => void): void
-    (event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void): void
-  }
+  on(event: 'error', listener: CaffeinateErrorListener): void
+  on(event: 'exit', listener: CaffeinateExitListener): void
+  off(event: 'error', listener: CaffeinateErrorListener): void
+  off(event: 'exit', listener: CaffeinateExitListener): void
   pid?: number
 }
 
@@ -40,6 +43,7 @@ export class MacosSystemSleepAssertion {
   private warnedForLastFailure = false
   private readonly intentionalStops = new WeakSet<CaffeinateProcess>()
   private readonly reportedFailures = new WeakSet<CaffeinateProcess>()
+  private readonly childCleanups = new WeakMap<CaffeinateProcess, () => void>()
 
   constructor(options: MacosSystemSleepAssertionOptions = {}) {
     this.logger = options.logger ?? console
@@ -70,15 +74,21 @@ export class MacosSystemSleepAssertion {
     }
 
     this.child = child
-    child.on('error', (error) => {
+    const onError: CaffeinateErrorListener = (error) => {
       this.handleChildFailure(child, `error:${String(error.message)}`, 'error', reason, error)
-    })
-    child.on('exit', (code, signal) => {
+    }
+    const onExit: CaffeinateExitListener = (code, signal) => {
       this.handleChildFailure(child, `exit:${String(code)}:${String(signal)}`, 'exit', reason, {
         code,
         signal
       })
+    }
+    this.childCleanups.set(child, () => {
+      child.off('error', onError)
+      child.off('exit', onExit)
     })
+    child.on('error', onError)
+    child.on('exit', onExit)
     this.resetRetrySuppression()
     this.resetFailureStreak()
   }
@@ -92,6 +102,7 @@ export class MacosSystemSleepAssertion {
     const child = this.child
     this.child = null
     this.intentionalStops.add(child)
+    this.detachChildListeners(child)
     try {
       child.kill()
     } catch (error) {
@@ -114,6 +125,7 @@ export class MacosSystemSleepAssertion {
     startReason: string,
     details: unknown
   ): void {
+    this.detachChildListeners(child)
     if (this.intentionalStops.has(child)) {
       this.intentionalStops.delete(child)
       return
@@ -126,6 +138,15 @@ export class MacosSystemSleepAssertion {
       this.child = null
     }
     this.handleFailure(failureKey, startReason, details, failureType)
+  }
+
+  private detachChildListeners(child: CaffeinateProcess): void {
+    const cleanup = this.childCleanups.get(child)
+    if (!cleanup) {
+      return
+    }
+    cleanup()
+    this.childCleanups.delete(child)
   }
 
   private handleFailure(

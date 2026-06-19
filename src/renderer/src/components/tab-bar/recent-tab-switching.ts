@@ -1,4 +1,5 @@
 import type { CtrlTabOrderMode, Tab, TabContentType, TabGroup } from '../../../../shared/types'
+import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import type { AppState } from '../../store/types'
 import { sanitizeRecentTabIds } from '../../store/slices/tab-group-state'
 import { getActiveTabNavOrder, type VisibleTabRef } from './group-tab-order'
@@ -29,7 +30,7 @@ type RecentTabSwitchingState = Pick<
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
->
+> & { settings?: AppState['settings'] }
 
 export function normalizeCtrlTabOrderMode(
   value: CtrlTabOrderMode | null | undefined
@@ -84,20 +85,25 @@ function getActiveVisibleTabKey(
   return activeEntry ? getVisibleTabKey(activeEntry) : null
 }
 
-function getTabLabel(tab: Tab | undefined, fallback: string): string {
-  return tab?.customLabel?.trim() || tab?.label?.trim() || fallback
+function getTabLabel(
+  tab: Tab | undefined,
+  generatedTitlesEnabled: boolean,
+  fallback: string
+): string {
+  return resolveUnifiedTabLabel(tab, generatedTitlesEnabled, fallback)
 }
 
 function toSwitcherItem(
   entry: VisibleTabRef,
   tabById: ReadonlyMap<string, Tab>,
-  dirtyFileIds: ReadonlySet<string>
+  dirtyFileIds: ReadonlySet<string>,
+  generatedTitlesEnabled: boolean
 ): RecentTabSwitcherItem {
   const backingTab = entry.tabId ? tabById.get(entry.tabId) : undefined
   return {
     ...entry,
     key: getVisibleTabKey(entry),
-    label: getTabLabel(backingTab, entry.id),
+    label: getTabLabel(backingTab, generatedTitlesEnabled, entry.id),
     contentType: backingTab?.contentType ?? (entry.type === 'editor' ? 'editor' : entry.type),
     isDirty: entry.type === 'editor' && dirtyFileIds.has(entry.id)
   }
@@ -161,9 +167,10 @@ export function buildRecentTabSwitcherModel(
       .filter((file) => file.worktreeId === worktreeId && file.isDirty)
       .map((file) => file.id)
   )
+  const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const itemByKey = new Map(
     visibleEntries.map((entry) => {
-      const item = toSwitcherItem(entry, tabById, dirtyFileIds)
+      const item = toSwitcherItem(entry, tabById, dirtyFileIds, generatedTitlesEnabled)
       return [item.key, item] as const
     })
   )

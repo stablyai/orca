@@ -82,6 +82,15 @@ export function registerPtyTitleSource(
     // owner token is available. Calling out of order is a programming bug.
     throw new Error(`registerPtyTitleSource called before serializer for ptyId ${ptyId}`)
   }
+  const existing = lastTitleByPtyId.get(ptyId)
+  const initialTitle = existing?.owner === serializerOwner ? existing.title : ''
+  if (existing) {
+    // Why: same-PTY remounts can install the new serializer/title source before
+    // the stale mount unregisters. Replace the tracked disposable immediately
+    // so the new quiet-pane listener cannot become unowned.
+    existing.disposable.dispose()
+    lastTitleByPtyId.delete(ptyId)
+  }
   const disposable = attach((title) => {
     const current = lastTitleByPtyId.get(ptyId)
     if (current && current.owner !== serializerOwner) {
@@ -91,10 +100,7 @@ export function registerPtyTitleSource(
   })
   // Seed an entry with an empty title so the disposable is tracked even
   // before the first onTitleChange fires. Subsequent updates overwrite it.
-  const existing = lastTitleByPtyId.get(ptyId)
-  if (!existing) {
-    lastTitleByPtyId.set(ptyId, { title: '', owner: serializerOwner, disposable })
-  }
+  lastTitleByPtyId.set(ptyId, { title: initialTitle, owner: serializerOwner, disposable })
   return () => {
     const entry = lastTitleByPtyId.get(ptyId)
     if (entry?.owner === serializerOwner) {

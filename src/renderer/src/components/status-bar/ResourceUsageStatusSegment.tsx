@@ -28,6 +28,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
@@ -39,15 +40,14 @@ import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
-import {
-  mergeSnapshotAndSessions,
-  UNATTRIBUTED_REPO_ID,
-  type DaemonSession,
-  type Metric,
-  type UnifiedProjectGroup,
-  type UnifiedSessionRow,
-  type UnifiedWorktreeRow
-} from './mergeSnapshotAndSessions'
+import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
+import type {
+  DaemonSession,
+  Metric,
+  UnifiedProjectGroup,
+  UnifiedSessionRow,
+  UnifiedWorktreeRow
+} from './resource-usage-merge-types'
 import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import {
@@ -60,6 +60,15 @@ import {
   getResourceUsageRuntimePaneTitlesByTabId,
   getResourceUsageTabsByWorktree
 } from './resource-usage-open-slices'
+import {
+  resolveResourceUsageSpaceScanReady,
+  type ResourceUsageSpaceScanSnapshot
+} from './resource-usage-space-scan-ready'
+import {
+  getResourceManagerAriaLabel,
+  getResourceManagerTooltipLines
+} from './resource-manager-terminal-copy'
+import { translate } from '@/i18n/i18n'
 
 const POLL_MS = 2_000
 const SESSIONS_POLL_MS = 10_000
@@ -236,7 +245,17 @@ function AppSection({
           type="button"
           onClick={onToggle}
           className="pl-2 py-2 pr-0.5 transition-colors hover:bg-muted/50"
-          aria-label={isCollapsed ? 'Expand Orca' : 'Collapse Orca'}
+          aria-label={
+            isCollapsed
+              ? translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.e419d27083',
+                  'Expand Orca'
+                )
+              : translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.53dd5560ae',
+                  'Collapse Orca'
+                )
+          }
           aria-expanded={!isCollapsed}
         >
           {isCollapsed ? (
@@ -247,7 +266,7 @@ function AppSection({
         </button>
         <div className="flex-1 min-w-0 py-2 pr-3 flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wide truncate text-muted-foreground">
-            Orca
+            {translate('auto.components.status.bar.ResourceUsageStatusSegment.288a4dd177', 'Orca')}
           </span>
           <div className="flex items-center gap-2 shrink-0">
             <Sparkline samples={app.history} />
@@ -258,10 +277,28 @@ function AppSection({
       </div>
       {!isCollapsed && (
         <div className="border-t border-border/30">
-          <AppSubRow label="Main" values={app.main} />
-          <AppSubRow label="Renderer" values={app.renderer} />
+          <AppSubRow
+            label={translate(
+              'auto.components.status.bar.ResourceUsageStatusSegment.81cd37af99',
+              'Main'
+            )}
+            values={app.main}
+          />
+          <AppSubRow
+            label={translate(
+              'auto.components.status.bar.ResourceUsageStatusSegment.d406915b78',
+              'Renderer'
+            )}
+            values={app.renderer}
+          />
           {(app.other.cpu > 0 || app.other.memory > 0) && (
-            <AppSubRow label="Other" values={app.other} />
+            <AppSubRow
+              label={translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.0f9e50eb07',
+                'Other'
+              )}
+              values={app.other}
+            />
           )}
         </div>
       )}
@@ -376,9 +413,13 @@ function SessionRow({
           className={cn(
             'rounded p-0.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive',
             session.bound &&
-              'opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
+              'can-hover:opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
           )}
-          aria-label={`Kill session ${session.sessionId}`}
+          aria-label={translate(
+            'auto.components.status.bar.ResourceUsageStatusSegment.fa6d36758d',
+            'Kill session {{value0}}',
+            { value0: session.sessionId }
+          )}
         >
           <X className="size-3" />
         </button>
@@ -435,7 +476,17 @@ function WorktreeRow({
             type="button"
             onClick={onToggle}
             className="pl-2 py-2 pr-0.5 shrink-0"
-            aria-label={isCollapsed ? 'Expand workspace' : 'Collapse workspace'}
+            aria-label={
+              isCollapsed
+                ? translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.c4a8968bdd',
+                    'Expand workspace'
+                  )
+                : translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.bbcd9b7b85',
+                    'Collapse workspace'
+                  )
+            }
           >
             {isCollapsed ? (
               <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -452,7 +503,11 @@ function WorktreeRow({
         <button
           type="button"
           onClick={onNavigate}
-          aria-label={`Open workspace ${rowLabel}`}
+          aria-label={translate(
+            'auto.components.status.bar.ResourceUsageStatusSegment.d659d71d2d',
+            'Resume workspace {{value0}}',
+            { value0: rowLabel }
+          )}
           className="flex-1 min-w-0 py-2 pr-2 pl-1 text-left flex items-center gap-1.5"
           disabled={!isNavigable}
         >
@@ -463,31 +518,40 @@ function WorktreeRow({
               local. */}
           {worktree.isRemote && (
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
-              · remote
+              {translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1',
+                '· remote'
+              )}
             </span>
           )}
         </button>
         <div className="flex items-center gap-2 shrink-0 pr-3">
           <div className="relative">
+            {/* Why: no-hover devices show the action overlay by default, so
+                the sparkline yields there just like it does during hover. */}
             <span
               className={cn(
                 'block transition-opacity',
                 showWorktreeActions &&
-                  'group-hover/wtrow:opacity-0 group-hover/wtrow:pointer-events-none group-focus-within/wtrow:opacity-0 group-focus-within/wtrow:pointer-events-none'
+                  'group-hover/wtrow:opacity-0 group-hover/wtrow:pointer-events-none group-focus-within/wtrow:opacity-0 group-focus-within/wtrow:pointer-events-none [@media(hover:none)]:opacity-0 [@media(hover:none)]:pointer-events-none'
               )}
               aria-hidden={showWorktreeActions ? undefined : true}
             >
               <Sparkline samples={worktree.history} />
             </span>
             {showWorktreeActions && (
-              <div className="absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 pointer-events-none transition-opacity group-hover/wtrow:opacity-100 group-hover/wtrow:pointer-events-auto group-focus-within/wtrow:opacity-100 group-focus-within/wtrow:pointer-events-auto">
+              <div className="absolute inset-0 flex items-center justify-end gap-0.5 can-hover:opacity-0 can-hover:pointer-events-none transition-opacity group-hover/wtrow:opacity-100 group-hover/wtrow:pointer-events-auto group-focus-within/wtrow:opacity-100 group-focus-within/wtrow:pointer-events-auto">
                 <Tooltip delayDuration={300}>
                   <TooltipTrigger asChild>
                     <button
                       type="button"
                       onClick={onDelete}
                       disabled={isMainWorktree}
-                      aria-label={`Delete workspace ${rowLabel}`}
+                      aria-label={translate(
+                        'auto.components.status.bar.ResourceUsageStatusSegment.16bc3c998a',
+                        'Delete workspace {{value0}}',
+                        { value0: rowLabel }
+                      )}
                       className={cn(
                         'p-0.5 rounded text-muted-foreground transition-colors',
                         isMainWorktree
@@ -503,7 +567,15 @@ function WorktreeRow({
                     sideOffset={4}
                     className="z-[70] max-w-[200px] text-pretty"
                   >
-                    {isMainWorktree ? 'The main workspace cannot be deleted.' : 'Delete workspace.'}
+                    {isMainWorktree
+                      ? translate(
+                          'auto.components.status.bar.ResourceUsageStatusSegment.946724a70a',
+                          'The main workspace cannot be deleted.'
+                        )
+                      : translate(
+                          'auto.components.status.bar.ResourceUsageStatusSegment.a82253b458',
+                          'Delete workspace.'
+                        )}
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -598,7 +670,17 @@ function ResourceTree({
                 type="button"
                 onClick={() => toggleRepo(group.repoId)}
                 className="pl-2 py-2 pr-0.5 transition-colors hover:bg-muted/50"
-                aria-label={repoCollapsed ? 'Expand repo' : 'Collapse repo'}
+                aria-label={
+                  repoCollapsed
+                    ? translate(
+                        'auto.components.status.bar.ResourceUsageStatusSegment.b12e31dfcb',
+                        'Expand repo'
+                      )
+                    : translate(
+                        'auto.components.status.bar.ResourceUsageStatusSegment.73a3fd68a9',
+                        'Collapse repo'
+                      )
+                }
               >
                 {repoCollapsed ? (
                   <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -613,7 +695,10 @@ function ResourceTree({
                   </span>
                   {group.hasRemoteChildren && (
                     <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
-                      · remote
+                      {translate(
+                        'auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1',
+                        '· remote'
+                      )}
                     </span>
                   )}
                 </span>
@@ -669,7 +754,13 @@ export function ResourceUsageStatusSegment({
   const [sessionsError, setSessionsError] = useState(false)
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
-  const [spaceScanReady, setSpaceScanReady] = useState(false)
+  const [spaceScanSnapshot, setSpaceScanSnapshot] = useState<ResourceUsageSpaceScanSnapshot>(
+    () => ({
+      ready: false,
+      previousScanning: workspaceSpaceScanning,
+      lastSeenScannedAt: workspaceSpaceScannedAt
+    })
+  )
   // Why: tab titles can update on terminal keystrokes. The resource popover's
   // merged tree needs them only while open, so closed status-bar badges should
   // not subscribe to those high-churn maps.
@@ -683,8 +774,6 @@ export function ResourceUsageStatusSegment({
   const tabsByWorktree = useAppStore((s) =>
     getResourceUsageTabsByWorktree(s, open, runtimeEnvironmentActive)
   )
-  const previousSpaceScanningRef = useRef(workspaceSpaceScanning)
-  const lastSeenSpaceScanAtRef = useRef<number | null>(workspaceSpaceScannedAt)
   // Why: this segment only understands the local Electron PTY/resource daemon.
   // While a runtime server is active, hiding local samples avoids showing or
   // killing sessions from the wrong machine.
@@ -694,21 +783,49 @@ export function ResourceUsageStatusSegment({
   // fall to <body>. We park a ref on the popover body so we can restore focus
   // somewhere stable for keyboard users.
   const popoverBodyRef = useRef<HTMLDivElement | null>(null)
+  const popoverBodyFocusFrameRef = useRef<number | null>(null)
+  const mountedRef = useMountedRef()
+
+  const cancelPopoverBodyFocusFrame = useCallback((): void => {
+    if (popoverBodyFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(popoverBodyFocusFrameRef.current)
+    popoverBodyFocusFrameRef.current = null
+  }, [])
+
+  const setPopoverBodyNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued post-kill focus is only valid while the popover body exists.
+      if (!node) {
+        cancelPopoverBodyFocusFrame()
+      }
+      popoverBodyRef.current = node
+    },
+    [cancelPopoverBodyFocusFrame]
+  )
 
   const refreshSessions = useCallback(async () => {
     if (runtimeEnvironmentActive) {
-      setSessions([])
-      setSessionsError(false)
+      if (mountedRef.current) {
+        setSessions([])
+        setSessionsError(false)
+      }
       return
     }
     try {
       const result = await window.api.pty.listSessions()
+      if (!mountedRef.current) {
+        return
+      }
       setSessions(result)
       setSessionsError(false)
     } catch {
-      setSessionsError(true)
+      if (mountedRef.current) {
+        setSessionsError(true)
+      }
     }
-  }, [runtimeEnvironmentActive])
+  }, [mountedRef, runtimeEnvironmentActive])
 
   const daemonActions = useDaemonActions({
     onRestartSettled: () => {
@@ -723,37 +840,24 @@ export function ResourceUsageStatusSegment({
 
   // Why: Space scans can finish after the user backs out of the full page or
   // closes this popover; the status-bar trigger becomes the handoff point.
-  useEffect(() => {
-    if (runtimeEnvironmentActive) {
-      setSpaceScanReady(false)
-      previousSpaceScanningRef.current = false
-      return
-    }
-    const scannedAt = workspaceSpaceScannedAt
-    const wasScanning = previousSpaceScanningRef.current
-    const scanCompleted =
-      wasScanning &&
-      !workspaceSpaceScanning &&
-      scannedAt !== null &&
-      scannedAt !== lastSeenSpaceScanAtRef.current
-
-    if (scanCompleted) {
-      lastSeenSpaceScanAtRef.current = scannedAt
-      setSpaceScanReady(!open && activeView !== 'space')
-    } else if (spaceScanReady && (open || activeView === 'space')) {
-      setSpaceScanReady(false)
-      lastSeenSpaceScanAtRef.current = scannedAt
-    }
-
-    previousSpaceScanningRef.current = workspaceSpaceScanning
-  }, [
-    activeView,
-    open,
+  const nextSpaceScanSnapshot = resolveResourceUsageSpaceScanReady({
+    snapshot: spaceScanSnapshot,
     runtimeEnvironmentActive,
-    spaceScanReady,
-    workspaceSpaceScannedAt,
-    workspaceSpaceScanning
-  ])
+    open,
+    activeView,
+    scannedAt: workspaceSpaceScannedAt,
+    scanning: workspaceSpaceScanning
+  })
+  if (
+    nextSpaceScanSnapshot.ready !== spaceScanSnapshot.ready ||
+    nextSpaceScanSnapshot.previousScanning !== spaceScanSnapshot.previousScanning ||
+    nextSpaceScanSnapshot.lastSeenScannedAt !== spaceScanSnapshot.lastSeenScannedAt
+  ) {
+    // Why: keep the scan transition render-time without mutating refs during
+    // render; React can safely retry this guarded state update before commit.
+    setSpaceScanSnapshot(nextSpaceScanSnapshot)
+  }
+  const spaceScanReady = nextSpaceScanSnapshot.ready
 
   // Poll memory + sessions when popover is open. Sessions also poll in the
   // background at a slower rate so the badge count stays reasonably fresh
@@ -916,6 +1020,17 @@ export function ResourceUsageStatusSegment({
   // empty/stale even though the resource numbers look fine.
   const sessionsOnlyError =
     !runtimeEnvironmentActive && sessionsError && memorySnapshotError === null
+  const resourceManagerTooltipLines = getResourceManagerTooltipLines({
+    memoryLabel: memBadgeLabel,
+    sessionCount: sessions.length,
+    runtimeEnvironmentActive,
+    spaceScanReady
+  })
+  const resourceManagerAriaLabel = getResourceManagerAriaLabel({
+    sessionCount: sessions.length,
+    runtimeEnvironmentActive,
+    spaceScanReady
+  })
 
   const toggleRepo = useCallback((repoId: string): void => {
     setCollapsedRepos((prev) => {
@@ -1043,17 +1158,23 @@ export function ResourceUsageStatusSegment({
     } catch {
       /* already dead — fall through */
     } finally {
-      setKilling(false)
-      setKillConfirm(null)
-      // Why: after the killed row unmounts, focus would otherwise drop to
-      // <body>. Park focus on the popover body so keyboard users land back
-      // in the list rather than outside the popover.
-      requestAnimationFrame(() => {
-        popoverBodyRef.current?.focus()
-      })
-      void refreshSessions()
+      if (mountedRef.current) {
+        setKilling(false)
+        setKillConfirm(null)
+        // Why: after the killed row unmounts, focus would otherwise drop to
+        // <body>. Park focus on the popover body so keyboard users land back
+        // in the list rather than outside the popover.
+        cancelPopoverBodyFocusFrame()
+        if (popoverBodyRef.current) {
+          popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
+            popoverBodyFocusFrameRef.current = null
+            popoverBodyRef.current?.focus()
+          })
+        }
+        void refreshSessions()
+      }
     }
-  }, [killConfirm, refreshSessions])
+  }, [cancelPopoverBodyFocusFrame, killConfirm, mountedRef, refreshSessions])
 
   const openSpaceResults = useCallback((): void => {
     setOpen(false)
@@ -1078,9 +1199,13 @@ export function ResourceUsageStatusSegment({
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
               aria-label={
-                spaceScanReady && !runtimeEnvironmentActive
-                  ? 'Resource manager, Space scan ready'
-                  : 'Resource manager'
+                daemonUnreachable
+                  ? translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.59f178fe11',
+                      '{{value0}}, daemon unreachable',
+                      { value0: resourceManagerAriaLabel }
+                    )
+                  : resourceManagerAriaLabel
               }
             >
               {spaceScanReady && !runtimeEnvironmentActive ? (
@@ -1111,20 +1236,27 @@ export function ResourceUsageStatusSegment({
                 </span>
               )}
               {daemonUnreachable && (
-                <AlertTriangle className="size-3 text-yellow-500" aria-label="Daemon unreachable" />
+                <AlertTriangle
+                  className="size-3 text-yellow-500"
+                  aria-label={translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.ca95d077db',
+                    'Daemon unreachable'
+                  )}
+                />
               )}
             </button>
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
           <div className="space-y-0.5">
-            <div>
-              Resource Manager — {memBadgeLabel} · {sessions.length} session
-              {sessions.length === 1 ? '' : 's'}
-            </div>
-            {spaceScanReady && !runtimeEnvironmentActive ? (
-              <div className="text-primary">Space scan ready</div>
-            ) : null}
+            {resourceManagerTooltipLines.map((line, index) => (
+              <div
+                key={`${index}:${line}`}
+                className={line === 'Space scan ready' ? 'text-primary' : ''}
+              >
+                {line}
+              </div>
+            ))}
           </div>
         </TooltipContent>
       </Tooltip>
@@ -1146,7 +1278,17 @@ export function ResourceUsageStatusSegment({
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
           <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
             <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
-            <span className="truncate">Resource Manager</span>
+            <span className="truncate">
+              {runtimeEnvironmentActive
+                ? translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.6a822b06a7',
+                    'Resource Manager'
+                  )
+                : translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.6d9793d4bc',
+                    'Resource Manager - Terminals'
+                  )}
+            </span>
           </div>
 
           <div className="flex items-center gap-0.5">
@@ -1156,14 +1298,25 @@ export function ResourceUsageStatusSegment({
                   type="button"
                   onClick={() => daemonActions.setPending('restart')}
                   disabled={daemonActions.isBusy || runtimeEnvironmentActive}
-                  aria-label="Restart daemon"
+                  aria-label={translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
+                    'Restart daemon'
+                  )}
                   className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
                 >
                   <RotateCw className="size-3" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                {runtimeEnvironmentActive ? 'Unavailable for runtime servers' : 'Restart daemon'}
+                {runtimeEnvironmentActive
+                  ? translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.14ff448686',
+                      'Unavailable for runtime servers'
+                    )
+                  : translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
+                      'Restart daemon'
+                    )}
               </TooltipContent>
             </Tooltip>
             <Tooltip delayDuration={200}>
@@ -1172,14 +1325,25 @@ export function ResourceUsageStatusSegment({
                   type="button"
                   onClick={() => daemonActions.setPending('killAll')}
                   disabled={daemonActions.isBusy || runtimeEnvironmentActive}
-                  aria-label="Kill all sessions"
+                  aria-label={translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
+                    'Kill all sessions'
+                  )}
                   className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
                 >
                   <Trash2 className="size-3" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                {runtimeEnvironmentActive ? 'Unavailable for runtime servers' : 'Kill all sessions'}
+                {runtimeEnvironmentActive
+                  ? translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.14ff448686',
+                      'Unavailable for runtime servers'
+                    )
+                  : translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
+                      'Kill all sessions'
+                    )}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -1189,9 +1353,17 @@ export function ResourceUsageStatusSegment({
           <div className="flex items-start gap-2 border-b border-border bg-yellow-500/10 px-3 py-2 text-[11px] text-foreground">
             <AlertTriangle className="mt-0.5 size-3 shrink-0 text-yellow-500" />
             <div className="flex-1">
-              <div className="font-medium">Daemon is not responding</div>
+              <div className="font-medium">
+                {translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.f8e0d794b4',
+                  'Daemon is not responding'
+                )}
+              </div>
               <div className="text-muted-foreground">
-                Resource snapshots and terminal sessions are unavailable.
+                {translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.f85af9cda6',
+                  'Resource snapshots and terminal sessions are unavailable.'
+                )}
               </div>
             </div>
             <Button
@@ -1202,7 +1374,10 @@ export function ResourceUsageStatusSegment({
               disabled={daemonActions.isBusy}
             >
               <RotateCw className="mr-1 size-3" />
-              Restart
+              {translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.93b0de3c21',
+                'Restart'
+              )}
             </Button>
           </div>
         )}
@@ -1213,7 +1388,12 @@ export function ResourceUsageStatusSegment({
             role="status"
           >
             <AlertTriangle className="size-3 shrink-0 text-yellow-500" />
-            <span>Terminal sessions unavailable. The list may be stale.</span>
+            <span>
+              {translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.e7cf14ec78',
+                'Terminal sessions unavailable. The list may be stale.'
+              )}
+            </span>
           </div>
         )}
 
@@ -1230,7 +1410,10 @@ export function ResourceUsageStatusSegment({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-                  Combined CPU load. Values above 100% mean more than one core is working at once.
+                  {translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.1fedf94eae',
+                    'Combined CPU load. Values above 100% mean more than one core is working at once.'
+                  )}
                 </TooltipContent>
               </Tooltip>
               <span className="text-muted-foreground/50">·</span>
@@ -1244,8 +1427,10 @@ export function ResourceUsageStatusSegment({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-                  Resident memory held by Orca plus the processes under each worktree&apos;s
-                  terminals.
+                  {translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.9e2525c89f',
+                    "Resident memory held by Orca plus the processes under each worktree's terminals."
+                  )}
                 </TooltipContent>
               </Tooltip>
               <span className="text-muted-foreground/50">·</span>
@@ -1255,18 +1440,34 @@ export function ResourceUsageStatusSegment({
                     tabIndex={0}
                     className="text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
                   >
-                    {formatPercent(hostShare)} of system RAM
+                    {formatPercent(hostShare)}{' '}
+                    {translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.e7ccce7e87',
+                      'of system RAM'
+                    )}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-                  How much of this machine&apos;s physical RAM the Orca-tracked processes are
-                  sitting on.
+                  {translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.6449a95c78',
+                    "How much of this machine's physical RAM the Orca-tracked processes are sitting on."
+                  )}
                 </TooltipContent>
               </Tooltip>
             </div>
             {orphanCount > 0 && (
               <span className="shrink-0 text-yellow-500" aria-live="polite">
-                {orphanCount} orphan{orphanCount === 1 ? '' : 's'}
+                {orphanCount === 1
+                  ? translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.30ff2c3c31',
+                      '{{value0}} orphan',
+                      { value0: orphanCount }
+                    )
+                  : translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.b8f4a2c1d0e3',
+                      '{{value0}} orphans',
+                      { value0: orphanCount }
+                    )}
               </span>
             )}
           </div>
@@ -1276,7 +1477,11 @@ export function ResourceUsageStatusSegment({
             jump as worktrees expand/collapse or as sessions come and go. The
             inner tree owns its own scroll. The footer renders below this
             shell when orphan-bulk-kill is available. */}
-        <div ref={popoverBodyRef} tabIndex={-1} className="flex h-[420px] flex-col outline-none">
+        <div
+          ref={setPopoverBodyNode}
+          tabIndex={-1}
+          className="flex h-[420px] flex-col outline-none"
+        >
           {(unifiedRepos.length > 0 || resourceSnapshot) && (
             <div className="flex items-center justify-between px-3 py-1 bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wide shrink-0">
               <button
@@ -1290,7 +1495,10 @@ export function ResourceUsageStatusSegment({
                 )}
                 aria-pressed={sortOption === 'name'}
               >
-                Name
+                {translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.2aa2de6cb9',
+                  'Name'
+                )}
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 <div className={cn(METRIC_COLUMNS_CLS, 'text-[10px]')}>
@@ -1306,7 +1514,10 @@ export function ResourceUsageStatusSegment({
                     )}
                     aria-pressed={sortOption === 'cpu'}
                   >
-                    CPU
+                    {translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.298f4be7f2',
+                      'CPU'
+                    )}
                   </button>
                   <button
                     type="button"
@@ -1320,7 +1531,10 @@ export function ResourceUsageStatusSegment({
                     )}
                     aria-pressed={sortOption === 'memory'}
                   >
-                    Memory
+                    {translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.1b24a32d3a',
+                      'Memory'
+                    )}
                   </button>
                 </div>
                 {/* Why: empty trailing gutter so the CPU/Memory header
@@ -1350,7 +1564,10 @@ export function ResourceUsageStatusSegment({
 
             {unifiedRepos.length === 0 && resourceSnapshot && (
               <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                Nothing running right now
+                {translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.27a74f91f0',
+                  'Nothing running right now'
+                )}
               </div>
             )}
 
@@ -1365,8 +1582,14 @@ export function ResourceUsageStatusSegment({
             {!resourceSnapshot && !daemonUnreachable && (
               <div className="px-3 py-4 text-center text-xs text-muted-foreground">
                 {runtimeEnvironmentActive
-                  ? 'Local resource usage hidden for runtime servers.'
-                  : 'Loading…'}
+                  ? translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.56b6888304',
+                      'Local resource usage hidden for runtime servers.'
+                    )
+                  : translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.888dad8c55',
+                      'Loading…'
+                    )}
               </div>
             )}
           </div>
@@ -1381,7 +1604,11 @@ export function ResourceUsageStatusSegment({
                 className="relative inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
                 <span className="min-w-0 truncate px-4 text-center">
-                  Review inactive workspaces ({oldWorkspaceCount})
+                  {translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3',
+                    'Review inactive workspaces ({{value0}})',
+                    { value0: oldWorkspaceCount }
+                  )}
                 </span>
                 <ChevronRight
                   className="absolute right-2.5 size-3.5 text-muted-foreground"
@@ -1395,7 +1622,17 @@ export function ResourceUsageStatusSegment({
                 onClick={() => void handleKillOrphans()}
                 className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
-                Kill {orphanCount} orphan terminal{orphanCount === 1 ? '' : 's'}
+                {orphanCount === 1
+                  ? translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.c7e3b1a0d9f2',
+                      'Kill {{value0}} orphan terminal',
+                      { value0: orphanCount }
+                    )
+                  : translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.d8f4c2b1e0a3',
+                      'Kill {{value0}} orphan terminals',
+                      { value0: orphanCount }
+                    )}
               </button>
             ) : null}
           </div>
@@ -1438,20 +1675,32 @@ export function ResourceUsageStatusSegment({
         >
           <DialogHeader>
             <DialogTitle className="text-sm">
-              Kill{' '}
-              <span className="font-medium text-foreground">
-                {killConfirm?.label ?? 'this session'}
-              </span>
-              ?
+              {translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.e9a5d3c2b1f0',
+                'Kill {{value0}}?',
+                {
+                  value0:
+                    killConfirm?.label ??
+                    translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.138b99bd80',
+                      'this session'
+                    )
+                }
+              )}
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Force-quits this terminal. Any unsaved work in the pane is lost. This can&apos;t be
-              undone.
+              {translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.67c4ecda49',
+                "Force-quits this terminal. Any unsaved work in the pane is lost. This can't be undone."
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setKillConfirm(null)} disabled={killing}>
-              Cancel
+              {translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.946d9f94d0',
+                'Cancel'
+              )}
             </Button>
             <Button
               variant="destructive"
@@ -1459,7 +1708,15 @@ export function ResourceUsageStatusSegment({
               disabled={killing}
             >
               {killing ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              {killing ? 'Killing…' : 'Kill session'}
+              {killing
+                ? translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.41ae4fa725',
+                    'Killing…'
+                  )
+                : translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.b10695d6ce',
+                    'Kill session'
+                  )}
             </Button>
           </DialogFooter>
         </DialogContent>

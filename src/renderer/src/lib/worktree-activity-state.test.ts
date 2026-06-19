@@ -35,4 +35,32 @@ describe('worktree activity state', () => {
       )
     ).toBe(false)
   })
+
+  it('treats pending paired web host terminal mirrors as inactive without a live pty', () => {
+    expect(
+      hasActiveWorkspaceActivity('wt-1', { 'wt-1': [makeTab('web-terminal-host-tab-1')] }, {}, {})
+    ).toBe(false)
+  })
+
+  it('treats ready paired web host terminal mirrors as active with a live pty', () => {
+    expect(
+      hasActiveWorkspaceActivity(
+        'wt-1',
+        { 'wt-1': [makeTab('web-terminal-host-tab-1')] },
+        { 'web-terminal-host-tab-1': ['pty-1'] },
+        {}
+      )
+    ).toBe(true)
+  })
+
+  it('keeps browser-only workspaces active when mirrored terminals are pending', () => {
+    expect(
+      hasActiveWorkspaceActivity(
+        'wt-1',
+        { 'wt-1': [makeTab('web-terminal-host-tab-1')] },
+        {},
+        { 'wt-1': [{ id: 'browser-1' }] }
+      )
+    ).toBe(true)
+  })
 })

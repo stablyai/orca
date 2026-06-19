@@ -1,11 +1,9 @@
 /* eslint-disable max-lines -- Why: model download, checksum, extraction, and cleanup share one state machine so progress/error transitions stay coupled. */
-import { app } from 'electron'
+import { app, net } from 'electron'
 import { join, resolve, relative } from 'path'
 import { existsSync, mkdirSync, createWriteStream, createReadStream, rmSync } from 'fs'
 import { readdir, rm } from 'fs/promises'
 import { createHash } from 'crypto'
-import { get as httpsGet } from 'https'
-import type { IncomingMessage } from 'http'
 import { pipeline } from 'stream/promises'
 import { spawn } from 'child_process'
 import type {
@@ -13,7 +11,8 @@ import type {
   SpeechModelState,
   SpeechModelStatus
 } from '../../shared/speech-types'
-import { SPEECH_MODEL_CATALOG, getCatalogModel } from './model-catalog'
+import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
+import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
 import { resolveTarExecutable } from './tar-executable'
 
 type DownloadHandle = {
@@ -21,20 +20,33 @@ type DownloadHandle = {
 }
 
 type ProgressCallback = (modelId: string, progress: number) => void
+type DownloadIncomingMessage = Electron.IncomingMessage &
+  NodeJS.ReadableStream & {
+    headers: Record<string, string | string[] | undefined>
+    resume: () => void
+    destroy?: () => void
+  }
+
+const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
 
 export class ModelManager {
   private modelsDir: string
   private activeDownloads = new Map<string, DownloadHandle>()
   private modelStates = new Map<string, SpeechModelState>()
-  private progressCallback: ProgressCallback | null = null
+  private progressCallbacks = new Set<ProgressCallback>()
 
   constructor(customModelsDir?: string) {
     this.modelsDir = customModelsDir || join(app.getPath('userData'), 'speech-models')
     mkdirSync(this.modelsDir, { recursive: true })
   }
 
-  setProgressCallback(cb: ProgressCallback): void {
-    this.progressCallback = cb
+  setProgressCallback(cb: ProgressCallback): () => void {
+    // Why: concurrent settings windows can observe the same download; a
+    // returned unsubscribe prevents one window from replacing another.
+    this.progressCallbacks.add(cb)
+    return () => {
+      this.progressCallbacks.delete(cb)
+    }
   }
 
   getModelsDir(): string {
@@ -59,6 +71,13 @@ export class ModelManager {
     const manifest = getCatalogModel(modelId)
     if (!manifest) {
       return { id: modelId, status: 'error', error: 'Unknown model' }
+    }
+
+    if (manifest.provider === 'openai') {
+      return {
+        id: modelId,
+        status: hasOpenAiSpeechApiKey() ? 'ready' : 'not-downloaded'
+      }
     }
 
     const modelDir = this.getModelDir(modelId)
@@ -90,6 +109,9 @@ export class ModelManager {
   }
 
   private validateModelFiles(manifest: SpeechModelManifest, modelDir: string): boolean {
+    if (!manifest.files) {
+      return false
+    }
     return manifest.files.every((f) => existsSync(join(modelDir, f)))
   }
 
@@ -101,6 +123,12 @@ export class ModelManager {
     const manifest = getCatalogModel(modelId)
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
+    }
+    if (!isLocalSpeechModel(manifest)) {
+      throw new Error(`Model does not support downloads: ${modelId}`)
+    }
+    if (!manifest.downloadUrl || !manifest.archiveSha256 || !manifest.sizeBytes) {
+      throw new Error(`Model download metadata missing: ${modelId}`)
     }
 
     const modelDir = this.getModelDir(modelId)
@@ -177,6 +205,11 @@ export class ModelManager {
         this.updateState(modelId, 'error', undefined, String(err))
       }
       this.cleanup(modelId, archivePath)
+      if (!aborted) {
+        // Why: the settings UI awaits this promise to show download failures;
+        // cancellation stays quiet, but real failures must reach the caller.
+        throw err
+      }
     } finally {
       this.activeDownloads.delete(modelId)
       try {
@@ -201,6 +234,10 @@ export class ModelManager {
     if (!getCatalogModel(modelId)) {
       throw new Error(`Unknown model: ${modelId}`)
     }
+    const manifest = getCatalogModel(modelId)
+    if (!manifest || !isLocalSpeechModel(manifest)) {
+      throw new Error(`Model does not support deletion: ${modelId}`)
+    }
     this.cancelDownload(modelId)
     const modelDir = this.getModelDir(modelId)
     if (existsSync(modelDir)) {
@@ -219,7 +256,10 @@ export class ModelManager {
     this.modelStates.set(modelId, state)
     // Why: notify the renderer on every state change (not just download
     // progress) so the UI updates for extracting/ready/error transitions.
-    this.progressCallback?.(modelId, progress ?? (status === 'extracting' ? 0.95 : -1))
+    const progressValue = progress ?? (status === 'extracting' ? 0.95 : -1)
+    for (const callback of this.progressCallbacks) {
+      callback(modelId, progressValue)
+    }
   }
 
   private downloadFile(
@@ -250,93 +290,159 @@ export class ModelManager {
         return
       }
 
-      let request: ReturnType<typeof httpsGet>
-      const onResponse = (response: IncomingMessage): void => {
-        if (
-          response.statusCode === 301 ||
-          response.statusCode === 302 ||
-          response.statusCode === 303 ||
-          response.statusCode === 307 ||
-          response.statusCode === 308
-        ) {
-          const redirectUrl = response.headers.location
-          if (!redirectUrl) {
-            response.resume()
-            reject(new Error('Redirect without location'))
-            return
-          }
-          if (redirectCount >= 5) {
-            response.resume()
-            reject(new Error('Too many redirects'))
-            return
-          }
-          let resolvedRedirect: URL
-          try {
-            resolvedRedirect = new URL(redirectUrl, parsedUrl)
-          } catch {
-            response.resume()
-            reject(new Error('Invalid redirect URL'))
-            return
-          }
-          if (resolvedRedirect.protocol !== 'https:') {
-            response.resume()
-            reject(new Error('Model download redirect must use HTTPS'))
-            return
-          }
-          response.resume()
-          this.downloadFile(
-            resolvedRedirect.toString(),
-            dest,
-            expectedSize,
-            modelId,
-            isAborted,
-            signal,
-            redirectCount + 1
-          )
-            .then(resolve)
-            .catch(reject)
+      let settled = false
+      let request: Electron.ClientRequest | null = null
+      let idleTimeout: ReturnType<typeof setTimeout> | null = null
+      const onSignalAbort = (): void => {
+        const activeRequest = request
+        rejectOnce(new Error('Aborted'))
+        activeRequest?.abort()
+      }
+      const clearIdleTimeout = (): void => {
+        if (idleTimeout) {
+          clearTimeout(idleTimeout)
+          idleTimeout = null
+        }
+      }
+      const cleanupRequestListeners = (): void => {
+        const activeRequest = request
+        clearIdleTimeout()
+        if (!activeRequest) {
           return
         }
-
+        activeRequest.off('error', onRequestError)
+        activeRequest.off('response', onResponse)
+        activeRequest.off('redirect', onRedirect)
+        signal?.removeEventListener('abort', onSignalAbort)
+        request = null
+      }
+      const resetIdleTimeout = (): void => {
+        clearIdleTimeout()
+        idleTimeout = setTimeout(onRequestTimeout, DOWNLOAD_IDLE_TIMEOUT_MS)
+      }
+      const resolveOnce = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupRequestListeners()
+        resolve()
+      }
+      const rejectOnce = (error: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanupRequestListeners()
+        reject(error)
+      }
+      const onRequestError = (error: Error): void => rejectOnce(error)
+      const onRequestTimeout = (): void => {
+        const activeRequest = request
+        rejectOnce(
+          new Error(
+            `Model download timed out after ${DOWNLOAD_IDLE_TIMEOUT_MS / 1000} seconds without network activity`
+          )
+        )
+        activeRequest?.abort()
+      }
+      const onRedirect = (_statusCode: number, _method: string, redirectUrl: string): void => {
+        if (redirectCount >= 5) {
+          const activeRequest = request
+          rejectOnce(new Error('Too many redirects'))
+          activeRequest?.abort()
+          return
+        }
+        let resolvedRedirect: URL
+        try {
+          resolvedRedirect = new URL(redirectUrl, parsedUrl)
+        } catch {
+          const activeRequest = request
+          rejectOnce(new Error('Invalid redirect URL'))
+          activeRequest?.abort()
+          return
+        }
+        if (resolvedRedirect.protocol !== 'https:') {
+          const activeRequest = request
+          rejectOnce(new Error('Model download redirect must use HTTPS'))
+          activeRequest?.abort()
+          return
+        }
+        const activeRequest = request
+        cleanupRequestListeners()
+        activeRequest?.abort()
+        this.downloadFile(
+          resolvedRedirect.toString(),
+          dest,
+          expectedSize,
+          modelId,
+          isAborted,
+          signal,
+          redirectCount + 1
+        )
+          .then(resolveOnce)
+          .catch(rejectOnce)
+      }
+      const onResponse = (incoming: Electron.IncomingMessage): void => {
+        const response = incoming as DownloadIncomingMessage
         if (response.statusCode !== 200) {
           response.resume()
-          reject(new Error(`HTTP ${response.statusCode}`))
+          rejectOnce(new Error(`HTTP ${response.statusCode}`))
           return
         }
 
-        const totalSize = parseInt(response.headers['content-length'] || '0', 10) || expectedSize
+        const contentLength = response.headers['content-length']
+        const totalSize =
+          parseInt(Array.isArray(contentLength) ? contentLength[0] : contentLength || '0', 10) ||
+          expectedSize
         let downloaded = 0
 
         const fileStream = createWriteStream(dest)
 
-        response.on('data', (chunk: Buffer) => {
+        const cleanupResponseProgressListener = (): void => {
+          response.off('data', onResponseData)
+        }
+        const onResponseData = (chunk: Buffer): void => {
+          resetIdleTimeout()
           if (isAborted()) {
-            request.destroy(new Error('Aborted'))
-            response.destroy()
+            request?.abort()
+            response.destroy?.()
             fileStream.destroy()
             return
           }
           downloaded += chunk.length
           const progress = Math.min(0.9, downloaded / totalSize)
           this.updateState(modelId, 'downloading', progress)
-        })
+        }
 
+        response.on('data', onResponseData)
         pipeline(response, fileStream)
           .then(() => {
+            cleanupResponseProgressListener()
             if (isAborted()) {
-              reject(new Error('Aborted'))
+              rejectOnce(new Error('Aborted'))
             } else {
-              resolve()
+              resolveOnce()
             }
           })
-          .catch(reject)
+          .catch((error: Error) => {
+            cleanupResponseProgressListener()
+            rejectOnce(error)
+          })
       }
 
-      request = signal
-        ? httpsGet(parsedUrl, { signal }, onResponse)
-        : httpsGet(parsedUrl, onResponse)
+      request = net.request({ method: 'GET', url: parsedUrl.toString() })
 
-      request.on('error', reject)
+      // Why: Electron's net stack honors app proxy settings, unlike Node's
+      // https client, but it does not expose request.setTimeout().
+      resetIdleTimeout()
+      request.on('error', onRequestError)
+      request.on('response', onResponse)
+      request.on('redirect', onRedirect)
+      if (signal) {
+        signal.addEventListener('abort', onSignalAbort, { once: true })
+      }
+      request.end()
     })
   }
 
@@ -344,19 +450,49 @@ export class ModelManager {
     return new Promise((resolve, reject) => {
       const hash = createHash('sha256')
       const stream = createReadStream(archivePath)
+      let settled = false
 
-      stream.on('data', (chunk) => hash.update(chunk))
-      stream.on('error', reject)
-      stream.on('end', () => {
+      const cleanup = (): void => {
+        stream.off('data', onData)
+        stream.off('error', onError)
+        stream.off('end', onEnd)
+      }
+      const settleResolve = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        resolve()
+      }
+      const settleReject = (error: Error): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        reject(error)
+      }
+      const onData = (chunk: Buffer): void => {
+        hash.update(chunk)
+      }
+      const onError = (error: Error): void => {
+        settleReject(error)
+      }
+      const onEnd = (): void => {
         const actualSha256 = hash.digest('hex')
         if (actualSha256 !== expectedSha256.toLowerCase()) {
           // Why: these archives feed native model parsers; filename checks do
           // not protect against compromised or redirected release assets.
-          reject(new Error('Downloaded model archive failed integrity verification'))
+          settleReject(new Error('Downloaded model archive failed integrity verification'))
           return
         }
-        resolve()
-      })
+        settleResolve()
+      }
+
+      stream.on('data', onData)
+      stream.on('error', onError)
+      stream.on('end', onEnd)
     })
   }
 
@@ -449,6 +585,9 @@ export class ModelManager {
   }
 
   private async flattenNestedDir(modelDir: string, manifest: SpeechModelManifest): Promise<void> {
+    if (!manifest.files) {
+      return
+    }
     const entries = await readdir(modelDir, { withFileTypes: true })
     for (const entry of entries) {
       if (entry.isDirectory()) {

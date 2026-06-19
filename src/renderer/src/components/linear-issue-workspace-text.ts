@@ -1,4 +1,4 @@
-import { getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
+import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { LinearIssue } from '../../../shared/types'
 
 const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
@@ -22,9 +22,7 @@ export function formatLinearIssueRelativeTime(input: string): string {
 }
 
 export function buildLinearIssueBranchName(issue: LinearIssue): string {
-  const titleSlug = getLinkedWorkItemSuggestedName(issue)
-  const key = issue.identifier.toLowerCase()
-  return titleSlug ? `${key}-${titleSlug}` : key
+  return getLinearIssueWorkspaceName(issue)
 }
 
 export function buildLinearIssuePrompt(issue: LinearIssue): string {

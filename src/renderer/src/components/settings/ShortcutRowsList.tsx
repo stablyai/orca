@@ -3,6 +3,7 @@ import type { KeybindingActionId, KeybindingInput } from '../../../../shared/key
 import { cn } from '../../lib/utils'
 import { ShortcutBindingRow } from './ShortcutBindingRow'
 import type { ShortcutRowsByGroup } from './ShortcutFilterRail'
+import { translate } from '@/i18n/i18n'
 
 export function ShortcutRowsList({
   className,
@@ -37,13 +38,16 @@ export function ShortcutRowsList({
           className
         )}
       >
-        No shortcuts match those filters.
+        {translate(
+          'auto.components.settings.ShortcutRowsList.4ce3cd24d9',
+          'No shortcuts match those filters.'
+        )}
       </div>
     )
   }
 
   return (
-    <div className={cn('grid gap-8', className)}>
+    <div className={cn('flex flex-col gap-8', className)}>
       {groups.map((group) => (
         <div key={group.title} className="space-y-3">
           <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">

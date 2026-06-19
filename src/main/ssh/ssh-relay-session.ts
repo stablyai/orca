@@ -10,6 +10,7 @@
 
 import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
+import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import type { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
@@ -48,6 +49,8 @@ import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
+import { joinRemotePath, isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
+import { makeRemoteDirectoryCommand, makeRemoteExecutableCommand } from './ssh-remote-commands'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   type DetectedPort,
@@ -57,8 +60,18 @@ import {
 } from '../../shared/ssh-types'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 
 export type RelaySessionState = 'idle' | 'deploying' | 'ready' | 'reconnecting' | 'disposed'
+
+type RemoteCliBridgeEnv = {
+  binDir: string
+  relayDir: string
+  nodePath: string
+  sockPath: string
+  hostPlatform: RemoteHostPlatform
+  pathDelimiter?: ':' | ';'
+}
 
 function normalizeRelayGracePeriodSeconds(graceTimeSeconds: number | undefined): number {
   const raw = graceTimeSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
@@ -96,6 +109,7 @@ export class SshRelaySession {
   private _onReady: ((targetId: string) => void) | null = null
   private portScanner: PortScanner | null = null
   private currentConnection: SshConnection | null = null
+  private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
 
   constructor(
     readonly targetId: string,
@@ -183,12 +197,19 @@ export class SshRelaySession {
     this.currentConnection = conn
 
     try {
-      const { transport } = await deployAndLaunchRelay(
-        conn,
-        undefined,
-        graceTimeSeconds,
-        this.targetId
-      )
+      const { transport, remoteHome, remoteRelayDir, nodePath, sockPath, hostPlatform } =
+        await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      this.remoteCliBridgeEnv =
+        remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
+          ? {
+              binDir: joinRemotePath(hostPlatform, remoteHome, '.orca-relay', 'bin'),
+              relayDir: remoteRelayDir,
+              nodePath,
+              sockPath,
+              hostPlatform,
+              pathDelimiter: hostPlatform.pathDelimiter
+            }
+          : null
 
       // Why: dispose() can fire during the await above (e.g. user clicks
       // disconnect while relay is deploying). If so, the session is already
@@ -302,12 +323,19 @@ export class SshRelaySession {
     this.teardownProviders('connection_lost')
 
     try {
-      const { transport } = await deployAndLaunchRelay(
-        conn,
-        undefined,
-        graceTimeSeconds,
-        this.targetId
-      )
+      const { transport, remoteHome, remoteRelayDir, nodePath, sockPath, hostPlatform } =
+        await deployAndLaunchRelay(conn, undefined, graceTimeSeconds, this.targetId)
+      this.remoteCliBridgeEnv =
+        remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
+          ? {
+              binDir: joinRemotePath(hostPlatform, remoteHome, '.orca-relay', 'bin'),
+              relayDir: remoteRelayDir,
+              nodePath,
+              sockPath,
+              hostPlatform,
+              pathDelimiter: hostPlatform.pathDelimiter
+            }
+          : null
 
       if (abortController.signal.aborted || this.isDisposed()) {
         // Why: the relay is already running on the remote. Creating a temporary
@@ -486,7 +514,14 @@ export class SshRelaySession {
       return false
     }
 
-    const ptyProvider = new SshPtyProvider(this.targetId, mux)
+    await this.installRemoteOrcaCliShim()
+    if (shouldContinue && !shouldContinue()) {
+      return false
+    }
+
+    this.wireUpRemoteOrcaCli(mux)
+
+    const ptyProvider = new SshPtyProvider(this.targetId, mux, this.remoteCliBridgeEnv ?? undefined)
     registerSshPtyProvider(this.targetId, ptyProvider)
 
     const fsProvider = new SshFilesystemProvider(this.targetId, mux, () =>
@@ -494,7 +529,11 @@ export class SshRelaySession {
     )
     registerSshFilesystemProvider(this.targetId, fsProvider)
 
-    const gitProvider = new SshGitProvider(this.targetId, mux)
+    const gitProvider = new SshGitProvider(
+      this.targetId,
+      mux,
+      this.remoteCliBridgeEnv?.hostPlatform ?? null
+    )
     registerSshGitProvider(this.targetId, gitProvider)
 
     this.wireUpPtyEvents(ptyProvider)
@@ -519,6 +558,14 @@ export class SshRelaySession {
   // report status from their first prompt.
   private async installManagedHooksOnRemote(mux: SshChannelMultiplexer): Promise<void> {
     if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
+      return
+    }
+    if (
+      this.remoteCliBridgeEnv?.hostPlatform &&
+      isWindowsRemoteHost(this.remoteCliBridgeEnv.hostPlatform)
+    ) {
+      // Why: managed hook installers currently emit POSIX hook scripts and paths.
+      // Windows remotes still get relay-injected env plus plugin overlays.
       return
     }
 
@@ -558,8 +605,68 @@ export class SshRelaySession {
     }
   }
 
+  private async installRemoteOrcaCliShim(): Promise<void> {
+    if (!this.remoteCliBridgeEnv) {
+      return
+    }
+    const { binDir, hostPlatform } = this.remoteCliBridgeEnv
+    const shim = buildRemoteCliShim(this.remoteCliBridgeEnv)
+    const conn = this.requireReadyConnection()
+    await execCommand(conn, makeRemoteDirectoryCommand(hostPlatform, binDir), {
+      wrapCommand: !isWindowsRemoteHost(hostPlatform)
+    })
+    if (typeof conn.writeFile === 'function') {
+      await conn.writeFile(shim.path, shim.contents, { hostPlatform })
+    } else {
+      const sftp = await conn.sftp()
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const ws = sftp.createWriteStream(shim.path)
+          sftp.once('error', reject)
+          ws.once('close', resolve)
+          ws.once('error', reject)
+          ws.end(shim.contents)
+        })
+      } finally {
+        sftp.end()
+      }
+    }
+    if (!isWindowsRemoteHost(hostPlatform)) {
+      await execCommand(conn, makeRemoteExecutableCommand(hostPlatform, shim.path))
+    }
+  }
+
+  private wireUpRemoteOrcaCli(mux: SshChannelMultiplexer): void {
+    mux.onRequest('orca.cli', async (params) => {
+      if (!this.runtime) {
+        throw new Error('Orca runtime is unavailable')
+      }
+      const argv = Array.isArray(params.argv)
+        ? params.argv.filter((item): item is string => typeof item === 'string')
+        : []
+      const cwd = typeof params.cwd === 'string' && params.cwd.length > 0 ? params.cwd : '/'
+      const rawEnv = params.env
+      const env =
+        rawEnv && typeof rawEnv === 'object' && !Array.isArray(rawEnv)
+          ? Object.fromEntries(
+              Object.entries(rawEnv).filter(
+                (entry): entry is [string, string] =>
+                  typeof entry[0] === 'string' && typeof entry[1] === 'string'
+              )
+            )
+          : {}
+      const stdin = typeof params.stdin === 'string' ? params.stdin : undefined
+      return await runRemoteOrcaCli(this.runtime, {
+        argv,
+        cwd,
+        env,
+        ...(stdin !== undefined ? { stdin } : {})
+      })
+    })
+  }
+
   // Why: ship the OpenCode plugin / Pi extension source bodies to the relay
-  // so it can materialize per-PTY overlay dirs and inject OPENCODE_CONFIG_DIR
+  // so it can materialize overlay dirs and inject OPENCODE_CONFIG_DIR
   // / PI_CODING_AGENT_DIR into spawn env. The strings change as we add agent
   // events (recent additions: cursor, pi); pinning them to the relay binary
   // would force a relay redeploy on every Orca update. See
@@ -642,7 +749,13 @@ export class SshRelaySession {
         env?: unknown
         version?: unknown
         hasExplicitPrompt?: unknown
+        promptInteractionKey?: unknown
+        hookEventName?: unknown
+        toolUseId?: unknown
+        toolAgentId?: unknown
+        toolAgentType?: unknown
         isReplay?: unknown
+        providerSession?: unknown
         payload?: unknown
       }
       if (typeof envelope.paneKey !== 'string') {
@@ -661,7 +774,18 @@ export class SshRelaySession {
           env: typeof envelope.env === 'string' ? envelope.env : undefined,
           version: typeof envelope.version === 'string' ? envelope.version : undefined,
           hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
+          promptInteractionKey:
+            typeof envelope.promptInteractionKey === 'string'
+              ? envelope.promptInteractionKey
+              : undefined,
+          hookEventName:
+            typeof envelope.hookEventName === 'string' ? envelope.hookEventName : undefined,
+          toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
+          toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
+          toolAgentType:
+            typeof envelope.toolAgentType === 'string' ? envelope.toolAgentType : undefined,
           isReplay: envelope.isReplay === true ? true : undefined,
+          providerSession: envelope.providerSession,
           payload: envelope.payload
         },
         this.targetId
@@ -879,5 +1003,49 @@ export class SshRelaySession {
         }
       }
     }
+  }
+}
+
+function quoteSh(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`
+}
+
+function buildRemoteCliShim(env: RemoteCliBridgeEnv): {
+  path: string
+  contents: string
+} {
+  if (isWindowsRemoteHost(env.hostPlatform)) {
+    const shimPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca.cmd')
+    return {
+      path: shimPath,
+      contents: [
+        '@echo off',
+        'setlocal',
+        `if not defined ORCA_RELAY_NODE_PATH set "ORCA_RELAY_NODE_PATH=${env.nodePath}"`,
+        `if not defined ORCA_RELAY_DIR set "ORCA_RELAY_DIR=${env.relayDir}"`,
+        `if not defined ORCA_RELAY_SOCKET_PATH set "ORCA_RELAY_SOCKET_PATH=${env.sockPath}"`,
+        '"%ORCA_RELAY_NODE_PATH%" "%ORCA_RELAY_DIR%/relay.js" --sock-path "%ORCA_RELAY_SOCKET_PATH%" --orca-cli %*',
+        'exit /b %ERRORLEVEL%',
+        ''
+      ].join('\r\n')
+    }
+  }
+
+  const shimPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca')
+  return {
+    path: shimPath,
+    contents: [
+      '#!/usr/bin/env sh',
+      'set -eu',
+      `ORCA_RELAY_NODE_PATH=\${ORCA_RELAY_NODE_PATH:-${quoteSh(env.nodePath)}}`,
+      `ORCA_RELAY_DIR=\${ORCA_RELAY_DIR:-${quoteSh(env.relayDir)}}`,
+      `ORCA_RELAY_SOCKET_PATH=\${ORCA_RELAY_SOCKET_PATH:-${quoteSh(env.sockPath)}}`,
+      'if [ ! -S "$ORCA_RELAY_SOCKET_PATH" ]; then',
+      '  echo "Orca SSH CLI bridge cannot find the relay socket: $ORCA_RELAY_SOCKET_PATH" >&2',
+      '  exit 1',
+      'fi',
+      'exec "$ORCA_RELAY_NODE_PATH" "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --orca-cli "$@"',
+      ''
+    ].join('\n')
   }
 }

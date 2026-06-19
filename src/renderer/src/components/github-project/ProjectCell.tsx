@@ -1,9 +1,11 @@
 /* eslint-disable max-lines -- Why: ProjectCell dispatches on field.dataType for every supported ProjectV2 field type; keeping the dispatch table and renderers colocated keeps the type-to-renderer mapping easy to audit. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Project field details are fetched from provider metadata IPC after the concrete field/value identity is known. */
 // Why: one cell per visible column. Dispatch on `field.dataType` first (so
 // built-in ASSIGNEES/LABELS cells render their dedicated content) and fall
 // through to `fieldValuesByFieldId[field.id].kind` as a safety net so a
 // fetched value is never silently dropped.
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { CircleDot, FileText, GitPullRequest, Lock, Plus } from 'lucide-react'
 import { TYPE_FIELD_DATA_TYPE } from './columns'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -12,6 +14,8 @@ import { cn } from '@/lib/utils'
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { useRepoSlugIndex } from '@/lib/repo-slug-index'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import type {
   GitHubIssueType,
   GitHubProjectField,
@@ -21,6 +25,8 @@ import type {
   GitHubProjectUser,
   ListIssueTypesBySlugResult
 } from '../../../../shared/github-project-types'
+import type { GlobalSettings } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type Props = {
   row: GitHubProjectRow
@@ -37,6 +43,7 @@ type Props = {
   onEditLabels?: (add: string[], remove: string[]) => void
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
   onOpenDialog?: () => void
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 }
 
 export default function ProjectCell({
@@ -47,7 +54,8 @@ export default function ProjectCell({
   onEditAssignees,
   onEditLabels,
   onEditIssueType,
-  onOpenDialog
+  onOpenDialog,
+  sourceSettings
 }: Props): React.JSX.Element {
   const value = row.fieldValuesByFieldId[field.id]
   const isRedacted = row.itemType === 'REDACTED'
@@ -58,15 +66,36 @@ export default function ProjectCell({
   }
   if (field.dataType === TYPE_FIELD_DATA_TYPE) {
     const editableHere = editable && !isRedacted && row.itemType === 'ISSUE'
-    return <TypeCell row={row} editable={editableHere} onEditIssueType={onEditIssueType} />
+    return (
+      <TypeCell
+        row={row}
+        editable={editableHere}
+        sourceSettings={sourceSettings}
+        onEditIssueType={onEditIssueType}
+      />
+    )
   }
   if (field.dataType === 'ASSIGNEES') {
     const editableHere = editable && !isRedacted && row.itemType !== 'DRAFT_ISSUE'
-    return <AssigneesCell row={row} editable={editableHere} onEditAssignees={onEditAssignees} />
+    return (
+      <AssigneesCell
+        row={row}
+        editable={editableHere}
+        sourceSettings={sourceSettings}
+        onEditAssignees={onEditAssignees}
+      />
+    )
   }
   if (field.dataType === 'LABELS') {
     const editableHere = editable && !isRedacted && row.itemType !== 'DRAFT_ISSUE'
-    return <LabelsCell row={row} editable={editableHere} onEditLabels={onEditLabels} />
+    return (
+      <LabelsCell
+        row={row}
+        editable={editableHere}
+        sourceSettings={sourceSettings}
+        onEditLabels={onEditLabels}
+      />
+    )
   }
   if (field.dataType === 'REPOSITORY') {
     return (
@@ -110,7 +139,7 @@ export default function ProjectCell({
       <TextCell
         value={text}
         editable={editable && !isRedacted}
-        placeholder="Add text"
+        placeholder={translate('auto.components.github.project.ProjectCell.9cb1a0c984', 'Add text')}
         onCommit={(next) => {
           if (next === '') {
             onEditField?.(field.id, null)
@@ -128,7 +157,10 @@ export default function ProjectCell({
         value={num}
         editable={editable && !isRedacted}
         numeric
-        placeholder="Add number"
+        placeholder={translate(
+          'auto.components.github.project.ProjectCell.bb7ebc11e3',
+          'Add number'
+        )}
         onCommit={(next) => {
           if (next === '') {
             onEditField?.(field.id, null)
@@ -192,7 +224,9 @@ function TitleCell({
     return (
       <div className="flex items-center gap-2 text-muted-foreground">
         <Lock className="size-3.5" />
-        <span className="italic">Restricted item</span>
+        <span className="italic">
+          {translate('auto.components.github.project.ProjectCell.af5d8c912a', 'Restricted item')}
+        </span>
       </div>
     )
   }
@@ -229,24 +263,42 @@ function TitleCell({
 function TypeCell({
   row,
   editable,
+  sourceSettings,
   onEditIssueType
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
 }): React.JSX.Element {
   // Why: for issues we surface the repo's `issueType` (Bug/Feature/Task etc)
   // when set — that's the editable taxonomy. PR/Draft/Restricted rows render
   // the static itemType glyph because there's no equivalent editable type.
   if (row.itemType === 'ISSUE') {
-    return <IssueTypeCell row={row} editable={editable} onEditIssueType={onEditIssueType} />
+    return (
+      <IssueTypeCell
+        row={row}
+        editable={editable}
+        sourceSettings={sourceSettings}
+        onEditIssueType={onEditIssueType}
+      />
+    )
   }
   const meta =
     row.itemType === 'PULL_REQUEST'
-      ? { Icon: GitPullRequest, label: 'PR' }
+      ? {
+          Icon: GitPullRequest,
+          label: translate('auto.components.github.project.ProjectCell.d0d0e13a5a', 'PR')
+        }
       : row.itemType === 'DRAFT_ISSUE'
-        ? { Icon: FileText, label: 'Draft' }
-        : { Icon: Lock, label: 'Restricted' }
+        ? {
+            Icon: FileText,
+            label: translate('auto.components.github.project.ProjectCell.6efdc0d920', 'Draft')
+          }
+        : {
+            Icon: Lock,
+            label: translate('auto.components.github.project.ProjectCell.8d669084f6', 'Restricted')
+          }
   const { Icon, label } = meta
   return (
     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -259,18 +311,27 @@ function TypeCell({
 function IssueTypeCell({
   row,
   editable,
+  sourceSettings,
   onEditIssueType
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
 }): React.JSX.Element {
   const issueType = row.content.issueType
   const [open, setOpen] = useState(false)
   const [options, setOptions] = useState<GitHubIssueType[]>([])
   const [loading, setLoading] = useState(false)
-  const settings = useAppStore((s) => s.settings)
   const [owner, repo] = (row.content.repository ?? '').split('/')
+  const { lookupSlug } = useRepoSlugIndex()
+  const matchedRepo = useMemo(
+    () => lookupSlug(row.content.repository)[0] ?? null,
+    [lookupSlug, row.content.repository]
+  )
+  const ownerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, matchedRepo?.id ?? null))
+  )
 
   React.useEffect(() => {
     if (!open || !owner || !repo) {
@@ -278,7 +339,7 @@ function IssueTypeCell({
     }
     let cancelled = false
     setLoading(true)
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(matchedRepo ? ownerSettings : sourceSettings)
     const request =
       target.kind === 'environment'
         ? callRuntimeRpc<ListIssueTypesBySlugResult>(
@@ -305,7 +366,7 @@ function IssueTypeCell({
     return () => {
       cancelled = true
     }
-  }, [open, owner, repo, settings])
+  }, [matchedRepo, open, owner, ownerSettings, repo, sourceSettings])
 
   const trigger = (
     <span className="inline-flex items-center gap-1 text-xs">
@@ -323,7 +384,9 @@ function IssueTypeCell({
           )
         })()
       ) : (
-        <span className="text-muted-foreground">Issue</span>
+        <span className="text-muted-foreground">
+          {translate('auto.components.github.project.ProjectCell.c5f949e489', 'Issue')}
+        </span>
       )}
     </span>
   )
@@ -337,7 +400,10 @@ function IssueTypeCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Issue type"
+          aria-label={translate(
+            'auto.components.github.project.ProjectCell.c7b059cf07',
+            'Issue type'
+          )}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
           {trigger}
@@ -345,12 +411,22 @@ function IssueTypeCell({
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1" align="start">
         {!owner || !repo ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">Row has no repo slug.</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.ProjectCell.54cac64427',
+              'Row has no repo slug.'
+            )}
+          </div>
         ) : loading ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">Loading…</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}
+          </div>
         ) : options.length === 0 ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">
-            This repo has no Issue Types.
+            {translate(
+              'auto.components.github.project.ProjectCell.943b3dadc9',
+              'This repo has no Issue Types.'
+            )}
           </div>
         ) : (
           options.map((t) => (
@@ -387,7 +463,7 @@ function IssueTypeCell({
               setOpen(false)
             }}
           >
-            Clear
+            {translate('auto.components.github.project.ProjectCell.ebde486e3c', 'Clear')}
           </button>
         ) : null}
       </PopoverContent>
@@ -441,7 +517,11 @@ function SingleSelectCell({
           aria-label={field.name}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
-          {label ?? <EmptyCellPrompt label="Select" />}
+          {label ?? (
+            <EmptyCellPrompt
+              label={translate('auto.components.github.project.ProjectCell.e369bf4fec', 'Select')}
+            />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-56 p-1">
@@ -470,7 +550,7 @@ function SingleSelectCell({
             setOpen(false)
           }}
         >
-          Clear
+          {translate('auto.components.github.project.ProjectCell.ebde486e3c', 'Clear')}
         </button>
       </PopoverContent>
     </Popover>
@@ -510,13 +590,17 @@ function IterationCell({
           aria-label={field.name}
           className="flex h-full w-full cursor-pointer items-center px-1 text-left"
         >
-          {label ?? <EmptyCellPrompt label="Select" />}
+          {label ?? (
+            <EmptyCellPrompt
+              label={translate('auto.components.github.project.ProjectCell.e369bf4fec', 'Select')}
+            />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {completed.length > 0 ? (
           <div className="px-2 pt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Completed
+            {translate('auto.components.github.project.ProjectCell.e17bb96881', 'Completed')}
           </div>
         ) : null}
         {completed.map((it) => (
@@ -531,7 +615,10 @@ function IterationCell({
         ))}
         {active.length > 0 ? (
           <div className="px-2 pt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-            Current & upcoming
+            {translate(
+              'auto.components.github.project.ProjectCell.191905e20e',
+              'Current & upcoming'
+            )}
           </div>
         ) : null}
         {active.map((it) => (
@@ -552,7 +639,7 @@ function IterationCell({
             setOpen(false)
           }}
         >
-          Clear
+          {translate('auto.components.github.project.ProjectCell.ebde486e3c', 'Clear')}
         </button>
       </PopoverContent>
     </Popover>
@@ -654,10 +741,16 @@ function DateCell({
   // Why: a date <input> fires onChange on every digit/spinner adjustment.
   // Committing on each fires a GraphQL mutation per keystroke. Buffer the
   // edit locally and commit on blur or Enter — same UX as TextCell.
-  const [draft, setDraft] = React.useState(value ?? '')
-  React.useEffect(() => {
-    setDraft(value ?? '')
-  }, [value])
+  const sourceValue = value ?? ''
+  const [draftState, setDraftState] = React.useState(() => ({
+    sourceValue,
+    draft: sourceValue
+  }))
+  if (draftState.sourceValue !== sourceValue) {
+    setDraftState({ sourceValue, draft: sourceValue })
+  }
+  const draft = draftState.sourceValue === sourceValue ? draftState.draft : sourceValue
+  const setDraft = (nextDraft: string): void => setDraftState({ sourceValue, draft: nextDraft })
   if (!editable) {
     return <span className="text-xs">{value}</span>
   }
@@ -667,7 +760,7 @@ function DateCell({
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
-        if (draft !== (value ?? '')) {
+        if (draft !== sourceValue) {
           onCommit(draft)
         }
       }}
@@ -677,7 +770,7 @@ function DateCell({
           ;(e.target as HTMLInputElement).blur()
         } else if (e.key === 'Escape') {
           e.preventDefault()
-          setDraft(value ?? '')
+          setDraft(sourceValue)
           ;(e.target as HTMLInputElement).blur()
         }
       }}
@@ -725,15 +818,16 @@ function UserChip({ user }: { user: GitHubProjectUser }): React.JSX.Element {
 function AssigneesCell({
   row,
   editable,
+  sourceSettings,
   onEditAssignees
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditAssignees?: (add: string[], remove: string[]) => void
 }): React.JSX.Element {
   const assignees = row.content.assignees
   const [open, setOpen] = useState(false)
-  const settings = useAppStore((s) => s.settings)
 
   const [owner, repo] = (row.content.repository ?? '').split('/')
 
@@ -755,7 +849,7 @@ function AssigneesCell({
     open ? owner : null,
     open ? repo : null,
     seedKey ? seedKey.split(',') : [],
-    settings
+    sourceSettings
   )
 
   const labelContent =
@@ -774,19 +868,33 @@ function AssigneesCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Assignees"
+          aria-label={translate(
+            'auto.components.github.project.ProjectCell.f7cdb78efb',
+            'Assignees'
+          )}
           className={cn(
             'flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1 text-xs text-muted-foreground hover:text-foreground'
           )}
         >
-          {labelContent ?? <EmptyCellPrompt label="Assign" />}
+          {labelContent ?? (
+            <EmptyCellPrompt
+              label={translate('auto.components.github.project.ProjectCell.36341ffc66', 'Assign')}
+            />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {!owner || !repo ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">Row has no repo slug.</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.ProjectCell.54cac64427',
+              'Row has no repo slug.'
+            )}
+          </div>
         ) : metadata.loading ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">Loading…</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}
+          </div>
         ) : (
           metadata.data.map((u) => {
             const isOn = assignees.some((a) => a.login === u.login)
@@ -825,18 +933,19 @@ function AssigneesCell({
 function LabelsCell({
   row,
   editable,
+  sourceSettings,
   onEditLabels
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditLabels?: (add: string[], remove: string[]) => void
 }): React.JSX.Element {
   const labels = row.content.labels
   const [open, setOpen] = useState(false)
-  const settings = useAppStore((s) => s.settings)
 
   const [owner, repo] = (row.content.repository ?? '').split('/')
-  const metadata = useRepoLabelsBySlug(open ? owner : null, open ? repo : null, settings)
+  const metadata = useRepoLabelsBySlug(open ? owner : null, open ? repo : null, sourceSettings)
 
   const labelContent =
     labels.length === 0 ? null : labels.map((l) => <LabelChip key={l.name} label={l} />)
@@ -850,19 +959,38 @@ function LabelsCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Labels"
+          aria-label={translate('auto.components.github.project.ProjectCell.8ae56a88a6', 'Labels')}
           className={cn('flex h-full w-full flex-wrap items-center gap-1 cursor-pointer px-1')}
         >
-          {labelContent ?? <EmptyCellPrompt label="Add label" />}
+          {labelContent ?? (
+            <EmptyCellPrompt
+              label={translate(
+                'auto.components.github.project.ProjectCell.2e26a06c70',
+                'Add label'
+              )}
+            />
+          )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {!owner || !repo ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">Row has no repo slug.</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.ProjectCell.54cac64427',
+              'Row has no repo slug.'
+            )}
+          </div>
         ) : metadata.loading ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">Loading…</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}
+          </div>
         ) : metadata.data.length === 0 ? (
-          <div className="px-2 py-1 text-xs text-muted-foreground">No labels in this repo.</div>
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.ProjectCell.4b5b871da8',
+              'No labels in this repo.'
+            )}
+          </div>
         ) : (
           metadata.data.map((name) => {
             const isOn = labels.some((l) => l.name === name)

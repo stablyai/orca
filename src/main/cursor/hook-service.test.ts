@@ -28,6 +28,8 @@ const CURSOR_EVENTS = [
   'afterAgentResponse'
 ]
 
+const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
+
 describe('CursorHookService', () => {
   let homeDir: string
 
@@ -61,13 +63,20 @@ describe('CursorHookService', () => {
       expect(definition?.hooks).toBeUndefined()
     }
 
-    const script = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'cursor-hook.sh'), 'utf8')
+    const script = readFileSync(
+      join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME),
+      'utf8'
+    )
     expect(script).toContain('/hook/cursor')
-    // Why: payload is streamed to a temp file and posted via name@file so it
-    // never lands on the curl command line (MDE oversized-command-line FP).
-    expect(script).toContain('cat > "$payload_file"')
-    expect(script).toContain('--data-urlencode "payload@${payload_file}"')
-    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+    if (process.platform === 'win32') {
+      expect(script).toContain('powershell -NoProfile')
+    } else {
+      // Why: payload is streamed to a temp file and posted via name@file so it
+      // never lands on the curl command line (MDE oversized-command-line FP).
+      expect(script).toContain('cat > "$payload_file"')
+      expect(script).toContain('--data-urlencode "payload@${payload_file}"')
+      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+    }
   })
 
   it('preserves user-authored Cursor hook entries and removes stale managed entries', () => {
@@ -101,7 +110,9 @@ describe('CursorHookService', () => {
     }
     const promptCommands = config.hooks.beforeSubmitPrompt.map((definition) => definition.command)
     expect(promptCommands).toContain('/usr/local/bin/user-hook')
-    expect(promptCommands.filter((command) => command?.includes('cursor-hook.sh'))).toHaveLength(1)
+    expect(
+      promptCommands.filter((command) => command?.includes(CURSOR_SCRIPT_FILE_NAME))
+    ).toHaveLength(1)
     expect(config.hooks.retiredEvent.map((definition) => definition.command)).toEqual([
       '/usr/local/bin/retired-user-hook'
     ])

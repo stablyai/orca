@@ -1,8 +1,15 @@
-import { basename, join, resolve, relative, isAbsolute, posix, win32 } from 'path'
-import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
+import { resolve, relative, isAbsolute, posix, sep, win32 } from 'path'
+import type { GlobalSettings, OrcaWorkspaceLayout, Repo } from '../../shared/types'
+import { resolveRuntimePath } from '../../shared/cross-platform-path'
+import { isWslUncPath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree-id'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getWslHome, parseWslPath } from '../wsl'
+
+type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
+type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
+
+export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
+export { mergeWorktree } from './worktree-metadata-merge'
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
@@ -57,29 +64,11 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
   const resolvedTargetPath = resolve(targetPath)
   const rel = relative(resolvedWorkspaceDir, resolvedTargetPath)
 
-  if (isAbsolute(rel) || rel.startsWith('..')) {
+  if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
     throw new Error('Invalid worktree path')
   }
 
   return resolvedTargetPath
-}
-
-/**
- * Compute the full branch name by applying the configured prefix strategy.
- */
-export function computeBranchName(
-  sanitizedName: string,
-  settings: { branchPrefix: string; branchPrefixCustom?: string },
-  gitUsername: string | null
-): string {
-  if (settings.branchPrefix === 'git-username') {
-    if (gitUsername) {
-      return `${gitUsername}/${sanitizedName}`
-    }
-  } else if (settings.branchPrefix === 'custom' && settings.branchPrefixCustom) {
-    return `${settings.branchPrefixCustom}/${sanitizedName}`
-  }
-  return sanitizedName
 }
 
 /**
@@ -95,37 +84,73 @@ export function computeBranchName(
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
-  settings: { nestWorkspaces: boolean; workspaceDir: string }
+  settings: WorktreePathSettings
 ): string {
-  const pathOps =
-    looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(settings.workspaceDir)
-      ? win32
-      : { basename, join }
-
-  const wsl = parseWslPath(repoPath)
-  if (wsl) {
-    const wslHome = getWslHome(wsl.distro)
-    if (wslHome) {
-      // Why: WSL UNC paths are still Windows paths from Node's perspective.
-      // On Linux CI, the default path helpers use POSIX semantics and would
-      // treat `\\wsl.localhost\...` as a plain string, producing mixed-separator
-      // paths like `\\wsl.localhost\Ubuntu\home\jin/orca/...`. Use win32 path
-      // operations whenever a Windows/UNC path is involved so behavior matches
-      // the Windows production runtime.
-      const wslWorkspaceDir = win32.join(wslHome, 'orca', 'workspaces')
-      if (settings.nestWorkspaces) {
-        const repoName = win32.basename(repoPath).replace(/\.git$/, '')
-        return win32.join(wslWorkspaceDir, repoName, sanitizedName)
-      }
-      return win32.join(wslWorkspaceDir, sanitizedName)
-    }
-  }
+  const workspaceRoot = computeWorkspaceRoot(repoPath, settings)
+  const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
 
   if (settings.nestWorkspaces) {
     const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
-    return pathOps.join(settings.workspaceDir, repoName, sanitizedName)
+    return pathOps.join(workspaceRoot, repoName, sanitizedName)
   }
-  return pathOps.join(settings.workspaceDir, sanitizedName)
+  return pathOps.join(workspaceRoot, sanitizedName)
+}
+
+export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir: string }): string {
+  const wsl = parseWslPath(repoPath)
+  if (wsl && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
+    const wslHome = getWslHome(wsl.distro)
+    if (wslHome) {
+      // Why: WSL UNC paths are still Windows paths from Node's perspective.
+      // Mirror absolute local desktop workspace roots inside the distro so
+      // terminals stay on the WSL filesystem; repo-relative roots can resolve
+      // directly against the WSL repo path.
+      return win32.join(wslHome, 'orca', 'workspaces')
+    }
+  }
+  return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
+}
+
+export function computeRemoteWorktreePath(
+  sanitizedName: string,
+  repoPath: string,
+  settings: WorktreePathSettings,
+  options: { useConfiguredAbsolutePath?: boolean } = {}
+): string {
+  if (
+    options.useConfiguredAbsolutePath ||
+    isWorkspaceDirRelativeToRepo(repoPath, settings.workspaceDir)
+  ) {
+    return computeWorktreePath(sanitizedName, repoPath, settings)
+  }
+  // Why: absolute global workspaceDir values belong to the desktop machine.
+  // SSH worktrees keep the legacy repo-sibling root unless a repo-specific
+  // path opts into a remote-host location.
+  return getRuntimePathOps(repoPath, repoPath).join(repoPath, '..', sanitizedName)
+}
+
+export function getWorktreePathSettings(
+  repo: WorktreeBasePathRepo,
+  settings: WorktreePathSettings
+): WorktreePathSettings {
+  return {
+    nestWorkspaces: settings.nestWorkspaces,
+    workspaceDir: getEffectiveWorktreeBasePath(repo, settings)
+  }
+}
+
+export function getWorktreeCreationLayout(
+  repo: WorktreeBasePathRepo,
+  settings: WorktreePathSettings
+): OrcaWorkspaceLayout {
+  return {
+    path: getEffectiveWorktreeBasePath(repo, settings),
+    nestWorkspaces: settings.nestWorkspaces
+  }
+}
+
+export function hasRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): boolean {
+  return getRepoWorktreeBasePath(repo) !== undefined
 }
 
 export function areWorktreePathsEqual(
@@ -133,6 +158,17 @@ export function areWorktreePathsEqual(
   rightPath: string,
   platform = process.platform
 ): boolean {
+  if (looksLikePosixAbsolutePath(leftPath) || looksLikePosixAbsolutePath(rightPath)) {
+    // Why: local WSL projects run POSIX paths on a Windows desktop; comparing
+    // them with win32 rules can delete or dedupe the wrong runtime-owned path.
+    if (!looksLikePosixAbsolutePath(leftPath) || !looksLikePosixAbsolutePath(rightPath)) {
+      return false
+    }
+    const left = normalizePosixWorktreePathForComparison(leftPath, platform)
+    const right = normalizePosixWorktreePathForComparison(rightPath, platform)
+    return left === right
+  }
+
   if (platform === 'win32' || looksLikeWindowsPath(leftPath) || looksLikeWindowsPath(rightPath)) {
     const left = win32.normalize(win32.resolve(leftPath))
     const right = win32.normalize(win32.resolve(rightPath))
@@ -142,13 +178,70 @@ export function areWorktreePathsEqual(
     // create spuriously fails until the next full reload repopulates state.
     return left.toLowerCase() === right.toLowerCase()
   }
-  const left = posix.normalize(posix.resolve(leftPath))
-  const right = posix.normalize(posix.resolve(rightPath))
+  const left = normalizePosixWorktreePathForComparison(leftPath, platform)
+  const right = normalizePosixWorktreePathForComparison(rightPath, platform)
   return left === right
 }
 
 function looksLikeWindowsPath(pathValue: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
+  return (
+    /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\') || pathValue.startsWith('//')
+  )
+}
+
+function looksLikePosixAbsolutePath(pathValue: string): boolean {
+  return pathValue.startsWith('/') && !pathValue.startsWith('//')
+}
+
+function normalizePosixWorktreePathForComparison(
+  pathValue: string,
+  platform: NodeJS.Platform
+): string {
+  const normalized = posix.normalize(posix.resolve(pathValue))
+  if (platform !== 'darwin') {
+    return normalized
+  }
+  if (normalized === '/private/tmp') {
+    return '/tmp'
+  }
+  return normalized.startsWith('/private/tmp/') ? normalized.slice('/private'.length) : normalized
+}
+
+function getRuntimePathOps(
+  repoPath: string,
+  workspaceDir: string
+): Pick<typeof posix, 'basename' | 'isAbsolute' | 'join' | 'normalize'> {
+  return looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(workspaceDir) ? win32 : posix
+}
+
+function resolveWorkspaceDirForRepo(repoPath: string, workspaceDir: string): string {
+  const pathOps = getRuntimePathOps(repoPath, workspaceDir)
+  return pathOps.isAbsolute(workspaceDir)
+    ? pathOps.normalize(workspaceDir)
+    : resolveRuntimePath(repoPath, workspaceDir)
+}
+
+function isWorkspaceDirRelativeToRepo(repoPath: string, workspaceDir: string): boolean {
+  return !getRuntimePathOps(repoPath, workspaceDir).isAbsolute(workspaceDir)
+}
+
+function getEffectiveWorktreeBasePath(
+  repo: WorktreeBasePathRepo,
+  settings: WorktreePathSettings
+): string {
+  return getRepoWorktreeBasePath(repo) ?? settings.workspaceDir
+}
+
+function getRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): string | undefined {
+  const trimmed = repo.worktreeBasePath?.trim()
+  return trimmed || undefined
+}
+
+function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: string): boolean {
+  if (isWorkspaceDirRelativeToRepo(repoPath, workspaceDir)) {
+    return false
+  }
+  return !isWslUncPath(workspaceDir)
 }
 
 /**
@@ -162,58 +255,6 @@ export function shouldSetDisplayName(
   sanitizedName: string
 ): boolean {
   return !(branchName === requestedName && sanitizedName === requestedName)
-}
-
-/**
- * Merge raw git worktree info with persisted user metadata into a full Worktree.
- */
-export function mergeWorktree(
-  repoId: string,
-  git: GitWorktreeInfo,
-  meta: WorktreeMeta | undefined,
-  defaultDisplayName?: string
-): Worktree {
-  const branchShort = git.branch.replace(/^refs\/heads\//, '')
-  return {
-    id: `${repoId}::${git.path}`,
-    ...(meta?.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
-    repoId,
-    path: git.path,
-    head: git.head,
-    branch: git.branch,
-    isBare: git.isBare,
-    ...(git.isSparse === true ? { isSparse: true } : {}),
-    isMainWorktree: git.isMainWorktree,
-    displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
-    comment: meta?.comment || '',
-    linkedIssue: meta?.linkedIssue ?? null,
-    linkedPR: meta?.linkedPR ?? null,
-    linkedLinearIssue: meta?.linkedLinearIssue ?? null,
-    linkedGitLabMR: meta?.linkedGitLabMR ?? null,
-    linkedGitLabIssue: meta?.linkedGitLabIssue ?? null,
-    isArchived: meta?.isArchived ?? false,
-    isUnread: meta?.isUnread ?? false,
-    isPinned: meta?.isPinned ?? false,
-    sortOrder: meta?.sortOrder ?? 0,
-    ...(meta?.manualOrder !== undefined ? { manualOrder: meta.manualOrder } : {}),
-    lastActivityAt: meta?.lastActivityAt ?? 0,
-    ...(meta?.createdAt !== undefined ? { createdAt: meta.createdAt } : {}),
-    ...(meta?.createdWithAgent !== undefined ? { createdWithAgent: meta.createdWithAgent } : {}),
-    ...(git.isSparse === true
-      ? {
-          sparseDirectories: meta?.sparseDirectories,
-          sparseBaseRef: meta?.sparseBaseRef,
-          sparsePresetId: meta?.sparsePresetId
-        }
-      : {}),
-    ...(meta?.baseRef !== undefined ? { baseRef: meta.baseRef } : {}),
-    ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
-    workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
-    // Why: diff comments are persisted on WorktreeMeta (see `WorktreeMeta` in
-    // shared/types) and forwarded verbatim so the renderer store mirrors
-    // on-disk state. `undefined` here means the worktree has no comments yet.
-    diffComments: meta?.diffComments
-  }
 }
 
 /**

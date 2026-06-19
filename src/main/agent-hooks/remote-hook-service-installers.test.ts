@@ -13,10 +13,13 @@ import { CursorHookService } from '../cursor/hook-service'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
 import { AntigravityHookService } from '../antigravity/hook-service'
+import { AmpHookService } from '../amp/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { HermesHookService } from '../hermes/hook-service'
+import { DevinHookService } from '../devin/hook-service'
+import { openClaudeHookService } from '../openclaude/hook-service'
 
 type FakeFs = {
   files: Map<string, string>
@@ -123,6 +126,10 @@ describe('remote hook service installers', () => {
           install: (sftp: SFTPWrapper) => new ClaudeHookService().installRemote(sftp, '/home/dev')
         },
         {
+          path: '/home/dev/.orca/agent-hooks/openclaude-hook.sh',
+          install: (sftp: SFTPWrapper) => openClaudeHookService.installRemote(sftp, '/home/dev')
+        },
+        {
           path: '/home/dev/.orca/agent-hooks/codex-hook.sh',
           install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, '/home/dev')
         },
@@ -134,6 +141,10 @@ describe('remote hook service installers', () => {
           path: '/home/dev/.orca/agent-hooks/antigravity-hook.sh',
           install: (sftp: SFTPWrapper) =>
             new AntigravityHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.config/amp/plugins/orca-agent-status.ts',
+          install: (sftp: SFTPWrapper) => new AmpHookService().installRemote(sftp, '/home/dev')
         },
         {
           path: '/home/dev/.orca/agent-hooks/cursor-hook.sh',
@@ -151,6 +162,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/copilot-hook.sh',
           install: (sftp: SFTPWrapper) => new CopilotHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/devin-hook.sh',
+          install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, '/home/dev')
         }
       ]
 
@@ -159,7 +174,12 @@ describe('remote hook service installers', () => {
         const status = await install(sftp)
         expect(status.state).toBe('installed')
         const script = fs.files.get(path)
-        expect(script).toMatch(/^#!\/bin\/sh\n/)
+        if (path.includes('/.config/amp/plugins/')) {
+          expect(script).toContain('/hook/amp')
+          expect(script).toContain("amp.on('agent.start'")
+        } else {
+          expect(script).toMatch(/^#!\/bin\/sh\n/)
+        }
         expect(script).not.toContain('@echo off')
         expect(script).not.toContain('powershell -NoProfile')
       }
@@ -212,18 +232,29 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
   })
 
-  it('installs remote Gemini, Antigravity, Cursor, Command Code, and Grok configs using their CLI-specific schemas', async () => {
+  it('installs remote Gemini, Antigravity, Cursor, Command Code, Grok, and Devin configs using their CLI-specific schemas', async () => {
     const gemini = createFakeSftp()
     const antigravity = createFakeSftp()
+    const amp = createFakeSftp()
     const cursor = createFakeSftp()
     const commandCode = createFakeSftp()
     const grok = createFakeSftp()
+    const devin = createFakeSftp({
+      '/home/dev/.config/devin/config.json': `{
+  // Existing Devin config comment
+  "hooks": {},
+  "permissions": { "mode": "normal" }
+}
+`
+    })
 
     await new GeminiHookService().installRemote(gemini.sftp, '/home/dev')
     await new AntigravityHookService().installRemote(antigravity.sftp, '/home/dev')
+    await new AmpHookService().installRemote(amp.sftp, '/home/dev')
     await new CursorHookService().installRemote(cursor.sftp, '/home/dev')
     await new CommandCodeHookService().installRemote(commandCode.sftp, '/home/dev')
     await new GrokHookService().installRemote(grok.sftp, '/home/dev')
+    await new DevinHookService().installRemote(devin.sftp, '/home/dev')
 
     const geminiConfig = JSON.parse(gemini.fs.files.get('/home/dev/.gemini/settings.json')!) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
@@ -256,6 +287,11 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
       expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
     }
+
+    const ampPlugin = amp.fs.files.get('/home/dev/.config/amp/plugins/orca-agent-status.ts')
+    expect(ampPlugin).toContain('/hook/amp')
+    expect(ampPlugin).toContain("amp.on('tool.call'")
+    expect(ampPlugin).toContain('return { action: "allow" }')
 
     const cursorConfig = JSON.parse(cursor.fs.files.get('/home/dev/.cursor/hooks.json')!) as {
       version: number
@@ -311,6 +347,55 @@ describe('remote hook service installers', () => {
       expect(command).toMatch(/^if \[ -x /)
     }
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('*')
+
+    const devinConfig = JSON.parse(devin.fs.files.get('/home/dev/.config/devin/config.json')!) as {
+      permissions: { mode: string }
+      hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
+    }
+    expect(devinConfig.permissions.mode).toBe('normal')
+    for (const eventName of [
+      'SessionStart',
+      'UserPromptSubmit',
+      'Stop',
+      'PostCompaction',
+      'SessionEnd'
+    ]) {
+      const definition = devinConfig.hooks[eventName]?.[0]
+      const command = definition?.hooks?.[0]?.command
+      expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
+      expect(command).toMatch(/^if \[ -x /)
+    }
+    for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
+      const definition = devinConfig.hooks[eventName]?.[0]
+      const command = definition?.hooks?.[0]?.command
+      expect(definition?.matcher).toBeUndefined()
+      expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
+      expect(command).toMatch(/^if \[ -x /)
+    }
+    expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
+  })
+
+  it('does not overwrite malformed remote Devin JSONC', async () => {
+    const original = '{"hooks": }'
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.config/devin/config.json': original
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const status = await new DevinHookService().installRemote(sftp, '/home/dev')
+
+      expect(status).toMatchObject({
+        agent: 'devin',
+        state: 'error',
+        configPath: '/home/dev/.config/devin/config.json',
+        managedHooksPresent: false,
+        detail: 'Could not parse remote Devin config.json'
+      })
+      expect(fs.files.get('/home/dev/.config/devin/config.json')).toBe(original)
+      expect(fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toBeUndefined()
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('removes stale remote Antigravity PreToolUse hooks while installing SSH hooks', async () => {
@@ -472,5 +557,23 @@ describe('remote hook service installers', () => {
       '/hook/hermes'
     )
     expect(fs.files.get('/home/dev/.hermes/config.yaml')).toContain('orca-status')
+  })
+
+  it('does not overwrite a remote user-authored Amp plugin file', async () => {
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.config/amp/plugins/orca-agent-status.ts':
+        'export default function userPlugin() {}\n'
+    })
+
+    const status = await new AmpHookService().installRemote(sftp, '/home/dev/')
+
+    expect(status).toMatchObject({
+      agent: 'amp',
+      state: 'partial',
+      managedHooksPresent: false
+    })
+    expect(fs.files.get('/home/dev/.config/amp/plugins/orca-agent-status.ts')).toBe(
+      'export default function userPlugin() {}\n'
+    )
   })
 })

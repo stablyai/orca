@@ -19,6 +19,19 @@ import { agentHookServer, _internals as agentHookInternals } from '../agent-hook
 import { getSshPtyProvider } from '../ipc/pty'
 import { toAppSshPtyId } from '../providers/ssh-pty-id'
 
+const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
+  getCohortAtEmitMock: vi.fn(),
+  trackMock: vi.fn()
+}))
+
+vi.mock('../telemetry/client', () => ({
+  track: trackMock
+}))
+
+vi.mock('../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: getCohortAtEmitMock
+}))
+
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
 }))
@@ -184,6 +197,9 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    trackMock.mockReset()
+    getCohortAtEmitMock.mockReset()
+    getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 4 })
     previousRemoteHooksFlag = process.env[ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]
     process.env[ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV] = '1'
     warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -386,6 +402,99 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
         lastAssistantMessage: 'partial answer'
       })
     )
+  })
+
+  it('forwards remote hook transition metadata into main ingest', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      platform: 'linux-x64'
+    })
+    const ingestSpy = vi.spyOn(agentHookServer, 'ingestRemote')
+
+    session = createSession('conn-hook-metadata')
+    await session.establish({} as SshConnection)
+
+    relay.notifyAgentHook(
+      makeEnvelope({
+        source: 'claude',
+        hookEventName: 'PreToolUse',
+        promptInteractionKey: 'command-code-transcript-user-3',
+        toolUseId: 'toolu-1',
+        toolAgentId: 'agent-subagent-a',
+        toolAgentType: 'Review',
+        providerSession: { key: 'session_id', id: 'ssh-relay-session-1' },
+        payload: {
+          state: 'working',
+          prompt: 'remote prompt',
+          agentType: 'claude',
+          toolName: 'Bash',
+          toolInput: 'pnpm test'
+        }
+      })
+    )
+
+    await vi.waitFor(() =>
+      expect(ingestSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hookEventName: 'PreToolUse',
+          promptInteractionKey: 'command-code-transcript-user-3',
+          toolUseId: 'toolu-1',
+          toolAgentId: 'agent-subagent-a',
+          toolAgentType: 'Review',
+          providerSession: { key: 'session_id', id: 'ssh-relay-session-1' }
+        }),
+        'conn-hook-metadata'
+      )
+    )
+    ingestSpy.mockRestore()
+  })
+
+  it('tracks prompt sent from live SSH agent hooks but not replayed hooks', async () => {
+    relay = createFakeRelay()
+    vi.mocked(deployAndLaunchRelay).mockResolvedValue({
+      transport: relay.transport,
+      platform: 'linux-x64'
+    })
+
+    session = createSession('conn-live-telemetry')
+    await session.establish({} as SshConnection)
+
+    relay.notifyAgentHook(
+      makeEnvelope({
+        hasExplicitPrompt: true,
+        payload: {
+          state: 'working',
+          prompt: 'ssh live user prompt',
+          agentType: 'codex'
+        }
+      })
+    )
+
+    await vi.waitFor(() =>
+      expect(trackMock).toHaveBeenCalledWith('agent_prompt_sent', {
+        agent_kind: 'codex',
+        launch_source: 'unknown',
+        request_kind: 'followup',
+        nth_repo_added: 4
+      })
+    )
+
+    trackMock.mockClear()
+    relay.notifyAgentHook(
+      makeEnvelope({
+        hasExplicitPrompt: true,
+        isReplay: true,
+        payload: {
+          state: 'working',
+          prompt: 'ssh replayed user prompt',
+          agentType: 'codex'
+        }
+      })
+    )
+
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 
   it('preserves replay metadata from remote hook notifications', async () => {

@@ -5,22 +5,16 @@ import { RuntimeClientError } from './types'
 export function launchOrcaApp(): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
   if (typeof overrideCommand === 'string' && overrideCommand.trim().length > 0) {
-    spawnProcess(overrideCommand, {
-      detached: true,
-      stdio: 'ignore',
-      shell: true
-    }).unref()
+    spawnDetached(overrideCommand, [], { shell: true })
     return
   }
 
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
-    spawnProcess(overrideExecutable, getExecutableAppArgs(), {
-      detached: true,
-      stdio: 'ignore',
+    spawnDetached(overrideExecutable, getExecutableAppArgs(), {
       ...getExecutableSpawnOptions(overrideExecutable),
       env: stripElectronRunAsNode(process.env)
-    }).unref()
+    })
     return
   }
 
@@ -31,20 +25,16 @@ export function launchOrcaApp(): void {
         // Why: launching the inner MacOS binary directly can trigger macOS app
         // launch failures and bypass normal bundle lifecycle. The public
         // packaged CLI should re-open the .app the same way Finder does.
-        spawnProcess('open', [appBundlePath], {
-          detached: true,
-          stdio: 'ignore',
+        spawnDetached('open', [appBundlePath], {
           env: stripElectronRunAsNode(process.env)
-        }).unref()
+        })
         return
       }
     }
 
-    spawnProcess(process.execPath, [], {
-      detached: true,
-      stdio: 'ignore',
+    spawnDetached(process.execPath, [], {
       env: stripElectronRunAsNode(process.env)
-    }).unref()
+    })
     return
   }
 
@@ -52,6 +42,18 @@ export function launchOrcaApp(): void {
     'runtime_open_failed',
     'Could not determine how to launch Orca. Start Orca manually and try again.'
   )
+}
+
+function spawnDetached(command: string, args: string[], options: SpawnOptions): void {
+  const child = spawnProcess(command, args, {
+    detached: true,
+    stdio: 'ignore',
+    ...options
+  })
+  // Why: detached launch errors are reported asynchronously after this function
+  // returns; openOrca already reports the user-facing timeout if startup fails.
+  child.once('error', () => {})
+  child.unref()
 }
 
 export function serveOrcaApp(

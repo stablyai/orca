@@ -69,7 +69,7 @@ describe('cleanupHiddenRateLimitPty', () => {
     expect(killMock).toHaveBeenCalledWith()
   })
 
-  it('does not neutralize kill on Windows because destroy closes ConPTY through kill', () => {
+  it('does not destroy after an intentional Windows kill because destroy kills again', () => {
     setPlatform('win32')
     const term = {
       kill: vi.fn(),
@@ -80,7 +80,22 @@ describe('cleanupHiddenRateLimitPty', () => {
 
     cleanupHiddenRateLimitPty(term, [], { kill: true })
 
-    expect(term.kill).toHaveBeenCalledTimes(2)
+    expect(term.kill).toHaveBeenCalledTimes(1)
+    expect(term.destroy).not.toHaveBeenCalled()
+  })
+
+  it('destroys a Windows PTY after natural exit so ConPTY cleanup still runs', () => {
+    setPlatform('win32')
+    const term = {
+      kill: vi.fn(),
+      destroy: vi.fn(() => {
+        term.kill()
+      })
+    }
+
+    cleanupHiddenRateLimitPty(term, [], { kill: false })
+
+    expect(term.kill).toHaveBeenCalledTimes(1)
     expect(term.destroy).toHaveBeenCalledTimes(1)
   })
 })

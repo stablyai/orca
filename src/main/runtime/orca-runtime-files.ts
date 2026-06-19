@@ -14,6 +14,7 @@ import {
   stat,
   writeFile
 } from 'fs/promises'
+import { homedir } from 'os'
 import { basename, dirname, extname, join } from 'path'
 import type {
   DirEntry,
@@ -24,17 +25,25 @@ import type {
   SearchResult,
   Worktree
 } from '../../shared/types'
+import {
+  isRuntimePathAbsolute,
+  relativePathInsideRoot,
+  resolveRuntimePath
+} from '../../shared/cross-platform-path'
 import type {
   RuntimeFileListResult,
   RuntimeFileOpenResult,
   RuntimeFilePreviewResult,
-  RuntimeFileReadResult
+  RuntimeFileReadResult,
+  RuntimeTerminalPathResolution
 } from '../../shared/runtime-types'
+import { watchFileExplorerInWorker } from './file-watcher-host'
 import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { isENOENT, resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
 import { searchWithGitGrep } from '../ipc/filesystem-search-git'
+import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { checkRgAvailable } from '../ipc/rg-availability'
 import {
   listMarkdownDocuments,
@@ -79,6 +88,28 @@ const MOBILE_BINARY_EXTENSIONS = new Set([
   '.webp',
   '.zip'
 ])
+// Raster image extensions the mobile client can render from a base64 data URI
+// via files.readPreview. Mirrors mobile's classifyMobileArtifact image set;
+// SVG/PDF are intentionally excluded (RN <Image> can't decode those data URIs).
+const MOBILE_PREVIEWABLE_IMAGE_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.bmp',
+  '.ico'
+])
+
+function isMobilePreviewableImagePath(relativePath: string): boolean {
+  const basename = basenameFromRelativePath(relativePath)
+  const dotIndex = basename.lastIndexOf('.')
+  if (dotIndex <= 0) {
+    return false
+  }
+  return MOBILE_PREVIEWABLE_IMAGE_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase())
+}
+
 const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -119,8 +150,19 @@ export type RuntimeFileCommandHost = {
   resolveRuntimeGitTarget(
     selector: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; connectionId?: string }>
-  openFile(worktreeId: string, filePath: string, relativePath: string): void
-  openDiff(worktreeId: string, filePath: string, relativePath: string, staged: boolean): void
+  openFile(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    runtimeEnvironmentId?: string | null
+  ): void
+  openDiff(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    staged: boolean,
+    runtimeEnvironmentId?: string | null
+  ): void
 }
 
 export class RuntimeFileCommands {
@@ -163,16 +205,26 @@ export class RuntimeFileCommands {
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
-    const kind = isMobileBinaryPath(relativePath)
-      ? 'binary'
-      : isMobileMarkdownPath(relativePath)
-        ? 'markdown'
-        : 'text'
+    // Previewable images open like text (the mobile viewer renders them via
+    // files.readPreview); other binaries stay unavailable on mobile.
+    const kind = isMobilePreviewableImagePath(relativePath)
+      ? 'image'
+      : isMobileBinaryPath(relativePath)
+        ? 'binary'
+        : isMobileMarkdownPath(relativePath)
+          ? 'markdown'
+          : 'text'
     if (kind === 'binary') {
       return { worktree: worktree.id, relativePath, kind, opened: false }
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.host.openFile(worktree.id, filePath, relativePath)
+    // Why: the service's internal runtimeId is not a registered runtime env selector
+    // (those live in orca-environments.json). Passing it caused Unknown environment
+    // errors on content load for CLI-initiated opens (via files.open from orca cli
+    // used by agents). Instead pass undefined so the renderer openFile falls back to
+    // the current activeRuntimeEnvironmentId (or null), matching sidebar opens and
+    // allowing correct routing for local vs remote envs.
+    this.host.openFile(worktree.id, filePath, relativePath, undefined)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -191,7 +243,8 @@ export class RuntimeFileCommands {
         ? 'markdown'
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.host.openDiff(worktree.id, filePath, relativePath, staged)
+    // Why: see openMobileFile; avoid stamping internal runtimeId as runtimeEnvironmentId.
+    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -222,6 +275,95 @@ export class RuntimeFileCommands {
       truncated: truncated.truncated,
       byteLength: truncated.byteLength
     }
+  }
+
+  // Resolves a path tapped in the mobile terminal (absolute, relative, or ~/…)
+  // to a worktree-relative path the file RPCs can open, plus existence.
+  // Relative paths resolve against `cwd` when the caller supplies it, else
+  // against the worktree root. NOTE: the mobile tap path does not yet forward a
+  // cwd, so a token relative to a subdirectory currently resolves against the
+  // root and may miss — absolute and root-relative paths always resolve.
+  // (Threading the terminal's tracked cwd is a follow-up.)
+  async resolveTerminalPath(
+    worktreeSelector: string,
+    pathText: string,
+    cwd?: string | null
+  ): Promise<RuntimeTerminalPathResolution> {
+    const store = this.host.requireStore()
+    const worktree = await this.host.resolveWorktreeSelector(worktreeSelector)
+    const repo = store.getRepo(worktree.repoId)
+    const connectionId = repo?.connectionId ?? undefined
+    const base = cwd && cwd.trim().length > 0 ? cwd : worktree.path
+
+    const empty: RuntimeTerminalPathResolution = {
+      worktree: worktree.id,
+      relativePath: null,
+      absolutePath: null,
+      exists: false,
+      isDirectory: false
+    }
+
+    // `~/…` is home-relative. The local home is known (os.homedir); the remote
+    // home is not, so don't guess — a tapped `~/…` on a remote worktree would
+    // mis-resolve under cwd/worktree-root, so treat it as not-openable instead.
+    const isTilde = pathText.startsWith('~/') || pathText.startsWith('~\\')
+    if (isTilde && connectionId) {
+      return empty
+    }
+    const expanded = isTilde ? resolveRuntimePath(homedir(), pathText.slice(2)) : pathText
+    const absolutePath = isRuntimePathAbsolute(expanded)
+      ? expanded
+      : resolveRuntimePath(base, expanded)
+    const relativePath = relativePathInsideRoot(worktree.path, absolutePath)
+
+    // Outside the worktree, or not a safe relative path → not openable here.
+    if (relativePath === null || relativePath === '' || !isSafeMobileRelativePath(relativePath)) {
+      return empty
+    }
+
+    try {
+      const stats = connectionId
+        ? await this.statRemoteTerminalPath(absolutePath, connectionId)
+        : await stat(await resolveAuthorizedPath(absolutePath, store))
+      return {
+        worktree: worktree.id,
+        relativePath,
+        absolutePath,
+        exists: true,
+        isDirectory: stats.isDirectory()
+      }
+    } catch (error) {
+      // A genuine "not found" → the path simply doesn't exist (report it, not an
+      // error). Transport/permission/provider failures must surface so a remote
+      // session doesn't silently report every tapped path as missing.
+      if (
+        isENOENT(error) ||
+        (connectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
+      ) {
+        return { ...empty, relativePath, absolutePath }
+      }
+      throw error
+    }
+  }
+
+  // A remote stat failure that means "the file isn't there" vs a transport /
+  // permission / provider error. The mux drops the ErrnoException `code`, so the
+  // message is the only signal — match the not-found shapes the relay surfaces.
+  private static isRemoteNotFoundErrorMessage(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error)
+    return /\bENOENT\b|no such file|not found|does not exist/i.test(message)
+  }
+
+  private async statRemoteTerminalPath(
+    absolutePath: string,
+    connectionId: string
+  ): Promise<{ isDirectory: () => boolean }> {
+    const provider = getSshFilesystemProvider(connectionId)
+    if (!provider) {
+      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
+    }
+    const stats = await provider.stat(absolutePath)
+    return { isDirectory: () => stats.type === 'directory' }
   }
 
   async readFileExplorerDir(worktreeSelector: string, relativePath: string): Promise<DirEntry[]> {
@@ -275,47 +417,11 @@ export class RuntimeFileCommands {
     if (process.platform === 'win32') {
       return watchWindowsRuntimeFileExplorer(rootPath, callback)
     }
-    const watcher = await import('@parcel/watcher')
-    const subscription = await watcher.subscribe(
-      rootPath,
-      (err, events) => {
-        if (err) {
-          console.error('[runtime-files.watch] watcher error', { rootPath, err })
-          callback([{ kind: 'overflow', absolutePath: rootPath }])
-          return
-        }
-        void Promise.all(
-          events.map(async (event): Promise<FsChangeEvent> => {
-            let isDirectory = false
-            try {
-              isDirectory = (await stat(event.path)).isDirectory()
-            } catch {
-              isDirectory = false
-            }
-            return {
-              kind: event.type,
-              absolutePath: event.path,
-              isDirectory
-            }
-          })
-        ).then(callback)
-      },
-      {
-        ignore: [
-          '.git',
-          'node_modules',
-          'dist',
-          'build',
-          '.next',
-          '.cache',
-          '__pycache__',
-          'target',
-          '.venv'
-        ]
-      }
-    )
+    // Why: the watcher runs in a worker thread so @parcel/watcher's blocking
+    // recursive crawl can't starve the main/`serve` process (issue #5308).
+    const dispose = await watchFileExplorerInWorker(rootPath, callback)
     return () => {
-      trackRuntimeFileWatcherUnsubscribe(rootPath, () => subscription.unsubscribe())
+      trackRuntimeFileWatcherUnsubscribe(rootPath, dispose)
     }
   }
 
@@ -685,14 +791,20 @@ export class RuntimeFileCommands {
     rootPath: string,
     options: SearchOptions
   ): Promise<SearchResult> {
-    const authorizedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
+    const store = this.host.requireStore()
+    const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
+    const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
+      store,
+      rootPath,
+      authorizedRootPath
+    )
     const maxResults = Math.max(
       1,
       Math.min(options.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
     )
-    const rgAvailable = await checkRgAvailable(authorizedRootPath)
+    const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
     if (!rgAvailable) {
-      return searchWithGitGrep(authorizedRootPath, options, maxResults)
+      return searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions)
     }
 
     return new Promise((resolvePromise) => {
@@ -717,8 +829,20 @@ export class RuntimeFileCommands {
         if (this.activeRuntimeTextSearches.get(searchKey) === child) {
           this.activeRuntimeTextSearches.delete(searchKey)
         }
-        clearTimeout(killTimeout)
+        cleanupListeners()
         resolvePromise(finalize(acc))
+      }
+
+      let killTimeout: ReturnType<typeof setTimeout> | null = null
+      const cleanupListeners = (): void => {
+        if (killTimeout) {
+          clearTimeout(killTimeout)
+          killTimeout = null
+        }
+        child?.stdout?.off('data', onStdoutData)
+        child?.stderr?.off('data', onStderrData)
+        child?.off('error', onError)
+        child?.off('close', onClose)
       }
 
       const processLine = (line: string): void => {
@@ -736,34 +860,41 @@ export class RuntimeFileCommands {
 
       const nextChild = wslAwareSpawn('rg', rgArgs, {
         cwd: authorizedRootPath,
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       child = nextChild
       this.activeRuntimeTextSearches.set(searchKey, nextChild)
 
       nextChild.stdout!.setEncoding('utf-8')
-      nextChild.stdout!.on('data', (chunk: string) => {
+      const onStdoutData = (chunk: string): void => {
         stdoutBuffer += chunk
         const lines = stdoutBuffer.split('\n')
         stdoutBuffer = lines.pop() ?? ''
         for (const line of lines) {
           processLine(line)
         }
-      })
-      nextChild.stderr!.on('data', () => {
+      }
+      const onStderrData = (): void => {
         // Drain stderr so rg cannot block on a full pipe.
-      })
-      nextChild.once('error', () => resolveOnce())
-      nextChild.once('close', () => {
+      }
+      const onError = (): void => resolveOnce()
+      const onClose = (): void => {
         if (stdoutBuffer) {
           processLine(stdoutBuffer)
         }
         resolveOnce()
-      })
+      }
 
-      const killTimeout = setTimeout(() => {
+      nextChild.stdout!.on('data', onStdoutData)
+      nextChild.stderr!.on('data', onStderrData)
+      nextChild.once('error', onError)
+      nextChild.once('close', onClose)
+
+      killTimeout = setTimeout(() => {
         acc.truncated = true
         child?.kill()
+        resolveOnce()
       }, SEARCH_TIMEOUT_MS)
     })
   }

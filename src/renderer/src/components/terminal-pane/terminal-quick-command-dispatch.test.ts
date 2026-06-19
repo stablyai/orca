@@ -1,8 +1,17 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  recordTerminalUserInputForLeaf: vi.fn()
+}))
+
+vi.mock('./terminal-input-activity', () => ({
+  recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
+}))
 import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
 
 function createPane() {
   return {
+    leafId: 'leaf-1',
     terminal: {
       focus: vi.fn()
     }
@@ -10,6 +19,10 @@ function createPane() {
 }
 
 describe('sendTerminalQuickCommandToPane', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('writes the formatted command to the PTY transport and refocuses the terminal', () => {
     const sendInput = vi.fn(() => true)
     const pane = createPane()
@@ -22,12 +35,14 @@ describe('sendTerminalQuickCommandToPane', () => {
         appendEnter: true
       },
       pane,
+      tabId: 'tab-1',
       transport: { sendInput }
     })
 
     expect(sent).toBe(true)
     expect(sendInput).toHaveBeenCalledWith('git status\r')
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
+    expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
   })
 
   it('does not focus the terminal when no connected transport accepts input', () => {
@@ -42,12 +57,14 @@ describe('sendTerminalQuickCommandToPane', () => {
         appendEnter: false
       },
       pane,
+      tabId: 'tab-1',
       transport: { sendInput }
     })
 
     expect(sent).toBe(false)
     expect(sendInput).toHaveBeenCalledWith('npm test')
     expect(pane.terminal.focus).not.toHaveBeenCalled()
+    expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
   })
 
   it('flattens multiline commands with semicolons before sending', () => {
@@ -63,6 +80,7 @@ describe('sendTerminalQuickCommandToPane', () => {
         appendEnter: true
       },
       pane,
+      tabId: 'tab-1',
       transport: { sendInput }
     })
 
@@ -84,11 +102,35 @@ describe('sendTerminalQuickCommandToPane', () => {
         appendEnter: false
       },
       pane,
+      tabId: 'tab-1',
       transport: { sendInput }
     })
 
     expect(sent).toBe(true)
     expect(sendInput).toHaveBeenCalledWith('echo one; echo two')
     expect(pane.terminal.focus).toHaveBeenCalledOnce()
+  })
+
+  it('does not write agent prompt quick commands into the current pane', () => {
+    const sendInput = vi.fn(() => true)
+    const focus = vi.fn()
+
+    const sent = sendTerminalQuickCommandToPane({
+      command: {
+        id: 'agent',
+        label: 'Agent',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this'
+      },
+      pane: { leafId: 'leaf-1', terminal: { focus } },
+      tabId: 'tab-1',
+      transport: { sendInput }
+    })
+
+    expect(sent).toBe(false)
+    expect(sendInput).not.toHaveBeenCalled()
+    expect(focus).not.toHaveBeenCalled()
+    expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
   })
 })

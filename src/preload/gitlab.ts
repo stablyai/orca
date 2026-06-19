@@ -3,106 +3,168 @@
    conflict on every upstream sync of the much larger central preload
    file. Composed back into `api.gl` from `index.ts`. */
 import { ipcRenderer } from 'electron'
+import type { TaskSourceContext } from '../shared/task-source-context'
+
+type GitLabRepoSelectorArgs = {
+  repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+}
 
 export const glApi = {
   viewer: (): Promise<unknown> => ipcRenderer.invoke('gitlab:viewer'),
+  diagnoseAuth: (): Promise<unknown> => ipcRenderer.invoke('gitlab:diagnoseAuth'),
+  rateLimit: (args?: { force?: boolean; host?: string | null }): Promise<unknown> =>
+    ipcRenderer.invoke('gitlab:rateLimit', args),
 
-  projectSlug: (args: { repoPath: string }): Promise<unknown> =>
+  projectSlug: (args: GitLabRepoSelectorArgs): Promise<unknown> =>
     ipcRenderer.invoke('gitlab:projectSlug', args),
 
-  mrForBranch: (args: {
-    repoPath: string
-    branch: string
-    linkedMRIid?: number | null
-  }): Promise<unknown> => ipcRenderer.invoke('gitlab:mrForBranch', args),
+  mrForBranch: (
+    args: GitLabRepoSelectorArgs & {
+      branch: string
+      linkedMRIid?: number | null
+    }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:mrForBranch', args),
 
-  mr: (args: { repoPath: string; iid: number }): Promise<unknown> =>
+  mr: (args: GitLabRepoSelectorArgs & { iid: number }): Promise<unknown> =>
     ipcRenderer.invoke('gitlab:mr', args),
 
-  listMRs: (args: {
-    repoPath: string
-    state?: 'opened' | 'merged' | 'closed' | 'all'
-    page?: number
-    perPage?: number
-  }): Promise<unknown> => ipcRenderer.invoke('gitlab:listMRs', args),
+  listMRs: (
+    args: GitLabRepoSelectorArgs & {
+      state?: 'opened' | 'merged' | 'closed' | 'all'
+      page?: number
+      perPage?: number
+    }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:listMRs', args),
 
-  listWorkItems: (args: {
-    repoPath: string
-    state?: 'opened' | 'merged' | 'closed' | 'all'
-    page?: number
-    perPage?: number
-  }): Promise<unknown> => ipcRenderer.invoke('gitlab:listWorkItems', args),
+  listWorkItems: (
+    args: GitLabRepoSelectorArgs & {
+      state?: 'opened' | 'merged' | 'closed' | 'all'
+      page?: number
+      perPage?: number
+    }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:listWorkItems', args),
 
-  issue: (args: { repoPath: string; number: number }): Promise<unknown> =>
+  issue: (args: GitLabRepoSelectorArgs & { number: number }): Promise<unknown> =>
     ipcRenderer.invoke('gitlab:issue', args),
 
-  listIssues: (args: {
-    repoPath: string
-    state?: 'opened' | 'closed' | 'all'
-    assignee?: string
-    limit?: number
-  }): Promise<{ items: unknown[]; error?: unknown }> =>
+  listIssues: (
+    args: GitLabRepoSelectorArgs & {
+      state?: 'opened' | 'closed' | 'all'
+      assignee?: string
+      limit?: number
+    }
+  ): Promise<{ items: unknown[]; error?: unknown }> =>
     ipcRenderer.invoke('gitlab:listIssues', args),
 
-  createIssue: (args: {
-    repoPath: string
-    title: string
-    body: string
-  }): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> =>
+  createIssue: (
+    args: GitLabRepoSelectorArgs & {
+      title: string
+      body: string
+    }
+  ): Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:createIssue', args),
 
-  updateIssue: (args: {
-    repoPath: string
-    number: number
-    updates: unknown
-  }): Promise<{ ok: true } | { ok: false; error: string }> =>
+  updateIssue: (
+    args: GitLabRepoSelectorArgs & {
+      number: number
+      updates: unknown
+    }
+  ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:updateIssue', args),
 
-  addIssueComment: (args: { repoPath: string; number: number; body: string }): Promise<unknown> =>
-    ipcRenderer.invoke('gitlab:addIssueComment', args),
+  addIssueComment: (
+    args: GitLabRepoSelectorArgs & { number: number; body: string }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:addIssueComment', args),
 
-  listLabels: (args: { repoPath: string }): Promise<string[]> =>
+  listLabels: (args: GitLabRepoSelectorArgs): Promise<string[]> =>
     ipcRenderer.invoke('gitlab:listLabels', args),
 
-  listAssignableUsers: (args: { repoPath: string }): Promise<unknown[]> =>
+  listAssignableUsers: (args: GitLabRepoSelectorArgs): Promise<unknown[]> =>
     ipcRenderer.invoke('gitlab:listAssignableUsers', args),
 
-  todos: (args: { repoPath: string }): Promise<unknown[]> =>
+  todos: (args: GitLabRepoSelectorArgs): Promise<unknown[]> =>
     ipcRenderer.invoke('gitlab:todos', args),
 
-  workItemDetails: (args: {
-    repoPath: string
-    iid: number
-    type: 'issue' | 'mr'
-  }): Promise<unknown> => ipcRenderer.invoke('gitlab:workItemDetails', args),
+  workItemDetails: (
+    args: GitLabRepoSelectorArgs & {
+      iid: number
+      type: 'issue' | 'mr'
+    }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:workItemDetails', args),
 
-  closeMR: (args: {
-    repoPath: string
-    iid: number
-  }): Promise<{ ok: true } | { ok: false; error: string }> =>
+  closeMR: (
+    args: GitLabRepoSelectorArgs & {
+      iid: number
+    }
+  ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:closeMR', args),
 
-  reopenMR: (args: {
-    repoPath: string
-    iid: number
-  }): Promise<{ ok: true } | { ok: false; error: string }> =>
+  reopenMR: (
+    args: GitLabRepoSelectorArgs & {
+      iid: number
+    }
+  ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:reopenMR', args),
 
-  mergeMR: (args: {
-    repoPath: string
-    iid: number
-    method?: 'merge' | 'squash' | 'rebase'
-  }): Promise<{ ok: true } | { ok: false; error: string }> =>
+  mergeMR: (
+    args: GitLabRepoSelectorArgs & {
+      iid: number
+      method?: 'merge' | 'squash' | 'rebase'
+    }
+  ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:mergeMR', args),
 
-  addMRComment: (args: { repoPath: string; iid: number; body: string }): Promise<unknown> =>
+  updateMR: (
+    args: GitLabRepoSelectorArgs & {
+      iid: number
+      updates: unknown
+    }
+  ): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('gitlab:updateMR', args),
+
+  updateMRReviewers: (
+    args: GitLabRepoSelectorArgs & {
+      iid: number
+      reviewerIds: number[]
+      projectRef?: unknown
+    }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:updateMRReviewers', args),
+
+  addMRComment: (args: GitLabRepoSelectorArgs & { iid: number; body: string }): Promise<unknown> =>
     ipcRenderer.invoke('gitlab:addMRComment', args),
 
-  workItemByPath: (args: {
-    repoPath: string
-    host: string
-    path: string
-    iid: number
-    type: 'issue' | 'mr'
-  }): Promise<unknown> => ipcRenderer.invoke('gitlab:workItemByPath', args)
+  addMRInlineComment: (
+    args: GitLabRepoSelectorArgs & {
+      iid: number
+      input: unknown
+      projectRef?: unknown
+    }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:addMRInlineComment', args),
+
+  resolveMRDiscussion: (
+    args: GitLabRepoSelectorArgs & {
+      iid: number
+      discussionId: string
+      resolved: boolean
+    }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:resolveMRDiscussion', args),
+
+  jobTrace: (
+    args: GitLabRepoSelectorArgs & { jobId: number; projectRef?: unknown }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:jobTrace', args),
+
+  retryJob: (
+    args: GitLabRepoSelectorArgs & { jobId: number; projectRef?: unknown }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:retryJob', args),
+
+  workItemByPath: (
+    args: GitLabRepoSelectorArgs & {
+      host: string
+      path: string
+      iid: number
+      type: 'issue' | 'mr'
+    }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:workItemByPath', args)
 }

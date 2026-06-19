@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   View,
   Text,
@@ -39,10 +39,19 @@ export function TextInputModal({
   onCancel
 }: Props) {
   const [value, setValue] = useState(defaultValue)
+  const [previousVisible, setPreviousVisible] = useState(visible)
+  const [previousDefaultValue, setPreviousDefaultValue] = useState(defaultValue)
 
-  useEffect(() => {
-    if (visible) setValue(defaultValue)
-  }, [visible, defaultValue])
+  // Why: reset before the opening commit so the drawer never paints the
+  // previous modal value while preserving the existing close animation state.
+  const shouldResetValue = visible && (!previousVisible || defaultValue !== previousDefaultValue)
+  if (visible !== previousVisible || shouldResetValue) {
+    setPreviousVisible(visible)
+    if (shouldResetValue) {
+      setPreviousDefaultValue(defaultValue)
+      setValue(defaultValue)
+    }
+  }
 
   function handleSubmit() {
     const trimmed = value.trim()

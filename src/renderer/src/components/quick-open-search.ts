@@ -14,11 +14,12 @@ export type QuickOpenSearchResult = {
 
 export function prepareQuickOpenFiles(files: readonly string[]): QuickOpenIndexedFile[] {
   return files.map((path, inputIndex) => {
-    const lastSlash = path.lastIndexOf('/')
+    const searchPath = path.replace(/\\/g, '/')
+    const lastSlash = searchPath.lastIndexOf('/')
     return {
       path,
-      lowerPath: path.toLowerCase(),
-      lowerFilename: path.slice(lastSlash + 1).toLowerCase(),
+      lowerPath: searchPath.toLowerCase(),
+      lowerFilename: searchPath.slice(lastSlash + 1).toLowerCase(),
       inputIndex
     }
   })
@@ -33,7 +34,9 @@ export function rankQuickOpenFiles(
     return []
   }
 
-  const normalizedQuery = query.trim().toLowerCase()
+  // Why: Quick Open presents slash-normalized paths even on Windows; users
+  // still naturally type backslashes in path queries.
+  const normalizedQuery = query.trim().replace(/\\/g, '/').toLowerCase()
   if (!normalizedQuery) {
     return files.slice(0, limit).map((file) => ({ path: file.path, score: 0 }))
   }

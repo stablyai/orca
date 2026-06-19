@@ -1,20 +1,13 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, Github, Loader2, Terminal } from 'lucide-react'
+import { ExternalLink, Github, Terminal } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { useAppStore } from '@/store'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { cn } from '@/lib/utils'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
+import { translate } from '@/i18n/i18n'
 
 type GitHubSetupState = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
 
@@ -50,19 +43,38 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-[15px] font-semibold leading-tight text-foreground">GitHub</h3>
+              <h3 className="text-[15px] font-semibold leading-tight text-foreground">
+                {translate('auto.components.onboarding.IntegrationsStep.217beb0658', 'GitHub')}
+              </h3>
               {state === 'connected' ? (
-                <IntegrationStatusPill tone="connected">Connected</IntegrationStatusPill>
+                <IntegrationStatusPill tone="connected">
+                  {translate('auto.components.onboarding.IntegrationsStep.c91a5782f1', 'Connected')}
+                </IntegrationStatusPill>
               ) : state === 'not-installed' ? (
-                <IntegrationStatusPill tone="attention">CLI not installed</IntegrationStatusPill>
+                <IntegrationStatusPill tone="attention">
+                  {translate(
+                    'auto.components.onboarding.IntegrationsStep.5c115cb713',
+                    'CLI not installed'
+                  )}
+                </IntegrationStatusPill>
               ) : state === 'not-authenticated' ? (
-                <IntegrationStatusPill tone="attention">Sign in needed</IntegrationStatusPill>
+                <IntegrationStatusPill tone="attention">
+                  {translate(
+                    'auto.components.onboarding.IntegrationsStep.8405043962',
+                    'Sign in needed'
+                  )}
+                </IntegrationStatusPill>
               ) : (
-                <IntegrationStatusPill tone="neutral">Checking…</IntegrationStatusPill>
+                <IntegrationStatusPill tone="neutral">
+                  {translate('auto.components.onboarding.IntegrationsStep.c1547656f0', 'Checking…')}
+                </IntegrationStatusPill>
               )}
             </div>
             <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-              Pull requests, issues, and check status.
+              {translate(
+                'auto.components.onboarding.IntegrationsStep.50db38cf4b',
+                'Pull requests, issues, and check status.'
+              )}
             </p>
           </div>
         </div>
@@ -74,7 +86,7 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
               onClick={() => window.api.shell.openUrl('https://cli.github.com')}
             >
               <ExternalLink className="size-3.5" />
-              Install gh
+              {translate('auto.components.onboarding.IntegrationsStep.bd5d976fb2', 'Install gh')}
             </Button>
           ) : null}
           {state === 'not-authenticated' ? (
@@ -85,7 +97,9 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
               onClick={() => setGithubTerminalOpen(true)}
             >
               <Terminal className="size-3.5" />
-              {githubTerminalOpen ? 'Signing in' : 'Sign in'}
+              {githubTerminalOpen
+                ? translate('auto.components.onboarding.IntegrationsStep.0b4a7d23ab', 'Signing in')
+                : translate('auto.components.onboarding.IntegrationsStep.d6e5dba05a', 'Sign in')}
             </Button>
           ) : null}
           {state !== 'connected' ? (
@@ -94,7 +108,7 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
               size="sm"
               onClick={() => void refreshPreflightStatus({ force: true })}
             >
-              Re-check
+              {translate('auto.components.onboarding.IntegrationsStep.80e3ce0bc9', 'Re-check')}
             </Button>
           ) : null}
         </div>
@@ -103,9 +117,18 @@ export function GitHubRow(props: { compact?: boolean } = {}): React.JSX.Element 
         <div className={cn(compact ? 'px-4 pb-4' : 'px-5 pb-5')}>
           <OnboardingInlineCommandTerminal
             command="gh auth login"
-            title="GitHub setup"
-            ariaLabel="GitHub sign in command"
-            description="Press Enter to run GitHub CLI auth. Re-check GitHub after the browser or device flow finishes."
+            title={translate(
+              'auto.components.onboarding.IntegrationsStep.6d469169f2',
+              'GitHub setup'
+            )}
+            ariaLabel={translate(
+              'auto.components.onboarding.IntegrationsStep.f9d2e12d17',
+              'GitHub sign in command'
+            )}
+            description={translate(
+              'auto.components.onboarding.IntegrationsStep.af69f42372',
+              'Press Enter to run GitHub CLI auth. Re-check GitHub after the browser or device flow finishes.'
+            )}
           />
         </div>
       ) : null}
@@ -117,37 +140,10 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
   const { compact = false } = props
   const linearStatus = useAppStore((s) => s.linearStatus)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
-  const connectLinear = useAppStore((s) => s.connectLinear)
 
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [apiKeyDraft, setApiKeyDraft] = useState('')
-  const [connectState, setConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
-  const [connectError, setConnectError] = useState<string | null>(null)
 
   const workspaceCount = linearStatus.workspaces?.length ?? (linearStatus.connected ? 1 : 0)
-
-  const handleConnect = async (): Promise<void> => {
-    const apiKey = apiKeyDraft.trim()
-    if (!apiKey || connectState === 'connecting') {
-      return
-    }
-    setConnectState('connecting')
-    setConnectError(null)
-    try {
-      const result = await connectLinear(apiKey)
-      if (result.ok) {
-        setApiKeyDraft('')
-        setConnectState('idle')
-        setDialogOpen(false)
-        return
-      }
-      setConnectState('error')
-      setConnectError(result.error)
-    } catch (error) {
-      setConnectState('error')
-      setConnectError(error instanceof Error ? error.message : 'Connection failed')
-    }
-  }
 
   return (
     <>
@@ -159,135 +155,81 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-[15px] font-semibold leading-tight text-foreground">Linear</h3>
+                <h3 className="text-[15px] font-semibold leading-tight text-foreground">
+                  {translate('auto.components.onboarding.IntegrationsStep.27743304b1', 'Linear')}
+                </h3>
                 {linearStatus.connected ? (
-                  <IntegrationStatusPill tone="connected">Connected</IntegrationStatusPill>
+                  <IntegrationStatusPill tone="connected">
+                    {translate(
+                      'auto.components.onboarding.IntegrationsStep.c91a5782f1',
+                      'Connected'
+                    )}
+                  </IntegrationStatusPill>
                 ) : null}
               </div>
               <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                 {linearStatus.connected
-                  ? `${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'} linked. Add another any time.`
-                  : 'Paste a Linear API key to link issues to workspaces. Stored locally; nothing leaves this machine.'}
+                  ? translate(
+                      'auto.components.onboarding.IntegrationsStep.b08a6ac93c',
+                      '{{value0}} workspace{{value1}} linked. Add another workspace or replace a restricted key any time.',
+                      { value0: workspaceCount, value1: workspaceCount === 1 ? '' : 's' }
+                    )
+                  : translate(
+                      'auto.components.onboarding.IntegrationsStep.4983ae7433',
+                      'Add Linear access with a Personal API key. Full-access keys can show every team the key owner can access.'
+                    )}
               </p>
             </div>
           </div>
           <div className={cn('flex items-center gap-2', compact ? 'flex-wrap' : 'shrink-0')}>
             {linearStatus.connected ? (
               <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
-                Add workspace
+                {translate(
+                  'auto.components.onboarding.IntegrationsStep.dd9c186a8b',
+                  'Add workspace access'
+                )}
               </Button>
             ) : (
               <Button size="sm" onClick={() => setDialogOpen(true)}>
-                Connect
+                {translate(
+                  'auto.components.onboarding.IntegrationsStep.04ef416712',
+                  'Add Linear access'
+                )}
               </Button>
             )}
             {!linearStatus.connected ? (
               <Button variant="ghost" size="sm" onClick={() => void checkLinearConnection(true)}>
-                Re-check
+                {translate('auto.components.onboarding.IntegrationsStep.80e3ce0bc9', 'Re-check')}
               </Button>
             ) : null}
           </div>
         </div>
       </div>
 
-      <Dialog
+      <LinearApiKeyDialog
         open={dialogOpen}
-        onOpenChange={(open) => {
-          if (connectState !== 'connecting') {
-            setDialogOpen(open)
-          }
-        }}
-      >
-        <DialogContent
-          overlayClassName="z-[110]"
-          className="z-[120] sm:max-w-md"
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && apiKeyDraft.trim() && connectState !== 'connecting') {
-              event.preventDefault()
-              void handleConnect()
-            }
-          }}
-        >
-          <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">Connect Linear workspace</DialogTitle>
-            <DialogDescription>
-              Paste a Personal API key to add a Linear workspace to Orca.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <Input
-              autoFocus
-              type="password"
-              placeholder="lin_api_..."
-              value={apiKeyDraft}
-              onChange={(event) => {
-                setApiKeyDraft(event.target.value)
-                if (connectState === 'error') {
-                  setConnectState('idle')
-                  setConnectError(null)
-                }
-              }}
-              disabled={connectState === 'connecting'}
-            />
-            {connectState === 'error' && connectError ? (
-              <p className="text-xs text-destructive">{connectError}</p>
-            ) : null}
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Create one in{' '}
-              <button
-                className="text-primary underline-offset-2 hover:underline"
-                onClick={() =>
-                  window.api.shell.openUrl('https://linear.app/settings/account/security')
-                }
-              >
-                Linear Settings &rarr; Security
-              </button>
-              .
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDialogOpen(false)}
-              disabled={connectState === 'connecting'}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleConnect()}
-              disabled={!apiKeyDraft.trim() || connectState === 'connecting'}
-            >
-              {connectState === 'connecting' ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                'Connect'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setDialogOpen}
+        overlayClassName="z-[110]"
+        contentClassName="z-[120]"
+        connectLabel="Add Linear access"
+      />
     </>
   )
 }
 
 const CAPABILITIES = [
-  'Start a workspace from any issue, PR, or Linear ticket, prefilled with its title and context',
-  'Browse your assigned tasks in the Tasks view without leaving Orca',
-  'See issue state, PR review status, and CI checks on every worktree',
+  'Start a workspace from any GitHub issue or pull request, prefilled with its title and context',
+  'Browse GitHub issues and pull requests in the Tasks view without leaving Orca',
+  'See issue state, review status, and CI checks on every worktree',
   'Read, comment on, and merge pull requests without leaving Orca'
 ] as const
 
 export function IntegrationsStep(): React.JSX.Element {
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
 
   useEffect(() => {
     void refreshPreflightStatus()
-    void checkLinearConnection()
-  }, [checkLinearConnection, refreshPreflightStatus])
+  }, [refreshPreflightStatus])
 
   return (
     <div className="space-y-6">
@@ -302,15 +244,21 @@ export function IntegrationsStep(): React.JSX.Element {
 
       <div className="space-y-3">
         <GitHubRow />
-        <LinearRow />
-        <div className="mt-4 flex items-center justify-between rounded-xl border border-border bg-muted/10 px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <span className="text-[14px] font-medium text-foreground/70">Jira</span>
-            <span className="text-[13px] text-muted-foreground">
-              Issues, sprints, and assignees.
+        <div className="mt-4 rounded-xl border border-border bg-muted/10 px-5 py-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-[14px] font-medium text-foreground/70">
+              {translate(
+                'auto.components.onboarding.IntegrationsStep.3a3e360289',
+                'More task sources'
+              )}
+            </span>
+            <span className="text-[13px] leading-relaxed text-muted-foreground">
+              {translate(
+                'auto.components.onboarding.IntegrationsStep.277f30eb34',
+                'Linear, GitLab, Bitbucket, Azure DevOps, Gitea, and Jira live in Settings > Integrations.'
+              )}
             </span>
           </div>
-          <IntegrationStatusPill tone="neutral">Coming soon</IntegrationStatusPill>
         </div>
       </div>
     </div>

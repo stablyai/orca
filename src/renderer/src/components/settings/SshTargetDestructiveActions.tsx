@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { SshDestructiveActionDialog } from './SshDestructiveActionDialog'
-import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
+import {
+  isSshTargetConnecting,
+  shouldClearPendingSshReset,
+  type SshTargetBusyAction
+} from './ssh-target-action-state'
+import { translate } from '@/i18n/i18n'
 
 type PendingTargetAction = { id: string; label: string }
 
@@ -31,6 +37,7 @@ export function SshTargetDestructiveActions({
   const [pendingRemove, setPendingRemove] = useState<PendingTargetAction | null>(null)
   const [pendingReset, setPendingReset] = useState<PendingTargetAction | null>(null)
   const [pendingTerminate, setPendingTerminate] = useState<PendingTargetAction | null>(null)
+  const mountedRef = useMountedRef()
   // Why: confirmed SSH actions keep running after the dialog click, so this
   // state blocks overlapping relay/session teardown for the same target.
   const targetActionsInFlightRef = useRef(new Map<string, SshTargetBusyAction>())
@@ -55,12 +62,17 @@ export function SshTargetDestructiveActions({
     []
   )
 
-  const finishTargetAction = useCallback((targetId: string): void => {
-    const nextActions = new Map(targetActionsInFlightRef.current)
-    nextActions.delete(targetId)
-    targetActionsInFlightRef.current = nextActions
-    setTargetActionsInFlight(nextActions)
-  }, [])
+  const finishTargetAction = useCallback(
+    (targetId: string): void => {
+      const nextActions = new Map(targetActionsInFlightRef.current)
+      nextActions.delete(targetId)
+      targetActionsInFlightRef.current = nextActions
+      if (mountedRef.current) {
+        setTargetActionsInFlight(nextActions)
+      }
+    },
+    [mountedRef]
+  )
 
   const runConfirmedTargetAction = async (
     pendingTarget: PendingTargetAction | null,
@@ -75,7 +87,9 @@ export function SshTargetDestructiveActions({
     const targetId = pendingTarget.id
     try {
       await operation(targetId)
-      clearPendingTarget()
+      if (mountedRef.current) {
+        clearPendingTarget()
+      }
     } finally {
       finishTargetAction(targetId)
     }
@@ -93,12 +107,17 @@ export function SshTargetDestructiveActions({
     pendingReset !== null && isSshTargetConnecting(pendingResetStatus)
   const pendingTerminateIsBusy =
     pendingTerminate !== null && targetActionsInFlight.get(pendingTerminate.id) === 'terminate'
-
-  useEffect(() => {
-    if (pendingResetBlockedByConnection && !pendingResetIsBusy) {
-      setPendingReset(null)
-    }
-  }, [pendingResetBlockedByConnection, pendingResetIsBusy])
+  const shouldClearReset = shouldClearPendingSshReset({
+    pendingTargetId: pendingReset?.id ?? null,
+    pendingResetIsBusy,
+    connectionStatus: pendingResetStatus
+  })
+  if (shouldClearReset) {
+    // Why: a reconnecting target cannot safely reset its relay; clear the
+    // pending dialog before it paints stale destructive UI.
+    setPendingReset(null)
+  }
+  const dialogPendingReset = shouldClearReset ? null : pendingReset
 
   const confirmResetRelay = async (): Promise<void> => {
     if (!pendingReset) {
@@ -140,8 +159,14 @@ export function SshTargetDestructiveActions({
 
       <SshDestructiveActionDialog
         open={!!pendingRemove}
-        title="Remove SSH Target"
-        description="This will remove the target and end any active remote terminals."
+        title={translate(
+          'auto.components.settings.SshTargetDestructiveActions.4808966c41',
+          'Remove SSH Target'
+        )}
+        description={translate(
+          'auto.components.settings.SshTargetDestructiveActions.3bb0cf0ee4',
+          'This will remove the target and end any active remote terminals.'
+        )}
         targetLabel={pendingRemove?.label}
         actionLabel="Remove"
         busyLabel="Removing"
@@ -160,10 +185,16 @@ export function SshTargetDestructiveActions({
       />
 
       <SshDestructiveActionDialog
-        open={!!pendingReset && (!pendingResetBlockedByConnection || pendingResetIsBusy)}
-        title="Reset Remote Relay?"
-        description="This force-stops the remote relay for this SSH target. Active remote terminals and port forwards for this target will end."
-        targetLabel={pendingReset?.label}
+        open={!!dialogPendingReset && (!pendingResetBlockedByConnection || pendingResetIsBusy)}
+        title={translate(
+          'auto.components.settings.SshTargetDestructiveActions.570a7a0574',
+          'Reset Remote Relay?'
+        )}
+        description={translate(
+          'auto.components.settings.SshTargetDestructiveActions.26be00392d',
+          'This force-stops the remote relay for this SSH target. Active remote terminals and port forwards for this target will end.'
+        )}
+        targetLabel={dialogPendingReset?.label}
         actionLabel="Reset Relay"
         busyLabel="Resetting"
         isBusy={pendingResetIsBusy}
@@ -180,8 +211,14 @@ export function SshTargetDestructiveActions({
 
       <SshDestructiveActionDialog
         open={!!pendingTerminate}
-        title="End Remote Terminals?"
-        description="This will stop active terminal sessions on this SSH target. Reconnecting will not restore them."
+        title={translate(
+          'auto.components.settings.SshTargetDestructiveActions.accf177a03',
+          'End Remote Terminals?'
+        )}
+        description={translate(
+          'auto.components.settings.SshTargetDestructiveActions.7e66942808',
+          'This will stop active terminal sessions on this SSH target. Reconnecting will not restore them.'
+        )}
         targetLabel={pendingTerminate?.label}
         actionLabel="End Terminals"
         busyLabel="Ending"

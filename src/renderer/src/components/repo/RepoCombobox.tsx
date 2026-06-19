@@ -13,8 +13,10 @@ import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { Repo } from '../../../../shared/types'
 import RepoBadgeLabel from './RepoBadgeLabel'
+import { translate } from '@/i18n/i18n'
 
 type RepoComboboxProps = {
   repos: Repo[]
@@ -25,6 +27,8 @@ type RepoComboboxProps = {
   triggerClassName?: string
   autoOpenOnMount?: boolean
   showStandaloneAddButton?: boolean
+  invalid?: boolean
+  describedBy?: string
 }
 
 export default function RepoCombobox({
@@ -35,7 +39,9 @@ export default function RepoCombobox({
   placeholder = 'Select repo...',
   triggerClassName,
   autoOpenOnMount = false,
-  showStandaloneAddButton = true
+  showStandaloneAddButton = true,
+  invalid = false,
+  describedBy
 }: RepoComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(autoOpenOnMount)
   const [query, setQuery] = useState('')
@@ -49,6 +55,7 @@ export default function RepoCombobox({
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
   const focusFrameRef = React.useRef<number | null>(null)
+  const mountedRef = useMountedRef()
 
   const selectedRepo = useMemo(
     () => repos.find((repo) => repo.id === value) ?? null,
@@ -56,10 +63,25 @@ export default function RepoCombobox({
   )
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
 
-  const focusSearchInput = useCallback(() => {
+  const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
       cancelAnimationFrame(focusFrameRef.current)
+      focusFrameRef.current = null
     }
+  }, [])
+
+  const setInputNode = useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
+
+  const focusSearchInput = useCallback(() => {
+    cancelFocusFrame()
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       const repoSearchInput = inputRef.current
@@ -73,7 +95,7 @@ export default function RepoCombobox({
       const end = repoSearchInput.value.length
       repoSearchInput.setSelectionRange(end, end)
     })
-  }, [])
+  }, [cancelFocusFrame])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -82,16 +104,13 @@ export default function RepoCombobox({
         setCommandValue(value)
         return
       }
-      if (focusFrameRef.current !== null) {
-        cancelAnimationFrame(focusFrameRef.current)
-        focusFrameRef.current = null
-      }
+      cancelFocusFrame()
       // Why: the create-worktree dialog delays its own field reset until after
       // close animation, so the repo picker must clear its local filter here or a
       // stale query can reopen to an apparently missing repo list.
       setQuery('')
     },
-    [value]
+    [cancelFocusFrame, value]
   )
 
   const handleSelect = useCallback(
@@ -147,14 +166,19 @@ export default function RepoCombobox({
         if (isGitRepoKind(repo)) {
           await fetchWorktrees(repo.id)
         }
+        if (!mountedRef.current) {
+          return
+        }
         onValueChange(repo.id)
         setOpen(false)
         setQuery('')
       }
     } finally {
-      setIsAdding(false)
+      if (mountedRef.current) {
+        setIsAdding(false)
+      }
     }
-  }, [addRepo, fetchWorktrees, isAdding, onValueChange])
+  }, [addRepo, fetchWorktrees, isAdding, mountedRef, onValueChange])
 
   return (
     <div className="flex w-full items-center gap-1.5">
@@ -166,6 +190,8 @@ export default function RepoCombobox({
             variant="outline"
             role="combobox"
             aria-expanded={open}
+            aria-invalid={invalid ? true : undefined}
+            aria-describedby={describedBy}
             onKeyDown={handleTriggerKeyDown}
             className={cn(
               'h-8 min-w-[184px] justify-between px-3 text-xs font-normal',
@@ -183,7 +209,7 @@ export default function RepoCombobox({
                 {selectedRepo.connectionId && (
                   <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                     <Server className="size-2.5" />
-                    SSH
+                    {translate('auto.components.repo.RepoCombobox.3639fd9da2', 'SSH')}
                   </span>
                 )}
               </span>
@@ -204,13 +230,21 @@ export default function RepoCombobox({
         >
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
-              ref={inputRef}
-              placeholder="Search projects/folders..."
+              ref={setInputNode}
+              placeholder={translate(
+                'auto.components.repo.RepoCombobox.a0c48f5f29',
+                'Search projects/folders...'
+              )}
               value={query}
               onValueChange={setQuery}
             />
             <CommandList>
-              <CommandEmpty>No projects/folders match your search.</CommandEmpty>
+              <CommandEmpty>
+                {translate(
+                  'auto.components.repo.RepoCombobox.e7ed739236',
+                  'No projects/folders match your search.'
+                )}
+              </CommandEmpty>
               {filteredRepos.map((repo) => (
                 <CommandItem
                   key={repo.id}
@@ -234,7 +268,7 @@ export default function RepoCombobox({
                       {repo.connectionId && (
                         <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                           <Server className="size-2.5" />
-                          SSH
+                          {translate('auto.components.repo.RepoCombobox.3639fd9da2', 'SSH')}
                         </span>
                       )}
                     </span>
@@ -257,7 +291,11 @@ export default function RepoCombobox({
                 className="h-9 w-full justify-start rounded-none px-3 text-xs font-normal"
               >
                 <FolderPlus className="size-3.5 text-muted-foreground" />
-                <span>{isAdding ? 'Adding project…' : 'Add project'}</span>
+                <span>
+                  {isAdding
+                    ? translate('auto.components.repo.RepoCombobox.116812151a', 'Adding project…')
+                    : translate('auto.components.repo.RepoCombobox.b3e15f4525', 'Add project')}
+                </span>
               </Button>
             </div>
           </Command>
@@ -274,7 +312,11 @@ export default function RepoCombobox({
           disabled={isAdding}
           onClick={() => void handleAddFolder()}
           className="size-9 shrink-0 p-0"
-          aria-label={isAdding ? 'Adding project' : 'Add project'}
+          aria-label={
+            isAdding
+              ? translate('auto.components.repo.RepoCombobox.b4a235e886', 'Adding project')
+              : translate('auto.components.repo.RepoCombobox.b3e15f4525', 'Add project')
+          }
         >
           <FolderPlus className="size-3.5" />
         </Button>

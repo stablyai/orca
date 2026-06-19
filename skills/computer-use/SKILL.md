@@ -1,85 +1,53 @@
 ---
 name: computer-use
-description: Use Orca's computer-use CLI to inspect and control local desktop apps through accessibility trees, screenshots, and safe UI actions. Use when an agent needs to list desktop apps, get an app state, read visible UI, click, type, press keys, scroll, drag, set values, or perform app accessibility actions. Triggers include "computer use", "orca computer", "list apps", "get app state", "read Spotify", "read Slack", "click app", "type text", "press key", "set value", "scroll app", "drag app", and desktop app interaction tasks.
+description: >-
+  Use Orca's computer-use CLI to inspect and operate local desktop app windows
+  through accessibility trees, screenshots, and safe UI actions. Use for
+  desktop app interaction: list apps/windows, get app state, read visible UI,
+  click controls, type, press keys, scroll, drag, set values, or perform
+  accessibility actions. Also use for browser windows, webviews, Orca app UI,
+  or other desktop UI. Triggers include "computer use", "orca computer", "read
+  Spotify", "read Slack", "control/click/read in a desktop app", and "get app
+  state".
 ---
 
 # Computer Use
 
-Use this skill when the task should operate through Orca's desktop computer-use surface rather than native Codex computer tools, raw AppleScript, ad hoc screenshots, or direct app internals.
+Use this skill for desktop UI through `orca computer`. When the requested target is a website or web app, operate the desktop browser app/window that contains the page.
 
 ## Preconditions
 
-- Prefer the public `orca computer ...` command.
-- In this Orca worktree, use `./config/scripts/orca-dev computer ...` when testing the local dev runtime.
-- Prefer `--json` for agent-driven calls. Screenshot image bytes are omitted from JSON and written to `screenshot.path` when present.
-- Do not push, submit forms, send messages, buy items, delete data, or change account settings unless the user explicitly asked for that specific action.
-- If an app contains sensitive content, read only what the user requested and avoid unnecessary screenshots or logs.
-
-Check runtime availability first:
+- Prefer `orca computer ...`; on Linux, use `orca-ide computer ...` if `orca` is unavailable. In this Orca worktree, use `./config/scripts/orca-dev computer ...` only when testing the local dev runtime.
+- Prefer `--json`. Screenshot bytes are omitted from JSON and written to `screenshot.path`.
+- Do not push, submit forms, send messages, buy items, delete data, change account settings, or expose secrets unless the user explicitly asked for that action.
+- If an app contains sensitive content, read only what the user requested.
 
 ```bash
 orca status --json
 orca computer capabilities --json
 ```
 
-For local development against this worktree:
-
-```bash
-./config/scripts/orca-dev status --json
-```
-
-## Core Workflow
-
-Use a snapshot-act-snapshot loop:
-
-1. Discover apps:
+## Core Loop
 
 ```bash
 orca computer list-apps --json
-```
-
-2. Get a fresh state for the target app:
-
-```bash
 orca computer get-app-state --app com.spotify.client --json
-```
-
-3. Choose an element from that state.
-
-4. Perform one action:
-
-```bash
 orca computer click --app com.spotify.client --element-index 42 --json
 ```
 
-5. Inspect the action result before deciding whether to act again. Actions return a fresh state:
-
-```bash
-orca computer click --app com.spotify.client --element-index 42 --json
-```
-
-Element indexes are scoped to the current app state. They can go stale after navigation, focus changes, scrolling, window changes, or app re-rendering. Never carry indexes across unrelated steps without refreshing state.
+Use the fresh state returned by each action for the next element index. Element indexes are the numeric labels shown in the tree; they may be sparse when noisy sections are omitted, so never infer valid indexes from `elementCount` or "Visible elements." Element indexes are short-lived and go stale after delays, navigation, focus changes, scrolling, window changes, or app re-rendering.
 
 ## App Selectors
 
-Prefer bundle IDs returned by `list-apps`:
+Prefer bundle IDs from `list-apps`; names are acceptable when unambiguous. Use `pid:<number>` only when bundle ID or name matching is ambiguous.
 
 ```bash
 orca computer get-app-state --app com.microsoft.edgemac --json
-orca computer get-app-state --app com.spotify.client --json
-```
-
-Names are acceptable when unambiguous:
-
-```bash
 orca computer get-app-state --app Spotify --json
-```
-
-Use `pid:<number>` only when bundle ID or name matching is ambiguous:
-
-```bash
 orca computer get-app-state --app pid:12345 --json
 ```
+
+For apps with multiple windows or ambiguous titles, run `list-windows` first. Prefer `--window-id <id>` when the listed id is not `none`; otherwise use `--window-index <n>`. Once you choose a window, pass the same selector to `get-app-state` and later actions until the target window changes.
 
 ## Commands
 
@@ -89,7 +57,9 @@ orca computer capabilities --json
 orca computer list-apps --json
 orca computer list-windows --app <app> --json
 orca computer get-app-state --app <app> --json
+orca computer get-app-state --app <app> --restore-window --json
 orca computer click --app <app> --element-index <index> --json
+orca computer click --app <app> --x 100 --y 100 --json
 orca computer perform-secondary-action --app <app> --element-index <index> --action <name> --json
 orca computer set-value --app <app> --element-index <index> --value "text" --json
 orca computer type-text --app <app> --text "text" --json
@@ -97,96 +67,75 @@ orca computer press-key --app <app> --key Return --json
 orca computer hotkey --app <app> --key CmdOrCtrl+A --json
 orca computer paste-text --app <app> --text "text" --json
 orca computer scroll --app <app> (--element-index <index> | --x <x> --y <y>) --direction down --json
+orca computer drag --app <app> --from-element-index <index> --to-element-index <index> --json
 orca computer drag --app <app> --from-x 100 --from-y 100 --to-x 300 --to-y 300 --json
 ```
 
-Use `--no-screenshot` only when pixels are not needed. Screenshots are often the only useful signal for Electron, WebView, or canvas-heavy apps with shallow accessibility trees.
-
-Coordinates are window-local. Use coordinates from the latest screenshot/state for the same target window.
-
-Use `--text-stdin` or `--value-stdin` for sensitive text so payloads do not land in shell history.
-On Linux and Windows, action payloads still pass through a short-lived local operation file.
+Use `--no-screenshot` only when pixels are not needed. Use `--text-stdin` or `--value-stdin` for sensitive text so payloads do not land in shell history. On Linux and Windows, action payloads still pass through a short-lived local operation file, so avoid sending secrets unless the user explicitly asked for them:
 
 ```bash
 printf '%s' "$TEXT" | orca computer set-value --app <app> --element-index <index> --value-stdin --json
 ```
 
-## Choosing Actions
+## Action Rules
 
-Prefer semantic actions over raw keyboard input:
-
-- Use `set-value` for known editable fields.
-- Use `click` for buttons, tabs, menu items, checkboxes, and other direct controls.
-- Use `perform-secondary-action` only when the state lists a concrete action name and the user intent matches it.
-- Use `type-text` after focusing a field and confirming the app has a focused text receiver.
-- Use `press-key` for navigation keys, Return, Escape, shortcuts, or submitting a field after the state confirms the right target is active.
-
-Why: keyboard input is process-targeted on macOS, but it still depends on the target app having a valid focused receiver. `set-value` targets the accessibility element directly and is more reliable when supported.
-
-## Foreground And Background
-
-Some actions work while the app is in the background. Treat this as app-dependent:
-
-- `set-value` can work in the background when the app exposes a writable accessibility value.
-- `click` and accessibility actions may work in the background for some native controls.
-- `type-text` and `press-key` are targeted to the app process on macOS, but the app may ignore them unless it owns focus or already has an active text receiver.
-
-If an action returns success but the UI did not change, do not repeat the same action blindly. Run `get-app-state` again, inspect the screenshot/tree, then switch to a more semantic action or bring/focus the target if needed.
+- Prefer semantic actions: `set-value` for editable fields, `click` for controls, `perform-secondary-action` only for listed action names.
+- After any UI-changing action, use the returned state or rerun `get-app-state` before choosing the next element index.
+- Use `type-text` only after focusing a field and confirming the app has a focused text receiver; synthetic keyboard delivery is reported as unverified, so inspect the returned state before assuming text landed.
+- Use `press-key` for single/navigation keys such as Return, Escape, Tab, and arrows. Use `hotkey` only for one modifier chord plus one key, such as `CmdOrCtrl+A` or `CmdOrCtrl+Shift+P`; prefer `CmdOrCtrl+...` for cross-platform combos.
+- Some actions work in background apps, but this is app-dependent. If success does not change the UI, refresh state and choose a more semantic action or restore/focus the window.
+- Prefer `set-value` for text fields that expose values; it can report verified value writes when the provider can read the refreshed value.
+- Coordinates are window-local; use coordinates from the latest screenshot/state for the same target window.
 
 ## Screenshots
 
-`get-app-state` returns an accessibility tree and, by default, a screenshot. Use both:
+`get-app-state` returns tree+screenshot. Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
 
-- Trust the tree for element indexes, names, roles, values, and actions.
-- Trust the screenshot for visual confirmation, especially in Electron and WebView apps.
-- If the tree is shallow, use screenshot evidence before deciding whether any action is safe.
-- If screenshot capture fails or returns no image, the app may be hidden, minimized, off-screen, or have no visible window.
+Coordinates passed to `click`, `scroll`, and `drag` are window-local action coordinates. If the screenshot reports `scale` other than `1`, convert visual screenshot pixels before acting:
 
-Use restore only when appropriate for the task:
-
-```bash
-orca computer get-app-state --app <app> --restore-window --json
+```text
+action_x = screenshot_pixel_x / screenshot.scale
+action_y = screenshot_pixel_y / screenshot.scale
 ```
 
-## App-Specific Notes
+Prefer element indexes or element frames from the tree when available. Use raw screenshot-derived coordinates only after checking the latest screenshot scale and window size.
 
-### Browsers
+On Linux and Windows, screenshots may come from the visible desktop region for the target window bounds. If visual pixels matter, use `--restore-window` so another window does not cover the target region; if you cannot take focus, trust the tree over potentially occluded pixels.
 
-For Edge, Chrome, and similar browsers, prefer setting the address/search field directly:
+## App Notes
+
+Browsers: for Edge, Chrome, Safari, and similar browser windows, set the address/search field directly, then press Return. Do not assume raw typing went to the address bar. Use `--restore-window` when the browser is not already frontmost. Large tab strips may show only the active tab plus an "inactive browser tabs omitted" marker; treat that as intentional noise reduction and operate on the current page/address bar unless the user asked to manage tabs.
+
+For browser-hosted forms such as Gmail compose, verify the focused UI element after each field action. Page text fields can expose accessibility actions without moving DOM focus; if a click or `set-value` does not change the focused receiver, use `Tab` / `Shift+Tab` from a known focused field or window-local coordinates from a fresh screenshot. Prefer `paste-text` into the verified focused field for draft bodies, then inspect the returned state before continuing.
 
 ```bash
-orca computer get-app-state --app com.microsoft.edgemac --json
+orca computer get-app-state --app com.microsoft.edgemac --restore-window --json
 orca computer set-value --app com.microsoft.edgemac --element-index <addressBarIndex> --value "test123" --json
 orca computer press-key --app com.microsoft.edgemac --key Return --json
-orca computer get-app-state --app com.microsoft.edgemac --json
 ```
 
-Do not assume raw typing went to the address bar. Confirm the field or page changed after pressing Return.
+Spotify: refresh after playback clicks; the UI often changes asynchronously.
 
-### Spotify
+Slack: the accessibility tree may be shallow while the screenshot contains useful information. Reading visible Slack UI is fine when requested; sending messages or triggering workflows still needs explicit permission.
 
-Spotify state can update asynchronously after playback or network-backed search. After a playback click, run `get-app-state` before clicking again.
+## Errors
 
-For search, prefer `set-value` on the search combobox, usually named like `What do you want to play?`. `type-text` may only work when Spotify owns focus and that field is already focused.
+- `app_not_found`: run `list-apps` and retry with the bundle ID. If the target is a web app such as Gmail, choose the desktop browser app/window that contains it; do not retry `orca computer ... --app Gmail` unchanged because `orca computer` app selectors refer to desktop apps, not website names.
+- `app_blocked`: stop; the target is intentionally blocked from computer-use.
+- `window_not_found` / `window_stale`: run `list-windows`, choose a current selector, then rerun `get-app-state`.
+- `window_not_focused`: retry once with `--restore-window`; if the message says restore was already requested, stop retrying restore and bring the app forward manually or check permissions. For editable fields prefer `set-value`, then inspect before assuming keyboard input worked.
+- `element_not_found`: index is stale; run `get-app-state` again.
+- `unsupported_capability`: the provider or desktop environment cannot do that action; use a semantic alternative or install the missing dependency if the message names one.
+- `action_not_supported`: inspect the element's listed actions and retry with one of those names, or use click/set-value when appropriate.
+- `value_not_settable`: the element cannot accept direct value writes; focus it and use keyboard input only when the returned state can be inspected.
+- `element_not_clickable`: the element has no actionable frame; use a parent/child element with a frame or choose window-local coordinates from the latest screenshot.
+- `invalid_argument`: fix the command flags; do not retry the same command unchanged.
+- `action_timeout`: inspect current state before retrying, then use a simpler semantic action or `--no-screenshot` if observation is slow.
+- `screenshot_failed`: use `--no-screenshot` if tree state is enough; if the message names Screen Recording or screenshots permission, run `orca computer permissions --id screenshots --json`.
+- `accessibility_error`: run `orca computer capabilities --json`; if the message names Accessibility permission, run `orca computer permissions --id accessibility --json`.
+- Empty tree or no screenshot: app may have no visible window, be minimized, or need permissions.
+- Permission errors: run `orca computer permissions --json`, or `orca computer permissions --id accessibility --json` / `--id screenshots --json` when the message names one permission, use the setup UI, then retry.
 
-### Slack
+## Next Action
 
-Slack may expose a shallow accessibility tree while the screenshot contains the useful information. Reading visible Slack UI is acceptable when requested, but do not send messages or trigger workflows unless explicitly asked.
-
-## Error Handling
-
-- `app_not_found`: run `list-apps` and retry with the bundle ID.
-- `element_not_found`: the index is stale; run `get-app-state` again.
-- `action_failed`: inspect the element role/actions and try a more semantic action.
-- Empty tree or no screenshot: the app may have no visible window, be minimized, or be blocked by permissions.
-- Permission errors: the user needs to grant Accessibility or Screen Recording to `Orca Computer Use`. Run `orca computer permissions --json`, use the setup UI, then retry `orca computer get-app-state --app <bundle> --json`.
-
-## Safety Checks
-
-Before acting, classify the action:
-
-- Safe: read state, list apps, inspect screenshot, focus a search box, scroll, open a harmless tab.
-- Needs care: typing into a focused field, pressing Return, clicking a primary button.
-- Requires explicit user permission: sending messages, posting, purchasing, deleting, submitting forms, changing settings, signing in, or exposing secrets.
-
-When uncertain, stop after `get-app-state` and report what is visible instead of acting.
+Confirm Orca status unless already checked, then run `orca computer capabilities --json`. For website or web-app targets such as Gmail, identify the desktop browser app/window that contains the page, then get that target app state with `orca computer get-app-state --app <app> --json`.

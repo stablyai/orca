@@ -1,8 +1,15 @@
-import { resolve, relative, dirname, basename, isAbsolute } from 'path'
+/* eslint-disable max-lines -- Why: filesystem authorization keeps root
+discovery, canonicalization, and registered-worktree cache checks together so
+the security boundary is auditable end to end. */
+import { resolve, relative, dirname, basename, isAbsolute, sep } from 'path'
 import { realpathSync } from 'fs'
 import { realpath } from 'fs/promises'
 import type { Store } from '../persistence'
 import { isRepoRoot, listRepoWorktrees } from '../repo-worktrees'
+import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
+import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
+import type { FolderWorkspace, ProjectGroup, Repo } from '../../shared/types'
 
 export const PATH_ACCESS_DENIED_MESSAGE =
   'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
@@ -12,6 +19,9 @@ const registeredWorktreeRootsByRepo = new Map<string, Set<string>>()
 const registeredWorktreeRootRepoIds = new Set<string>()
 let registeredWorktreeRootsDirty = true
 let registeredWorktreeRootsRefresh: Promise<void> | null = null
+const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8
+type FolderScopeStore = Pick<Store, 'getRepos'> &
+  Partial<Pick<Store, 'getProjectGroups' | 'getFolderWorkspaces'>>
 
 export function authorizeExternalPath(targetPath: string): void {
   const resolvedTarget = resolve(targetPath)
@@ -38,6 +48,75 @@ function getLocalRepos(store: Store) {
   return store.getRepos().filter((repo) => !repo.connectionId)
 }
 
+function getFolderScopeCandidateRepos(
+  folderPath: string,
+  projectGroupId: string,
+  projectGroups: readonly ProjectGroup[],
+  repos: readonly Repo[]
+): Repo[] {
+  const groupIds = getProjectGroupSubtreeIds(projectGroups, projectGroupId)
+  return repos.filter(
+    (repo) =>
+      (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
+      isPathInsideOrEqual(folderPath, repo.path)
+  )
+}
+
+function isRemoteOnlyFolderScope(
+  folderPath: string,
+  projectGroupId: string,
+  connectionId: string | null | undefined,
+  projectGroups: readonly ProjectGroup[],
+  repos: readonly Repo[]
+): boolean {
+  if (connectionId) {
+    return true
+  }
+  const candidates = getFolderScopeCandidateRepos(folderPath, projectGroupId, projectGroups, repos)
+  return candidates.length > 0 && candidates.every((repo) => Boolean(repo.connectionId))
+}
+
+function getFolderWorkspaceConnectionId(
+  workspace: FolderWorkspace,
+  projectGroups: readonly ProjectGroup[]
+): string | null {
+  return (
+    workspace.connectionId ??
+    projectGroups.find((group) => group.id === workspace.projectGroupId)?.connectionId ??
+    null
+  )
+}
+
+function getLocalFolderScopeRoots(store: Store): string[] {
+  const scopeStore = store as FolderScopeStore
+  const repos = scopeStore.getRepos()
+  // Why: many filesystem tests use narrow Store doubles; folder scopes are additive.
+  const projectGroups = scopeStore.getProjectGroups?.() ?? []
+  const roots: string[] = []
+  for (const group of projectGroups) {
+    if (
+      group.parentPath &&
+      !isRemoteOnlyFolderScope(group.parentPath, group.id, group.connectionId, projectGroups, repos)
+    ) {
+      roots.push(resolve(group.parentPath))
+    }
+  }
+  for (const workspace of scopeStore.getFolderWorkspaces?.() ?? []) {
+    if (
+      !isRemoteOnlyFolderScope(
+        workspace.folderPath,
+        workspace.projectGroupId,
+        getFolderWorkspaceConnectionId(workspace, projectGroups),
+        projectGroups,
+        repos
+      )
+    ) {
+      roots.push(resolve(workspace.folderPath))
+    }
+  }
+  return roots
+}
+
 /**
  * Check whether resolvedTarget is equal to or a descendant of resolvedBase.
  * Uses relative() so it works with both `/` (Unix) and `\` (Windows) separators.
@@ -47,22 +126,31 @@ export function isDescendantOrEqual(resolvedTarget: string, resolvedBase: string
     return true
   }
   const rel = relative(resolvedBase, resolvedTarget)
-  // rel must not start with ".." and must not be an absolute path (e.g. different drive on Windows)
+  // rel must not be ".."/"../..." or an absolute path (e.g. different drive on Windows)
   // [Security Fix]: Added !isAbsolute(rel) to prevent drive traversal bypasses on Windows
   // where relative('D:\\repo', 'C:\\etc\\passwd') returns absolute path 'C:\\etc\\passwd'
-  return (
-    rel !== '' &&
-    !rel.startsWith('..') &&
-    !isAbsolute(rel) &&
-    resolve(resolvedBase, rel) === resolvedTarget
-  )
+  // Why: Windows path.relative() already treats drive/root casing as equivalent;
+  // rejoining and comparing strings would deny valid `c:\repo` descendants of `C:\Repo`.
+  return rel !== '' && !(rel === '..' || rel.startsWith(`..${sep}`)) && !isAbsolute(rel)
 }
 
 export function getAllowedRoots(store: Store): string[] {
-  const roots = getLocalRepos(store).map((repo) => resolve(repo.path))
-  const workspaceDir = store.getSettings().workspaceDir
-  if (workspaceDir) {
-    roots.push(resolve(workspaceDir))
+  const localRepos = getLocalRepos(store)
+  const settings = store.getSettings()
+  const roots = [
+    ...localRepos.map((repo) => resolve(repo.path)),
+    ...getLocalFolderScopeRoots(store)
+  ]
+  if (settings.workspaceDir) {
+    if (localRepos.length === 0) {
+      roots.push(resolve(settings.workspaceDir))
+    } else {
+      for (const repo of localRepos) {
+        roots.push(
+          resolve(computeWorkspaceRoot(repo.path, getWorktreePathSettings(repo, settings)))
+        )
+      }
+    }
   }
   return roots
 }
@@ -81,11 +169,8 @@ export function isPathAllowed(targetPath: string, store: Store): boolean {
 }
 
 export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
-  // Why: repos are processed in parallel so the cache rebuild completes in
-  // wall-clock time proportional to the slowest single repo, not the sum of
-  // all repos.  The previous sequential loop was the main bottleneck on
-  // Windows where each `git worktree list` + realpath chain takes 500 ms+
-  // due to slower process creation and antivirus I/O scanning.
+  // Why: repos are processed with bounded parallelism so the cache rebuild
+  // keeps the Windows speedup without spawning one git process per repo.
   //
   // Why no realpath() here: this rebuild runs on repo/worktree invalidation,
   // so canonicalizing every repo root would repeatedly touch TCC-protected
@@ -94,15 +179,17 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   // destructive or read/write operation, so the security boundary remains
   // enforced where it matters.
   const repos = getLocalRepos(store)
-  const perProjectResults = await Promise.all(
-    repos.map(async (repo) => {
+  const perProjectResults = await mapWithConcurrency(
+    repos,
+    AUTHORIZED_ROOTS_REBUILD_CONCURRENCY,
+    async (repo) => {
       const roots: string[] = []
       try {
         roots.push(resolve(repo.path))
 
-        const worktrees = await listRepoWorktrees(repo)
-        const worktreeRoots = worktrees.map((wt) => resolve(wt.path))
-        roots.push(...worktreeRoots)
+        for (const worktree of await listRepoWorktrees(repo)) {
+          roots.push(resolve(worktree.path))
+        }
       } catch (error) {
         // Why: a single inaccessible repo (EACCES, EIO, etc.) must not break
         // the entire cache rebuild — that would disable File Explorer and
@@ -111,7 +198,7 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
         console.warn(`[filesystem-auth] skipping repo ${repo.path} during cache rebuild:`, error)
       }
       return { repoId: repo.id, roots }
-    })
+    }
   )
 
   registeredWorktreeRoots.clear()
@@ -127,6 +214,26 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
     registeredWorktreeRootRepoIds.add(repoId)
   }
   registeredWorktreeRootsDirty = false
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  maxConcurrent: number,
+  mapper: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = []
+  let nextIndex = 0
+  const workerCount = Math.min(maxConcurrent, items.length)
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex
+        nextIndex += 1
+        results[index] = await mapper(items[index])
+      }
+    })
+  )
+  return results
 }
 
 export function registerWorktreeRootsForRepo(
@@ -200,7 +307,15 @@ export async function resolveAuthorizedPath(
     // Canonicalize the parent so symlinks in ancestors cannot redirect us
     // outside allowed roots, but keep the final segment untouched so callers
     // (delete/rename) act on the link itself.
-    const realParent = await realpath(dirname(resolvedTarget))
+    let realParent: string
+    try {
+      realParent = await realpath(dirname(resolvedTarget))
+    } catch (error) {
+      if (isENOENT(error)) {
+        return resolveAuthorizedMissingPath(resolvedTarget, store)
+      }
+      throw error
+    }
     const candidateTarget = resolve(realParent, basename(resolvedTarget))
     if (
       !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
@@ -226,17 +341,40 @@ export async function resolveAuthorizedPath(
     if (!isENOENT(error)) {
       throw error
     }
+    return resolveAuthorizedMissingPath(resolvedTarget, store)
+  }
+}
 
-    const realParent = await realpath(dirname(resolvedTarget))
-    const candidateTarget = resolve(realParent, basename(resolvedTarget))
-    if (
-      !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
-        canonicalSourcePath: resolvedTarget
-      }))
-    ) {
-      throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+async function resolveAuthorizedMissingPath(resolvedTarget: string, store: Store): Promise<string> {
+  let existingAncestor = resolvedTarget
+  const missingSegments: string[] = []
+
+  while (true) {
+    try {
+      const realAncestor = await realpath(existingAncestor)
+      const candidateTarget = resolve(realAncestor, ...missingSegments)
+      if (
+        !(await isPathAllowedIncludingRegisteredWorktrees(candidateTarget, store, {
+          canonicalSourcePath: resolvedTarget
+        }))
+      ) {
+        throw new Error(PATH_ACCESS_DENIED_MESSAGE)
+      }
+      return candidateTarget
+    } catch (error) {
+      if (!isENOENT(error)) {
+        throw error
+      }
+      const parent = dirname(existingAncestor)
+      if (parent === existingAncestor) {
+        throw error
+      }
+      // Why: create/copy callers intentionally create missing parents after
+      // auth. Canonicalize the nearest existing ancestor so symlink escapes are
+      // still caught without rejecting legitimate nested paths.
+      missingSegments.unshift(basename(existingAncestor))
+      existingAncestor = parent
     }
-    return candidateTarget
   }
 }
 
@@ -250,6 +388,10 @@ async function isPathAllowedIncludingRegisteredWorktrees(
   }
 
   if (isRegisteredWorktreePath(targetPath)) {
+    return true
+  }
+
+  if (await isPathAllowedByCanonicalAllowedRoot(targetPath, options.canonicalSourcePath, store)) {
     return true
   }
 
@@ -324,6 +466,29 @@ function allLocalRepoRootsRegistered(localRepoIds: Set<string>): boolean {
     }
   }
   return true
+}
+
+async function isPathAllowedByCanonicalAllowedRoot(
+  targetPath: string,
+  sourcePath: string | undefined,
+  store: Store
+): Promise<boolean> {
+  if (!sourcePath) {
+    return false
+  }
+  for (const root of getAllowedRoots(store)) {
+    const resolvedRoot = resolve(root)
+    if (!isDescendantOrEqual(sourcePath, resolvedRoot)) {
+      continue
+    }
+    // Why: active file operations may resolve `/var` to `/private/var` on
+    // macOS. Canonicalize only the matched root instead of the whole repo set.
+    const canonicalRoot = await normalizeExistingPath(resolvedRoot)
+    if (isDescendantOrEqual(targetPath, canonicalRoot)) {
+      return true
+    }
+  }
+  return false
 }
 
 function isRegisteredWorktreePath(targetPath: string): boolean {

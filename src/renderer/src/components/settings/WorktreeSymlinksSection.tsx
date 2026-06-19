@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { SearchableSetting } from './SearchableSetting'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 
 type WorktreeSymlinksSectionProps = {
   repo: Repo
@@ -15,6 +16,7 @@ type WorktreeSymlinksSectionProps = {
 }
 
 type DirEntry = { name: string; isDirectory: boolean }
+type DirectorySuggestionState = { requestKey: string; entries: DirEntry[] }
 
 const MAX_SUGGESTIONS = 50
 
@@ -24,15 +26,21 @@ export function WorktreeSymlinksSection({
 }: WorktreeSymlinksSectionProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [entries, setEntries] = useState<DirEntry[]>([])
   const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
 
   const paths = repo.symlinkPaths ?? []
   const queryTrimmed = query.trim().replace(/^\/+/, '')
+  const useLocalDirectorySuggestions = !activeRuntimeEnvironmentId?.trim()
+  const directorySuggestionKey = `${repo.path}\n${repo.connectionId ?? ''}`
+  const [directorySuggestions, setDirectorySuggestions] = useState<DirectorySuggestionState>(
+    () => ({
+      requestKey: directorySuggestionKey,
+      entries: []
+    })
+  )
 
   useEffect(() => {
-    if (activeRuntimeEnvironmentId?.trim()) {
-      setEntries([])
+    if (!useLocalDirectorySuggestions) {
       return
     }
     let cancelled = false
@@ -42,7 +50,10 @@ export function WorktreeSymlinksSection({
         if (cancelled) {
           return
         }
-        setEntries(list.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory })))
+        setDirectorySuggestions({
+          requestKey: directorySuggestionKey,
+          entries: list.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory }))
+        })
       })
       .catch(() => {
         // Non-fatal: without entries the combobox still works as a free-text
@@ -51,13 +62,19 @@ export function WorktreeSymlinksSection({
     return () => {
       cancelled = true
     }
-  }, [activeRuntimeEnvironmentId, repo.path, repo.connectionId])
+  }, [useLocalDirectorySuggestions, repo.path, repo.connectionId, directorySuggestionKey])
 
   const filtered = useMemo(() => {
     const q = queryTrimmed.toLowerCase()
-    const base = q ? entries.filter((e) => e.name.toLowerCase().includes(q)) : entries
+    const suggestionEntries =
+      useLocalDirectorySuggestions && directorySuggestions.requestKey === directorySuggestionKey
+        ? directorySuggestions.entries
+        : []
+    const base = q
+      ? suggestionEntries.filter((e) => e.name.toLowerCase().includes(q))
+      : suggestionEntries
     return base.slice(0, MAX_SUGGESTIONS)
-  }, [queryTrimmed, entries])
+  }, [queryTrimmed, directorySuggestionKey, directorySuggestions, useLocalDirectorySuggestions])
 
   const hasExactMatch = filtered.some((e) => e.name === queryTrimmed)
   const showLiteralItem = queryTrimmed.length > 0 && !hasExactMatch && !paths.includes(queryTrimmed)
@@ -79,10 +96,19 @@ export function WorktreeSymlinksSection({
 
   return (
     <SearchableSetting
-      title="Worktree Symlinks"
-      description="Paths to symlink from the primary checkout into newly created worktrees."
+      title={translate(
+        'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
+        'Worktree Shared Paths'
+      )}
+      description={translate(
+        'auto.components.settings.WorktreeSymlinksSection.b07ef5a8b6',
+        'Paths to materialize from the primary checkout into newly created worktrees.'
+      )}
       keywords={[
         repo.displayName,
+        'apfs',
+        'clone',
+        'copy',
         'symlink',
         'symlinks',
         'worktree',
@@ -95,28 +121,43 @@ export function WorktreeSymlinksSection({
     >
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h3 className="text-sm font-semibold">Worktree Symlinks</h3>
+          <h3 className="text-sm font-semibold">
+            {translate(
+              'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
+              'Worktree Shared Paths'
+            )}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            When a new worktree is created, each path listed here will be symlinked from the primary
-            checkout.
+            {translate(
+              'auto.components.settings.WorktreeSymlinksSection.7ff265071d',
+              'When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.'
+            )}
           </p>
         </div>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button type="button" variant="outline" size="sm">
               <Plus className="size-3.5" />
-              Add Path
+              {translate('auto.components.settings.WorktreeSymlinksSection.241325302c', 'Add Path')}
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-72 p-0">
             <Command shouldFilter={false}>
               <CommandInput
-                placeholder="Type a path (e.g. .env or node_modules)…"
+                placeholder={translate(
+                  'auto.components.settings.WorktreeSymlinksSection.4cd2a4c077',
+                  'Type a path (e.g. .env or node_modules)…'
+                )}
                 value={query}
                 onValueChange={setQuery}
               />
               <CommandList>
-                <CommandEmpty>No matches. Keep typing to add a custom path.</CommandEmpty>
+                <CommandEmpty>
+                  {translate(
+                    'auto.components.settings.WorktreeSymlinksSection.ab40b8a5f1',
+                    'No matches. Keep typing to add a custom path.'
+                  )}
+                </CommandEmpty>
                 {showLiteralItem ? (
                   <CommandItem
                     value={`__literal__:${queryTrimmed}`}
@@ -125,7 +166,10 @@ export function WorktreeSymlinksSection({
                   >
                     <Plus className="size-3.5 text-muted-foreground" />
                     <span className="text-xs">
-                      Add{' '}
+                      {translate(
+                        'auto.components.settings.WorktreeSymlinksSection.b2429aeb31',
+                        'Add'
+                      )}{' '}
                       <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
                         {queryTrimmed}
                       </code>
@@ -151,7 +195,10 @@ export function WorktreeSymlinksSection({
                       <span className="truncate text-xs">{entry.name}</span>
                       {alreadyAdded ? (
                         <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
-                          added
+                          {translate(
+                            'auto.components.settings.WorktreeSymlinksSection.ea06227efa',
+                            'added'
+                          )}
                         </span>
                       ) : null}
                     </CommandItem>
@@ -165,7 +212,10 @@ export function WorktreeSymlinksSection({
 
       {paths.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
-          No symlink paths configured for this repository.
+          {translate(
+            'auto.components.settings.WorktreeSymlinksSection.31ebab5403',
+            'No shared paths configured for this repository.'
+          )}
         </div>
       ) : (
         <div className="rounded-xl border border-border/50 bg-background/70 px-4 py-3 shadow-sm">
@@ -175,9 +225,23 @@ export function WorktreeSymlinksSection({
             </div>
             <div className="min-w-0 flex-1 space-y-2">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <h4 className="text-sm font-medium">Linked paths</h4>
+                <h4 className="text-sm font-medium">
+                  {translate(
+                    'auto.components.settings.WorktreeSymlinksSection.b814c618e2',
+                    'Linked paths'
+                  )}
+                </h4>
                 <span className="text-[11px] text-muted-foreground">
-                  {paths.length === 1 ? '1 path' : `${paths.length} paths`}
+                  {paths.length === 1
+                    ? translate(
+                        'auto.components.settings.WorktreeSymlinksSection.9ea912d811',
+                        '1 path'
+                      )
+                    : translate(
+                        'auto.components.settings.WorktreeSymlinksSection.d72ba8dc68',
+                        '{{value0}} paths',
+                        { value0: paths.length }
+                      )}
                 </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -192,7 +256,11 @@ export function WorktreeSymlinksSection({
                       size="icon-xs"
                       variant="ghost"
                       onClick={() => handleRemove(path)}
-                      aria-label={`Remove ${path}`}
+                      aria-label={translate(
+                        'auto.components.settings.WorktreeSymlinksSection.1c1e35b219',
+                        'Remove {{value0}}',
+                        { value0: path }
+                      )}
                       className="size-4 shrink-0 rounded-sm"
                     >
                       <X className="size-3" />

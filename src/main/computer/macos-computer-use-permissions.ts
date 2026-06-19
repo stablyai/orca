@@ -1,22 +1,18 @@
 import { execFileSync, spawn, spawnSync } from 'child_process'
-import { mkdtemp, readFile, rm, stat } from 'fs/promises'
-import { tmpdir } from 'os'
 import { join } from 'path'
-import { setTimeout as delay } from 'timers/promises'
 import { RuntimeClientError } from './runtime-client-error'
-import {
-  resolveMacOSComputerUseAppPath,
-  resolveMacOSComputerUseExecutablePath
-} from './macos-native-provider-paths'
+import { resolveMacOSComputerUseAppPath } from './macos-native-provider-paths'
+import { getComputerUsePermissionStatus } from './macos-computer-use-permission-status'
 import type {
   ComputerUsePermissionId,
   ComputerUsePermissionResetResult,
   ComputerUsePermissionSetupResult,
-  ComputerUsePermissionStatus,
   ComputerUsePermissionStatusResult
 } from '../../shared/computer-use-permissions-types'
 
 const DEFAULT_COMPUTER_USE_BUNDLE_ID = 'com.stablyai.orca.computer-use'
+
+export { getComputerUsePermissionStatus } from './macos-computer-use-permission-status'
 
 export function openComputerUsePermissions(
   permissionId?: ComputerUsePermissionId
@@ -133,139 +129,6 @@ function closeExistingPermissionHelpers(): void {
     spawnSync('/usr/bin/pkill', ['-f', pattern], {
       stdio: 'ignore'
     })
-  }
-}
-
-export function getComputerUsePermissionStatus(): Promise<ComputerUsePermissionStatusResult> {
-  return getComputerUsePermissionStatusAsync()
-}
-
-async function getComputerUsePermissionStatusAsync(): Promise<ComputerUsePermissionStatusResult> {
-  if (process.platform !== 'darwin') {
-    return {
-      platform: process.platform,
-      helperAppPath: null,
-      helperUnavailableReason: null,
-      permissions: [
-        { id: 'accessibility', status: 'unsupported' },
-        { id: 'screenshots', status: 'unsupported' }
-      ]
-    }
-  }
-
-  const helperAppPath = resolveMacOSComputerUseAppPath()
-  if (!helperAppPath) {
-    return createUnavailablePermissionStatus('Orca Computer Use.app was not found', null)
-  }
-
-  const executablePath = resolveMacOSComputerUseExecutablePath()
-  if (!executablePath) {
-    return createUnavailablePermissionStatus(
-      `${helperAppPath}/Contents/MacOS/orca-computer-use-macos was not found`,
-      helperAppPath
-    )
-  }
-
-  const raw = await readPermissionStatusFromHelperApp(helperAppPath)
-
-  return {
-    platform: process.platform,
-    helperAppPath,
-    helperUnavailableReason: null,
-    permissions: [
-      { id: 'accessibility', status: raw.accessibility ?? 'not-granted' },
-      { id: 'screenshots', status: raw.screenshots ?? 'not-granted' }
-    ]
-  }
-}
-
-function createUnavailablePermissionStatus(
-  reason: string,
-  helperAppPath: string | null
-): ComputerUsePermissionStatusResult {
-  return {
-    platform: process.platform,
-    helperAppPath,
-    helperUnavailableReason: reason,
-    permissions: [
-      { id: 'accessibility', status: 'not-granted' },
-      { id: 'screenshots', status: 'not-granted' }
-    ]
-  }
-}
-
-async function readPermissionStatusFromHelperApp(
-  helperAppPath: string
-): Promise<Partial<Record<ComputerUsePermissionId, ComputerUsePermissionStatus>>> {
-  const tempDir = await mkdtemp(join(tmpdir(), 'orca-computer-use-permissions-'))
-  const statusPath = join(tempDir, 'status.json')
-  try {
-    // Why: TCC status must be checked through the helper app identity. Directly
-    // execing the binary can inherit the parent app's already-granted context.
-    await launchPermissionStatusHelper(helperAppPath, statusPath)
-
-    for (let attempt = 0; attempt < 50; attempt++) {
-      if (await fileExists(statusPath)) {
-        const output = await readFile(statusPath, 'utf8')
-        return JSON.parse(output) as Partial<
-          Record<ComputerUsePermissionId, ComputerUsePermissionStatus>
-        >
-      }
-      await delay(100)
-    }
-    throw new RuntimeClientError('accessibility_error', 'Timed out checking permissions')
-  } finally {
-    await rm(tempDir, { recursive: true, force: true })
-  }
-}
-
-function launchPermissionStatusHelper(helperAppPath: string, statusPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const launch = spawn(
-      '/usr/bin/open',
-      ['-n', helperAppPath, '--args', '--permission-status-file', statusPath],
-      {
-        stdio: ['ignore', 'pipe', 'pipe']
-      }
-    )
-    let stdout = ''
-    let stderr = ''
-
-    launch.stdout?.setEncoding('utf8')
-    launch.stderr?.setEncoding('utf8')
-    launch.stdout?.on('data', (chunk) => {
-      stdout += chunk
-    })
-    launch.stderr?.on('data', (chunk) => {
-      stderr += chunk
-    })
-    launch.on('error', () => {
-      reject(
-        new RuntimeClientError(
-          'accessibility_error',
-          'Could not check permissions: failed to launch helper'
-        )
-      )
-    })
-    launch.on('close', (status) => {
-      if (status === 0) {
-        resolve()
-        return
-      }
-      const detail = stderr.trim() || stdout.trim() || `exit ${status ?? 'unknown'}`
-      reject(
-        new RuntimeClientError('accessibility_error', `Could not check permissions: ${detail}`)
-      )
-    })
-  })
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await stat(path)
-    return true
-  } catch {
-    return false
   }
 }
 

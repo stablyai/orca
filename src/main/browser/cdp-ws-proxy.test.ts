@@ -330,6 +330,28 @@ describe('CdpWsProxy', () => {
     })
   })
 
+  it('detaches client websocket listeners after client close', async () => {
+    const client = await connect()
+    const serverClient = (proxy as unknown as { client: WebSocket | null }).client
+    expect(serverClient).toBeTruthy()
+    const offSpy = vi.spyOn(serverClient!, 'off')
+
+    client.close()
+
+    const start = Date.now()
+    while (
+      (proxy as unknown as { client: WebSocket | null }).client &&
+      Date.now() - start < 2_000
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+
+    expect((proxy as unknown as { client: WebSocket | null }).client).toBeNull()
+    const removedEvents = offSpy.mock.calls.map(([event]) => event)
+    expect(removedEvents).toEqual(expect.arrayContaining(['message', 'close']))
+    offSpy.mockRestore()
+  })
+
   it('rejects inflight requests on stop', async () => {
     let resolveCommand: (v: unknown) => void
     mock.webContents.debugger.sendCommand.mockImplementation(

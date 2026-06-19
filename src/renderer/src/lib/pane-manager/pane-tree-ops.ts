@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: split-tree DOM reparent, promote, and equalize rules need one consistent owner. */
 import type {
   DropZone,
   ManagedPane,
@@ -5,7 +6,7 @@ import type {
   PaneStyleOptions,
   ScrollState
 } from './pane-manager-types'
-import { createDivider } from './pane-divider'
+import { createDivider, disposeDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
@@ -22,7 +23,14 @@ type TreeOpsCallbacks = {
   safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
   onLayoutChanged?: () => void
+  isDestroyed?: () => boolean
+  requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
 }
+
+const MIN_PANE_FIT_WIDTH_PX = 48
+const MIN_PANE_FIT_HEIGHT_PX = 24
+const MIN_PANE_FIT_COLS = 8
+const MIN_PANE_FIT_ROWS = 4
 
 function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
   try {
@@ -30,6 +38,24 @@ function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number 
   } catch {
     return null
   }
+}
+
+function canMeasurePaneForFit(pane: ManagedPane): boolean {
+  const measure = pane.container.getBoundingClientRect
+  if (typeof measure === 'function') {
+    const rect = measure.call(pane.container)
+    if (rect.width < MIN_PANE_FIT_WIDTH_PX || rect.height < MIN_PANE_FIT_HEIGHT_PX) {
+      return false
+    }
+  }
+  const dims = getProposedDimensions(pane)
+  if (!dims) {
+    return false
+  }
+  // Why: worktree switches can briefly measure a near-zero overlay before
+  // fallback positioning lands. Fitting there pins the PTY at ~2 cols until
+  // the next user-driven resize.
+  return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
 }
 
 function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
@@ -40,6 +66,9 @@ function captureScrollStateForFit(pane: ManagedPane): ScrollState | null {
 }
 
 export function safeFit(pane: ManagedPane): void {
+  if (!canMeasurePaneForFit(pane)) {
+    return
+  }
   let scrollState: ScrollState | null = null
   let shouldRestoreScroll = false
   try {
@@ -216,7 +245,13 @@ export function insertPaneNextTo(
     split.appendChild(source.container)
   }
 
-  requestAnimationFrame(() => {
+  const requestReparentFrame =
+    callbacks.requestPaneReparentFrame ??
+    ((callback: FrameRequestCallback) => requestAnimationFrame(callback))
+  requestReparentFrame(() => {
+    if (callbacks.isDestroyed?.()) {
+      return
+    }
     if (sourceHadWebgl && source.gpuRenderingEnabled && !source.webglDisabledAfterContextLoss) {
       attachWebgl(source)
     }
@@ -281,6 +316,7 @@ export function removeDividers(parent: HTMLElement): void {
       child instanceof HTMLElement && child.classList.contains('pane-divider')
   )
   for (const d of dividers) {
+    disposeDivider(d)
     d.remove()
   }
 }

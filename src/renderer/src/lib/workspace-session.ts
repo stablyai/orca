@@ -9,6 +9,9 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-s
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
+import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
+import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
+import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 
 /** Why (issue #1158): the debounced + shutdown session writers share this
  *  gate so a hydration failure cannot overwrite orca-data.json with the
@@ -30,6 +33,7 @@ export function shouldPersistWorkspaceSession(
 export type WorkspaceSessionSnapshot = Pick<
   AppState,
   | 'activeRepoId'
+  | 'activeWorkspaceKey'
   | 'activeWorktreeId'
   | 'activeTabId'
   | 'tabsByWorktree'
@@ -37,6 +41,8 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'terminalLayoutsByTabId'
   | 'activeTabIdByWorktree'
   | 'openFiles'
+  | 'editorDrafts'
+  | 'markdownFrontmatterVisible'
   | 'activeFileIdByWorktree'
   | 'activeTabTypeByWorktree'
   | 'browserTabsByWorktree'
@@ -52,7 +58,10 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'worktreesByRepo'
   | 'lastKnownRelayPtyIdByTabId'
   | 'lastVisitedAtByWorktreeId'
->
+  | 'defaultTerminalTabsAppliedByWorktreeId'
+> & {
+  sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
+}
 
 // Why: the App-level Zustand subscriber that debounces session writes uses
 // this list as a shallow-equality gate so it only resets the timer when a
@@ -62,6 +71,7 @@ export type WorkspaceSessionSnapshot = Pick<
 // time, preventing the gate from silently going stale.
 export const SESSION_RELEVANT_FIELDS = [
   'activeRepoId',
+  'activeWorkspaceKey',
   'activeWorktreeId',
   'activeTabId',
   'tabsByWorktree',
@@ -69,6 +79,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'terminalLayoutsByTabId',
   'activeTabIdByWorktree',
   'openFiles',
+  'editorDrafts',
+  'markdownFrontmatterVisible',
   'activeFileIdByWorktree',
   'activeTabTypeByWorktree',
   'browserTabsByWorktree',
@@ -83,7 +95,9 @@ export const SESSION_RELEVANT_FIELDS = [
   'repos',
   'worktreesByRepo',
   'lastKnownRelayPtyIdByTabId',
-  'lastVisitedAtByWorktreeId'
+  'lastVisitedAtByWorktreeId',
+  'defaultTerminalTabsAppliedByWorktreeId',
+  'sleepingAgentSessionsByPaneKey'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
 
 type _MissingSessionField = Exclude<
@@ -97,24 +111,31 @@ void _exhaustive
  *  Only edit-mode files are saved — diffs and conflict views are transient. */
 export function buildEditorSessionData(
   openFiles: OpenFile[],
+  editorDrafts: Record<string, string>,
+  markdownFrontmatterVisible: Record<string, boolean>,
   activeFileIdByWorktree: Record<string, string | null>,
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
 ): Pick<
   WorkspaceSessionState,
-  'openFilesByWorktree' | 'activeFileIdByWorktree' | 'activeTabTypeByWorktree'
+  | 'openFilesByWorktree'
+  | 'activeFileIdByWorktree'
+  | 'activeTabTypeByWorktree'
+  | 'markdownFrontmatterVisible'
 > {
   const editFiles = openFiles.filter((f) => f.mode === 'edit')
   const byWorktree: Record<string, PersistedOpenFile[]> = {}
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
+    const dirtyDraftContent = f.isDirty ? editorDrafts[f.id] : undefined
     arr.push({
       filePath: f.filePath,
       relativePath: f.relativePath,
       worktreeId: f.worktreeId,
       language: f.language,
       isPreview: f.isPreview || undefined,
-      runtimeEnvironmentId: f.runtimeEnvironmentId
+      runtimeEnvironmentId: f.runtimeEnvironmentId,
+      ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {})
     })
     const ids =
       editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
@@ -153,11 +174,18 @@ export function buildEditorSessionData(
     string,
     WorkspaceVisibleTabType
   >
+  const allEditFileIds = new Set(Object.values(editFileIdsByWorktree).flatMap((ids) => [...ids]))
+  const persistedMarkdownFrontmatterVisible = Object.fromEntries(
+    Object.keys(markdownFrontmatterVisible ?? {})
+      .filter((fileId) => allEditFileIds.has(fileId))
+      .map((fileId) => [fileId, true])
+  )
 
   return {
     openFilesByWorktree: byWorktree,
     activeFileIdByWorktree: persistedActiveFileIdByWorktree,
-    activeTabTypeByWorktree: persistedActiveTabTypeByWorktree
+    activeTabTypeByWorktree: persistedActiveTabTypeByWorktree,
+    markdownFrontmatterVisible: persistedMarkdownFrontmatterVisible
   }
 }
 
@@ -173,31 +201,62 @@ export function buildBrowserSessionData(
     // Why: browser tabs persist only lightweight chrome state. Live guest
     // webContents are recreated on restore, so loading is reset to false and
     // transient errors are preserved only as last-known tab metadata.
-    browserTabsByWorktree: Object.fromEntries(
-      Object.entries(browserTabsByWorktree).map(([worktreeId, tabs]) => [
-        worktreeId,
-        tabs.map((tab) => ({ ...tab, loading: false }))
-      ])
-    ),
-    browserPagesByWorkspace: Object.fromEntries(
-      Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
-        workspaceId,
-        pages.map((page) => ({ ...page, loading: false }))
-      ])
-    ),
+    browserTabsByWorktree: buildPersistedBrowserTabsByWorktree(browserTabsByWorktree),
+    browserPagesByWorkspace: buildPersistedBrowserPagesByWorkspace(browserPagesByWorkspace),
     activeBrowserTabIdByWorktree
   }
 }
 
-export function buildWorkspaceSessionPayload(
+export function buildPersistedBrowserTabsByWorktree(
+  browserTabsByWorktree: Record<string, BrowserWorkspace[]>
+): WorkspaceSessionState['browserTabsByWorktree'] {
+  return Object.fromEntries(
+    Object.entries(browserTabsByWorktree).map(([worktreeId, tabs]) => [
+      worktreeId,
+      tabs.map((tab) => ({ ...tab, loading: false }))
+    ])
+  )
+}
+
+export function buildPersistedBrowserPagesByWorkspace(
+  browserPagesByWorkspace: Record<string, BrowserPage[]>
+): WorkspaceSessionState['browserPagesByWorkspace'] {
+  return Object.fromEntries(
+    Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
+      workspaceId,
+      pages.map((page) => ({ ...page, loading: false }))
+    ])
+  )
+}
+
+export function buildSanitizedTabsByWorktree(
+  tabsByWorktree: WorkspaceSessionSnapshot['tabsByWorktree']
+): WorkspaceSessionState['tabsByWorktree'] {
+  // Why: pendingActivationSpawn is documented on TerminalTab as a transient
+  // renderer-only handoff between setActiveWorktree and the next updateTabPtyId
+  // — it must never be persisted. The main-process session:set handler writes
+  // the payload to disk without re-parsing it against the Zod schema, so if
+  // the flag were ever set and not consumed before a save (e.g. app quits
+  // mid-handoff), it would round-trip to disk and the next session would
+  // start with a stale suppression flag that drops the first legitimate PTY
+  // spawn from the sidebar's recency sort. Strip it here to enforce the
+  // type-level invariant at the persistence boundary.
+  return Object.fromEntries(
+    Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
+      worktreeId,
+      tabs.map((tab) => {
+        const { pendingActivationSpawn: _unused, ...rest } = tab
+        void _unused
+        return rest
+      })
+    ])
+  )
+}
+
+export function buildTerminalSessionData(
   snapshot: WorkspaceSessionSnapshot
-): WorkspaceSessionState {
+): Pick<WorkspaceSessionState, 'activeWorktreeIdsOnShutdown' | 'remoteSessionIdsByTabId'> {
   const tabsByWorktree = snapshot.tabsByWorktree
-  const activeTabIdByWorktree = snapshot.activeTabIdByWorktree
-  const unifiedTabsByWorktree = snapshot.unifiedTabsByWorktree
-  const groupsByWorktree = snapshot.groupsByWorktree
-  const layoutByWorktree = snapshot.layoutByWorktree
-  const activeGroupIdByWorktree = snapshot.activeGroupIdByWorktree
 
   // Why: ptyIdsByTabId is the live-PTY map. tab.ptyId is only a wake hint that
   // sleep intentionally preserves, so using it as liveness would revive slept
@@ -217,12 +276,6 @@ export function buildWorkspaceSessionPayload(
   const activeWorktreeIdsOnShutdown = Object.entries(tabsByWorktree)
     .filter(([, tabs]) => tabs.some(hasReconnectableSession))
     .map(([worktreeId]) => worktreeId)
-
-  // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
-  // object. Object.entries() on a Map returns [] — must use Array.from().
-  const connectedTargetIds = Array.from(snapshot.sshConnectionStates.entries())
-    .filter(([, state]) => state.status === 'connected')
-    .map(([targetId]) => targetId)
 
   const worktreeById = new Map(
     Object.values(snapshot.worktreesByRepo)
@@ -256,39 +309,46 @@ export function buildWorkspaceSessionPayload(
     }
   }
 
-  // Why: pendingActivationSpawn is documented on TerminalTab as a transient
-  // renderer-only handoff between setActiveWorktree and the next updateTabPtyId
-  // — it must never be persisted. The main-process session:set handler writes
-  // the payload to disk without re-parsing it against the Zod schema, so if
-  // the flag were ever set and not consumed before a save (e.g. app quits
-  // mid-handoff), it would round-trip to disk and the next session would
-  // start with a stale suppression flag that drops the first legitimate PTY
-  // spawn from the sidebar's recency sort. Strip it here to enforce the
-  // type-level invariant at the persistence boundary.
-  const sanitizedTabsByWorktree = Object.fromEntries(
-    Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
-      worktreeId,
-      tabs.map((tab) => {
-        const { pendingActivationSpawn: _unused, ...rest } = tab
-        void _unused
-        return rest
-      })
-    ])
-  )
+  return {
+    activeWorktreeIdsOnShutdown,
+    remoteSessionIdsByTabId:
+      Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined
+  }
+}
+
+export function buildActiveConnectionIdsAtShutdown(
+  snapshot: WorkspaceSessionSnapshot
+): WorkspaceSessionState['activeConnectionIdsAtShutdown'] {
+  // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
+  // object. Object.entries() on a Map returns [] — must use Array.from().
+  const connectedTargetIds = Array.from(snapshot.sshConnectionStates.entries())
+    .filter(([, state]) => state.status === 'connected')
+    .map(([targetId]) => targetId)
+
+  return connectedTargetIds.length > 0 ? connectedTargetIds : undefined
+}
+
+export function buildWorkspaceSessionPayload(
+  snapshot: WorkspaceSessionSnapshot
+): WorkspaceSessionState {
+  const terminalSessionData = buildTerminalSessionData(snapshot)
 
   const payload = {
     activeRepoId: snapshot.activeRepoId,
+    activeWorkspaceKey: snapshot.activeWorkspaceKey,
     activeWorktreeId: snapshot.activeWorktreeId,
     activeTabId: snapshot.activeTabId,
-    tabsByWorktree: sanitizedTabsByWorktree,
+    tabsByWorktree: buildSanitizedTabsByWorktree(snapshot.tabsByWorktree),
     terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
     // Why: session:set fully replaces the persisted object, so every write path
     // must carry forward which worktrees still had live PTYs. Dropping this
     // field silently disables eager terminal reconnect on the next restart.
-    activeWorktreeIdsOnShutdown,
-    activeTabIdByWorktree,
+    activeWorktreeIdsOnShutdown: terminalSessionData.activeWorktreeIdsOnShutdown,
+    activeTabIdByWorktree: snapshot.activeTabIdByWorktree,
     ...buildEditorSessionData(
       snapshot.openFiles,
+      snapshot.editorDrafts,
+      snapshot.markdownFrontmatterVisible,
       snapshot.activeFileIdByWorktree,
       snapshot.activeTabTypeByWorktree
     ),
@@ -301,22 +361,23 @@ export function buildWorkspaceSessionPayload(
     // the payload boundary so stale renderer state cannot make every session
     // write stringify an oversized legacy history array.
     browserUrlHistory: normalizeBrowserHistoryEntries(snapshot.browserUrlHistory),
-    unifiedTabs: unifiedTabsByWorktree,
-    tabGroups: groupsByWorktree,
-    tabGroupLayouts: layoutByWorktree,
-    activeGroupIdByWorktree,
-    activeConnectionIdsAtShutdown: connectedTargetIds.length > 0 ? connectedTargetIds : undefined,
-    remoteSessionIdsByTabId:
-      Object.keys(remoteSessionIdsByTabId).length > 0 ? remoteSessionIdsByTabId : undefined,
+    // Why: split creation and tab creation are separate renderer updates.
+    // Persist only layouts backed by real tabs so a reload cannot restore a
+    // blank split pane from that transient midpoint.
+    ...buildPersistedUnifiedTabSessionData(snapshot),
+    activeConnectionIdsAtShutdown: buildActiveConnectionIdsAtShutdown(snapshot),
+    remoteSessionIdsByTabId: terminalSessionData.remoteSessionIdsByTabId,
     // Why: per-worktree focus-recency for Cmd+J's empty-query ordering.
     // Omit when empty so sessions written by builds that never stamped
     // anything don't bloat the payload. See
     // docs/cmd-j-empty-query-ordering.md.
-    lastVisitedAtByWorktreeId:
-      snapshot.lastVisitedAtByWorktreeId &&
-      Object.keys(snapshot.lastVisitedAtByWorktreeId).length > 0
-        ? snapshot.lastVisitedAtByWorktreeId
-        : undefined
+    lastVisitedAtByWorktreeId: buildLastVisitedAtByWorktreeId(snapshot),
+    defaultTerminalTabsAppliedByWorktreeId:
+      snapshot.defaultTerminalTabsAppliedByWorktreeId &&
+      Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
+        ? snapshot.defaultTerminalTabsAppliedByWorktreeId
+        : undefined,
+    ...buildSleepingAgentSessionData(snapshot)
   }
 
   return pruneLocalTerminalScrollbackBuffers(payload, snapshot.repos)

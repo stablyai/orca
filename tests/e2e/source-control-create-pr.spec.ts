@@ -1,6 +1,7 @@
-import type { Page } from '@stablyai/playwright-test'
+import type { Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import type { CreateHostedReviewResult } from '../../src/shared/hosted-review'
 
 type CreatePRPayload = {
   repoPath: string
@@ -70,10 +71,30 @@ async function forceCreatePREligibleStatus(
   )
 }
 
+function getCreatePRComposer(page: Page): Locator {
+  const titleInput = page.getByRole('textbox', { name: 'Pull request title' })
+  const descriptionLabelPredicate =
+    'translate(@aria-label, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")=' +
+    '"pull request description"'
+  return titleInput.locator(
+    `
+    xpath=ancestor::*[.//textarea[${descriptionLabelPredicate}]
+      and .//button[normalize-space(.)="Create PR"]][1]
+  `.trim()
+  )
+}
+
+function getCreatePRComposerSubmitButton(page: Page): Locator {
+  // Why: the header and composer currently share the same accessible name.
+  // Anchor to the field container so this submits the editable composer.
+  return getCreatePRComposer(page).getByRole('button', { name: 'Create PR' })
+}
+
 async function seedCreatePREligibleBranch(
-  page: Page
+  page: Page,
+  options: { createResult?: CreateHostedReviewResult } = {}
 ): Promise<{ branch: string; worktreeId: string }> {
-  return page.evaluate(async () => {
+  return page.evaluate(async ({ createResult }) => {
     const store = window.__store
     if (!store) {
       throw new Error('window.__store is not available')
@@ -158,6 +179,9 @@ async function seedCreatePREligibleBranch(
           repoPath,
           input
         })
+        if (createResult) {
+          return createResult
+        }
         return {
           ok: true as const,
           number: 73,
@@ -169,7 +193,7 @@ async function seedCreatePREligibleBranch(
     state.setRightSidebarOpen(true)
     state.setRightSidebarTab('source-control')
     return { branch, worktreeId: worktree.id }
-  })
+  }, options)
 }
 
 test.describe('Source Control create pull request', () => {
@@ -183,13 +207,13 @@ test.describe('Source Control create pull request', () => {
     await openSourceControl(orcaPage, worktreeId)
     await forceCreatePREligibleStatus(orcaPage, worktreeId, branch)
 
-    const createButton = orcaPage.getByRole('button', { name: 'Create PR' })
-    await expect(createButton).toBeVisible({ timeout: 10_000 })
-    await expect(createButton).toBeDisabled()
     const titleInput = orcaPage.getByRole('textbox', { name: 'Pull request title' })
     const descriptionInput = orcaPage.getByRole('textbox', {
       name: 'Pull request description'
     })
+    const createButton = getCreatePRComposerSubmitButton(orcaPage)
+    await expect(createButton).toBeVisible({ timeout: 10_000 })
+    await expect(createButton).toBeDisabled()
     await expect(titleInput).toHaveValue('')
     await expect(orcaPage.getByRole('textbox', { name: 'Pull request base branch' })).toHaveValue(
       'main'
@@ -224,5 +248,39 @@ test.describe('Source Control create pull request', () => {
       body: '- Initial commit for E2E',
       draft: false
     })
+  })
+
+  test('surfaces create failures without clearing the pull request composer', async ({
+    orcaPage
+  }) => {
+    const failureMessage = 'Create PR failed: GitHub API rate limit exceeded'
+    const { branch, worktreeId } = await seedCreatePREligibleBranch(orcaPage, {
+      createResult: {
+        ok: false,
+        code: 'unknown',
+        error: failureMessage
+      }
+    })
+    await openSourceControl(orcaPage, worktreeId)
+    await forceCreatePREligibleStatus(orcaPage, worktreeId, branch)
+
+    const titleInput = orcaPage.getByRole('textbox', { name: 'Pull request title' })
+    const descriptionInput = orcaPage.getByRole('textbox', {
+      name: 'Pull request description'
+    })
+    const createButton = getCreatePRComposerSubmitButton(orcaPage)
+    await expect(createButton).toBeVisible({ timeout: 10_000 })
+    await titleInput.fill('Failing PR from E2E')
+    await descriptionInput.fill('This draft should survive a failed create attempt.')
+    await expect(createButton).toBeEnabled()
+    await createButton.click()
+
+    await expect(orcaPage.getByText(failureMessage)).toBeVisible()
+    await expect(titleInput).toHaveValue('Failing PR from E2E')
+    await expect(descriptionInput).toHaveValue('This draft should survive a failed create attempt.')
+    await expect(orcaPage.getByRole('textbox', { name: 'Pull request base branch' })).toHaveValue(
+      'main'
+    )
+    await expect(createButton).toBeEnabled()
   })
 })

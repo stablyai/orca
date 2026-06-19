@@ -31,6 +31,7 @@ describe('getMarkdownDocCompletionContext', () => {
 
   it('rejects closed or malformed contexts', () => {
     expect(getMarkdownDocCompletionContext('[[done]]')).toBeNull()
+    expect(getMarkdownDocCompletionContext('[[done|Alias')).toBeNull()
     expect(getMarkdownDocCompletionContext('plain text')).toBeNull()
   })
 })

@@ -103,10 +103,6 @@ export function buildWorktreeComparator(
           (b.manualOrder ?? b.sortOrder) - (a.manualOrder ?? a.sortOrder) ||
           a.displayName.localeCompare(b.displayName)
         )
-      default: {
-        const _exhaustive: never = sortBy
-        return _exhaustive
-      }
     }
   }
 }

@@ -2,7 +2,8 @@ import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord,
-  RuntimeWorktreeCreateResult
+  RuntimeWorktreeCreateResult,
+  RuntimeWorktreeRemoveResult
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
@@ -19,9 +20,28 @@ import {
   getRequiredWorktreeSelector,
   resolveCurrentWorktreeSelector
 } from '../selectors'
+import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { printLineageSummary } from './worktree-lineage-summary'
+import {
+  assertWorkspaceTargetFlagsCompatible,
+  hasWorkspaceProjectTarget,
+  resolveProjectCreateRepoSelector
+} from '../worktree-project-target'
+import {
+  assertCreateParentFlagsCompatible,
+  resolveCreateParentSelector
+} from './worktree-create-parent-selector'
+import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 
 type HookWarningResult = {
   warning?: string
+}
+
+type PreservedBranchResult = {
+  preservedBranch?: {
+    branchName: string
+  }
 }
 
 function printHookWarning(result: HookWarningResult, json: boolean): void {
@@ -30,33 +50,15 @@ function printHookWarning(result: HookWarningResult, json: boolean): void {
   }
 }
 
-function printLineageSummary(result: RuntimeWorktreeCreateResult, json: boolean): void {
-  if (json) {
-    return
-  }
-  for (const warning of result.warnings ?? []) {
-    console.error(`warning: ${warning.message}`)
-  }
-  if (result.lineage) {
-    const source =
-      result.lineage.capture.source === 'terminal-context'
-        ? 'terminal'
-        : result.lineage.capture.source === 'cwd-context'
-          ? 'cwd'
-          : result.lineage.capture.source === 'orchestration-context'
-            ? 'orchestration'
-            : result.lineage.capture.source === 'explicit-cli-flag'
-              ? 'explicit flag'
-              : 'manual action'
+function printPreservedBranchWarning(result: PreservedBranchResult, json: boolean): void {
+  if (!json && result.preservedBranch) {
     console.error(
-      `parent: ${result.lineage.parentWorktreeId} (${result.lineage.capture.confidence} from ${source})`
+      `warning: local branch "${result.preservedBranch.branchName}" was kept because Git could not safely delete it`
     )
-  } else {
-    console.error('parent: none')
   }
 }
 
-function assertParentFlagsCompatible(flags: Map<string, string | boolean>): void {
+function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean>): void {
   if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -70,6 +72,101 @@ function assertParentFlagsCompatible(flags: Map<string, string | boolean>): void
   ) {
     throw new RuntimeClientError('invalid_argument', 'Missing required --parent-worktree')
   }
+}
+
+function getEnvParentWorkspace(): string | undefined {
+  const workspaceId = process.env.ORCA_WORKSPACE_ID
+  if (typeof workspaceId === 'string' && isWorkspaceKey(workspaceId)) {
+    return workspaceId
+  }
+  const worktreeId = process.env.ORCA_WORKTREE_ID
+  if (typeof worktreeId === 'string' && worktreeId.length > 0) {
+    return isWorkspaceKey(worktreeId) ? worktreeId : worktreeWorkspaceKey(worktreeId)
+  }
+  return undefined
+}
+
+function getPresentStringFlag(
+  flags: Map<string, string | boolean>,
+  name: string,
+  options: { allowEmpty?: boolean } = {}
+): string | undefined {
+  if (!flags.has(name)) {
+    return undefined
+  }
+  const value = flags.get(name)
+  if (typeof value === 'string' && (options.allowEmpty || value.length > 0)) {
+    return value
+  }
+  throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
+}
+
+function getOptionalStartupAgent(flags: Map<string, string | boolean>): string | undefined {
+  const agent = getPresentStringFlag(flags, 'agent')
+  if (agent === undefined) {
+    if (flags.has('prompt')) {
+      throw new RuntimeClientError('invalid_argument', '--prompt requires --agent')
+    }
+    return undefined
+  }
+  if (!isTuiAgent(agent)) {
+    throw new RuntimeClientError('invalid_argument', `Unknown TUI agent "${agent}"`)
+  }
+  return agent
+}
+
+function getOptionalSetupDecision(
+  flags: Map<string, string | boolean>
+): 'run' | 'skip' | 'inherit' | undefined {
+  const setup = getPresentStringFlag(flags, 'setup')
+  if (setup !== undefined && setup !== 'run' && setup !== 'skip' && setup !== 'inherit') {
+    throw new RuntimeClientError('invalid_argument', '--setup must be one of: run, skip, inherit')
+  }
+  if (flags.get('run-hooks') === true) {
+    if (setup !== undefined && setup !== 'run') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Choose either --run-hooks or --setup run, not contradictory setup flags.'
+      )
+    }
+    return setup
+  }
+  return setup
+}
+
+function getRepoSelectorFromWorktreeSelector(selector: string | undefined): string | undefined {
+  if (!selector?.startsWith('id:')) {
+    return undefined
+  }
+  const worktreeId = selector.slice('id:'.length)
+  const separatorIndex = worktreeId.indexOf('::')
+  if (separatorIndex <= 0) {
+    return undefined
+  }
+  return `id:${worktreeId.slice(0, separatorIndex)}`
+}
+
+async function getCreateRepoSelector(
+  flags: Map<string, string | boolean>,
+  cwdParentWorktree: string | undefined,
+  client: Parameters<CommandHandler>[0]['client']
+): Promise<string> {
+  const projectRepoSelector = await resolveProjectCreateRepoSelector(flags, client)
+  if (projectRepoSelector) {
+    return projectRepoSelector
+  }
+  const explicitRepo = getPresentStringFlag(flags, 'repo')
+  if (explicitRepo) {
+    return explicitRepo
+  }
+  const inferredRepo = getRepoSelectorFromWorktreeSelector(cwdParentWorktree)
+  if (inferredRepo) {
+    return inferredRepo
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    'Missing repo selector. Pass --repo or run from inside an Orca-managed worktree.'
+  )
 }
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
@@ -99,65 +196,92 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree create': async ({ flags, client, cwd, json }) => {
-    assertParentFlagsCompatible(flags)
+    assertCreateParentFlagsCompatible(flags)
+    assertWorkspaceTargetFlagsCompatible(flags)
     const callerTerminalHandle =
       typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
       process.env.ORCA_TERMINAL_HANDLE.length > 0
         ? process.env.ORCA_TERMINAL_HANDLE
         : undefined
-    const explicitParentWorktree = await getOptionalWorktreeSelector(
-      flags,
-      'parent-worktree',
-      cwd,
-      client
-    )
+    const explicitParent = await resolveCreateParentSelector(flags, cwd, client)
+    const explicitParentWorktree = explicitParent.parentWorktree
+    const explicitParentWorkspace = explicitParent.parentWorkspace
+    const startupAgent = getOptionalStartupAgent(flags)
+    const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
+    const envParentWorkspace =
+      !noParent && !explicitParentWorkspace && !explicitParentWorktree
+        ? getEnvParentWorkspace()
+        : undefined
     let cwdParentWorktree: string | undefined
-    if (!explicitParentWorktree && !noParent) {
+    const needsCwdRepoInference = !flags.has('repo') && !hasWorkspaceProjectTarget(flags)
+    if (
+      (!explicitParentWorktree && !explicitParentWorkspace && !noParent) ||
+      needsCwdRepoInference
+    ) {
       try {
         // Why: agent shells can lose ORCA_TERMINAL_HANDLE while still running
-        // inside an Orca worktree. Cwd keeps CLI-created children nestable.
+        // inside an Orca worktree. Cwd keeps CLI-created children nestable and
+        // lets create infer the repo for the common current-workspace case.
         cwdParentWorktree = await resolveCurrentWorktreeSelector(cwd, client)
       } catch {
         cwdParentWorktree = undefined
       }
     }
+    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo: getRequiredStringFlag(flags, 'repo'),
+      repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
       name: getRequiredStringFlag(flags, 'name'),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
+      ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
-      activate: flags.get('activate') === true || flags.get('run-hooks') === true,
+      activate:
+        flags.get('activate') === true || flags.get('run-hooks') === true || Boolean(startupAgent),
+      ...(setupDecision ? { setupDecision } : {}),
       parentWorktree: explicitParentWorktree,
+      ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
+      ...(envParentWorkspace ? { envParentWorkspace } : {}),
       ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
       noParent,
-      callerTerminalHandle
+      callerTerminalHandle,
+      ...(startupAgent
+        ? {
+            startupAgent,
+            startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? ''
+          }
+        : {})
     })
     printHookWarning(result.result, json)
     printLineageSummary(result.result, json)
     printResult(result, json, formatWorktreeShow)
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
-    assertParentFlagsCompatible(flags)
+    assertParentWorktreeFlagsCompatible(flags)
+    const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
+      allowNull: true
+    })
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.set', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       displayName: getOptionalStringFlag(flags, 'display-name'),
       linkedIssue: getOptionalNullableNumberFlag(flags, 'issue'),
+      ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
+      workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
       noParent: flags.get('no-parent') === true
     })
     printResult(result, json, formatWorktreeShow)
   },
   'worktree rm': async ({ flags, client, cwd, json }) => {
-    const result = await client.call<{ removed: boolean; warning?: string }>('worktree.rm', {
+    const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       force: flags.get('force') === true,
       runHooks: flags.get('run-hooks') === true
     })
     printHookWarning(result.result, json)
+    printPreservedBranchWarning(result.result, json)
     printResult(result, json, (value) => `removed: ${value.removed}`)
   }
 }

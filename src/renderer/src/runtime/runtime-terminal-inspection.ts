@@ -1,4 +1,7 @@
 import type { GlobalSettings } from '../../../shared/types'
+import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+import { useAppStore } from '../store'
 import { RuntimeRpcCallError, callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import {
   getRemoteRuntimePtyEnvironmentId,
@@ -11,6 +14,7 @@ export type RuntimeTerminalProcessInspection = {
 }
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
+const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 
 export function isRemoteRuntimePtyId(ptyId: string): boolean {
   return ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
@@ -33,6 +37,26 @@ function isTerminalGoneError(error: unknown): boolean {
     message.includes('terminal_gone') ||
     message.includes('no_connected_pty')
   )
+}
+
+export function recordRuntimeTerminalInputForPtyId(ptyId: string, timestamp = Date.now()): void {
+  const state = useAppStore.getState()
+  for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
+    for (const [leafId, leafPtyId] of Object.entries(layout?.ptyIdsByLeafId ?? {})) {
+      if (leafPtyId !== ptyId) {
+        continue
+      }
+      try {
+        // Why: paired/runtime sends can bypass xterm.onData, so hibernation
+        // needs the same user-input marker from the PTY-id route.
+        state.recordTerminalInput(makePaneKey(tabId, leafId), timestamp)
+      } catch {
+        // Ignore malformed legacy layout data; the planner will stay
+        // conservative when a live PTY cannot be matched to an eligible pane.
+      }
+      return
+    }
+  }
 }
 
 export async function inspectRuntimeTerminalProcess(
@@ -80,18 +104,25 @@ export function sendRuntimePtyInput(
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   if (target.kind !== 'environment' || !terminal) {
     window.api.pty.write(ptyId, data)
+    recordRuntimeTerminalInputForPtyId(ptyId)
     return true
   }
 
-  void callRuntimeRpc(
+  void callRuntimeRpc<{ send: RuntimeTerminalSend }>(
     target,
     'terminal.send',
-    { terminal, text: data },
+    { terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
     { timeoutMs: 15_000 }
-  ).catch(() => {
-    // Why: web session snapshots can retire a remote handle while xterm still
-    // flushes a final input event. The next host snapshot will reattach.
-  })
+  )
+    .then((result) => {
+      if (result.send.accepted === true) {
+        recordRuntimeTerminalInputForPtyId(ptyId)
+      }
+    })
+    .catch(() => {
+      // Why: web session snapshots can retire a remote handle while xterm still
+      // flushes a final input event. The next host snapshot will reattach.
+    })
   return true
 }
 
@@ -106,13 +137,30 @@ export async function sendRuntimePtyInputVerified(
     : getActiveRuntimeTarget(settings)
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   if (target.kind !== 'environment' || !terminal) {
-    window.api.pty.write(ptyId, data)
-    return true
+    const accepted = await window.api.pty.writeAccepted(ptyId, data)
+    if (!accepted) {
+      window.api.pty.write(ptyId, data)
+      // Why: SSH/local fallback writes are fire-and-forget. Callers use this
+      // boolean to continue UX flow, while hook telemetry confirms real turns.
+      recordRuntimeTerminalInputForPtyId(ptyId)
+      return true
+    }
+    recordRuntimeTerminalInputForPtyId(ptyId)
+    return accepted
   }
 
   try {
-    await callRuntimeRpc(target, 'terminal.send', { terminal, text: data }, { timeoutMs: 15_000 })
-    return true
+    const result = await callRuntimeRpc<{ send: RuntimeTerminalSend }>(
+      target,
+      'terminal.send',
+      { terminal, text: data, client: DESKTOP_RUNTIME_CLIENT },
+      { timeoutMs: 15_000 }
+    )
+    if (result.send.accepted === true) {
+      recordRuntimeTerminalInputForPtyId(ptyId)
+      return true
+    }
+    return false
   } catch (error) {
     if (isTerminalGoneError(error)) {
       return false

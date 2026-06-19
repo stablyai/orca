@@ -36,6 +36,10 @@ type SplitGroupTerminal = {
   tabId: string
 }
 
+function agentsSidebarButton(page: Page) {
+  return page.getByRole('button', { name: /^Agents(?:\s+\d+)?$/ }).first()
+}
+
 async function seedActivityThread(
   page: Page,
   thread: SeededActivityThread,
@@ -167,12 +171,14 @@ async function enableActivityAgentsView(page: Page): Promise<void> {
 }
 
 async function clickWorkspaceCardAgentRow(page: Page, prompt: string): Promise<void> {
-  const rowLabel = page
-    .getByRole('group', { name: 'Agents' })
-    .locator(`span[title="${prompt}"]`)
-    .first()
-  await expect(rowLabel).toBeVisible({ timeout: 10_000 })
-  await rowLabel.click()
+  const agentsGroup = page.getByRole('group', { name: 'Agents' }).first()
+  const collapsedSummary = agentsGroup.getByRole('button', { name: /^Expand \d+ agents?:/ })
+  if (await collapsedSummary.isVisible()) {
+    await collapsedSummary.click()
+  }
+  const agentRow = agentsGroup.getByRole('treeitem').filter({ hasText: prompt }).first()
+  await expect(agentRow).toBeVisible({ timeout: 10_000 })
+  await agentRow.click()
 }
 
 async function readActivePaneSelection(page: Page): Promise<ActivePaneSelection> {
@@ -262,7 +268,7 @@ test.describe('Activity Agent Pane Isolation', () => {
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
     const [first, second] = await seedActivityThreadsForSplitPanes(orcaPage, snapshot)
 
-    await orcaPage.getByRole('button', { name: /Agents/ }).click()
+    await agentsSidebarButton(orcaPage).click()
     await expect(orcaPage.getByText(first.prompt)).toBeVisible()
     await expect(orcaPage.getByText(second.prompt)).toBeVisible()
 
@@ -324,7 +330,7 @@ test.describe('Activity Agent Pane Isolation', () => {
       now - 5_000
     )
 
-    await expect(orcaPage.getByRole('button', { name: /^Agents\s+1$/ })).toBeVisible()
+    await expect(agentsSidebarButton(orcaPage)).toHaveAccessibleName(/^Agents\s+1$/)
 
     await orcaPage.evaluate((paneKey) => {
       const store = window.__store
@@ -334,7 +340,7 @@ test.describe('Activity Agent Pane Isolation', () => {
       store.getState().acknowledgeAgents([paneKey])
     }, thread.paneKey)
 
-    await expect(orcaPage.getByRole('button', { name: /^Agents$/ })).toBeVisible()
+    await expect(agentsSidebarButton(orcaPage)).toHaveAccessibleName(/^Agents$/)
     await expect(orcaPage.getByRole('button', { name: /^Agents\s+1$/ })).toHaveCount(0)
   })
 

@@ -16,6 +16,26 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('terminal send RPC', () => {
+  it('reports whether a terminal handle is running a recognized agent', async () => {
+    const runtime = stubRuntime({
+      isTerminalRunningAgent: vi.fn().mockResolvedValue(true)
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.isRunningAgent', {
+        terminal: 'terminal-1'
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    expect(response.result).toEqual({ isRunningAgent: true })
+    expect(runtime.isTerminalRunningAgent).toHaveBeenCalledWith('terminal-1')
+  })
+
   it('drops desktop input while a mobile client owns the terminal floor', async () => {
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),

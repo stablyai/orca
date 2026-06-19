@@ -12,7 +12,8 @@ export enum TerminalStreamOpcode {
   Input = 7,
   Resize = 8,
   Subscribe = 9,
-  Unsubscribe = 10
+  Unsubscribe = 10,
+  SnapshotRequest = 11
 }
 
 export type TerminalStreamFrame = {
@@ -90,6 +91,7 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.Input ||
     value === TerminalStreamOpcode.Resize ||
     value === TerminalStreamOpcode.Subscribe ||
-    value === TerminalStreamOpcode.Unsubscribe
+    value === TerminalStreamOpcode.Unsubscribe ||
+    value === TerminalStreamOpcode.SnapshotRequest
   )
 }

@@ -1,7 +1,13 @@
+import { fileUriToFilesystemPath } from '../../../../shared/file-uri-path'
+
 export type TerminalFileUrlTarget = {
   filePath: string
   line: number | null
   column: number | null
+}
+
+export type TerminalFileUrlTargetOptions = {
+  allowUncHost?: boolean
 }
 
 function parseFileUrlLineHash(hash: string): { line: number; column: number | null } | null {
@@ -28,16 +34,17 @@ function parseFilePathTrailingLineTarget(filePath: string): TerminalFileUrlTarge
   }
 }
 
-export function resolveTerminalFileUrlTarget(parsed: URL): TerminalFileUrlTarget | null {
-  if (parsed.hostname && parsed.hostname !== 'localhost') {
+export function resolveTerminalFileUrlTarget(
+  parsed: URL,
+  options: TerminalFileUrlTargetOptions = {}
+): TerminalFileUrlTarget | null {
+  if (parsed.hostname && parsed.hostname !== 'localhost' && !options.allowUncHost) {
     return null
   }
 
-  let filePath = decodeURIComponent(parsed.pathname)
-  // Why: on Windows, file:///C:/foo yields pathname "/C:/foo". The leading
-  // slash must be stripped to produce a valid Windows path ("C:/foo").
-  if (/^\/[A-Za-z]:/.test(filePath)) {
-    filePath = filePath.slice(1)
+  const filePath = fileUriToFilesystemPath(parsed)
+  if (!filePath) {
+    return null
   }
 
   const hashTarget = parseFileUrlLineHash(parsed.hash)

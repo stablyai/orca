@@ -1,5 +1,5 @@
 import type { Socket } from 'net'
-import { encodeNdjson } from './ndjson'
+import { encodeNdjson, NDJSON_MAX_LINE_BYTES } from './ndjson'
 
 type StreamDataClient = {
   streamSocket: Socket | null
@@ -20,12 +20,99 @@ type EnqueueOptions = {
   flushMaxChars?: number
 }
 
+type DaemonStreamDataBatcherOptions = {
+  maxLineBytes?: number
+}
+
+function encodeStreamDataEvent(sessionId: string, data: string): string {
+  return encodeNdjson({
+    type: 'event',
+    event: 'data',
+    sessionId,
+    payload: { data }
+  })
+}
+
+function streamDataEventLineBytes(sessionId: string, data: string): number {
+  return Buffer.byteLength(encodeStreamDataEvent(sessionId, data), 'utf8')
+}
+
+function isHighSurrogate(value: number): boolean {
+  return value >= 0xd800 && value <= 0xdbff
+}
+
+function isLowSurrogate(value: number): boolean {
+  return value >= 0xdc00 && value <= 0xdfff
+}
+
+function clampToSafeSplitIndex(value: string, start: number, end: number): number {
+  if (end <= start || end >= value.length) {
+    return end
+  }
+  const prev = value.charCodeAt(end - 1)
+  const next = value.charCodeAt(end)
+  return isHighSurrogate(prev) && isLowSurrogate(next) ? end - 1 : end
+}
+
+function nextSafeSplitIndex(value: string, start: number): number {
+  const next = Math.min(value.length, start + 1)
+  if (
+    next < value.length &&
+    isHighSurrogate(value.charCodeAt(start)) &&
+    isLowSurrogate(value.charCodeAt(next))
+  ) {
+    return next + 1
+  }
+  return next
+}
+
+function splitStreamDataForNdjson(sessionId: string, data: string, maxLineBytes: number): string[] {
+  if (streamDataEventLineBytes(sessionId, data) <= maxLineBytes) {
+    return [data]
+  }
+
+  const chunks: string[] = []
+  let start = 0
+  while (start < data.length) {
+    let low = start + 1
+    let high = data.length
+    let best = start
+
+    while (low <= high) {
+      const rawMid = Math.floor((low + high) / 2)
+      const mid = clampToSafeSplitIndex(data, start, rawMid)
+      if (mid <= start) {
+        low = rawMid + 1
+        continue
+      }
+
+      if (streamDataEventLineBytes(sessionId, data.slice(start, mid)) <= maxLineBytes) {
+        best = mid
+        low = rawMid + 1
+      } else {
+        high = rawMid - 1
+      }
+    }
+
+    const end = best > start ? best : nextSafeSplitIndex(data, start)
+    chunks.push(data.slice(start, end))
+    start = end
+  }
+
+  return chunks
+}
+
 export class DaemonStreamDataBatcher {
   private pendingByClient = new Map<string, PendingStreamDataBatch>()
   private getClient: (clientId: string) => StreamDataClient | undefined
+  private maxLineBytes: number
 
-  constructor(getClient: (clientId: string) => StreamDataClient | undefined) {
+  constructor(
+    getClient: (clientId: string) => StreamDataClient | undefined,
+    options: DaemonStreamDataBatcherOptions = {}
+  ) {
     this.getClient = getClient
+    this.maxLineBytes = Math.max(1, options.maxLineBytes ?? NDJSON_MAX_LINE_BYTES)
   }
 
   enqueue(clientId: string, sessionId: string, data: string, options: EnqueueOptions = {}): void {
@@ -79,14 +166,7 @@ export class DaemonStreamDataBatcher {
     }
 
     for (const entry of batch.queue) {
-      client.streamSocket.write(
-        encodeNdjson({
-          type: 'event',
-          event: 'data',
-          sessionId: entry.sessionId,
-          payload: { data: entry.data }
-        })
-      )
+      this.writeStreamDataEvent(client.streamSocket, entry.sessionId, entry.data)
     }
   }
 
@@ -137,14 +217,7 @@ export class DaemonStreamDataBatcher {
     }
 
     for (const entry of flushed) {
-      client.streamSocket.write(
-        encodeNdjson({
-          type: 'event',
-          event: 'data',
-          sessionId: entry.sessionId,
-          payload: { data: entry.data }
-        })
-      )
+      this.writeStreamDataEvent(client.streamSocket, entry.sessionId, entry.data)
     }
   }
 
@@ -159,6 +232,15 @@ export class DaemonStreamDataBatcher {
         clearTimeout(batch.timer)
       }
       this.pendingByClient.delete(id)
+    }
+  }
+
+  private writeStreamDataEvent(streamSocket: Socket, sessionId: string, data: string): void {
+    // Why: createNdjsonParser rejects oversized lines. Terminal output can
+    // burst faster than the batch interval, so writer-side chunking prevents
+    // the daemon from dropping its own stream events at the receiver.
+    for (const chunk of splitStreamDataForNdjson(sessionId, data, this.maxLineBytes)) {
+      streamSocket.write(encodeStreamDataEvent(sessionId, chunk))
     }
   }
 }

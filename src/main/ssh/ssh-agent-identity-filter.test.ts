@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'path'
 
 const mocks = vi.hoisted(() => ({
   createAgent: vi.fn(),
@@ -26,6 +27,12 @@ vi.mock('ssh2', () => {
 })
 
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
+
+const TEST_HOME = '/home/testuser'
+
+function testHomePath(...parts: string[]): string {
+  return join(TEST_HOME, ...parts)
+}
 
 type TestKey = {
   id: string
@@ -68,7 +75,31 @@ describe('createIdentityFilteredAgent', () => {
     })
 
     expect(identities).toEqual([allowedKey])
-    expect(mocks.readFileSync).toHaveBeenCalledWith('/home/testuser/.ssh/work_key.pub')
+    expect(mocks.readFileSync).toHaveBeenCalledWith(testHomePath('.ssh', 'work_key.pub'))
+  })
+
+  it('expands Windows-style configured identity file paths before filtering', async () => {
+    const allowedKey = makeKey('allowed')
+    mocks.readFileSync.mockReturnValue('ssh-ed25519 AAAA allowed')
+    mocks.parseKey.mockReturnValue(allowedKey)
+    mocks.createAgent.mockReturnValue({
+      getIdentities: vi.fn((callback) => callback(undefined, [allowedKey])),
+      sign: vi.fn()
+    })
+
+    const agent = createIdentityFilteredAgent('/tmp/agent.sock', ['~\\.ssh\\work_key'])
+    const identities = await new Promise<unknown[]>((resolve, reject) => {
+      agent?.getIdentities((error, keys) => {
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve(keys ?? [])
+      })
+    })
+
+    expect(identities).toEqual([allowedKey])
+    expect(mocks.readFileSync).toHaveBeenCalledWith(testHomePath('.ssh', 'work_key.pub'))
   })
 
   it('filters nested public key entries returned by ssh2 agents', async () => {

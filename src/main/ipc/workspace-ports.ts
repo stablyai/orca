@@ -19,6 +19,8 @@ type WorkspacePortHandlersOptions = {
   getWindows?: () => BrowserWindow[]
 }
 
+let unsubscribeAdvertisedUrlChanges: (() => void) | null = null
+
 export function registerWorkspacePortHandlers(
   store: Store,
   options: WorkspacePortHandlersOptions = {}
@@ -27,7 +29,8 @@ export function registerWorkspacePortHandlers(
   const advertisedUrlEvents = options.advertisedUrlEvents ?? advertisedUrlWatcher
   const getWindows = options.getWindows ?? (() => BrowserWindow.getAllWindows())
 
-  advertisedUrlEvents.onDidChange((event) => {
+  unsubscribeAdvertisedUrlChanges?.()
+  unsubscribeAdvertisedUrlChanges = advertisedUrlEvents.onDidChange((event) => {
     const localWorktrees = getStoreWorkspacePortProbes(store)
     if (!localWorktrees.some((worktree) => worktree.id === event.worktreeId)) {
       return
@@ -35,6 +38,8 @@ export function registerWorkspacePortHandlers(
     broadcastWorkspacePortAdvertisedUrlChanged(getWindows, event)
   })
 
+  ipcMain.removeHandler('workspacePorts:scan')
+  ipcMain.removeHandler('workspacePorts:kill')
   ipcMain.handle(
     'workspacePorts:scan',
     (_event, rawArgs?: unknown): Promise<WorkspacePortScanResult> => {

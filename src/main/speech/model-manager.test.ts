@@ -1,19 +1,23 @@
 import { createHash } from 'crypto'
-import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { dirname, join } from 'path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
 
-const { httpsGetMock, spawnMock } = vi.hoisted(() => ({
-  httpsGetMock: vi.fn(),
+const { hasOpenAiSpeechApiKeyMock, netRequestMock, spawnMock } = vi.hoisted(() => ({
+  hasOpenAiSpeechApiKeyMock: vi.fn(),
+  netRequestMock: vi.fn(),
   spawnMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
     getPath: () => '/tmp/orca-speech-models-test'
+  },
+  net: {
+    request: netRequestMock
   }
 }))
 
@@ -22,10 +26,9 @@ vi.mock('child_process', async () => {
   return { ...(actual as Record<string, unknown>), spawn: spawnMock }
 })
 
-vi.mock('https', async () => {
-  const actual = await vi.importActual('https')
-  return { ...(actual as Record<string, unknown>), get: httpsGetMock }
-})
+vi.mock('./openai-api-key-store', () => ({
+  hasOpenAiSpeechApiKey: hasOpenAiSpeechApiKeyMock
+}))
 
 type ModelManagerInternals = {
   verifyArchiveSha256: (archivePath: string, expectedSha256: string) => Promise<void>
@@ -47,12 +50,17 @@ type ModelManagerInternals = {
 
 describe('ModelManager', () => {
   beforeEach(() => {
-    httpsGetMock.mockReset()
+    netRequestMock.mockReset()
+    hasOpenAiSpeechApiKeyMock.mockReset()
+    hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
     spawnMock.mockReset()
   })
 
   it('requires pinned SHA-256 hashes for every catalog archive', () => {
     for (const manifest of SPEECH_MODEL_CATALOG) {
+      if (manifest.provider !== 'local') {
+        continue
+      }
       expect(manifest.archiveSha256).toMatch(/^[a-f0-9]{64}$/)
     }
   })
@@ -93,16 +101,72 @@ describe('ModelManager', () => {
     }
   })
 
+  it('marks OpenAI transcription models ready only when an API key is configured', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manager = new ModelManager(dir)
+
+      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
+        id: 'openai-gpt-4o-mini-transcribe',
+        status: 'not-downloaded'
+      })
+
+      hasOpenAiSpeechApiKeyMock.mockReturnValue(true)
+
+      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
+        id: 'openai-gpt-4o-mini-transcribe',
+        status: 'ready'
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('deletes a ready local model and reports it as not downloaded', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manifest = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'local')
+      expect(manifest?.files).toBeDefined()
+      const manager = new ModelManager(dir)
+      const modelDir = manager.getModelDir(manifest!.id)
+      for (const file of manifest!.files ?? []) {
+        const path = join(modelDir, file)
+        mkdirSync(dirname(path), { recursive: true })
+        writeFileSync(path, 'model file')
+      }
+
+      await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
+        id: manifest!.id,
+        status: 'ready'
+      })
+      await manager.deleteModel(manifest!.id)
+
+      expect(existsSync(modelDir)).toBe(false)
+      await expect(manager.getModelState(manifest!.id)).resolves.toEqual({
+        id: manifest!.id,
+        status: 'not-downloaded'
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('aborts an in-flight model download request when cancelled', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
     try {
       const manifest = SPEECH_MODEL_CATALOG[0]
       const errorHandlers: ((err: Error) => void)[] = []
+      const responseHandlers: ((response: unknown) => void)[] = []
+      const redirectHandlers: ((
+        statusCode: number,
+        method: string,
+        redirectUrl: string
+      ) => void)[] = []
       const request = {
-        destroy: vi.fn((err?: Error) => {
+        abort: vi.fn(() => {
           queueMicrotask(() => {
             for (const handler of errorHandlers) {
-              handler(err ?? new Error('destroyed'))
+              handler(new Error('Aborted'))
             }
           })
           return request
@@ -110,33 +174,226 @@ describe('ModelManager', () => {
         on: vi.fn((event: string, cb: (err: Error) => void) => {
           if (event === 'error') {
             errorHandlers.push(cb)
+          } else if (event === 'response') {
+            responseHandlers.push(cb as unknown as (response: unknown) => void)
+          } else if (event === 'redirect') {
+            redirectHandlers.push(
+              cb as unknown as (statusCode: number, method: string, redirectUrl: string) => void
+            )
           }
           return request
-        })
+        }),
+        off: vi.fn((event: string, cb: ((err: Error) => void) | (() => void)) => {
+          if (event === 'error') {
+            const index = errorHandlers.indexOf(cb as (err: Error) => void)
+            if (index !== -1) {
+              errorHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'response') {
+            const index = responseHandlers.indexOf(cb as (response: unknown) => void)
+            if (index !== -1) {
+              responseHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'redirect') {
+            const index = redirectHandlers.indexOf(
+              cb as (statusCode: number, method: string, redirectUrl: string) => void
+            )
+            if (index !== -1) {
+              redirectHandlers.splice(index, 1)
+            }
+          }
+          return request
+        }),
+        end: vi.fn(() => request)
       }
-      httpsGetMock.mockImplementation(
-        (
-          _url: URL,
-          options: { signal?: AbortSignal } | ((response: unknown) => void),
-          _cb?: (response: unknown) => void
-        ) => {
-          if (typeof options !== 'function') {
-            options.signal?.addEventListener('abort', () => request.destroy(new Error('Aborted')), {
-              once: true
-            })
-          }
-          return request
-        }
-      )
+      netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir)
 
       const download = manager.downloadModel(manifest.id)
       manager.cancelDownload(manifest.id)
       await expect(download).resolves.toBeUndefined()
 
-      expect(request.destroy).toHaveBeenCalledWith(expect.any(Error))
+      expect(netRequestMock).toHaveBeenCalledWith({
+        method: 'GET',
+        url: expect.stringMatching(/^https:\/\//)
+      })
+      expect(request.end).toHaveBeenCalled()
+      expect(request.abort).toHaveBeenCalled()
+      expect(request.off).toHaveBeenCalledWith('error', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('response', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('redirect', expect.any(Function))
+      expect(errorHandlers).toHaveLength(0)
+      expect(responseHandlers).toHaveLength(0)
+      expect(redirectHandlers).toHaveLength(0)
       expect((await manager.getModelState(manifest.id)).status).toBe('not-downloaded')
     } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('settles immediately when the abort signal fires before a response', async () => {
+    vi.useFakeTimers()
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const errorHandlers: ((err: Error) => void)[] = []
+      const responseHandlers: ((response: unknown) => void)[] = []
+      const redirectHandlers: ((
+        statusCode: number,
+        method: string,
+        redirectUrl: string
+      ) => void)[] = []
+      const request = {
+        abort: vi.fn(() => request),
+        on: vi.fn((event: string, cb: (err: Error) => void) => {
+          if (event === 'error') {
+            errorHandlers.push(cb)
+          } else if (event === 'response') {
+            responseHandlers.push(cb as unknown as (response: unknown) => void)
+          } else if (event === 'redirect') {
+            redirectHandlers.push(
+              cb as unknown as (statusCode: number, method: string, redirectUrl: string) => void
+            )
+          }
+          return request
+        }),
+        off: vi.fn((event: string, cb: ((err: Error) => void) | (() => void)) => {
+          if (event === 'error') {
+            const index = errorHandlers.indexOf(cb as (err: Error) => void)
+            if (index !== -1) {
+              errorHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'response') {
+            const index = responseHandlers.indexOf(cb as (response: unknown) => void)
+            if (index !== -1) {
+              responseHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'redirect') {
+            const index = redirectHandlers.indexOf(
+              cb as (statusCode: number, method: string, redirectUrl: string) => void
+            )
+            if (index !== -1) {
+              redirectHandlers.splice(index, 1)
+            }
+          }
+          return request
+        }),
+        end: vi.fn(() => request)
+      }
+      netRequestMock.mockReturnValue(request)
+      const controller = new AbortController()
+      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+
+      const download = manager.downloadFile(
+        'https://example.com/model.tar.bz2',
+        join(dir, 'model.tar.bz2'),
+        1,
+        'm',
+        () => true,
+        controller.signal
+      )
+      const outcomePromise = download.then(
+        () => 'resolved',
+        (error) => (error instanceof Error ? error.message : String(error))
+      )
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(0)
+
+      await expect(outcomePromise).resolves.toBe('Aborted')
+      expect(request.abort).toHaveBeenCalled()
+      expect(request.off).toHaveBeenCalledWith('error', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('response', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('redirect', expect.any(Function))
+      expect(errorHandlers).toHaveLength(0)
+      expect(responseHandlers).toHaveLength(0)
+      expect(redirectHandlers).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('times out a model download request that never responds', async () => {
+    vi.useFakeTimers()
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const errorHandlers: ((err: Error) => void)[] = []
+      const responseHandlers: ((response: unknown) => void)[] = []
+      const redirectHandlers: ((
+        statusCode: number,
+        method: string,
+        redirectUrl: string
+      ) => void)[] = []
+      const request = {
+        abort: vi.fn(() => request),
+        on: vi.fn((event: string, cb: (err: Error) => void) => {
+          if (event === 'error') {
+            errorHandlers.push(cb)
+          } else if (event === 'response') {
+            responseHandlers.push(cb as unknown as (response: unknown) => void)
+          } else if (event === 'redirect') {
+            redirectHandlers.push(
+              cb as unknown as (statusCode: number, method: string, redirectUrl: string) => void
+            )
+          }
+          return request
+        }),
+        off: vi.fn((event: string, cb: ((err: Error) => void) | (() => void)) => {
+          if (event === 'error') {
+            const index = errorHandlers.indexOf(cb as (err: Error) => void)
+            if (index !== -1) {
+              errorHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'response') {
+            const index = responseHandlers.indexOf(cb as (response: unknown) => void)
+            if (index !== -1) {
+              responseHandlers.splice(index, 1)
+            }
+          }
+          if (event === 'redirect') {
+            const index = redirectHandlers.indexOf(
+              cb as (statusCode: number, method: string, redirectUrl: string) => void
+            )
+            if (index !== -1) {
+              redirectHandlers.splice(index, 1)
+            }
+          }
+          return request
+        }),
+        end: vi.fn(() => request)
+      }
+      netRequestMock.mockReturnValue(request)
+      const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+
+      const download = manager.downloadFile(
+        'https://example.com/model.tar.bz2',
+        join(dir, 'model.tar.bz2'),
+        1,
+        'm',
+        () => false
+      )
+      const outcomePromise = download.then(
+        () => 'resolved',
+        (error) => (error instanceof Error ? error.message : String(error))
+      )
+
+      await vi.advanceTimersByTimeAsync(120_000)
+      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
+
+      expect(outcome).toBe('Model download timed out after 120 seconds without network activity')
+      expect(request.abort).toHaveBeenCalledWith()
+      expect(request.off).toHaveBeenCalledWith('error', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('response', expect.any(Function))
+      expect(request.off).toHaveBeenCalledWith('redirect', expect.any(Function))
+      expect(errorHandlers).toHaveLength(0)
+      expect(responseHandlers).toHaveLength(0)
+      expect(redirectHandlers).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
       rmSync(dir, { recursive: true, force: true })
     }
   })

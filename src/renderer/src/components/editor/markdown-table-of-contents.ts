@@ -99,7 +99,7 @@ function markdownAstNodeToText(node: MarkdownAstNode): string {
 
 export function buildMarkdownTableOfContents(markdown: string): MarkdownTocItem[] {
   const slugger = new MarkdownHeadingSlugger()
-  const root: MarkdownTocItem = { id: 'toc-root', level: 1, title: '', children: [] }
+  const root = { id: 'toc-root', level: 1 as const, title: '', children: [] }
   const stack: MarkdownTocItem[] = [root]
 
   // Why: parsing Markdown keeps the TOC aligned with rendered setext/GFM/entity

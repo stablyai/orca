@@ -1,5 +1,5 @@
 // Why: Pi (PI_CODING_AGENT_DIR) and OpenCode (OPENCODE_CONFIG_DIR) both inject
-// Orca-owned files into per-PTY overlay directories that mirror a user-owned
+// Orca-owned files into overlay directories that mirror a user-owned
 // source dir via symlinks/junctions. The safety guarantees here -- never
 // descend into a symlink/junction during teardown, refuse to operate outside
 // the overlay root, lstat-not-stat to avoid following links -- are the result
@@ -8,7 +8,7 @@
 // consumer cannot accidentally diverge from the audited cleanup behavior.
 
 import { cpSync, linkSync, lstatSync, readdirSync, rmdirSync, symlinkSync, unlinkSync } from 'fs'
-import { join, relative, resolve, sep } from 'path'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
 
 export function mirrorEntry(sourcePath: string, targetPath: string): void {
   // Why: lstatSync (not statSync) so that if the user's source dir contains
@@ -37,6 +37,27 @@ export function mirrorEntry(sourcePath: string, targetPath: string): void {
   }
 
   symlinkSync(sourcePath, targetPath, isDirectoryLike ? 'dir' : 'file')
+}
+
+export function mirrorWritableFileEntry(sourcePath: string, targetPath: string): void {
+  if (process.platform === 'win32') {
+    try {
+      linkSync(sourcePath, targetPath)
+      return
+    } catch {
+      // Cross-device homes cannot hardlink; try a file symlink so writable
+      // SQLite state can still flow to source instead of a disposable copy.
+    }
+
+    try {
+      symlinkSync(sourcePath, targetPath, 'file')
+      return
+    } catch {
+      throw new Error(`Unable to create source-backed writable file mirror: ${targetPath}`)
+    }
+  }
+
+  symlinkSync(sourcePath, targetPath, 'file')
 }
 
 // Exported for tests. A "descend candidate" is an entry whose children we
@@ -118,7 +139,7 @@ export function safeRemoveOverlay(overlayDir: string, overlayRoot: string): void
   const resolvedRoot = resolve(overlayRoot)
   const resolvedTarget = resolve(overlayDir)
   const rel = relative(resolvedRoot, resolvedTarget)
-  if (rel === '' || rel.startsWith('..') || rel.includes(`..${sep}`)) {
+  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     console.warn(
       `[overlay-mirror] refusing to remove overlay outside root: target=${resolvedTarget} root=${resolvedRoot}`
     )

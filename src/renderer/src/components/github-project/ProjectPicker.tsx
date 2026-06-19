@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type {
   GitHubProjectOwnerType,
   GitHubProjectSettings,
@@ -23,6 +24,7 @@ import type {
   ListProjectViewsResult,
   ResolveProjectRefResult
 } from '../../../../shared/github-project-types'
+import { translate } from '@/i18n/i18n'
 
 export type ResolvedProjectSelection = {
   owner: string
@@ -42,11 +44,20 @@ type Props = {
 }
 
 const BROWSE_CACHE_TTL_MS = 5 * 60_000
-let browseCache: {
+type BrowseCacheEntry = {
   fetchedAt: number
   projects: GitHubProjectSummary[]
   partialFailures?: { owner: string; message: string }[]
-} | null = null
+}
+
+const browseCacheByRuntimeScope = new Map<string, BrowseCacheEntry>()
+
+function getProjectPickerRuntimeScope(
+  settings: Parameters<typeof getActiveRuntimeTarget>[0]
+): string {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+}
 
 async function listAccessibleProjectsForRuntime(
   settings: Parameters<typeof getActiveRuntimeTarget>[0]
@@ -92,6 +103,7 @@ async function resolveProjectRefForRuntime(
 export default function ProjectPicker({ activeProject, onSelect }: Props): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const mountedRef = useMountedRef()
   const projectSettings: GitHubProjectSettings = useMemo(
     () =>
       settings?.githubProjects ?? {
@@ -107,6 +119,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const [query, setQuery] = useState('')
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browseError, setBrowseError] = useState<GitHubProjectViewError | null>(null)
+  const browseCache = browseCacheByRuntimeScope.get(getProjectPickerRuntimeScope(settings))
   const [browseProjects, setBrowseProjects] = useState<GitHubProjectSummary[]>(
     () => browseCache?.projects ?? []
   )
@@ -127,9 +140,11 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const [viewLoading, setViewLoading] = useState(false)
 
   const loadBrowse = useCallback(async () => {
-    if (browseCache && Date.now() - browseCache.fetchedAt < BROWSE_CACHE_TTL_MS) {
-      setBrowseProjects(browseCache.projects)
-      setPartialFailures(browseCache.partialFailures ?? [])
+    const cacheKey = getProjectPickerRuntimeScope(settings)
+    const cached = browseCacheByRuntimeScope.get(cacheKey) ?? null
+    if (cached && Date.now() - cached.fetchedAt < BROWSE_CACHE_TTL_MS) {
+      setBrowseProjects(cached.projects)
+      setPartialFailures(cached.partialFailures ?? [])
       return
     }
     setBrowseLoading(true)
@@ -137,25 +152,35 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     try {
       const res = await listAccessibleProjectsForRuntime(settings)
       if (res.ok) {
-        browseCache = {
+        browseCacheByRuntimeScope.set(cacheKey, {
           fetchedAt: Date.now(),
           projects: res.projects,
           partialFailures: res.partialFailures
+        })
+        if (!mountedRef.current) {
+          return
         }
         setBrowseProjects(res.projects)
         setPartialFailures(res.partialFailures ?? [])
       } else {
+        if (!mountedRef.current) {
+          return
+        }
         setBrowseError(res.error)
       }
     } catch (err) {
-      setBrowseError({
-        type: 'unknown',
-        message: err instanceof Error ? err.message : 'Failed to list projects'
-      })
+      if (mountedRef.current) {
+        setBrowseError({
+          type: 'unknown',
+          message: err instanceof Error ? err.message : 'Failed to list projects'
+        })
+      }
     } finally {
-      setBrowseLoading(false)
+      if (mountedRef.current) {
+        setBrowseLoading(false)
+      }
     }
-  }, [settings])
+  }, [mountedRef, settings])
 
   useEffect(() => {
     if (open && !viewPickFor) {
@@ -203,13 +228,16 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
           }
         }
       })
+      if (!mountedRef.current) {
+        return
+      }
       onSelect(selection)
       setOpen(false)
       setQuery('')
       setViewPickFor(null)
       void title
     },
-    [onSelect, updateProjectSettings]
+    [mountedRef, onSelect, updateProjectSettings]
   )
 
   const handleChooseProject = useCallback(
@@ -253,6 +281,9 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
           ownerType: selection.ownerType,
           projectNumber: selection.number
         })
+        if (!mountedRef.current) {
+          return
+        }
         if (res.ok) {
           setViewList(res.views)
           if (selection.viewNumber !== undefined) {
@@ -283,13 +314,23 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         // unhandled rejections — leaving the picker stuck on the view-pick
         // step with a perpetual spinner. Treat as an empty result and toast
         // a transport-level message so the user can retry or paste again.
-        setViewList([])
-        toast.error(`Failed to load views: ${err instanceof Error ? err.message : String(err)}`)
+        if (mountedRef.current) {
+          setViewList([])
+          toast.error(
+            translate(
+              'auto.components.github.project.ProjectPicker.44b2c6326b',
+              'Failed to load views: {{value0}}',
+              { value0: err instanceof Error ? err.message : String(err) }
+            )
+          )
+        }
       } finally {
-        setViewLoading(false)
+        if (mountedRef.current) {
+          setViewLoading(false)
+        }
       }
     },
-    [commitSelection, projectSettings.lastViewByProject, settings]
+    [commitSelection, mountedRef, projectSettings.lastViewByProject, settings]
   )
 
   const handlePaste = useCallback(async () => {
@@ -302,6 +343,9 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     setPasteBusy(true)
     try {
       const res = await resolveProjectRefForRuntime(settings, pasteInput.trim())
+      if (!mountedRef.current) {
+        return
+      }
       if (!res.ok) {
         setPasteError(res.error.message)
         return
@@ -317,9 +361,11 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         ...(res.viewNumber !== undefined ? { viewNumber: res.viewNumber } : {})
       })
     } finally {
-      setPasteBusy(false)
+      if (mountedRef.current) {
+        setPasteBusy(false)
+      }
     }
-  }, [handleChooseProject, pasteInput, settings])
+  }, [handleChooseProject, mountedRef, pasteInput, settings])
 
   const filteredBrowse = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -379,7 +425,10 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search projects"
+                  placeholder={translate(
+                    'auto.components.github.project.ProjectPicker.f492e1b539',
+                    'Search projects'
+                  )}
                   className="h-8 pl-7 text-xs"
                 />
               </div>
@@ -390,7 +439,12 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
             ) : null}
             <div className="max-h-[340px] overflow-y-auto p-1 scrollbar-sleek">
               {projectSettings.pinned.length > 0 ? (
-                <Section label="Pinned">
+                <Section
+                  label={translate(
+                    'auto.components.github.project.ProjectPicker.707843206c',
+                    'Pinned'
+                  )}
+                >
                   {projectSettings.pinned.map((p) => {
                     const key = `${p.ownerType}:${p.owner}:${p.number}`
                     const knownGood = projectSettings.lastViewByProject[key]?.viewId != null
@@ -425,7 +479,12 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                 </Section>
               ) : null}
               {projectSettings.recent.length > 0 ? (
-                <Section label="Recent">
+                <Section
+                  label={translate(
+                    'auto.components.github.project.ProjectPicker.b3044b7a25',
+                    'Recent'
+                  )}
+                >
                   {projectSettings.recent
                     .filter(
                       (r) =>
@@ -470,10 +529,26 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                     })}
                 </Section>
               ) : null}
-              <Section label={browseLoading ? 'Browse all (loading…)' : 'Browse all'}>
+              <Section
+                label={
+                  browseLoading
+                    ? translate(
+                        'auto.components.github.project.ProjectPicker.ba0ab9a117',
+                        'Browse all (loading…)'
+                      )
+                    : translate(
+                        'auto.components.github.project.ProjectPicker.b787682111',
+                        'Browse all'
+                      )
+                }
+              >
                 {browseLoading ? (
                   <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
-                    <Loader className="size-3 animate-spin" /> Loading…
+                    <Loader className="size-3 animate-spin" />{' '}
+                    {translate(
+                      'auto.components.github.project.ProjectPicker.7b6d39627e',
+                      'Loading…'
+                    )}
                   </div>
                 ) : null}
                 {filteredBrowse.map((p) => (
@@ -506,7 +581,10 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                       void handlePaste()
                     }
                   }}
-                  placeholder="Add by URL or owner/number"
+                  placeholder={translate(
+                    'auto.components.github.project.ProjectPicker.5113ecc298',
+                    'Add by URL or owner/number'
+                  )}
                   className="h-8 text-xs"
                 />
                 <Button
@@ -515,7 +593,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                   disabled={pasteBusy || !pasteInput.trim()}
                   className="h-8"
                 >
-                  Add
+                  {translate('auto.components.github.project.ProjectPicker.fce99a24a7', 'Add')}
                 </Button>
               </div>
               {pasteError ? (
@@ -577,15 +655,15 @@ function PickerRow({
             className="text-[10px] text-muted-foreground hover:text-foreground"
             onClick={onRemovePin}
           >
-            Remove pin
+            {translate('auto.components.github.project.ProjectPicker.5009ffc2f3', 'Remove pin')}
           </button>
         </div>
       ) : null}
       {canPin ? (
         <button
           type="button"
-          title="Pin"
-          className="opacity-0 group-hover:opacity-100"
+          title={translate('auto.components.github.project.ProjectPicker.8ab5447c64', 'Pin')}
+          className="can-hover:opacity-0 group-hover:opacity-100"
           onClick={onPin}
         >
           <Pin className="size-3.5" />
@@ -614,18 +692,26 @@ function ViewPickStep({
           onClick={onBack}
           className="text-xs text-muted-foreground hover:text-foreground"
         >
-          ← Back
+          {translate('auto.components.github.project.ProjectPicker.a51b3337ab', '← Back')}
         </button>
-        <span className="text-xs font-medium">Choose a view</span>
+        <span className="text-xs font-medium">
+          {translate('auto.components.github.project.ProjectPicker.9bf55fa1e8', 'Choose a view')}
+        </span>
         <span />
       </div>
       <div className="max-h-[340px] overflow-y-auto p-1 scrollbar-sleek">
         {loading ? (
           <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
-            <Loader className="size-3 animate-spin" /> Loading views…
+            <Loader className="size-3 animate-spin" />{' '}
+            {translate('auto.components.github.project.ProjectPicker.72a05c04a6', 'Loading views…')}
           </div>
         ) : views.length === 0 ? (
-          <div className="px-2 py-2 text-xs text-muted-foreground">No views found.</div>
+          <div className="px-2 py-2 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.github.project.ProjectPicker.9b36829267',
+              'No views found.'
+            )}
+          </div>
         ) : (
           views.map((v) => {
             const supported = v.layout === 'TABLE_LAYOUT'
@@ -643,10 +729,16 @@ function ViewPickStep({
                 <span className="text-sm">{v.name}</span>
                 <span className="text-[10px] text-muted-foreground">
                   {v.layout === 'TABLE_LAYOUT'
-                    ? 'Table'
+                    ? translate('auto.components.github.project.ProjectPicker.1a2b8e512e', 'Table')
                     : v.layout === 'BOARD_LAYOUT'
-                      ? 'Board (unsupported)'
-                      : 'Roadmap (unsupported)'}
+                      ? translate(
+                          'auto.components.github.project.ProjectPicker.d34ef9b554',
+                          'Board (unsupported)'
+                        )
+                      : translate(
+                          'auto.components.github.project.ProjectPicker.ab1a2c357d',
+                          'Roadmap (unsupported)'
+                        )}
                 </span>
               </button>
             )
@@ -683,7 +775,10 @@ function PartialFailuresBanner({
         <div>
           <div>{summary}</div>
           <div className="mt-0.5 text-[11px] opacity-80">
-            Paste a project URL below to reach missing ones.
+            {translate(
+              'auto.components.github.project.ProjectPicker.96739284c3',
+              'Paste a project URL below to reach missing ones.'
+            )}
           </div>
         </div>
       </div>

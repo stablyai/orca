@@ -126,7 +126,7 @@ async function openRepoSettings(page: Page, repoId: string): Promise<Locator> {
 }
 
 async function openImportedSetupSettingsFromToast(page: Page, repoId: string): Promise<Locator> {
-  const viewInSettings = page.getByRole('button', { name: 'View in Settings' })
+  const viewInSettings = page.getByRole('button', { name: "project's settings", exact: true })
   await expect(viewInSettings).toBeAttached({ timeout: 10_000 })
   // Why: in hidden Electron CI windows, the Sonner action can be laid out just
   // outside Playwright's viewport even though the action is mounted and wired.
@@ -157,14 +157,15 @@ test.describe('Setup script import prompt', () => {
     const repoId = await addAndActivateRepo(orcaPage, repoPath)
 
     await expect(
-      orcaPage.getByText(/Detected setup config from Superset \(\.superset\/config\.json \+1\)\./)
+      orcaPage.getByText(
+        /Found a setup command in\s*Superset \(\.superset\/config\.json \+1\)\. Save it to run for new worktrees\./
+      )
     ).toBeVisible({ timeout: 15_000 })
 
-    await orcaPage.getByRole('button', { name: 'Import setup' }).click()
+    await orcaPage.getByRole('button', { name: 'Save local setup' }).click()
 
-    await expect(orcaPage.getByText('Setup script imported')).toBeVisible()
     await expect(
-      orcaPage.getByText("2 unsupported fields skipped. Saved to this repo's local settings.")
+      orcaPage.getByText('2 unsupported fields skipped. Saved the setup command.')
     ).toBeVisible()
 
     const localCommands = await openImportedSetupSettingsFromToast(orcaPage, repoId)
@@ -185,12 +186,16 @@ test.describe('Setup script import prompt', () => {
     const repoId = await addAndActivateRepo(orcaPage, repoPath)
 
     await expect(
-      orcaPage.getByText(/Detected setup config from cmux \(\.cmux\/cmux\.json\)\./)
+      orcaPage.getByText(
+        /Found a setup command in\s*cmux \(\.cmux\/cmux\.json\)\. Save it to run for new worktrees\./
+      )
     ).toBeVisible({ timeout: 15_000 })
 
-    await orcaPage.getByRole('button', { name: 'Import setup' }).click()
+    await orcaPage.getByRole('button', { name: 'Save local setup' }).click()
 
-    await expect(orcaPage.getByText('Setup script imported')).toBeVisible()
+    await expect(
+      orcaPage.getByRole('button', { name: "project's settings", exact: true })
+    ).toBeVisible()
 
     const repoSettings = await openRepoSettings(orcaPage, repoId)
     await expectSettingsCommandValue(repoSettings, 'Setup Script', './scripts/setup.sh')

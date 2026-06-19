@@ -53,8 +53,9 @@ describe('killAllProcessesForWorktree', () => {
       { ptyId: 'w1-registry-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 },
       { ptyId: 'w2-registry-2', worktreeId: 'w2', sessionId: null, paneKey: null, pid: 101 }
     ])
+    const onPtyStopped = vi.fn()
 
-    const result = await killAllProcessesForWorktree('w1', { localProvider })
+    const result = await killAllProcessesForWorktree('w1', { localProvider, onPtyStopped })
 
     expect(result.runtimeStopped).toBe(0)
     expect(result.providerStopped).toBe(1)
@@ -64,6 +65,10 @@ describe('killAllProcessesForWorktree', () => {
     expect(localProvider.shutdown).toHaveBeenCalledWith('w1-registry-1', { immediate: true })
     expect(localProvider.shutdown).not.toHaveBeenCalledWith('w2@@efef5678', { immediate: true })
     expect(localProvider.shutdown).not.toHaveBeenCalledWith('w2-registry-2', { immediate: true })
+    expect(onPtyStopped).toHaveBeenCalledWith('w1@@abcd1234')
+    expect(onPtyStopped).toHaveBeenCalledWith('w1-registry-1')
+    expect(onPtyStopped).not.toHaveBeenCalledWith('w2@@efef5678')
+    expect(onPtyStopped).not.toHaveBeenCalledWith('w2-registry-2')
   })
 
   it('skips the daemon prefix sweep safely when the provider uses numeric ids', async () => {
@@ -75,14 +80,16 @@ describe('killAllProcessesForWorktree', () => {
     listRegisteredPtysMock.mockReturnValue([
       { ptyId: '1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 200 }
     ])
+    const onPtyStopped = vi.fn()
 
-    const result = await killAllProcessesForWorktree('w1', { localProvider })
+    const result = await killAllProcessesForWorktree('w1', { localProvider, onPtyStopped })
 
     // Prefix sweep must kill nothing; registry sweep must still fire.
     expect(result.providerStopped).toBe(0)
     expect(result.registryStopped).toBe(1)
     expect(localProvider.shutdown).toHaveBeenCalledWith('1', { immediate: true })
     expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
+    expect(onPtyStopped).toHaveBeenCalledWith('1')
   })
 
   it('best-effort: swallows errors from listProcesses and shutdown', async () => {
@@ -100,6 +107,21 @@ describe('killAllProcessesForWorktree', () => {
     // rejected → counted as not-killed (registry sweep currently swallows).
     expect(result.providerStopped).toBe(0)
     expect(result.registryStopped).toBe(0)
+  })
+
+  it('does not let cleanup hook failures abort teardown', async () => {
+    const localProvider = createProviderStub(async () => [
+      { id: 'w1@@aaaa', cwd: '/tmp/w1', title: 'shell' }
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+    const onPtyStopped = vi.fn(() => {
+      throw new Error('cleanup failed')
+    })
+
+    const result = await killAllProcessesForWorktree('w1', { localProvider, onPtyStopped })
+
+    expect(result.providerStopped).toBe(1)
+    expect(onPtyStopped).toHaveBeenCalledWith('w1@@aaaa')
   })
 
   it('does not carry state between successive calls with distinct providers', async () => {

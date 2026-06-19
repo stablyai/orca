@@ -7,7 +7,8 @@ import type {
   PersistedState,
   PersistedUIState,
   RepoHookSettings,
-  WorkspaceSessionState
+  WorkspaceSessionState,
+  AgentActivityDisplayMode
 } from './types'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
@@ -17,10 +18,25 @@ import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
+import { DEFAULT_APP_ICON_ID } from './app-icon'
+import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
+import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
+import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
+import { DEFAULT_TUI_AGENT_ARGS, DEFAULT_TUI_AGENT_ENV } from './tui-agent-launch-defaults'
+import { UI_LANGUAGE_SYSTEM } from './ui-language'
+import {
+  DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
+  DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
+} from './left-sidebar-appearance'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
+  COMPACT_WORKTREE_CARD_PROPERTIES,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
+  TASK_WORKTREE_CARD_PROPERTIES,
+  getWorktreeCardModeProperties,
+  getWorktreeCardModeUpdates,
+  isLegacyDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from './worktree-card-properties'
 
@@ -28,10 +44,16 @@ export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
 export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
 export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
+export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'compact'
+
+export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
+  return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+}
 
 // Why: the onboarding wizard's last step index. Centralized so backfill,
 // clamps, and UI step references all agree on the same upper bound.
-export const ONBOARDING_FINAL_STEP = 7
+export const ONBOARDING_FINAL_STEP = 5
+export const ONBOARDING_FLOW_VERSION = 4
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not
@@ -128,6 +150,7 @@ export function getDefaultNotificationSettings(): NotificationSettings {
 
 export function getDefaultOnboardingState(): OnboardingState {
   return {
+    flowVersion: ONBOARDING_FLOW_VERSION,
     closedAt: null,
     outcome: null,
     lastCompletedStep: -1,
@@ -148,17 +171,30 @@ export function getDefaultOnboardingState(): OnboardingState {
   }
 }
 
+function getDefaultWorkspaceDir(homeDir: string): string {
+  const separator = homeDir.includes('\\') ? '\\' : '/'
+  const trimmedHomeDir = homeDir.replace(/[\\/]+$/, '')
+  return [trimmedHomeDir, 'orca', 'workspaces'].join(separator)
+}
+
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
-    workspaceDir: `${homedir}/orca/workspaces`,
+    workspaceDir: getDefaultWorkspaceDir(homedir),
     nestWorkspaces: true,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
-    autoRenameBranchFromWork: false,
+    localBaseRefSuggestionDismissed: false,
+    autoRenameBranchFromWork: true,
+    autoRenameBranchFromWorkDefaultedOn: true,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     enableGitHubAttribution: false,
     theme: 'system',
+    leftSidebarAppearanceMode: 'default',
+    leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
+    leftSidebarTintOpacity: DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
+    uiLanguage: UI_LANGUAGE_SYSTEM,
+    appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
@@ -173,20 +209,22 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
     terminalLineHeight: 1,
-    // Why: keep the setting on "auto" so explicit user choices stay available,
-    // but renderer policy maps Linux auto to DOM to avoid GPU glyph corruption.
+    // Why: "auto" should use WebGL when supported while keeping DOM fallback
+    // for renderer failures and Linux software/unknown GPU renderers.
     terminalGpuAcceleration: 'auto',
     // Why 'auto': when the user has picked a known ligature font we want the
     // feature enabled by default, but we never force it if they pick a font
     // that lacks ligatures or if they've explicitly opted out. The resolver
     // is in shared/terminal-ligatures.ts.
     terminalLigatures: 'auto',
-    terminalCursorStyle: 'bar',
+    terminalCursorStyle: 'block',
+    terminalCursorStyleDefaultedToBlock: true,
     terminalCursorBlink: true,
     terminalThemeDark: 'Ghostty Default Style Dark',
     terminalDividerColorDark: '#3f3f46',
     terminalUseSeparateLightTheme: true,
     terminalThemeLight: 'Builtin Tango Light',
+    terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',
     terminalInactivePaneOpacity: 0.8,
     terminalActivePaneOpacity: 1,
@@ -197,6 +235,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // and Ctrl+right-click still opens the context menu when paste is enabled.
     terminalRightClickToPaste: true,
     terminalWindowsShell: 'powershell.exe',
+    terminalWindowsWslDistro: null,
+    localAccountRuntime: 'host',
+    localAccountWslDistro: null,
+    localWindowsRuntimeDefault: { kind: 'windows-host' },
     // Why: Windows users expect "PowerShell" to mean modern PowerShell when it
     // is installed, with a safe fallback to the inbox Windows PowerShell.
     terminalWindowsPowerShellImplementation: 'auto',
@@ -208,17 +250,24 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // focus-follows-mouse never happens unexpectedly.
     terminalFocusFollowsMouse: false,
     windowBackgroundBlur: false,
+    minimizeToTrayOnClose: false,
     terminalClipboardOnSelect: false,
     terminalAllowOsc52Clipboard: false,
+    claudeAgentTeamsMode: 'off',
     setupScriptLaunchMode: 'new-tab',
     terminalScrollbackBytes: 10_000_000,
-    openLinksInApp: true,
-    openInApplications: [],
+    httpProxyUrl: '',
+    httpProxyBypassRules: '',
+    electronHttp1CompatibilityMode: false,
+    openLinksInApp: false,
+    openLinksInAppPreferencePrompted: false,
+    openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
     sourceControlViewMode: 'list',
     showTitlebarAppName: true,
     showTasksButton: true,
+    showAutomationsButton: true,
     showMobileButton: true,
     ctrlTabOrderMode: 'mru',
     // Why: switching worktrees and opening command surfaces from a focused
@@ -237,23 +286,33 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     promptCacheTtlMs: 300_000,
     codexManagedAccounts: [],
     activeCodexManagedAccountId: null,
+    activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} },
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
-    disabledTuiAgents: [],
+    disabledTuiAgents: [...DEFAULT_DISABLED_TUI_AGENTS],
+    claudeAgentTeamsDefaultDisabledMigrated: true,
     skipDeleteWorktreeConfirm: false,
+    skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
+    skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: [...TASK_PROVIDERS],
+    visibleTaskProvidersDefaultedForJira: true,
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
     opencodeWorkspaceId: '',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
+    agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
+    agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
+    agentYoloDefaultsMigrated: true,
     agentStatusHooksEnabled: true,
+    tabAutoGenerateTitle: false,
+    confirmClosePinnedTab: true,
     keepComputerAwakeWhileAgentsRun: false,
     // Why: 'auto' runs a layout-aware probe at boot (see
     // src/renderer/src/lib/keyboard-layout/*) that picks 'true' for US and
@@ -265,6 +324,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalMacOptionAsAltMigrated: false,
     terminalJISYenToBackslash: false,
     experimentalMobile: false,
+    mobileEmulatorEnabled: true,
+    mobileEmulatorDefaultDeviceUdid: null,
     // Why: indefinite hold by default — the desktop "Restore" banner is the
     // explicit return-to-desktop-size action, no wall-clock guess.
     // See docs/mobile-fit-hold.md.
@@ -275,7 +336,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     experimentalActivity: false,
     experimentalActivityDefaultedOffForAllUsers: true,
     experimentalTerminalAttention: false,
-    experimentalCompactWorktreeCards: false,
+    experimentalAgentHibernation: false,
+    agentHibernationIdleMs: 30 * 60 * 1000,
+    experimentalNewWorktreeCardStyle: false,
+    compactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
     // Why: local desktop remains the default server until the user explicitly
     // selects a saved runtime environment.
@@ -318,7 +382,8 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     language: 'en',
     dictationMode: 'toggle' as const,
     terminalConfirmBeforeInsert: false,
-    userModels: []
+    userModels: [],
+    openAiApiKeyConfigured: false
   }
 }
 
@@ -337,21 +402,27 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
   return {
     schemaVersion: SCHEMA_VERSION,
     repos: [],
+    projects: [],
+    projectHostSetups: [],
     projectGroups: [],
+    folderWorkspaces: [],
     sparsePresetsByRepo: {},
     worktreeMeta: {},
     worktreeLineageById: {},
+    workspaceLineageByChildKey: {},
     settings: getDefaultSettings(homedir),
     ui: getDefaultUIState(),
     githubCache: { pr: {}, issue: {} },
     workspaceSession: getDefaultWorkspaceSession(),
+    workspaceSessionsByHostId: {},
     sshTargets: [],
     sshRemotePtyLeases: [],
     migrationUnsupportedPtyEntries: [],
     legacyPaneKeyAliasEntries: [],
     automations: [],
     automationRuns: [],
-    onboarding: getDefaultOnboardingState()
+    onboarding: getDefaultOnboardingState(),
+    featureInteractionTelemetryBuckets: {}
   }
 }
 
@@ -362,22 +433,32 @@ export function getDefaultUIState(): PersistedUIState {
     sidebarWidth: 280,
     rightSidebarOpen: true,
     rightSidebarTab: 'explorer',
+    rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
+    markdownTocPanelWidth: 240,
     groupBy: 'repo',
     sortBy: 'recent',
+    projectOrderBy: 'manual',
     showActiveOnly: false,
     hideSleepingWorkspaces: DEFAULT_HIDE_SLEEPING_WORKSPACES,
+    workspaceHostScope: 'all',
+    visibleWorkspaceHostIds: null,
+    workspaceHostOrder: [],
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
     hideDefaultBranchWorkspace: false,
+    hideAutomationGeneratedWorkspaces: false,
+    showDotfilesByWorktree: {},
     filterRepoIds: [],
     collapsedGroups: [],
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
+    _worktreeCardModeDefaulted: true,
+    agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
-    workspaceBoardCompact: false,
     workspaceBoardColumnWidth: 308,
+    syncTaskStatusFromWorkspaceBoard: false,
     _workspaceStatusesDefaultOrderMigrated: true,
     _workspaceStatusesDefaultWorkflowMigrated: true,
     _workspaceStatusesDefaultVisualsMigrated: true,
@@ -388,9 +469,21 @@ export function getDefaultUIState(): PersistedUIState {
     trustedOrcaHooks: {},
     setupScriptPromptDismissedRepoIds: [],
     acknowledgedAgentsByPaneKey: {},
+    setupGuideSidebarDismissed: false,
+    setupGuideBrowserMilestoneMigrated: true,
+    setupGuideBrowserMilestoneLegacyComplete: false,
+    browserImportHintHidden: false,
+    trayMinimizeNoticeShown: false,
+    mobileEmulatorTabIntroDismissed: false,
+    mobileEmulatorAgentSetupDismissed: false,
+    // Why: brand-new profiles never saw recent project ordering; only upgraded
+    // profiles get the one-time sidebar notice on first launch.
+    projectOrderManualDefaultNoticeDismissed: true,
     workspaceCleanup: { dismissals: {} },
     featureTipsSeenIds: [],
-    featureInteractions: {}
+    featureInteractions: {},
+    contextualToursSeenIds: [],
+    browserDefaultZoomLevel: DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
   }
 }
 
@@ -402,11 +495,13 @@ export function getDefaultWorkspaceSession(): WorkspaceSessionState {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     openFilesByWorktree: {},
+    markdownFrontmatterVisible: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
     activeBrowserTabIdByWorktree: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
-    browserUrlHistory: []
+    browserUrlHistory: [],
+    defaultTerminalTabsAppliedByWorktreeId: {}
   }
 }

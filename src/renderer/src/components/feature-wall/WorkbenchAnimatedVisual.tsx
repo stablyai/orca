@@ -1,8 +1,13 @@
 /* eslint-disable max-lines -- Why: this animation is a self-contained storyboard; splitting the phase markup from its timing constants would make the sequence harder to verify. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this visual is a timed storyboard; typed text, cursor, and phase state intentionally advance from animation effects. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
+import { ClaudeIcon } from '../status-bar/icons'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
+import { CodexInlineIcon } from './feature-tour-preview-glyphs'
+import { translate } from '@/i18n/i18n'
 
 // Why: the right-click menu needs the same icons as the real Orca menu so the
 // visual reads as the actual product, not a generic terminal mockup.
@@ -87,9 +92,11 @@ type Phase =
   | { kind: 'split-active' }
 
 type RightLine =
+  | { kind: 'submitted-command'; text: string }
   | { kind: 'session-started' }
   | { kind: 'submitted-prompt'; text: string }
   | { kind: 'thinking' }
+  | { kind: 'agent-action'; action: string; target: string; working?: boolean }
   | { kind: 'response-skeleton'; widthPct: number; withGlyph: boolean }
 
 type CursorTarget = { kind: 'hidden' } | { kind: 'pane' } | { kind: 'split-row' }
@@ -117,25 +124,52 @@ const THINKING_MS = 1100
 const RESPONSE_GAP_MS = 500
 const RESPONSE_GAP_LATER_MS = 550
 const FINAL_HOLD_MS = 1800
+// Why: the success state of side-by-side agents needs a longer dwell time so the user can easily see both active.
+const CHECKLIST_FINAL_HOLD_MS = 3800
 
 const RUN_TICK_MS = 2400
 
 const CLAUDE_CMD = 'claude'
 const REVIEW_PROMPT = 'review src/auth for missing error handling'
+const CODEX_CMD = 'codex'
+const CODEX_PROMPT = 'fix failing checkout test'
 const RESPONSE_WIDTHS = [72, 88, 64, 78] as const
 
-export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
-  const { reducedMotion } = props
+function getTwoAgentsReducedMotionLines(): readonly RightLine[] {
+  return [
+    { kind: 'submitted-command', text: CODEX_CMD },
+    { kind: 'session-started' },
+    { kind: 'submitted-prompt', text: CODEX_PROMPT },
+    { kind: 'agent-action', action: 'Read', target: 'checkout.test.ts' },
+    { kind: 'agent-action', action: 'Grep', target: 'timeout checkout' },
+    { kind: 'agent-action', action: 'Edit', target: 'src/checkout.ts', working: true }
+  ]
+}
+
+type WorkbenchAnimatedVisualVariant = 'tour' | 'two-agents-checklist'
+
+export function WorkbenchAnimatedVisual(props: {
+  reducedMotion: boolean
+  variant?: WorkbenchAnimatedVisualVariant
+}): JSX.Element {
+  const { reducedMotion, variant = 'tour' } = props
+  const isTwoAgentsChecklist = variant === 'two-agents-checklist'
+  const splitRightShortcutLabel = useShortcutLabel('terminal.splitRight')
+  const splitDownShortcutLabel = useShortcutLabel('terminal.splitDown')
   const panelRef = useRef<HTMLDivElement | null>(null)
   const leftPaneRef = useRef<HTMLDivElement | null>(null)
   const splitRowRef = useRef<HTMLDivElement | null>(null)
 
-  const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
+  const [phase, setPhase] = useState<Phase>(() =>
+    reducedMotion && isTwoAgentsChecklist ? { kind: 'split-active' } : { kind: 'idle' }
+  )
   const [runIdx, setRunIdx] = useState(0)
   const [cursorTarget, setCursorTarget] = useState<CursorTarget>({ kind: 'hidden' })
   const [rightTyped, setRightTyped] = useState('')
-  const [rightLines, setRightLines] = useState<readonly RightLine[]>([])
-  const [showInputLine, setShowInputLine] = useState(true)
+  const [rightLines, setRightLines] = useState<readonly RightLine[]>(() =>
+    reducedMotion && isTwoAgentsChecklist ? getTwoAgentsReducedMotionLines() : []
+  )
+  const [showInputLine, setShowInputLine] = useState(!(reducedMotion && isTwoAgentsChecklist))
   const [promptGlyph, setPromptGlyph] = useState<'$' | '>'>('$')
   const [showCaret, setShowCaret] = useState(true)
   const [rippleKey, setRippleKey] = useState(0)
@@ -143,21 +177,26 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
   // Cycle the running test on the left, independent of the loop, so the
   // playwright run keeps moving while the user works on the right.
   useEffect(() => {
-    if (reducedMotion) {
+    if (reducedMotion || isTwoAgentsChecklist) {
       return
     }
     const id = window.setInterval(() => {
       setRunIdx((i) => (i + 1) % RUN_QUEUE.length)
     }, RUN_TICK_MS)
     return () => window.clearInterval(id)
-  }, [reducedMotion])
+  }, [isTwoAgentsChecklist, reducedMotion])
 
   // Main animation loop — async-ish using setTimeout chains so reduced-motion
   // can short-circuit the entire effect cleanly.
   useEffect(() => {
     if (reducedMotion) {
-      setPhase({ kind: 'idle' })
+      setPhase(isTwoAgentsChecklist ? { kind: 'split-active' } : { kind: 'idle' })
       setCursorTarget({ kind: 'hidden' })
+      setRightTyped('')
+      setRightLines(isTwoAgentsChecklist ? getTwoAgentsReducedMotionLines() : [])
+      setShowInputLine(!isTwoAgentsChecklist)
+      setPromptGlyph('$')
+      setShowCaret(!isTwoAgentsChecklist)
       return
     }
     let cancelled = false
@@ -230,13 +269,14 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
           return
         }
 
-        // 6. User types `claude` into the new pane.
+        // 6. User types an agent command into the new pane.
         setPhase({ kind: 'split-active' })
-        for (let i = 1; i <= CLAUDE_CMD.length; i += 1) {
+        const agentCommand = isTwoAgentsChecklist ? CODEX_CMD : CLAUDE_CMD
+        for (let i = 1; i <= agentCommand.length; i += 1) {
           if (cancelled) {
             return
           }
-          setRightTyped(CLAUDE_CMD.slice(0, i))
+          setRightTyped(agentCommand.slice(0, i))
           await wait(TYPE_PER_CHAR_MS)
         }
         await wait(POST_CLAUDE_TYPE_MS)
@@ -245,9 +285,13 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
         }
 
         // 7. Hide input line, show "session started", then bring input back
-        //    with the Claude `>` prompt glyph.
+        //    with the agent `>` prompt glyph.
         setShowInputLine(false)
-        setRightLines((lines) => [...lines, { kind: 'session-started' }])
+        setRightLines((lines) => [
+          ...lines,
+          { kind: 'submitted-command', text: agentCommand },
+          { kind: 'session-started' }
+        ])
         await wait(SESSION_HEADER_MS)
         if (cancelled) {
           return
@@ -260,12 +304,13 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
           return
         }
 
-        // 8. Type the review prompt.
-        for (let i = 1; i <= REVIEW_PROMPT.length; i += 1) {
+        // 8. Type the task prompt.
+        const taskPrompt = isTwoAgentsChecklist ? CODEX_PROMPT : REVIEW_PROMPT
+        for (let i = 1; i <= taskPrompt.length; i += 1) {
           if (cancelled) {
             return
           }
-          setRightTyped(REVIEW_PROMPT.slice(0, i))
+          setRightTyped(taskPrompt.slice(0, i))
           await wait(PROMPT_PER_CHAR_MS)
         }
         await wait(POST_PROMPT_TYPE_MS)
@@ -275,7 +320,7 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
 
         // 9. Submit: collapse input into scrollback, swap to thinking spinner.
         setShowCaret(false)
-        setRightLines((lines) => [...lines, { kind: 'submitted-prompt', text: REVIEW_PROMPT }])
+        setRightLines((lines) => [...lines, { kind: 'submitted-prompt', text: taskPrompt }])
         setShowInputLine(false)
         await wait(POST_SUBMIT_MS)
         if (cancelled) {
@@ -285,6 +330,39 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
         await wait(THINKING_MS)
         if (cancelled) {
           return
+        }
+
+        // 10. Stream concrete work for the checklist visual; keep the generic
+        // tour abstract so it stays about the split gesture.
+        if (isTwoAgentsChecklist) {
+          setRightLines((lines) => {
+            const withoutThinking = lines.filter((l) => l.kind !== 'thinking')
+            return [
+              ...withoutThinking,
+              { kind: 'agent-action', action: 'Read', target: 'checkout.test.ts' }
+            ]
+          })
+          await wait(RESPONSE_GAP_MS)
+          if (cancelled) {
+            return
+          }
+          setRightLines((lines) => [
+            ...lines,
+            { kind: 'agent-action', action: 'Grep', target: 'timeout checkout' }
+          ])
+          await wait(RESPONSE_GAP_LATER_MS)
+          if (cancelled) {
+            return
+          }
+          setRightLines((lines) => [
+            ...lines,
+            { kind: 'agent-action', action: 'Edit', target: 'src/checkout.ts', working: true }
+          ])
+          await wait(CHECKLIST_FINAL_HOLD_MS)
+          if (cancelled) {
+            return
+          }
+          continue
         }
 
         // 10. Stream skeleton response bars — actual answer doesn't matter.
@@ -319,7 +397,7 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
           ...lines,
           { kind: 'response-skeleton', widthPct: RESPONSE_WIDTHS[3], withGlyph: false }
         ])
-        await wait(FINAL_HOLD_MS)
+        await wait(isTwoAgentsChecklist ? CHECKLIST_FINAL_HOLD_MS : FINAL_HOLD_MS)
         if (cancelled) {
           return
         }
@@ -331,7 +409,7 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
     }
-  }, [reducedMotion])
+  }, [isTwoAgentsChecklist, reducedMotion])
 
   const cursor = useFakeCursor(panelRef, leftPaneRef, splitRowRef, cursorTarget, reducedMotion)
 
@@ -342,6 +420,7 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
   const splitRowActive = phase.kind === 'menu-active' || phase.kind === 'menu-click'
   const showRipple = phase.kind === 'right-click' || phase.kind === 'menu-click'
   const running = RUN_QUEUE[runIdx] ?? RUN_QUEUE[0]
+  const promptAccentClass = isTwoAgentsChecklist ? 'text-foreground' : 'text-amber-600'
 
   return (
     <div
@@ -355,55 +434,51 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
         <span className="size-2.5 rounded-full bg-emerald-400/70" />
       </div>
 
+      {/* Why: onboarding previews can flip theme without remounting this visual;
+          token-backed terminal chrome follows explicit and system theme changes. */}
       <div
         className={cn(
-          'grid bg-[#fafafa] font-mono text-[11px] transition-[grid-template-columns] duration-[600ms] ease-[cubic-bezier(.2,.8,.2,1)]',
+          'grid bg-[var(--editor-surface)] font-mono text-[11px]',
+          reducedMotion
+            ? 'transition-none'
+            : 'transition-[grid-template-columns] duration-[600ms] ease-[cubic-bezier(.2,.8,.2,1)]',
           splitOpen ? 'grid-cols-[1fr_1fr]' : 'grid-cols-[1fr_0fr]'
         )}
         style={{ minHeight: 230 }}
       >
-        {/* Left pane: playwright list reporter. */}
+        {/* Left pane: source work that remains visible after the split. */}
         <div ref={leftPaneRef} className="relative flex min-w-0 flex-col gap-1.5 px-3 py-2.5">
-          <TermLine>
-            <Prompt>$</Prompt>
-            <span className="text-foreground">pnpm playwright test</span>
-          </TermLine>
-          <TermLine muted>Running 12 tests using 4 workers</TermLine>
-          <TermLine>
-            <PwCheck />
-            <PwIdx>1</PwIdx>login.spec.ts<PwName> › can sign in</PwName>
-            <PwDur>(1.2s)</PwDur>
-          </TermLine>
-          <TermLine>
-            <PwCheck />
-            <PwIdx>2</PwIdx>checkout.spec.ts<PwName> › cart total updates</PwName>
-            <PwDur>(0.8s)</PwDur>
-          </TermLine>
-          <TermLine>
-            <RunSpinner />
-            <PwIdx>3</PwIdx>
-            {running.name}
-            <PwName> {running.desc}</PwName>
-          </TermLine>
+          {isTwoAgentsChecklist ? (
+            <ClaudeChecklistPane reducedMotion={reducedMotion} />
+          ) : (
+            <PlaywrightPane running={running} reducedMotion={reducedMotion} />
+          )}
 
-          {/* Right-click context menu — light card, skeleton bars for the
+          {/* Right-click context menu — theme card, skeleton bars for the
               other items, real labels only for the two split actions. */}
           <ContextMenu
             shown={menuShown}
             splitRowActive={splitRowActive}
             splitRowRef={splitRowRef}
+            splitRightShortcutLabel={splitRightShortcutLabel}
+            splitDownShortcutLabel={splitDownShortcutLabel}
           />
         </div>
 
-        {/* Right pane: empty until the split lands, then a Claude session. */}
+        {/* Right pane: empty until the split lands, then an agent session. */}
         <div
           className={cn(
             'flex min-w-0 flex-col gap-1.5 overflow-hidden border-l border-border px-3 py-2.5 transition-[opacity,transform] duration-[480ms] ease-[cubic-bezier(.2,.8,.2,1)]',
+            reducedMotion ? 'transition-none' : null,
             splitOpen ? 'opacity-100' : 'translate-x-2 opacity-0'
           )}
           style={{ transitionDelay: splitOpen ? '200ms' : '0ms' }}
         >
-          <RightPaneScrollback lines={rightLines} />
+          <RightPaneScrollback
+            lines={rightLines}
+            isCodex={isTwoAgentsChecklist}
+            promptAccentClass={promptAccentClass}
+          />
           {showInputLine ? (
             <TermLine wrap>
               <Prompt claude={promptGlyph === '>'}>{promptGlyph}</Prompt>
@@ -432,13 +507,161 @@ export function WorkbenchAnimatedVisual(props: { reducedMotion: boolean }): JSX.
         </div>
       </div>
 
-      {/* Standalone keyboard hint stays inside the visual so the tour copy can
-          remain a single subheader line. */}
-      <div className="border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
-        Same pane: <kbd className={KBD_CLASS}>⌘D</kbd> splits right ·{' '}
-        <kbd className={KBD_CLASS}>⌘⇧D</kbd> splits down
-      </div>
+      {isTwoAgentsChecklist ? null : (
+        /* Standalone keyboard hint stays inside the visual so the tour copy can
+            remain a single subheader line. */
+        <div className="border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.0bc9ad0cd1',
+            'Same pane:'
+          )}
+          <kbd className={KBD_CLASS}>{splitRightShortcutLabel}</kbd>{' '}
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.a2b114dad0',
+            'splits right ·'
+          )}{' '}
+          <kbd className={KBD_CLASS}>{splitDownShortcutLabel}</kbd>{' '}
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.16877e038d',
+            'splits down'
+          )}
+        </div>
+      )}
     </div>
+  )
+}
+
+function PlaywrightPane(props: {
+  running: (typeof RUN_QUEUE)[number]
+  reducedMotion: boolean
+}): JSX.Element {
+  return (
+    <>
+      <TermLine>
+        <Prompt>$</Prompt>
+        <span className="text-foreground">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.4371cc9931',
+            'pnpm playwright test'
+          )}
+        </span>
+      </TermLine>
+      <TermLine muted>
+        {translate(
+          'auto.components.feature.wall.WorkbenchAnimatedVisual.0b20782e0f',
+          'Running 12 tests using 4 workers'
+        )}
+      </TermLine>
+      <TermLine>
+        <PwCheck />
+        <PwIdx>1</PwIdx>
+        {translate(
+          'auto.components.feature.wall.WorkbenchAnimatedVisual.defe550fe2',
+          'login.spec.ts'
+        )}
+        <PwName>
+          {' '}
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.3261c6853b',
+            '› can sign in'
+          )}
+        </PwName>
+        <PwDur>
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.5c5cbd783f', '(1.2s)')}
+        </PwDur>
+      </TermLine>
+      <TermLine>
+        <PwCheck />
+        <PwIdx>2</PwIdx>
+        {translate(
+          'auto.components.feature.wall.WorkbenchAnimatedVisual.623881d72e',
+          'checkout.spec.ts'
+        )}
+        <PwName>
+          {' '}
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.944199e54a',
+            '› cart total updates'
+          )}
+        </PwName>
+        <PwDur>
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.7d9f1d5f7d', '(0.8s)')}
+        </PwDur>
+      </TermLine>
+      <TermLine>
+        <RunSpinner reducedMotion={props.reducedMotion} />
+        <PwIdx>3</PwIdx>
+        {props.running.name}
+        <PwName> {props.running.desc}</PwName>
+      </TermLine>
+    </>
+  )
+}
+
+function ClaudeChecklistPane(props: { reducedMotion: boolean }): JSX.Element {
+  return (
+    <>
+      <TermLine>
+        <Prompt>$</Prompt>
+        <span className="text-foreground">
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.000106adfe', 'claude')}
+        </span>
+      </TermLine>
+      <TermLine muted>
+        <span className="mr-1.5 inline-flex align-[-2px]">
+          <ClaudeIcon size={12} />
+        </span>
+        {translate(
+          'auto.components.feature.wall.WorkbenchAnimatedVisual.431ca9842a',
+          'Claude Code session started'
+        )}
+      </TermLine>
+      <TermLine wrap>
+        <span className="mr-1.5 text-amber-600">
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.932c4b3a97', '>')}
+        </span>
+        {translate(
+          'auto.components.feature.wall.WorkbenchAnimatedVisual.c0eb94125e',
+          'review auth edge cases'
+        )}
+      </TermLine>
+      <TermLine>
+        <span className="mr-1.5 font-bold text-emerald-600">✓</span>
+        <span className="text-foreground">
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.9923847785', 'Read')}
+        </span>
+        <span className="ml-1.5 truncate text-muted-foreground">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.b85eab49dd',
+            'src/auth/session.ts'
+          )}
+        </span>
+      </TermLine>
+      <TermLine>
+        <span className="mr-1.5 font-bold text-emerald-600">✓</span>
+        <span className="text-foreground">
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.17cfdc3344', 'Grep')}
+        </span>
+        <span className="ml-1.5 truncate text-muted-foreground">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.0d93c298a7',
+            'throw src/auth'
+          )}
+        </span>
+      </TermLine>
+      <TermLine>
+        <RunSpinner reducedMotion={props.reducedMotion} />
+        <span className="text-foreground">
+          {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.99f5224f1e', 'Edit')}
+        </span>
+        <span className="ml-1.5 truncate text-muted-foreground">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.b85eab49dd',
+            'src/auth/session.ts'
+          )}
+        </span>
+      </TermLine>
+    </>
   )
 }
 
@@ -484,9 +707,14 @@ function PwDur(props: { children: React.ReactNode }): JSX.Element {
   return <span className="ml-2 text-muted-foreground">{props.children}</span>
 }
 
-function RunSpinner(): JSX.Element {
+function RunSpinner(props: { reducedMotion?: boolean }): JSX.Element {
   return (
-    <span className="mr-1.5 inline-block size-2 animate-spin rounded-full border-[1.5px] border-foreground/20 border-t-foreground align-[-1px]" />
+    <span
+      className={cn(
+        'mr-1.5 inline-block size-2 rounded-full border-[1.5px] border-foreground/20 align-[-1px]',
+        props.reducedMotion ? 'border-t-foreground/20' : 'animate-spin border-t-foreground'
+      )}
+    />
   )
 }
 
@@ -494,6 +722,8 @@ function ContextMenu(props: {
   shown: boolean
   splitRowActive: boolean
   splitRowRef: React.RefObject<HTMLDivElement | null>
+  splitRightShortcutLabel: string
+  splitDownShortcutLabel: string
 }): JSX.Element {
   return (
     <div
@@ -518,15 +748,29 @@ function ContextMenu(props: {
         <span className="inline-flex items-center justify-center text-muted-foreground">
           <SplitRightIcon />
         </span>
-        <span className="whitespace-nowrap leading-none">Split Terminal Right</span>
-        <span className="font-mono text-[11px] text-muted-foreground">⌘D</span>
+        <span className="whitespace-nowrap leading-none">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.e370fa8c2b',
+            'Split Terminal Right'
+          )}
+        </span>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          {props.splitRightShortcutLabel}
+        </span>
       </div>
       <div className="grid h-[22px] grid-cols-[18px_1fr_auto] items-center gap-2 rounded-[5px] px-1.5 py-1 pl-1.5">
         <span className="inline-flex items-center justify-center text-muted-foreground">
           <SplitDownIcon />
         </span>
-        <span className="whitespace-nowrap leading-none">Split Terminal Down</span>
-        <span className="font-mono text-[11px] text-muted-foreground">⌘⇧D</span>
+        <span className="whitespace-nowrap leading-none">
+          {translate(
+            'auto.components.feature.wall.WorkbenchAnimatedVisual.ca2cfbf188',
+            'Split Terminal Down'
+          )}
+        </span>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          {props.splitDownShortcutLabel}
+        </span>
       </div>
       <CtxSeparator />
       <CtxSkeleton width={64} />
@@ -550,21 +794,51 @@ function CtxSeparator(): JSX.Element {
   return <div className="my-1 h-px bg-foreground/[0.08]" />
 }
 
-function RightPaneScrollback(props: { lines: readonly RightLine[] }): JSX.Element {
+function RightPaneScrollback(props: {
+  lines: readonly RightLine[]
+  isCodex?: boolean
+  promptAccentClass?: string
+}): JSX.Element {
   return (
     <>
       {props.lines.map((line, i) => {
+        // Why: preserving the submitted command keeps the terminal view realistic after submitting.
+        if (line.kind === 'submitted-command') {
+          return (
+            <TermLine key={i}>
+              <Prompt>$</Prompt>
+              <span className="text-foreground">{line.text}</span>
+            </TermLine>
+          )
+        }
         if (line.kind === 'session-started') {
           return (
             <TermLine key={i} muted>
-              <span className="mr-1.5 text-foreground">●</span>Claude Code session started
+              {props.isCodex ? (
+                <span className="mr-1.5 inline-flex align-[-2px]">
+                  <CodexInlineIcon />
+                </span>
+              ) : (
+                <span className="mr-1.5 text-foreground">●</span>
+              )}
+              {props.isCodex
+                ? translate(
+                    'auto.components.feature.wall.WorkbenchAnimatedVisual.fc84f17fe7',
+                    'Codex session started'
+                  )
+                : translate(
+                    'auto.components.feature.wall.WorkbenchAnimatedVisual.431ca9842a',
+                    'Claude Code session started'
+                  )}
             </TermLine>
           )
         }
         if (line.kind === 'submitted-prompt') {
           return (
             <TermLine key={i} wrap>
-              <span className="mr-1.5 text-amber-600">&gt;</span>
+              <span className={cn('mr-1.5', props.promptAccentClass ?? 'text-amber-600')}>
+                {translate('auto.components.feature.wall.WorkbenchAnimatedVisual.932c4b3a97', '>')}
+              </span>
               {line.text}
             </TermLine>
           )
@@ -573,16 +847,42 @@ function RightPaneScrollback(props: { lines: readonly RightLine[] }): JSX.Elemen
           return (
             <TermLine key={i}>
               <RunSpinner />
-              <span className="text-muted-foreground">Thinking…</span>
+              <span className="text-muted-foreground">
+                {translate(
+                  'auto.components.feature.wall.WorkbenchAnimatedVisual.633a91e358',
+                  'Thinking…'
+                )}
+              </span>
+            </TermLine>
+          )
+        }
+        if (line.kind === 'agent-action') {
+          return (
+            <TermLine key={i}>
+              {line.working ? (
+                <RunSpinner />
+              ) : (
+                <span className="mr-1.5 font-bold text-emerald-600">✓</span>
+              )}
+              <span className="text-foreground">{line.action}</span>
+              <span className="ml-1.5 truncate text-muted-foreground">{line.target}</span>
             </TermLine>
           )
         }
         return (
           <TermLine key={i}>
-            {line.withGlyph ? <span className="mr-1.5 text-amber-600">●</span> : null}
+            {line.withGlyph ? (
+              props.isCodex ? (
+                <span className="mr-1.5 inline-flex align-[-2px]">
+                  <CodexInlineIcon />
+                </span>
+              ) : (
+                <span className="mr-1.5 text-amber-600">●</span>
+              )
+            ) : null}
             <span
-              className="inline-block h-[7px] rounded-[3px] align-[1px]"
-              style={{ width: `${line.widthPct}%`, background: 'rgba(24,24,27,0.18)' }}
+              className="inline-block h-[7px] rounded-[3px] bg-foreground/[0.18] align-[1px]"
+              style={{ width: `${line.widthPct}%` }}
             />
           </TermLine>
         )

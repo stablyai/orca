@@ -17,6 +17,7 @@ import type { SFTPWrapper, FileEntryWithStats } from 'ssh2'
 import { isPlainObject, type HooksConfig } from './installer-utils'
 
 const DEFAULT_REMOTE_CONFIG_MODE = 0o600
+const REMOTE_SFTP_OPERATION_TIMEOUT_MS = 10_000
 
 /** Read+JSON-parse a remote file. Returns `null` on parse failure (caller
  *  surfaces "could not parse" status to the UI), `{}` on missing file
@@ -170,16 +171,51 @@ export async function writeTextFileRemoteAtomic(
 
 // ─── Private SFTP primitives ────────────────────────────────────────
 
-async function readFile(sftp: SFTPWrapper, remotePath: string): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    sftp.readFile(remotePath, 'utf8', (err, data) => {
+function sftpOperation<T>(
+  label: string,
+  run: (callback: (err: unknown, value?: T) => void) => void
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) {
+        return
+      }
+      settled = true
+      // Why: remote hook installation must fail open; a wedged SFTP callback
+      // should degrade hook status, not block SSH workspace startup forever.
+      reject(new Error(`Timed out waiting for SFTP ${label}`))
+    }, REMOTE_SFTP_OPERATION_TIMEOUT_MS)
+    if (typeof timer === 'object' && 'unref' in timer) {
+      timer.unref()
+    }
+
+    const finish = (err: unknown, value?: T): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
       if (err) {
         reject(err)
         return
       }
-      resolve(typeof data === 'string' ? data : data.toString('utf8'))
-    })
+      resolve(value as T)
+    }
+
+    try {
+      run(finish)
+    } catch (error) {
+      finish(error)
+    }
   })
+}
+
+async function readFile(sftp: SFTPWrapper, remotePath: string): Promise<string> {
+  const data = await sftpOperation<string | Buffer>(`readFile ${remotePath}`, (callback) => {
+    sftp.readFile(remotePath, 'utf8', callback)
+  })
+  return typeof data === 'string' ? data : data.toString('utf8')
 }
 
 async function writeFile(
@@ -188,29 +224,18 @@ async function writeFile(
   content: string,
   mode?: number
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const options =
-      mode === undefined ? { encoding: 'utf8' as const } : { encoding: 'utf8' as const, mode }
-    sftp.writeFile(remotePath, content, options, (err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
+  const options =
+    mode === undefined ? { encoding: 'utf8' as const } : { encoding: 'utf8' as const, mode }
+  await sftpOperation<void>(`writeFile ${remotePath}`, (callback) => {
+    sftp.writeFile(remotePath, content, options, callback)
   })
 }
 
 async function statMode(sftp: SFTPWrapper, remotePath: string): Promise<number> {
-  return new Promise((resolve, reject) => {
-    sftp.stat(remotePath, (err, stats) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve(stats.mode & 0o7777)
-    })
+  const stats = await sftpOperation<{ mode: number }>(`stat ${remotePath}`, (callback) => {
+    sftp.stat(remotePath, callback)
   })
+  return stats.mode & 0o7777
 }
 
 async function getRemoteFileModeOrDefault(
@@ -248,76 +273,38 @@ async function rename(sftp: SFTPWrapper, src: string, dst: string): Promise<void
 }
 
 async function renamePlain(sftp: SFTPWrapper, src: string, dst: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.rename(src, dst, (err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
+  await sftpOperation<void>(`rename ${src}`, (callback) => {
+    sftp.rename(src, dst, callback)
   })
 }
 
 async function renameOpenSsh(sftp: SFTPWrapper, src: string, dst: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.ext_openssh_rename(src, dst, (err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
+  await sftpOperation<void>(`openssh_rename ${src}`, (callback) => {
+    sftp.ext_openssh_rename(src, dst, callback)
   })
 }
 
 async function unlink(sftp: SFTPWrapper, remotePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.unlink(remotePath, (err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
+  await sftpOperation<void>(`unlink ${remotePath}`, (callback) => {
+    sftp.unlink(remotePath, callback)
   })
 }
 
 async function chmod(sftp: SFTPWrapper, remotePath: string, mode: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.chmod(remotePath, mode, (err) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve()
-    })
+  await sftpOperation<void>(`chmod ${remotePath}`, (callback) => {
+    sftp.chmod(remotePath, mode, callback)
   })
 }
 
 async function readdir(sftp: SFTPWrapper, remotePath: string): Promise<FileEntryWithStats[]> {
-  return new Promise((resolve, reject) => {
-    sftp.readdir(remotePath, (err, list) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve(list)
-    })
+  return await sftpOperation<FileEntryWithStats[]>(`readdir ${remotePath}`, (callback) => {
+    sftp.readdir(remotePath, callback)
   })
 }
 
 async function mkdir(sftp: SFTPWrapper, remotePath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    sftp.mkdir(remotePath, (err) => {
-      if (err) {
-        // SSH_FX_FAILURE (4) often means "already exists" on OpenSSH; we
-        // probe with stat afterwards rather than parse the error code.
-        reject(err)
-        return
-      }
-      resolve()
-    })
+  await sftpOperation<void>(`mkdir ${remotePath}`, (callback) => {
+    sftp.mkdir(remotePath, callback)
   })
 }
 

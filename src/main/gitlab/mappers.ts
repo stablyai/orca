@@ -2,10 +2,13 @@ import type {
   CheckStatus,
   GitLabIssueInfo,
   GitLabWorkItem,
-  MRCheckDetail,
   MRInfo,
   MRState
 } from '../../shared/types'
+import {
+  mapGitLabPipelineJobStatusToCheckStatus,
+  mapGitLabPipelineJobStatusToConclusion
+} from '../../shared/gitlab-pipeline-checks'
 
 // ── Pipeline job mapping (GitLab REST `/pipelines/:id/jobs`) ────────
 // Why: GitLab pipeline jobs roughly map to GitHub check-runs, but use a
@@ -13,49 +16,8 @@ import type {
 // into PRCheckDetail's status + conclusion shape so the renderer can
 // share a row with the GitHub side.
 
-export function mapPipelineJobStatusToCheckStatus(status: string): MRCheckDetail['status'] {
-  const s = status?.toLowerCase()
-  if (s === 'created' || s === 'pending' || s === 'waiting_for_resource' || s === 'preparing') {
-    return 'queued'
-  }
-  if (s === 'running') {
-    return 'in_progress'
-  }
-  return 'completed'
-}
-
-export function mapPipelineJobStatusToConclusion(status: string): MRCheckDetail['conclusion'] {
-  const s = status?.toLowerCase()
-  if (s === 'success') {
-    return 'success'
-  }
-  if (s === 'failed') {
-    return 'failure'
-  }
-  if (s === 'canceled' || s === 'canceling') {
-    return 'cancelled'
-  }
-  if (s === 'skipped') {
-    return 'skipped'
-  }
-  // Why: 'manual' jobs require user trigger and never auto-complete; we
-  // surface them as neutral rather than pending so they don't stall the
-  // top-level rollup at "pending" forever.
-  if (s === 'manual') {
-    return 'neutral'
-  }
-  if (
-    s === 'created' ||
-    s === 'pending' ||
-    s === 'running' ||
-    s === 'waiting_for_resource' ||
-    s === 'preparing' ||
-    s === 'scheduled'
-  ) {
-    return 'pending'
-  }
-  return null
-}
+export const mapPipelineJobStatusToCheckStatus = mapGitLabPipelineJobStatusToCheckStatus
+export const mapPipelineJobStatusToConclusion = mapGitLabPipelineJobStatusToConclusion
 
 // ── MR state mapping ────────────────────────────────────────────────
 // Why: glab returns the API state directly. Apply the draft flag (or a
@@ -135,6 +97,7 @@ type GitLabMRRaw = {
   has_conflicts?: boolean
   detailed_merge_status?: string
   description?: string | null
+  target_branch?: string
   author?: { username?: string | null; avatar_url?: string | null } | null
 }
 
@@ -148,6 +111,7 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     updatedAt: data.updated_at ?? data.updatedAt ?? '',
     mergeable: deriveMergeable(data),
     headSha: data.sha,
+    baseRefName: data.target_branch,
     // Why: detail-endpoint payloads include `description`; list endpoints
     // strip it. Pass through what's present rather than coercing missing
     // values to '' so downstream UIs can distinguish "no body authored"
