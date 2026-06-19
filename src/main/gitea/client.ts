@@ -10,15 +10,14 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import { normalizeGiteaApiBaseUrl } from './server-store'
+import { encodedRepoPath, getEnvGiteaAuth, giteaGetJsonAtBase, giteaRepoGet } from './request'
 
-const REQUEST_TIMEOUT_MS = 5000
+// Re-exported so existing importers (and the client test) keep their path.
+export { normalizeGiteaApiBaseUrl }
+
 const PULL_REQUEST_PAGE_LIMIT = 50
 const MAX_PULL_REQUEST_PAGES = 5
-
-type GiteaAuthConfig = {
-  apiBaseUrl: string | null
-  token: string | null
-}
 
 export type GiteaAuthStatus = {
   configured: boolean
@@ -28,84 +27,12 @@ export type GiteaAuthStatus = {
   tokenConfigured: boolean
 }
 
-type RequestOptions = {
-  searchParams?: Record<string, string | number>
-  timeoutMs?: number
-}
-
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
-}
-
-export function normalizeGiteaApiBaseUrl(value: string): string {
-  const trimmed = value.trim().replace(/\/+$/, '')
-  return /\/api\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/api/v1`
-}
-
-function getAuthConfig(): GiteaAuthConfig {
-  const apiBaseUrl = envValue('ORCA_GITEA_API_BASE_URL')
-  return {
-    apiBaseUrl: apiBaseUrl ? normalizeGiteaApiBaseUrl(apiBaseUrl) : null,
-    token: envValue('ORCA_GITEA_TOKEN')
-  }
-}
-
-function authHeaders(config: Pick<GiteaAuthConfig, 'token'>): Record<string, string> {
-  return config.token ? { Authorization: `token ${config.token}` } : {}
-}
-
-function configuredApiBaseUrl(repo: GiteaRepoRef): string {
-  return getAuthConfig().apiBaseUrl ?? repo.apiBaseUrl
-}
-
-function apiUrl(baseUrl: string, path: string, searchParams?: RequestOptions['searchParams']): URL {
-  const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
-  if (searchParams) {
-    for (const [key, value] of Object.entries(searchParams)) {
-      url.searchParams.set(key, String(value))
-    }
-  }
-  return url
-}
-
-async function requestJsonAtBase<T>(
-  baseUrl: string,
-  path: string,
-  options: RequestOptions = {}
-): Promise<T | null> {
-  const config = getAuthConfig()
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? REQUEST_TIMEOUT_MS)
-  try {
-    const response = await fetch(apiUrl(baseUrl, path, options.searchParams), {
-      headers: {
-        Accept: 'application/json',
-        ...authHeaders(config)
-      },
-      signal: controller.signal
-    })
-    if (!response.ok) {
-      return null
-    }
-    return (await response.json()) as T
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
 function requestJson<T>(
   repo: GiteaRepoRef,
   path: string,
-  options: RequestOptions = {}
+  options: { searchParams?: Record<string, string | number>; timeoutMs?: number } = {}
 ): Promise<T | null> {
-  return requestJsonAtBase(configuredApiBaseUrl(repo), path, options)
-}
-
-function encodedRepoPath(repo: GiteaRepoRef): string {
-  return `${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.repo)}`
+  return giteaRepoGet<T>(repo, path, options)
 }
 
 async function getCommitStatus(
@@ -140,7 +67,7 @@ function matchesBranch(raw: RawGiteaPullRequest, branchName: string): boolean {
 }
 
 export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
-  const config = getAuthConfig()
+  const config = getEnvGiteaAuth()
   const tokenConfigured = config.token !== null
   if (!config.apiBaseUrl && !tokenConfigured) {
     return {
@@ -162,7 +89,7 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
   }
 
   if (!tokenConfigured) {
-    const version = await requestJsonAtBase<{ version?: string }>(config.apiBaseUrl, '/version', {
+    const version = await giteaGetJsonAtBase<{ version?: string }>(config.apiBaseUrl, '/version', {
       timeoutMs: 4000
     })
     return {
@@ -174,11 +101,11 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
     }
   }
 
-  const user = await requestJsonAtBase<{
+  const user = await giteaGetJsonAtBase<{
     login?: string | null
     username?: string | null
     full_name?: string | null
-  }>(config.apiBaseUrl, '/user', { timeoutMs: 4000 })
+  }>(config.apiBaseUrl, '/user', { timeoutMs: 4000, token: config.token })
   return {
     configured: true,
     authenticated: user !== null,

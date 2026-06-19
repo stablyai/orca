@@ -68,13 +68,20 @@ export function useHostedReviewActions({
               iid: review.number,
               method
             })
-          : await window.api.gh.mergePR({
-              repoPath: repo.path,
-              repoId: repo.id,
-              prNumber: review.number,
-              method,
-              prRepo: githubPR?.prRepo ?? null
-            })
+          : review.provider === 'gitea'
+            ? await window.api.gitea.prMerge({
+                repoPath: repo.path,
+                repoId: repo.id,
+                number: review.number,
+                method
+              })
+            : await window.api.gh.mergePR({
+                repoPath: repo.path,
+                repoId: repo.id,
+                prNumber: review.number,
+                method,
+                prRepo: githubPR?.prRepo ?? null
+              })
         if (!result.ok) {
           setActionError(result.error)
         } else {
@@ -89,6 +96,7 @@ export function useHostedReviewActions({
     [
       githubPR?.prRepo,
       isGitLab,
+      review.provider,
       defaultMergeMethod,
       onRefreshReview,
       repo.id,
@@ -175,12 +183,19 @@ export function useHostedReviewActions({
                 repoId: repo.id,
                 iid: review.number
               })
-          : await window.api.gh.updatePRState({
-              repoPath: repo.path,
-              repoId: repo.id,
-              prNumber: review.number,
-              updates: { state: nextState }
-            })
+          : review.provider === 'gitea'
+            ? await window.api.gitea.updateIssue({
+                repoPath: repo.path,
+                repoId: repo.id,
+                number: review.number,
+                updates: { state: nextState }
+              })
+            : await window.api.gh.updatePRState({
+                repoPath: repo.path,
+                repoId: repo.id,
+                prNumber: review.number,
+                updates: { state: nextState }
+              })
         if (!result.ok) {
           setActionError(result.error)
           toast.error(result.error)
@@ -212,6 +227,7 @@ export function useHostedReviewActions({
     [
       confirm,
       isGitLab,
+      review.provider,
       onRefreshReview,
       repo.id,
       repo.path,

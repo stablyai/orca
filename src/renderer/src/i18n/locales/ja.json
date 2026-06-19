@@ -6036,7 +6036,9 @@
           "dd67a1b6e1": "タスクのソース ピッカーとサイドバーのショートカットに GitLab を表示します。",
           "7c5d7fdc20": "GitLab",
           "1db47236cd": "タスクのソース ピッカーとサイドバーのショートカットに GitHub を表示します。",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "d8a6f1c3fe": "Gitea",
+          "a054078ab7": "Show Gitea in the Tasks source picker and sidebar shortcuts."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "ペイン分割線の太さ。",
@@ -8124,6 +8126,25 @@
           "d37e92a06b": "ORCA_DIAGNOSTICS_DISABLED=1 が設定されています — アプリ診断はオフです。",
           "5ebb31e1fb": "CI で実行中です — 診断はオフです。",
           "e27c8d45bf": "環境変数により診断は無効になっています。"
+        },
+        "gitea": {
+          "integration": {
+            "card": {
+              "069f07af1c": "{{value0}} server{{value1}} connected",
+              "31b7f980fb": "Checking Gitea access before showing setup actions.",
+              "5a8cd33300": "Browse, create, and start work from Gitea issues.",
+              "d4e5f6a7b8": "Connection failed.",
+              "bdcb1e773f": "Add server",
+              "9ce5f12a0d": "Connect Gitea",
+              "3852b1fd6f": "Verified",
+              "09bde44485": "Testing...",
+              "2bf28d5929": "Test",
+              "d0b31b4845": "Disconnect {{value0}}",
+              "f47924e554": "Each connected Gitea server stores one token, encrypted locally.",
+              "c043731756": "Connect a self-hosted Gitea server with its URL and a personal access token. Credentials are stored locally and encrypted when local runtime storage supports it.",
+              "9a555db81e": "Re-check"
+            }
+          }
         }
       },
       "right": {
@@ -11509,6 +11530,13 @@
               "chooseSource": "タスクソースを選択"
             }
           }
+        },
+        "page": {
+          "localized": {
+            "options": {
+              "3de5a79478": "Gitea"
+            }
+          }
         }
       },
       "taskPageEmptyState": {
@@ -11546,6 +11574,155 @@
             "later": "Later"
           }
         }
+      },
+      "gitea": {
+        "connect": {
+          "dialog": {
+            "d2823a1de0": "Connect Gitea server",
+            "d076a10ae3": "Use a Gitea server URL and a personal access token to browse and manage issues.",
+            "690c1da1bb": "Gitea server URL",
+            "83b75fa9b7": "https://gitea.example.com",
+            "062ae1ea05": "Access token",
+            "79c04f358b": "Gitea personal access token",
+            "3ecb3e1153": "Create a token under your Gitea user settings → Applications, with read/write access to issues.",
+            "4d1f2d9f21": "Your token is stored locally and encrypted when local runtime storage supports it.",
+            "7acfed1da5": "Cancel",
+            "f5d526570f": "Verifying…",
+            "f68c3d011f": "Connect"
+          }
+        },
+        "issue": {
+          "meta": {
+            "controls": {
+              "ba343731c0": "Failed to update issue.",
+              "63f46a8d86": "Title",
+              "8cc407607b": "Labels",
+              "11fac85e07": "No labels in this repo.",
+              "401f7dc7a2": "Assignees",
+              "3cd6f5acbd": "No assignable users."
+            }
+          },
+          "comments": {
+            "8608602d16": "Comments",
+            "ea3f6f14a1": "No comments yet.",
+            "6a519bdb1c": "Unknown"
+          }
+        },
+        "pr": {
+          "file": {
+            "diff": {
+              "81e07de6a5": "Binary file not shown.",
+              "f1a2b3c4d5": "Failed to load file diff.",
+              "e6f7a8b9c0": "Retry"
+            }
+          },
+          "checks": {
+            "bed82a55cd": "No status checks reported for this PR.",
+            "448c6113a4": "Open check details"
+          },
+          "line": {
+            "comments": {
+              "489b36633a": "Line {{value0}}",
+              "c01a062b92": "Unknown",
+              "4e59b0c4f8": "Line #",
+              "a43b5cc38b": "New-file line number from the diff",
+              "02339776da": "Review comment…",
+              "317313f8af": "Comment",
+              "6cbd906d88": "Comment on a line"
+            }
+          },
+          "tab": {
+            "body": {
+              "1fe3a05742": "No description provided.",
+              "413feaa83a": "Inline",
+              "5372c28376": "Side by side",
+              "53ab0c5a49": "No changed files."
+            }
+          },
+          "merge": {
+            "button": {
+              "2378ab4908": "Conflicts",
+              "8e662b9b6b": "Merge"
+            }
+          }
+        },
+        "new": {
+          "issue": {
+            "dialog": {
+              "db951c3a29": "New issue in {{value0}}",
+              "b42f72cfc5": "Create an issue in the selected Gitea project.",
+              "becfadf1df": "Title",
+              "6c8b731fb2": "Description",
+              "032fd2ed27": "Cancel",
+              "5e1d23a112": "Create issue"
+            }
+          }
+        }
+      },
+      "GiteaTaskList": {
+        "heading": "Issues & pull requests",
+        "c07dd13940": "All open",
+        "ab2a229e50": "Assigned to me",
+        "74f30cd767": "Created",
+        "031c70d963": "Closed",
+        "bf66fad935": "All",
+        "65a3bffe7a": "Issues",
+        "9b21aab4c9": "PRs",
+        "9986e0e679": "Merged",
+        "747423c0f8": "Draft",
+        "980519b0c8": "Open",
+        "0285721e62": "Failed to load Gitea tasks.",
+        "5997067bee": "New issue",
+        "e3db16e7c7": "Refresh Gitea tasks",
+        "34cd2d1024": "Select a Gitea-hosted project to see its issues and pull requests.",
+        "6e1e6691d7": "Loading Gitea tasks…",
+        "00f67933b5": "No open issues or pull requests."
+      },
+      "GiteaIssueWorkspace": {
+        "comments": "Comments",
+        "noComments": "No comments yet.",
+        "unknown": "Unknown",
+        "47b064c003": "{{value0}} copied",
+        "927222e135": "Failed to copy.",
+        "2d2e69fe70": "Failed to update issue.",
+        "b7c8d9e0f1": "Failed to load issue.",
+        "565680a39b": "Failed to add comment.",
+        "a792c22414": "Gitea item",
+        "01b6ea43ca": "Preview and start work from the selected Gitea item.",
+        "ce513e3ca2": "Close",
+        "e849a4c80f": "Start workspace",
+        "c0d4f97901": "Closed",
+        "ab08895bb5": "Open",
+        "1ab551635b": "Reopen",
+        "6b3c5a3144": "Close issue",
+        "63cbb99973": "Open in Gitea",
+        "c29b657be3": "Copy URL",
+        "ca242eaf5d": "No description provided.",
+        "0fee3f06ff": "Add a comment...",
+        "d3e0033e0f": "Comment"
+      },
+      "GiteaPullRequestWorkspace": {
+        "conflicts": "Conflicts",
+        "merge": "Merge",
+        "noDescription": "No description provided.",
+        "inline": "Inline",
+        "sideBySide": "Side by side",
+        "noFiles": "No changed files.",
+        "f5cf34ed40": "Failed to add comment.",
+        "c2d3e4f5a6": "Failed to load PR checks.",
+        "22f9c29c9b": "Pull request merged.",
+        "d93415a77d": "Failed to merge.",
+        "c7c84081fc": "Failed to add review comment.",
+        "f51240a59a": "Conversation",
+        "4f4abe43ab": "Files",
+        "95a6c97ba6": "Checks",
+        "8e44409da0": "Gitea pull request",
+        "0a432f2c1a": "Review files, checks, and conversation, then merge or start work.",
+        "5fa5ec9fff": "Close",
+        "f88c7cf08c": "Start workspace",
+        "9813b44d73": "Open in Gitea",
+        "ddc99ed766": "Add a comment...",
+        "d646ddef48": "Comment"
       }
     },
     "i18n": {

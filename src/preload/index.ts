@@ -1527,6 +1527,150 @@ const api = {
       ipcRenderer.invoke('jira:listTransitions', args)
   },
 
+  gitea: {
+    connect: (args: {
+      baseUrl: string
+      token: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gitea:connect', args),
+
+    disconnect: (args?: { serverId?: string }): Promise<void> =>
+      ipcRenderer.invoke('gitea:disconnect', args),
+
+    selectServer: (args: { serverId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('gitea:selectServer', args),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('gitea:status'),
+
+    testConnection: (args?: {
+      serverId?: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gitea:testConnection', args),
+
+    listWorkItems: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      filter?: 'assigned' | 'created' | 'all' | 'closed'
+      limit?: number
+    }): Promise<unknown[]> => ipcRenderer.invoke('gitea:listWorkItems', args),
+
+    issue: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      number: number
+    }): Promise<unknown> => ipcRenderer.invoke('gitea:issue', args),
+
+    issueComments: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      number: number
+    }): Promise<unknown[]> => ipcRenderer.invoke('gitea:issueComments', args),
+
+    labels: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+    }): Promise<unknown[]> => ipcRenderer.invoke('gitea:labels', args),
+
+    assignees: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+    }): Promise<unknown[]> => ipcRenderer.invoke('gitea:assignees', args),
+
+    prDetail: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      number: number
+    }): Promise<unknown> => ipcRenderer.invoke('gitea:prDetail', args),
+
+    prFiles: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      number: number
+    }): Promise<unknown[]> => ipcRenderer.invoke('gitea:prFiles', args),
+
+    prFileContents: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      path: string
+      oldPath?: string
+      status: string
+      baseSha: string
+      headSha: string
+    }): Promise<unknown> => ipcRenderer.invoke('gitea:prFileContents', args),
+
+    prChecks: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      headSha: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('gitea:prChecks', args),
+
+    prMerge: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      number: number
+      method?: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gitea:prMerge', args),
+
+    prReviewComments: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      number: number
+    }): Promise<unknown[]> => ipcRenderer.invoke('gitea:prReviewComments', args),
+
+    prAddReviewComment: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      number: number
+      path: string
+      line: number
+      body: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gitea:prAddReviewComment', args),
+
+    createIssue: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      title: string
+      body?: string
+      assignees?: string[]
+      labelIds?: number[]
+    }): Promise<
+      { ok: true; id: number; number: number; url: string } | { ok: false; error: string }
+    > => ipcRenderer.invoke('gitea:createIssue', args),
+
+    updateIssue: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      number: number
+      updates: unknown
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gitea:updateIssue', args),
+
+    addIssueComment: (args: {
+      repoPath: string
+      repoId?: string | null
+      sourceContext?: unknown
+      number: number
+      body: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('gitea:addIssueComment', args)
+  },
+
   starNag: {
     onShow: (
       callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void

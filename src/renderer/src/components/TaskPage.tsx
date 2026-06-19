@@ -207,6 +207,7 @@ import type {
   GitHubAssignableUser,
   GitHubPRMergeMethod,
   GitHubWorkItem,
+  GiteaWorkItem,
   GitLabTodo,
   GitLabWorkItem,
   JiraCreateField,
@@ -228,6 +229,10 @@ import type {
 } from '../../../shared/types'
 import type { PreflightStatus } from '../../../preload/api-types'
 import type { GitLabProjectRef } from '../../../shared/gitlab-types'
+import { GiteaTaskList } from './GiteaTaskList'
+import { GiteaIssueWorkspace, type GiteaWorkspaceSelection } from './GiteaIssueWorkspace'
+import { GiteaPullRequestWorkspace } from './GiteaPullRequestWorkspace'
+import type { GiteaIssueScope } from '@/store/slices/gitea'
 import {
   LINEAR_ISSUE_LIST_MAX,
   clampLinearIssueListLimit
@@ -341,7 +346,7 @@ function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
 
 function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
-  provider: 'github' | 'gitlab',
+  provider: 'github' | 'gitlab' | 'gitea',
   gitlabProjectRef?: GitLabProjectRef | null
 ): TaskSourceContext | null {
   if (!repo) {
@@ -2752,6 +2757,9 @@ export default function TaskPage(): React.JSX.Element {
   )
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
+  const giteaStatus = useAppStore((s) => s.giteaStatus)
+  const giteaStatusLoaded = useAppStore((s) => s.giteaStatusLoaded)
+  const refreshGiteaStatus = useAppStore((s) => s.refreshGiteaStatus)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const connectJira = useAppStore((s) => s.connectJira)
   const selectJiraSite = useAppStore((s) => s.selectJiraSite)
@@ -2768,6 +2776,9 @@ export default function TaskPage(): React.JSX.Element {
   const jiraStatusReady = jiraStatusCurrent && jiraStatusChecked
   const linearConnected = linearStatusCurrent && linearStatus.connected
   const jiraConnected = jiraStatusCurrent && jiraStatus.connected
+  // Gitea credentials live on the local machine, so connection state is not
+  // gated by the runtime provider-context key like Linear/Jira.
+  const giteaConnected = giteaStatus?.connected === true
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
 
@@ -2873,13 +2884,15 @@ export default function TaskPage(): React.JSX.Element {
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearConnected === true
+          linearConnected: linearConnected === true,
+          giteaConfigured: giteaConnected
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
       linearConnected,
+      giteaConnected,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,
       preflightStatus?.glab?.installed
@@ -6245,6 +6258,50 @@ export default function TaskPage(): React.JSX.Element {
     [openComposerForGitLabItem]
   )
 
+  const [selectedGiteaItem, setSelectedGiteaItem] = useState<GiteaWorkspaceSelection | null>(null)
+  const [selectedGiteaPr, setSelectedGiteaPr] = useState<GiteaWorkspaceSelection | null>(null)
+
+  const handleUseGiteaItem = useCallback(
+    (repo: Repo, item: GiteaWorkItem): void => {
+      const linkedWorkItem: LinkedWorkItemSummary = {
+        type: item.type === 'pull' ? 'pr' : 'issue',
+        number: item.number,
+        title: item.title,
+        url: item.url
+      }
+      openModal('new-workspace-composer', {
+        linkedWorkItem,
+        taskSourceContext: getTaskPageRepoSourceContext(repo, 'gitea'),
+        prefilledName: `${item.type === 'pull' ? 'pr' : 'issue'}-${item.number}`,
+        initialRepoId: repo.id,
+        telemetrySource: 'sidebar'
+      })
+    },
+    [openModal]
+  )
+
+  const makeGiteaScope = useCallback(
+    (repo: Repo): GiteaIssueScope => ({
+      repoPath: repo.path,
+      repoId: repo.id,
+      sourceContext: getTaskPageRepoSourceContext(repo, 'gitea')
+    }),
+    []
+  )
+
+  // Issues open the inline detail panel; PRs open the PR review drawer.
+  const handleOpenGiteaItem = useCallback(
+    (repo: Repo, item: GiteaWorkItem): void => {
+      const selection = { repo, item, scope: makeGiteaScope(repo) }
+      if (item.type === 'pull') {
+        setSelectedGiteaPr(selection)
+        return
+      }
+      setSelectedGiteaItem(selection)
+    },
+    [makeGiteaScope]
+  )
+
   const handleCreateNewIssue = useCallback(async (): Promise<void> => {
     if (!newIssueTargetRepo) {
       return
@@ -6666,6 +6723,8 @@ export default function TaskPage(): React.JSX.Element {
     // Why: when a modal is open, let it own Esc dismissal.
     if (
       dialogWorkItem ||
+      selectedGiteaItem ||
+      selectedGiteaPr ||
       selectedLinearIssue ||
       newIssueOpen ||
       newLinearIssueOpen ||
@@ -6709,6 +6768,8 @@ export default function TaskPage(): React.JSX.Element {
     activeModal,
     closeTaskPage,
     dialogWorkItem,
+    selectedGiteaItem,
+    selectedGiteaPr,
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
@@ -6725,9 +6786,14 @@ export default function TaskPage(): React.JSX.Element {
     if (!jiraStatusReady) {
       void checkJiraConnection()
     }
+    if (!giteaStatusLoaded) {
+      void refreshGiteaStatus()
+    }
   }, [
     checkJiraConnection,
     checkLinearConnection,
+    giteaStatusLoaded,
+    refreshGiteaStatus,
     expectedPreflightContextKey,
     jiraStatusContextKey,
     jiraStatusReady,
@@ -9637,6 +9703,62 @@ export default function TaskPage(): React.JSX.Element {
                 />
               </div>
             )
+          ) : taskSource === 'gitea' ? (
+            <>
+              <GiteaTaskList
+                repos={selectedRepos}
+                makeScope={makeGiteaScope}
+                onOpen={handleOpenGiteaItem}
+                projectPicker={
+                  <TaskProjectSourceCombobox
+                    groups={taskPickerGroups}
+                    selected={repoSelection}
+                    getRepoHostLabel={getTaskPickerRepoHostLabel}
+                    onChange={(next) => {
+                      const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                      setRepoSelection(normalized)
+                      void updateSettings({ defaultRepoSelection: [...normalized] }).catch(() => {
+                        toast.error(
+                          translate(
+                            'auto.components.TaskPage.dfd72673e7',
+                            'Failed to save project selection.'
+                          )
+                        )
+                      })
+                    }}
+                    onSelectAll={() => {
+                      const allIds = new Set(taskPickerRepos.map((r) => r.id))
+                      setRepoSelection(allIds)
+                      void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                        toast.error(
+                          translate(
+                            'auto.components.TaskPage.dfd72673e7',
+                            'Failed to save project selection.'
+                          )
+                        )
+                      })
+                    }}
+                    triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                  />
+                }
+              />
+              <GiteaIssueWorkspace
+                selection={selectedGiteaItem}
+                onUse={(repo, item) => {
+                  setSelectedGiteaItem(null)
+                  handleUseGiteaItem(repo, item)
+                }}
+                onClose={() => setSelectedGiteaItem(null)}
+              />
+              <GiteaPullRequestWorkspace
+                selection={selectedGiteaPr}
+                onUse={(repo, item) => {
+                  setSelectedGiteaPr(null)
+                  handleUseGiteaItem(repo, item)
+                }}
+                onClose={() => setSelectedGiteaPr(null)}
+              />
+            </>
           ) : taskSource === 'linear' && selectedLinearIssue ? (
             <LinearIssueWorkspace
               issue={selectedLinearIssue}

@@ -5,6 +5,7 @@ import type { ExecutionHostHealth } from '../../../shared/execution-host-registr
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import type { TaskProvider } from '../../../shared/types'
 import type { TaskProviderIdentity, TaskSourceContext } from '../../../shared/task-source-context'
+import { formatLongList, formatShortList, uniqueLabels } from './task-source-context-summary-format'
 
 export type TaskSourceContextSummary = {
   label: string
@@ -49,6 +50,7 @@ export function getTaskSourceContextSummary(args: {
   switch (args.provider) {
     case 'github':
     case 'gitlab':
+    case 'gitea':
       return getRepoBackedTaskSourceSummary(args)
     case 'linear':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
@@ -198,21 +200,11 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'gitea':
+      return identity.owner && identity.repo
+        ? `${identity.owner}/${identity.repo}`
+        : (identity.baseUrl ?? null)
   }
-}
-
-function uniqueLabels(labels: readonly (string | null | undefined)[]): string[] {
-  const seen = new Set<string>()
-  const result: string[] = []
-  for (const label of labels) {
-    const trimmed = label?.trim()
-    if (!trimmed || seen.has(trimmed)) {
-      continue
-    }
-    seen.add(trimmed)
-    result.push(trimmed)
-  }
-  return result
 }
 
 function getUnavailableHosts(
@@ -302,15 +294,4 @@ function getSshStatusLabel(status: SshConnectionStatus): string {
     case 'disconnected':
       return 'disconnected'
   }
-}
-
-function formatShortList(labels: readonly string[]): string {
-  if (labels.length <= 2) {
-    return labels.join(', ')
-  }
-  return `${labels[0]} +${labels.length - 1}`
-}
-
-function formatLongList(labels: readonly string[]): string {
-  return labels.join(', ')
 }

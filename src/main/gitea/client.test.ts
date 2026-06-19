@@ -57,6 +57,10 @@ describe('Gitea client', () => {
   })
 
   it('fetches a branch pull request and commit status', async () => {
+    // The env token is only honored for its explicitly configured (host-matching)
+    // base URL, so set it to the repo's host rather than relying on the removed
+    // behavior of applying the token to any repo-derived host.
+    process.env.ORCA_GITEA_API_BASE_URL = 'https://git.example.com'
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       const parsed = new URL(url)
       if (!init) {
