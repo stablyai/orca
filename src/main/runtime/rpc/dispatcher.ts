@@ -193,7 +193,10 @@ export class RpcDispatcher {
   }
 
   private mapError(request: RpcRequest, meta: RpcEnvelopeMeta, error: unknown): RpcResponse {
-    if (error instanceof ZodError || error instanceof InvalidArgumentError) {
+    if (error instanceof ZodError) {
+      return this.invalidArgumentResponse(request, meta, formatZodError(error))
+    }
+    if (error instanceof InvalidArgumentError) {
       return this.invalidArgumentResponse(request, meta, error.message)
     }
 
@@ -206,9 +209,6 @@ export class RpcDispatcher {
     }
     if (request.method.startsWith('emulator.')) {
       return mapEmulatorError(request.id, meta, error)
-    }
-    if (error instanceof ZodError) {
-      return this.invalidArgumentResponse(request, meta, formatZodError(error))
     }
     return mapRuntimeError(request.id, meta, error)
   }
