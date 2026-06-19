@@ -1,3 +1,4 @@
+import { CJK_LATIN_SPACED_TERMS } from './locale-cjk-latin-spaced-terms.mjs'
 import { isScreenCursorContext } from './locale-screen-cursor-exemptions.mjs'
 import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
@@ -20,6 +21,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Agents',
   'Aider',
   'Amp',
+  'Android',
   'Antigravity',
   'Auggie',
   'Autohand Code',
@@ -35,6 +37,8 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Droid',
   'Devin',
   'Gemini',
+  'Git',
+  'Git Bash',
   'GitHub Copilot',
   'GitLab',
   'Goose',
@@ -68,6 +72,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Zed',
   'agent',
   'agents',
+  'android',
   'codex',
   'commit',
   'commits',
@@ -188,6 +193,7 @@ export const BRAND_MISTRANSLATIONS = {
     Goose: ['거위'],
     Pi: ['파이'],
     'GitHub Copilot': ['GitHub 코파일럿', '코파일럿'],
+    Git: ['힘내'],
     Discord: ['디스코드'],
     Linear: ['선형'],
     Agent: ['에이전트'],
@@ -331,55 +337,6 @@ export const NATIVE_PICKER_LABELS = {
   es: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' }
 }
 
-const CJK_LATIN_SPACED_TERMS = [
-  'Issues',
-  'Issue',
-  'Terminal',
-  'Terminals',
-  'terminal',
-  'terminals',
-  'Agents',
-  'Agent',
-  'agents',
-  'agent',
-  'Markdown',
-  'markdown',
-  'Repos',
-  'Repo',
-  'repos',
-  'repo',
-  'Commits',
-  'Commit',
-  'commits',
-  'commit',
-  'Linear',
-  'GitHub',
-  'GitLab',
-  'Jira',
-  'Claude',
-  'Claude Code',
-  'Codex',
-  'Gemini',
-  'Kimi',
-  'OpenCode',
-  'Orca',
-  'Cursor',
-  'Bitbucket',
-  'Tailscale',
-  'Kagi',
-  'SSH',
-  'WSL',
-  'PR',
-  'MR',
-  'REST',
-  'HEAD',
-  'Bash',
-  'PowerShell',
-  'Git AI Author',
-  'Token',
-  'token'
-]
-
 const CJK_LATIN_SPACED_TERM_PATTERN = CJK_LATIN_SPACED_TERMS.join('|')
 
 export function isEnglishOnlyKey(key) {
@@ -465,9 +422,11 @@ function applyCjkLatinTermSpacing(localeValue, locale) {
       '$1 $2'
     )
   if (locale === 'ko') {
+    // Korean particles attach to the noun (no space) only when the particle is a complete token at a
+    // boundary — re-glue "Orca 에"/"PR 을"/"에서는" but keep "Jira 이슈"/"Orca 로고"/"agent 에뮬레이터".
     result = result.replace(
       new RegExp(
-        `(${CJK_LATIN_SPACED_TERM_PATTERN}) (가|이|은|는|을|를|와|과|의|로|으로|에서|에게|도|만|부터|까지)`,
+        `(${CJK_LATIN_SPACED_TERM_PATTERN}) ((?:에서|에게|에는|에선|으로|로서|로써|부터|까지|보다|처럼|은|는|이|가|을|를|와|과|의|에|로|도|만)+)(?=$|[\\s.,!?…·:;)\\]}"'」』])`,
         'g'
       ),
       '$1$2'

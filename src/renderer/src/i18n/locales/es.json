@@ -3656,8 +3656,7 @@
           "automation": "Automation",
           "2d74665a56": "Puertos",
           "65a9820bd1": "Estados del agente",
-          "219ebf1961": "Nombre de rama",
-          "automation": "Automation"
+          "219ebf1961": "Nombre de rama"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -11391,7 +11390,15 @@
           "openReviewExternally": "Abrir {{value0}} externamente",
           "summary": "{{value0}} adjuntos · {{value1}} con PR/MR · {{value2}} requieren atención · {{value3}} pendientes · {{value4}} correctos · {{value5}} sin PR · {{value6}} desconocidos",
           "showDetails": "Mostrar detalles de comprobaciones de PR de {{value0}}",
-          "hideDetails": "Ocultar detalles de comprobaciones de PR de {{value0}}"
+          "hideDetails": "Ocultar detalles de comprobaciones de PR de {{value0}}",
+          "reviewChecks": "Review checks",
+          "allChecksPassing": "all checks passing",
+          "oneWorktree": "1 worktree",
+          "worktreeCount": "{{value0}} worktrees",
+          "oneFailing": "1 failing",
+          "failingCount": "{{value0}} failing",
+          "onePending": "1 pending",
+          "pendingCount": "{{value0}} pending"
         },
         "parentPrChecks": {
           "rowSummary": {

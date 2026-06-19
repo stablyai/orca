@@ -3668,7 +3668,6 @@
           "1a0eec0d35": "Status",
           "b5536d5a88": "Tasks",
           "8d62c68b35": "Notes",
-          "automation": "Automation",
           "2d74665a56": "Ports",
           "65a9820bd1": "Agent statuses",
           "219ebf1961": "Branch name"
@@ -11391,7 +11390,15 @@
           "openReviewExternally": "Open {{value0}} externally",
           "summary": "{{value0}} attached · {{value1}} with PR/MR · {{value2}} attention · {{value3}} pending · {{value4}} passing · {{value5}} no PR · {{value6}} unknown",
           "showDetails": "Show {{value0}} PR check details",
-          "hideDetails": "Hide {{value0}} PR check details"
+          "hideDetails": "Hide {{value0}} PR check details",
+          "reviewChecks": "Review checks",
+          "allChecksPassing": "all checks passing",
+          "oneWorktree": "1 worktree",
+          "worktreeCount": "{{value0}} worktrees",
+          "oneFailing": "1 failing",
+          "failingCount": "{{value0}} failing",
+          "onePending": "1 pending",
+          "pendingCount": "{{value0}} pending"
         },
         "parentPrChecks": {
           "rowSummary": {
