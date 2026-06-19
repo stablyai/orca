@@ -20,8 +20,20 @@ const { homedirMock } = vi.hoisted(() => ({
 }))
 
 const { fsMockState } = vi.hoisted(() => ({
-  fsMockState: { failLink: false, failSymlink: false }
+  fsMockState: {
+    failLink: false,
+    failSymlink: false,
+    fakeSymlinks: new Map<string, string>()
+  }
 }))
+
+function isWindowsSymlinkPrivilegeError(error: unknown): boolean {
+  if (process.platform !== 'win32' || !(error instanceof Error)) {
+    return false
+  }
+  const errorWithCode = error as Error & { code?: string }
+  return errorWithCode.code === 'EPERM' || errorWithCode.code === 'EACCES'
+}
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
@@ -33,11 +45,52 @@ vi.mock('node:fs', async () => {
       }
       return actual.linkSync(...args)
     },
+    lstatSync: ((path: Parameters<typeof actual.lstatSync>[0]) => {
+      const stat = actual.lstatSync(path)
+      if (!fsMockState.fakeSymlinks.has(String(path))) {
+        return stat
+      }
+      // Why: Windows often disallows file symlink creation outside Developer
+      // Mode; tests simulate the link metadata while keeping a real path.
+      return { ...stat, isSymbolicLink: () => true }
+    }) as typeof actual.lstatSync,
+    readlinkSync: ((path: Parameters<typeof actual.readlinkSync>[0]) => {
+      const fakeTarget = fsMockState.fakeSymlinks.get(String(path))
+      if (fakeTarget !== undefined) {
+        return fakeTarget
+      }
+      return actual.readlinkSync(path)
+    }) as typeof actual.readlinkSync,
+    renameSync: (...args: Parameters<typeof actual.renameSync>) => {
+      const [oldPath, newPath] = args
+      const fakeTarget = fsMockState.fakeSymlinks.get(String(oldPath))
+      const result = actual.renameSync(...args)
+      if (fakeTarget !== undefined) {
+        fsMockState.fakeSymlinks.delete(String(oldPath))
+        fsMockState.fakeSymlinks.set(String(newPath), fakeTarget)
+      } else {
+        fsMockState.fakeSymlinks.delete(String(newPath))
+      }
+      return result
+    },
+    rmSync: (...args: Parameters<typeof actual.rmSync>) => {
+      fsMockState.fakeSymlinks.delete(String(args[0]))
+      return actual.rmSync(...args)
+    },
     symlinkSync: (...args: Parameters<typeof actual.symlinkSync>) => {
       if (fsMockState.failSymlink) {
         throw new Error('symlink disabled for test')
       }
-      return actual.symlinkSync(...args)
+      try {
+        return actual.symlinkSync(...args)
+      } catch (error) {
+        if (!isWindowsSymlinkPrivilegeError(error)) {
+          throw error
+        }
+        const [target, path] = args
+        fsMockState.fakeSymlinks.set(String(path), String(target))
+        actual.writeFileSync(path, '', 'utf-8')
+      }
     }
   }
 })
@@ -106,6 +159,7 @@ function writeLegacyCopyMarker(relativePath: string, sourcePath: string, targetP
 beforeEach(() => {
   fsMockState.failLink = false
   fsMockState.failSymlink = false
+  fsMockState.fakeSymlinks.clear()
   fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-session-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-session-user-data-'))
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
