@@ -1191,12 +1191,19 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     gitBranchCompareRequestStatusHeadByWorktree: omitByWorktree(
       s.gitBranchCompareRequestStatusHeadByWorktree
     ),
+    // Why: keyed by worktreeId; without this it leaks a huge-status marker per
+    // removed worktree for the rest of the session.
+    gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
     expandedDirs: omitByWorktree(s.expandedDirs),
     // Per-file editor state for removed files
     editorDrafts: omitByFileId(s.editorDrafts),
     markdownViewMode: omitByFileId(s.markdownViewMode),
     markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
+    // Why: keyed by fileId; the bulk reconcile path previously kept these,
+    // leaking a cursor-line / view-mode entry per file of every removed worktree.
+    editorCursorLine: omitByFileId(s.editorCursorLine),
+    editorViewMode: omitByFileId(s.editorViewMode),
     // Top-level actives
     openFiles: nextOpenFiles,
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
@@ -2010,18 +2017,27 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           removedFileIds.size > 0
             ? { ...s.markdownFrontmatterVisible }
             : s.markdownFrontmatterVisible
+        // Why: editorCursorLine is keyed by fileId and must be cleared with the
+        // other per-file editor state so it does not leak per removed file.
+        const nextEditorCursorLine =
+          removedFileIds.size > 0 ? { ...s.editorCursorLine } : s.editorCursorLine
         if (removedFileIds.size > 0) {
           for (const fileId of removedFileIds) {
             delete nextEditorDrafts[fileId]
             delete nextMarkdownViewMode[fileId]
             delete nextEditorViewMode[fileId]
             delete nextMarkdownFrontmatterVisible[fileId]
+            delete nextEditorCursorLine[fileId]
           }
         }
         const nextExpandedDirs = { ...s.expandedDirs }
         delete nextExpandedDirs[worktreeId]
         const nextShowDotfilesByWorktree = { ...s.showDotfilesByWorktree }
         delete nextShowDotfilesByWorktree[worktreeId]
+        // Why: keyed by worktreeId; clear the huge-status marker so it does not
+        // linger after the worktree is gone.
+        const nextGitStatusHugeByWorktree = { ...s.gitStatusHugeByWorktree }
+        delete nextGitStatusHugeByWorktree[worktreeId]
         const nextRightSidebarExplorerViewByWorktree = {
           ...s.rightSidebarExplorerViewByWorktree
         }
@@ -2089,8 +2105,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           markdownViewMode: nextMarkdownViewMode,
           editorViewMode: nextEditorViewMode,
           markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
+          editorCursorLine: nextEditorCursorLine,
           showDotfilesByWorktree: nextShowDotfilesByWorktree,
           expandedDirs: nextExpandedDirs,
+          gitStatusHugeByWorktree: nextGitStatusHugeByWorktree,
           gitStatusByWorktree: nextGitStatusByWorktree,
           gitStatusHeadByWorktree: nextGitStatusHeadByWorktree,
           gitIgnoredPathsByWorktree: nextGitIgnoredPathsByWorktree,
