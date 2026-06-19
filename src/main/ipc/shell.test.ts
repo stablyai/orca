@@ -156,6 +156,17 @@ describe('registerShellHandlers', () => {
       await expect(handler({}, workspacePath)).resolves.toBeUndefined()
       expect(showItemInFolderMock).toHaveBeenCalledWith(normalize(workspacePath))
     })
+
+    it('swallows launcher failures', async () => {
+      showItemInFolderMock.mockImplementationOnce(() => {
+        throw new Error('launcher unavailable')
+      })
+      const workspacePath = resolve('workspace')
+      const handler = getHandler('shell:openPath')
+
+      await expect(handler({}, workspacePath)).resolves.toBeUndefined()
+      expect(showItemInFolderMock).toHaveBeenCalledWith(normalize(workspacePath))
+    })
   })
 
   describe('shell:openInFileManager', () => {
