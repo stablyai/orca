@@ -37,7 +37,7 @@ import { translate } from '@/i18n/i18n'
 const VAULT_HEADER_CONTROL_CLASS = 'size-6 shrink-0'
 
 const VAULT_SCOPE_TOGGLE_ITEM_CLASS =
-  'h-6 min-h-6 min-w-0 border border-transparent bg-transparent px-1.5 text-[10px] font-medium leading-none text-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground aria-[checked=true]:border-foreground/20 aria-[checked=true]:bg-foreground/10 aria-[checked=true]:text-foreground aria-[checked=true]:shadow-xs aria-[checked=true]:hover:bg-foreground/15 aria-[checked=true]:hover:text-foreground data-[state=on]:border-foreground/20 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-foreground/15 data-[state=on]:hover:text-foreground @max-[300px]/ai-vault:px-1'
+  'h-7 min-h-7 min-w-0 flex-1 basis-0 shrink border border-transparent bg-transparent px-2.5 text-[11px] font-medium leading-none text-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground aria-[checked=true]:border-foreground/20 aria-[checked=true]:bg-foreground/10 aria-[checked=true]:text-foreground aria-[checked=true]:shadow-xs aria-[checked=true]:hover:bg-foreground/15 aria-[checked=true]:hover:text-foreground data-[state=on]:border-foreground/20 data-[state=on]:bg-foreground/10 data-[state=on]:text-foreground data-[state=on]:shadow-xs data-[state=on]:hover:bg-foreground/15 data-[state=on]:hover:text-foreground @max-[300px]/ai-vault:px-1.5'
 
 export function VaultGroupHeader({
   group,
@@ -128,7 +128,7 @@ export function VaultScopeSwitch({
         }
       }}
       variant="outline"
-      className="h-6 shrink-0 rounded-md border border-sidebar-border bg-sidebar-accent/35 shadow-xs"
+      className="h-7 w-full rounded-md border border-sidebar-border bg-sidebar-accent/35 shadow-xs"
       aria-label={translate(
         'auto.components.right.sidebar.AiVaultPanelControls.scopeAriaLabel',
         'Session History scope: {{value0}}',
