@@ -11025,6 +11025,49 @@ describe('OrcaRuntimeService', () => {
     expect(merged.tabGroups![0]!.tabOrder).toContain(secondHostTabId)
   })
 
+  it('creates a new headless terminal in the targeted split group, not the active one', async () => {
+    // Regression: a per-group "+" passes targetGroupId, but the headless create
+    // ignored it and funneled every new tab into the active group.
+    let ptyCounter = 0
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: `target-group-pty-${++ptyCounter}` })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    // Why: createMobileSessionTerminal asserts the graph is ready; serve mode
+    // marks it ready via syncWindowGraph(0,...) (windowId 0 ≠ a real renderer).
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, { activate: true })
+    const second = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, { activate: true })
+    const before = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const leftGroupId = before.tabGroups![0]!.id
+
+    // Split the 2nd tab into a new right group; the new group becomes active.
+    await runtime.moveMobileSessionTab(`id:${TEST_WORKTREE_ID}`, {
+      kind: 'split',
+      tabId: second.tabId!,
+      targetGroupId: leftGroupId,
+      splitDirection: 'right'
+    })
+    const split = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(split.tabGroups).toHaveLength(2)
+    const rightGroupId = split.tabGroups!.find((g) => g.id !== leftGroupId)!.id
+
+    // Create a terminal targeting the LEFT (now non-active) group.
+    await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      targetGroupId: leftGroupId,
+      activate: true
+    })
+
+    const after = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const left = after.tabGroups!.find((g) => g.id === leftGroupId)!
+    const right = after.tabGroups!.find((g) => g.id === rightGroupId)!
+    expect(left.tabOrder).toHaveLength(2) // original + the targeted create
+    expect(right.tabOrder).toHaveLength(1) // unchanged
+  })
+
   it('keeps preserved headless mobile session publication epochs idempotent', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.syncWindowGraph(0, {

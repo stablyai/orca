@@ -3256,7 +3256,10 @@ export class OrcaRuntimeService {
     worktreeId: string,
     tabs: readonly RuntimeMobileSessionSnapshotTab[],
     activeTab: RuntimeMobileSessionSnapshotTab | null,
-    existingGroups?: readonly RuntimeMobileSessionTabGroup[]
+    existingGroups?: readonly RuntimeMobileSessionTabGroup[],
+    // Why: a new tab created via a specific group's "+" must land in THAT group,
+    // not the active one — otherwise every "+" in a split funnels to one group.
+    newTabAssignment?: { tabId: string; groupId: string }
   ): RuntimeMobileSessionTabGroup[] {
     // Why: order across terminals and browsers in their actual array order so a
     // tab opened after a browser tab lands to its right, not regrouped before it.
@@ -3279,7 +3282,8 @@ export class OrcaRuntimeService {
       return this.distributeHeadlessTabsAcrossGroups(
         existingGroups,
         tabOrder,
-        activeTopLevelId
+        activeTopLevelId,
+        newTabAssignment
       )
     }
 
@@ -3302,13 +3306,22 @@ export class OrcaRuntimeService {
   private distributeHeadlessTabsAcrossGroups(
     existingGroups: readonly RuntimeMobileSessionTabGroup[],
     tabOrder: readonly string[],
-    activeTopLevelId: string | null
+    activeTopLevelId: string | null,
+    newTabAssignment?: { tabId: string; groupId: string }
   ): RuntimeMobileSessionTabGroup[] {
     const groupIdByTabId = new Map<string, string>()
     for (const group of existingGroups) {
       for (const tabId of group.tabOrder) {
         groupIdByTabId.set(tabId, group.id)
       }
+    }
+    // Why: route a freshly-created tab to the group its "+" was clicked in,
+    // when that group still exists; otherwise fall through to the active group.
+    const hasTargetGroup =
+      newTabAssignment !== undefined &&
+      existingGroups.some((group) => group.id === newTabAssignment.groupId)
+    if (hasTargetGroup) {
+      groupIdByTabId.set(newTabAssignment!.tabId, newTabAssignment!.groupId)
     }
     const activeGroupId =
       (activeTopLevelId ? groupIdByTabId.get(activeTopLevelId) : undefined) ??
@@ -13863,7 +13876,8 @@ export class OrcaRuntimeService {
         command,
         opts.startupCommandDelivery,
         undefined,
-        opts.agent
+        opts.agent,
+        opts.targetGroupId
       )
     }
     const requestId = randomUUID()
@@ -13954,7 +13968,8 @@ export class OrcaRuntimeService {
     command?: string,
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery'],
     identity?: { tabId: string; leafId: string; sessionId?: string },
-    launchAgent?: TuiAgent
+    launchAgent?: TuiAgent,
+    targetGroupId?: string
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
     // Why: SshPtyProvider treats sessionId as a relay reattach request. Only
@@ -14025,14 +14040,20 @@ export class OrcaRuntimeService {
       worktree: worktreeId,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-      activeGroupId: existing?.activeGroupId ?? this.getHeadlessMobileSessionGroupId(worktreeId),
+      // Why: activating the new tab also focuses its group, so when "+" targeted
+      // a specific split group, make that group active too.
+      activeGroupId:
+        activate && targetGroupId
+          ? targetGroupId
+          : (existing?.activeGroupId ?? this.getHeadlessMobileSessionGroupId(worktreeId)),
       activeTabId: activate ? tab.id : (existing?.activeTabId ?? null),
       activeTabType: activate ? 'terminal' : (existing?.activeTabType ?? null),
       tabGroups: this.buildHeadlessMobileSessionTabGroups(
         worktreeId,
         tabs,
         activate ? tab : null,
-        existing?.tabGroups
+        existing?.tabGroups,
+        targetGroupId ? { tabId: parentTabId, groupId: targetGroupId } : undefined
       ),
       // Why: keep the group split geometry when a new tab is created, otherwise
       // opening a terminal while split loses the groups' arrangement.
