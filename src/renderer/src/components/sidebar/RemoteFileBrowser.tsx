@@ -447,7 +447,7 @@ export function RemoteFileBrowser({
           debounceTimerRef.current = null
         }
         const value = inputRef.current?.value ?? ''
-        if (isPathMode(value)) {
+        if (!isRemoteFileBrowserPathResolveTextTooLarge(value) && isPathMode(value)) {
           resolvePathInput(value)
         }
       }, 0)
@@ -732,6 +732,7 @@ export function RemoteFileBrowser({
             // Directory has contents; filter hides them all. Distinguishing
             // filter emptiness from directory emptiness keeps copy accurate.
             <div className="flex items-center justify-center h-full">
+              <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
               <p className="text-xs text-muted-foreground">{displayNoMatchesCopy}</p>
             </div>
           ) : (
