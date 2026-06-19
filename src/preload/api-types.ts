@@ -2162,6 +2162,7 @@ export type PreloadApi = {
       wslDistro?: string | null
     }) => Promise<CodexRateLimitAccountsState>
     reauthenticate: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
+    cancelReauthentication: (args: { accountId: string }) => Promise<boolean>
     remove: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
     select: (args: {
       accountId: string | null

@@ -2834,6 +2834,7 @@ function createAccountsApi(): never {
     add: () => Promise.resolve(empty),
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
+    cancelReauthentication: () => Promise.resolve(false),
     remove: () => Promise.resolve(empty),
     select: () => Promise.resolve(empty)
   } as never

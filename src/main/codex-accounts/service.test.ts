@@ -1111,6 +1111,121 @@ describe('CodexAccountService config sync', () => {
     expect(store.updateSettings).toHaveBeenCalledTimes(testCase.expectedUpdateCount)
   })
 
+  it('cancels a hanging reauthentication so another attempt can start', async () => {
+    vi.resetModules()
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+    const managedHomePath = createManagedHome(
+      testState.userDataDir,
+      'account-1',
+      '',
+      createCodexAuthJson('old@example.com', 'provider-account-old', 'refresh-old')
+    )
+    const settings = createSettings({
+      codexManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'old@example.com',
+          managedHomePath,
+          providerAccountId: 'provider-account-old',
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeCodexManagedAccountId: 'account-1'
+    })
+    let spawnCount = 0
+    const firstChild = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: () => boolean
+      pid: number
+      exitCode: number | null
+      signalCode: string | null
+    }
+    firstChild.stdout = new PassThrough()
+    firstChild.stderr = new PassThrough()
+    firstChild.kill = vi.fn(() => true)
+    firstChild.pid = 4242
+    firstChild.exitCode = null
+    firstChild.signalCode = null
+    const spawnMock = vi.fn(
+      (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
+        spawnCount += 1
+        if (spawnCount === 1) {
+          return firstChild
+        }
+        const child = new EventEmitter() as EventEmitter & {
+          stdout: PassThrough
+          stderr: PassThrough
+          kill: () => boolean
+        }
+        child.stdout = new PassThrough()
+        child.stderr = new PassThrough()
+        child.kill = vi.fn(() => true)
+        const loginHome = options.env.CODEX_HOME
+        expect(loginHome).toBeTruthy()
+        writeFileSync(
+          join(loginHome!, 'auth.json'),
+          createCodexAuthJson('new@example.com', 'provider-account-new', 'refresh-new'),
+          'utf-8'
+        )
+        queueMicrotask(() => child.emit('close', 0))
+        return child
+      }
+    )
+
+    const execFileSyncMock = vi.fn()
+    vi.doMock('node:child_process', () => ({
+      execFileSync: execFileSyncMock,
+      spawn: spawnMock
+    }))
+    vi.doMock('../codex-cli/command', () => ({
+      resolveCodexCommand: () => 'codex'
+    }))
+
+    try {
+      const store = createStore(settings)
+      const rateLimits = createRateLimits()
+      const runtimeHome = createRuntimeHome()
+      // Import after the per-test module mocks so the service captures the Windows process fakes.
+      const { CodexAccountService } = await import('./service')
+      const service = new CodexAccountService(
+        store as never,
+        rateLimits as never,
+        runtimeHome as never
+      )
+
+      const firstAttempt = service.reauthenticateAccount('account-1')
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+
+      expect(service.cancelReauthentication('account-1')).toBe(true)
+      await expect(firstAttempt).rejects.toThrow('Codex sign-in was cancelled.')
+      expect(execFileSyncMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '4242', '/t', '/f'],
+        expect.objectContaining({ windowsHide: true, stdio: 'ignore' })
+      )
+      expect(firstChild.kill).not.toHaveBeenCalled()
+      expect(store.getSettings().codexManagedAccounts[0].email).toBe('old@example.com')
+
+      const result = await service.reauthenticateAccount('account-1')
+
+      expect(result.accounts[0]).toMatchObject({
+        email: 'new@example.com',
+        providerAccountId: 'provider-account-new'
+      })
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+    } finally {
+      Object.defineProperty(process, 'platform', originalPlatform)
+      vi.doUnmock('node:child_process')
+      vi.doUnmock('../codex-cli/command')
+    }
+  })
+
   it('does not recreate a missing managed home at a different account path', async () => {
     vi.resetModules()
     const managedHomePath = join(testState.userDataDir, 'codex-accounts', 'other-account', 'home')
@@ -2156,31 +2271,32 @@ describe('CodexAccountService config sync', () => {
     vi.useFakeTimers()
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-    const child = new EventEmitter() as EventEmitter & {
-      stdout: PassThrough
-      stderr: PassThrough
-      kill: () => void
-      pid: number
-      exitCode: number | null
-      signalCode: string | null
-    }
-    child.stdout = new PassThrough()
-    child.stderr = new PassThrough()
-    child.kill = vi.fn()
-    child.pid = 4242
-    child.exitCode = null
-    child.signalCode = null
-    const execFileSyncMock = vi.fn()
-    const spawnMock = vi.fn(() => child)
-    vi.doMock('node:child_process', () => ({
-      execFileSync: execFileSyncMock,
-      spawn: spawnMock
-    }))
-    vi.doMock('../codex-cli/command', () => ({
-      resolveCodexCommand: () => 'codex'
-    }))
-
+    // Exercise Windows process-tree cancellation regardless of the test host.
     try {
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: PassThrough
+        stderr: PassThrough
+        kill: () => void
+        pid: number
+        exitCode: number | null
+        signalCode: string | null
+      }
+      child.stdout = new PassThrough()
+      child.stderr = new PassThrough()
+      child.kill = vi.fn()
+      child.pid = 4242
+      child.exitCode = null
+      child.signalCode = null
+      const execFileSyncMock = vi.fn()
+      const spawnMock = vi.fn(() => child)
+      vi.doMock('node:child_process', () => ({
+        execFileSync: execFileSyncMock,
+        spawn: spawnMock
+      }))
+      vi.doMock('../codex-cli/command', () => ({
+        resolveCodexCommand: () => 'codex'
+      }))
+
       const store = createStore(createSettings())
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
@@ -2229,34 +2345,35 @@ describe('CodexAccountService config sync', () => {
     vi.useFakeTimers()
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-    const child = new EventEmitter() as EventEmitter & {
-      stdout: PassThrough
-      stderr: PassThrough
-      kill: () => void
-      pid: number
-      exitCode: number | null
-      signalCode: string | null
-    }
-    child.stdout = new PassThrough()
-    child.stderr = new PassThrough()
-    child.kill = vi.fn()
-    child.pid = 4343
-    child.exitCode = null
-    child.signalCode = null
-    const execFileSyncMock = vi.fn()
-    vi.doMock('node:child_process', () => ({
-      execFileSync: execFileSyncMock,
-      spawn: vi.fn(() => child)
-    }))
-    vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-    const authPath = join(testState.fakeHomeDir, 'auth.json')
-    writeFileSync(
-      authPath,
-      createCodexAuthJson('user@example.com', 'provider-account-1', 'old-token'),
-      'utf-8'
-    )
-
+    // Exercise Windows process-tree cancellation regardless of the test host.
     try {
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: PassThrough
+        stderr: PassThrough
+        kill: () => void
+        pid: number
+        exitCode: number | null
+        signalCode: string | null
+      }
+      child.stdout = new PassThrough()
+      child.stderr = new PassThrough()
+      child.kill = vi.fn()
+      child.pid = 4343
+      child.exitCode = null
+      child.signalCode = null
+      const execFileSyncMock = vi.fn()
+      vi.doMock('node:child_process', () => ({
+        execFileSync: execFileSyncMock,
+        spawn: vi.fn(() => child)
+      }))
+      vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
+      const authPath = join(testState.fakeHomeDir, 'auth.json')
+      writeFileSync(
+        authPath,
+        createCodexAuthJson('user@example.com', 'provider-account-1', 'old-token'),
+        'utf-8'
+      )
+
       const { CodexAccountService } = await import('./service')
       const service = new CodexAccountService(
         createStore(createSettings()) as never,

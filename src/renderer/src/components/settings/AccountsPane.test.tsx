@@ -1,8 +1,11 @@
-import React from 'react'
+// @vitest-environment happy-dom
+
+import React, { act } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { CodexRateLimitAccountsState, GlobalSettings } from '../../../../shared/types'
 import { i18n } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { AccountsPane } from './AccountsPane'
@@ -20,10 +23,81 @@ function renderPane(
   )
 }
 
+let interactiveContainer: HTMLDivElement | null = null
+let interactiveRoot: Root | null = null
+
+async function renderInteractivePane(settings: GlobalSettings): Promise<HTMLDivElement> {
+  interactiveContainer = document.createElement('div')
+  document.body.appendChild(interactiveContainer)
+  interactiveRoot = createRoot(interactiveContainer)
+
+  await act(async () => {
+    interactiveRoot?.render(
+      React.createElement(AccountsPane, {
+        settings,
+        updateSettings: vi.fn()
+      })
+    )
+  })
+  await act(async () => {
+    await Promise.resolve()
+  })
+
+  return interactiveContainer
+}
+
+function findButton(container: HTMLElement, label: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll('button')).find((candidate) =>
+    candidate.textContent?.includes(label)
+  )
+  expect(button).toBeTruthy()
+  return button as HTMLButtonElement
+}
+
+function installAccountsApi(
+  codexAccounts: CodexRateLimitAccountsState,
+  reauthenticate: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>,
+  cancelReauthentication: (args: { accountId: string }) => Promise<boolean>
+): void {
+  Object.assign(window, {
+    api: {
+      codexAccounts: {
+        list: vi.fn().mockResolvedValue(codexAccounts),
+        add: vi.fn().mockResolvedValue(codexAccounts),
+        reauthenticate,
+        cancelReauthentication,
+        remove: vi.fn().mockResolvedValue(codexAccounts),
+        select: vi.fn().mockResolvedValue(codexAccounts)
+      },
+      claudeAccounts: {
+        list: vi.fn().mockResolvedValue({
+          accounts: [],
+          activeAccountId: null,
+          activeAccountIdsByRuntime: { host: null, wsl: {} }
+        }),
+        add: vi.fn(),
+        reauthenticate: vi.fn(),
+        remove: vi.fn(),
+        select: vi.fn()
+      }
+    }
+  })
+}
+
 describe('AccountsPane', () => {
   beforeEach(async () => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     await i18n.changeLanguage('en')
     useAppStore.setState({ settingsSearchQuery: '' })
+  })
+
+  afterEach(() => {
+    act(() => {
+      interactiveRoot?.unmount()
+    })
+    interactiveContainer?.remove()
+    interactiveRoot = null
+    interactiveContainer = null
   })
 
   it('hides the WSL account location controls on platforms without WSL support', () => {
@@ -137,5 +211,57 @@ describe('AccountsPane', () => {
     expect(
       markup.slice(markup.lastIndexOf('<button', addAccountIndex), addAccountIndex)
     ).not.toContain('disabled=""')
+  })
+
+  it('lets a pending Codex re-authentication be cancelled', async () => {
+    const codexAccounts: CodexRateLimitAccountsState = {
+      accounts: [
+        {
+          id: 'account-1',
+          email: 'one@example.com',
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        },
+        {
+          id: 'account-2',
+          email: 'two@example.com',
+          managedHomeRuntime: 'host',
+          wslDistro: null,
+          providerAccountId: null,
+          workspaceLabel: null,
+          workspaceAccountId: null,
+          createdAt: 2,
+          updatedAt: 2,
+          lastAuthenticatedAt: 2
+        }
+      ],
+      activeAccountId: 'account-1',
+      activeAccountIdsByRuntime: { host: 'account-1', wsl: {} }
+    }
+    const reauthenticate = vi.fn(() => new Promise<CodexRateLimitAccountsState>(() => undefined))
+    const cancelReauthentication = vi.fn().mockResolvedValue(true)
+    installAccountsApi(codexAccounts, reauthenticate, cancelReauthentication)
+
+    const container = await renderInteractivePane(getDefaultSettings('/tmp'))
+    expect(container.textContent).toContain('one@example.com')
+
+    await act(async () => {
+      findButton(container, 'Re-authenticate').dispatchEvent(
+        new MouseEvent('click', { bubbles: true })
+      )
+    })
+
+    expect(reauthenticate).toHaveBeenCalledWith({ accountId: 'account-1' })
+    await act(async () => {
+      findButton(container, 'Cancel').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(cancelReauthentication).toHaveBeenCalledWith({ accountId: 'account-1' })
   })
 })

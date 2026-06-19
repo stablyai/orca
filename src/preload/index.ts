@@ -1884,6 +1884,8 @@ const api = {
       ipcRenderer.invoke('codexAccounts:add', args),
     reauthenticate: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:reauthenticate', args),
+    cancelReauthentication: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('codexAccounts:cancelReauthentication', args),
     remove: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:remove', args),
     select: (args: {
