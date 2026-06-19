@@ -19675,8 +19675,10 @@ export class OrcaRuntimeService {
     getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
     getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow(),
     getOffscreenBrowserBackend: () => this.offscreenBrowserBackend,
-    markHeadlessBrowserSessionTabActive: (worktreeId, browserPageId) =>
-      this.markHeadlessBrowserSessionTabActive(worktreeId, browserPageId)
+    // Why: bind the method directly rather than re-listing params in a wrapper
+    // arrow — a hand-listed wrapper silently dropped targetGroupId before, so a
+    // new browser opened in the right split group landed in the left.
+    markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this)
   })
 
   private readonly emulatorCommands = new RuntimeEmulatorCommands({
