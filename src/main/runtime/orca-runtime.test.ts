@@ -11068,6 +11068,38 @@ describe('OrcaRuntimeService', () => {
     expect(right.tabOrder).toHaveLength(1) // unchanged
   })
 
+  it('appendBrowserTabOrder keeps a browser in its group across rebuilds (durability)', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const groups = [
+      { id: 'left', activeTabId: 'web-terminal-a', tabOrder: ['web-terminal-a'] },
+      { id: 'right', activeTabId: 'web-terminal-b', tabOrder: ['web-terminal-b'] }
+    ]
+
+    // First create: a new browser targeted at the RIGHT group lands there.
+    const afterCreate = runtime['appendBrowserTabOrder'](groups, ['browser-1'], {
+      tabId: 'browser-1',
+      groupId: 'right'
+    })
+    expect(afterCreate.find((g) => g.id === 'right')!.tabOrder).toContain('browser-1')
+    expect(afterCreate.find((g) => g.id === 'left')!.tabOrder).not.toContain('browser-1')
+
+    // Rebuild: the terminal distributor drops the browser id (terminal-only), so
+    // appendBrowserTabOrder must restore it to its prior group, not group[0].
+    const rebuiltGroups = [
+      { id: 'left', activeTabId: 'web-terminal-a', tabOrder: ['web-terminal-a'] },
+      { id: 'right', activeTabId: 'web-terminal-b', tabOrder: ['web-terminal-b'] }
+    ]
+    const priorAssignment = runtime['collectBrowserGroupAssignment'](afterCreate, ['browser-1'])
+    const afterRebuild = runtime['appendBrowserTabOrder'](
+      rebuiltGroups,
+      ['browser-1'],
+      undefined,
+      priorAssignment
+    )
+    expect(afterRebuild.find((g) => g.id === 'right')!.tabOrder).toContain('browser-1')
+    expect(afterRebuild.find((g) => g.id === 'left')!.tabOrder).not.toContain('browser-1')
+  })
+
   it('keeps preserved headless mobile session publication epochs idempotent', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.syncWindowGraph(0, {

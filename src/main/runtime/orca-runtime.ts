@@ -2740,7 +2740,11 @@ export class OrcaRuntimeService {
                 this.collectHeadlessParentTabOrder(mergedTerminalTabs),
                 activeTopLevelId
               ),
-              mergedBrowserOrder
+              mergedBrowserOrder,
+              undefined,
+              // Why: distribute drops browser ids (terminal-only), so carry each
+              // browser's persisted group forward instead of coalescing left.
+              this.collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
             )
           : options.onlyServeOwnedTerminals === true && existing?.tabGroups
             ? this.appendBrowserTabOrder(
@@ -2818,26 +2822,68 @@ export class OrcaRuntimeService {
   }
 
   // Why: browser session tabs have no parentTabId so the terminal-only group
-  // builder drops them from tabOrder. Append their ids to the primary group so
-  // paired clients render them in the tab bar.
+  // builder drops them from tabOrder; this re-adds their ids to a group.
+  // Browser tabs are live-only (no persisted session entry), but their GROUP
+  // membership must still survive snapshot rebuilds like terminals'. The
+  // passed-in groups already encode each browser's group (carried from the prior
+  // snapshot / persisted tabGroups), so keep each existing browser id where it
+  // is; only a genuinely-new browser id goes to its create-target group (when
+  // that group exists) and otherwise to the first group. Previously every
+  // browser was force-pushed into group[0], so opening a browser in the right
+  // split group always snapped it back to the left on the next rebuild.
   private appendBrowserTabOrder(
     groups: readonly RuntimeMobileSessionTabGroup[],
-    browserTabIds: readonly string[]
+    browserTabIds: readonly string[],
+    newTabAssignment?: { tabId: string; groupId: string },
+    // browserPageId -> groupId from the prior/persisted groups. The terminal
+    // distributor rebuilds tabOrder from terminal ids only and drops browser
+    // ids, so this carries each browser's group across rebuilds.
+    priorGroupByBrowserId?: ReadonlyMap<string, string>
   ): RuntimeMobileSessionTabGroup[] {
     if (browserTabIds.length === 0) {
       return [...groups]
     }
     const next = groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
-    const target = next[0]
-    if (!target) {
+    if (next.length === 0) {
       return next
     }
-    for (const id of browserTabIds) {
-      if (!target.tabOrder.includes(id)) {
-        target.tabOrder.push(id)
+    const groupById = new Map(next.map((group) => [group.id, group]))
+    const ownerGroupByTabId = new Map<string, RuntimeMobileSessionTabGroup>()
+    for (const group of next) {
+      for (const id of group.tabOrder) {
+        ownerGroupByTabId.set(id, group)
       }
     }
+    for (const id of browserTabIds) {
+      if (ownerGroupByTabId.has(id)) {
+        continue
+      }
+      const priorGroupId = priorGroupByBrowserId?.get(id)
+      const targetGroup =
+        (newTabAssignment?.tabId === id ? groupById.get(newTabAssignment.groupId) : undefined) ??
+        (priorGroupId ? groupById.get(priorGroupId) : undefined) ??
+        next[0]!
+      targetGroup.tabOrder.push(id)
+    }
     return next
+  }
+
+  // browserPageId -> groupId from a set of groups (the persisted/prior layout),
+  // so a browser stays in its group across rebuilds that drop browser ids.
+  private collectBrowserGroupAssignment(
+    groups: readonly RuntimeMobileSessionTabGroup[] | undefined,
+    browserTabIds: readonly string[]
+  ): Map<string, string> {
+    const browserIdSet = new Set(browserTabIds)
+    const assignment = new Map<string, string>()
+    for (const group of groups ?? []) {
+      for (const id of group.tabOrder) {
+        if (browserIdSet.has(id)) {
+          assignment.set(id, group.id)
+        }
+      }
+    }
+    return assignment
   }
 
   private isServeOwnedPtyId(ptyId: string | null | undefined): boolean {
@@ -3739,7 +3785,8 @@ export class OrcaRuntimeService {
 
   private markHeadlessBrowserSessionTabActive(
     worktreeId: string | undefined,
-    browserPageId: string
+    browserPageId: string,
+    targetGroupId?: string
   ): void {
     if (!this.offscreenBrowserBackend || !worktreeId) {
       return
@@ -3754,21 +3801,45 @@ export class OrcaRuntimeService {
     if (!snapshot || !tab) {
       return
     }
+    const groups = snapshot.tabGroups ?? []
+    const hasTargetGroup =
+      targetGroupId !== undefined && groups.some((group) => group.id === targetGroupId)
+    // Why: move the new browser into the group whose "+" was clicked, removing it
+    // from wherever the rebuild placed it. Only the TARGET group's activeTabId
+    // (and the global active) change — every other group's active tab is left
+    // intact, so creating in the right group never resets the left group's tab.
+    const nextGroups = hasTargetGroup
+      ? groups.map((group) => {
+          const withoutTab = group.tabOrder.filter((id) => id !== tab.id)
+          if (group.id === targetGroupId) {
+            return { ...group, tabOrder: [...withoutTab, tab.id], activeTabId: tab.id }
+          }
+          return withoutTab.length === group.tabOrder.length
+            ? group
+            : { ...group, tabOrder: withoutTab }
+        })
+      : groups.map((group) =>
+          group.tabOrder.includes(tab.id) ? { ...group, activeTabId: tab.id } : group
+        )
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
+      ...(hasTargetGroup ? { activeGroupId: targetGroupId } : {}),
       activeTabId: tab.id,
       activeTabType: 'browser',
       tabs: snapshot.tabs.map((candidate) => ({
         ...candidate,
         isActive: candidate.id === tab.id
       })),
-      tabGroups: (snapshot.tabGroups ?? []).map((group) =>
-        group.tabOrder.includes(tab.id) ? { ...group, activeTabId: tab.id } : group
-      )
+      tabGroups: nextGroups
     }
     this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    // Why: browser group membership is otherwise live-only; persist it so a
+    // later rebuild keeps the browser in its group instead of coalescing left.
+    if (hasTargetGroup && nextSnapshot.tabGroupLayout) {
+      this.persistHeadlessTabGroups(worktreeId, nextGroups, nextSnapshot.tabGroupLayout)
+    }
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
 

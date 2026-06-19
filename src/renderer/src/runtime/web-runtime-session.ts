@@ -130,6 +130,9 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         // headless host this marks the tab active in the session snapshot so the
         // reconcile keeps focus on it instead of snapping back to a terminal.
         activate: true,
+        // Why: place the new browser in the split group whose "+" was clicked,
+        // so the host snapshot is authoritative for its group (no left-snap).
+        ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
         // Why: paired web clients need the local tab immediately. The remote
         // pane will stream once the host webview registers; waiting here makes
         // the workspace appear to close while the host finishes mounting.

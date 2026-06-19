@@ -152,7 +152,11 @@ export type RuntimeBrowserCommandHost = {
   // focused. A headless browser create must mark itself active there so paired
   // clients keep focus on the new tab instead of the reconcile snapping back to
   // a terminal (whose activeTabType the snapshot still reports).
-  markHeadlessBrowserSessionTabActive?(worktreeId: string | undefined, browserPageId: string): void
+  markHeadlessBrowserSessionTabActive?(
+    worktreeId: string | undefined,
+    browserPageId: string,
+    targetGroupId?: string
+  ): void
 }
 
 export class RuntimeBrowserCommands {
@@ -1325,6 +1329,7 @@ export class RuntimeBrowserCommands {
     profileId?: string
     waitForRegistration?: boolean
     activate?: boolean
+    targetGroupId?: string
   }): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
     const worktreeId = params.worktree
@@ -1343,7 +1348,8 @@ export class RuntimeBrowserCommands {
         url,
         worktreeId,
         params.profileId,
-        params.activate
+        params.activate,
+        params.targetGroupId
       )
     }
     const { browserPageId } = await this.createBrowserTabInRenderer(
@@ -1753,7 +1759,8 @@ export class RuntimeBrowserCommands {
     url: string,
     worktreeId?: string,
     profileId?: string,
-    activate?: boolean
+    activate?: boolean,
+    targetGroupId?: string
   ): Promise<{ browserPageId: string }> {
     const { browserPageId } = await offscreen.createTab({ url, worktreeId, profileId })
     const bridge = this.host.getAgentBrowserBridge()
@@ -1767,7 +1774,7 @@ export class RuntimeBrowserCommands {
     // or they'd yank a connected client/mobile to the new tab. Mirrors the
     // renderer path, which forwards `activate` and never force-focuses otherwise.
     if (activate === true) {
-      this.host.markHeadlessBrowserSessionTabActive?.(worktreeId, browserPageId)
+      this.host.markHeadlessBrowserSessionTabActive?.(worktreeId, browserPageId, targetGroupId)
     }
     return { browserPageId }
   }
