@@ -2303,6 +2303,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "화면 지우기",
             "8c17d6786d": "창 닫기",
+            "copyTerminalId": "터미널 ID 복사",
             "2cf85a6a55": "창 ID 복사",
             "39809d152f": "제목 설정…",
             "06c2b0f043": "창 크기 균등화",
@@ -2395,9 +2396,9 @@
                     "a29b9faa01": "창 ID가 복사되었습니다.",
                     "terminal": {
                       "id": {
-                        "copied": "Terminal ID copied",
+                        "copied": "터미널 ID가 복사되었습니다",
                         "copy": {
-                          "failed": "Unable to copy terminal ID"
+                          "failed": "터미널 ID를 복사할 수 없습니다"
                         }
                       }
                     }
@@ -8067,7 +8068,8 @@
           "2b3c4d5e6f": "적용 대상",
           "3c4d5e6f7a": "클라이언트 기본값 재정의",
           "4d5e6f7a8b": "클라이언트 기본값 상속",
-          "5e6f7a8b9c": "재설정"
+          "5e6f7a8b9c": "재설정",
+          "6f7a8b9cad": "상대 경로(예: .orca/worktrees)를 사용하면 프로젝트별 위치가 되고, 절대 경로를 사용하면 모든 프로젝트가 하나의 폴더를 공유합니다."
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",
@@ -8420,6 +8422,9 @@
           "SearchResultItems": {
             "cc06595a3b": "라인 경로 복사",
             "3596b9668d": "경로 복사"
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "보기"
           },
           "SourceControl": {
             "1406954883": "모든 메모 지우기...",

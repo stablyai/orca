@@ -2303,6 +2303,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "Borrar pantalla",
             "8c17d6786d": "Cerrar panel",
+            "copyTerminalId": "Copiar ID de terminal",
             "2cf85a6a55": "Copiar ID del panel",
             "39809d152f": "Establecer título…",
             "06c2b0f043": "Igualar tamaños de paneles",
@@ -2395,9 +2396,9 @@
                     "a29b9faa01": "ID del panel copiado",
                     "terminal": {
                       "id": {
-                        "copied": "Terminal ID copied",
+                        "copied": "ID de terminal copiado",
                         "copy": {
-                          "failed": "Unable to copy terminal ID"
+                          "failed": "No se pudo copiar el ID de terminal"
                         }
                       }
                     }
@@ -8063,11 +8064,12 @@
           "thisDevice": "This device"
         },
         "WorkspaceDirectorySetting": {
-          "1a2b3c4d5e": "Client default",
-          "2b3c4d5e6f": "Apply to",
-          "3c4d5e6f7a": "Overrides client default",
-          "4d5e6f7a8b": "Inherits the client default",
-          "5e6f7a8b9c": "Reset"
+          "1a2b3c4d5e": "Predeterminado del cliente",
+          "2b3c4d5e6f": "Aplicar a",
+          "3c4d5e6f7a": "Anula el valor predeterminado del cliente",
+          "4d5e6f7a8b": "Hereda el valor predeterminado del cliente",
+          "5e6f7a8b9c": "Restablecer",
+          "6f7a8b9cad": "Usa una ruta relativa (p. ej. .orca/worktrees) para una ubicación por proyecto, o una ruta absoluta para una carpeta compartida."
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",
@@ -8420,6 +8422,9 @@
           "SearchResultItems": {
             "cc06595a3b": "Copiar ruta de línea",
             "3596b9668d": "Copiar ruta"
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "Ver"
           },
           "SourceControl": {
             "1406954883": "Borrar todas las notas...",

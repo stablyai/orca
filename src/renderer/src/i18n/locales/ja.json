@@ -2303,6 +2303,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "クリアスクリーン",
             "8c17d6786d": "ペインを閉じる",
+            "copyTerminalId": "Terminal ID をコピー",
             "2cf85a6a55": "ペインIDのコピー",
             "39809d152f": "タイトルを設定…",
             "06c2b0f043": "ペインのサイズを均等化する",
@@ -2395,9 +2396,9 @@
                     "a29b9faa01": "ペイン ID がコピーされました",
                     "terminal": {
                       "id": {
-                        "copied": "Terminal ID copied",
+                        "copied": "Terminal ID をコピーしました",
                         "copy": {
-                          "failed": "Unable to copy terminal ID"
+                          "failed": "Terminal ID をコピーできません"
                         }
                       }
                     }
@@ -8063,11 +8064,12 @@
           "thisDevice": "This device"
         },
         "WorkspaceDirectorySetting": {
-          "1a2b3c4d5e": "Client default",
-          "2b3c4d5e6f": "Apply to",
-          "3c4d5e6f7a": "Overrides client default",
-          "4d5e6f7a8b": "Inherits the client default",
-          "5e6f7a8b9c": "リセット"
+          "1a2b3c4d5e": "クライアントのデフォルト",
+          "2b3c4d5e6f": "適用先",
+          "3c4d5e6f7a": "クライアントのデフォルトを上書き",
+          "4d5e6f7a8b": "クライアントのデフォルトを継承",
+          "5e6f7a8b9c": "リセット",
+          "6f7a8b9cad": "相対パス（例: .orca/worktrees）を指定するとプロジェクトごとの場所になり、絶対パスを指定すると全プロジェクトで 1 つのフォルダーを共有します。"
         },
         "ProviderHostScopeControl": {
           "scope_label": "{{value0}}: {{value1}}",
@@ -8420,6 +8422,9 @@
           "SearchResultItems": {
             "cc06595a3b": "ラインパスのコピー",
             "3596b9668d": "パスのコピー"
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "表示"
           },
           "SourceControl": {
             "1406954883": "すべてのメモをクリアします...",
