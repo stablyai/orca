@@ -103,6 +103,10 @@ import {
   isTerminalLiveInputWithinByteLimit,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import {
+  getTerminalCommandKeyboardType,
+  getTerminalLiveInputKeyboardType
+} from '../../../../src/terminal/terminal-keyboard-type'
 import { normalizeTerminalTextInput } from '../../../../src/terminal/terminal-text-input-normalization'
 import { countTerminalGestureInputSequences } from '../../../../src/terminal/terminal-gesture-input'
 import { MobileBrowserPane } from '../../../../src/browser/MobileBrowserPane'
@@ -4824,7 +4828,7 @@ export default function SessionScreen() {
                       autoCorrect={false}
                       spellCheck={false}
                       smartInsertDelete={false}
-                      keyboardType={Platform.OS === 'ios' ? 'ascii-capable' : 'visible-password'}
+                      keyboardType={getTerminalLiveInputKeyboardType(Platform.OS)}
                       returnKeyType="default"
                       blurOnSubmit={false}
                       editable={canSend}
@@ -4855,15 +4859,12 @@ export default function SessionScreen() {
                       autoCorrect={autocompleteEnabled}
                       spellCheck={autocompleteEnabled}
                       smartInsertDelete={false}
-                      // Why: the default keyboard exposes autocomplete/autocorrect;
-                      // ascii-capable (iOS) / visible-password (Android) suppress it.
-                      keyboardType={
+                      // Why: Android's default keyboard is required for CJK IME
+                      // composition; iOS can still use ASCII when autocomplete is off.
+                      keyboardType={getTerminalCommandKeyboardType(
+                        Platform.OS,
                         autocompleteEnabled
-                          ? 'default'
-                          : Platform.OS === 'ios'
-                            ? 'ascii-capable'
-                            : 'visible-password'
-                      }
+                      )}
                       returnKeyType="send"
                       editable={canSend}
                       onSubmitEditing={() => void handleSend()}
