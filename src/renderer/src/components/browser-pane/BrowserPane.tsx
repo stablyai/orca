@@ -2614,6 +2614,7 @@ function BrowserPagePane({
     clearTimeout(browserZoomFeedbackTimerRef.current)
   }, [])
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
+  const dismissAddressBarSuggestionsRef = useRef<(() => void) | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const browserTabIdRef = useRef(browserTab.id)
   browserTabIdRef.current = browserTab.id
@@ -3503,6 +3504,10 @@ function BrowserPagePane({
 
     webviewRef.current = webview
 
+    const dismissAddressBarSuggestions = (): void => {
+      dismissAddressBarSuggestionsRef.current?.()
+    }
+
     const handleDomReady = (): void => {
       const webContentsId = webview.getWebContentsId()
       let queuedAnnotationViewportBridgeSync = false
@@ -3737,6 +3742,7 @@ function BrowserPagePane({
     }
 
     webview.addEventListener('dom-ready', handleDomReady)
+    webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
     // Why: separate handler registered only on 'did-navigate' (full page loads),
@@ -3769,6 +3775,7 @@ function BrowserPagePane({
 
     return () => {
       webview.removeEventListener('dom-ready', handleDomReady)
+      webview.removeEventListener('focus', dismissAddressBarSuggestions)
       webview.removeEventListener('did-start-loading', handleDidStartLoading)
       webview.removeEventListener('did-stop-loading', handleDidStopLoading)
       webview.removeEventListener('did-navigate', handleDidNavigate)
@@ -4705,6 +4712,7 @@ function BrowserPagePane({
           onSubmit={submitAddressBar}
           onNavigate={navigateToUrl}
           inputRef={addressBarInputRef}
+          dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
         />
 
         <BrowserImportHintButton profileId={sessionProfileId} />
