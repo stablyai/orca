@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { holdPtyResizesForPaneSubtrees } from '@/lib/pane-manager/pane-pty-resize-hold'
+import { beginTerminalContainerResizeSettle } from '@/lib/pane-manager/terminal-container-resize-settle'
 import { fitPanes } from './pane-helpers'
 
 type UseTerminalContainerFitSyncArgs = {
@@ -55,7 +57,28 @@ export function useTerminalContainerFitSync({
     // UI while a sidebar opens or a window resizes.
     const RESIZE_DEBOUNCE_MS = 150
     let timerId: ReturnType<typeof setTimeout> | null = null
+    let releaseResizeSettle: (() => void) | null = null
+    let ptyResizeHold: ReturnType<typeof holdPtyResizesForPaneSubtrees> | null = null
+    const beginResizeSettle = (): void => {
+      releaseResizeSettle ??= beginTerminalContainerResizeSettle()
+      ptyResizeHold ??= holdPtyResizesForPaneSubtrees([container])
+    }
+    const releasePendingResizeSettle = (flush: boolean): void => {
+      releaseResizeSettle?.()
+      releaseResizeSettle = null
+      const hold = ptyResizeHold
+      ptyResizeHold = null
+      if (!hold) {
+        return
+      }
+      if (flush) {
+        hold.flush()
+      } else {
+        hold.cancel()
+      }
+    }
     const resizeObserver = new ResizeObserver(() => {
+      beginResizeSettle()
       if (timerId !== null) {
         clearTimeout(timerId)
       }
@@ -63,7 +86,17 @@ export function useTerminalContainerFitSync({
         timerId = null
         const manager = managerRef.current
         if (manager) {
-          fitPanes(manager)
+          // Why: while the outer terminal container is resizing, per-pane
+          // observers skip heavy xterm reflows and PTY resize forwarding is
+          // held. Fit once after the drag settles, then flush the final
+          // SIGWINCH-sized grid instead of every transient grid.
+          try {
+            fitPanes(manager)
+          } finally {
+            releasePendingResizeSettle(true)
+          }
+        } else {
+          releasePendingResizeSettle(false)
         }
       }, RESIZE_DEBOUNCE_MS)
     })
@@ -73,6 +106,7 @@ export function useTerminalContainerFitSync({
       if (timerId !== null) {
         clearTimeout(timerId)
       }
+      releasePendingResizeSettle(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible])
