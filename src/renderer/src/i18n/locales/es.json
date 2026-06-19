@@ -2328,7 +2328,8 @@
             "f3eeb1de13": "Copiar",
             "c2f0b72b8d": "Insertar",
             "925f49f210": "Expandir panel",
-            "df766809e0": "Contraer panel"
+            "df766809e0": "Contraer panel",
+            "copyTerminalId": "Copiar ID de terminal"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Reiniciar demonio",

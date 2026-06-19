@@ -2328,7 +2328,8 @@
             "f3eeb1de13": "복사",
             "c2f0b72b8d": "삽입",
             "925f49f210": "창 확장",
-            "df766809e0": "창 축소"
+            "df766809e0": "창 축소",
+            "copyTerminalId": "터미널 ID 복사"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "데몬 재시작",
@@ -2405,7 +2406,7 @@
                     "a29b9faa01": "창 ID가 복사되었습니다.",
                     "terminal": {
                       "id": {
-                        "copied": "터미널 ID가 복사되었습니다",
+                        "copied": "터미널 ID를 복사했습니다",
                         "copy": {
                           "failed": "터미널 ID를 복사할 수 없습니다"
                         }
