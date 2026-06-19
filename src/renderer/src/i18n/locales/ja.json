@@ -58,6 +58,13 @@
     "window": "ウィンドウ",
     "help": "ヘルプ"
   },
+  "tray": {
+    "openOrca": "Orcaを開く",
+    "quit": "終了",
+    "minimizeNotice": {
+      "body": "Orcaはシステムトレイで実行中です"
+    }
+  },
   "worktreeJumpPalette": {
     "matchLabel": {
       "comment": "コメント",
@@ -1069,7 +1076,9 @@
         "setupKindFolder": "Folder",
         "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
         "importingHostSetup": "Importing...",
-        "importHostSetup": "インポート"
+        "importHostSetup": "インポート",
+        "reuseExistingBranch": "Reuse branch",
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "ワークスペースを作成する前に、プロジェクト、ワークスペース名、および agent を選択します。"
@@ -1650,7 +1659,7 @@
         "1628fd7dfa": "アクティブなワークツリー、設定、操作、または開いているタブがありません",
         "b781ae05e3": "入力してワークツリー、設定、タブ、操作を検索します。",
         "f60f8730be": "他に切り替えるワークツリーがない",
-        "c4afa68159": "ワークツリー、設定、操作、ページ タイトル、エミュレータ、URL、PR、またはポートを試す。",
+        "c4afa68159": "ワークツリー、設定、操作、タブタイトル、エージェントプロンプト、URL、PR、またはポートを試してください。",
         "dbd9d87eec": "検索に一致する結果はありません",
         "2c38630a01": "ワークスペースはもう存在しません",
         "7726ce9970": "「モバイルエミュレータ」タブは存在しません",
@@ -1667,7 +1676,8 @@
         "recentWorktreesHeader": "最近のワークツリー",
         "settingsBadge": "設定",
         "actionBadge": "操作",
-        "paletteHostBadge": "Host: {{value0}}"
+        "paletteHostBadge": "Host: {{value0}}",
+        "workspaceTabMissing": "タブはもう存在しません"
       },
       "github": {
         "pr": {
@@ -2274,6 +2284,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "クリアスクリーン",
             "8c17d6786d": "ペインを閉じる",
+            "copyTerminalId": "Terminal ID をコピー",
             "2cf85a6a55": "ペインIDのコピー",
             "39809d152f": "タイトルを設定…",
             "06c2b0f043": "ペインのサイズを均等化する",
@@ -2357,7 +2368,15 @@
               "pane": {
                 "context": {
                   "menu": {
-                    "a29b9faa01": "ペイン ID がコピーされました"
+                    "a29b9faa01": "ペイン ID がコピーされました",
+                    "terminal": {
+                      "id": {
+                        "copied": "Terminal ID をコピーしました",
+                        "copy": {
+                          "failed": "Terminal ID をコピーできません"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -2664,13 +2683,11 @@
             "runtime_checking": "確認中",
             "runtime_online": "接続済み",
             "runtime_unavailable": "Disconnected",
-            "runtime_available": "Available",
             "runtime_connect_unavailable": "Remote host is not reachable",
             "runtime_disconnect_failed": "Disconnect failed",
             "runtime_reconnecting": "Reconnecting",
             "runtime_last_close_reason": "Closed: {{value0}}",
-            "runtime_reconnect_attempt": "Attempt {{value0}}",
-            "runtime_channel_counts": "{{value0}} pending · {{value1}} streams"
+            "runtime_reconnect_attempt": "Attempt {{value0}}"
           },
           "StatusBar": {
             "9659e38343": "ポート",
@@ -3519,7 +3536,8 @@
           "f506a1262a": "ワークスペースのフィルタリング",
           "75405270ed": "フィルターの編集 ({{value0}} がアクティブ)",
           "489d1c8c9f": "プロジェクトを検索...",
-          "ee240a39eb": "フィルターの編集"
+          "ee240a39eb": "フィルターの編集",
+          "automationCreated": "自動化で作成されたワークスペースを非表示"
         },
         "SidebarHeader": {
           "92154beb7e": "新規ワークスペース",
@@ -3581,7 +3599,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "デフォルトのブランチを非表示にする",
           "ed1611b65b": "スリープ中を非表示",
-          "82594419ba": "フィルター"
+          "82594419ba": "フィルター",
+          "automationCreated": "自動化で作成されたワークスペースを非表示"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent アクティビティのレイアウト",
@@ -3634,7 +3653,8 @@
           "8d62c68b35": "ノート",
           "2d74665a56": "ポート",
           "65a9820bd1": "Agent ステータス",
-          "219ebf1961": "ブランチ名"
+          "219ebf1961": "ブランチ名",
+          "automation": "Automation"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
@@ -3707,7 +3727,9 @@
           "93aebe4529": "フォルダ",
           "0d224eff10": "プライマリワークツリー",
           "ca74db7550": "SSH 経由のリモートプロジェクト",
-          "021538e1d1": "SSH が切断されました"
+          "021538e1d1": "SSH が切断されました",
+          "runtimeHostDisconnected": "Server disconnected",
+          "runtimeHostProject": "Project on Orca server"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -3732,7 +3754,15 @@
           "3ea2702e62": "リンク済み {{value0}} #{{value1}}",
           "b105fd3057": "リンク Linear {{value0}}",
           "3f2649eeb8": "リンクされた Issue #{{value0}}",
-          "fe075cb851": "ワークスペースのメモ"
+          "fe075cb851": "ワークスペースのメモ",
+          "automationHeader": "自動化",
+          "openAutomation": "自動化を開く",
+          "openAutomationRun": "実行を開く",
+          "automationCreated": "自動化によって作成",
+          "checkingAutomationAvailability": "自動化の利用可否を確認中...",
+          "automationMissing": "自動化は利用できなくなりました。",
+          "automationRunMissing": "実行履歴は利用できなくなりました。",
+          "automationAvailabilityUnavailable": "自動化の利用可否を確認できませんでした。"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状態: オープン",
@@ -3761,7 +3791,7 @@
           "e091caab15": "プロジェクトが見つかりませんでした",
           "439fa94d53": "アップデート",
           "579b1a8e61": "親から削除",
-          "8d9cd19d09": "親ワークスペースを開く",
+          "8d9cd19d09": "親ワークツリーを開く",
           "d35dfeae58": "グループから削除",
           "76865d827f": "グループに移動",
           "503ec0f8e6": "プロジェクトからの新規グループ",
@@ -3777,7 +3807,9 @@
           "8dacff1fe0": "既読マークを付ける",
           "3baa7d6507": "ピン",
           "697d0f6e1b": "固定を解除する",
-          "250de158fd": "Remove Workspace"
+          "250de158fd": "Remove Workspace",
+          "changeParentWorkspace": "親ワークツリーを変更...",
+          "setParentWorkspace": "親ワークツリーを設定..."
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -3818,7 +3850,8 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
-          "hostDisconnected": "Disconnected"
+          "hostDisconnected": "Disconnected",
+          "failedNestWorkspace": "ワークスペースをネストできませんでした"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
@@ -4160,6 +4193,12 @@
           "c7d8e9f0a1": "{{value0}} 件更新",
           "d8e9f0a1b2": "{{value0}} 件スキップ",
           "e9f0a1b2c3": "{{value0}} 件失敗"
+        },
+        "WorktreeParentPickerPopover": {
+          "failedSetParent": "親ワークツリーを設定できませんでした",
+          "current": "現在",
+          "searchPlaceholder": "ワークツリーを検索...",
+          "empty": "一致する対象ワークツリーがありません。"
         }
       },
       "shared": {
@@ -4282,7 +4321,9 @@
           "6627e75c92": "HTTP/1.1の互換性について説明する",
           "e9506d3377": "HTTP/1.1 互換性",
           "8b7a8df299": "サポートのトラブルシューティングのための低レベルの回避策。",
-          "8d8d8ac599": "互換性"
+          "8d8d8ac599": "互換性",
+          "network": "ネットワーク",
+          "networkDescription": "プロキシや企業環境向けのアプリレベルのネットワークルーティング。"
         },
         "AgentLocationSetting": {
           "92f4238f1a": "WSL のデフォルト",
@@ -4294,15 +4335,19 @@
           "f97b986b7f": "wsl"
         },
         "AgentSkillSetupPanel": {
-          "0b810ec59f": "Enter を押してインストール コマンドを実行します。",
+          "0b810ec59f": "Press Enter to run the command.",
           "ed197f59a2": "コピーコマンド",
-          "817d3f9f18": "インストールコマンドのコピー",
+          "817d3f9f18": "Copy command",
           "5289300939": "未インストール",
           "9fcebceb2a": "インストール済み",
           "68a468752e": "確認中...",
           "c689392435": "再確認",
-          "a31e2aa302": "インストールコマンドのコピーに失敗しました。",
-          "378ad26865": "インストールコマンドをコピーしました。"
+          "a31e2aa302": "Failed to copy command.",
+          "378ad26865": "Copied command.",
+          "copiedCommand": "Copied command.",
+          "failedToCopyCommand": "Failed to copy command.",
+          "copyCommandAria": "Copy command",
+          "runCommandDescription": "Press Enter to run the command."
         },
         "AgentsPane": {
           "d83834f5e6": "インストールされている agents を検出しています…",
@@ -4394,7 +4439,10 @@
             "tintOpacity": "色合いの強さ",
             "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。"
           },
-          "workspaceCardLayoutGuidance": "ワークスペースサイドバーのオプションメニュー > カードレイアウト > コンパクト を使用します。"
+          "workspaceCardLayoutGuidance": "ワークスペースサイドバーのオプションメニュー > カードレイアウト > コンパクト を使用します。",
+          "872af9556e": "システムトレイ",
+          "2edf606c46": "閉じるときにトレイへ最小化",
+          "b707773a0d": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4708,11 +4756,11 @@
           "agentHibernation": {
             "copy": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。安全モデルを調整中の実験的機能です。",
             "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、対応しているセッションは再度開いたときに再開します。",
-            "idleMinutesDescription": "完了したバックグラウンド agent を Orca が休止状態にできるまで待つアイドル時間（分）。",
-            "idleMinutesLabel": "休止まで",
+            "idleMinutesDescription": "完了したバックグラウンド agent を Orca がスリープ状態にできるまで待つアイドル時間（分）。",
+            "idleMinutesLabel": "スリープまで",
             "idleMinutesSuffix": "分",
-            "title": "Agent の休止",
-            "toggleLabel": "Agent の休止を切り替え"
+            "title": "Agent のスリープ",
+            "toggleLabel": "Agent のスリープを切り替え"
           },
           "newWorktreeCardStyle": {
             "copy": "更新された worktree カードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
@@ -4734,7 +4782,7 @@
           "37df688d6f": "フローティング ワークスペースを有効にして、新規タブの開始位置を選択します。",
           "1f67f39384": "フローティングワークスペース"
         },
-        "GeneralCacheTimerSection": {
+        "AgentCacheTimerSection": {
           "05de84a104": "1時間",
           "54395ecd7c": "5分",
           "8b9e202e0a": "これをプロバイダーのキャッシュ TTL と一致させます。デフォルトは 5 分です。",
@@ -4770,7 +4818,7 @@
           "d21136d9ef": "Orca がファイル編集を保持する方法を構成します。",
           "45c6e85c4d": "エディタ"
         },
-        "GeneralNetworkSettingsSection": {
+        "AdvancedNetworkSettingsSection": {
           "3e431564b5": "ローカルホスト、127.0.0.1、*.internal",
           "33ee3ca3af": "オプション。ホストはカンマ、セミコロン、または改行で区切ります。",
           "f6d76cc8f4": "プロキシ バイパス ルール",
@@ -4781,7 +4829,8 @@
           "f00daf6324": "HTTPプロキシ",
           "823e0f15b1": "Orca ネットワーク リクエストとローカル terminal の子のプロキシ URL。",
           "d93c7cd531": "アプリレベルのネットワークルーティングを構成します。",
-          "c46cdbbd4e": "ネットワーク"
+          "c46cdbbd4e": "ネットワーク",
+          "configureProxy": "プロキシを設定"
         },
         "GeneralPane": {
           "d58fccfd84": "ナビゲーション",
@@ -6259,7 +6308,8 @@
           "ad5d036ecc": "マイクの許可を要求できませんでした。音声ディクテーションが有効になっていませんでした。",
           "f9a9cf6928": "音声ディクテーションを有効にする前に、マイクの許可が必要です。",
           "1eac933202": "macOS のプライバシーとセキュリティを開きました。アクセスを許可した後、ディクテーションを再度有効にします。",
-          "cd9fe37556": "マイクの許可が与えられました"
+          "cd9fe37556": "マイクの許可が与えられました",
+          "6fa734ed95": "Delete {{value0}}"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} を削除",
@@ -6553,7 +6603,9 @@
               "cardLayout": "カードレイアウト",
               "workspaceOptions": "ワークスペースオプション",
               "detailed": "詳細"
-            }
+            },
+            "9a115966d3": "閉じるときにトレイへ最小化",
+            "4d5b9427b5": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。"
           }
         },
         "auto": {
@@ -6818,11 +6870,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "設定したアイドル時間が経過したバックグラウンド agent terminals を停止し、再度開いたときに対応セッションを再開します。",
-              "hibernate": "休止",
               "minutes": "分",
               "sleep": "スリープ",
               "terminal": "terminal",
-              "title": "Agent の休止"
+              "title": "Agent のスリープ"
             },
             "newWorktreeCardStyle": {
               "card": "カード",
@@ -8343,6 +8394,9 @@
             "cc06595a3b": "ラインパスのコピー",
             "3596b9668d": "パスのコピー"
           },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "表示"
+          },
           "SourceControl": {
             "1406954883": "すべてのメモをクリアします...",
             "cc05b2d088": "ファイルエクスプローラーで開く",
@@ -9039,6 +9093,9 @@
                 "copyCommand": "Copy command"
               }
             }
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "View"
           }
         }
       },
@@ -11173,7 +11230,9 @@
           "d441032f7e": "一時停止",
           "5918020edc": "走る",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "自動化は利用できなくなりました。",
+          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。"
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo ブランチを検索...",
@@ -11375,7 +11434,15 @@
           "openReviewExternally": "{{value0}} を外部で開く",
           "summary": "{{value0}} 件添付 · PR/MR あり {{value1}} 件 · 要対応 {{value2}} 件 · 保留中 {{value3}} 件 · 成功 {{value4}} 件 · PR なし {{value5}} 件 · 不明 {{value6}} 件",
           "showDetails": "{{value0}} の PR チェック詳細を表示",
-          "hideDetails": "{{value0}} の PR チェック詳細を非表示"
+          "hideDetails": "{{value0}} の PR チェック詳細を非表示",
+          "reviewChecks": "レビューのチェック",
+          "allChecksPassing": "すべてのチェックが成功",
+          "oneWorktree": "1 件のワークツリー",
+          "worktreeCount": "{{value0}} 件のワークツリー",
+          "oneFailing": "1 件失敗",
+          "failingCount": "{{value0}} 件失敗",
+          "onePending": "1 件保留中",
+          "pendingCount": "{{value0}} 件保留中"
         },
         "parentPrChecks": {
           "rowSummary": {

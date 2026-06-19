@@ -191,14 +191,16 @@ export function WorkspaceDirectorySetting({
           )}
         </div>
       )}
-      {/* Why: relative paths resolve per-project (worktree-logic.ts resolveWorkspaceDirForRepo),
-          which the field's label and description don't surface. */}
-      <p className="text-xs text-muted-foreground">
-        {translate(
-          'auto.components.settings.WorkspaceDirectorySetting.6f7a8b9cad',
-          'Use a relative path (e.g. .orca/worktrees) for a per-project location, or an absolute path for one shared folder.'
-        )}
-      </p>
+      {/* Why: this helper documents the client-default workspaceDir resolver;
+          avoid promising host-specific creation semantics here. */}
+      {!editingHost && (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.WorkspaceDirectorySetting.6f7a8b9cad',
+            'Use a relative path (e.g. .orca/worktrees) for a per-project location, or an absolute path for one shared folder.'
+          )}
+        </p>
+      )}
     </SearchableSetting>
   )
 }

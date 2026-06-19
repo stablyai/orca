@@ -35,6 +35,7 @@ export {
   ensurePtyDispatcher,
   getEagerPtyBufferHandle,
   registerEagerPtyBuffer,
+  restorePtyDataHandlersAfterFailedShutdown,
   subscribeToPtyExit,
   unregisterPtyDataHandlers
 } from './pty-dispatcher'
@@ -421,6 +422,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     cwd,
     env,
     command,
+    startupCommandDelivery,
     connectionId,
     worktreeId,
     tabId,
@@ -543,6 +545,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           cwd,
           env,
           command,
+          ...(startupCommandDelivery ? { startupCommandDelivery } : {}),
           ...(connectionId ? { connectionId } : {}),
           ...(options.sessionId ? { sessionId: options.sessionId } : {}),
           worktreeId,

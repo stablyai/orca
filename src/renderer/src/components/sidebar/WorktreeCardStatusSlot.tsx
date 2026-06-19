@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell } from 'lucide-react'
+import { Bell, GitBranch } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
@@ -19,10 +19,15 @@ type WorktreeCardStatusSlotProps = {
   onPointerDown: React.PointerEventHandler<HTMLButtonElement>
   prDisplay?: WorktreeCardPrDisplay | null
   newCardStyle?: boolean
+  hasBranchIdentity?: boolean
   className?: string
 }
 
 const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'done', 'inactive'])
+// Why: a missing review display can also mean provider state is unavailable,
+// so the passive label names the branch cue without claiming no review exists.
+const BRANCH_STATUS_LABEL = 'Branch'
+const branchStatusIconClassName = 'size-4 text-muted-foreground/70'
 
 function getReviewStatusTooltip(review: WorktreeCardPrDisplay): string {
   const label = getReviewLabel(review)
@@ -57,6 +62,7 @@ export function WorktreeCardStatusSlot({
   onPointerDown,
   prDisplay = null,
   newCardStyle = false,
+  hasBranchIdentity = true,
   className
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
@@ -66,15 +72,38 @@ export function WorktreeCardStatusSlot({
     showStatus &&
     prDisplay !== null &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
+  const canShowBranchStatus =
+    newCardStyle &&
+    showStatus &&
+    hasBranchIdentity &&
+    prDisplay === null &&
+    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const passiveStatusLabel =
-    canShowReviewStatus && prDisplay ? getReviewStatusTooltip(prDisplay) : statusLabel
+    canShowReviewStatus && prDisplay
+      ? getReviewStatusTooltip(prDisplay)
+      : canShowBranchStatus
+        ? BRANCH_STATUS_LABEL
+        : statusLabel
   const reviewStatusIconClassName = 'size-4'
+  const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const passiveStatus =
     canShowReviewStatus && prDisplay ? (
       <Tooltip>
         <TooltipTrigger asChild>
           <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
             <ReviewIcon review={prDisplay} className={reviewStatusIconClassName} />
+            <span className="sr-only">{passiveStatusLabel}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>
+          <span>{passiveStatusLabel}</span>
+        </TooltipContent>
+      </Tooltip>
+    ) : canShowBranchStatus ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
+            {branchStatusIcon}
             <span className="sr-only">{passiveStatusLabel}</span>
           </span>
         </TooltipTrigger>
@@ -106,7 +135,7 @@ export function WorktreeCardStatusSlot({
 
   const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'
   const tooltip =
-    showStatus && (!isUnread || (newCardStyle && canShowReviewStatus && prDisplay))
+    showStatus && (!isUnread || (newCardStyle && (canShowBranchStatus || canShowReviewStatus)))
       ? `${passiveStatusLabel} · ${unreadTooltip}`
       : unreadTooltip
 
@@ -135,12 +164,26 @@ export function WorktreeCardStatusSlot({
                 </span>
                 <FilledBellIcon className="absolute -right-1 -top-1 size-[13px] text-amber-500 drop-shadow-sm" />
               </>
+            ) : isUnread && showStatus && canShowBranchStatus ? (
+              <>
+                <span className="inline-flex size-5 items-center justify-center p-0.5">
+                  {branchStatusIcon}
+                </span>
+                <FilledBellIcon className="absolute -right-1 -top-1 size-[13px] text-amber-500 drop-shadow-sm" />
+              </>
             ) : isUnread ? (
               <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
             ) : showStatus && canShowReviewStatus && prDisplay ? (
               <>
                 <span className="inline-flex size-5 items-center justify-center p-0.5 transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0">
                   <ReviewIcon review={prDisplay} className={reviewStatusIconClassName} />
+                </span>
+                <Bell className="absolute size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />
+              </>
+            ) : showStatus && canShowBranchStatus ? (
+              <>
+                <span className="inline-flex size-5 items-center justify-center p-0.5 transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0">
+                  {branchStatusIcon}
                 </span>
                 <Bell className="absolute size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />
               </>

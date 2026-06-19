@@ -23,10 +23,13 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 import { getLocalWorkspacePortSections } from './PortsPanel'
 import {
+  getPortOpenBrowserTooltipLabel,
+  getPortSystemBrowserHint,
   killWorkspacePortForTarget,
   mergeWorkspacePortScans,
   openWorkspacePortInBrowser,
   refreshWorkspacePortScanAfterStop,
+  resolvePortOpenInOrcaBrowser,
   scanWorkspacePortsForTarget
 } from '@/lib/workspace-port-actions'
 
@@ -67,6 +70,17 @@ const runtimeCall = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const openUrl = vi.fn()
 
+function portOpenClick(
+  overrides: Partial<Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>> = {}
+): Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'> {
+  return {
+    metaKey: false,
+    ctrlKey: false,
+    shiftKey: false,
+    ...overrides
+  }
+}
+
 beforeEach(() => {
   localScan.mockReset()
   localKill.mockReset()
@@ -96,6 +110,61 @@ beforeEach(() => {
 })
 
 describe('PortsPanel runtime routing', () => {
+  it('formats platform-specific system-browser hints for port open tooltips', () => {
+    expect(getPortSystemBrowserHint(true)).toBe('⇧⌘+click for system browser')
+    expect(getPortSystemBrowserHint(false)).toBe('Shift+Ctrl+click for system browser')
+    expect(getPortOpenBrowserTooltipLabel('Open in Browser', false)).toBe(
+      'Open in Browser. Shift+Ctrl+click for system browser'
+    )
+  })
+
+  it('maps macOS Shift+Cmd-click to system-browser port routing', () => {
+    expect(
+      resolvePortOpenInOrcaBrowser({
+        settings: { openLinksInApp: true },
+        event: portOpenClick({ metaKey: true, shiftKey: true }),
+        isMac: true
+      })
+    ).toBe(false)
+  })
+
+  it('maps non-macOS Shift+Ctrl-click to system-browser port routing', () => {
+    expect(
+      resolvePortOpenInOrcaBrowser({
+        settings: { openLinksInApp: true },
+        event: portOpenClick({ ctrlKey: true, shiftKey: true }),
+        isMac: false
+      })
+    ).toBe(false)
+  })
+
+  it('does not treat macOS Shift+Ctrl-click as a system-browser port override', () => {
+    expect(
+      resolvePortOpenInOrcaBrowser({
+        settings: { openLinksInApp: true },
+        event: portOpenClick({ ctrlKey: true, shiftKey: true }),
+        isMac: true
+      })
+    ).toBe(true)
+  })
+
+  it('keeps plain and no-event port opens on the saved link-routing setting', () => {
+    expect(
+      resolvePortOpenInOrcaBrowser({
+        settings: { openLinksInApp: true },
+        event: portOpenClick(),
+        isMac: false
+      })
+    ).toBe(true)
+    expect(
+      resolvePortOpenInOrcaBrowser({
+        settings: { openLinksInApp: false },
+        event: null,
+        isMac: false
+      })
+    ).toBe(false)
+  })
+
   it('uses local IPC for local workspace port scans and kills', async () => {
     localScan.mockResolvedValueOnce(emptyScan)
     localKill.mockResolvedValueOnce({ ok: true })
@@ -305,6 +374,31 @@ describe('PortsPanel runtime routing', () => {
         createBrowserTab: createBrowserTab as never,
         setRemoteBrowserPageHandle: setRemoteBrowserPageHandle as never,
         openInOrcaBrowser: false
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(openUrl).toHaveBeenCalledWith('http://127.0.0.1:63468')
+    expect(createBrowserTab).not.toHaveBeenCalled()
+    expect(activateAndRevealWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('opens forced local workspace port clicks in the system browser', async () => {
+    const createBrowserTab = vi.fn()
+    const setRemoteBrowserPageHandle = vi.fn()
+    openUrl.mockResolvedValueOnce(undefined)
+    const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
+      settings: { openLinksInApp: true },
+      event: portOpenClick({ ctrlKey: true, shiftKey: true }),
+      isMac: false
+    })
+
+    await expect(
+      openWorkspacePortInBrowser({
+        port: workspacePort,
+        runtimeTarget: { kind: 'local' },
+        createBrowserTab: createBrowserTab as never,
+        setRemoteBrowserPageHandle: setRemoteBrowserPageHandle as never,
+        openInOrcaBrowser
       })
     ).resolves.toEqual({ ok: true })
 

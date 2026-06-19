@@ -1,5 +1,8 @@
 import { Import, Loader2 } from 'lucide-react'
-import { ORCA_CLI_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import {
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_UPDATE_COMMAND
+} from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
@@ -128,6 +131,7 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               'Enables agents to use Orca CLI commands, including mobile emulator control.'
             )}
             command={ORCA_CLI_SKILL_INSTALL_COMMAND}
+            installedCommand={ORCA_CLI_SKILL_UPDATE_COMMAND}
             terminalTitle="Orca CLI skill setup"
             terminalAriaLabel="Orca CLI skill install terminal"
             terminalWorktreeId="settings-mobile-emulator-orca-cli-skill-terminal"

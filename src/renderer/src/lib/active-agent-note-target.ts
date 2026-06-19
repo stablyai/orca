@@ -19,7 +19,7 @@ import {
   getAgentLabel,
   isExplicitAgentStatusFresh
 } from './agent-status'
-import { resolveRuntimePaneTitleLeafId } from './runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
 
 const ACTIVE_AGENT_PROBE_RPC_TIMEOUT_MS = 3000
 const ACTIVE_AGENT_TERMINAL_LIST_LIMIT = 200
@@ -263,34 +263,11 @@ function getFocusedRuntimePaneTitle(
   state: ActiveTerminalNoteTargetState,
   noteTarget: ActiveTerminalNoteTarget
 ): string | null {
-  const paneTitles = state.runtimePaneTitlesByTabId?.[noteTarget.tabId]
-  if (!paneTitles || Object.keys(paneTitles).length === 0) {
-    return null
-  }
-
-  const layout = state.terminalLayoutsByTabId[noteTarget.tabId]
-  const titleEntries = Object.entries(paneTitles)
-  if (layout?.root) {
-    // Why: split-pane title maps can be sparse; a lone background title must not
-    // enable "send to active agent" for the focused shell pane.
-    for (const [runtimePaneId, title] of titleEntries) {
-      if (resolveRuntimePaneTitleLeafId(layout, runtimePaneId) === noteTarget.leafId) {
-        return title
-      }
-    }
-    return null
-  }
-
-  if (titleEntries.length === 1) {
-    return titleEntries[0][1]
-  }
-
-  for (const [runtimePaneId, title] of titleEntries) {
-    if (resolveRuntimePaneTitleLeafId(layout, runtimePaneId) === noteTarget.leafId) {
-      return title
-    }
-  }
-  return null
+  return resolveRuntimePaneTitleForLeaf(
+    state.terminalLayoutsByTabId[noteTarget.tabId],
+    state.runtimePaneTitlesByTabId?.[noteTarget.tabId],
+    noteTarget.leafId
+  )
 }
 
 function isRecognizedAgentTitle(title: string): boolean {

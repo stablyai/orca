@@ -342,6 +342,30 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
+  it('passes startup command delivery when creating the remote runtime terminal', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      command: "codex 'linked issue context'",
+      startupCommandDelivery: 'shell-ready'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'terminal.create',
+        params: expect.objectContaining({
+          command: "codex 'linked issue context'",
+          startupCommandDelivery: 'shell-ready'
+        })
+      })
+    )
+  })
+
   it('activates pending host session mirrors instead of creating duplicate terminals', async () => {
     runtimeCall.mockImplementation((args) => {
       if (args.method === 'session.tabs.activate') {

@@ -44,57 +44,6 @@ export const CARD_LAYOUT_OPTIONS = [
   }
 ] as const
 
-export const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
-  {
-    id: 'issue',
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.91dfc653e8',
-        'GitHub ticket'
-      )
-    }
-  },
-  {
-    id: 'linear-issue',
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.ca4d3c522e',
-        'Linear issue'
-      )
-    }
-  },
-  {
-    id: 'pr',
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.b8dcc6f321',
-        'PR/MR link'
-      )
-    }
-  },
-  {
-    id: 'comment',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.26c71e536c', 'Notes')
-    }
-  },
-  {
-    id: 'ports',
-    get label() {
-      return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b64d8bcca0', 'Ports')
-    }
-  },
-  {
-    id: 'inline-agents',
-    get label() {
-      return translate(
-        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.d7084e8bc8',
-        'Agent activity'
-      )
-    }
-  }
-]
-
 export const AGENT_ACTIVITY_DISPLAY_OPTIONS: {
   id: AgentActivityDisplayMode
   label: string
@@ -135,6 +84,16 @@ const BASE_WORKTREE_CARD_PROPERTY_OPTIONS: WorktreeCardPropertyOption[] = [
     properties: ['comment'],
     get label() {
       return translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.8d62c68b35', 'Notes')
+    }
+  },
+  {
+    id: 'automation',
+    properties: ['automation'],
+    get label() {
+      return translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.automation',
+        'Automation'
+      )
     }
   },
   {

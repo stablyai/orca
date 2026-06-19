@@ -42,6 +42,28 @@ describe('mobile session startup', () => {
     )
   })
 
+  it('activates an already-selected pending terminal tab after hydration', () => {
+    expect(source).toContain(
+      'const pendingTerminalActivationAttemptRef = useRef<string | null>(null)'
+    )
+    expect(source).toContain('pendingTerminalActivationAttemptRef.current = null')
+
+    const pendingActivationEffect = sliceBetween(
+      "if (!client || connState !== 'connected' || !activePendingTerminalTab) {",
+      'const showLoadingState ='
+    )
+    expect(pendingActivationEffect).toContain(
+      'pendingTerminalActivationAttemptRef.current === activationKey'
+    )
+    expect(pendingActivationEffect).toContain("sendRequest('session.tabs.activate'")
+    expect(pendingActivationEffect).toContain('tabId: activePendingTerminalTab.id')
+    expect(pendingActivationEffect).toContain('leafId: activePendingTerminalTab.leafId')
+    expect(pendingActivationEffect).toContain(
+      'applySessionTabs((response as RpcSuccess).result as SessionTabsResult)'
+    )
+    expect(pendingActivationEffect).toContain('scheduleDelayedAction(() => void fetchSessionTabs()')
+  })
+
   it('keeps dynamic agent rows above fixed New Tab actions', () => {
     const newTabActions = sliceBetween('title="New Tab"', 'onClose={() => setShowCreateTabDrawer')
 

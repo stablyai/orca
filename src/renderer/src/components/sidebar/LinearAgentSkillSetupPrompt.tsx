@@ -8,8 +8,9 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import {
+  LINEAR_TICKETS_SKILL_INSTALL_COMMAND,
   LINEAR_TICKETS_SKILL_NAME,
-  buildAgentFeatureSkillInstallCommand
+  LINEAR_TICKETS_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
   ensureOrcaCliAvailableForAgentSkillTerminal,
@@ -17,7 +18,7 @@ import {
 } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 import {
-  buildSkillInstallCommandForRuntime,
+  buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
   getWslCliDistroRequest
 } from '../settings/CliSkillRuntimeSetup'
@@ -110,11 +111,11 @@ export function LinearAgentSkillSetupPrompt({
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const command = useMemo(
-    () =>
-      buildSkillInstallCommandForRuntime(
-        buildAgentFeatureSkillInstallCommand([LINEAR_TICKETS_SKILL_NAME]),
-        agentRuntime
-      ),
+    () => buildSkillCommandForRuntime(LINEAR_TICKETS_SKILL_INSTALL_COMMAND, agentRuntime),
+    [agentRuntime]
+  )
+  const installedCommand = useMemo(
+    () => buildSkillCommandForRuntime(LINEAR_TICKETS_SKILL_UPDATE_COMMAND, agentRuntime),
     [agentRuntime]
   )
   const terminalShellOverride = getLinearPromptTerminalShellOverride(
@@ -277,6 +278,7 @@ export function LinearAgentSkillSetupPrompt({
       successDescription={successDescription}
       missingLabel={missingLabel}
       command={command}
+      installedCommand={installedCommand}
       terminalShellOverride={terminalShellOverride}
       installed={skill.installed}
       loading={showCheckingModal || cliLoading || skill.loading}

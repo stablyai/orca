@@ -12,17 +12,34 @@ export function buildAgentFeatureSkillInstallCommand(skillNames: readonly string
   return `npx skills add ${ORCA_SKILLS_REPOSITORY_URL} --skill ${skillNames.join(' ')} --global`
 }
 
+export function buildAgentFeatureSkillUpdateCommand(skillName: string): string {
+  const trimmedSkillName = skillName.trim()
+  if (!trimmedSkillName) {
+    throw new Error('A skill name is required.')
+  }
+  return `npx skills update ${trimmedSkillName} --global`
+}
+
 export const ORCA_CLI_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME
 ])
+
+export const ORCA_CLI_SKILL_UPDATE_COMMAND =
+  buildAgentFeatureSkillUpdateCommand(ORCA_CLI_SKILL_NAME)
 
 export const COMPUTER_USE_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   COMPUTER_USE_SKILL_NAME
 ])
 
+export const COMPUTER_USE_SKILL_UPDATE_COMMAND =
+  buildAgentFeatureSkillUpdateCommand(COMPUTER_USE_SKILL_NAME)
+
 export const ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME
 ])
+
+export const ORCHESTRATION_SKILL_UPDATE_COMMAND =
+  buildAgentFeatureSkillUpdateCommand(ORCHESTRATION_SKILL_NAME)
 
 export const ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME,
@@ -32,3 +49,6 @@ export const ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSki
 export const LINEAR_TICKETS_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   LINEAR_TICKETS_SKILL_NAME
 ])
+
+export const LINEAR_TICKETS_SKILL_UPDATE_COMMAND =
+  buildAgentFeatureSkillUpdateCommand(LINEAR_TICKETS_SKILL_NAME)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
+  buildSkillCommandForRuntime,
   buildSkillInstallCommandForRuntime,
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
@@ -17,6 +18,18 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     expect(command).toContain("wsl.exe -d 'Ubuntu' -- sh -c")
     expect(command).toContain('getent passwd')
     expect(command).toContain('npx skills add orchestration --global')
+  })
+
+  it('wraps WSL skill updates with the same selected distro login shell', () => {
+    const command = buildSkillCommandForRuntime('npx skills update orchestration --global', {
+      runtime: 'wsl',
+      wslDistro: 'Fedora Remix',
+      label: 'WSL Fedora Remix'
+    })
+
+    expect(command).toContain("wsl.exe -d 'Fedora Remix' -- sh -c")
+    expect(command).toContain('getent passwd')
+    expect(command).toContain('npx skills update orchestration --global')
   })
 
   it('preserves the selected WSL distro for skill discovery', () => {

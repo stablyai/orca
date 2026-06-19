@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { Ban, Plus, RotateCcw, Terminal } from 'lucide-react'
 import {
   formatKeybinding,
+  isDigitIndexActionId,
   isDoubleTapBinding,
   type KeybindingActionId,
   type KeybindingDefinition,
@@ -41,6 +42,16 @@ type ShortcutBindingRowProps = {
 export type ShortcutTerminalStatus = {
   label: string
   description: string
+}
+
+// Why: digit-index rows store one representative chord (e.g. ⌘1) but fire for
+// 1-9, so the trailing number cap renders the whole range.
+function toDigitRangeKeys(keys: string[]): string[] {
+  const last = keys.at(-1)
+  if (last === undefined || !/^[1-9]$/.test(last)) {
+    return keys
+  }
+  return [...keys.slice(0, -1), `${last}–9`]
 }
 
 export function ShortcutBindingRow({
@@ -172,6 +183,8 @@ export function ShortcutBindingRow({
     : hasBinding
       ? `Change shortcut for ${item.title}`
       : `Add shortcut for ${item.title}`
+
+  const isDigitIndex = isDigitIndexActionId(item.id)
 
   return (
     <SearchableSetting
@@ -315,13 +328,16 @@ export function ShortcutBindingRow({
                 </span>
               ) : hasBinding ? (
                 <span className="flex flex-wrap items-center justify-end gap-1.5">
-                  {effective.map((binding) => (
-                    <ShortcutKeyCombo
-                      key={binding}
-                      keys={formatKeybinding(binding, platform)}
-                      doubleTap={isDoubleTapBinding(binding)}
-                    />
-                  ))}
+                  {effective.map((binding) => {
+                    const keys = formatKeybinding(binding, platform)
+                    return (
+                      <ShortcutKeyCombo
+                        key={binding}
+                        keys={isDigitIndex ? toDigitRangeKeys(keys) : keys}
+                        doubleTap={isDoubleTapBinding(binding)}
+                      />
+                    )
+                  })}
                 </span>
               ) : (
                 <span className="flex items-center gap-1">

@@ -33,6 +33,8 @@ import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import { translate } from '@/i18n/i18n'
+import { createSshBackgroundStartupDelivery } from '@/lib/ssh-background-startup-delivery'
+import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
 
 export type LaunchAgentBackgroundSessionArgs = {
   agent: TuiAgent
@@ -138,39 +140,22 @@ export async function launchAgentBackgroundSession(
     ORCA_WORKTREE_ID: worktreeId
   }
   const sshConnectionId = repo?.connectionId ?? null
-  let pendingSshStartupCommand = sshConnectionId ? startupPlan.launchCommand : null
-  let sshStartupInjectTimer: ReturnType<typeof setTimeout> | null = null
-  const clearSshStartupInjectTimer = (): void => {
-    if (sshStartupInjectTimer !== null) {
-      clearTimeout(sshStartupInjectTimer)
-      sshStartupInjectTimer = null
-    }
-  }
-  const scheduleSshStartupInjection = (ptyId: string): void => {
-    if (!pendingSshStartupCommand) {
-      return
-    }
-    clearSshStartupInjectTimer()
-    sshStartupInjectTimer = setTimeout(() => {
-      sshStartupInjectTimer = null
-      const command = pendingSshStartupCommand
-      if (!command) {
-        return
-      }
-      pendingSshStartupCommand = null
-      // Why: the SSH relay ignores spawn.command for interactive PTYs; hidden
-      // automation tabs must type the startup command themselves after shell output.
-      const submittedCommand =
-        command.endsWith('\r') || command.endsWith('\n') ? command : `${command}\r`
-      window.api.pty.write(ptyId, submittedCommand)
-    }, 50)
-  }
+  const sshStartupDelivery = createSshBackgroundStartupDelivery({
+    command: sshConnectionId ? startupPlan.launchCommand : null,
+    waitForShellReady:
+      Boolean(sshConnectionId) &&
+      shouldUseShellReadyStartupDelivery({
+        command: startupPlan.launchCommand,
+        startupCommandDelivery: startupPlan.startupCommandDelivery
+      }),
+    write: (ptyId, data) => window.api.pty.write(ptyId, data)
+  })
   // Route by the worktree's owner host: the agent terminal must spawn on the host
   // that owns this worktree, not on the focused runtime.
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(store, worktreeId)
   )
-  let ptyId: string
+  let ptyId = ''
   try {
     if (runtimeTarget.kind === 'environment') {
       // Why: runtime environments execute on the server; using local pty.spawn
@@ -181,6 +166,9 @@ export async function launchAgentBackgroundSession(
         {
           worktree: toRuntimeWorktreeSelector(worktreeId),
           command: startupPlan.launchCommand,
+          ...(startupPlan.startupCommandDelivery
+            ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+            : {}),
           env: paneEnv,
           title,
           tabId: tab.id,
@@ -195,7 +183,10 @@ export async function launchAgentBackgroundSession(
         cols: 120,
         rows: 40,
         cwd: worktree.path,
-        ...(sshConnectionId ? {} : { command: startupPlan.launchCommand }),
+        command: startupPlan.launchCommand,
+        ...(!startupPlan.startupCommandDelivery
+          ? {}
+          : { startupCommandDelivery: startupPlan.startupCommandDelivery }),
         env: paneEnv,
         connectionId: sshConnectionId,
         worktreeId,
@@ -234,14 +225,15 @@ export async function launchAgentBackgroundSession(
     exitHandled = true
     unsubscribeExit()
     unsubscribeData()
-    clearSshStartupInjectTimer()
+    sshStartupDelivery.clear()
     useAppStore.getState().clearTabPtyId(tab.id, ptyId)
     onExit?.(ptyId, code)
   }
   const processAgentStatus = createAgentStatusOscProcessor()
   const handleData = (data: string): void => {
+    data = sshStartupDelivery.handleData(data)
     onData?.(data)
-    scheduleSshStartupInjection(ptyId)
+    sshStartupDelivery.schedule(ptyId)
     const processed = processAgentStatus(data)
     for (const payload of processed.payloads) {
       useAppStore.getState().setAgentStatus(paneKey, payload, undefined)

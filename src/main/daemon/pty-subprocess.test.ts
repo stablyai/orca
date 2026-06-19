@@ -951,6 +951,85 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
+  it('keeps plain Codex startup commands on the no-marker wrapper', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        command: 'codex',
+        env: { SHELL: '/bin/zsh' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[1]).toEqual(['-l'])
+    expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+  })
+
+  it('uses shell-ready wrapper for delivery-hinted Codex startup commands', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        command: "codex 'linked issue context'",
+        startupCommandDelivery: 'shell-ready',
+        env: { SHELL: '/bin/zsh' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[1]).toEqual(['-l'])
+    expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+  })
+
+  it('uses shell-ready wrapper for Codex native prefill flags', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        command: "codex --prefill 'linked issue context'",
+        env: { SHELL: '/bin/zsh' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[1]).toEqual(['-l'])
+    expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+  })
+
   it('deletes requested env keys after merging daemon process env', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -1188,6 +1267,65 @@ describe('createPtySubprocess', () => {
       ['/K', 'chcp 65001 > nul'],
       expect.any(Object)
     )
+  })
+
+  it('embeds short PowerShell startup commands in the Windows shell launch', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    let handle: ReturnType<typeof createPtySubprocess>
+    try {
+      handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe',
+        command: "& 'codex' '--no-alt-screen'"
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    const encoded = String(lastCall[1][3])
+    const command = Buffer.from(encoded, 'base64').toString('utf16le')
+    expect(command.trimEnd().endsWith("& 'codex' '--no-alt-screen'")).toBe(true)
+    expect(handle!.startupCommandDeliveredInShellArgs).toBe(true)
+  })
+
+  it('keeps oversized Windows startup commands on PTY stdin delivery', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    let handle: ReturnType<typeof createPtySubprocess>
+    try {
+      handle = createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'cmd.exe',
+        command: `codex ${'x'.repeat(7000)}`
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'cmd.exe',
+      ['/K', 'chcp 65001 > nul'],
+      expect.any(Object)
+    )
+    expect(handle!.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
   it('launches Git Bash with login args and CHERE_INVOKING on Windows', () => {

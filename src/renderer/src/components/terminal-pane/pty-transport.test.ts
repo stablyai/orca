@@ -746,6 +746,27 @@ describe('createIpcPtyTransport', () => {
     expect(onPtyExit).toHaveBeenCalledWith('pty-1')
   })
 
+  it('restores data handlers when an intentional shutdown fails before exit', async () => {
+    const {
+      createIpcPtyTransport,
+      restorePtyDataHandlersAfterFailedShutdown,
+      unregisterPtyDataHandlers
+    } = await import('./pty-transport')
+    const onDataCallback = vi.fn()
+    const transport = createIpcPtyTransport()
+
+    await transport.connect({ url: '', callbacks: { onData: onDataCallback } })
+
+    const snapshots = unregisterPtyDataHandlers(['pty-1'])
+    onData?.({ id: 'pty-1', data: 'final burst while detached' })
+    expect(onDataCallback).not.toHaveBeenCalled()
+
+    restorePtyDataHandlersAfterFailedShutdown(snapshots)
+    onData?.({ id: 'pty-1', data: 'live again' })
+
+    expect(onDataCallback).toHaveBeenCalledWith('live again')
+  })
+
   it('unregisterPtyDataHandlers cancels staleTitleTimer so it cannot fire stale idle transition', async () => {
     vi.useFakeTimers()
     try {

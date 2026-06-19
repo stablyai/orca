@@ -31,6 +31,9 @@ export type SubprocessHandle = {
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(): string | null
+  /** True when shell launch args already delivered the startup command, so the
+   *  terminal host must skip its stdin fallback write. */
+  startupCommandDeliveredInShellArgs?: boolean
   write(data: string): void
   resize(cols: number, rows: number): void
   kill(): void
@@ -52,6 +55,12 @@ export type SessionOptions = {
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
   scrollback?: number
+  // Why: fired once the session reaches a terminal state (natural exit or
+  // kill-timeout force-dispose) so the owner (TerminalHost) can reap it —
+  // dispose the headless emulator and drop it from its session map. Without a
+  // reaper, dead sessions (and their ~5000-row scrollback emulators) accumulate
+  // for the lifetime of the long-lived daemon process.
+  onExit?: (code: number) => void
 }
 
 type AttachedClient = {
@@ -69,6 +78,7 @@ export class Session {
   private _disposed = false
   private emulator: HeadlessEmulator
   private subprocess: SubprocessHandle
+  private readonly onSessionExit?: (code: number) => void
   private attachedClients: AttachedClient[] = []
   private preReadyStdinQueue: string[] = []
   private markerBuffer = ''
@@ -83,6 +93,7 @@ export class Session {
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.subprocess = opts.subprocess
+    this.onSessionExit = opts.onExit
     const size = normalizePtySize(opts.cols, opts.rows)
     this.emulator = new HeadlessEmulator({
       cols: size.cols,
@@ -321,6 +332,9 @@ export class Session {
     }
     this.#teardownSubprocess()
     this._state = 'exited'
+    // Why: free the headless emulator's scrollback here too (this path skips
+    // dispose()). Matches forceDispose(); reaping just drops the map entry.
+    this.emulator.dispose()
   }
 
   /** Private: shared teardown helper called by dispose(), forceDispose(), and
@@ -415,10 +429,10 @@ export class Session {
     // Why: release the ptmx fd on the natural-exit path. Without this, the
     // node-pty wrapper's _socket stays alive until GC and the master fd leaks
     // (see docs/fix-pty-fd-leak.md). Do NOT route through #teardownSubprocess:
-    // that helper flips `_disposed = true`, which would short-circuit a later
-    // Session.dispose() call from TerminalHost's dead-session cleanup at
-    // terminal-host.ts:83 — skipping attachedClients/emulator/postReadyFlushGate
-    // cleanup. Call subprocess.dispose() directly inside try/catch.
+    // that helper flips `_disposed = true`, which would short-circuit the later
+    // Session.dispose() call from TerminalHost.reapSession (wired via onExit
+    // below) — skipping attachedClients/emulator/postReadyFlushGate cleanup.
+    // Call subprocess.dispose() directly inside try/catch.
     try {
       this.subprocess.dispose()
     } catch {
@@ -428,6 +442,10 @@ export class Session {
     for (const client of this.attachedClients) {
       client.onExit(code)
     }
+
+    // Why: hand off to the owner's reaper so the emulator is disposed and the
+    // session dropped from the host map; otherwise dead sessions accumulate.
+    this.onSessionExit?.(code)
   }
 
   private scanForShellMarker(data: string): void {
@@ -507,5 +525,9 @@ export class Session {
     for (const client of clients) {
       client.onExit(-1)
     }
+
+    // Why: reap from the host map on the kill-timeout path too (emulator already
+    // disposed above; reapSession's dispose() call is a no-op and just drops it).
+    this.onSessionExit?.(-1)
   }
 }

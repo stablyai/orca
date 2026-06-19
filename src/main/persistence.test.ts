@@ -510,6 +510,56 @@ describe('Store', () => {
     expect(ui.setupGuideBrowserMilestoneLegacyComplete).toBe(false)
   })
 
+  it('defaults minimizeToTrayOnClose to false when unset', async () => {
+    const store = await createStore()
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('coerces loaded minimizeToTrayOnClose to false unless stored as true', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      settings: {
+        minimizeToTrayOnClose: 'true' as unknown as boolean
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('persists minimizeToTrayOnClose true/false round-trip', async () => {
+    const store = await createStore()
+    store.updateSettings({ minimizeToTrayOnClose: true })
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(true)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.minimizeToTrayOnClose).toBe(true)
+    store.updateSettings({ minimizeToTrayOnClose: false })
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('coerces non-boolean minimizeToTrayOnClose payloads to a strict boolean', async () => {
+    const store = await createStore()
+    // Why: a renderer-supplied non-bool must never persist as a truthy non-bool
+    // that would later read as "tray-minimize on".
+    store.updateSettings({ minimizeToTrayOnClose: 'true' as unknown as boolean })
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+    store.updateSettings({ minimizeToTrayOnClose: 1 as unknown as boolean })
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+    store.updateSettings({ minimizeToTrayOnClose: null as unknown as boolean })
+    expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('defaults trayMinimizeNoticeShown to false and persists it strictly', async () => {
+    const store = await createStore()
+    expect(store.getUI().trayMinimizeNoticeShown).toBe(false)
+    store.updateUI({ trayMinimizeNoticeShown: true })
+    expect(store.getUI().trayMinimizeNoticeShown).toBe(true)
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getUI().trayMinimizeNoticeShown).toBe(true)
+  })
+
   it('hides the setup guide sidebar entry for existing users backfilled as completed', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -5084,6 +5134,7 @@ describe('Store', () => {
       'issue',
       'linear-issue',
       'pr',
+      'automation',
       'comment',
       'ports',
       'inline-agents'
@@ -5209,7 +5260,7 @@ describe('Store', () => {
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
   })
 
-  it('uses the default preset when card properties are missing', async () => {
+  it('uses the compact preset when card properties are missing in compact mode', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -5222,17 +5273,57 @@ describe('Store', () => {
     const store = await createStore()
 
     expect(store.getSettings().compactWorktreeCards).toBe(true)
-    expect(store.getUI().worktreeCardProperties).toEqual([
-      'status',
-      'unread',
-      'issue',
-      'linear-issue',
-      'pr',
-      'comment',
-      'ports',
-      'inline-agents'
-    ])
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread'])
+    expect(store.getUI().worktreeCardProperties).not.toContain('automation')
   })
+
+  it('preserves the current defaulted Compact preset without expanding display toggles', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true },
+      ui: {
+        worktreeCardProperties: ['status', 'unread'],
+        _worktreeCardModeDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().compactWorktreeCards).toBe(true)
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread'])
+    expect(store.getUI().worktreeCardProperties).not.toContain('ports')
+    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+  })
+
+  it.each([
+    ['raw', ['status', 'automation']],
+    ['normalized', ['status', 'unread', 'automation']]
+  ] as const)(
+    'migrates the old %s defaulted compact preset without automation',
+    async (_, props) => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: { compactWorktreeCards: true },
+        ui: {
+          worktreeCardProperties: [...props],
+          _worktreeCardModeDefaulted: true
+        },
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+      const store = await createStore()
+
+      expect(store.getSettings().compactWorktreeCards).toBe(true)
+      expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread'])
+      expect(store.getUI().worktreeCardProperties).not.toContain('automation')
+      expect(store.getUI()._worktreeCardModeDefaulted).toBe(true)
+    }
+  )
 
   // ── GitHub Cache ───────────────────────────────────────────────────
 

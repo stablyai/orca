@@ -11,10 +11,13 @@ describe('worktree card property options', () => {
 
     expect(WORKTREE_CARD_PROPERTY_OPTIONS).toEqual(options)
     expect(options.map((option) => option.id)).toContain('tasks')
+    expect(options.map((option) => option.id)).toContain('automation')
     expect(options.find((option) => option.id === 'tasks')?.properties).toEqual(
       TASK_WORKTREE_CARD_PROPERTIES
     )
+    expect(options.find((option) => option.id === 'automation')?.properties).toEqual(['automation'])
     expect(options.map((option) => option.label)).toContain('Tasks')
+    expect(options.map((option) => option.label)).toContain('Automation')
     expect(options.map((option) => option.label)).not.toContain('GitHub issues')
     expect(options.map((option) => option.label)).not.toContain('Linear issues')
   })
@@ -28,7 +31,9 @@ describe('worktree card property options', () => {
     expect(options.find((option) => option.id === 'linear-issue')?.properties).toEqual([
       'linear-issue'
     ])
+    expect(options.find((option) => option.id === 'automation')?.properties).toEqual(['automation'])
     expect(options.map((option) => option.label)).toContain('GitHub issues')
     expect(options.map((option) => option.label)).toContain('Linear issues')
+    expect(options.map((option) => option.label)).toContain('Automation')
   })
 })

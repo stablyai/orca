@@ -125,6 +125,16 @@ describe('HistoryManager', () => {
       expect(data.rehydrateSequences).toBe('\x1b[?2004h\x1b[?1h')
     })
 
+    it('preserves OSC link ranges in checkpoint', async () => {
+      await mgr.openSession('sess-1', { cwd: '/tmp', cols: 80, rows: 24 })
+      const oscLinks = [{ row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }]
+
+      await mgr.checkpoint('sess-1', makeSnapshot({ oscLinks }))
+
+      const data = JSON.parse(readFileSync(sessionPath(dir, 'sess-1', 'checkpoint.json'), 'utf-8'))
+      expect(data.oscLinks).toEqual(oscLinks)
+    })
+
     it('ignores checkpoint for unknown sessions', async () => {
       await mgr.checkpoint('nonexistent', makeSnapshot())
     })

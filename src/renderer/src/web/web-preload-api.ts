@@ -31,6 +31,7 @@ import {
   getDefaultSettings,
   getDefaultUIState,
   getDefaultWorkspaceSession,
+  getWorktreeCardModeProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION
@@ -1132,7 +1133,8 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         parentWorkspace: args.parentWorkspace,
         workspaceStatus: args.workspaceStatus,
-        manualOrder: args.manualOrder
+        manualOrder: args.manualOrder,
+        automationProvenanceRequest: args.automationProvenanceRequest
       })
     },
     // Why: the runtime create path emits no two-phase progress, so the web
@@ -2646,6 +2648,9 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
       runtimeSettings.experimentalNewWorktreeCardStyle =
         result.settings.experimentalNewWorktreeCardStyle
     }
+    if (typeof result.settings.compactWorktreeCards === 'boolean') {
+      runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
+    }
     const next = mergeSettings(local, runtimeSettings)
     writeJson(SETTINGS_STORAGE_KEY, next)
     return next
@@ -2665,6 +2670,9 @@ async function syncRuntimeBackedSettings(
   const runtimeUpdates: Partial<GlobalSettings> = {}
   if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
     runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
+  }
+  if (typeof updates.compactWorktreeCards === 'boolean') {
+    runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
   }
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext
@@ -2751,11 +2759,19 @@ function closeWebOnboarding(base: OnboardingState): OnboardingState {
 function readLocalWebUIState(): PersistedUIState {
   const defaults = getDefaultUIState()
   const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  if (typeof stored.rightSidebarOpen === 'boolean') {
-    return mergeWebUIState(defaults, stored)
-  }
   const storedSettings = getStoredSettings()
-  return mergeWebUIState(defaults, {
+  const base = {
+    ...defaults,
+    // Why: when runtime ui.get is unavailable, web fallback must mirror the
+    // main-process missing-property seed from the legacy card layout mode.
+    worktreeCardProperties: getWorktreeCardModeProperties(
+      storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
+    )
+  }
+  if (typeof stored.rightSidebarOpen === 'boolean') {
+    return mergeWebUIState(base, stored)
+  }
+  return mergeWebUIState(base, {
     ...stored,
     // Why: web fallback lacks main-process normalization, so migrate the
     // retired setting only when the local UI preference is still absent.

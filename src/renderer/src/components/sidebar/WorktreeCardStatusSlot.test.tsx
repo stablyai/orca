@@ -148,6 +148,46 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('bg-neutral-500/40')
   })
 
+  it('uses a branch icon instead of the quiet active dot when new card style has no review', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        newCardStyle
+      />
+    )
+
+    expect(markup).toContain('Branch')
+    expect(markup).toContain('lucide-git-branch')
+    expect(markup).toContain('text-muted-foreground/70')
+    expect(markup).not.toContain('bg-emerald-500')
+  })
+
+  it('keeps the quiet dot when the row has no branch identity', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardStatusSlot
+        worktreeId="wt-1"
+        showStatus
+        showUnreadAction={false}
+        isUnread={false}
+        unreadTooltip="Mark as unread"
+        onPointerDown={vi.fn()}
+        onToggleUnread={vi.fn()}
+        newCardStyle
+        hasBranchIdentity={false}
+      />
+    )
+
+    expect(markup).toContain('Active')
+    expect(markup).toContain('bg-emerald-500')
+    expect(markup).not.toContain('lucide-git-branch')
+  })
+
   it('keeps working activity ahead of PR status in new card style', () => {
     mocks.status = 'working'
     const markup = renderToStaticMarkup(
@@ -237,23 +277,26 @@ describe('WorktreeCardStatusSlot', () => {
     expect(markup).not.toContain('bg-emerald-500')
   })
 
-  it('keeps the new style unread status dot in the stable lane footprint', () => {
+  it('overlays unread on the no-review branch icon in new card style', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardStatusSlot
         worktreeId="wt-1"
         showStatus
         showUnreadAction
-        isUnread={false}
-        unreadTooltip="Mark as unread"
+        isUnread
+        unreadTooltip="Mark as read"
         onPointerDown={vi.fn()}
         onToggleUnread={vi.fn()}
         newCardStyle
       />
     )
 
-    expect(markup).toContain('Active · Mark as unread')
+    expect(markup).toContain('Branch · Mark as read')
     expect(markup).toContain(
       'group/unread relative flex cursor-pointer items-center justify-center rounded transition-all size-5'
     )
+    expect(markup).toContain('lucide-git-branch')
+    expect(markup).toContain('absolute -right-1 -top-1 size-[13px] text-amber-500')
+    expect(markup).not.toContain('bg-emerald-500')
   })
 })

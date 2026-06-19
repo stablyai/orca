@@ -83,6 +83,10 @@ import {
   type SourceControlTreeNode
 } from './source-control-tree'
 import {
+  buildActiveOpenFileSignature,
+  buildActiveOpenRowKeys
+} from './source-control-active-open-file-keys'
+import {
   SourceControlDiscardDialog,
   type PendingDiscardConfirmation
 } from './source-control-discard-dialog'
@@ -92,12 +96,7 @@ import {
 } from './git-status-refresh'
 import { describeForkPushTarget } from './fork-push-target-label'
 import { toast } from 'sonner'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
+import { SourceControlEntryContextMenu } from './source-control-entry-context-menu'
 import {
   Dialog,
   DialogClose,
@@ -1309,11 +1308,16 @@ function SourceControlInner(): React.JSX.Element {
         )
       : null
   const activePrFromQueue = activePrCacheKey ? (prCache[activePrCacheKey]?.data ?? null) : null
-  const hostedReview: HostedReviewInfo | null = hostedReviewCacheKey
-    ? activePrFromQueue
-      ? { provider: 'github', ...activePrFromQueue, status: activePrFromQueue.checksStatus }
-      : (hostedReviewEntry?.data ?? null)
-    : null
+  const hostedReviewEntryData = hostedReviewEntry?.data ?? null
+  const hostedReview: HostedReviewInfo | null = useMemo(() => {
+    if (!hostedReviewCacheKey) {
+      return null
+    }
+    if (activePrFromQueue) {
+      return { provider: 'github', ...activePrFromQueue, status: activePrFromQueue.checksStatus }
+    }
+    return hostedReviewEntryData
+  }, [activePrFromQueue, hostedReviewCacheKey, hostedReviewEntryData])
   const effectiveBaseRef = resolveSourceControlBaseRef({
     worktreeBaseRef: normalizedWorktreeBaseRef,
     reviewBaseRefName: hostedReview?.baseRefName,
@@ -3879,6 +3883,43 @@ function SourceControlInner(): React.JSX.Element {
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
   )
 
+  // Why: a stable string signature keeps this selector referentially stable so
+  // the panel only re-renders when the active editor file (or its diff source)
+  // actually changes. Gated on the visible tab being an editor so the highlight
+  // clears when the user switches to a terminal or browser surface.
+  const activeOpenFileSignature = useAppStore((s) => {
+    if (!activeWorktreeId) {
+      return null
+    }
+    if (s.activeTabTypeByWorktree?.[activeWorktreeId] !== 'editor') {
+      return null
+    }
+    const activeFileId = s.activeFileIdByWorktree?.[activeWorktreeId]
+    if (!activeFileId) {
+      return null
+    }
+    const activeFile = s.openFiles?.find(
+      (file) => file.id === activeFileId && file.worktreeId === activeWorktreeId
+    )
+    if (!activeFile) {
+      return null
+    }
+    return buildActiveOpenFileSignature(activeFile.diffSource, activeFile.relativePath)
+  })
+
+  const activeOpenAvailableRowKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const entry of visibleSelectionEntries) {
+      keys.add(entry.key)
+    }
+    return keys
+  }, [visibleSelectionEntries])
+
+  const activeOpenRowKeys = useMemo(
+    () => buildActiveOpenRowKeys(activeOpenFileSignature, activeOpenAvailableRowKeys),
+    [activeOpenAvailableRowKeys, activeOpenFileSignature]
+  )
+
   const handleOpenDiff = useCallback(
     (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => {
       if (!activeWorktreeId || !worktreePath) {
@@ -4309,12 +4350,9 @@ function SourceControlInner(): React.JSX.Element {
     if (shouldResetToLoading) {
       beginGitBranchCompareRequest(activeWorktreeId, requestKey, effectiveBaseRef)
     } else {
-      useAppStore.setState((s) => ({
-        gitBranchCompareRequestKeyByWorktree: {
-          ...s.gitBranchCompareRequestKeyByWorktree,
-          [activeWorktreeId]: requestKey
-        }
-      }))
+      beginGitBranchCompareRequest(activeWorktreeId, requestKey, effectiveBaseRef, {
+        preserveExistingSummary: true
+      })
     }
 
     try {
@@ -5526,9 +5564,11 @@ function SourceControlInner(): React.JSX.Element {
                                 worktreePath={worktreePath}
                                 depth={node.depth}
                                 selected={selectedKeySet.has(node.key)}
+                                isOpenFile={activeOpenRowKeys.has(node.key)}
                                 onSelect={handleSelect}
                                 onContextMenu={handleContextMenu}
                                 onRevealInExplorer={revealInExplorer}
+                                connectionId={activeConnectionId}
                                 onOpen={handleOpenDiff}
                                 onStage={handleStage}
                                 onUnstage={handleUnstage}
@@ -5548,9 +5588,11 @@ function SourceControlInner(): React.JSX.Element {
                                 currentWorktreeId={currentWorktreeId}
                                 worktreePath={worktreePath}
                                 selected={selectedKeySet.has(key)}
+                                isOpenFile={activeOpenRowKeys.has(key)}
                                 onSelect={handleSelect}
                                 onContextMenu={handleContextMenu}
                                 onRevealInExplorer={revealInExplorer}
+                                connectionId={activeConnectionId}
                                 onOpen={handleOpenDiff}
                                 onStage={handleStage}
                                 onUnstage={handleUnstage}
@@ -5629,6 +5671,7 @@ function SourceControlInner(): React.JSX.Element {
                           worktreePath={worktreePath}
                           depth={node.depth}
                           onRevealInExplorer={revealInExplorer}
+                          connectionId={activeConnectionId}
                           onOpen={(event) => openCommittedDiff(node.entry, event)}
                           commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
                           showPathHint={false}
@@ -5642,6 +5685,7 @@ function SourceControlInner(): React.JSX.Element {
                         currentWorktreeId={currentWorktreeId}
                         worktreePath={worktreePath}
                         onRevealInExplorer={revealInExplorer}
+                        connectionId={activeConnectionId}
                         onOpen={(event) => openCommittedDiff(entry, event)}
                         commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                       />
@@ -7436,9 +7480,11 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   worktreePath,
   depth = 0,
   selected,
+  isOpenFile = false,
   onSelect,
   onContextMenu,
   onRevealInExplorer,
+  connectionId,
   onOpen,
   onStage,
   onUnstage,
@@ -7452,9 +7498,11 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   worktreePath: string
   depth?: number
   selected?: boolean
+  isOpenFile?: boolean
   onSelect?: (e: React.MouseEvent, key: string, entry: GitStatusEntry) => void
   onContextMenu?: (key: string) => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
+  connectionId?: string | null
   onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   onStage: (filePath: string) => Promise<void>
   onUnstage: (filePath: string) => Promise<void>
@@ -7495,6 +7543,8 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      connectionId={connectionId}
+      onView={() => onOpen(entry)}
       onRevealInExplorer={onRevealInExplorer}
       onOpenChange={(open) => {
         if (open && onContextMenu) {
@@ -7506,9 +7556,14 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         data-testid="source-control-entry"
         data-source-control-path={entry.path}
         data-source-control-area={entry.area}
+        // Why: the currently open file gets the strongest "current row" accent
+        // (full `bg-accent` + `data-current`) per the styleguide, outranking the
+        // lighter bulk-selection tint so the open file always reads as active.
+        data-current={isOpenFile ? 'true' : undefined}
         className={cn(
-          'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors hover:bg-accent/40',
-          selected && 'bg-accent/60'
+          'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
+          isOpenFile ? 'bg-accent hover:bg-accent' : 'hover:bg-accent/40',
+          !isOpenFile && selected && 'bg-accent/60'
         )}
         style={{
           paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`
@@ -7696,6 +7751,7 @@ function BranchEntryRow({
   worktreePath,
   depth = 0,
   onRevealInExplorer,
+  connectionId,
   onOpen,
   commentCount,
   showPathHint = true
@@ -7705,7 +7761,8 @@ function BranchEntryRow({
   worktreePath: string
   depth?: number
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
-  onOpen: (event: SourceControlRowOpenEvent) => void
+  connectionId?: string | null
+  onOpen: (event?: SourceControlRowOpenEvent) => void
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
@@ -7718,6 +7775,8 @@ function BranchEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      connectionId={connectionId}
+      onView={() => onOpen()}
       onRevealInExplorer={onRevealInExplorer}
     >
       <div
@@ -7763,42 +7822,6 @@ function BranchEntryRow({
         </span>
       </div>
     </SourceControlEntryContextMenu>
-  )
-}
-
-function SourceControlEntryContextMenu({
-  currentWorktreeId,
-  absolutePath,
-  onRevealInExplorer,
-  onOpenChange,
-  children
-}: {
-  currentWorktreeId: string
-  absolutePath?: string
-  onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
-  onOpenChange?: (open: boolean) => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  const handleOpenInFileExplorer = useCallback(() => {
-    if (!absolutePath) {
-      return
-    }
-    onRevealInExplorer(currentWorktreeId, absolutePath)
-  }, [absolutePath, currentWorktreeId, onRevealInExplorer])
-
-  return (
-    <ContextMenu onOpenChange={onOpenChange}>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem onSelect={handleOpenInFileExplorer} disabled={!absolutePath}>
-          <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SourceControl.cc05b2d088',
-            'Open in File Explorer'
-          )}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
   )
 }
 

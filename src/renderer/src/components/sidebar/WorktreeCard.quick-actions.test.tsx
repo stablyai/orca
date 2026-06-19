@@ -216,6 +216,7 @@ describe('WorktreeCard quick actions', () => {
       />
     )
 
+    expect(markup).not.toMatch(/Will be renamed from first agent message|rename pending/)
     expect(markup).not.toContain(
       'aria-label="This worktree will be renamed from the first agent message"'
     )

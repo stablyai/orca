@@ -14,6 +14,8 @@ const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
 }))
 
+const itOnPosix = process.platform === 'win32' ? it.skip : it
+
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
   return {
@@ -123,6 +125,37 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const result = await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1' })
       expect(result.id).toContain('wt-1')
     })
+
+    itOnPosix('keeps plain Codex startup on the short daemon shell-ready timeout', async () => {
+      await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        command: 'codex',
+        env: { SHELL: '/bin/zsh' }
+      })
+
+      await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
+      expect(lastSubprocess.write).toHaveBeenCalledWith('codex\n')
+    })
+
+    itOnPosix('waits for shell-ready for delivery-hinted Codex startup', async () => {
+      await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        command: "codex 'linked issue context'",
+        startupCommandDelivery: 'shell-ready',
+        env: { SHELL: '/bin/zsh' }
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 350))
+      expect(lastSubprocess.write).not.toHaveBeenCalled()
+
+      lastSubprocess._simulateData('\x1b]777;orca-shell-ready\x07')
+      lastSubprocess._simulateData('\r\nuser@host $ ')
+
+      await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)
+      expect(lastSubprocess.write).toHaveBeenCalledWith("codex 'linked issue context'\n")
+    })
   })
 
   describe('write', () => {
@@ -157,6 +190,24 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await adapter.shutdown(id, { immediate: true })
       expect(lastSubprocess.kill).not.toHaveBeenCalled()
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
+    })
+  })
+
+  describe('sessionsNeedingFullCheckpoint cleanup (leak regression)', () => {
+    // Why: the cold-restore path flags a session for a full checkpoint. If the
+    // session exits before that checkpoint lands, the flag was never cleared and
+    // leaked a permanent Set entry for the daemon's lifetime.
+    it('clears the pending full-checkpoint flag when a session exits', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const internals = adapter as unknown as { sessionsNeedingFullCheckpoint: Set<string> }
+      // Simulate the cold-restore reanchor path having flagged this session.
+      internals.sessionsNeedingFullCheckpoint.add(id)
+      expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(true)
+
+      lastSubprocess._simulateExit(0)
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(internals.sessionsNeedingFullCheckpoint.has(id)).toBe(false)
     })
   })
 
@@ -777,6 +828,49 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       })
     })
 
+    it('returns cold restore OSC link ranges from checkpoint history', async () => {
+      const sessionId = 'cold-restore-osc-links'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      const oscLinks = [{ row: 0, startCol: 0, endCol: 5, uri: 'https://example.com/issue/1234' }]
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/myapp',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-04-15T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(
+        join(sessionDir, 'checkpoint.json'),
+        JSON.stringify({
+          snapshotAnsi: '#1234\r\n',
+          scrollbackAnsi: '',
+          oscLinks,
+          rehydrateSequences: '',
+          cwd: '/projects/myapp',
+          cols: 80,
+          rows: 24,
+          modes: {
+            bracketedPaste: false,
+            mouseTracking: false,
+            applicationCursor: false,
+            alternateScreen: false
+          },
+          scrollbackLines: 0,
+          checkpointedAt: '2026-04-15T11:00:00Z'
+        })
+      )
+
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(result.coldRestore?.oscLinks).toEqual(oscLinks)
+    })
+
     it('re-anchors a cold-restored session with a full checkpoint on the first tick', async () => {
       const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
       const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
@@ -881,7 +975,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       const internals = historyAdapter as unknown as {
-        coldRestoreCache: Map<string, { scrollback: string; cwd: string }>
+        coldRestoreCache: Map<string, { scrollback: string; cwd: string; oscLinks?: unknown[] }>
       }
 
       await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
@@ -911,7 +1005,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       const internals = historyAdapter as unknown as {
-        coldRestoreCache: Map<string, { scrollback: string; cwd: string }>
+        coldRestoreCache: Map<string, { scrollback: string; cwd: string; oscLinks?: unknown[] }>
       }
 
       await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })

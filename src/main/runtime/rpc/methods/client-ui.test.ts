@@ -21,6 +21,7 @@ describe('client UI RPC methods', () => {
       visibleTaskProviders: ['github', 'gitlab'],
       defaultRepoSelection: ['repo-1'],
       defaultLinearTeamSelection: ['team-1'],
+      compactWorktreeCards: true,
       githubProjects: {
         pinned: [],
         recent: [],
@@ -51,6 +52,7 @@ describe('client UI RPC methods', () => {
       defaultRepoSelection: ['repo-1', 'repo-2'],
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       experimentalNewWorktreeCardStyle: true,
+      compactWorktreeCards: true,
       githubProjects: {
         pinned: [],
         recent: [],
@@ -74,6 +76,7 @@ describe('client UI RPC methods', () => {
         visibleTaskProviders: ['github', 'linear'],
         defaultTaskViewPreset: 'my-prs',
         experimentalNewWorktreeCardStyle: true,
+        compactWorktreeCards: true,
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
         githubProjects: settings.githubProjects
@@ -87,6 +90,7 @@ describe('client UI RPC methods', () => {
       visibleTaskProviders: ['github', 'linear'],
       defaultTaskViewPreset: 'my-prs',
       experimentalNewWorktreeCardStyle: true,
+      compactWorktreeCards: true,
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects
@@ -134,6 +138,7 @@ describe('client UI RPC methods', () => {
       rightSidebarTab: 'checks',
       rightSidebarExplorerView: 'search',
       showActiveOnly: true,
+      hideAutomationGeneratedWorkspaces: true,
       filterRepoIds: ['repo-1']
     }
     const runtime = {
@@ -149,6 +154,7 @@ describe('client UI RPC methods', () => {
         rightSidebarExplorerView: 'search',
         showActiveOnly: true,
         hideSleepingWorkspaces: true,
+        hideAutomationGeneratedWorkspaces: true,
         filterRepoIds: ['repo-1']
       })
     )
@@ -159,6 +165,7 @@ describe('client UI RPC methods', () => {
       rightSidebarExplorerView: 'search',
       showActiveOnly: true,
       hideSleepingWorkspaces: true,
+      hideAutomationGeneratedWorkspaces: true,
       filterRepoIds: ['repo-1']
     })
     expect(response).toMatchObject({ ok: true, result: { ui: updated } })
@@ -167,7 +174,7 @@ describe('client UI RPC methods', () => {
   it('accepts persisted literal UI arrays and nested UI state', async () => {
     const updated: PersistedUIState = {
       ...getDefaultUIState(),
-      worktreeCardProperties: ['status', 'branch', 'inline-agents'],
+      worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
       statusBarItems: ['codex'],
       taskResumeState: {
@@ -203,7 +210,7 @@ describe('client UI RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const payload = {
-      worktreeCardProperties: ['status', 'branch', 'inline-agents'],
+      worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
       statusBarItems: ['codex'],
       taskResumeState: {
@@ -236,7 +243,7 @@ describe('client UI RPC methods', () => {
 
     expect(runtime.updateUIState).toHaveBeenCalledWith({
       ...payload,
-      worktreeCardProperties: ['status', 'unread', 'branch', 'inline-agents']
+      worktreeCardProperties: ['status', 'unread', 'branch', 'automation', 'inline-agents']
     })
     expect(response).toMatchObject({ ok: true, result: { ui: updated } })
   })

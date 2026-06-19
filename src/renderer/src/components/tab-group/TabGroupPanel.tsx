@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo } from 'react'
+import { Suspense, useMemo } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { Columns2, Ellipsis, Rows2, X } from 'lucide-react'
 import { useAppStore } from '../../store'
@@ -345,11 +346,11 @@ export default function TabGroupPanel({
           {/* Why: Electron's native drag hit-test ignores z-index — a no-drag
               element only overrides drag when it's a DOM descendant, not a
               sibling in another branch. The floating right-sidebar toggle and
-              the fixed-position window-controls overlay on Windows both sit in
-              separate DOM trees, so we need an explicit no-drag child here to
-              punch holes in the drag surface beneath them. The sidebar toggle
-              is 40px (w-10); window controls add --window-controls-width
-              (138px on Windows, 0px elsewhere) on top. */}
+              the fixed-position window-controls overlay for custom desktop
+              chrome both sit in separate DOM trees, so we need an explicit
+              no-drag child here to punch holes in the drag surface beneath
+              them. The sidebar toggle is 40px (w-10); window controls add
+              --window-controls-width (138px when active, 0px otherwise) on top. */}
           {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
             <div
               className="shrink-0"

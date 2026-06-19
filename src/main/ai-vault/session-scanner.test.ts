@@ -613,9 +613,7 @@ describe('scanAiVaultSessions', () => {
       "cd '/tmp/openclaw' && openclaw --resume 'openclaw-session'"
     )
     expect(commandByAgent.get('pi')).toBe("cd '/tmp/pi' && pi --session 'pi-session'")
-    expect(commandByAgent.get('devin')).toBe(
-      "cd '/tmp/devin' && devin --resume 'devin-session'"
-    )
+    expect(commandByAgent.get('devin')).toBe("cd '/tmp/devin' && devin --resume 'devin-session'")
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
   })
 })

@@ -62,10 +62,7 @@ export function getWslCliDistroRequest(
     : undefined
 }
 
-export function buildSkillInstallCommandForRuntime(
-  command: string,
-  runtime: LocalAgentRuntime
-): string {
+export function buildSkillCommandForRuntime(command: string, runtime: LocalAgentRuntime): string {
   if (runtime.runtime !== 'wsl') {
     return command
   }
@@ -74,6 +71,13 @@ export function buildSkillInstallCommandForRuntime(
     : ''
   const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
   return `wsl.exe${distroArg} -- sh -c ${quotePowerShellSingle(wslCommand)}`
+}
+
+export function buildSkillInstallCommandForRuntime(
+  command: string,
+  runtime: LocalAgentRuntime
+): string {
+  return buildSkillCommandForRuntime(command, runtime)
 }
 
 export function getSkillDiscoveryTargetForRuntime(

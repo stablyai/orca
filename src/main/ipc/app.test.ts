@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handlers, appExitMock, appQuitMock, appRelaunchMock, execFileMock } = vi.hoisted(() => ({
-  handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
-  appExitMock: vi.fn(),
-  appQuitMock: vi.fn(),
-  appRelaunchMock: vi.fn(),
-  execFileMock: vi.fn()
-}))
+const { handlers, appExitMock, appQuitMock, appRelaunchMock, execFileMock, destroySystemTrayMock } =
+  vi.hoisted(() => ({
+    handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
+    appExitMock: vi.fn(),
+    appQuitMock: vi.fn(),
+    appRelaunchMock: vi.fn(),
+    execFileMock: vi.fn(),
+    destroySystemTrayMock: vi.fn()
+  }))
 
 vi.mock('node:child_process', () => ({
   execFile: execFileMock
@@ -37,6 +39,10 @@ vi.mock('@electron-toolkit/utils', () => ({
   is: { dev: true }
 }))
 
+vi.mock('../tray/system-tray', () => ({
+  destroySystemTray: destroySystemTrayMock
+}))
+
 import { registerAppHandlers } from './app'
 
 describe('registerAppHandlers', () => {
@@ -49,6 +55,7 @@ describe('registerAppHandlers', () => {
     appQuitMock.mockReset()
     appRelaunchMock.mockReset()
     execFileMock.mockReset()
+    destroySystemTrayMock.mockReset()
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
 
@@ -70,8 +77,12 @@ describe('registerAppHandlers', () => {
     await relaunchPromise
     await vi.advanceTimersByTimeAsync(150)
 
+    expect(destroySystemTrayMock).toHaveBeenCalledTimes(1)
     expect(appRelaunchMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).toHaveBeenCalledWith(0)
+    expect(destroySystemTrayMock.mock.invocationCallOrder[0]).toBeLessThan(
+      appExitMock.mock.invocationCallOrder[0]
+    )
   })
 
   it('waits for pre-relaunch cleanup before exiting', async () => {

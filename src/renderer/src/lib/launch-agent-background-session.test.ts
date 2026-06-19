@@ -355,7 +355,7 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
-  it('injects startup commands into SSH background sessions after shell output arrives', async () => {
+  it('injects fast startup commands into SSH background sessions after shell output arrives', async () => {
     vi.useFakeTimers()
     try {
       state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
@@ -368,7 +368,10 @@ describe('launchAgentBackgroundSession', () => {
         title: 'Nightly audit'
       })
 
-      expect(mockSpawn.mock.calls[0]?.[0]?.command).toBeUndefined()
+      expect(mockSpawn.mock.calls[0]?.[0]?.command).toBe(
+        "claude '--dangerously-skip-permissions' 'run the automation'"
+      )
+      expect(mockSpawn.mock.calls[0]?.[0]?.startupCommandDelivery).toBeUndefined()
       const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
       dataSidecar('user@remote repo % ')
       vi.advanceTimersByTime(50)
@@ -377,6 +380,108 @@ describe('launchAgentBackgroundSession', () => {
         'pty-1',
         "claude '--dangerously-skip-permissions' 'run the automation'\r"
       )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for shell-ready before injecting payload-bearing SSH background commands', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation',
+        title: 'Nightly audit'
+      })
+
+      expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'",
+          startupCommandDelivery: 'shell-ready'
+        })
+      )
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      dataSidecar('user@remote repo % ')
+      vi.advanceTimersByTime(50)
+      expect(mockWrite).not.toHaveBeenCalled()
+
+      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for shell-ready for SSH background Codex native prefill commands without a hint', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      state.settings = {
+        agentCmdOverrides: { codex: "codex --prefill 'draft from override'" },
+        activeRuntimeEnvironmentId: null
+      }
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        title: 'Nightly audit'
+      })
+
+      expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          command:
+            "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'"
+        })
+      )
+      expect(mockSpawn.mock.calls[0]?.[0]).not.toHaveProperty('startupCommandDelivery')
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      dataSidecar('user@remote repo % ')
+      vi.advanceTimersByTime(50)
+      expect(mockWrite).not.toHaveBeenCalled()
+
+      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'\r"
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not rearm SSH background startup delivery after exit cleanup', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation',
+        title: 'Nightly audit'
+      })
+
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      const exitSidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1] as (code: number) => void
+      exitSidecar(0)
+
+      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }

@@ -309,7 +309,7 @@ describe('web settings preload API', () => {
     expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
   })
 
-  it('keeps compact worktree cards local when hydrating paired runtime settings', async () => {
+  it('hydrates compact worktree cards from paired runtime settings', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -337,10 +337,10 @@ describe('web settings preload API', () => {
       compactWorktreeCards?: boolean
     }
 
-    expect(settings.compactWorktreeCards).toBe(false)
-    expect(stored.compactWorktreeCards).toBe(false)
+    expect(settings.compactWorktreeCards).toBe(true)
+    expect(stored.compactWorktreeCards).toBe(true)
     expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
-  })
+  }, 15_000)
 
   it('hydrates new worktree card style from a paired runtime', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
@@ -375,7 +375,7 @@ describe('web settings preload API', () => {
     expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
   })
 
-  it('keeps compact worktree card updates local for paired web clients', async () => {
+  it('forwards compact worktree card updates to a paired runtime', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -406,8 +406,10 @@ describe('web settings preload API', () => {
 
     expect(settings.compactWorktreeCards).toBe(true)
     expect(stored.compactWorktreeCards).toBe(true)
-    expect(runtimeCalls).toEqual([])
-  })
+    expect(runtimeCalls).toEqual([
+      { method: 'settings.update', params: { compactWorktreeCards: true } }
+    ])
+  }, 15_000)
 
   it('forwards new worktree card style updates to a paired runtime', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
@@ -758,6 +760,90 @@ describe('web UI preload API', () => {
     const ui = await api.ui.get()
 
     expect(ui.rightSidebarOpen).toBe(true)
+  })
+
+  it('seeds missing local card display properties from runtime-backed compact settings when ui.get is unavailable', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'settings.get') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { settings: { compactWorktreeCards: true } },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: false,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.settings.get()
+    const ui = await globals.window.api.ui.get()
+
+    expect(ui.worktreeCardProperties).toEqual(['status', 'unread'])
+    expect(ui.worktreeCardProperties).not.toContain('ports')
+    expect(ui.worktreeCardProperties).not.toContain('inline-agents')
+    expect(runtimeCalls.map((call) => call.method)).toEqual(['settings.get', 'ui.get'])
+  })
+
+  it('preserves explicit local card display properties when compact fallback settings are present', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'settings.get') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { settings: { compactWorktreeCards: true } },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: false,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({ worktreeCardProperties: ['status', 'pr'] })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.settings.get()
+    const ui = await globals.window.api.ui.get()
+
+    expect(ui.worktreeCardProperties).toEqual(['status', 'unread', 'pr'])
+    expect(ui.worktreeCardProperties).not.toContain('ports')
+    expect(ui.worktreeCardProperties).not.toContain('inline-agents')
+    expect(runtimeCalls.map((call) => call.method)).toEqual(['settings.get', 'ui.get'])
   })
 
   it('keeps newer feature interaction counts when runtime responses resolve out of order', async () => {

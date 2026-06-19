@@ -659,6 +659,7 @@ export default function JiraIssueWorkspace({
                   {displayed.description?.trim() ? (
                     <CommentMarkdown
                       content={displayed.description}
+                      variant="document"
                       className="text-[14px] leading-relaxed"
                     />
                   ) : (

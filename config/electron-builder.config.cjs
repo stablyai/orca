@@ -142,6 +142,11 @@ module.exports = {
   },
   win: {
     executableName: 'Orca',
+    // Why: Windows installers are signed after electron-builder packaging by
+    // SignPath, so the packager cannot infer the updater publisherName.
+    signtoolOptions: {
+      publisherName: 'SignPath Foundation'
+    },
     extraResources: [
       ...commonExtraResources,
       winSpeechNativeResource,
@@ -278,12 +283,33 @@ module.exports = {
   deb: {
     packageName: 'orca-ide',
     artifactName: 'orca-ide_${version}_${arch}.${ext}',
-    depends: ['python3', 'python3-gi', 'gir1.2-atspi-2.0', 'at-spi2-core', 'xdotool', 'xclip']
+    // Why: xvfb lets the bundled `orca serve` CLI run browser panes on a headless
+    // Linux host — Chromium needs a display server even for offscreen rendering,
+    // and serve starts Xvfb itself when present (see ensure-virtual-display.ts).
+    depends: ['python3', 'python3-gi', 'gir1.2-atspi-2.0', 'at-spi2-core', 'xdotool', 'xclip', 'xvfb'],
+    // Why: symlink the bundled CLI onto PATH at install time so `orca-ide serve`
+    // works on a headless host. The in-app CLI registration (CliInstaller) is
+    // GUI-triggered and can never run on a server, so without this the CLI is
+    // unreachable from the shell on exactly the hosts that need it.
+    afterInstall: 'resources/linux/packaging/after-install.sh',
+    afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   rpm: {
     packageName: 'orca-ide',
     artifactName: 'orca-ide-${version}.${arch}.${ext}',
-    depends: ['python3', 'python3-gobject', 'at-spi2-core', 'xdotool', 'xclip']
+    // Why: see deb depends. RPM distros ship Xvfb as xorg-x11-server-Xvfb (there
+    // is no `xvfb` package), so the name differs from the deb here.
+    depends: [
+      'python3',
+      'python3-gobject',
+      'at-spi2-core',
+      'xdotool',
+      'xclip',
+      'xorg-x11-server-Xvfb'
+    ],
+    // Why: same headless CLI-on-PATH registration as deb; rpm runs these via fpm.
+    afterInstall: 'resources/linux/packaging/after-install.sh',
+    afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   beforeBuild: electronBuilderNativeRebuild,
   // Why: must be true so that electron-builder rebuilds native modules

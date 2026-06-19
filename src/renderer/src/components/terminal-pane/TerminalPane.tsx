@@ -73,8 +73,15 @@ import {
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
-import { closeWebRuntimeTerminal } from '@/runtime/web-runtime-session'
+import {
+  inspectRuntimeTerminalProcess,
+  isRemoteRuntimePtyId
+} from '@/runtime/runtime-terminal-inspection'
+import {
+  clearWebRuntimeTerminalBuffer,
+  closeWebRuntimeTerminal,
+  updateWebRuntimePaneLayout
+} from '@/runtime/web-runtime-session'
 import { isPrimarySelectionEnabled, readPrimarySelectionText } from '@/lib/primary-selection'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
@@ -82,7 +89,10 @@ import {
   isSyntheticSinglePaneTitle,
   sanitizeTerminalLayoutPaneTitles
 } from '@/lib/terminal-pane-title-sanitization'
-import { planTerminalLiveLayoutInsertions } from './terminal-live-layout-reconciliation'
+import {
+  isHostAuthoritativeLayout,
+  planTerminalLiveLayoutInsertions
+} from './terminal-live-layout-reconciliation'
 import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
@@ -673,18 +683,37 @@ export default function TerminalPane({
       layout.titlesByLeafId = titlesByLeafId
     }
     setTabLayout(tabId, layout)
+    // Why: pane geometry is host-authoritative for remote-server tabs, so push
+    // ratios/expand/titles to the host or they revert on the next snapshot.
+    // Gate on a remote pty to avoid an RPC for purely-local tabs.
+    const hasRemotePane = Object.values(mergedPtyIds).some(
+      (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
+    )
+    if (hasRemotePane) {
+      void updateWebRuntimePaneLayout({
+        worktreeId,
+        tabId,
+        root: layout.root,
+        expandedLeafId: layout.expandedLeafId,
+        ...(layout.titlesByLeafId ? { titlesByLeafId: layout.titlesByLeafId } : {})
+      })
+    }
     for (const leafId of currentLeafIds) {
       clearedScrollbackLeafIds.delete(leafId)
     }
-  }, [tabId, setTabLayout])
+  }, [tabId, setTabLayout, worktreeId])
 
   const clearPaneScrollback = useCallback(
     (pane: ManagedPane): void => {
       clearedScrollbackLeafIdsRef.current.add(pane.leafId)
       pane.terminal.clear()
+      // Why: also clear the host buffer for remote-server panes, or the next
+      // host snapshot replays the scrollback we just cleared locally.
+      const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+      clearWebRuntimeTerminalBuffer(ptyId)
       persistLayoutSnapshot()
     },
-    [persistLayoutSnapshot]
+    [paneTransportsRef, persistLayoutSnapshot]
   )
 
   useEffect(() => {
@@ -948,11 +977,19 @@ export default function TerminalPane({
   })
 
   useEffect(() => {
-    if (!(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) {
-      return
-    }
     const manager = managerRef.current
     if (!manager || !restoredLayout.root) {
+      return
+    }
+    // Host-owned split layouts (web clients, or a desktop client viewing a
+    // remote server worktree) arrive via the host snapshot, so the reconciler
+    // must materialize their panes; local desktop tabs split directly.
+    if (
+      !isHostAuthoritativeLayout({
+        isWebClient: !!(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__,
+        ptyIdsByLeafId: restoredLayout.ptyIdsByLeafId
+      })
+    ) {
       return
     }
     const insertions = planTerminalLiveLayoutInsertions(
@@ -2090,6 +2127,7 @@ export default function TerminalPane({
         }
         onToggleExpand={contextMenu.onToggleExpand}
         onSetTitle={contextMenu.onSetTitle}
+        onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
       />
       {/* Why: repos is a broad store slice; only subscribe while the editor is visible. */}

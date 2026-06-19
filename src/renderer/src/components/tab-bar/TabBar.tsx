@@ -769,7 +769,7 @@ function TabBarInner({
     isMacOs &&
     mobileEmulatorEnabled &&
     onNewSimulatorTab ? (
-      <MobileEmulatorTabIntroCallout onAction={() => setNewTabMenuOpen(false)} />
+      <MobileEmulatorTabIntroCallout />
     ) : null
   const standardCreateMenuItems =
     newTabMenuOrder === 'markdown-first' ? (
@@ -961,6 +961,7 @@ function TabBarInner({
   )
 
   const togglePinned = (item: TabItem): void => {
+    // pinTab/unpinTab mirror the change to the host for remote-server tabs.
     if (item.isPinned) {
       unpinTab(item.unifiedTabId)
       return
@@ -1192,7 +1193,14 @@ function TabBarInner({
           </TooltipContent>
         </Tooltip>
       ) : null}
-      <DropdownMenu open={newTabMenuOpen} onOpenChange={setNewTabMenuOpen}>
+      <DropdownMenu
+        open={newTabMenuOpen}
+        onOpenChange={setNewTabMenuOpen}
+        // Why: this menu can stay open after the Mobile Emulator "Hide" action,
+        // which shows a toast with a re-enable link; modal would disable body
+        // pointer events and make that toast (and other outside UI) unclickable.
+        modal={false}
+      >
         <DropdownMenuTrigger asChild>
           <button
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"

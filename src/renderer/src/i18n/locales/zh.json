@@ -58,6 +58,13 @@
     "window": "窗口",
     "help": "帮助"
   },
+  "tray": {
+    "openOrca": "打开 Orca",
+    "quit": "退出",
+    "minimizeNotice": {
+      "body": "Orca 仍在系统托盘中运行"
+    }
+  },
   "worktreeJumpPalette": {
     "matchLabel": {
       "comment": "评论",
@@ -1069,7 +1076,9 @@
         "setupKindFolder": "文件夹",
         "setupHostExistingFolderHelp": "链接已存在的检出目录，然后在该主机上创建此工作区。",
         "importingHostSetup": "导入中...",
-        "importHostSetup": "导入"
+        "importHostSetup": "导入",
+        "reuseExistingBranch": "Reuse branch",
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"
@@ -1650,7 +1659,7 @@
         "1628fd7dfa": "没有活动的工作树、设置、操作或打开的选项卡",
         "b781ae05e3": "键入以搜索工作树、设置、选项卡和操作。",
         "f60f8730be": "没有其他工作树可供切换",
-        "c4afa68159": "尝试工作树、设置、操作、页面标题、模拟器、URL、PR 或端口。",
+        "c4afa68159": "尝试工作树、设置、操作、标签页标题、智能体提示、URL、PR 或端口。",
         "dbd9d87eec": "没有结果符合您的搜索",
         "2c38630a01": "工作区不再存在",
         "7726ce9970": "手机模拟器选项卡不再存在",
@@ -1667,7 +1676,8 @@
         "recentWorktreesHeader": "最近的工作树",
         "settingsBadge": "设置",
         "actionBadge": "操作",
-        "paletteHostBadge": "主机：{{value0}}"
+        "paletteHostBadge": "主机：{{value0}}",
+        "workspaceTabMissing": "标签页不再存在"
       },
       "github": {
         "pr": {
@@ -2274,6 +2284,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "清晰的屏幕",
             "8c17d6786d": "关闭窗格",
+            "copyTerminalId": "复制终端 ID",
             "2cf85a6a55": "复制窗格 ID",
             "39809d152f": "设置标题...",
             "06c2b0f043": "均衡窗格大小",
@@ -2357,7 +2368,15 @@
               "pane": {
                 "context": {
                   "menu": {
-                    "a29b9faa01": "已复制窗格 ID"
+                    "a29b9faa01": "已复制窗格 ID",
+                    "terminal": {
+                      "id": {
+                        "copied": "已复制终端 ID",
+                        "copy": {
+                          "failed": "无法复制终端 ID"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -2664,13 +2683,11 @@
             "runtime_checking": "检查中",
             "runtime_online": "已连接",
             "runtime_unavailable": "已断开",
-            "runtime_available": "可用",
             "runtime_connect_unavailable": "远程主机不可达",
             "runtime_disconnect_failed": "断开连接失败",
             "runtime_reconnecting": "重新连接中",
             "runtime_last_close_reason": "Closed: {{value0}}",
-            "runtime_reconnect_attempt": "Attempt {{value0}}",
-            "runtime_channel_counts": "{{value0}} pending · {{value1}} streams"
+            "runtime_reconnect_attempt": "Attempt {{value0}}"
           },
           "StatusBar": {
             "9659e38343": "端口",
@@ -3519,7 +3536,8 @@
           "f506a1262a": "搜索工作区",
           "75405270ed": "编辑搜索器（{{value0}} 活动）",
           "489d1c8c9f": "搜索项目...",
-          "ee240a39eb": "编辑搜索器"
+          "ee240a39eb": "编辑搜索器",
+          "automationCreated": "隐藏自动化创建的工作区"
         },
         "SidebarHeader": {
           "92154beb7e": "新工作区",
@@ -3581,7 +3599,8 @@
         "SidebarWorkspaceFilterSection": {
           "c3fa13dc2e": "隐藏默认分支",
           "ed1611b65b": "隐藏休眠项",
-          "82594419ba": "搜索器"
+          "82594419ba": "搜索器",
+          "automationCreated": "隐藏自动化创建的工作区"
         },
         "SidebarWorkspaceOptionsMenu": {
           "95c9754653": "Agent 活动布局",
@@ -3634,7 +3653,8 @@
           "8d62c68b35": "笔记",
           "2d74665a56": "端口",
           "65a9820bd1": "Agent 状态",
-          "219ebf1961": "分支名称"
+          "219ebf1961": "分支名称",
+          "automation": "Automation"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",
@@ -3707,7 +3727,9 @@
           "93aebe4529": "文件夹",
           "0d224eff10": "主要工作树",
           "ca74db7550": "通过 SSH 远程项目",
-          "021538e1d1": "SSH 已断开连接"
+          "021538e1d1": "SSH 已断开连接",
+          "runtimeHostDisconnected": "Server disconnected",
+          "runtimeHostProject": "Project on Orca server"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -3732,7 +3754,15 @@
           "3ea2702e62": "已链接 {{value0}} #{{value1}}",
           "b105fd3057": "链接 Linear {{value0}}",
           "3f2649eeb8": "链接议题#{{value0}}",
-          "fe075cb851": "工作区笔记"
+          "fe075cb851": "工作区笔记",
+          "automationHeader": "自动化",
+          "openAutomation": "打开自动化",
+          "openAutomationRun": "打开运行",
+          "automationCreated": "由自动化创建",
+          "checkingAutomationAvailability": "正在检查自动化可用性...",
+          "automationMissing": "自动化已不可用。",
+          "automationRunMissing": "运行历史已不可用。",
+          "automationAvailabilityUnavailable": "无法检查自动化可用性。"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "状态：开放",
@@ -3761,7 +3791,7 @@
           "e091caab15": "找不到该项目",
           "439fa94d53": "更新",
           "579b1a8e61": "从父级中删除",
-          "8d9cd19d09": "打开父工作区",
+          "8d9cd19d09": "打开父工作树",
           "d35dfeae58": "从组中删除",
           "76865d827f": "移至群组",
           "503ec0f8e6": "来自项目的新组",
@@ -3777,7 +3807,9 @@
           "8dacff1fe0": "马克·里德",
           "3baa7d6507": "别针",
           "697d0f6e1b": "取消固定",
-          "250de158fd": "移除工作区"
+          "250de158fd": "移除工作区",
+          "changeParentWorkspace": "更改父工作树...",
+          "setParentWorkspace": "设置父工作树..."
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
@@ -3818,7 +3850,8 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
-          "hostDisconnected": "Disconnected"
+          "hostDisconnected": "Disconnected",
+          "failedNestWorkspace": "无法嵌套工作区"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -4160,6 +4193,12 @@
           "c7d8e9f0a1": "已更新 {{value0}} 个",
           "d8e9f0a1b2": "已跳过 {{value0}} 个",
           "e9f0a1b2c3": "失败 {{value0}} 个"
+        },
+        "WorktreeParentPickerPopover": {
+          "failedSetParent": "无法设置父工作树",
+          "current": "当前",
+          "searchPlaceholder": "搜索工作树...",
+          "empty": "没有匹配的可用工作树。"
         }
       },
       "shared": {
@@ -4282,7 +4321,9 @@
           "6627e75c92": "解释 HTTP/1.1 兼容性",
           "e9506d3377": "HTTP/1.1 兼容性",
           "8b7a8df299": "支持故障排除的低级解决方法。",
-          "8d8d8ac599": "兼容性"
+          "8d8d8ac599": "兼容性",
+          "network": "网络",
+          "networkDescription": "用于代理和企业环境的应用级网络路由。"
         },
         "AgentLocationSetting": {
           "92f4238f1a": "WSL 默认值",
@@ -4294,15 +4335,19 @@
           "f97b986b7f": "wsl"
         },
         "AgentSkillSetupPanel": {
-          "0b810ec59f": "按 Enter 运行安装命令。",
+          "0b810ec59f": "Press Enter to run the command.",
           "ed197f59a2": "复制命令",
-          "817d3f9f18": "复制安装命令",
+          "817d3f9f18": "Copy command",
           "5289300939": "未安装",
           "9fcebceb2a": "已安装",
           "68a468752e": "检查中...",
           "c689392435": "重新检查",
-          "a31e2aa302": "无法复制安装命令。",
-          "378ad26865": "复制安装命令。"
+          "a31e2aa302": "Failed to copy command.",
+          "378ad26865": "Copied command.",
+          "copiedCommand": "Copied command.",
+          "failedToCopyCommand": "Failed to copy command.",
+          "copyCommandAria": "Copy command",
+          "runCommandDescription": "Press Enter to run the command."
         },
         "AgentsPane": {
           "d83834f5e6": "检测已安装的 Agent...",
@@ -4394,7 +4439,10 @@
             "tintOpacity": "色调强度",
             "tintOpacityDescription": "控制色调混入边栏的强度。"
           },
-          "workspaceCardLayoutGuidance": "使用工作区侧边栏选项菜单 > 卡片布局 > 紧凑。"
+          "workspaceCardLayoutGuidance": "使用工作区侧边栏选项菜单 > 卡片布局 > 紧凑。",
+          "872af9556e": "系统托盘",
+          "2edf606c46": "关闭时最小化到托盘",
+          "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -4708,11 +4756,11 @@
           "agentHibernation": {
             "copy": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。我们仍在调校安全模型，此功能为实验性功能。",
             "description": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。",
-            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其休眠前需要等待的空闲分钟数。",
-            "idleMinutesLabel": "休眠等待时间",
+            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其睡眠前需要等待的空闲分钟数。",
+            "idleMinutesLabel": "睡眠等待时间",
             "idleMinutesSuffix": "分钟",
-            "title": "Agent 休眠",
-            "toggleLabel": "切换 agent 休眠"
+            "title": "Agent 睡眠",
+            "toggleLabel": "切换 agent 睡眠"
           },
           "newWorktreeCardStyle": {
             "copy": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
@@ -4734,7 +4782,7 @@
           "37df688d6f": "启用浮动工作区并选择新选项卡的开始位置。",
           "1f67f39384": "浮动工作区"
         },
-        "GeneralCacheTimerSection": {
+        "AgentCacheTimerSection": {
           "05de84a104": "1小时",
           "54395ecd7c": "5分钟",
           "8b9e202e0a": "将此与您的提供商的缓存 TTL 相匹配。默认值为 5 分钟。",
@@ -4770,7 +4818,7 @@
           "d21136d9ef": "配置 Orca 如何保留文件编辑。",
           "45c6e85c4d": "编辑"
         },
-        "GeneralNetworkSettingsSection": {
+        "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",
           "33ee3ca3af": "可选。用逗号、分号或换行符分隔主机。",
           "f6d76cc8f4": "代理绕过规则",
@@ -4781,7 +4829,8 @@
           "f00daf6324": "HTTPAgent",
           "823e0f15b1": "Orca 网络请求和本地 terminal 子项的 Agent URL。",
           "d93c7cd531": "配置应用程序级网络路由。",
-          "c46cdbbd4e": "网络"
+          "c46cdbbd4e": "网络",
+          "configureProxy": "配置代理"
         },
         "GeneralPane": {
           "d58fccfd84": "导航",
@@ -6222,7 +6271,8 @@
           "ad5d036ecc": "无法请求麦克风权限。未启用语音听写。",
           "f9a9cf6928": "启用语音听写之前需要麦克风许可。",
           "1eac933202": "打开 macOS 隐私和安全。授予访问权限后再次启用听写。",
-          "cd9fe37556": "已授予麦克风权限"
+          "cd9fe37556": "已授予麦克风权限",
+          "6fa734ed95": "Delete {{value0}}"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
@@ -6516,7 +6566,9 @@
               "cardLayout": "卡片布局",
               "workspaceOptions": "工作区选项",
               "detailed": "详细"
-            }
+            },
+            "9a115966d3": "关闭时最小化到托盘",
+            "4d5b9427b5": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。"
           }
         },
         "auto": {
@@ -6781,11 +6833,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "在配置的空闲时间后停止后台 agent 终端，并在再次打开时恢复受支持的会话。",
-              "hibernate": "休眠",
               "minutes": "分钟",
               "sleep": "睡眠",
               "terminal": "终端",
-              "title": "Agent 休眠"
+              "title": "Agent 睡眠"
             },
             "newWorktreeCardStyle": {
               "card": "卡片",
@@ -8343,6 +8394,9 @@
             "cc06595a3b": "复制线路径",
             "3596b9668d": "复制路径"
           },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "查看"
+          },
           "SourceControl": {
             "1406954883": "清除所有笔记...",
             "cc05b2d088": "在文件资源管理器中打开",
@@ -9039,6 +9093,9 @@
                 "copyCommand": "Copy command"
               }
             }
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "View"
           }
         }
       },
@@ -11173,7 +11230,9 @@
           "d441032f7e": "暂停",
           "5918020edc": "跑步",
           "a21f6c33ad": "Automation source refreshed.",
-          "53f06f0ad5": "Retry source"
+          "53f06f0ad5": "Retry source",
+          "pendingAutomationMissing": "自动化已不可用。",
+          "pendingAutomationRunMissing": "运行历史已不可用。"
         },
         "CreateFromPicker": {
           "f061f49e3f": "搜索 repo 分支...",
@@ -11375,7 +11434,15 @@
           "openReviewExternally": "在外部打开 {{value0}}",
           "summary": "已附加 {{value0}} 个 · 有 PR/MR {{value1}} 个 · 需注意 {{value2}} 个 · 等待中 {{value3}} 个 · 通过 {{value4}} 个 · 无 PR {{value5}} 个 · 未知 {{value6}} 个",
           "showDetails": "显示 {{value0}} 的 PR 检查详情",
-          "hideDetails": "隐藏 {{value0}} 的 PR 检查详情"
+          "hideDetails": "隐藏 {{value0}} 的 PR 检查详情",
+          "reviewChecks": "评审检查",
+          "allChecksPassing": "所有检查均通过",
+          "oneWorktree": "1 个工作树",
+          "worktreeCount": "{{value0}} 个工作树",
+          "oneFailing": "1 个失败",
+          "failingCount": "{{value0}} 个失败",
+          "onePending": "1 个等待中",
+          "pendingCount": "{{value0}} 个等待中"
         },
         "parentPrChecks": {
           "rowSummary": {

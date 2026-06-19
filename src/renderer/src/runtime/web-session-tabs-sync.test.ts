@@ -4,6 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import {
+  recordWebSessionFocusIntent,
+  resetWebSessionFocusIntentForTests
+} from './web-session-focus-intent'
+import {
+  recordWebSessionCloseIntent,
+  resetWebSessionCloseIntentForTests
+} from './web-session-close-intent'
 import type { BrowserPage, BrowserWorkspace, Tab, TerminalTab } from '../../../shared/types'
 import type { OpenFile } from '../store/slices/editor'
 import {
@@ -84,6 +92,8 @@ function makeSnapshot(
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(() => {
     resetWebSessionTabsSnapshotFreshnessForTests()
+    resetWebSessionFocusIntentForTests()
+    resetWebSessionCloseIntentForTests()
   })
 
   it('ignores stale or duplicate same-epoch snapshots after a newer version was applied', () => {
@@ -97,6 +107,66 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(second).toBe(afterNewer)
     expect(applyFreshWebSessionTabsSnapshot(afterNewer, newer, ENV, NOW)).toBe(afterNewer)
+  })
+
+  it('applies a lower-version snapshot from a different epoch (host restart safety)', () => {
+    // Why: snapshotVersion resets when the host restarts, and a restart produces
+    // a new publicationEpoch. Since the client's freshness tracking survives a
+    // transparent transport reconnect, rejecting on version alone would
+    // permanently drop the post-restart snapshot. A different epoch must apply
+    // even at a lower version; only same-epoch non-newer frames are stale.
+    const before = makeSnapshot([], {
+      publicationEpoch: 'epoch-gen-1',
+      snapshotVersion: 10,
+      activeTabType: null
+    })
+    const afterRestart = makeSnapshot([], {
+      publicationEpoch: 'epoch-gen-2',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+
+    expect(shouldApplyWebSessionTabsSnapshot(before, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(afterRestart, ENV)).toBe(true)
+    // Same-epoch non-newer frames are still rejected as stale/duplicate.
+    const sameEpochOlder = makeSnapshot([], {
+      publicationEpoch: 'epoch-gen-2',
+      snapshotVersion: 1,
+      activeTabType: null
+    })
+    expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
+  })
+
+  it('suppresses a tab the client is closing until the host confirms removal (no close flash)', () => {
+    const surface = {
+      type: 'terminal' as const,
+      id: HOST_SURFACE_ID,
+      parentTabId: 'host-tab-1',
+      leafId: LEAF_ID,
+      title: 'Terminal',
+      status: 'ready' as const,
+      terminal: 'term_host',
+      isActive: true
+    }
+    // Client closed host-tab-1; an in-flight pre-close snapshot still lists it.
+    recordWebSessionCloseIntent(WT, 'host-tab-1', NOW)
+    const stalePreClose = applyWebSessionTabsSnapshot(makeState(), makeSnapshot([surface]), ENV, NOW)
+    expect((stalePreClose.tabsByWorktree?.[WT] ?? []).map((tab) => tab.id)).not.toContain(
+      toWebTerminalSurfaceTabId('host-tab-1')
+    )
+
+    // The host's post-close snapshot omits the tab -> intent clears; a later
+    // snapshot that re-adds the SAME id (a genuinely new tab) is no longer hidden.
+    applyWebSessionTabsSnapshot(makeState(), makeSnapshot([]), ENV, NOW + 1)
+    const reopened = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([surface], { snapshotVersion: 5 }),
+      ENV,
+      NOW + 2
+    )
+    expect((reopened.tabsByWorktree?.[WT] ?? []).map((tab) => tab.id)).toContain(
+      toWebTerminalSurfaceTabId('host-tab-1')
+    )
   })
 
   it('does not bootstrap a terminal from a stale empty active-worktree snapshot', () => {
@@ -1550,6 +1620,105 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabId: shellTabId,
       tabOrder: [agentTabId, shellTabId]
     })
+  })
+
+  it('focuses a brand-new remote terminal that the snapshot marks active', () => {
+    // Why: opening a new terminal must take focus. Distinct from the #5435 case
+    // above (existing tab echoed active = keep focus); here the active tab is new.
+    const existingTabId = toWebTerminalSurfaceTabId('host-tab-1')
+    const newTabId = toWebTerminalSurfaceTabId('host-tab-2')
+    // Simulate createWebRuntimeSessionTerminal recording focus intent for the new tab.
+    recordWebSessionFocusIntent(WT, `host-tab-2::${SECOND_LEAF_ID}`)
+    const existingUnifiedTab: Tab = {
+      id: existingTabId,
+      entityId: existingTabId,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'terminal',
+      label: 'shell',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false,
+      isPinned: false
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        activeTabId: existingTabId,
+        activeTabIdByWorktree: { [WT]: existingTabId },
+        activeTabType: 'terminal',
+        activeTabTypeByWorktree: { [WT]: 'terminal' },
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: existingTabId,
+              ptyId: 'remote:web-env-1@@terminal-1',
+              worktreeId: WT,
+              title: 'shell',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: NOW
+            }
+          ]
+        },
+        unifiedTabsByWorktree: { [WT]: [existingUnifiedTab] },
+        tabBarOrderByWorktree: { [WT]: [existingTabId] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: existingTabId,
+              tabOrder: [existingTabId],
+              recentTabIds: [existingTabId]
+            }
+          ]
+        }
+      }),
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: `host-tab-1::${LEAF_ID}`,
+            title: 'shell',
+            parentTabId: 'host-tab-1',
+            leafId: LEAF_ID,
+            isActive: false,
+            status: 'ready',
+            terminal: 'terminal-1'
+          },
+          {
+            type: 'terminal',
+            id: `host-tab-2::${SECOND_LEAF_ID}`,
+            title: 'new shell',
+            parentTabId: 'host-tab-2',
+            leafId: SECOND_LEAF_ID,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-2'
+          }
+        ],
+        {
+          activeTabId: `host-tab-2::${SECOND_LEAF_ID}`,
+          activeTabType: 'terminal',
+          tabGroups: [
+            {
+              id: 'host-group-1',
+              activeTabId: 'host-tab-2',
+              tabOrder: ['host-tab-1', 'host-tab-2']
+            }
+          ]
+        }
+      ),
+      ENV,
+      NOW + 10
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.activeTabIdByWorktree?.[WT]).toBe(newTabId)
+    expect(patch.groupsByWorktree?.[WT]?.[0]?.activeTabId).toBe(newTabId)
   })
 
   it('does not let repeated remote split status snapshots steal local pane focus', () => {

@@ -3,6 +3,10 @@ import type {
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
+  RuntimeTerminalVisualLayout,
+  RuntimeTerminalVisualLayoutNode,
+  RuntimeTerminalVisualPaneNode,
+  RuntimeTerminalVisualTab,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
   RuntimeTerminalSend,
@@ -21,9 +25,65 @@ export function formatTerminalList(result: RuntimeTerminalListResult): string {
         `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
+  const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
+  const bodyWithLayout = visualLayout ? `${body}\n\nvisual layout:\n${visualLayout}` : body
   return result.truncated
-    ? `${body}\n\ntruncated: showing ${result.terminals.length} of ${result.totalCount}`
-    : body
+    ? `${bodyWithLayout}\n\ntruncated: showing ${result.terminals.length} of ${result.totalCount}`
+    : bodyWithLayout
+}
+
+function formatTerminalVisualLayouts(
+  layouts: readonly RuntimeTerminalVisualLayout[] | undefined
+): string | null {
+  if (!layouts || layouts.length === 0) {
+    return null
+  }
+  return layouts
+    .map((layout) =>
+      [
+        `worktree: ${layout.worktreePath || layout.worktreeId}`,
+        ...formatVisualLayoutNode(layout.root, 0)
+      ].join('\n')
+    )
+    .join('\n\n')
+}
+
+function formatVisualLayoutNode(node: RuntimeTerminalVisualLayoutNode, depth: number): string[] {
+  const indent = '  '.repeat(depth)
+  if (node.type === 'split') {
+    return [
+      `${indent}split ${node.direction}`,
+      ...formatVisualLayoutNode(node.first, depth + 1),
+      ...formatVisualLayoutNode(node.second, depth + 1)
+    ]
+  }
+  return [
+    `${indent}group ${node.groupId ?? '(default)'}`,
+    ...node.tabs.flatMap((tab) => formatVisualTab(tab, depth + 1))
+  ]
+}
+
+function formatVisualTab(tab: RuntimeTerminalVisualTab, depth: number): string[] {
+  const indent = '  '.repeat(depth)
+  return [
+    `${indent}tab ${tab.tabId}  ${tab.title ?? '(untitled)'}`,
+    ...formatVisualPaneNode(tab.panes, depth + 1)
+  ]
+}
+
+function formatVisualPaneNode(node: RuntimeTerminalVisualPaneNode, depth: number): string[] {
+  const indent = '  '.repeat(depth)
+  if (node.type === 'pane-split') {
+    return [
+      `${indent}pane split ${node.direction}`,
+      ...formatVisualPaneNode(node.first, depth + 1),
+      ...formatVisualPaneNode(node.second, depth + 1)
+    ]
+  }
+  const marker = node.active ? '* ' : '  '
+  return [
+    `${indent}${marker}${node.handle}  ${node.title ?? '(untitled)'}  tab=${node.tabId} leaf=${node.leafId}`
+  ]
 }
 
 export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): string {

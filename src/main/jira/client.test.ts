@@ -364,6 +364,13 @@ describe('Jira client credential storage', () => {
     })
   })
 
+  it('does not treat Jira permission failures as credential revocation', async () => {
+    const jira = await loadClientModule()
+
+    expect(jira.isAuthError(new jira.JiraApiError('Unauthorized', 401))).toBe(true)
+    expect(jira.isAuthError(new jira.JiraApiError('Forbidden', 403))).toBe(false)
+  })
+
   it('bridges proxy environment settings before Jira connect requests', async () => {
     netFetchMock.mockResolvedValueOnce(
       new Response(

@@ -1,6 +1,5 @@
 /* eslint-disable max-lines */
 import {
-  lazy,
   Suspense,
   useCallback,
   useEffect,
@@ -10,6 +9,7 @@ import {
   useState,
   type SetStateAction
 } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 
 import {
   ArrowLeft,
@@ -24,6 +24,10 @@ import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/const
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import {
+  isPairedWebClientWindow,
+  shouldRenderDesktopWindowChrome
+} from '@/lib/desktop-window-chrome'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { buildAppFontFamily } from '@/lib/app-font-family'
@@ -154,6 +158,14 @@ import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialo
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
 const shortcutPlatform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+// Why: Windows and Linux both run with the native title bar removed (Windows
+// via titleBarStyle: 'hidden', Linux via frame: false), so the renderer draws
+// its own logo/menu anchor and min/max/close controls on both. Paired web
+// clients run in a browser tab, so they must not render desktop window chrome.
+const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
+  platform: shortcutPlatform,
+  isWebClient: isPairedWebClientWindow()
+})
 
 function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -177,9 +189,10 @@ type ShortcutDispatchInput = {
   preventDefault: () => void
 }
 
-// Why: 'hidden' titleBarStyle on Windows removes the native OS title bar,
-// so we render our own minimize/maximize/close buttons.  These SVG icons match
-// the Fluent/Win11 style: thin 10×10 paths on a 40×30 hit area.
+// Why: Windows ('hidden' titleBarStyle) and Linux (frame: false) both remove
+// the native OS title bar, so we render our own minimize/maximize/close
+// buttons. These SVG icons match the Fluent/Win11 style: thin 10×10 paths on a
+// 40×30 hit area.
 function WindowControls(): React.JSX.Element {
   const [maximized, setMaximized] = useState(false)
   useEffect(() => {
@@ -573,6 +586,7 @@ function App(): React.JSX.Element {
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
+  const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
@@ -1247,6 +1261,7 @@ function App(): React.JSX.Element {
         hideSleepingWorkspaces: !showSleepingWorkspaces,
         showSleepingWorkspaces,
         hideDefaultBranchWorkspace,
+        hideAutomationGeneratedWorkspaces,
         showDotfilesByWorktree,
         filterRepoIds,
         // Why: rides the same debounced save so dashboard auto-acks (which fire
@@ -1272,6 +1287,7 @@ function App(): React.JSX.Element {
     projectOrderBy,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
+    hideAutomationGeneratedWorkspaces,
     showDotfilesByWorktree,
     filterRepoIds,
     acknowledgedAgentsByPaneKey
@@ -1776,9 +1792,9 @@ function App(): React.JSX.Element {
       <div className="flex h-full items-center">
         {isMac && !isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
-        ) : isWindows ? (
-          /* Why: on Windows the native title bar is hidden, so we render the
-             Orca logo as a non-interactive identity anchor and a ··· button
+        ) : hasCustomTitleBar ? (
+          /* Why: on Windows/Linux the native title bar is removed, so we render
+             the Orca logo as a non-interactive identity anchor and a ··· button
              that pops up the application menu (the same menu revealed by Alt
              on the default autoHideMenuBar). */
           <>
@@ -1801,7 +1817,7 @@ function App(): React.JSX.Element {
         ) : (
           <div className="pl-2" />
         )}
-        {showSidebar && !isWindows && (
+        {showSidebar && !hasCustomTitleBar && (
           <>
             {settings?.showTitlebarAppName !== false && (
               <ContextMenu>
@@ -1944,8 +1960,8 @@ function App(): React.JSX.Element {
       visible at a time. */}
       {!rightSidebarOpen && rightSidebarToggle}
       {/* Why: reserve space so content is not obscured by the
-      fixed-position window-controls overlay on Windows. */}
-      {isWindows && <div className="window-controls-titlebar-spacer" />}
+      fixed-position window-controls overlay on Windows/Linux. */}
+      {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>
   )
 
@@ -1957,12 +1973,13 @@ function App(): React.JSX.Element {
         {
           '--collapsed-sidebar-header-width': `${collapsedSidebarHeaderWidth}px`,
           // Why: consumed by anything that needs to avoid the fixed-position
-          // window-controls overlay on Windows (floating sidebar toggle, right
-          // sidebar header, etc.) without hardcoding 138px in multiple places.
-          '--window-controls-width': isWindows ? '138px' : '0px',
+          // window-controls overlay on Windows/Linux (floating sidebar toggle,
+          // right sidebar header, etc.) without hardcoding 138px in multiple
+          // places.
+          '--window-controls-width': hasCustomTitleBar ? '138px' : '0px',
           // Why: consumed by the side-position activity bar to push icons below
-          // the fixed-position window-controls overlay on Windows.
-          '--window-controls-height': isWindows ? '36px' : '0px'
+          // the fixed-position window-controls overlay on Windows/Linux.
+          '--window-controls-height': hasCustomTitleBar ? '36px' : '0px'
         } as React.CSSProperties
       }
     >
@@ -2111,9 +2128,9 @@ function App(): React.JSX.Element {
                               {
                                 // Why: right: var(--window-controls-width) is the single
                                 // mechanism that keeps the toggle clear of the
-                                // fixed-position window-controls overlay on Windows (138px)
-                                // and sits at the right edge on non-Windows (0px). No
-                                // internal spacer needed — adding one would push the button
+                                // fixed-position window-controls overlay on custom desktop
+                                // chrome (138px) and sits at the right edge otherwise (0px).
+                                // No internal spacer needed — adding one would push the button
                                 // a further 138px to the left and cover the pane-actions
                                 // Ellipsis button with an un-clickable div.
                                 right: 'var(--window-controls-width)',
@@ -2558,7 +2575,7 @@ function App(): React.JSX.Element {
           in DOM order. Electron's hit-test for drag regions is DOM-order-based and
           ignores z-index — placing WindowControls earlier caused the drag region to
           win, making the buttons unclickable. */}
-      {isWindows && <WindowControls />}
+      {hasCustomTitleBar && <WindowControls />}
     </div>
   )
 }

@@ -19,8 +19,7 @@ function bodyMarkup(): string {
 }
 
 // Minimal xterm stub: one scrollback line containing a URL, fixed 8x15 cells.
-function makeTerminal(line: string) {
-  const lines = [line]
+function makeTerminal(lineRef: { current: string }) {
   return {
     cols: 80,
     rows: 24,
@@ -32,11 +31,11 @@ function makeTerminal(line: string) {
       active: {
         viewportY: 0,
         baseY: 0,
-        length: lines.length,
+        length: 1,
         cursorY: 0,
         type: 'normal' as const,
         getLine(row: number) {
-          const text = lines[row]
+          const text = row === 0 ? lineRef.current : undefined
           if (text === undefined) {
             return null
           }
@@ -73,11 +72,17 @@ function makeTerminal(line: string) {
 
 type Posted = Array<Record<string, unknown>>
 
-function boot(line: string): { posted: Posted } {
+type OscLinkRange = { row: number; startCol: number; endCol: number; uri: string }
+
+function boot(
+  line: string,
+  oscLinks?: OscLinkRange[]
+): { posted: Posted; setLine: (line: string) => void } {
   const posted: Posted = []
+  const lineRef = { current: line }
   const w = window as unknown as { Terminal: unknown; ReactNativeWebView: unknown }
   w.Terminal = function () {
-    return makeTerminal(line)
+    return makeTerminal(lineRef)
   }
   w.ReactNativeWebView = {
     postMessage(s: string) {
@@ -89,10 +94,15 @@ function boot(line: string): { posted: Posted } {
   new Function(iifeSource())()
   window.dispatchEvent(
     new MessageEvent('message', {
-      data: JSON.stringify({ type: 'init', cols: 80, rows: 24, initialData: '' })
+      data: JSON.stringify({ type: 'init', cols: 80, rows: 24, initialData: '', oscLinks })
     })
   )
-  return { posted }
+  return {
+    posted,
+    setLine: (nextLine: string) => {
+      lineRef.current = nextLine
+    }
+  }
 }
 
 function fireTouch(type: string, touches: Array<{ x: number; y: number }>): void {
@@ -114,6 +124,7 @@ describe('terminal WebView tap routing', () => {
   const URL_LINE = 'visit https://example.com/foo now'
   const tapX = 12 * 8 * 0.3125
   const tapY = 2
+  const screenXForCol = (col: number): number => col * 8 * 0.3125
 
   beforeEach(() => {
     Object.defineProperty(window, 'innerWidth', { value: 200, configurable: true })
@@ -150,6 +161,40 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchstart', [{ x: tapX, y: tapY }])
     fireTouch('touchend', [])
     expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/foo')
+  })
+
+  it('opens first-load OSC links from snapshot metadata on the exact cell range', async () => {
+    const oscLinks = [{ row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }]
+    const { posted } = boot('issue #1234 done', oscLinks)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(7), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/issue/1234')
+  })
+
+  it('does not open snapshot OSC links from adjacent terminal cells', async () => {
+    const oscLinks = [{ row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }]
+    const { posted } = boot('issue #1234 done', oscLinks)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(12), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
+  })
+
+  it('does not open stale snapshot OSC links after the row text changes', async () => {
+    const oscLinks = [{ row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }]
+    const { posted, setLine } = boot('issue #1234 done', oscLinks)
+    await settle()
+    setLine('issue plain done')
+
+    fireTouch('touchstart', [{ x: screenXForCol(7), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
   })
 
   it('does not post open-url for a scroll gesture past the tap slop', async () => {

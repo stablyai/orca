@@ -2561,17 +2561,22 @@ describe('repos:searchBaseRefs SSH relay', () => {
 
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream/main' })
 
-    expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
-    const [argv] = mockGitProvider.exec.mock.calls.find(
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(3)
+    const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
-    )!
-    expect(argv).toContain('refs/remotes/*upstream*/*main*')
-    expect(argv).toContain('refs/heads/*upstream*/*main*')
+    )
+    expect(forEachRefCalls).toHaveLength(2)
+    const segmentedArgv = forEachRefCalls[0][0] as string[]
+    const branchRootArgv = forEachRefCalls[1][0] as string[]
+    expect(segmentedArgv).toContain('refs/remotes/*upstream*/*main*')
+    expect(segmentedArgv).toContain('refs/heads/*upstream*/*main*')
+    expect(branchRootArgv).toContain('refs/remotes/*/upstream/main*')
+    expect(branchRootArgv).toContain('refs/heads/upstream/main*')
     // Regression guard: the literal slash must never appear inside a
     // single segmented glob (would be `refs/remotes/*upstream/main*`),
     // which fnmatch cannot match because `*` doesn't cross `/`.
-    expect(argv).not.toContain('refs/remotes/*upstream/main*/*')
-    expect(argv).not.toContain('refs/remotes/*/*upstream/main*')
+    expect(segmentedArgv).not.toContain('refs/remotes/*upstream/main*/*')
+    expect(segmentedArgv).not.toContain('refs/remotes/*/*upstream/main*')
     expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 

@@ -84,6 +84,10 @@ type NewWorkspaceComposerCardProps = {
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
+  /** True when an existing local branch is selected and can be reused. */
+  canReuseSelectedBranch: boolean
+  reuseSelectedBranch: boolean
+  onReuseSelectedBranchChange: (next: boolean) => void
   smartNameGitHubSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
   forkPushWarning: string | null
@@ -317,6 +321,9 @@ export default function NewWorkspaceComposerCard({
   onSmartLinearIssueSelect,
   smartNameSelection,
   onClearSmartNameSelection,
+  canReuseSelectedBranch,
+  reuseSelectedBranch,
+  onReuseSelectedBranchChange,
   smartNameGitHubSourceContext,
   forkPushWarning,
   detectedAgentIds,
@@ -658,6 +665,64 @@ export default function NewWorkspaceComposerCard({
               <span>{forkPushWarning}</span>
             </p>
           ) : null}
+          {/* Why (#5181): sits right under the branch selection (not the Name
+              field, which can differ from the branch) so reusing the picked
+              branch is an explicit, discoverable choice. Stays mounted and
+              collapses via a grid-rows transition (matching the Advanced
+              drawer) so the dialog grows/shrinks smoothly as the option
+              appears. Only offered when reuse is possible — an existing local
+              branch not already checked out in another worktree. */}
+          <div
+            className={cn(
+              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+              canReuseSelectedBranch ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            )}
+            aria-hidden={!canReuseSelectedBranch}
+          >
+            <div className="min-h-0">
+              <div className="space-y-1 pt-1">
+                <label className="group flex w-fit items-center gap-2 text-xs text-foreground">
+                  <span
+                    className={cn(
+                      'flex size-4 items-center justify-center rounded-[3px] border shadow-sm transition',
+                      reuseSelectedBranch
+                        ? 'border-emerald-500/60 bg-emerald-500 text-white'
+                        : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        'size-3 transition-opacity',
+                        reuseSelectedBranch ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={reuseSelectedBranch}
+                    onChange={(event) => onReuseSelectedBranchChange(event.target.checked)}
+                    // Why: while collapsed the row is aria-hidden, so disable the
+                    // input too — keeps a hidden control out of the tab order and
+                    // fully inert (no focusable control inside an aria-hidden tree).
+                    disabled={!canReuseSelectedBranch}
+                    className="sr-only"
+                  />
+                  <span>
+                    {translate(
+                      'auto.components.NewWorkspaceComposerCard.reuseExistingBranch',
+                      'Reuse branch'
+                    )}
+                  </span>
+                </label>
+                <p className="pl-6 text-[11px] text-muted-foreground">
+                  {translate(
+                    'auto.components.NewWorkspaceComposerCard.reuseExistingBranchHint',
+                    'Check out the existing branch instead of creating a new one from it.'
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-1" data-contextual-tour-target="workspace-creation-agent">
