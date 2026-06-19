@@ -117,4 +117,43 @@ describe('createRuntimeClientEventsSync', () => {
     await flush()
     expect(h.recordsFor('C')[0].unsubscribe).toHaveBeenCalledTimes(1)
   })
+
+  it('retries failed desired subscriptions without another store-driven sync', async () => {
+    vi.useFakeTimers()
+    try {
+      let desired = ['A']
+      let attempt = 0
+      const unsubscribe = vi.fn()
+      const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> => {
+        attempt += 1
+        if (attempt === 1) {
+          return Promise.reject(new Error('temporary subscribe failure'))
+        }
+        return Promise.resolve({ unsubscribe })
+      })
+      const sync = createRuntimeClientEventsSync({
+        getDesiredEnvironmentIds: () => desired,
+        subscribe,
+        onEvent: vi.fn(),
+        retryDelayMs: 10
+      })
+
+      sync.sync()
+      await Promise.resolve()
+      expect(subscribe).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(9)
+      expect(subscribe).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      await Promise.resolve()
+      expect(subscribe).toHaveBeenCalledTimes(2)
+
+      desired = []
+      sync.sync()
+      expect(unsubscribe).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

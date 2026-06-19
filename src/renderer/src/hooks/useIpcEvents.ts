@@ -712,8 +712,12 @@ function getRuntimeClientEventEnvironmentIds(): string[] {
   return [...ids]
 }
 
+export function buildRuntimeClientEventEnvironmentKey(environmentIds: string[]): string {
+  return [...new Set(environmentIds)].sort().join('\u0000')
+}
+
 function getRuntimeClientEventEnvironmentKey(): string {
-  return getRuntimeClientEventEnvironmentIds().join('\u0000')
+  return buildRuntimeClientEventEnvironmentKey(getRuntimeClientEventEnvironmentIds())
 }
 
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
