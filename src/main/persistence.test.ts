@@ -481,7 +481,13 @@ describe('Store', () => {
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.showAutomationsButton).toBe(true)
-    expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(settings.visibleTaskProviders).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira',
+      'glpi'
+    ])
     expect(settings.openInApplications).toEqual([
       { id: 'vscode', label: 'VS Code', command: 'code' }
     ])
@@ -1699,7 +1705,13 @@ describe('Store', () => {
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().showAutomationsButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira',
+      'glpi'
+    ])
     expect(store.getSettings().experimentalActivity).toBe(false)
     expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(store.getSettings().experimentalTerminalAttention).toBe(false)

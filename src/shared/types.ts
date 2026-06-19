@@ -327,7 +327,7 @@ export type FolderWorkspace = {
 }
 
 export type FolderWorkspaceLinkedTask = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'glpi'
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
@@ -1755,6 +1755,25 @@ export type {
   JiraUser,
   JiraViewer
 } from './jira-types'
+
+export type {
+  GlpiConnectArgs,
+  GlpiConnectionStatus,
+  GlpiCreateTicketArgs,
+  GlpiCreateTicketResult,
+  GlpiFollowup,
+  GlpiMutationResult,
+  GlpiServer,
+  GlpiServerSelection,
+  GlpiTicket,
+  GlpiTicketFilter,
+  GlpiTicketStatus,
+  GlpiTicketType,
+  GlpiTicketUpdate,
+  GlpiUser,
+  GlpiViewer,
+  GlpiWorkItemFilters
+} from './glpi-types'
 
 /**
  * GitHub API rate-limit buckets surfaced in the TaskPage header so users can

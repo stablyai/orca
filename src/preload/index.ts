@@ -1527,6 +1527,49 @@ const api = {
       ipcRenderer.invoke('jira:listTransitions', args)
   },
 
+  glpi: {
+    connect: (args: {
+      baseUrl: string
+      appToken: string
+      userToken: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('glpi:connect', args),
+
+    disconnect: (args?: { serverId?: string }): Promise<void> =>
+      ipcRenderer.invoke('glpi:disconnect', args),
+
+    selectServer: (args: { serverId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('glpi:selectServer', args),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('glpi:status'),
+
+    testConnection: (args?: {
+      serverId?: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('glpi:testConnection', args),
+
+    listWorkItems: (args?: {
+      serverId?: string
+      filter?: unknown
+      limit?: number
+      filters?: unknown
+    }): Promise<unknown[]> => ipcRenderer.invoke('glpi:listWorkItems', args),
+
+    ticket: (args: { serverId?: string; id: number }): Promise<unknown> =>
+      ipcRenderer.invoke('glpi:ticket', args),
+
+    followups: (args: { serverId?: string; id: number }): Promise<unknown[]> =>
+      ipcRenderer.invoke('glpi:followups', args),
+
+    addFollowup: (args: { serverId?: string; id: number; content: string }): Promise<unknown> =>
+      ipcRenderer.invoke('glpi:addFollowup', args),
+
+    updateTicket: (args: { serverId?: string; id: number; updates: unknown }): Promise<unknown> =>
+      ipcRenderer.invoke('glpi:updateTicket', args),
+
+    createTicket: (args: unknown): Promise<unknown> => ipcRenderer.invoke('glpi:createTicket', args)
+  },
+
   starNag: {
     onShow: (
       callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void

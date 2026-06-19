@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { getSshStatusLabel } from './ssh-connection-status-label'
 import { getExecutionHostLabel } from '../../../shared/execution-host'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { ExecutionHostHealth } from '../../../shared/execution-host-registry'
@@ -45,6 +46,7 @@ export function getTaskSourceContextSummary(args: {
   selectedRepoCount?: number
   linearWorkspaceName?: string | null
   jiraSiteName?: string | null
+  glpiServerName?: string | null
 }): TaskSourceContextSummary {
   switch (args.provider) {
     case 'github':
@@ -60,6 +62,13 @@ export function getTaskSourceContextSummary(args: {
     case 'jira':
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
         accountLabel: args.jiraSiteName,
+        accountHostId: args.accountHostId,
+        hostLabelById: args.hostLabelById,
+        hostAvailability: args.hostAvailability
+      })
+    case 'glpi':
+      return getAccountBackedTaskSourceSummary(args.providerLabel, {
+        accountLabel: args.glpiServerName,
         accountHostId: args.accountHostId,
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
@@ -198,6 +207,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'glpi':
+      return identity.serverUrl ?? identity.serverId ?? null
   }
 }
 
@@ -284,24 +295,6 @@ function getAvailabilityLabel(
     return unavailableHosts[0].statusLabel
   }
   return `${unavailableHosts.length} unavailable`
-}
-
-function getSshStatusLabel(status: SshConnectionStatus): string {
-  switch (status) {
-    case 'connected':
-      return 'connected'
-    case 'connecting':
-    case 'deploying-relay':
-    case 'reconnecting':
-      return 'connecting'
-    case 'auth-failed':
-      return 'auth needed'
-    case 'reconnection-failed':
-    case 'error':
-      return 'connection issue'
-    case 'disconnected':
-      return 'disconnected'
-  }
 }
 
 function formatShortList(labels: readonly string[]): string {

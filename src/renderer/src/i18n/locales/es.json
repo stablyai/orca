@@ -1574,7 +1574,20 @@
         "ff90d0abc7": "Iniciar espacio de trabajo desde {{value0}}",
         "fe28c9821f": "vista",
         "8d1e17a3ef": "Abra {{value0}} en GitHub",
-        "4ac8ff2275": "Abrir {{value0}} en Jira"
+        "4ac8ff2275": "Abrir {{value0}} en Jira",
+        "33498b2f8b": "No se pudo crear el ticket de GLPI.",
+        "f85087a202": "Todos los servidores GLPI",
+        "05ffb945f2": "Nuevo ticket de GLPI",
+        "4e7517a43d": "Actualizar tickets de GLPI",
+        "4e1743a262": "Conecta tu servidor GLPI",
+        "94270d6245": "Explora, actualiza y empieza a trabajar desde los tickets de GLPI directamente aquí.",
+        "3f0fbc2d23": "Conectar GLPI",
+        "cf43c2468a": "Ocultar GLPI",
+        "3b4796aac0": "Tickets de GLPI",
+        "70d247c485": "Ticket",
+        "7ba4f1554d": "No se encontraron tickets de GLPI",
+        "6ca25ad7b4": "Abrir {{value0}} en GLPI",
+        "90da2367bb": "Abrir en GLPI"
       },
       "Terminal": {
         "73768427cf": "Cerca",
@@ -6003,7 +6016,9 @@
           "dd67a1b6e1": "Muestre GitLab en el selector de fuente de Tareas y en los accesos directos de la barra lateral.",
           "7c5d7fdc20": "GitLab",
           "1db47236cd": "Muestre GitHub en el selector de fuente de Tareas y en los accesos directos de la barra lateral.",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "db2872c3eb": "GLPI",
+          "c5f3055fe6": "Show GLPI in the Tasks source picker and sidebar shortcuts."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Grosor de la línea divisoria del panel.",
@@ -8113,6 +8128,27 @@
           "d37e92a06b": "ORCA_DIAGNOSTICS_DISABLED=1 está configurado: los diagnósticos de la app están desactivados.",
           "5ebb31e1fb": "Se está ejecutando en CI: los diagnósticos están desactivados.",
           "e27c8d45bf": "Los diagnósticos están desactivados por una variable de entorno."
+        },
+        "glpi": {
+          "integration": {
+            "card": {
+              "3652362824": "Desconectar {{value0}}",
+              "3907210261": "Verificado",
+              "e65c56123e": "Conecta un servidor GLPI con un token de aplicación y tu token de API de usuario. Las credenciales se envían al runtime remoto seleccionado y se almacenan allí con el cifrado que admita el runtime.",
+              "4464e319b9": "Conecta un servidor GLPI con un token de aplicación y tu token de API de usuario. Las credenciales se almacenan localmente y se cifran cuando el almacenamiento del runtime local lo admite.",
+              "9639e2d7f3": "{{value0}} servidor(es) conectado(s)",
+              "55adcb030c": "Comprobando el acceso a GLPI antes de mostrar las acciones de configuración.",
+              "de87f5c922": "Explora, crea y empieza a trabajar desde los tickets de GLPI.",
+              "30dcdc6acc": "Añadir servidor",
+              "6b75d2844f": "Conectar GLPI",
+              "4faaa20f04": "Probando...",
+              "d667078dfa": "Probar",
+              "d8dbdfc8a2": "Cada servidor GLPI conectado tiene sus tokens almacenados por el runtime activo.",
+              "57dd44c500": "GLPI está conectado para este runtime. Vuelve a comprobarlo si la lista de servidores conectados parece desactualizada.",
+              "1fa3a21f3a": "Volver a comprobar",
+              "3d50d105eb": "Desconectar"
+            }
+          }
         }
       },
       "right": {
@@ -11498,6 +11534,18 @@
               "chooseSource": "Elige el origen de tareas"
             }
           }
+        },
+        "page": {
+          "localized": {
+            "options": {
+              "13db236c75": "GLPI",
+              "a998fc39b1": "Creadas por mí",
+              "81c1ca89fd": "Todas abiertas",
+              "b8436633d8": "Todas",
+              "e2b9c8c892": "Incidencias",
+              "b8609b0793": "Solicitudes"
+            }
+          }
         }
       },
       "taskPageEmptyState": {
@@ -11535,6 +11583,112 @@
             "later": "Later"
           }
         }
+      },
+      "glpi": {
+        "connect": {
+          "dialog": {
+            "cd43bfb3b7": "Tus tokens se envían al runtime remoto seleccionado y se almacenan allí con el cifrado que admita el runtime.",
+            "c6dd841e4a": "Tus tokens se almacenan localmente y se cifran cuando el almacenamiento del runtime local lo admite.",
+            "e8c6adc128": "Conectar servidor GLPI",
+            "06db050839": "Usa una URL de GLPI con un token de aplicación y tu token de API de usuario para explorar los tickets.",
+            "3924cbe054": "URL de GLPI",
+            "420f3239d2": "https://glpi.example.com",
+            "fbcf3bd3e2": "Token de aplicación",
+            "14e3d15891": "App-Token de GLPI",
+            "3b74f1e1ad": "Token de API de usuario",
+            "eac7eee953": "Token de API personal",
+            "f596fdeb2c": "Genera el token de API de usuario en tus preferencias de GLPI, en Claves de acceso remoto.",
+            "182d946c24": "Cancelar",
+            "56bb5fce21": "Verificando…",
+            "c8c40b7e62": "Conectar"
+          }
+        },
+        "new": {
+          "ticket": {
+            "dialog": {
+              "7872b123a3": "No se pudo crear el ticket. Comprueba tu acceso a GLPI e inténtalo de nuevo.",
+              "5f3261ec55": "Nuevo ticket de GLPI",
+              "179aa5cc53": "Crea un ticket en {{value0}}.",
+              "021dceec54": "Crea un ticket en GLPI.",
+              "222533c970": "Título",
+              "df4b3592d1": "Resumen breve del problema",
+              "ecfea19759": "Descripción",
+              "7a43b31780": "Añade cualquier detalle que ayude a resolver el ticket",
+              "6647218333": "Tipo",
+              "5d83457bb5": "Incidencia",
+              "6f3e248e04": "Solicitud",
+              "ed88ae4924": "Cancelar",
+              "2a3003f1fc": "Creando…",
+              "0e2f43e33a": "Crear ticket"
+            }
+          }
+        },
+        "ticket": {
+          "followups": {
+            "bbf91dd6cf": "recientemente",
+            "d004456e51": "Seguimientos",
+            "324ad31ec9": "Reintentar",
+            "5bee9d63dc": "Aún no hay seguimientos.",
+            "507b68ecfe": "Desconocido",
+            "adf299616a": "Privado",
+            "c40c06e831": "Añadir un seguimiento de GLPI...",
+            "4de419cd14": "Seguimiento"
+          },
+          "status": {
+            "control": {
+              "14941fe48a": "Nuevo",
+              "3e93e05deb": "En proceso",
+              "adb93b9970": "Planificado",
+              "c34203c96f": "Pendiente",
+              "8e1ce241d9": "Resuelto",
+              "cf6b31a56d": "Cerrado",
+              "c8914a7b29": "Muy alta",
+              "0549b49055": "Alta",
+              "86a21a6624": "Media",
+              "aedf2be080": "Baja",
+              "31b46d0f80": "Muy baja",
+              "e660a662d2": "Incidencia",
+              "96564a25b0": "Solicitud",
+              "0c1c2fd027": "Cambiar estado"
+            }
+          }
+        },
+        "filter": {
+          "popover": {
+            "cb0205b0fc": "Muy baja",
+            "12d0381544": "Baja",
+            "c63c887091": "Media",
+            "3691c5f710": "Alta",
+            "5e0ef451f0": "Muy alta",
+            "01f20435c6": "Filtros",
+            "a63bf42a12": "El título contiene",
+            "2c76dbbb28": "Categoría",
+            "d5148b45bf": "Prioridad",
+            "1c19ea34de": "Cualquiera",
+            "58b7bc144d": "Borrar filtros"
+          }
+        }
+      },
+      "GlpiTicketWorkspace": {
+        "57ccc6879c": "{{value0}} copiado",
+        "d75ad9a7a4": "No se pudo copiar {{value0}}",
+        "62fd2e0719": "No se pudieron cargar los seguimientos.",
+        "375ad44a42": "No se pudo actualizar el ticket.",
+        "ac04e56c2f": "No se pudo añadir el seguimiento.",
+        "7f0167c940": "Abrir en GLPI",
+        "fff0f40146": "Copiar URL",
+        "a9a5c99719": "Copiar ID",
+        "6df09513c6": "Copiar nombre de rama sugerido",
+        "c9dda8c70a": "Copiar prompt",
+        "70133b524a": "Sin solicitante",
+        "21a015b029": "Sin asignar",
+        "d4121e691b": "Previsualiza, actualiza y empieza a trabajar desde el ticket seleccionado.",
+        "656b9da353": "Iniciar espacio de trabajo",
+        "be1acc0de5": "Cerrar vista previa del ticket de GLPI",
+        "2bcf18562f": "Cerrar",
+        "e9d3e09d8a": "Urgencia",
+        "475506bad9": "Prioridad",
+        "5ba820459a": "No se proporcionó ninguna descripción."
       }
     },
     "i18n": {

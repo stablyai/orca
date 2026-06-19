@@ -144,7 +144,16 @@ import {
   LinearProjectTable
 } from '@/components/linear-project-view-surfaces'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
+import GlpiTicketWorkspace from '@/components/GlpiTicketWorkspace'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { GlpiIcon } from '@/components/icons/GlpiIcon'
+import { GlpiConnectDialog } from '@/components/glpi-connect-dialog'
+import { GlpiNewTicketDialog } from '@/components/glpi-new-ticket-dialog'
+import { useTaskPageGlpi } from '@/components/task-page-glpi-handlers'
+import { getGlpiStatusTone } from '@/components/task-page-glpi-presentation'
+import { getGlpiScaleLabel, getGlpiStatusLabel } from '@/components/glpi-ticket-status-control'
+import { GlpiFilterPopover } from '@/components/glpi-filter-popover'
+import type { GlpiTypeFilter } from '@/components/task-page-glpi-filters'
 import { cn } from '@/lib/utils'
 import {
   getLinkedWorkItemSuggestedName,
@@ -209,6 +218,7 @@ import type {
   GitHubWorkItem,
   GitLabTodo,
   GitLabWorkItem,
+  GlpiCreateTicketArgs,
   JiraCreateField,
   LinearCollectionResult,
   LinearCustomViewModel,
@@ -268,6 +278,8 @@ import {
   getGitHubTaskKindPresets,
   getGitLabIssueFilters,
   getGitLabMRFilters,
+  getGlpiPresets,
+  getGlpiTypeFilters,
   getJiraPresets,
   getLinearDisplayProperties,
   getLinearGroupOptions,
@@ -2889,6 +2901,8 @@ export default function TaskPage(): React.JSX.Element {
   const githubModeButtons = getGitHubModeButtons()
   const linearModeOptions = getLinearModeOptions()
   const jiraPresets = getJiraPresets()
+  const glpiPresets = getGlpiPresets()
+  const glpiTypeFilters = getGlpiTypeFilters()
   const gitLabIssueFilters = getGitLabIssueFilters()
   const gitLabMRFilters = getGitLabMRFilters()
   const linearViewOptions = getLinearViewOptions()
@@ -3151,7 +3165,7 @@ export default function TaskPage(): React.JSX.Element {
     ]
   )
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'linear' && taskSource !== 'jira') {
+    if (taskSource !== 'linear' && taskSource !== 'jira' && taskSource !== 'glpi') {
       return []
     }
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)
@@ -3224,6 +3238,13 @@ export default function TaskPage(): React.JSX.Element {
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      glpi:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('glpi'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
         }) ?? undefined
     }
   }, [
@@ -3237,6 +3258,19 @@ export default function TaskPage(): React.JSX.Element {
     selectedRepos,
     sourceOptions
   ])
+  const [taskResumeApplied, setTaskResumeApplied] = useState(false)
+
+  // GLPI is an account-based task source that mirrors Jira; its list/detail
+  // state, effects and handlers live in this focused hook.
+  const glpi = useTaskPageGlpi({
+    taskSource,
+    taskResumeApplied,
+    providerRuntimeContextKey,
+    accountBackedTaskSourceHostId,
+    fallbackTaskSourceProjectId,
+    openTaskPage,
+    openModal
+  })
   const taskSourceContextSummary = useMemo(() => {
     const providerLabel =
       sourceOptions.find((source) => source.id === taskSource)?.label ?? taskSource
@@ -3245,7 +3279,7 @@ export default function TaskPage(): React.JSX.Element {
       providerLabel,
       repoContexts: taskSourceRepoContexts,
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'glpi'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       accountHostId: accountBackedTaskSourceHostId,
@@ -3253,9 +3287,11 @@ export default function TaskPage(): React.JSX.Element {
       selectedRepoCount: selectedRepos.length,
       linearWorkspaceName:
         selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null,
-      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null,
+      glpiServerName: glpi.glpiServerName
     })
   }, [
+    glpi.glpiServerName,
     selectedJiraSite,
     selectedLinearWorkspace,
     selectedRepos.length,
@@ -3273,11 +3309,11 @@ export default function TaskPage(): React.JSX.Element {
     return getTaskSourceAvailabilityNotice({
       providerLabel,
       sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'glpi'
           ? 1
           : Math.max(1, taskSourceRepoContexts.length),
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'glpi'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       hostLabelById
@@ -3304,7 +3340,6 @@ export default function TaskPage(): React.JSX.Element {
   const githubSearchPersistReadyRef = useRef(false)
   const linearSearchPersistReadyRef = useRef(false)
   const jiraSearchPersistReadyRef = useRef(false)
-  const [taskResumeApplied, setTaskResumeApplied] = useState(false)
 
   // Why: pageData.taskSource changes when the user clicks a specific source
   // icon in the sidebar while the task page is already open. useState only
@@ -3882,6 +3917,8 @@ export default function TaskPage(): React.JSX.Element {
     }
     setDialogWorkItem(null)
     clearSelectedLinearIssue()
+    // GLPI detail is local hook state (not page-data backed), so clear it here.
+    glpi.clearSelectedGlpiTicket()
     useAppStore.setState((s) => ({
       taskPageData: {
         ...s.taskPageData,
@@ -3896,7 +3933,7 @@ export default function TaskPage(): React.JSX.Element {
         openJiraSourceContext: undefined
       }
     }))
-  }, [clearSelectedLinearIssue, setDialogWorkItem])
+  }, [clearSelectedLinearIssue, glpi, setDialogWorkItem])
 
   const [selectedJiraIssueKey, setSelectedJiraIssueKey] = useState<string | null>(null)
   const [selectedJiraIssueFallback, setSelectedJiraIssueFallback] = useState<JiraIssue | null>(null)
@@ -5291,6 +5328,9 @@ export default function TaskPage(): React.JSX.Element {
   const [newJiraIssueCustomFieldValues, setNewJiraIssueCustomFieldValues] = useState<
     Record<string, string>
   >({})
+  const [glpiConnectOpen, setGlpiConnectOpen] = useState(false)
+  const [newGlpiTicketOpen, setNewGlpiTicketOpen] = useState(false)
+  const createGlpiTicket = useAppStore((s) => s.createGlpiTicket)
   const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
   const [jiraSiteUrlDraft, setJiraSiteUrlDraft] = useState('')
   const [jiraEmailDraft, setJiraEmailDraft] = useState('')
@@ -5336,7 +5376,10 @@ export default function TaskPage(): React.JSX.Element {
       setNewJiraIssueCustomFieldValues({})
       setNewJiraIssueSubmitting(false)
     }
-  }, [newJiraIssueOpen, newLinearIssueOpen, providerRuntimeContextKey])
+    if (newGlpiTicketOpen) {
+      setNewGlpiTicketOpen(false)
+    }
+  }, [newGlpiTicketOpen, newJiraIssueOpen, newLinearIssueOpen, providerRuntimeContextKey])
 
   const sortedAvailableJiraProjects = useMemo(
     () =>
@@ -6101,6 +6144,7 @@ export default function TaskPage(): React.JSX.Element {
       newLinearProjectOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
+      newGlpiTicketOpen ||
       activeModal !== 'none'
     ) {
       return
@@ -6144,6 +6188,7 @@ export default function TaskPage(): React.JSX.Element {
     newLinearProjectOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
+    newGlpiTicketOpen,
     taskSource
   ])
 
@@ -6670,6 +6715,7 @@ export default function TaskPage(): React.JSX.Element {
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
+      newGlpiTicketOpen ||
       activeModal !== 'none'
     ) {
       return
@@ -6712,6 +6758,7 @@ export default function TaskPage(): React.JSX.Element {
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
+    newGlpiTicketOpen,
     selectedLinearIssue
   ])
 
@@ -7447,6 +7494,34 @@ export default function TaskPage(): React.JSX.Element {
     [openComposerForJiraItem]
   )
 
+  const handleCreateGlpiTicket = useCallback(
+    async (input: {
+      title: string
+      content: string
+      type: 'incident' | 'request'
+    }): Promise<boolean> => {
+      const args: GlpiCreateTicketArgs = {
+        serverId: glpi.selectedGlpiServerId ?? undefined,
+        title: input.title,
+        content: input.content || undefined,
+        type: input.type
+      }
+      const result = await createGlpiTicket(args, {
+        sourceContext: glpi.glpiTaskSourceContext
+      })
+      if (!result.ok) {
+        toast.error(
+          result.error ||
+            translate('auto.components.TaskPage.33498b2f8b', 'Failed to create GLPI ticket.')
+        )
+        return false
+      }
+      glpi.refreshGlpiTickets()
+      return true
+    },
+    [createGlpiTicket, glpi]
+  )
+
   const handleJiraConnect = useCallback(async (): Promise<void> => {
     const siteUrl = jiraSiteUrlDraft.trim()
     const email = jiraEmailDraft.trim()
@@ -7479,6 +7554,7 @@ export default function TaskPage(): React.JSX.Element {
     hasGitHubDetail: Boolean(dialogWorkItem),
     hasGitLabDetail: Boolean(gitlabDialogItem),
     hasJiraDetail: Boolean(selectedJiraIssue),
+    hasGlpiDetail: Boolean(glpi.selectedGlpiTicket),
     hasLinearIssueDetail: Boolean(selectedLinearIssue),
     hasLinearProjectContext: Boolean(selectedLinearProject),
     hasLinearViewContext: Boolean(selectedLinearCustomView)
@@ -7673,6 +7749,32 @@ export default function TaskPage(): React.JSX.Element {
                             {jiraSites.map((site) => (
                               <SelectItem key={site.id} value={site.id}>
                                 {site.displayName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {taskSource === 'glpi' && glpi.glpiConnected ? (
+                    <div className="flex items-center gap-2">
+                      {glpi.glpiServers.length > 1 ? (
+                        <Select
+                          value={glpi.selectedGlpiServerId ?? 'all'}
+                          onValueChange={(value) => {
+                            glpi.selectGlpiServerById(value)
+                          }}
+                        >
+                          <SelectTrigger className="h-8 w-[220px] rounded-md border-border/50 bg-muted/50 text-xs font-medium shadow-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">
+                              {translate('auto.components.TaskPage.f85087a202', 'All GLPI servers')}
+                            </SelectItem>
+                            {glpi.glpiServers.map((server) => (
+                              <SelectItem key={server.id} value={server.id}>
+                                {server.displayName}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -8419,6 +8521,111 @@ export default function TaskPage(): React.JSX.Element {
                             <X className="size-4" />
                           </button>
                         ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : taskSource === 'glpi' && glpi.glpiConnected ? (
+                  <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {glpiPresets.map((preset) => {
+                          const active = glpi.activeGlpiPreset === preset.id
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => {
+                                glpi.setActiveGlpiPreset(preset.id)
+                                glpi.refreshGlpiTickets()
+                              }}
+                              className={cn(
+                                'rounded-md border px-2 py-1 text-xs transition',
+                                active
+                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
+                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
+                              )}
+                            >
+                              {preset.label}
+                            </button>
+                          )
+                        })}
+                        <span className="mx-1 h-4 w-px shrink-0 bg-border/50" aria-hidden />
+                        <div className="flex items-center gap-1 rounded-md border border-border/50 p-0.5">
+                          {glpiTypeFilters.map((option) => {
+                            const active = glpi.glpiTypeFilter === option.id
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => {
+                                  glpi.setGlpiTypeFilter(option.id as GlpiTypeFilter)
+                                  glpi.refreshGlpiTickets()
+                                }}
+                                className={cn(
+                                  'rounded-sm px-2 py-0.5 text-xs transition',
+                                  active
+                                    ? 'bg-foreground/90 text-background backdrop-blur-md'
+                                    : 'bg-transparent text-foreground hover:bg-muted/50'
+                                )}
+                              >
+                                {option.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <GlpiFilterPopover
+                          value={glpi.glpiAdvancedFilters}
+                          onChange={glpi.setGlpiAdvancedFilters}
+                          onClear={() => glpi.setGlpiAdvancedFilters({})}
+                        />
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => setNewGlpiTicketOpen(true)}
+                              aria-label={translate(
+                                'auto.components.TaskPage.05ffb945f2',
+                                'New GLPI ticket'
+                              )}
+                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              <Plus className="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {translate('auto.components.TaskPage.05ffb945f2', 'New GLPI ticket')}
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => glpi.refreshGlpiTickets()}
+                              disabled={glpi.glpiLoading}
+                              aria-label={translate(
+                                'auto.components.TaskPage.4e7517a43d',
+                                'Refresh GLPI tickets'
+                              )}
+                              className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
+                            >
+                              {glpi.glpiLoading ? (
+                                <LoaderCircle className="size-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="size-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" sideOffset={6}>
+                            {translate(
+                              'auto.components.TaskPage.4e7517a43d',
+                              'Refresh GLPI tickets'
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     </div>
                   </div>
@@ -9635,6 +9842,267 @@ export default function TaskPage(): React.JSX.Element {
                   onClose={closeTaskDetailPage}
                   sourceContext={jiraDetailSourceContext}
                 />
+              </div>
+            )
+          ) : taskSource === 'glpi' ? (
+            !glpi.glpiStatusReady ? (
+              <div className="mt-4 flex items-center justify-center py-14">
+                <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : !glpi.glpiConnected ? (
+              <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
+                <GlpiIcon className="mb-4 size-8 text-muted-foreground/60" />
+                <p className="text-base font-medium text-foreground">
+                  {translate('auto.components.TaskPage.4e1743a262', 'Connect your GLPI server')}
+                </p>
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.TaskPage.94270d6245',
+                    'Browse, update, and start work from GLPI tickets directly from here.'
+                  )}
+                </p>
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  <Button onClick={() => setGlpiConnectOpen(true)}>
+                    {translate('auto.components.TaskPage.3f0fbc2d23', 'Connect GLPI')}
+                  </Button>
+                  <Button variant="outline" onClick={() => hideTaskSource('glpi', 'GLPI')}>
+                    {translate('auto.components.TaskPage.cf43c2468a', 'Hide GLPI')}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+                <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
+                  <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {translate('auto.components.TaskPage.3b4796aac0', 'GLPI tickets')}
+                  </div>
+                  <div className="shrink-0 text-[11px] text-muted-foreground">
+                    {glpi.glpiTickets.length}{' '}
+                    {translate('auto.components.TaskPage.b7bae28b6a', 'shown')}
+                  </div>
+                </div>
+
+                <div className="grid h-8 flex-none grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:!hidden lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]">
+                  <span>{translate('auto.components.TaskPage.eb10c32872', 'ID')}</span>
+                  <span>{translate('auto.components.TaskPage.70d247c485', 'Ticket')}</span>
+                  <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
+                  <span>{translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}</span>
+                  <span className="block max-lg:!hidden">
+                    {translate('auto.components.TaskPage.d2a876ca53', 'Assignee')}
+                  </span>
+                  <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+                  <span />
+                </div>
+
+                <div
+                  className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
+                  style={{ scrollbarGutter: 'stable' }}
+                >
+                  {(glpi.glpiCredentialError ?? glpi.glpiError) ? (
+                    <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+                      {glpi.glpiCredentialError ?? glpi.glpiError}
+                    </div>
+                  ) : null}
+
+                  {glpi.glpiLoading && glpi.glpiTickets.length === 0 ? (
+                    <div className="divide-y divide-border/50">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="px-3 py-3">
+                          <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
+                          <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-muted/60" />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {!glpi.glpiLoading &&
+                  glpi.glpiTickets.length === 0 &&
+                  !glpi.glpiError &&
+                  !glpi.glpiCredentialError ? (
+                    <div className="px-4 py-10 text-center">
+                      <p className="text-sm font-medium text-foreground">
+                        {translate('auto.components.TaskPage.7ba4f1554d', 'No GLPI tickets found')}
+                      </p>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        {translate(
+                          'auto.components.TaskPage.94d900518d',
+                          'No issues match the selected preset.'
+                        )}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  <div className="divide-y divide-border/50">
+                    {glpi.glpiTickets.map((ticket) => {
+                      const selected = ticket.id === glpi.selectedGlpiTicketId
+                      const contextLabel =
+                        glpi.selectedGlpiServerId === null && ticket.serverName
+                          ? ticket.serverName
+                          : (ticket.category ?? '')
+                      return (
+                        <div
+                          key={`${ticket.serverId ?? 'server'}:${ticket.id}`}
+                          role="button"
+                          tabIndex={0}
+                          aria-current={selected ? 'true' : undefined}
+                          data-current={selected ? 'true' : undefined}
+                          onClick={() => glpi.openGlpiDetailPage(ticket)}
+                          onKeyDown={(e) => {
+                            if (e.target !== e.currentTarget) {
+                              return
+                            }
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              glpi.openGlpiDetailPage(ticket)
+                            }
+                          }}
+                          className={cn(
+                            'group/row grid min-h-12 cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-left transition hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:grid-cols-[90px_minmax(0,1fr)_128px_92px_80px] lg:grid-cols-[96px_minmax(0,1.25fr)_132px_120px_136px_96px_64px] xl:grid-cols-[104px_minmax(0,1.45fr)_144px_132px_160px_128px_72px]',
+                            selected && 'bg-accent'
+                          )}
+                        >
+                          <span className="block truncate font-mono text-[12px] text-muted-foreground max-md:!hidden">
+                            #{ticket.id}
+                          </span>
+
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="shrink-0 font-mono text-[11px] text-muted-foreground md:hidden">
+                                #{ticket.id}
+                              </span>
+                              <h3 className="min-w-0 truncate text-[13px] font-medium text-foreground">
+                                {ticket.title}
+                              </h3>
+                            </div>
+                            <div className="mt-1 flex min-w-0 items-center gap-1.5 md:!hidden">
+                              <span
+                                className={cn(
+                                  'inline-flex min-w-0 items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium',
+                                  getGlpiStatusTone(ticket.status)
+                                )}
+                              >
+                                <span className="truncate">
+                                  {getGlpiStatusLabel(ticket.status)}
+                                </span>
+                              </span>
+                              <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                                {ticket.assignees[0]?.fullName ??
+                                  ticket.assignees[0]?.login ??
+                                  translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+                              </span>
+                            </div>
+                            {contextLabel ? (
+                              <div className="mt-1 flex min-w-0 items-center gap-1 max-lg:!hidden">
+                                <span className="max-w-[160px] truncate text-[10px] text-muted-foreground">
+                                  {contextLabel}
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="flex min-w-0 max-md:!hidden">
+                            <span
+                              className={cn(
+                                'inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                                getGlpiStatusTone(ticket.status)
+                              )}
+                            >
+                              <span className="truncate">{getGlpiStatusLabel(ticket.status)}</span>
+                            </span>
+                          </div>
+
+                          <span className="block truncate text-[12px] text-muted-foreground max-md:!hidden">
+                            {getGlpiScaleLabel(ticket.priority)}
+                          </span>
+
+                          <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
+                            <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
+                              {(
+                                ticket.assignees[0]?.fullName ??
+                                ticket.assignees[0]?.login ??
+                                '-'
+                              ).slice(0, 1)}
+                            </span>
+                            <span className="truncate">
+                              {ticket.assignees[0]?.fullName ??
+                                ticket.assignees[0]?.login ??
+                                translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+                            </span>
+                          </div>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="block min-w-0 truncate text-[12px] text-muted-foreground max-md:!hidden">
+                                {formatRelativeTime(ticket.updatedAt)}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" sideOffset={6}>
+                              {new Date(ticket.updatedAt).toLocaleString()}
+                            </TooltipContent>
+                          </Tooltip>
+
+                          <div className="flex shrink-0 items-center justify-end gap-1 md:opacity-0 md:transition-opacity md:group-hover/row:opacity-100 md:group-focus-within/row:opacity-100">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    glpi.handleUseGlpiTicket(ticket)
+                                  }}
+                                  aria-label={translate(
+                                    'auto.components.TaskPage.ff90d0abc7',
+                                    'Start workspace from {{value0}}',
+                                    { value0: `#${ticket.id}` }
+                                  )}
+                                >
+                                  <ArrowRight className="size-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" sideOffset={6}>
+                                {translate(
+                                  'auto.components.TaskPage.9497f2787c',
+                                  'Start workspace'
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    window.api.shell.openUrl(ticket.url)
+                                  }}
+                                  aria-label={translate(
+                                    'auto.components.TaskPage.6ca25ad7b4',
+                                    'Open {{value0}} in GLPI',
+                                    { value0: `#${ticket.id}` }
+                                  )}
+                                >
+                                  <ExternalLink className="size-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" sideOffset={6}>
+                                {translate('auto.components.TaskPage.90da2367bb', 'Open in GLPI')}
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+                {glpi.selectedGlpiTicket ? (
+                  <GlpiTicketWorkspace
+                    ticket={glpi.selectedGlpiTicket}
+                    onUse={glpi.handleUseGlpiTicket}
+                    onClose={closeTaskDetailPage}
+                    sourceContext={glpi.glpiDetailSourceContext}
+                  />
+                ) : null}
               </div>
             )
           ) : taskSource === 'linear' && selectedLinearIssue ? (
@@ -12232,6 +12700,15 @@ export default function TaskPage(): React.JSX.Element {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <GlpiConnectDialog open={glpiConnectOpen} onOpenChange={setGlpiConnectOpen} />
+
+      <GlpiNewTicketDialog
+        open={newGlpiTicketOpen}
+        onOpenChange={setNewGlpiTicketOpen}
+        serverName={glpi.glpiServerName ?? undefined}
+        onCreate={handleCreateGlpiTicket}
+      />
     </div>
   )
 }

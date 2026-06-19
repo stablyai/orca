@@ -6,6 +6,7 @@ import {
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
 import { cn } from '@/lib/utils'
+import { GlpiIcon } from '@/components/icons/GlpiIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Label } from '../ui/label'
@@ -75,6 +76,19 @@ const TASK_PROVIDER_OPTIONS: readonly {
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  {
+    id: 'glpi',
+    get label() {
+      return translate('auto.components.settings.TasksPane.db2872c3eb', 'GLPI')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.c5f3055fe6',
+        'Show GLPI in the Tasks source picker and sidebar shortcuts.'
+      )
+    },
+    Icon: ({ className }) => <GlpiIcon className={className} />
   }
 ]
 
@@ -123,6 +137,8 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
             'linear',
             'jira',
             'atlassian',
+            'glpi',
+            'itsm',
             'display',
             'hide'
           ]}

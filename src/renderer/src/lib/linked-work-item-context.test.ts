@@ -2,12 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { buildAgentPromptWithContext } from './new-workspace'
 import {
   buildContainedLinkedContextBlock,
+  buildGlpiLaunchContextBlock,
   buildLinearLaunchContextBlock,
   getLaunchableWorkItemDraftContent,
   getLinkedWorkItemPromptContext,
   LINKED_CONTEXT_BLOCK_MAX_CHARS,
   resolveQuickCreateLinkedWorkItemPrompt
 } from './linked-work-item-context'
+
+const GLPI_ITEM = {
+  provider: 'glpi' as const,
+  number: 4567,
+  url: 'https://soporte.example.net/front/ticket.form.php?id=4567',
+  title: 'Printer offline in accounting'
+}
 
 const LINEAR_ITEM = {
   url: 'https://linear.app/acme/issue/ENG-123/test',
@@ -130,7 +138,42 @@ describe('buildLinearLaunchContextBlock', () => {
   })
 })
 
+describe('buildGlpiLaunchContextBlock', () => {
+  it('emits the ticket pointer with id, title, and URL', () => {
+    const block = buildGlpiLaunchContextBlock({
+      ticketNumber: GLPI_ITEM.number,
+      title: GLPI_ITEM.title,
+      url: GLPI_ITEM.url
+    })
+
+    expect(block).toBe(
+      `Resolve GLPI ticket #4567: Printer offline in accounting — ${GLPI_ITEM.url}`
+    )
+  })
+
+  it('drops the id prefix when no positive ticket number is present', () => {
+    expect(
+      buildGlpiLaunchContextBlock({ ticketNumber: 0, title: 'Account locked', url: undefined })
+    ).toBe('Resolve GLPI ticket: Account locked')
+  })
+
+  it('returns null when nothing identifying is available', () => {
+    expect(
+      buildGlpiLaunchContextBlock({ ticketNumber: undefined, title: '  ', url: '  ' })
+    ).toBeNull()
+  })
+})
+
 describe('getLinkedWorkItemPromptContext', () => {
+  it('returns the GLPI launch block for GLPI items', () => {
+    const result = getLinkedWorkItemPromptContext(GLPI_ITEM, { cliAvailable: false })
+
+    expect(result.linkedUrls).toEqual([])
+    expect(result.linkedContextBlocks).toEqual([
+      `Resolve GLPI ticket #4567: Printer offline in accounting — ${GLPI_ITEM.url}`
+    ])
+  })
+
   it('returns the Linear launch block instead of ticket content for Linear items', () => {
     const result = getLinkedWorkItemPromptContext(LINEAR_ITEM, { cliAvailable: true })
 
@@ -202,6 +245,18 @@ describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
       draftPrompt: 'note\n\nhttps://github.com/acme/repo/issues/42'
     })
   })
+
+  it('drafts the note above the GLPI launch block', () => {
+    const result = resolveQuickCreateLinkedWorkItemPrompt(GLPI_ITEM, 'check on site', {
+      cliAvailable: false
+    })
+
+    expect(result.prompt).toBe('')
+    expect(result.draftPrompt).toContain('check on site')
+    expect(result.draftPrompt).toContain('Resolve GLPI ticket #4567: Printer offline in accounting')
+    expect(result.draftPrompt).toContain(GLPI_ITEM.url)
+    expect(result.draftPrompt).toMatch(/\n$/)
+  })
 })
 
 describe('getLaunchableWorkItemDraftContent', () => {
@@ -238,6 +293,18 @@ describe('getLaunchableWorkItemDraftContent', () => {
         cliAvailable: true
       })
     ).toBe('https://github.com/acme/repo/issues/42')
+  })
+
+  it('drafts the GLPI launch block for GLPI items', () => {
+    const draft = getLaunchableWorkItemDraftContent({
+      pasteContent: '',
+      ...GLPI_ITEM,
+      cliAvailable: false
+    })
+
+    expect(draft).toContain('Resolve GLPI ticket #4567: Printer offline in accounting')
+    expect(draft).toContain(GLPI_ITEM.url)
+    expect(draft).toMatch(/\n$/)
   })
 })
 

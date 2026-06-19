@@ -2,6 +2,7 @@ import React from 'react'
 import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { GlpiIcon } from '@/components/icons/GlpiIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { getTaskPresetQuery } from '@/lib/new-workspace'
@@ -27,6 +28,9 @@ export type SourceOption = {
 
 export type JiraPresetId = 'assigned' | 'reported' | 'all' | 'done'
 export type JiraPreset = { id: JiraPresetId; label: string }
+
+export type GlpiPresetId = 'assigned' | 'created' | 'all' | 'closed'
+export type GlpiPreset = { id: GlpiPresetId; label: string }
 
 export type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
 
@@ -124,6 +128,11 @@ export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
     id: 'jira',
     label: translate('auto.components.TaskPage.9cd11ba218', 'Jira'),
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  {
+    id: 'glpi',
+    label: translate('auto.components.task.page.localized.options.13db236c75', 'GLPI'),
+    Icon: ({ className }) => <GlpiIcon className={className} />
   }
 ])
 
@@ -132,6 +141,33 @@ export const getJiraPresets = createLocalizedCatalog((): JiraPreset[] => [
   { id: 'reported', label: translate('auto.components.TaskPage.bd9965df51', 'Reported') },
   { id: 'all', label: translate('auto.components.TaskPage.4b6e40e42c', 'All Open') },
   { id: 'done', label: translate('auto.components.TaskPage.18451e99df', 'Done') }
+])
+
+export const getGlpiPresets = createLocalizedCatalog((): GlpiPreset[] => [
+  { id: 'assigned', label: translate('auto.components.TaskPage.94f0339621', 'Assigned to me') },
+  {
+    id: 'created',
+    label: translate('auto.components.task.page.localized.options.a998fc39b1', 'Created by me')
+  },
+  {
+    id: 'all',
+    label: translate('auto.components.task.page.localized.options.81c1ca89fd', 'All open')
+  },
+  { id: 'closed', label: translate('auto.components.TaskPage.d09bf34db7', 'Closed') }
+])
+
+export type GlpiTypeFilterOption = { id: 'all' | 'incident' | 'request'; label: string }
+
+export const getGlpiTypeFilters = createLocalizedCatalog((): GlpiTypeFilterOption[] => [
+  { id: 'all', label: translate('auto.components.task.page.localized.options.b8436633d8', 'All') },
+  {
+    id: 'incident',
+    label: translate('auto.components.task.page.localized.options.e2b9c8c892', 'Incidents')
+  },
+  {
+    id: 'request',
+    label: translate('auto.components.task.page.localized.options.b8609b0793', 'Requests')
+  }
 ])
 
 export const getGitHubModeButtons = createLocalizedCatalog((): GitHubModeButton[] => [

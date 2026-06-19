@@ -18,6 +18,7 @@ import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/wor
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { canUseInlineDraftLaunchPlan } from '@/lib/inline-draft-launch-safety'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import {
   resolveTuiAgentLaunchArgs,
@@ -2116,17 +2117,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           hint = `was ${baseBranch}`
         }
       }
-      const preserveLinearLinkedWorkItem = isLinearLinkedWorkItem(linkedWorkItem)
+      // Account-scoped sources (Linear, GLPI) outlive a repo/project change.
+      const preserveLinkedWorkItem =
+        isLinearLinkedWorkItem(linkedWorkItem) ||
+        (linkedWorkItem != null && getLinkedWorkItemProvider(linkedWorkItem) === 'glpi')
       setRepoId(value)
       if (!options.preserveStartFrom) {
         setLinkedIssue('')
         setLinkedPR(null)
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
-        // Why: repo changes invalidate repo-scoped sources (GitHub/GitLab/branch),
-        // but a selected Linear issue is workspace-scoped source context and
-        // must survive choosing the implementation project.
-        if (!preserveLinearLinkedWorkItem) {
+        // Repo-scoped sources (GitHub/GitLab) are meaningless after a repo switch.
+        if (!preserveLinkedWorkItem) {
           setLinkedWorkItem(null)
         }
       }
@@ -3309,7 +3311,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               })
 
         let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
-        if (draftLaunchPlan) {
+        // Why: multi-line drafts can't be folded into the typed launch command.
+        if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, CLIENT_PLATFORM)) {
           startupPlan = {
             agent: draftLaunchPlan.agent,
             launchCommand: draftLaunchPlan.launchCommand,

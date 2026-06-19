@@ -6,9 +6,10 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from './execution-host'
+import type { TaskProvider } from './task-providers'
 import type { GlobalSettings, ProjectProviderIdentity, Repo } from './types'
 
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type { TaskProvider }
 
 export type GitHubTaskProviderIdentity = ProjectProviderIdentity & {
   provider: 'github'
@@ -37,11 +38,18 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type GlpiTaskProviderIdentity = {
+  provider: 'glpi'
+  serverId?: string | null
+  serverUrl?: string | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
+  | GlpiTaskProviderIdentity
 
 export type TaskSourceContext = {
   kind: 'task-source'
@@ -182,6 +190,7 @@ function normalizeTaskProvider(value: string): TaskProvider | null {
     case 'gitlab':
     case 'linear':
     case 'jira':
+    case 'glpi':
       return value
     default:
       return null
@@ -216,6 +225,8 @@ function providerIdentityCachePart(identity: TaskProviderIdentity | null | undef
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
+    case 'glpi':
+      return identity.serverId ?? identity.serverUrl ?? ''
   }
 }
 

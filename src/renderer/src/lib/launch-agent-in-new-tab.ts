@@ -7,6 +7,7 @@ import {
 } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
+import { canUseInlineDraftLaunchPlan } from '@/lib/inline-draft-launch-safety'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'

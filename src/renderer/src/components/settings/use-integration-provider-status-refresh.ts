@@ -11,8 +11,11 @@ export function useIntegrationProviderStatusRefresh(): void {
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const glpiStatusChecked = useAppStore((s) => s.glpiStatusChecked)
+  const glpiStatusContextKey = useAppStore((s) => s.glpiStatusContextKey)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const checkGlpiConnection = useAppStore((s) => s.checkGlpiConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
@@ -21,6 +24,7 @@ export function useIntegrationProviderStatusRefresh(): void {
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const glpiStatusCurrent = glpiStatusContextKey === providerRuntimeContextKey
 
   useEffect(() => {
     if (!linearStatusCurrent || !linearStatusChecked) {
@@ -29,12 +33,19 @@ export function useIntegrationProviderStatusRefresh(): void {
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!glpiStatusCurrent || !glpiStatusChecked) {
+      void checkGlpiConnection()
+    }
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
   }, [
+    checkGlpiConnection,
     checkJiraConnection,
     checkLinearConnection,
+    glpiStatusChecked,
+    glpiStatusCurrent,
+    glpiStatusContextKey,
     jiraStatusChecked,
     jiraStatusCurrent,
     jiraStatusContextKey,

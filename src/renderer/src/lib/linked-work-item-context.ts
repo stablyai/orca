@@ -98,6 +98,53 @@ export function buildLinearLaunchContextBlock(args: LinearLaunchContextArgs): st
   return lines.join('\n')
 }
 
+export function buildGlpiLaunchContextBlock(args: {
+  ticketNumber: number | undefined
+  title: string | undefined
+  url: string | undefined
+}): string | null {
+  const url = args.url?.trim()
+  const title = args.title?.trim()
+  const hasTicket = typeof args.ticketNumber === 'number' && args.ticketNumber > 0
+  if (!url && !title && !hasTicket) {
+    return null
+  }
+  const subject = title ? `: ${title}` : ''
+  const header = hasTicket
+    ? `Resolve GLPI ticket #${args.ticketNumber}${subject}`
+    : `Resolve GLPI ticket${subject}`
+  // Single line: the prompt rides in the typed `--prefill` launch command.
+  return url ? `${header} — ${url}` : header
+}
+
+export function buildWorkItemLaunchContextBlock(
+  item:
+    | {
+        provider?: TaskProvider
+        number?: number | null
+        title?: string
+        url?: string
+        linearIdentifier?: string
+      }
+    | null
+    | undefined,
+  opts: { cliAvailable: boolean }
+): string | null {
+  if (item?.provider === 'glpi') {
+    return buildGlpiLaunchContextBlock({
+      ticketNumber: item.number ?? undefined,
+      title: item.title,
+      url: item.url
+    })
+  }
+  return buildLinearLaunchContextBlock({
+    identifier: item?.linearIdentifier,
+    title: item?.title,
+    url: item?.url,
+    cliAvailable: opts.cliAvailable
+  })
+}
+
 function escapeLinkedContextControlChars(value: string): string {
   return Array.from(value, (char) => {
     const code = char.charCodeAt(0)
@@ -142,20 +189,22 @@ function capLinkedContextSourceLines(args: { sourceLines: string; fixedChars: nu
 export function getLinkedWorkItemPromptContext(
   linkedWorkItem:
     | Pick<
-        { url: string; title?: string; linearIdentifier?: string },
-        'url' | 'title' | 'linearIdentifier'
+        {
+          url: string
+          title?: string
+          number?: number
+          provider?: TaskProvider
+          linearIdentifier?: string
+        },
+        'url' | 'title' | 'number' | 'provider' | 'linearIdentifier'
       >
     | null
     | undefined,
   opts: { cliAvailable: boolean }
 ): { linkedUrls: string[]; linkedContextBlocks: string[] } {
-  const linearBlock = buildLinearLaunchContextBlock({
-    identifier: linkedWorkItem?.linearIdentifier,
-    url: linkedWorkItem?.url,
-    cliAvailable: opts.cliAvailable
-  })
-  if (linearBlock) {
-    return { linkedUrls: [], linkedContextBlocks: [linearBlock] }
+  const launchBlock = buildWorkItemLaunchContextBlock(linkedWorkItem, opts)
+  if (launchBlock) {
+    return { linkedUrls: [], linkedContextBlocks: [launchBlock] }
   }
   const linkedUrl = linkedWorkItem?.url?.trim()
   return linkedUrl
@@ -167,28 +216,32 @@ export function getLaunchableWorkItemDraftContent(args: {
   pasteContent?: string
   url: string
   title?: string
+  number?: number | null
+  provider?: TaskProvider
   linearIdentifier?: string
   cliAvailable: boolean
 }): string {
   if (args.pasteContent?.trim()) {
     return args.pasteContent
   }
-  const linearBlock = buildLinearLaunchContextBlock({
-    identifier: args.linearIdentifier,
-    url: args.url,
-    cliAvailable: args.cliAvailable
-  })
-  if (!linearBlock) {
+  const launchBlock = buildWorkItemLaunchContextBlock(args, { cliAvailable: args.cliAvailable })
+  if (!launchBlock) {
     return args.url
   }
-  return formatDraftContextBlock(linearBlock)
+  return formatDraftContextBlock(launchBlock)
 }
 
 export function resolveQuickCreateLinkedWorkItemPrompt(
   linkedWorkItem:
     | Pick<
-        { number: number; url: string; title?: string; linearIdentifier?: string },
-        'number' | 'url' | 'title' | 'linearIdentifier'
+        {
+          number: number
+          url: string
+          title?: string
+          provider?: TaskProvider
+          linearIdentifier?: string
+        },
+        'number' | 'url' | 'title' | 'provider' | 'linearIdentifier'
       >
     | null
     | undefined,
@@ -196,16 +249,11 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
   opts: { cliAvailable: boolean }
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
-  const linearBlock = buildLinearLaunchContextBlock({
-    identifier: linkedWorkItem?.linearIdentifier,
-    title: linkedWorkItem?.title,
-    url: linkedWorkItem?.url,
-    cliAvailable: opts.cliAvailable
-  })
-  const linearDraft = linearBlock ? formatDraftContextBlock(linearBlock) : null
+  const launchBlock = buildWorkItemLaunchContextBlock(linkedWorkItem, opts)
+  const launchDraft = launchBlock ? formatDraftContextBlock(launchBlock) : null
   const linkedUrl = linkedWorkItem?.url?.trim() || null
-  const draftPrompt = linearDraft
-    ? [trimmedNote, linearDraft].filter(Boolean).join('\n\n')
+  const draftPrompt = launchDraft
+    ? [trimmedNote, launchDraft].filter(Boolean).join('\n\n')
     : linkedUrl
       ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
       : null

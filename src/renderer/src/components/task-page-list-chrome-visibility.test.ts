@@ -10,6 +10,7 @@ const baseState: TaskPageListChromeVisibilityState = {
   hasGitHubDetail: false,
   hasGitLabDetail: false,
   hasJiraDetail: false,
+  hasGlpiDetail: false,
   hasLinearIssueDetail: false,
   hasLinearProjectContext: false,
   hasLinearViewContext: false
@@ -41,6 +42,13 @@ describe('shouldHideTaskPageListChrome', () => {
     expect(
       shouldHideTaskPageListChrome({
         ...baseState,
+        taskSource: 'glpi',
+        hasGlpiDetail: true
+      })
+    ).toBe(true)
+    expect(
+      shouldHideTaskPageListChrome({
+        ...baseState,
         taskSource: 'linear',
         hasLinearProjectContext: true
       })
@@ -64,6 +72,13 @@ describe('shouldHideTaskPageListChrome', () => {
         hasGitHubDetail: true,
         hasGitLabDetail: true,
         hasLinearIssueDetail: true
+      })
+    ).toBe(false)
+    expect(
+      shouldHideTaskPageListChrome({
+        ...baseState,
+        taskSource: 'github',
+        hasGlpiDetail: true
       })
     ).toBe(false)
   })

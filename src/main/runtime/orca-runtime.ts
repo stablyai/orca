@@ -86,6 +86,18 @@ import type {
   JiraIssueFilter,
   JiraIssueUpdate,
   JiraSiteSelection,
+  GlpiConnectArgs,
+  GlpiConnectionStatus,
+  GlpiCreateTicketArgs,
+  GlpiCreateTicketResult,
+  GlpiFollowup,
+  GlpiMutationResult,
+  GlpiServerSelection,
+  GlpiTicket,
+  GlpiTicketFilter,
+  GlpiTicketUpdate,
+  GlpiViewer,
+  GlpiWorkItemFilters,
   LinearIssueUpdate,
   LinearProjectSummary,
   LinearWorkspaceSelection,
@@ -478,6 +490,21 @@ import {
   searchIssues as searchJiraIssues,
   updateIssue as updateJiraIssue
 } from '../jira/issues'
+import {
+  connect as connectGlpi,
+  disconnect as disconnectGlpi,
+  getStatus as getGlpiStatus,
+  selectServer as selectGlpiServer,
+  testConnection as testGlpiConnection
+} from '../glpi/connect'
+import {
+  addGlpiTicketFollowup,
+  createGlpiTicketOnServer,
+  getGlpiTicketDetail,
+  getGlpiTicketFollowups,
+  listGlpiWorkItems,
+  updateGlpiTicketDetail
+} from '../glpi/ticket-operations'
 import {
   clearProjectItemFieldValue,
   getProjectViewTable,
@@ -19675,6 +19702,69 @@ export class OrcaRuntimeService {
 
   jiraListTransitions(key: string, siteId?: string): ReturnType<typeof listJiraTransitions> {
     return listJiraTransitions(key, siteId)
+  }
+
+  // ── GLPI integration ──
+
+  glpiStatus(): GlpiConnectionStatus {
+    return getGlpiStatus()
+  }
+
+  glpiConnect(
+    args: GlpiConnectArgs
+  ): Promise<{ ok: true; viewer: GlpiViewer } | { ok: false; error: string }> {
+    return connectGlpi(args)
+  }
+
+  glpiDisconnect(serverId?: string): void {
+    disconnectGlpi(serverId)
+  }
+
+  glpiSelectServer(serverId: GlpiServerSelection): GlpiConnectionStatus {
+    return selectGlpiServer(serverId)
+  }
+
+  glpiTestConnection(
+    serverId?: string
+  ): Promise<{ ok: true; viewer: GlpiViewer } | { ok: false; error: string }> {
+    return testGlpiConnection(serverId)
+  }
+
+  glpiListWorkItems(
+    serverId: GlpiServerSelection | null | undefined,
+    filter: GlpiTicketFilter,
+    limit: number,
+    filters?: GlpiWorkItemFilters
+  ): Promise<GlpiTicket[]> {
+    return listGlpiWorkItems(serverId, filter, limit, filters)
+  }
+
+  glpiTicket(serverId: string | null | undefined, id: number): Promise<GlpiTicket | null> {
+    return getGlpiTicketDetail(serverId, id)
+  }
+
+  glpiFollowups(serverId: string | null | undefined, id: number): Promise<GlpiFollowup[]> {
+    return getGlpiTicketFollowups(serverId, id)
+  }
+
+  glpiAddFollowup(
+    serverId: string | null | undefined,
+    id: number,
+    content: string
+  ): Promise<GlpiMutationResult> {
+    return addGlpiTicketFollowup(serverId, id, content)
+  }
+
+  glpiUpdateTicket(
+    serverId: string | null | undefined,
+    id: number,
+    updates: GlpiTicketUpdate
+  ): Promise<GlpiMutationResult> {
+    return updateGlpiTicketDetail(serverId, id, updates)
+  }
+
+  glpiCreateTicket(args: GlpiCreateTicketArgs): Promise<GlpiCreateTicketResult> {
+    return createGlpiTicketOnServer(args)
   }
 
   // ── Browser automation ──
