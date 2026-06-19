@@ -398,12 +398,13 @@ describe('TerminalHost', () => {
       expect(host.listSessions()).toEqual([])
     })
 
-    it('skips forceKill on already-exited sessions to avoid recycled-pid SIGKILL', async () => {
+    it('never force-kills an exited session (recycled-pid SIGKILL safety)', async () => {
       // Why: after a session's subprocess has exited (onExit fired), proc.pid
-      // refers to a reaped child whose pid may have been recycled. Calling
-      // forceKillAndDisposeSubprocess() on an exited session would
-      // process.kill(recycled_pid, 'SIGKILL') — killing a stranger. Dispose
-      // must detect isAlive=false and use disposeSubprocess() (fd release only).
+      // refers to a reaped child whose pid may have been recycled. Force-killing
+      // it would process.kill(recycled_pid, 'SIGKILL') — killing a stranger.
+      // The exit now reaps the session via session.dispose(), which skips
+      // forceKill once _state==='exited' (only the fd is released). host.dispose
+      // then only ever sees live sessions.
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -411,11 +412,14 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      // Simulate natural exit — session is retained in map until dispose.
-      lastSubprocess._onExitCb?.(0)
-
-      // Re-create another session so the map has BOTH a live and dead entry.
+      // Natural exit reaps session-1 synchronously: its subprocess fd is
+      // released (dispose) but it is never force-killed, and it is dropped from
+      // the map (so it is not listed and not touched by host.dispose below).
       const exitedSub = lastSubprocess
+      lastSubprocess._onExitCb?.(0)
+      expect(host.listSessions()).toEqual([])
+
+      // A second, live session remains in the map for host.dispose to reap.
       await host.createOrAttach({
         sessionId: 'session-2',
         cols: 80,

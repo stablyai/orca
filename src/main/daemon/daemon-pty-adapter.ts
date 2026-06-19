@@ -305,6 +305,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
     this.coldRestoreCache.delete(id)
     // Why: the !keepHistory close path doesn't take a final checkpoint, so a
     // session stranded in sessionsNeedingFullCheckpoint would never be cleared.
+    // (Under keepHistory the final checkpoint above already cleared the flag, so
+    // this is a harmless no-op there — kept unconditional to cover both paths.)
     this.sessionsNeedingFullCheckpoint.delete(id)
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)

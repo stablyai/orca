@@ -120,4 +120,39 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     expect(emulatorDispose).toHaveBeenCalledTimes(1)
     expect(host.listSessions()).toHaveLength(0)
   })
+
+  it('reaps a session whose graceful kill times out (forceDispose path)', async () => {
+    vi.useFakeTimers()
+    try {
+      const stubbornHost = new TerminalHost({
+        spawnSubprocess: () => {
+          const sub = createMockSubprocess()
+          // Stubborn child: ignores graceful kill, so the KILL_TIMEOUT_MS timer
+          // must force-dispose it.
+          sub.kill = vi.fn()
+          return sub
+        }
+      })
+      await stubbornHost.createOrAttach({
+        sessionId: 'stubborn',
+        cols: 80,
+        rows: 24,
+        streamClient: streamClient()
+      })
+
+      // Graceful kill — the no-op subprocess.kill never fires onExit.
+      stubbornHost.kill('stubborn')
+      expect(emulatorDispose).not.toHaveBeenCalled()
+
+      // The 5s KILL_TIMEOUT_MS fallback fires forceDispose, which disposes the
+      // emulator and reaps the session via the onExit hook.
+      vi.advanceTimersByTime(5000)
+
+      expect(emulatorDispose).toHaveBeenCalledTimes(1)
+      expect(stubbornHost.listSessions()).toHaveLength(0)
+      stubbornHost.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
