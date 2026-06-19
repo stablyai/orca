@@ -111,7 +111,7 @@ describe('rpc wrappers', () => {
     const client = clientWith([
       malformedFailure({
         code: 'method_not_found',
-        message: "Method 'speech.models.list' not found"
+        message: 'Unknown method: speech.models.list'
       })
     ])
 
