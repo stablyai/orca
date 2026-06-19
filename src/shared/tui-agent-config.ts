@@ -1,4 +1,5 @@
 import type { TuiAgent } from './types'
+import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
 export type AgentPromptInjectionMode =
   | 'argv'
@@ -14,6 +15,8 @@ export type TuiAgentConfig = {
   /** Additional executable names that identify the same agent on PATH. */
   detectCmdAliases?: readonly string[]
   launchCmd: string
+  /** Platform-specific launch command when the public binary name differs. */
+  launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
   /** Why: flag that launches the TUI with the given text already in the
@@ -70,6 +73,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'orca',
     detectCmdAliases: ['orca-dev', 'orca-ide'],
     launchCmd: 'orca claude-teams',
+    launchCmdByPlatform: {
+      linux: `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`,
+      win32: `${getOrcaCliCommandNameForPlatform('win32')} claude-teams`
+    },
     expectedProcess: 'claude',
     promptInjectionMode: 'stdin-after-start'
   },
@@ -329,4 +336,11 @@ export function isTuiAgent(value: unknown): value is TuiAgent {
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
   return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
+}
+
+export function getTuiAgentLaunchCommand(
+  config: TuiAgentConfig,
+  platform: NodeJS.Platform
+): string {
+  return config.launchCmdByPlatform?.[platform] ?? config.launchCmd
 }
