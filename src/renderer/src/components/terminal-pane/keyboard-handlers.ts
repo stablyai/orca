@@ -302,6 +302,21 @@ export function useTerminalKeyboardShortcuts({
         return
       }
 
+      if (action.type === 'scrollViewport') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        const pane = manager.getActivePane() ?? manager.getPanes()[0]
+        if (!pane) {
+          return
+        }
+        if (action.position === 'top') {
+          pane.terminal.scrollToLine(0)
+        } else {
+          pane.terminal.scrollToBottom()
+        }
+        return
+      }
+
       // Cmd+[ / Cmd+] cycles active split pane focus.
       if (action.type === 'focusPane') {
         const panes = manager.getPanes()
