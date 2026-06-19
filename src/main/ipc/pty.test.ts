@@ -6,11 +6,7 @@ import { delimiter, join } from 'node:path'
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
-const expectedOmpStatusExtension = join(
-  '/tmp/default-omp-agent',
-  'extensions',
-  'orca-agent-status.ts'
-)
+const expectedOmpStatusExtension = '/tmp/default-omp-agent/extensions/orca-agent-status.ts'
 const expectedAttributionShimDir = join(
   '/tmp/orca-user-data',
   'orca-terminal-attribution',

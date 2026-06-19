@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const FIELD_SOURCE = readFileSync(join(__dirname, 'SmartWorkspaceNameField.tsx'), 'utf8')
+const FIELD_SOURCE = readFileSync(
+  join(__dirname, 'SmartWorkspaceNameField.tsx'),
+  'utf8'
+).replaceAll('\r\n', '\n')
 
 function sourceBetween(source: string, startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)

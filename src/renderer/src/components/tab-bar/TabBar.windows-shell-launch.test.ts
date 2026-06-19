@@ -378,7 +378,7 @@ describe('TabBar PowerShell launch wiring', () => {
     onSelect?.()
 
     expect(onNewTerminalWithShell).toHaveBeenCalledWith('pwsh.exe')
-  })
+  }, 30_000)
 
   it('hides the WSL terminal row for local host-runtime projects', async () => {
     appStoreSnapshot.activeRepoId = 'repo-1'

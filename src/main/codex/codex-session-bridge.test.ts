@@ -50,7 +50,10 @@ vi.mock('node:os', async () => {
   }
 })
 
-import { syncSystemCodexSessionsIntoManagedHome } from './codex-session-bridge'
+import {
+  syncSystemCodexSessionsIntoManagedHome,
+  syncSystemCodexSessionsIntoManagedHomeIncrementally
+} from './codex-session-bridge'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -275,5 +278,36 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
 
     expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')
+  })
+
+  it('incrementally bridges session files without requiring the synchronous launch path', async () => {
+    const systemSessionRoot = join(getSystemCodexHomePath(), 'sessions', '2026', '06', '18')
+    mkdirSync(systemSessionRoot, { recursive: true })
+    for (let index = 0; index < 5; index += 1) {
+      writeFileSync(
+        join(systemSessionRoot, `rollout-incremental-${index}.jsonl`),
+        `{"id":"incremental-${index}"}\n`,
+        'utf-8'
+      )
+    }
+
+    const summary = await syncSystemCodexSessionsIntoManagedHomeIncrementally({
+      batchSize: 2,
+      yieldMs: 0
+    })
+
+    expect(summary).toEqual({ scannedFiles: 5, linkedFiles: 5 })
+    for (let index = 0; index < 5; index += 1) {
+      const systemSessionPath = join(systemSessionRoot, `rollout-incremental-${index}.jsonl`)
+      const runtimeSessionPath = join(
+        getRuntimeCodexHomePath(),
+        'sessions',
+        '2026',
+        '06',
+        '18',
+        `rollout-incremental-${index}.jsonl`
+      )
+      expectResourceLinked(runtimeSessionPath, systemSessionPath)
+    }
   })
 })

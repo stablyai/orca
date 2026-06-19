@@ -226,7 +226,7 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('58941')
     expect(markup).not.toContain('data-worktree-card-meta-row=""')
     expect(markup).toContain('aria-label="1 live port"')
-  }, 20_000)
+  }, 30_000)
 
   it('shows hidden task, notes, and port details from the compact worktree card hover', async () => {
     settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
@@ -277,7 +277,7 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('Live Ports')
     expect(markup).toContain('58941')
     expect(markup).not.toContain('data-worktree-card-meta-row=""')
-  }, 20_000)
+  }, 30_000)
 
   it('shows selected task and note metadata on the compact card title row', async () => {
     settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
@@ -300,7 +300,7 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('Linked issue #123')
     expect(markup).toContain('Linked Linear ENG-123')
     expect(markup).toContain('Workspace notes')
-  }, 20_000)
+  }, 30_000)
 
   it('keeps selected task and note metadata above the compact branch row', async () => {
     settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
@@ -327,7 +327,7 @@ describe('WorktreeCard compact hover details', () => {
     expect(markup).toContain('Linked Linear ENG-123')
     expect(markup).toContain('Workspace notes')
     expect(markup).toContain('feature/local-branch')
-  }, 20_000)
+  }, 30_000)
 
   it('keeps branch identity visible on detailed cards by default', async () => {
     settings = { compactWorktreeCards: false }

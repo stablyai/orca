@@ -77,6 +77,12 @@ export class TerminalHost {
     this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
   }
 
+  /**
+   * Creates a terminal session or attaches to an existing live one.
+   *
+   * Startup commands are written through stdin only when the subprocess did not
+   * already deliver them through shell launch arguments.
+   */
   async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
     const existing = this.sessions.get(opts.sessionId)
 
@@ -137,7 +143,7 @@ export class TerminalHost {
 
     const token = session.attachClient(opts.streamClient)
 
-    if (opts.command) {
+    if (opts.command && !subprocess.startupCommandDeliveredInShellArgs) {
       // Why: startup commands must run inside the long-lived interactive shell
       // the daemon keeps for the pane. Session.write() handles the shell-ready
       // barrier for supported shells and falls back to an immediate write for

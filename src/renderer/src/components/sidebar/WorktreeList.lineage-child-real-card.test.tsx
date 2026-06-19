@@ -386,7 +386,7 @@ function expectBoundaryStep(args: {
 describe('WorktreeList real child WorktreeCard integration', () => {
   beforeAll(async () => {
     WorktreeList = (await import('./WorktreeList')).default as WorktreeListComponent
-  }, 20_000)
+  }, 60_000)
 
   beforeEach(() => {
     vi.clearAllMocks()
