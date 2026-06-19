@@ -3,16 +3,46 @@ export type CoalescedPollRunner = {
   dispose: () => void
 }
 
-export function createCoalescedPollRunner(task: () => Promise<void>): CoalescedPollRunner {
+export type CoalescedPollRunnerTimer = ReturnType<typeof setTimeout>
+
+export type CoalescedPollRunnerOptions = {
+  /**
+   * Delay before a coalesced trailing run. Useful for expensive pollers whose
+   * work can exceed the interval and would otherwise run back-to-back forever.
+   */
+  trailingDelayMs?: number
+  setTimeoutFn?: (callback: () => void, delayMs: number) => CoalescedPollRunnerTimer
+  clearTimeoutFn?: (handle: CoalescedPollRunnerTimer) => void
+}
+
+export function createCoalescedPollRunner(
+  task: () => Promise<void>,
+  options: CoalescedPollRunnerOptions = {}
+): CoalescedPollRunner {
   let disposed = false
   let inFlight = false
   let rerun = false
+  let trailingTimeout: CoalescedPollRunnerTimer | null = null
+  const setTimeoutFn =
+    options.setTimeoutFn ??
+    ((callback: () => void, delayMs: number): CoalescedPollRunnerTimer =>
+      setTimeout(callback, delayMs))
+  const clearTimeoutFn =
+    options.clearTimeoutFn ?? ((handle: CoalescedPollRunnerTimer): void => clearTimeout(handle))
+
+  const clearTrailingTimeout = (): void => {
+    if (!trailingTimeout) {
+      return
+    }
+    clearTimeoutFn(trailingTimeout)
+    trailingTimeout = null
+  }
 
   const run = (): void => {
     if (disposed) {
       return
     }
-    if (inFlight) {
+    if (inFlight || trailingTimeout) {
       rerun = true
       return
     }
@@ -26,6 +56,16 @@ export function createCoalescedPollRunner(task: () => Promise<void>): CoalescedP
         inFlight = false
         if (rerun && !disposed) {
           rerun = false
+          const delayMs = Math.max(0, options.trailingDelayMs ?? 0)
+          if (delayMs > 0) {
+            // Why: if a poll already exceeded its interval, immediate trailing
+            // reruns can keep the renderer and IPC paths hot indefinitely.
+            trailingTimeout = setTimeoutFn(() => {
+              trailingTimeout = null
+              run()
+            }, delayMs)
+            return
+          }
           run()
           return
         }
@@ -38,6 +78,7 @@ export function createCoalescedPollRunner(task: () => Promise<void>): CoalescedP
     dispose: () => {
       disposed = true
       rerun = false
+      clearTrailingTimeout()
     }
   }
 }
