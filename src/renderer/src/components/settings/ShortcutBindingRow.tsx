@@ -175,6 +175,7 @@ export function ShortcutBindingRow({
 
   return (
     <SearchableSetting
+      id={`shortcut-${item.id}`}
       title={item.title}
       description={translate(
         'auto.components.settings.ShortcutBindingRow.3b11ef3a43',

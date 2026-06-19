@@ -1,19 +1,14 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   findKeybindingConflicts,
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
   getKeybindingDefinition,
-  isKeybindingAllowedInTerminal,
-  isKeybindingPotentialTerminalConflict,
   keybindingFromInputForAction,
-  keybindingIsActiveInContext,
   normalizeKeybindingListForAction,
   type KeybindingActionId,
-  type KeybindingDefinition,
   type KeybindingInput,
-  type KeybindingOverrides,
-  type TerminalShortcutPolicy
+  type KeybindingOverrides
 } from '../../../../shared/keybindings'
 import {
   EMPTY_DISABLED_TUI_AGENTS,
@@ -23,7 +18,6 @@ import {
 import { useAppStore } from '../../store'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
-import type { ShortcutTerminalStatus } from './ShortcutBindingRow'
 import {
   getShortcutSearchEntry,
   matchesShortcutFilter,
@@ -38,6 +32,8 @@ import { getTerminalShortcutPolicySearchEntry } from './shortcuts-search'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { clearRecordingActionForShortcutMutation } from './shortcut-recording-state'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import type { ShortcutActionIntentSignal } from './settings-shortcut-intent'
+import { getShortcutTerminalStatus } from './shortcut-terminal-status'
 import { translate } from '@/i18n/i18n'
 
 const isMac = navigator.userAgent.includes('Mac')
@@ -46,6 +42,16 @@ const platform: NodeJS.Platform = isMac
   : navigator.userAgent.includes('Windows')
     ? 'win32'
     : 'linux'
+
+export function getShortcutActionIntentState(actionId: KeybindingActionId): {
+  query: string
+  filter: ShortcutFilter
+} {
+  return {
+    query: getKeybindingDefinition(actionId)?.title ?? actionId,
+    filter: 'all'
+  }
+}
 
 function sameBindings(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((binding, index) => binding === b[index])
@@ -74,57 +80,11 @@ function hasCommonBindingOverride(
   return hasOwnBindingOverride(snapshot?.commonOverrides ?? {}, actionId)
 }
 
-function getShortcutTerminalStatus(
-  definition: KeybindingDefinition,
-  terminalShortcutPolicy: TerminalShortcutPolicy,
-  hasEffectiveBinding: boolean
-): ShortcutTerminalStatus | undefined {
-  if (!hasEffectiveBinding) {
-    return undefined
-  }
-  if (definition.scope === 'terminal') {
-    return {
-      label: translate('auto.components.settings.ShortcutsPane.cb02e00202', 'Terminal'),
-      description: translate(
-        'auto.components.settings.ShortcutsPane.781cb74d22',
-        'Runs from terminal panes.'
-      )
-    }
-  }
-  if (isKeybindingAllowedInTerminal(definition)) {
-    return {
-      label: translate('auto.components.settings.ShortcutsPane.25b0004fbf', 'Terminal active'),
-      description: translate(
-        'auto.components.settings.ShortcutsPane.3c0fac059a',
-        'Still runs while a terminal has keyboard focus.'
-      )
-    }
-  }
-  if (!isKeybindingPotentialTerminalConflict(definition)) {
-    return undefined
-  }
-  const activeInTerminal = keybindingIsActiveInContext(definition, {
-    context: 'terminal',
-    terminalShortcutPolicy
-  })
-  return activeInTerminal
-    ? {
-        label: translate('auto.components.settings.ShortcutsPane.2a0e8aeccf', 'Orca first'),
-        description: translate(
-          'auto.components.settings.ShortcutsPane.dfa8ff612f',
-          'Also runs while a terminal or TUI has keyboard focus.'
-        )
-      }
-    : {
-        label: translate('auto.components.settings.ShortcutsPane.5c65d5db9d', 'Terminal first'),
-        description: translate(
-          'auto.components.settings.ShortcutsPane.f0b35b0b2e',
-          'Disabled while a terminal or TUI has keyboard focus.'
-        )
-      }
-}
-
-export function ShortcutsPane(): React.JSX.Element {
+export function ShortcutsPane({
+  shortcutActionIntent
+}: {
+  shortcutActionIntent?: ShortcutActionIntentSignal | null
+}): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const terminalShortcutPolicy = useAppStore(
     (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
@@ -143,6 +103,7 @@ export function ShortcutsPane(): React.JSX.Element {
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
   const [shortcutQuery, setShortcutQuery] = useState('')
   const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
+  const shortcutFocusFrameRef = useRef<number | null>(null)
 
   const groups = useMemo(() => groupDefinitions(disabledTuiAgents), [disabledTuiAgents])
   const ignoredConflictActionIds = useMemo(
@@ -217,6 +178,36 @@ export function ShortcutsPane(): React.JSX.Element {
   const visibleShortcutCount = visibleShortcutGroups.reduce(
     (sum, group) => sum + group.rows.length,
     0
+  )
+
+  useEffect(() => {
+    if (!shortcutActionIntent) {
+      return
+    }
+    const intentState = getShortcutActionIntentState(shortcutActionIntent.actionId)
+    setShortcutQuery(intentState.query)
+    setShortcutFilter(intentState.filter)
+    if (shortcutFocusFrameRef.current !== null) {
+      cancelAnimationFrame(shortcutFocusFrameRef.current)
+    }
+    // Why: applying the query/filter can remount rows, so focus waits until the target exists.
+    shortcutFocusFrameRef.current = requestAnimationFrame(() => {
+      shortcutFocusFrameRef.current = requestAnimationFrame(() => {
+        shortcutFocusFrameRef.current = null
+        const row = document.getElementById(`shortcut-${shortcutActionIntent.actionId}`)
+        row?.scrollIntoView({ block: 'center' })
+        row?.querySelector<HTMLButtonElement>('[data-shortcut-recorder]')?.focus()
+      })
+    })
+  }, [shortcutActionIntent])
+
+  useEffect(
+    () => () => {
+      if (shortcutFocusFrameRef.current !== null) {
+        cancelAnimationFrame(shortcutFocusFrameRef.current)
+      }
+    },
+    []
   )
 
   const saveBindings = async (

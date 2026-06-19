@@ -87,6 +87,7 @@ import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-pane
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
+import type { KeybindingActionId } from '../../../../shared/keybindings'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   getSetupScriptPromptDismissalKey
@@ -691,7 +692,8 @@ export type UISlice = {
     pane: SettingsNavTarget
     repoId: string | null
     sectionId?: string
-    intent?: 'add-quick-command'
+    intent?: 'add-quick-command' | 'shortcut-action'
+    actionId?: KeybindingActionId
   } | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void

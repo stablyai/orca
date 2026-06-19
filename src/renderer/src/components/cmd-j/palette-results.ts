@@ -1,5 +1,8 @@
 import type { SettingsNavIcon, SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { CmdJQuickAction } from './quick-actions'
+import type { CmdJShortcutResult } from './shortcut-results'
+
+export type { CmdJShortcutResult } from './shortcut-results'
 
 export type CmdJSettingsResult = {
   id: string
@@ -17,7 +20,7 @@ export type CmdJActionResult = CmdJQuickAction & {
   order: number
 }
 
-export type CmdJMiddleResult = CmdJSettingsResult | CmdJActionResult
+export type CmdJMiddleResult = CmdJSettingsResult | CmdJActionResult | CmdJShortcutResult
 
 type RankedResult = {
   result: CmdJMiddleResult
@@ -29,7 +32,7 @@ const SETTINGS_ALIASES: Record<string, string[]> = {
   browser: ['browser settings'],
   terminal: ['terminal settings'],
   ssh: ['ssh'],
-  shortcuts: ['keyboard shortcuts'],
+  shortcuts: ['keyboard shortcuts', 'keybinding', 'keybindings'],
   appearance: ['theme', 'themes'],
   agents: ['ai agents'],
   'quick-commands': ['quick commands', 'quick command'],
@@ -143,6 +146,28 @@ function tokenScore(query: string, values: readonly string[]): number {
   return score
 }
 
+function hasShortcutIntent(query: string): boolean {
+  const queryTokens = new Set(tokenize(query))
+  return (
+    queryTokens.has('shortcut') ||
+    queryTokens.has('shortcuts') ||
+    queryTokens.has('keybinding') ||
+    queryTokens.has('keybindings') ||
+    query.includes('keyboard shortcut')
+  )
+}
+
+function isGenericShortcutQuery(query: string): boolean {
+  return [
+    'shortcut',
+    'shortcuts',
+    'keyboard shortcut',
+    'keyboard shortcuts',
+    'keybinding',
+    'keybindings'
+  ].includes(query)
+}
+
 function rankingForCandidate(
   query: string,
   candidate: CmdJMiddleResult,
@@ -173,26 +198,42 @@ function rankingForCandidate(
   }
 
   if (
+    candidate.kind === 'shortcut' &&
+    !isGenericShortcutQuery(query) &&
+    candidate.configKeywords.some((keyword) => query === keyword)
+  ) {
+    return { result: candidate, rule: 4, score: 0 }
+  }
+
+  if (
     candidate.kind === 'action' &&
     candidate.verbKeywords.some((keyword) => startsOrIsStartedBy(query, keyword)) &&
     !settingsConfigKeywords.some((keyword) => query.endsWith(keyword))
   ) {
-    return { result: candidate, rule: 4, score: 0 }
+    return { result: candidate, rule: 5, score: 0 }
   }
 
   if (
     candidate.kind === 'settings' &&
     candidate.configKeywords.some((keyword) => keyword.startsWith(query) && keyword !== query)
   ) {
-    return { result: candidate, rule: 5, score: 0 }
+    return { result: candidate, rule: 6, score: 0 }
   }
 
   const values =
     candidate.kind === 'settings'
       ? [candidate.title, ...candidate.configKeywords]
-      : [candidate.title, ...candidate.verbKeywords]
+      : candidate.kind === 'shortcut'
+        ? [candidate.title, ...candidate.configKeywords]
+        : [candidate.title, ...candidate.verbKeywords]
   const score = tokenScore(query, values)
-  return score > 0 ? { result: candidate, rule: 6, score } : null
+  if (score === 0) {
+    return null
+  }
+  if (candidate.kind === 'shortcut' && hasShortcutIntent(query)) {
+    return { result: candidate, rule: 7, score: score + 2 }
+  }
+  return { result: candidate, rule: 8, score }
 }
 
 function compareRanked(a: RankedResult, b: RankedResult): number {
@@ -202,8 +243,16 @@ function compareRanked(a: RankedResult, b: RankedResult): number {
   if (a.rule === 6 && a.score !== b.score) {
     return b.score - a.score
   }
+  if ((a.rule === 7 || a.rule === 8) && a.score !== b.score) {
+    return b.score - a.score
+  }
   if (a.result.kind !== b.result.kind) {
-    return a.result.kind === 'settings' ? -1 : 1
+    const kindOrder: Record<CmdJMiddleResult['kind'], number> = {
+      settings: 0,
+      shortcut: 1,
+      action: 2
+    }
+    return kindOrder[a.result.kind] - kindOrder[b.result.kind]
   }
   if (a.result.order !== b.result.order) {
     return a.result.order - b.result.order
@@ -214,11 +263,13 @@ function compareRanked(a: RankedResult, b: RankedResult): number {
 export function rankCmdJMiddleResults({
   query,
   settingsResults,
-  actionResults
+  actionResults,
+  shortcutResults = []
 }: {
   query: string
   settingsResults: readonly CmdJSettingsResult[]
   actionResults: readonly CmdJActionResult[]
+  shortcutResults?: readonly CmdJShortcutResult[]
 }): CmdJMiddleResult[] {
   const normalizedQuery = normalizeQuery(query)
   if (normalizedQuery.length < 2) {
@@ -226,10 +277,11 @@ export function rankCmdJMiddleResults({
   }
   const settings = settingsResults
   const actions = actionResults
+  const shortcuts = shortcutResults
   const actionVerbKeywords = actions.flatMap((action) => action.verbKeywords)
   const settingsConfigKeywords = settings.flatMap((setting) => setting.configKeywords)
 
-  return [...settings, ...actions]
+  return [...settings, ...shortcuts, ...actions]
     .map((candidate) =>
       rankingForCandidate(normalizedQuery, candidate, actionVerbKeywords, settingsConfigKeywords)
     )

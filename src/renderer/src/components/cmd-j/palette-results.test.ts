@@ -6,7 +6,10 @@ import {
   buildCmdJSettingsResults,
   rankCmdJMiddleResults
 } from './palette-results'
+import { buildCmdJShortcutResults } from './shortcut-results'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { KeybindingDefinition } from '../../../../shared/keybindings'
+import { groupDefinitions } from '@/components/settings/shortcut-groups'
 
 const noopRun: CmdJQuickAction['run'] = async () => ({ status: 'ok' })
 const available: CmdJQuickAction['isAvailable'] = () => ({ available: true })
@@ -132,6 +135,14 @@ const sections: SettingsNavSection[] = [
     group: 'interface'
   },
   {
+    id: 'shortcuts',
+    title: 'Shortcuts',
+    description: 'Keyboard shortcuts.',
+    icon: Settings,
+    searchEntries: [{ title: 'Keyboard Shortcuts' }],
+    group: 'interface'
+  },
+  {
     id: 'agents',
     title: 'Agents',
     description: 'Manage AI agents.',
@@ -149,10 +160,54 @@ const sections: SettingsNavSection[] = [
   }
 ]
 
+const shortcutDefinitions: KeybindingDefinition[] = [
+  {
+    id: 'terminal.splitRight',
+    title: 'Split terminal right',
+    group: 'Terminal',
+    scope: 'terminal',
+    searchKeywords: ['pane', 'split', 'right'],
+    defaultBindings: {
+      darwin: ['Mod+Backslash'],
+      linux: ['Mod+Shift+Backslash'],
+      win32: ['Mod+Shift+Backslash']
+    }
+  },
+  {
+    id: 'tab.newTerminal',
+    title: 'New Terminal',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['terminal', 'tab'],
+    defaultBindings: {
+      darwin: ['Mod+T'],
+      linux: ['Mod+T'],
+      win32: ['Mod+T']
+    }
+  }
+]
+
 function top(query: string): string | undefined {
   return rankCmdJMiddleResults({
     query,
     settingsResults: buildCmdJSettingsResults(sections),
+    actionResults: buildCmdJActionResults(actions)
+  })[0]?.id
+}
+
+function topWithShortcuts(
+  query: string,
+  bindingSearchTextByActionId: Parameters<
+    typeof buildCmdJShortcutResults
+  >[0]['bindingSearchTextByActionId'] = {}
+): string | undefined {
+  return rankCmdJMiddleResults({
+    query,
+    settingsResults: buildCmdJSettingsResults(sections),
+    shortcutResults: buildCmdJShortcutResults({
+      definitions: shortcutDefinitions,
+      bindingSearchTextByActionId
+    }),
     actionResults: buildCmdJActionResults(actions)
   })[0]?.id
 }
@@ -200,5 +255,57 @@ describe('Cmd+J palette middle-band ranking', () => {
   it('does not match settings on one-character or description-only queries', () => {
     expect(top('t')).toBeUndefined()
     expect(top('cookie import')).toBeUndefined()
+  })
+
+  it('builds shortcut rows from keybinding definitions', () => {
+    expect(buildCmdJShortcutResults({ definitions: shortcutDefinitions })[0]).toMatchObject({
+      id: 'shortcut:terminal.splitRight',
+      kind: 'shortcut',
+      title: 'Split terminal right',
+      description: 'Terminal shortcut',
+      actionId: 'terminal.splitRight'
+    })
+  })
+
+  it.each([
+    ['terminal shortcut', 'shortcut:terminal.splitRight'],
+    ['split terminal right shortcut', 'shortcut:terminal.splitRight'],
+    ['new terminal shortcut', 'shortcut:tab.newTerminal'],
+    ['keyboard shortcut terminal', 'shortcut:terminal.splitRight']
+  ])('ranks shortcut query %s first', (query, expectedId) => {
+    expect(topWithShortcuts(query)).toBe(expectedId)
+  })
+
+  it('uses caller-provided binding labels for shortcut ranking', () => {
+    expect(topWithShortcuts('ctrl shift backslash')).toBeUndefined()
+    expect(
+      topWithShortcuts('ctrl shift backslash', {
+        'terminal.splitRight': ['Ctrl+Shift+\\', 'Ctrl Shift \\']
+      })
+    ).toBe('shortcut:terminal.splitRight')
+  })
+
+  it('keeps pure settings queries ahead of shortcut rows', () => {
+    expect(topWithShortcuts('terminal')).toBe('settings:terminal')
+  })
+
+  it.each([
+    ['shortcut', 'settings:shortcuts'],
+    ['keybinding', 'settings:shortcuts']
+  ])('keeps generic %s query on the Shortcuts settings pane', (query, expectedId) => {
+    expect(topWithShortcuts(query)).toBe(expectedId)
+  })
+
+  it('honors disabled-agent filtering before building shortcut results', () => {
+    const filteredDefinitions = groupDefinitions(['codex']).flatMap((group) => group.items)
+    const resultIds = buildCmdJShortcutResults({ definitions: filteredDefinitions }).map(
+      (result) => result.actionId
+    )
+
+    expect(resultIds).not.toContain('tab.newAgent.codex')
+  })
+
+  it('does not return shortcut rows on one-character queries', () => {
+    expect(topWithShortcuts('s')).toBeUndefined()
   })
 })

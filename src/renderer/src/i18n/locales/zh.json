@@ -11518,6 +11518,15 @@
             "later": "Later"
           }
         }
+      },
+      "cmd-j": {
+        "shortcutPaletteItems": {
+          "shortcutBadge": "Shortcut",
+          "unassigned": "Unassigned"
+        },
+        "shortcutResults": {
+          "description": "{{value0}} shortcut"
+        }
       }
     },
     "i18n": {

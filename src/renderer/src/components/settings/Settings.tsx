@@ -90,6 +90,11 @@ import {
 } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
+import {
+  getShortcutActionIntentSignal,
+  isShortcutActionIntentTarget,
+  type ShortcutActionIntentSignal
+} from './settings-shortcut-intent'
 
 const SETTINGS_NAV_GROUPS = [
   {
@@ -290,6 +295,8 @@ function Settings(): React.JSX.Element {
   )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
+  const [shortcutActionIntent, setShortcutActionIntent] =
+    useState<ShortcutActionIntentSignal | null>(null)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
   const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
@@ -543,6 +550,11 @@ function Settings(): React.JSX.Element {
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
     if (settingsNavigationTarget.intent === 'add-quick-command') {
       setQuickCommandAddIntentSignal((signal) => signal + 1)
+    }
+    if (isShortcutActionIntentTarget(settingsNavigationTarget)) {
+      setShortcutActionIntent((current) =>
+        getShortcutActionIntentSignal(settingsNavigationTarget, current)
+      )
     }
     setMountedSectionIds((previous) => {
       if (previous.has(paneSectionId)) {
@@ -1405,7 +1417,9 @@ function Settings(): React.JSX.Element {
                     isFocusedShortcutsPane ? 'min-h-0 flex-1 overflow-hidden' : undefined
                   }
                 >
-                  {isSectionMounted('shortcuts') ? <ShortcutsPane /> : null}
+                  {isSectionMounted('shortcuts') ? (
+                    <ShortcutsPane shortcutActionIntent={shortcutActionIntent} />
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection

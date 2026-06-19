@@ -68,8 +68,17 @@ import {
   buildCmdJSettingsResults,
   rankCmdJMiddleResults,
   type CmdJActionResult,
-  type CmdJSettingsResult
+  type CmdJSettingsResult,
+  type CmdJShortcutResult
 } from '@/components/cmd-j/palette-results'
+import { buildCmdJShortcutResults } from '@/components/cmd-j/shortcut-results'
+import {
+  buildShortcutBindingSearchText,
+  buildShortcutPaletteItems,
+  getShortcutSettingsTarget,
+  ShortcutPaletteCommandItem,
+  type ShortcutPaletteItem
+} from '@/components/cmd-j/shortcut-palette-items'
 import {
   buildCmdJQuickActionContext,
   captureCmdJActiveGroupSnapshot,
@@ -80,6 +89,7 @@ import {
   getCmdJQuickActions,
   CREATE_WORKSPACE_QUICK_ACTION_ID
 } from '@/components/cmd-j/quick-actions'
+import { groupDefinitions } from '@/components/settings/shortcut-groups'
 import {
   getComposerEligibleRepos,
   resolveComposerGitRepoId
@@ -149,6 +159,7 @@ type PaletteItem =
   | WorktreePaletteItem
   | SettingsPaletteItem
   | QuickActionPaletteItem
+  | ShortcutPaletteItem
   | BrowserPaletteItem
   | SimulatorPaletteItem
 
@@ -319,6 +330,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const activeGroupIdByWorktree = useAppStore((s) => s.activeGroupIdByWorktree)
   const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
   const settings = useAppStore((s) => s.settings)
+  const keybindings = useAppStore((s) => s.keybindings)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -651,6 +663,21 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     () => buildCmdJSettingsResults(settingsSections),
     [settingsSections]
   )
+  const shortcutDefinitions = useMemo(
+    () => groupDefinitions(settings?.disabledTuiAgents ?? []).flatMap((group) => group.items),
+    [settings?.disabledTuiAgents]
+  )
+  const shortcutResults = useMemo(
+    () =>
+      buildCmdJShortcutResults({
+        definitions: shortcutDefinitions,
+        bindingSearchTextByActionId: buildShortcutBindingSearchText(
+          shortcutDefinitions,
+          keybindings
+        )
+      }),
+    [keybindings, shortcutDefinitions]
+  )
   const actionResults = useMemo(() => buildCmdJActionResults(getCmdJQuickActions()), [])
 
   const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
@@ -708,21 +735,48 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   const quickActionContext = buildQuickActionContext()
 
-  const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(
-    () =>
-      rankCmdJMiddleResults({
-        query: deferredQuery,
-        settingsResults,
-        actionResults: actionResults.filter(
-          (action) => action.isAvailable(quickActionContext).available
-        )
-      }).map((result) =>
-        result.kind === 'settings'
-          ? { id: result.id, type: 'settings' as const, result }
-          : { id: `quick-action:${result.id}`, type: 'quick-action' as const, result }
-      ),
-    [actionResults, deferredQuery, quickActionContext, settingsResults]
-  )
+  const middleItems = useMemo<
+    (SettingsPaletteItem | QuickActionPaletteItem | ShortcutPaletteItem)[]
+  >(() => {
+    const rankedResults = rankCmdJMiddleResults({
+      query: deferredQuery,
+      settingsResults,
+      shortcutResults,
+      actionResults: actionResults.filter(
+        (action) => action.isAvailable(quickActionContext).available
+      )
+    })
+    const shortcutItemsById = new Map(
+      buildShortcutPaletteItems({
+        results: rankedResults.filter(
+          (result): result is CmdJShortcutResult => result.kind === 'shortcut'
+        ),
+        keybindings
+      }).map((item) => [item.id, item])
+    )
+
+    return rankedResults
+      .map((result) => {
+        if (result.kind === 'settings') {
+          return { id: result.id, type: 'settings' as const, result }
+        }
+        if (result.kind === 'shortcut') {
+          return shortcutItemsById.get(result.id) ?? null
+        }
+        return { id: `quick-action:${result.id}`, type: 'quick-action' as const, result }
+      })
+      .filter(
+        (item): item is SettingsPaletteItem | QuickActionPaletteItem | ShortcutPaletteItem =>
+          item !== null
+      )
+  }, [
+    actionResults,
+    deferredQuery,
+    keybindings,
+    quickActionContext,
+    settingsResults,
+    shortcutResults
+  ])
 
   // Why: on empty query we cap the worktree section (not open tabs) so the
   // OPEN TABS header + ≥1 tab row stays visible above the fold — users
@@ -1123,6 +1177,17 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [closeModal, openSettingsPage, openSettingsTarget, recordFeatureInteraction]
   )
 
+  const handleSelectShortcut = useCallback(
+    (result: CmdJShortcutResult) => {
+      skipRestoreFocusRef.current = true
+      closeModal()
+      setSelectedItemId('')
+      openSettingsTarget(getShortcutSettingsTarget(result.actionId))
+      openSettingsPage()
+    },
+    [closeModal, openSettingsPage, openSettingsTarget]
+  )
+
   const handleSelectQuickAction = useCallback(
     (action: CmdJActionResult) => {
       skipRestoreFocusRef.current = true
@@ -1154,6 +1219,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         handleSelectSimulatorTab(item.result)
       } else if (item.type === 'settings') {
         handleSelectSettings(item.result)
+      } else if (item.type === 'shortcut') {
+        handleSelectShortcut(item.result)
       } else {
         handleSelectQuickAction(item.result)
       }
@@ -1161,6 +1228,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [
       handleSelectBrowserPage,
       handleSelectQuickAction,
+      handleSelectShortcut,
       handleSelectSettings,
       handleSelectSimulatorTab,
       handleSelectWorktree
@@ -1384,7 +1452,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         ),
         subtitle: translate(
           'auto.components.WorktreeJumpPalette.c4afa68159',
-          'Try a worktree, setting, action, page title, emulator, URL, PR, or port.'
+          'Try a worktree, shortcut, setting, action, page title, emulator, URL, PR, or port.'
         )
       }
     }
@@ -1400,14 +1468,14 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         ),
         subtitle: translate(
           'auto.components.WorktreeJumpPalette.b781ae05e3',
-          'Type to search worktrees, settings, tabs, and actions.'
+          'Type to search worktrees, shortcuts, settings, tabs, and actions.'
         )
       }
     }
     return {
       title: translate(
         'auto.components.WorktreeJumpPalette.1628fd7dfa',
-        'No active worktrees, settings, actions, or open tabs'
+        'No active worktrees, shortcuts, settings, actions, or open tabs'
       ),
       subtitle: translate(
         'auto.components.WorktreeJumpPalette.f7fda8d562',
@@ -1426,7 +1494,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       title={translate('auto.components.WorktreeJumpPalette.4ee378034d', 'Jump to...')}
       description={translate(
         'auto.components.WorktreeJumpPalette.4e4ff044d5',
-        'Search worktrees, settings, tabs, and actions'
+        'Search worktrees, shortcuts, settings, tabs, and actions'
       )}
       overlayClassName="bg-black/55 backdrop-blur-[2px]"
       contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
@@ -1440,7 +1508,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       <CommandInput
         placeholder={translate(
           'auto.components.WorktreeJumpPalette.1ebe225fee',
-          'Search worktrees, settings, tabs, and actions...'
+          'Search worktrees, shortcuts, settings, tabs, and actions...'
         )}
         value={query}
         onValueChange={handleQueryChange}
@@ -1654,6 +1722,16 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                       </div>
                     </div>
                   </CommandItem>
+                )
+              }
+
+              if (entry.type === 'shortcut') {
+                return (
+                  <ShortcutPaletteCommandItem
+                    key={entry.id}
+                    item={entry}
+                    onSelect={() => handleSelectItem(entry)}
+                  />
                 )
               }
 
