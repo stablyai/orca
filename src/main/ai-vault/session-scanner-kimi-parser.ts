@@ -34,7 +34,12 @@ export async function parseKimiSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const stateRecord = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  let stateRecord: Record<string, unknown> | null
+  try {
+    stateRecord = asRecord(JSON.parse(await readFile(file.path, 'utf-8')) as unknown)
+  } catch {
+    return null
+  }
   if (!stateRecord) {
     return null
   }

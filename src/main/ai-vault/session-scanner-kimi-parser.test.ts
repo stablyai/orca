@@ -125,6 +125,13 @@ async function writeKimiSession(args: {
 }
 
 describe('parseKimiSessionFile', () => {
+  it('returns null for malformed state.json', async () => {
+    const { file } = await writeKimiSession({})
+    await writeFile(file.path, '{not-json')
+
+    await expect(parseKimiSessionFile(file, 'darwin')).resolves.toBeNull()
+  })
+
   it('parses a full session from state.json + index + wire transcript', async () => {
     const { file } = await writeKimiSession({})
     const session = await parseKimiSessionFile(file, 'darwin')

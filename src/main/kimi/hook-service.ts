@@ -8,7 +8,7 @@ import {
   writeFileSync
 } from 'fs'
 import { homedir } from 'os'
-import { dirname, join } from 'path'
+import { dirname, join, posix as pathPosix } from 'path'
 import { randomUUID } from 'crypto'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -193,9 +193,13 @@ export class KimiHookService {
   // the local install. POSIX-only by design (Kimi's shell is sh/Git Bash); the
   // managed script body is already platform-independent.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    const home = remoteHome.replace(/\/$/, '')
-    const remoteConfigPath = `${home}/.kimi-code/config.toml`
-    const remoteScriptPath = `${home}/.orca/agent-hooks/${MANAGED_SCRIPT_FILE_NAME}`
+    const remoteConfigPath = pathPosix.join(remoteHome, '.kimi-code', 'config.toml')
+    const remoteScriptPath = pathPosix.join(
+      remoteHome,
+      '.orca',
+      'agent-hooks',
+      MANAGED_SCRIPT_FILE_NAME
+    )
     try {
       // null (file absent) → start from an empty config; Kimi creates it lazily.
       const text = (await readTextFileRemote(sftp, remoteConfigPath)) ?? ''
