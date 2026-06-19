@@ -2561,6 +2561,10 @@ export type GlobalSettings = {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
+  /** When enabled, Orca exits a rate-limited managed Claude/Codex session,
+   *  switches to another managed account with available quota, resumes the
+   *  same provider session, then sends "continue". */
+  autoSwitchRateLimitedAccounts?: boolean
   /** When true, each worktree gets its own shell history file so ArrowUp
    *  does not surface commands from other worktrees. Defaults to true.
    *  Disable to revert to shared global shell history. */

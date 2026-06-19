@@ -508,6 +508,18 @@
         "distroRequired": "Select a WSL distro for this project before installing this skill.",
         "distroMissing": "The selected WSL distro is unavailable. Choose an available distro or switch this project to Windows.",
         "wslDefault": "WSL default"
+      },
+      "agentRateLimitAutoSwitchRunner": {
+        "07ff1f8806": "Auto-switch is disabled.",
+        "7e5d87791a": "Auto-switch is not available for SSH terminals because account auth lives on the remote host.",
+        "d823b157d5": "No managed {{value0}} account with available quota was found.",
+        "79751c2c2d": "Could not build a resume command for the limited agent session.",
+        "13668a6034": "The limited agent did not exit after Ctrl+C, so Orca left the terminal untouched.",
+        "9553d26436": "The terminal did not accept the resume command after switching accounts.",
+        "13ccffb514": "The resumed agent did not take over the terminal in time.",
+        "65d1f14b75": "The resumed agent did not accept the continue command.",
+        "65e8e278a4": "Could not inspect managed accounts: {{value0}}",
+        "a939f58b30": "Could not resolve the resume platform: {{value0}}"
       }
     },
     "hooks": {
@@ -4302,7 +4314,12 @@
           "75ca9b718e": "Codex は、アクティブなアカウントには新たにサインインする必要があると報告しました。新規 Codex セッションを開始する前に、再認証してください。",
           "b11078a9c2": "wsl",
           "350b2a1aa7": "Use your current",
-          "e05d0ff737": "現在の {{value0}} Claude ログインを使用します。"
+          "e05d0ff737": "現在の {{value0}} Claude ログインを使用します。",
+          "b28bb41f63": "Auto-switch Limited Agents",
+          "7d2634bfa1": "When a live Claude or Codex session hits an account limit, Orca can switch to another managed account and resume the same session.",
+          "5d6a7e20ef": "Exits the limited Claude or Codex agent, selects a managed account with available quota, resumes the provider session, then sends continue.",
+          "0f9197cfde": "Enabled",
+          "a103114594": "Enable"
         },
         "AdvancedPane": {
           "40b29e0bf3": "再起動",
@@ -6389,7 +6406,9 @@
             "bdbd1e668e": "窓",
             "593720c17f": "場所",
             "b84a5b0c8a": "プロバイダー アカウントをこのデバイスまたは WSL で検査および追加するかどうかを選択します。",
-            "d09fb5ca92": "アカウントの場所"
+            "d09fb5ca92": "アカウントの場所",
+            "0b0fd87891": "Auto-switch Limited Agents",
+            "3d76b94f10": "Resume Claude and Codex sessions on another managed account when the active account hits a limit."
           }
         },
         "advanced": {
@@ -11545,6 +11564,16 @@
             "dismiss": "Dismiss",
             "later": "Later"
           }
+        }
+      },
+      "terminalPane": {
+        "TerminalPane": {
+          "3200325804": "Switching managed accounts and resuming the same session.",
+          "34f715e07e": "{{value0}} account limit detected.",
+          "e0e6981a0e": "{{value0}} session resumed.",
+          "f8d8f16aca": "Switched to {{value0}} and sent continue.",
+          "816627b20e": "{{value0}} auto-switch skipped.",
+          "8bb13ef78d": "{{value0}} auto-switch failed."
         }
       }
     },

@@ -106,6 +106,11 @@ import {
   isResumableTuiAgent,
   normalizeAgentProviderSession
 } from '../../../../shared/agent-session-resume'
+import {
+  detectAgentRateLimitOutput,
+  isAutoSwitchRateLimitAgent,
+  type AgentRateLimitDetectionState
+} from '../../../../shared/agent-rate-limit-detection'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
@@ -838,6 +843,9 @@ export function connectPanePty(
   // Use the stable layout leaf UUID, not the renderer-local numeric pane id.
   const cacheKey = makePaneKey(deps.tabId, pane.leafId)
   const pendingSpawnKey = cacheKey
+  const rateLimitDetectionState: AgentRateLimitDetectionState = { tail: '' }
+  let lastRateLimitDetectionKey: string | null = null
+  let rateLimitDetectionPtyId: string | null = null
   const neutralTerminalTitle = (): string => {
     const state = useAppStore.getState()
     const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
@@ -3035,6 +3043,39 @@ export function connectPanePty(
         data = scanned.output
       }
       resetHiddenOutputRestoreIfPtyChanged()
+      const currentPtyId = transport.getPtyId()
+      if (currentPtyId !== rateLimitDetectionPtyId) {
+        // Why: pane bindings can swap PTYs; stale split output must not trigger a new session.
+        rateLimitDetectionPtyId = currentPtyId
+        rateLimitDetectionState.tail = ''
+        lastRateLimitDetectionKey = null
+      }
+      if (
+        currentPtyId &&
+        deps.onAgentRateLimitDetected &&
+        useAppStore.getState().settings?.autoSwitchRateLimitedAccounts === true
+      ) {
+        const entry = useAppStore.getState().agentStatusByPaneKey[cacheKey]
+        const agent = entry?.agentType
+        const providerSession = normalizeAgentProviderSession(entry?.providerSession)
+        if (
+          isAutoSwitchRateLimitAgent(agent) &&
+          providerSession &&
+          detectAgentRateLimitOutput(agent, data, rateLimitDetectionState)
+        ) {
+          const detectionKey = `${currentPtyId}:${agent}:${providerSession.key}:${providerSession.id}`
+          if (lastRateLimitDetectionKey !== detectionKey) {
+            lastRateLimitDetectionKey = detectionKey
+            deps.onAgentRateLimitDetected({
+              paneId: pane.id,
+              paneKey: cacheKey,
+              ptyId: currentPtyId,
+              agent,
+              providerSession
+            })
+          }
+        }
+      }
       respondToTerminalPixelSizeQueries(data)
       observeTerminalBracketedPasteModeOutput(pane.terminal, data)
       for (const link of observeTerminalGitHubPRLink(data)) {

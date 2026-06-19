@@ -5,6 +5,8 @@ import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../../shared/types'
+import type { AutoSwitchRateLimitAgent } from '../../../../shared/agent-rate-limit-detection'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 
 export type PtyConnectionDeps = {
   tabId: string
@@ -35,6 +37,13 @@ export type PtyConnectionDeps = {
   isVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  onAgentRateLimitDetected?: (event: {
+    paneId: number
+    paneKey: string
+    ptyId: string
+    agent: AutoSwitchRateLimitAgent
+    providerSession: AgentProviderSessionMetadata
+  }) => void
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void

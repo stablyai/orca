@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import { X } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { isUnifiedTabPinned } from '@/store/pinned-tab-close-guard'
 import { Button } from '@/components/ui/button'
@@ -109,6 +110,9 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
+import type { AutoSwitchRateLimitAgent } from '../../../../shared/agent-rate-limit-detection'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
+import { runAgentRateLimitAutoSwitch } from '@/lib/agent-rate-limit-auto-switch-runner'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -371,6 +375,7 @@ export default function TerminalPane({
   paneTitlesRef.current = paneTitles
   const removedTitleLeafIdsRef = useRef<Set<string>>(new Set())
   const clearedScrollbackLeafIdsRef = useRef<Set<string>>(new Set())
+  const autoSwitchingPaneKeysRef = useRef<Set<string>>(new Set())
   const [renamingPaneId, setRenamingPaneId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
@@ -591,6 +596,100 @@ export default function TerminalPane({
   const systemPrefersDark = useSystemPrefersDark()
   const dispatchNotification = useNotificationDispatch(worktreeId)
   const setCacheTimerStartedAt = useAppStore((store) => store.setCacheTimerStartedAt)
+
+  const handleAgentRateLimitDetected = useCallback(
+    (event: {
+      paneId: number
+      paneKey: string
+      ptyId: string
+      agent: AutoSwitchRateLimitAgent
+      providerSession: AgentProviderSessionMetadata
+    }): void => {
+      if (autoSwitchingPaneKeysRef.current.has(event.paneKey)) {
+        return
+      }
+      const transport = paneTransportsRef.current.get(event.paneId)
+      if (!transport || transport.getPtyId() !== event.ptyId) {
+        return
+      }
+      if (useAppStore.getState().settings?.autoSwitchRateLimitedAccounts !== true) {
+        return
+      }
+
+      autoSwitchingPaneKeysRef.current.add(event.paneKey)
+      const agentLabel = event.agent === 'claude' ? 'Claude' : 'Codex'
+      toast.info(
+        translate(
+          'auto.components.terminalPane.TerminalPane.34f715e07e',
+          '{{value0}} account limit detected.',
+          { value0: agentLabel }
+        ),
+        {
+          description: translate(
+            'auto.components.terminalPane.TerminalPane.3200325804',
+            'Switching managed accounts and resuming the same session.'
+          )
+        }
+      )
+
+      void runAgentRateLimitAutoSwitch({
+        ptyId: event.ptyId,
+        agent: event.agent,
+        providerSession: event.providerSession,
+        connectionId: getConnectionId(worktreeId) ?? null
+      })
+        .then((result) => {
+          if (result.ok) {
+            toast.success(
+              translate(
+                'auto.components.terminalPane.TerminalPane.e0e6981a0e',
+                '{{value0}} session resumed.',
+                { value0: agentLabel }
+              ),
+              {
+                description: translate(
+                  'auto.components.terminalPane.TerminalPane.f8d8f16aca',
+                  'Switched to {{value0}} and sent continue.',
+                  { value0: result.accountLabel }
+                )
+              }
+            )
+            return
+          }
+          if (result.reason === 'disabled') {
+            return
+          }
+          const toastFn =
+            result.reason === 'no-account' || result.reason === 'ssh' ? toast.info : toast.error
+          toastFn(
+            translate(
+              'auto.components.terminalPane.TerminalPane.816627b20e',
+              '{{value0}} auto-switch skipped.',
+              { value0: agentLabel }
+            ),
+            {
+              description: result.message
+            }
+          )
+        })
+        .catch((error) => {
+          toast.error(
+            translate(
+              'auto.components.terminalPane.TerminalPane.8bb13ef78d',
+              '{{value0}} auto-switch failed.',
+              { value0: agentLabel }
+            ),
+            {
+              description: error instanceof Error ? error.message : String(error)
+            }
+          )
+        })
+        .finally(() => {
+          autoSwitchingPaneKeysRef.current.delete(event.paneKey)
+        })
+    },
+    [paneTransportsRef, worktreeId]
+  )
 
   // Memoized with useCallback so downstream hooks (useTerminalKeyboardShortcuts,
   // useTerminalPaneLifecycle, createExpandCollapseActions) don't tear down and
@@ -949,6 +1048,7 @@ export default function TerminalPane({
     isVisibleRef,
     onPtyExitRef,
     onPtyErrorRef,
+    onAgentRateLimitDetected: handleAgentRateLimitDetected,
     clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
     updateTabTitle,
@@ -1166,6 +1266,7 @@ export default function TerminalPane({
         isVisibleRef,
         onPtyExitRef,
         onPtyErrorRef,
+        onAgentRateLimitDetected: handleAgentRateLimitDetected,
         clearTabPtyId,
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
         updateTabTitle,
@@ -1192,6 +1293,7 @@ export default function TerminalPane({
       clearTabPtyId,
       cwd,
       dispatchNotification,
+      handleAgentRateLimitDetected,
       markWorktreeUnread,
       markTerminalTabUnread,
       markTerminalPaneUnread,

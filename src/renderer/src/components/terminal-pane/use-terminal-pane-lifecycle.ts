@@ -29,6 +29,8 @@ import type {
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { AutoSwitchRateLimitAgent } from '../../../../shared/agent-rate-limit-detection'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
@@ -171,6 +173,13 @@ type UseTerminalPaneLifecycleDeps = {
   isVisibleRef: React.RefObject<boolean>
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  onAgentRateLimitDetected?: (event: {
+    paneId: number
+    paneKey: string
+    ptyId: string
+    agent: AutoSwitchRateLimitAgent
+    providerSession: AgentProviderSessionMetadata
+  }) => void
   clearTabPtyId: (tabId: string, ptyId: string) => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
@@ -354,6 +363,7 @@ export function useTerminalPaneLifecycle({
   isVisibleRef,
   onPtyExitRef,
   onPtyErrorRef,
+  onAgentRateLimitDetected,
   clearTabPtyId,
   consumeSuppressedPtyExit,
   updateTabTitle,
@@ -541,6 +551,7 @@ export function useTerminalPaneLifecycle({
       isVisibleRef,
       onPtyExitRef,
       onPtyErrorRef,
+      onAgentRateLimitDetected,
       clearTabPtyId,
       consumeSuppressedPtyExit,
       updateTabTitle,

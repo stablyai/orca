@@ -22,6 +22,32 @@ export const getAccountsLocationSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsAutoSwitchSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.accounts.search.0b0fd87891',
+      'Auto-switch Limited Agents'
+    ),
+    description: translate(
+      'auto.components.settings.accounts.search.3d76b94f10',
+      'Resume Claude and Codex sessions on another managed account when the active account hits a limit.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.70d1b8def5', 'codex'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.4de7da808a', 'continue'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.0df8d33e19', 'resume')
+    ]
+  }
+])
+
 export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.accounts.search.75682e1b62', 'Claude Accounts'),
@@ -173,6 +199,7 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
 
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
+  ...getAccountsAutoSwitchSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
   ...getAccountsGeminiSearchEntries(),

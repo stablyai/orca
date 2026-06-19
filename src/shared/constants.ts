@@ -289,6 +289,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} },
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
+    autoSwitchRateLimitedAccounts: false,
     terminalScopeHistoryByWorktree: true,
     defaultTuiAgent: null,
     disabledTuiAgents: [...DEFAULT_DISABLED_TUI_AGENTS],

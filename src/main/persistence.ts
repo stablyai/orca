@@ -4507,6 +4507,10 @@ export class Store {
     if ('minimizeToTrayOnClose' in updates) {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
     }
+    if ('autoSwitchRateLimitedAccounts' in updates) {
+      sanitizedUpdates.autoSwitchRateLimitedAccounts =
+        updates.autoSwitchRateLimitedAccounts === true
+    }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
     }
