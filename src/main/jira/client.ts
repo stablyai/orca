@@ -574,5 +574,7 @@ export function clearToken(siteId: string): void {
 }
 
 export function isAuthError(error: unknown): boolean {
-  return error instanceof JiraApiError && (error.status === 401 || error.status === 403)
+  // Why: Jira returns 403 for project/API permission gaps even when /myself
+  // succeeds, so only 401 means the saved credential itself is invalid.
+  return error instanceof JiraApiError && error.status === 401
 }
