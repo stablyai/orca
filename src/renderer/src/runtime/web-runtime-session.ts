@@ -19,6 +19,7 @@ import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { recordWebSessionFocusIntent } from './web-session-focus-intent'
+import { recordWebSessionCloseIntent } from './web-session-close-intent'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
 
 export {
@@ -437,6 +438,12 @@ async function callWebRuntimeSessionTabMethod(
         worktreeId: args.worktreeId,
         tabId: args.tabId
       }) ?? toHostSessionTabId(args.tabId)
+    if (method === 'session.tabs.close') {
+      // Why: the local mirror is pruned before this resolves, so suppress this
+      // host tab in the reconcile until the host snapshot confirms removal —
+      // otherwise an in-flight pre-close snapshot makes the tab flash back.
+      recordWebSessionCloseIntent(args.worktreeId, hostTabId, Date.now())
+    }
     const response = await window.api.runtimeEnvironments.call({
       selector: environmentId,
       method,

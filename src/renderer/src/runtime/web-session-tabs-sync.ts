@@ -43,6 +43,10 @@ import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { clearWebSessionFocusIntent, peekWebSessionFocusIntent } from './web-session-focus-intent'
 import {
+  isWebSessionCloseIntentPending,
+  reconcileWebSessionCloseIntents
+} from './web-session-close-intent'
+import {
   beginWebRuntimeWakeTerminalRespawn,
   clearAllWebRuntimeWakeTerminalRespawn,
   clearWebRuntimeWakeTerminalRespawnForWorktree,
@@ -1508,11 +1512,35 @@ function findCurrentVisibleUnifiedTabId(args: {
 
 export function applyWebSessionTabsSnapshot(
   state: WebSessionTabsSyncState,
-  snapshot: RuntimeMobileSessionTabsResult,
+  rawSnapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
   now = Date.now()
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
-  const worktreeId = snapshot.worktree
+  const worktreeId = rawSnapshot.worktree
+  // Why: a remote close prunes the local mirror immediately, but an in-flight
+  // pre-close snapshot can still list the tab and flash it back. Drop any tab
+  // the client is closing until the host confirms removal; reconcile the intents
+  // against the full snapshot first so confirmed (absent) closes clear.
+  const snapshotHostTabId = (tab: RuntimeMobileSessionTabsResult['tabs'][number]): string =>
+    tab.type === 'terminal'
+      ? tab.parentTabId
+      : tab.type === 'browser'
+        ? (tab.browserPageId ?? tab.id)
+        : tab.id
+  reconcileWebSessionCloseIntents(
+    worktreeId,
+    new Set(rawSnapshot.tabs.map((tab) => snapshotHostTabId(tab)))
+  )
+  const snapshot: RuntimeMobileSessionTabsResult = rawSnapshot.tabs.some((tab) =>
+    isWebSessionCloseIntentPending(worktreeId, snapshotHostTabId(tab), now)
+  )
+    ? {
+        ...rawSnapshot,
+        tabs: rawSnapshot.tabs.filter(
+          (tab) => !isWebSessionCloseIntentPending(worktreeId, snapshotHostTabId(tab), now)
+        )
+      }
+    : rawSnapshot
   // Why: only follow the snapshot's active tab over the user's current focus when
   // the client itself initiated this activation (a create/activate it recorded).
   // An unsolicited server-active (e.g. an agent "thinking" echo) must not steal

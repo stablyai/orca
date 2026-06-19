@@ -8,6 +8,10 @@ import {
   recordWebSessionFocusIntent,
   resetWebSessionFocusIntentForTests
 } from './web-session-focus-intent'
+import {
+  recordWebSessionCloseIntent,
+  resetWebSessionCloseIntentForTests
+} from './web-session-close-intent'
 import type { BrowserPage, BrowserWorkspace, Tab, TerminalTab } from '../../../shared/types'
 import type { OpenFile } from '../store/slices/editor'
 import {
@@ -89,6 +93,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(() => {
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetWebSessionFocusIntentForTests()
+    resetWebSessionCloseIntentForTests()
   })
 
   it('ignores stale or duplicate same-epoch snapshots after a newer version was applied', () => {
@@ -130,6 +135,38 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeTabType: null
     })
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
+  })
+
+  it('suppresses a tab the client is closing until the host confirms removal (no close flash)', () => {
+    const surface = {
+      type: 'terminal' as const,
+      id: HOST_SURFACE_ID,
+      parentTabId: 'host-tab-1',
+      leafId: LEAF_ID,
+      title: 'Terminal',
+      status: 'ready' as const,
+      terminal: 'term_host',
+      isActive: true
+    }
+    // Client closed host-tab-1; an in-flight pre-close snapshot still lists it.
+    recordWebSessionCloseIntent(WT, 'host-tab-1', NOW)
+    const stalePreClose = applyWebSessionTabsSnapshot(makeState(), makeSnapshot([surface]), ENV, NOW)
+    expect((stalePreClose.tabsByWorktree?.[WT] ?? []).map((tab) => tab.id)).not.toContain(
+      toWebTerminalSurfaceTabId('host-tab-1')
+    )
+
+    // The host's post-close snapshot omits the tab -> intent clears; a later
+    // snapshot that re-adds the SAME id (a genuinely new tab) is no longer hidden.
+    applyWebSessionTabsSnapshot(makeState(), makeSnapshot([]), ENV, NOW + 1)
+    const reopened = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([surface], { snapshotVersion: 5 }),
+      ENV,
+      NOW + 2
+    )
+    expect((reopened.tabsByWorktree?.[WT] ?? []).map((tab) => tab.id)).toContain(
+      toWebTerminalSurfaceTabId('host-tab-1')
+    )
   })
 
   it('does not bootstrap a terminal from a stale empty active-worktree snapshot', () => {
