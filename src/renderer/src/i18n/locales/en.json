@@ -1038,6 +1038,8 @@
         "commentTooLarge": "Comment is too large to submit safely."
       },
       "NewWorkspaceComposerCard": {
+        "reuseExistingBranch": "Reuse branch",
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it.",
         "cbb47ee0dc": "Only available for local Git projects.",
         "d861de981b": "Sparse checkout",
         "090cfedeb4": "Write a note",
@@ -1673,7 +1675,7 @@
         "1628fd7dfa": "No active worktrees, settings, actions, or open tabs",
         "b781ae05e3": "Type to search worktrees, settings, tabs, and actions.",
         "f60f8730be": "No other worktrees to switch to",
-        "c4afa68159": "Try a worktree, setting, action, page title, emulator, URL, PR, or port.",
+        "c4afa68159": "Try a worktree, setting, action, tab title, agent prompt, URL, PR, or port.",
         "dbd9d87eec": "No results match your search",
         "2c38630a01": "Workspace no longer exists",
         "7726ce9970": "Mobile emulator tab no longer exists",
@@ -1690,7 +1692,8 @@
         "recentWorktreesHeader": "Recent Worktrees",
         "settingsBadge": "Settings",
         "actionBadge": "Action",
-        "paletteHostBadge": "Host: {{value0}}"
+        "paletteHostBadge": "Host: {{value0}}",
+        "workspaceTabMissing": "Tab no longer exists"
       },
       "github": {
         "pr": {
@@ -2314,7 +2317,8 @@
             "f3eeb1de13": "Copy",
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
-            "df766809e0": "Collapse Pane"
+            "df766809e0": "Collapse Pane",
+            "copyTerminalId": "Copy Terminal ID"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
@@ -2388,7 +2392,15 @@
               "pane": {
                 "context": {
                   "menu": {
-                    "a29b9faa01": "Pane ID copied"
+                    "a29b9faa01": "Pane ID copied",
+                    "terminal": {
+                      "id": {
+                        "copied": "Terminal ID copied",
+                        "copy": {
+                          "failed": "Unable to copy terminal ID"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -3839,7 +3851,7 @@
           "e091caab15": "The project could not be found",
           "439fa94d53": "Update",
           "579b1a8e61": "Remove from Parent",
-          "8d9cd19d09": "Open Parent Workspace",
+          "8d9cd19d09": "Open Parent Worktree",
           "d35dfeae58": "Remove from group",
           "76865d827f": "Move to group",
           "503ec0f8e6": "New group from project",
@@ -3855,7 +3867,9 @@
           "8dacff1fe0": "Mark Read",
           "3baa7d6507": "Pin",
           "697d0f6e1b": "Unpin",
-          "250de158fd": "Remove Workspace"
+          "250de158fd": "Remove Workspace",
+          "changeParentWorkspace": "Change Parent Worktree...",
+          "setParentWorkspace": "Set Parent Worktree..."
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -3896,7 +3910,8 @@
           "b667b59632": "Some projects could not be removed from Orca",
           "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
           "groupDeleteFailed": "Failed to delete group",
-          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed."
+          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
+          "failedNestWorkspace": "Failed to nest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -4205,6 +4220,12 @@
           "c7d8e9f0a1": "{{value0}} updated",
           "d8e9f0a1b2": "{{value0}} skipped",
           "e9f0a1b2c3": "{{value0}} failed"
+        },
+        "WorktreeParentPickerPopover": {
+          "failedSetParent": "Failed to set parent worktree",
+          "current": "Current",
+          "searchPlaceholder": "Search worktrees...",
+          "empty": "No matching eligible worktrees."
         }
       },
       "shared": {
@@ -4775,11 +4796,11 @@
           "agentHibernation": {
             "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
             "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
-            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
-            "idleMinutesLabel": "Hibernate after",
+            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can sleep it.",
+            "idleMinutesLabel": "Sleep after",
             "idleMinutesSuffix": "minutes",
-            "title": "Agent hibernation",
-            "toggleLabel": "Toggle agent hibernation"
+            "title": "Agent sleep",
+            "toggleLabel": "Toggle agent sleep"
           },
           "newWorktreeCardStyle": {
             "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
@@ -6302,6 +6323,7 @@
           "c2c64b24d0": "Reset"
         },
         "VoicePane": {
+          "6fa734ed95": "Delete {{value0}}",
           "68de13f72c": "Failed to delete model.",
           "1ba81c0ff0": "recommended",
           "cfde55c7b0": "Failed to download model.",
@@ -6874,11 +6896,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
-              "hibernate": "hibernate",
               "minutes": "minutes",
               "sleep": "sleep",
               "terminal": "terminal",
-              "title": "Agent hibernation"
+              "title": "Agent sleep"
             },
             "newWorktreeCardStyle": {
               "card": "card",
@@ -9097,6 +9118,9 @@
                 "copyCommand": "Copy command"
               }
             }
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "View"
           }
         }
       },

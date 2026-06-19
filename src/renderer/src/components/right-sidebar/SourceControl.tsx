@@ -102,12 +102,7 @@ import {
 } from './git-status-refresh'
 import { describeForkPushTarget } from './fork-push-target-label'
 import { toast } from 'sonner'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
+import { SourceControlEntryContextMenu } from './source-control-entry-context-menu'
 import {
   Dialog,
   DialogClose,
@@ -5581,6 +5576,7 @@ function SourceControlInner(): React.JSX.Element {
                                 onSelect={handleSelect}
                                 onContextMenu={handleContextMenu}
                                 onRevealInExplorer={revealInExplorer}
+                                connectionId={activeConnectionId}
                                 onOpen={handleOpenDiff}
                                 onStage={handleStage}
                                 onUnstage={handleUnstage}
@@ -5604,6 +5600,7 @@ function SourceControlInner(): React.JSX.Element {
                                 onSelect={handleSelect}
                                 onContextMenu={handleContextMenu}
                                 onRevealInExplorer={revealInExplorer}
+                                connectionId={activeConnectionId}
                                 onOpen={handleOpenDiff}
                                 onStage={handleStage}
                                 onUnstage={handleUnstage}
@@ -5682,6 +5679,7 @@ function SourceControlInner(): React.JSX.Element {
                           worktreePath={worktreePath}
                           depth={node.depth}
                           onRevealInExplorer={revealInExplorer}
+                          connectionId={activeConnectionId}
                           onOpen={(event) => openCommittedDiff(node.entry, event)}
                           commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
                           showPathHint={false}
@@ -5695,6 +5693,7 @@ function SourceControlInner(): React.JSX.Element {
                         currentWorktreeId={currentWorktreeId}
                         worktreePath={worktreePath}
                         onRevealInExplorer={revealInExplorer}
+                        connectionId={activeConnectionId}
                         onOpen={(event) => openCommittedDiff(entry, event)}
                         commentCount={diffCommentCountByPath.get(entry.path) ?? 0}
                       />
@@ -7493,6 +7492,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onSelect,
   onContextMenu,
   onRevealInExplorer,
+  connectionId,
   onOpen,
   onStage,
   onUnstage,
@@ -7510,6 +7510,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   onSelect?: (e: React.MouseEvent, key: string, entry: GitStatusEntry) => void
   onContextMenu?: (key: string) => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
+  connectionId?: string | null
   onOpen: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   onStage: (filePath: string) => Promise<void>
   onUnstage: (filePath: string) => Promise<void>
@@ -7550,6 +7551,8 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      connectionId={connectionId}
+      onView={() => onOpen(entry)}
       onRevealInExplorer={onRevealInExplorer}
       onOpenChange={(open) => {
         if (open && onContextMenu) {
@@ -7756,6 +7759,7 @@ function BranchEntryRow({
   worktreePath,
   depth = 0,
   onRevealInExplorer,
+  connectionId,
   onOpen,
   commentCount,
   showPathHint = true
@@ -7765,7 +7769,8 @@ function BranchEntryRow({
   worktreePath: string
   depth?: number
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
-  onOpen: (event: SourceControlRowOpenEvent) => void
+  connectionId?: string | null
+  onOpen: (event?: SourceControlRowOpenEvent) => void
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
@@ -7778,6 +7783,8 @@ function BranchEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      connectionId={connectionId}
+      onView={() => onOpen()}
       onRevealInExplorer={onRevealInExplorer}
     >
       <div
@@ -7823,42 +7830,6 @@ function BranchEntryRow({
         </span>
       </div>
     </SourceControlEntryContextMenu>
-  )
-}
-
-function SourceControlEntryContextMenu({
-  currentWorktreeId,
-  absolutePath,
-  onRevealInExplorer,
-  onOpenChange,
-  children
-}: {
-  currentWorktreeId: string
-  absolutePath?: string
-  onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
-  onOpenChange?: (open: boolean) => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  const handleOpenInFileExplorer = useCallback(() => {
-    if (!absolutePath) {
-      return
-    }
-    onRevealInExplorer(currentWorktreeId, absolutePath)
-  }, [absolutePath, currentWorktreeId, onRevealInExplorer])
-
-  return (
-    <ContextMenu onOpenChange={onOpenChange}>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="w-52">
-        <ContextMenuItem onSelect={handleOpenInFileExplorer} disabled={!absolutePath}>
-          <FolderOpen className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SourceControl.cc05b2d088',
-            'Open in File Explorer'
-          )}
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
   )
 }
 

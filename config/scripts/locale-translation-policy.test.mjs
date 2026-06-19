@@ -583,4 +583,23 @@ describe('locale-translation-policy', () => {
       })
     ).toBe('폰트')
   })
+
+  it('merges split Korean key overrides without dropping other locale repairs', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.8c45901789',
+        enValue: 'Request reviewer {{value0}}',
+        localeValue: '请求审阅者 {{value0}}',
+        locale: 'zh'
+      })
+    ).toBe('请求评审人 {{value0}}')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.right.sidebar.PortsPanel.c9d106547a',
+        enValue: 'Forward',
+        localeValue: '進む',
+        locale: 'ja'
+      })
+    ).toBe('転送')
+  })
 })

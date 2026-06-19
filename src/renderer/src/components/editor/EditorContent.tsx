@@ -4,7 +4,8 @@ now Changes view mode). Keeping the mode-selection branches colocated is easier
 to reason about than scattering the switch across per-mode wrappers. Individual
 renderers (MonacoEditor, DiffViewer, ChangesModeView, MarkdownPreview, etc.)
 already live in their own modules. */
-import React, { lazy } from 'react'
+import React from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'

@@ -79,6 +79,7 @@ import {
 } from '@/components/browser-pane/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
 import { detectLanguage } from '@/lib/language-detect'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
@@ -725,9 +726,6 @@ export function useIpcEvents(): void {
     type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
     const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
     let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
-    const runtimeClientEventsSubscriptions = new Map<string, () => void>()
-    const runtimeClientEventsPending = new Set<string>()
-    let runtimeClientEventsGeneration = 0
 
     unsubs.push(attachMobileMarkdownBridge())
 
@@ -881,76 +879,15 @@ export function useIpcEvents(): void {
         })
     }
 
-    const stopRuntimeClientEvents = (): void => {
-      runtimeClientEventsGeneration += 1
-      for (const unsubscribe of runtimeClientEventsSubscriptions.values()) {
-        unsubscribe()
-      }
-      runtimeClientEventsSubscriptions.clear()
-      runtimeClientEventsPending.clear()
-    }
+    const runtimeClientEventsSync = createRuntimeClientEventsSync({
+      getDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds,
+      subscribe: subscribeRuntimeClientEvents,
+      onEvent: handleRuntimeClientEvent
+    })
 
-    const syncRuntimeClientEventsSubscription = (): void => {
-      const desiredIds = new Set(getRuntimeClientEventEnvironmentIds())
-      for (const [environmentId, unsubscribe] of runtimeClientEventsSubscriptions) {
-        if (desiredIds.has(environmentId)) {
-          continue
-        }
-        unsubscribe()
-        runtimeClientEventsSubscriptions.delete(environmentId)
-      }
-      for (const environmentId of desiredIds) {
-        if (
-          runtimeClientEventsSubscriptions.has(environmentId) ||
-          runtimeClientEventsPending.has(environmentId)
-        ) {
-          continue
-        }
-        runtimeClientEventsPending.add(environmentId)
-        const generation = runtimeClientEventsGeneration
-        void subscribeRuntimeClientEvents(
-          environmentId,
-          (event) => handleRuntimeClientEvent(environmentId, event),
-          (error) => {
-            console.warn('[runtime-client-events] subscription error:', error)
-          }
-        )
-          .then((subscription) => {
-            runtimeClientEventsPending.delete(environmentId)
-            if (
-              generation !== runtimeClientEventsGeneration ||
-              !getRuntimeClientEventEnvironmentIds().includes(environmentId)
-            ) {
-              subscription.unsubscribe()
-              return
-            }
-            runtimeClientEventsSubscriptions.set(environmentId, subscription.unsubscribe)
-          })
-          .catch((error) => {
-            runtimeClientEventsPending.delete(environmentId)
-            if (generation === runtimeClientEventsGeneration) {
-              console.warn('[runtime-client-events] failed to subscribe:', error)
-            }
-          })
-      }
-      for (const environmentId of runtimeClientEventsPending) {
-        if (desiredIds.has(environmentId)) {
-          continue
-        }
-        runtimeClientEventsPending.delete(environmentId)
-      }
-      if (desiredIds.size === 0 && runtimeClientEventsSubscriptions.size === 0) {
-        runtimeClientEventsGeneration += 1
-      }
-    }
-
-    const unsubscribeRuntimeClientEventsSubscription = (): void => {
-      stopRuntimeClientEvents()
-    }
-
-    syncRuntimeClientEventsSubscription()
-    unsubs.push(useAppStore.subscribe(syncRuntimeClientEventsSubscription))
-    unsubs.push(unsubscribeRuntimeClientEventsSubscription)
+    runtimeClientEventsSync.sync()
+    unsubs.push(useAppStore.subscribe(runtimeClientEventsSync.sync))
+    unsubs.push(runtimeClientEventsSync.stop)
 
     unsubs.push(
       window.api.repos.onChanged(() => {

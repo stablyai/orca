@@ -1091,7 +1091,9 @@
         "setupHostExistingFolderHelp": "Link a checkout that already exists there, then create this workspace on that host.",
         "importingHostSetup": "Importing...",
         "importHostSetup": "Import",
-        "notePasteTooLarge": "Paste is too large for the note field."
+        "notePasteTooLarge": "Paste is too large for the note field.",
+        "reuseExistingBranch": "Reuse branch",
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "Elija el proyecto, el nombre del espacio de trabajo y el agente antes de crear el espacio de trabajo."
@@ -1673,7 +1675,7 @@
         "1628fd7dfa": "No hay árboles de trabajo, configuraciones, acciones ni pestañas abiertas activas",
         "b781ae05e3": "Escriba para buscar árboles de trabajo, configuraciones, pestañas y acciones.",
         "f60f8730be": "No hay otros árboles de trabajo a los que cambiar",
-        "c4afa68159": "Pruebe con un árbol de trabajo, configuración, acción, título de página, emulador, URL, PR o puerto.",
+        "c4afa68159": "Pruebe con un árbol de trabajo, ajuste, acción, título de pestaña, prompt de agente, URL, PR o puerto.",
         "dbd9d87eec": "Ningún resultado coincide con tu búsqueda",
         "2c38630a01": "El espacio de trabajo ya no existe",
         "7726ce9970": "La pestaña del emulador móvil ya no existe",
@@ -1690,7 +1692,8 @@
         "recentWorktreesHeader": "Árboles de trabajo recientes",
         "settingsBadge": "Ajustes",
         "actionBadge": "Acción",
-        "paletteHostBadge": "Host: {{value0}}"
+        "paletteHostBadge": "Host: {{value0}}",
+        "workspaceTabMissing": "La pestaña ya no existe"
       },
       "github": {
         "pr": {
@@ -2314,7 +2317,8 @@
             "f3eeb1de13": "Copiar",
             "c2f0b72b8d": "Insertar",
             "925f49f210": "Expandir panel",
-            "df766809e0": "Contraer panel"
+            "df766809e0": "Contraer panel",
+            "copyTerminalId": "Copy Terminal ID"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Reiniciar demonio",
@@ -2388,7 +2392,15 @@
               "pane": {
                 "context": {
                   "menu": {
-                    "a29b9faa01": "ID del panel copiado"
+                    "a29b9faa01": "ID del panel copiado",
+                    "terminal": {
+                      "id": {
+                        "copied": "Terminal ID copied",
+                        "copy": {
+                          "failed": "Unable to copy terminal ID"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -3825,7 +3837,7 @@
           "e091caab15": "No se pudo encontrar el proyecto.",
           "439fa94d53": "Actualizar",
           "579b1a8e61": "Quitar del padre",
-          "8d9cd19d09": "Abrir espacio de trabajo principal",
+          "8d9cd19d09": "Abrir árbol de trabajo padre",
           "d35dfeae58": "Quitar del grupo",
           "76865d827f": "Mover al grupo",
           "503ec0f8e6": "Nuevo grupo del proyecto",
@@ -3841,7 +3853,9 @@
           "8dacff1fe0": "Marcar como leído",
           "3baa7d6507": "Alfiler",
           "697d0f6e1b": "Desprender",
-          "250de158fd": "Remove Workspace"
+          "250de158fd": "Remove Workspace",
+          "changeParentWorkspace": "Cambiar árbol de trabajo padre...",
+          "setParentWorkspace": "Establecer árbol de trabajo padre..."
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",
@@ -3882,7 +3896,8 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
-          "hostDisconnected": "Disconnected"
+          "hostDisconnected": "Disconnected",
+          "failedNestWorkspace": "No se pudo anidar el espacio de trabajo"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
@@ -4205,6 +4220,12 @@
           "c7d8e9f0a1": "{{value0}} actualizadas",
           "d8e9f0a1b2": "{{value0}} omitidas",
           "e9f0a1b2c3": "{{value0}} fallidas"
+        },
+        "WorktreeParentPickerPopover": {
+          "failedSetParent": "No se pudo establecer el árbol de trabajo padre",
+          "current": "Actual",
+          "searchPlaceholder": "Buscar árboles de trabajo...",
+          "empty": "No hay árboles de trabajo elegibles que coincidan."
         }
       },
       "shared": {
@@ -4778,11 +4799,11 @@
           "agentHibernation": {
             "copy": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando las vuelves a abrir. Experimental mientras ajustamos el modelo de seguridad.",
             "description": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando las vuelves a abrir.",
-            "idleMinutesDescription": "Cuántos minutos inactivo debe esperar un agente en segundo plano completado antes de que Orca pueda hibernarlo.",
-            "idleMinutesLabel": "Hibernar después de",
+            "idleMinutesDescription": "Cuántos minutos inactivo debe esperar un agente en segundo plano completado antes de que Orca pueda suspenderlo.",
+            "idleMinutesLabel": "Suspender después de",
             "idleMinutesSuffix": "minutos",
-            "title": "Hibernación de agentes",
-            "toggleLabel": "Alternar hibernación de agentes"
+            "title": "Suspensión de agentes",
+            "toggleLabel": "Alternar suspensión de agentes"
           },
           "newWorktreeCardStyle": {
             "copy": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
@@ -6293,7 +6314,8 @@
           "ad5d036ecc": "No se pudo solicitar permiso del micrófono. El dictado de voz no estaba habilitado.",
           "f9a9cf6928": "Se requiere permiso del micrófono antes de habilitar el dictado de voz.",
           "1eac933202": "Se abrió Privacidad y seguridad de macOS. Habilite el dictado nuevamente después de otorgar acceso.",
-          "cd9fe37556": "Permiso de micrófono concedido"
+          "cd9fe37556": "Permiso de micrófono concedido",
+          "6fa734ed95": "Delete {{value0}}"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
@@ -6854,11 +6876,10 @@
               "agent": "agente",
               "agents": "agentes",
               "description": "Detiene los terminales de agentes en segundo plano que estén inactivos después del intervalo configurado y reanuda las sesiones compatibles cuando se vuelven a abrir.",
-              "hibernate": "hibernar",
               "minutes": "minutos",
               "sleep": "suspender",
               "terminal": "terminal",
-              "title": "Hibernación de agentes"
+              "title": "Suspensión de agentes"
             },
             "newWorktreeCardStyle": {
               "card": "tarjeta",
@@ -9097,6 +9118,9 @@
                 "copyCommand": "Copy command"
               }
             }
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "View"
           }
         }
       },
@@ -11446,14 +11470,14 @@
           "summary": "{{value0}} adjuntos · {{value1}} con PR/MR · {{value2}} requieren atención · {{value3}} pendientes · {{value4}} correctos · {{value5}} sin PR · {{value6}} desconocidos",
           "showDetails": "Mostrar detalles de comprobaciones de PR de {{value0}}",
           "hideDetails": "Ocultar detalles de comprobaciones de PR de {{value0}}",
-          "reviewChecks": "Review checks",
-          "allChecksPassing": "all checks passing",
-          "oneWorktree": "1 worktree",
-          "worktreeCount": "{{value0}} worktrees",
-          "oneFailing": "1 failing",
-          "failingCount": "{{value0}} failing",
-          "onePending": "1 pending",
-          "pendingCount": "{{value0}} pending"
+          "reviewChecks": "Comprobaciones de revisión",
+          "allChecksPassing": "todas las comprobaciones correctas",
+          "oneWorktree": "1 árbol de trabajo",
+          "worktreeCount": "{{value0}} árboles de trabajo",
+          "oneFailing": "1 fallando",
+          "failingCount": "{{value0}} fallando",
+          "onePending": "1 pendiente",
+          "pendingCount": "{{value0}} pendientes"
         },
         "parentPrChecks": {
           "rowSummary": {

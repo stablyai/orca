@@ -31,6 +31,7 @@ import {
   getDefaultSettings,
   getDefaultUIState,
   getDefaultWorkspaceSession,
+  getWorktreeCardModeProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION
@@ -2799,11 +2800,19 @@ function closeWebOnboarding(base: OnboardingState): OnboardingState {
 function readLocalWebUIState(): PersistedUIState {
   const defaults = getDefaultUIState()
   const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  if (typeof stored.rightSidebarOpen === 'boolean') {
-    return mergeWebUIState(defaults, stored)
-  }
   const storedSettings = getStoredSettings()
-  return mergeWebUIState(defaults, {
+  const base = {
+    ...defaults,
+    // Why: when runtime ui.get is unavailable, web fallback must mirror the
+    // main-process missing-property seed from the legacy card layout mode.
+    worktreeCardProperties: getWorktreeCardModeProperties(
+      storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
+    )
+  }
+  if (typeof stored.rightSidebarOpen === 'boolean') {
+    return mergeWebUIState(base, stored)
+  }
+  return mergeWebUIState(base, {
     ...stored,
     // Why: web fallback lacks main-process normalization, so migrate the
     // retired setting only when the local UI preference is still absent.

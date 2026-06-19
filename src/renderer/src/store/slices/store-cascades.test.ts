@@ -3104,7 +3104,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeDefined()
   })
 
-  it('records terminal input even before agent hibernation is enabled', () => {
+  it('records terminal input even before agent sleep is enabled', () => {
     const store = createTestStore()
 
     store.getState().recordTerminalInput('tab-1:leaf-1', 1000)

@@ -151,4 +151,26 @@ describe('WorktreeCard pinned repo icon', () => {
     },
     WORKTREE_CARD_IMPORT_TIMEOUT_MS
   )
+
+  it(
+    'uses the pinned-style repo icon in new card style instead of a metadata-row badge',
+    async () => {
+      settings = { compactWorktreeCards: false, experimentalNewWorktreeCardStyle: true }
+      worktreeCardProperties = ['status']
+      const { default: WorktreeCard } = await import('./WorktreeCard')
+
+      const markup = renderToStaticMarkup(
+        <WorktreeCard
+          worktree={makeWorktree({ isPinned: false })}
+          repo={makeRepo()}
+          isActive={false}
+        />
+      )
+
+      expect(markup).toContain('🦊')
+      expect(markup).toContain('Project orca')
+      expect(markup).not.toContain('data-worktree-card-meta-row=""')
+    },
+    WORKTREE_CARD_IMPORT_TIMEOUT_MS
+  )
 })

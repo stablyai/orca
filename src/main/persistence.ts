@@ -90,7 +90,7 @@ import {
   getDefaultRepoHookSettings,
   getDefaultWorkspaceSession,
   getWorktreeCardModeProperties,
-  isLegacyDefaultedCompactWorktreeCardProperties,
+  isDefaultedCompactWorktreeCardProperties,
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION,
@@ -2806,7 +2806,7 @@ export class Store {
             const needsLegacyDefaultedCompactMigration =
               loadedCompactWorktreeCards &&
               parsed.ui?._worktreeCardModeDefaulted === true &&
-              isLegacyDefaultedCompactWorktreeCardProperties(rawCardProps)
+              isDefaultedCompactWorktreeCardProperties(rawCardProps)
             const migratedCardProps = (() => {
               if (!Array.isArray(rawCardProps)) {
                 return undefined

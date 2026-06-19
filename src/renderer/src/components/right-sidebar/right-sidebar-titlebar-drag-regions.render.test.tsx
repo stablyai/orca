@@ -6,7 +6,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RightSidebar from './index'
 import { TopActivityOverflowMenu } from './activity-bar-buttons'
-import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from './right-sidebar-titlebar-drag-regions'
+import {
+  RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
+  RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME
+} from './right-sidebar-titlebar-drag-regions'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 
 const mockAppState = vi.hoisted(() => ({
@@ -194,9 +197,22 @@ function expectNoDrag(tag: string): void {
   expect(tag).toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
 }
 
+function setRendererPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      platform: {
+        get: () => ({ platform, osRelease: '' })
+      }
+    }
+  })
+}
+
 describe('rendered right sidebar titlebar drag regions', () => {
   beforeEach(() => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = false
+    setRendererPlatform('darwin')
     mockAppState.rightSidebarOpen = true
     mockAppState.rightSidebarTab = 'explorer'
     mockAppState.setRightSidebarTab = vi.fn((tab: ActiveRightSidebarTab) => {
@@ -233,6 +249,29 @@ describe('rendered right sidebar titlebar drag regions', () => {
     expectNoDrag(buttonOpeningTag(markup, 'Checks'))
     expect(buttonOpeningTag(markup, 'Toggle right sidebar')).toContain('sidebar-toggle')
     expect(markup).toContain(RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)
+  })
+
+  it('uses the custom desktop chrome top strip on Linux desktop', () => {
+    setRendererPlatform('linux')
+
+    const markup = renderToStaticMarkup(<RightSidebar />)
+    const activityStrip = openingTag(markup, 'right-sidebar-activity-strip')
+
+    expect(activityStrip).toContain('h-10')
+    expect(activityStrip).toContain('border-b')
+    expect(markup).toContain(RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME)
+  })
+
+  it('keeps paired Linux web clients on the browser-style top strip', () => {
+    setRendererPlatform('linux')
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+
+    const markup = renderToStaticMarkup(<RightSidebar />)
+    const activityStrip = openingTag(markup, 'right-sidebar-activity-strip')
+
+    expect(activityStrip).toContain('pl-2')
+    expect(activityStrip).not.toContain('h-10')
+    expect(markup).not.toContain(RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME)
   })
 
   it('keeps the overflow trigger no-drag when it renders', () => {

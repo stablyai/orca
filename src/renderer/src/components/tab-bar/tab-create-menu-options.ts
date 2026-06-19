@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { normalizeMatchQuery, scoreQueryTokens } from './query-token-match'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
@@ -37,95 +38,13 @@ export function isTabCreateMenuQueryTooLarge(
 ): boolean {
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
-
-function normalizeQuery(value: string): string {
-  return foldTabCreateMenuQueryWhitespace(value).toLowerCase()
-}
-
-// Why: accepted paste-sized menu queries are still on the renderer input path;
-// collapse display whitespace without a whole-string regex replacement pass.
-function foldTabCreateMenuQueryWhitespace(value: string): string {
-  let normalized = ''
-  let pendingWhitespace = false
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (isTabCreateMenuQueryWhitespace(code)) {
-      pendingWhitespace = normalized.length > 0
-      continue
-    }
-    if (pendingWhitespace) {
-      normalized += ' '
-      pendingWhitespace = false
-    }
-    normalized += value.charAt(index)
-  }
-  return normalized
-}
-
-function isTabCreateMenuQueryWhitespace(code: number): boolean {
-  return (
-    code === 32 ||
-    (code >= 9 && code <= 13) ||
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  )
-}
-
-function tokenize(value: string): string[] {
-  return normalizeQuery(value)
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean)
-}
-
-function scoreQueryTokens(
-  query: string,
-  values: readonly string[]
-): { allTokensMatched: boolean; score: number } {
-  const candidateTokens = values.flatMap(tokenize)
-  if (candidateTokens.length === 0) {
-    return { allTokensMatched: false, score: 0 }
-  }
-
-  const queryTokens = tokenize(query)
-  if (queryTokens.length === 0) {
-    return { allTokensMatched: false, score: 0 }
-  }
-
-  let score = 0
-  let allTokensMatched = true
-  for (const queryToken of queryTokens) {
-    let best = 0
-    for (const candidateToken of candidateTokens) {
-      if (candidateToken === queryToken) {
-        best = Math.max(best, 3)
-      } else if (candidateToken.startsWith(queryToken)) {
-        best = Math.max(best, 2)
-      } else if (candidateToken.includes(queryToken)) {
-        best = Math.max(best, 1)
-      }
-    }
-    if (best === 0) {
-      allTokensMatched = false
-    }
-    score += best
-  }
-  return { allTokensMatched, score }
-}
-
 function scoreMenuOption(query: string, option: TabCreateMenuOption): number {
-  const normalizedQuery = normalizeQuery(query)
+  const normalizedQuery = normalizeMatchQuery(query)
   if (!normalizedQuery) {
     return 0
   }
   const values = [option.label, ...option.keywords]
-  const normalizedLabel = normalizeQuery(option.label)
+  const normalizedLabel = normalizeMatchQuery(option.label)
   if (normalizedQuery === normalizedLabel) {
     return 100
   }
@@ -256,7 +175,7 @@ export function findMatchingTabCreateMenuOptions(
   if (isTabCreateMenuQueryTooLarge(query)) {
     return []
   }
-  const normalizedQuery = normalizeQuery(query)
+  const normalizedQuery = normalizeMatchQuery(query)
   if (!normalizedQuery) {
     return []
   }

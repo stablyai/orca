@@ -36,7 +36,7 @@ export {
   TASK_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeProperties,
   getWorktreeCardModeUpdates,
-  isLegacyDefaultedCompactWorktreeCardProperties,
+  isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from './worktree-card-properties'
 

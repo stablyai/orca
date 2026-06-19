@@ -1091,7 +1091,9 @@
         "setupHostExistingFolderHelp": "链接已存在的检出目录，然后在该主机上创建此工作区。",
         "importingHostSetup": "导入中...",
         "importHostSetup": "导入",
-        "notePasteTooLarge": "Paste is too large for the note field."
+        "notePasteTooLarge": "Paste is too large for the note field.",
+        "reuseExistingBranch": "Reuse branch",
+        "reuseExistingBranchHint": "Check out the existing branch instead of creating a new one from it."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "创建工作区之前选择项目、工作区名称和 Agent。"
@@ -1673,7 +1675,7 @@
         "1628fd7dfa": "没有活动的工作树、设置、操作或打开的选项卡",
         "b781ae05e3": "键入以搜索工作树、设置、选项卡和操作。",
         "f60f8730be": "没有其他工作树可供切换",
-        "c4afa68159": "尝试工作树、设置、操作、页面标题、模拟器、URL、PR 或端口。",
+        "c4afa68159": "尝试工作树、设置、操作、标签页标题、智能体提示、URL、PR 或端口。",
         "dbd9d87eec": "没有结果符合您的搜索",
         "2c38630a01": "工作区不再存在",
         "7726ce9970": "手机模拟器选项卡不再存在",
@@ -1690,7 +1692,8 @@
         "recentWorktreesHeader": "最近的工作树",
         "settingsBadge": "设置",
         "actionBadge": "操作",
-        "paletteHostBadge": "主机：{{value0}}"
+        "paletteHostBadge": "主机：{{value0}}",
+        "workspaceTabMissing": "标签页不再存在"
       },
       "github": {
         "pr": {
@@ -2314,7 +2317,8 @@
             "f3eeb1de13": "复制",
             "c2f0b72b8d": "插入",
             "925f49f210": "展开窗格",
-            "df766809e0": "折叠窗格"
+            "df766809e0": "折叠窗格",
+            "copyTerminalId": "Copy Terminal ID"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "重新启动守护进程",
@@ -2388,7 +2392,15 @@
               "pane": {
                 "context": {
                   "menu": {
-                    "a29b9faa01": "已复制窗格 ID"
+                    "a29b9faa01": "已复制窗格 ID",
+                    "terminal": {
+                      "id": {
+                        "copied": "Terminal ID copied",
+                        "copy": {
+                          "failed": "Unable to copy terminal ID"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -3806,7 +3818,7 @@
           "e091caab15": "找不到该项目",
           "439fa94d53": "更新",
           "579b1a8e61": "从父级中删除",
-          "8d9cd19d09": "打开父工作区",
+          "8d9cd19d09": "打开父工作树",
           "d35dfeae58": "从组中删除",
           "76865d827f": "移至群组",
           "503ec0f8e6": "来自项目的新组",
@@ -3822,7 +3834,9 @@
           "8dacff1fe0": "马克·里德",
           "3baa7d6507": "别针",
           "697d0f6e1b": "取消固定",
-          "250de158fd": "移除工作区"
+          "250de158fd": "移除工作区",
+          "changeParentWorkspace": "更改父工作树...",
+          "setParentWorkspace": "设置父工作树..."
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
@@ -3863,7 +3877,8 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
-          "hostDisconnected": "Disconnected"
+          "hostDisconnected": "Disconnected",
+          "failedNestWorkspace": "无法嵌套工作区"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -4205,6 +4220,12 @@
           "c7d8e9f0a1": "已更新 {{value0}} 个",
           "d8e9f0a1b2": "已跳过 {{value0}} 个",
           "e9f0a1b2c3": "失败 {{value0}} 个"
+        },
+        "WorktreeParentPickerPopover": {
+          "failedSetParent": "无法设置父工作树",
+          "current": "当前",
+          "searchPlaceholder": "搜索工作树...",
+          "empty": "没有匹配的可用工作树。"
         }
       },
       "shared": {
@@ -4763,11 +4784,11 @@
           "agentHibernation": {
             "copy": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。我们仍在调校安全模型，此功能为实验性功能。",
             "description": "在配置的空闲时间后停止后台 agent 终端，并在你再次打开时恢复受支持的会话。",
-            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其休眠前需要等待的空闲分钟数。",
-            "idleMinutesLabel": "休眠等待时间",
+            "idleMinutesDescription": "已完成的后台 agent 在 Orca 可以将其睡眠前需要等待的空闲分钟数。",
+            "idleMinutesLabel": "睡眠等待时间",
             "idleMinutesSuffix": "分钟",
-            "title": "Agent 休眠",
-            "toggleLabel": "切换 agent 休眠"
+            "title": "Agent 睡眠",
+            "toggleLabel": "切换 agent 睡眠"
           },
           "newWorktreeCardStyle": {
             "copy": "预览更新后的 worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现。",
@@ -6278,7 +6299,8 @@
           "ad5d036ecc": "无法请求麦克风权限。未启用语音听写。",
           "f9a9cf6928": "启用语音听写之前需要麦克风许可。",
           "1eac933202": "打开 macOS 隐私和安全。授予访问权限后再次启用听写。",
-          "cd9fe37556": "已授予麦克风权限"
+          "cd9fe37556": "已授予麦克风权限",
+          "6fa734ed95": "Delete {{value0}}"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
@@ -6839,11 +6861,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "在配置的空闲时间后停止后台 agent 终端，并在再次打开时恢复受支持的会话。",
-              "hibernate": "休眠",
               "minutes": "分钟",
               "sleep": "睡眠",
               "terminal": "终端",
-              "title": "Agent 休眠"
+              "title": "Agent 睡眠"
             },
             "newWorktreeCardStyle": {
               "card": "卡片",
@@ -9097,6 +9118,9 @@
                 "copyCommand": "Copy command"
               }
             }
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "View"
           }
         }
       },
@@ -11446,14 +11470,14 @@
           "summary": "已附加 {{value0}} 个 · 有 PR/MR {{value1}} 个 · 需注意 {{value2}} 个 · 等待中 {{value3}} 个 · 通过 {{value4}} 个 · 无 PR {{value5}} 个 · 未知 {{value6}} 个",
           "showDetails": "显示 {{value0}} 的 PR 检查详情",
           "hideDetails": "隐藏 {{value0}} 的 PR 检查详情",
-          "reviewChecks": "Review checks",
-          "allChecksPassing": "all checks passing",
-          "oneWorktree": "1 worktree",
-          "worktreeCount": "{{value0}} worktrees",
-          "oneFailing": "1 failing",
-          "failingCount": "{{value0}} failing",
-          "onePending": "1 pending",
-          "pendingCount": "{{value0}} pending"
+          "reviewChecks": "评审检查",
+          "allChecksPassing": "所有检查均通过",
+          "oneWorktree": "1 个工作树",
+          "worktreeCount": "{{value0}} 个工作树",
+          "oneFailing": "1 个失败",
+          "failingCount": "{{value0}} 个失败",
+          "onePending": "1 个等待中",
+          "pendingCount": "{{value0}} 个等待中"
         },
         "parentPrChecks": {
           "rowSummary": {

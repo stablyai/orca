@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: duplicated from GitHubItemDialog so the dedicated PR full-page surface can evolve its Primer-styled header without destabilizing the issue dialog; planned to refactor shared parts out later. */
 import React, {
   Suspense,
-  lazy,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -10,6 +9,7 @@ import React, {
   useState,
   useSyncExternalStore
 } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useShallow } from 'zustand/react/shallow'
 import type { editor as monacoEditor } from 'monaco-editor'

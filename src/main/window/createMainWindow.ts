@@ -269,6 +269,12 @@ export function createMainWindow(
         : process.platform === 'win32'
           ? 'hidden'
           : undefined,
+    // Why: Linux ignores titleBarStyle: 'hidden', so without this the native
+    // WM title bar stays and stacks on top of our renderer titlebar (double
+    // title bar). frame: false drops the native frame; the renderer draws its
+    // own titlebar + window controls (see WindowControls in App.tsx), matching
+    // the Windows custom-titlebar path.
+    ...(process.platform === 'linux' ? { frame: false } : {}),
     // Why: initial position for 1x zoom; syncTrafficLightPosition() adjusts
     // dynamically when the user changes UI zoom.
     ...(process.platform === 'darwin'
@@ -1043,8 +1049,8 @@ export function createMainWindow(
   }
   ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
-  // Why: renderer-drawn window controls on Windows send these to replicate the
-  // native title bar buttons that 'hidden' titleBarStyle removes.
+  // Why: renderer-drawn window controls on Windows/Linux desktop send these to
+  // replicate the native title bar buttons hidden by custom chrome.
   const minimizeChannel = 'window:minimize'
   const onMinimize = (): void => {
     if (!mainWindow.isDestroyed()) {
@@ -1083,9 +1089,9 @@ export function createMainWindow(
     }
     mainWindow.webContents.send('window:close-requested', { isQuitting: false })
   }
-  // Why: the ··· button in the renderer-drawn title bar on Windows pops up
-  // the application menu at the cursor position, replicating the Alt-key
-  // reveal that autoHideMenuBar normally provides.
+  // Why: the ··· button in the renderer-drawn title bar on Windows/Linux
+  // desktop pops up the application menu at the cursor position, replicating
+  // the Alt-key reveal that autoHideMenuBar normally provides.
   const popupMenuChannel = 'menu:popup'
   const onPopupMenu = (): void => {
     Menu.getApplicationMenu()?.popup({ window: mainWindow })

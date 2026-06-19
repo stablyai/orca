@@ -914,19 +914,12 @@ export function setupAutoUpdater(
     debug: (m: unknown) => console.debug('[autoUpdater]', m)
   } as never
 
-  // Why: no Windows Authenticode certificate exists for this project.
-  // electron-builder embeds the code-signing publisherName into the app's
-  // bundled app-update.yml at build time. Versions that were incorrectly
-  // signed with the macOS Apple Developer ID cert (issue #631) baked in a
-  // publisherName whose chain Windows cannot validate, and even after the
-  // CI fix the installed app's app-update.yml still contains the stale
-  // publisherName. Skip Windows code signing verification — update
-  // integrity is still guaranteed by the SHA-512 hash check in latest.yml.
+  // Why: older Windows installs either have no publisherName or have the
+  // stale macOS Apple Developer ID publisherName from issue #631. Keep the
+  // migration path open while SignPath-signed builds roll out.
   //
-  // TODO: remove this override once a Windows Authenticode certificate is
-  // purchased and WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD are added to CI.
-  // At that point electron-builder will embed the correct publisherName
-  // and the default verification should be re-enabled.
+  // TODO: re-enable after SignPath-signed builds with the explicit Windows
+  // publisherName have been the minimum supported updater source for a while.
   if (process.platform === 'win32') {
     ;(autoUpdater as NsisUpdater).verifyUpdateCodeSignature = () => Promise.resolve(null)
   }

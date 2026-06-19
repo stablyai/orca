@@ -42,7 +42,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   runtimeEnvironments: [],
   runtimeStatusByEnvironmentId: new Map(),
 
-  setRuntimeEnvironments: (environments) =>
+  setRuntimeEnvironments: (environments) => {
     set((s) => {
       const keep = new Set(environments.map((environment) => environment.id))
       const nextStatuses = new Map(s.runtimeStatusByEnvironmentId)
@@ -57,7 +57,13 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         runtimeEnvironments: environments,
         ...(statusesChanged ? { runtimeStatusByEnvironmentId: nextStatuses } : {})
       }
-    }),
+    })
+    // Why: evict detected-agent caches for environments that no longer exist so
+    // they don't leak per-environment entries for the renderer session.
+    // Optional-chained: minimal store assemblies (some unit tests) omit the
+    // detected-agents slice.
+    get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
+  },
 
   setRuntimeEnvironmentStatus: (environmentId, status) =>
     set((s) => {

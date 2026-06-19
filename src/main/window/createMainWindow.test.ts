@@ -58,6 +58,16 @@ vi.mock('../browser/browser-manager', () => ({
 import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
 
+function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+  const original = process.platform
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return run()
+  } finally {
+    Object.defineProperty(process, 'platform', { configurable: true, value: original })
+  }
+}
+
 describe('createMainWindow', () => {
   beforeEach(() => {
     browserWindowMock.mockReset()
@@ -169,7 +179,10 @@ describe('createMainWindow', () => {
         titleBarStyle: 'hidden'
       })
     } else {
+      // Linux: native frame is dropped so the renderer titlebar isn't stacked
+      // under the WM title bar (double title bar). titleBarStyle stays unset.
       expect(browserWindowOptions.titleBarStyle).toBeUndefined()
+      expect(browserWindowOptions.frame).toBe(false)
     }
 
     expect(windowHandlers.windowOpen({ url: 'https://example.com' })).toEqual({ action: 'deny' })
@@ -224,6 +237,53 @@ describe('createMainWindow', () => {
     const guest = { marker: 'guest' }
     windowHandlers['did-attach-webview']({} as never, guest as never)
     expect(attachGuestPoliciesMock).toHaveBeenCalledWith(guest)
+  })
+
+  it('sets platform-specific titlebar and frame options for every desktop platform', () => {
+    for (const [platform, expected] of [
+      ['darwin', { titleBarStyle: 'hiddenInset', frame: undefined }],
+      ['win32', { titleBarStyle: 'hidden', frame: undefined }],
+      ['linux', { titleBarStyle: undefined, frame: false }]
+    ] satisfies [
+      NodeJS.Platform,
+      { titleBarStyle: string | undefined; frame: boolean | undefined }
+    ][]) {
+      browserWindowMock.mockReset()
+      const webContents = {
+        on: vi.fn(),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn(),
+        isDevToolsOpened: vi.fn(),
+        openDevTools: vi.fn(),
+        closeDevTools: vi.fn()
+      }
+      const browserWindowInstance = {
+        webContents,
+        on: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        setWindowButtonPosition: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+      browserWindowMock.mockImplementation(function () {
+        return browserWindowInstance
+      })
+
+      withPlatform(platform, () => createMainWindow(null))
+
+      const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
+      expect(browserWindowOptions.titleBarStyle).toBe(expected.titleBarStyle)
+      expect(browserWindowOptions.frame).toBe(expected.frame)
+    }
   })
 
   it('supports all minus key variants for terminal zoom out', () => {

@@ -48,7 +48,7 @@ describe('ExperimentalPane', () => {
     )
   })
 
-  it('renders agent hibernation as an off-by-default searchable experimental switch', () => {
+  it('renders agent sleep as an off-by-default searchable experimental switch', () => {
     const settings = getDefaultSettings('/tmp')
     const markup = renderToStaticMarkup(
       <ExperimentalPane settings={settings} updateSettings={vi.fn()} />
@@ -56,12 +56,10 @@ describe('ExperimentalPane', () => {
 
     expect(settings.experimentalAgentHibernation).toBe(false)
     expect(settings.agentHibernationIdleMs).toBe(30 * 60 * 1000)
-    expect(markup).toContain('Agent hibernation')
-    expect(markup).not.toContain('Hibernate after')
+    expect(markup).toContain('Agent sleep')
+    expect(markup).not.toContain('Sleep after')
     expect(markup).toContain('aria-checked="false"')
-    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain(
-      'Agent hibernation'
-    )
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).toContain('Agent sleep')
   })
 
   it('renders new card style as an off-by-default searchable experimental switch', () => {
@@ -78,7 +76,7 @@ describe('ExperimentalPane', () => {
     )
   })
 
-  it('renders the agent hibernation idle duration as configurable minutes', async () => {
+  it('renders the agent sleep idle duration as configurable minutes', async () => {
     const updateSettings = vi.fn()
     const settings = {
       ...getDefaultSettings('/tmp'),
@@ -90,7 +88,7 @@ describe('ExperimentalPane', () => {
       '#experimental-agent-hibernation input[type="number"]'
     )
     if (!idleInput) {
-      throw new Error('Agent hibernation duration input was not rendered')
+      throw new Error('Agent sleep duration input was not rendered')
     }
 
     expect(idleInput.value).toBe('30')
@@ -102,7 +100,7 @@ describe('ExperimentalPane', () => {
     root.unmount()
   })
 
-  it('enables agent hibernation through the experimental switch', async () => {
+  it('enables agent sleep through the experimental switch', async () => {
     const updateSettings = vi.fn()
     const { root, container } = await renderExperimentalPane({ updateSettings })
 
@@ -110,7 +108,7 @@ describe('ExperimentalPane', () => {
       '#experimental-agent-hibernation button[role="switch"]'
     )
     if (!switchButton) {
-      throw new Error('Agent hibernation switch was not rendered')
+      throw new Error('Agent sleep switch was not rendered')
     }
 
     await act(async () => {

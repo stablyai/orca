@@ -1,15 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { FilePlus, FileText, Globe, Loader2, Smartphone, TerminalSquare } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
 import { useRuntimeFileListForWorktree } from '../quick-open-file-list'
-import {
-  getTabEntryOptions,
-  type TabCreateEntryArgs,
-  type TabEntryActionClassification,
-  type TabEntryOption
-} from './tab-create-entry-action'
+import { getTabEntryOptions, type TabCreateEntryArgs } from './tab-create-entry-action'
 import {
   findMatchingTabAgentLaunchOptions,
   type TabAgentLaunchOption
@@ -18,6 +10,17 @@ import {
   findMatchingTabCreateMenuOptions,
   type TabCreateMenuOption
 } from './tab-create-menu-options'
+import {
+  getActiveOptionId,
+  isActiveEntryOption,
+  type ActiveOption
+} from './tab-create-entry-active-option'
+import {
+  EntryActionRow,
+  EntryStatusRow,
+  RESULT_LISTBOX_ID,
+  resultOptionDomId
+} from './TabBarCreateEntryRow'
 import type { TuiAgent } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -59,6 +62,35 @@ export default function TabBarCreateEntry({
   const [lastMenuOpen, setLastMenuOpen] = useState(menuOpen)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileList = useRuntimeFileListForWorktree({ enabled: menuOpen, worktreeId })
+
+  // Why: once ArrowDown moves focus into the static menu list, ArrowUp on the
+  // first item should return to the search box so the keyboard trip isn't
+  // one-way. Capture phase beats Radix's roving-focus handler.
+  useEffect(() => {
+    if (!menuOpen) {
+      return
+    }
+    const input = inputRef.current
+    const menu = input?.closest<HTMLElement>('[role="menu"]')
+    if (!input || !menu) {
+      return
+    }
+    const handleMenuKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'ArrowUp') {
+        return
+      }
+      const firstItem = menu.querySelector(
+        '[role="menuitem"]:not([data-disabled]):not([aria-disabled="true"])'
+      )
+      if (firstItem && document.activeElement === firstItem) {
+        event.preventDefault()
+        event.stopPropagation()
+        input.focus()
+      }
+    }
+    menu.addEventListener('keydown', handleMenuKeyDown, true)
+    return () => menu.removeEventListener('keydown', handleMenuKeyDown, true)
+  }, [menuOpen])
 
   useEffect(() => {
     if (!menuOpen) {
@@ -185,14 +217,26 @@ export default function TabBarCreateEntry({
         submitOption()
       }}
       onKeyDown={(event) => {
-        if (activeOptions.length > 1 && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-          event.preventDefault()
-          event.stopPropagation()
-          setSelectedIndex((current) => {
-            const delta = event.key === 'ArrowDown' ? 1 : -1
-            return (current + delta + activeOptions.length) % activeOptions.length
-          })
-          return
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          if (activeOptions.length > 0) {
+            event.preventDefault()
+            event.stopPropagation()
+            setSelectedIndex((current) => {
+              const delta = event.key === 'ArrowDown' ? 1 : -1
+              return (current + delta + activeOptions.length) % activeOptions.length
+            })
+            return
+          }
+          // Why: with no result rows the static create/agent items render below;
+          // move focus into that Radix menu list so it stays keyboard-navigable
+          // from the search box instead of trapping focus in the input.
+          if (
+            focusMenuItemAtEdge(event.currentTarget, event.key === 'ArrowDown' ? 'first' : 'last')
+          ) {
+            event.preventDefault()
+            event.stopPropagation()
+            return
+          }
         }
         if (event.key !== 'Escape') {
           event.stopPropagation()
@@ -209,6 +253,13 @@ export default function TabBarCreateEntry({
             setError(null)
           }}
           disabled={disabled}
+          role="combobox"
+          aria-expanded={activeOptions.length > 0}
+          aria-controls={RESULT_LISTBOX_ID}
+          aria-autocomplete="list"
+          aria-activedescendant={
+            activeOptions.length > 0 && !error ? resultOptionDomId(activeSelectedIndex) : undefined
+          }
           aria-label={translate(
             'auto.components.tab.bar.TabBarCreateEntry.39676a184c',
             'Open any file, URL, agent, ...'
@@ -222,13 +273,18 @@ export default function TabBarCreateEntry({
         />
       </div>
       {error || activeOptions.length > 0 || hasQuery ? (
-        <div className="mt-1 space-y-0.5 px-1">
+        <div
+          className="mt-1 space-y-0.5 px-1"
+          id={RESULT_LISTBOX_ID}
+          role={activeOptions.length > 0 && !error ? 'listbox' : undefined}
+        >
           {error ? (
             <EntryStatusRow message={error} />
           ) : activeOptions.length > 0 ? (
             activeOptions.map((option, index) => (
               <EntryActionRow
                 key={getActiveOptionId(option)}
+                id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
                 onClick={() => submitOption(option)}
@@ -243,146 +299,20 @@ export default function TabBarCreateEntry({
   )
 }
 
-type ActiveEntryOption = TabEntryOption & {
-  classification: TabEntryActionClassification
-}
-
-type ActiveOption =
-  | {
-      kind: 'agent'
-      option: TabAgentLaunchOption
-    }
-  | {
-      kind: 'entry'
-      option: ActiveEntryOption
-    }
-  | {
-      kind: 'menu'
-      option: TabCreateMenuOption
-    }
-
-function isActiveEntryOption(option: TabEntryOption): option is ActiveEntryOption {
-  return option.classification.kind !== 'empty' && option.classification.kind !== 'blocked'
-}
-
-function getActiveOptionId(option: ActiveOption): string {
-  if (option.kind === 'agent') {
-    return `agent:${option.option.agent}`
+// Moves keyboard focus to the first/last enabled item of the enclosing Radix
+// menu so the static create/agent list stays navigable from the search input.
+function focusMenuItemAtEdge(fromElement: HTMLElement, edge: 'first' | 'last'): boolean {
+  const menu = fromElement.closest('[role="menu"]')
+  if (!menu) {
+    return false
   }
-  if (option.kind === 'menu') {
-    return `menu:${option.option.id}`
-  }
-  return option.option.id
-}
-
-function EntryStatusRow({
-  loading = false,
-  message
-}: {
-  loading?: boolean
-  message: string
-}): React.JSX.Element {
-  return (
-    <div className="flex min-h-6 items-center gap-1.5 rounded-[7px] px-1 text-[11px] leading-5 text-muted-foreground">
-      {loading ? <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" /> : null}
-      <span className="truncate">{message}</span>
-    </div>
+  const items = menu.querySelectorAll<HTMLElement>(
+    '[role="menuitem"]:not([data-disabled]):not([aria-disabled="true"])'
   )
-}
-
-function EntryActionRow({
-  onClick,
-  option,
-  selected
-}: {
-  onClick: () => void
-  option: ActiveOption
-  selected: boolean
-}): React.JSX.Element {
-  const presentation = getActionPresentation(option)
-
-  return (
-    <button
-      type="button"
-      className={cn(
-        'flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none',
-        selected
-          ? 'bg-black/8 text-accent-foreground dark:bg-white/14'
-          : 'text-muted-foreground hover:bg-black/8 hover:text-accent-foreground dark:hover:bg-white/14'
-      )}
-      onClick={onClick}
-    >
-      {presentation.icon}
-      <span className={cn('min-w-0 truncate font-medium', presentation.showDetail && 'shrink-0')}>
-        {presentation.label}
-      </span>
-      {presentation.showDetail ? (
-        <>
-          <span className="text-muted-foreground/70" aria-hidden="true">
-            ·
-          </span>
-          <span className="min-w-0 truncate">{presentation.detail}</span>
-        </>
-      ) : null}
-    </button>
-  )
-}
-
-function getActionPresentation(option: ActiveOption): {
-  detail: string
-  icon: React.ReactNode
-  label: string
-  showDetail: boolean
-} {
-  if (option.kind === 'menu') {
-    const icon =
-      option.option.kind === 'new-browser' ? (
-        <Globe className="size-3.5 shrink-0" aria-hidden="true" />
-      ) : option.option.kind === 'new-markdown' ? (
-        <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />
-      ) : option.option.kind === 'open-markdown' ? (
-        <FileText className="size-3.5 shrink-0" aria-hidden="true" />
-      ) : option.option.kind === 'new-simulator' || option.option.kind === 'go-to-simulator' ? (
-        <Smartphone className="size-3.5 shrink-0" aria-hidden="true" />
-      ) : (
-        <TerminalSquare className="size-3.5 shrink-0" aria-hidden="true" />
-      )
-    return {
-      detail: '',
-      icon,
-      label: option.option.label,
-      showDetail: false
-    }
+  const target = edge === 'first' ? items[0] : items.item(items.length - 1)
+  if (!target) {
+    return false
   }
-  if (option.kind === 'agent') {
-    return {
-      detail: option.option.label,
-      icon: <AgentIcon agent={option.option.agent} size={14} />,
-      label: translate('auto.components.tab.bar.TabBarCreateEntry.b27864279e', 'Launch agent'),
-      showDetail: true
-    }
-  }
-  const { classification } = option.option
-  if (classification.kind === 'explicit-url' || classification.kind === 'host-url') {
-    return {
-      detail: classification.url,
-      icon: <Globe className="size-3.5 shrink-0" aria-hidden="true" />,
-      label: translate('auto.components.tab.bar.TabBarCreateEntry.7cdf8ee0c8', 'Open URL'),
-      showDetail: true
-    }
-  }
-  if (classification.kind === 'existing-file') {
-    return {
-      detail: classification.relativePath,
-      icon: <FileText className="size-3.5 shrink-0" aria-hidden="true" />,
-      label: translate('auto.components.tab.bar.TabBarCreateEntry.25dc1cd653', 'Open file'),
-      showDetail: true
-    }
-  }
-  return {
-    detail: classification.relativePath,
-    icon: <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />,
-    label: translate('auto.components.tab.bar.TabBarCreateEntry.d62d63b807', 'Create file'),
-    showDetail: true
-  }
+  target.focus()
+  return true
 }
