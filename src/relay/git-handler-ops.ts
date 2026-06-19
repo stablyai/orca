@@ -6,8 +6,10 @@
  * remain decoupled from the GitHandler class.
  */
 import * as path from 'path'
-import { readFile } from 'fs/promises'
-import { bufferToBlob, buildDiffResult, parseBranchDiff } from './git-handler-utils'
+import { bufferToBlob, parseBranchDiff } from './git-handler-utils'
+import { buildDiffResult } from './git-diff-result'
+import { isGitBufferOverflowError } from './git-buffer-overflow'
+import { readWorkingDiffFile } from './git-working-file-read'
 
 // ─── Executor types ──────────────────────────────────────────────────
 
@@ -32,7 +34,10 @@ export async function readBlobAtOid(
   try {
     const buf = await gitBuffer(['show', '--end-of-options', `${oid}:${gitPath}`], cwd)
     return bufferToBlob(buf, filePath)
-  } catch {
+  } catch (error) {
+    if (isGitBufferOverflowError(error)) {
+      return { content: '', isBinary: true }
+    }
     return { content: '', isBinary: false }
   }
 }
@@ -47,7 +52,10 @@ export async function readBlobAtIndex(
   try {
     const buf = await gitBuffer(['show', '--end-of-options', `:${gitPath}`], cwd)
     return bufferToBlob(buf, filePath)
-  } catch {
+  } catch (error) {
+    if (isGitBufferOverflowError(error)) {
+      return { content: '', isBinary: true }
+    }
     return { content: '', isBinary: false }
   }
 }
@@ -62,17 +70,6 @@ export async function readUnstagedLeft(
     return index
   }
   return readBlobAtOid(gitBuffer, cwd, 'HEAD', filePath)
-}
-
-export async function readWorkingFile(
-  absPath: string
-): Promise<{ content: string; isBinary: boolean }> {
-  try {
-    const buffer = await readFile(absPath)
-    return bufferToBlob(buffer)
-  } catch {
-    return { content: '', isBinary: false }
-  }
 }
 
 // ─── Diff ────────────────────────────────────────────────────────────
@@ -105,7 +102,7 @@ export async function computeDiff(
       originalContent = left.content
       originalIsBinary = left.isBinary
 
-      const right = await readWorkingFile(path.join(worktreePath, filePath))
+      const right = await readWorkingDiffFile(path.join(worktreePath, filePath))
       modifiedContent = right.content
       modifiedIsBinary = right.isBinary
     }

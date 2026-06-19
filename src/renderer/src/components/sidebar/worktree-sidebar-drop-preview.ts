@@ -8,6 +8,7 @@ export type WorktreeSidebarDropPreview = {
   dropIndex: number
   dropIndicatorY: number
   previewOffsetsByWorktreeId: ReadonlyMap<string, number>
+  lineageParentId?: string
 }
 
 export type WorktreeSidebarStatusDropTarget = {
@@ -16,7 +17,7 @@ export type WorktreeSidebarStatusDropTarget = {
 }
 
 export type WorktreeSidebarTrackedStatusDropTarget = {
-  target: WorktreeSidebarStatusDropTarget
+  target: WorktreeSidebarStatusDropTarget & { lineageParentId: string | null }
   preview: WorktreeSidebarDropPreview | null
   x: number
   y: number
@@ -24,18 +25,20 @@ export type WorktreeSidebarTrackedStatusDropTarget = {
 
 const STATUS_DROP_TARGET_FALLBACK_TOLERANCE_PX = 6
 
-function hasWorktreeSidebarStatusDropTarget(target: WorktreeSidebarStatusDropTarget): boolean {
-  return target.isPinDrop || target.status !== null
+function hasWorktreeSidebarStatusDropTarget(
+  target: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
+): boolean {
+  return target.isPinDrop || target.status !== null || (target.lineageParentId ?? null) !== null
 }
 
 export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
-  currentTarget: WorktreeSidebarStatusDropTarget
+  currentTarget: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
   currentPreview: WorktreeSidebarDropPreview | null
   latestTrackedTarget: WorktreeSidebarTrackedStatusDropTarget | null
   x: number
   y: number
 }): {
-  target: WorktreeSidebarStatusDropTarget
+  target: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
   preview: WorktreeSidebarDropPreview | null
 } {
   if (hasWorktreeSidebarStatusDropTarget(args.currentTarget)) {

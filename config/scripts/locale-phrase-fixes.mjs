@@ -146,7 +146,7 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /细绳/g, replacement: '字符串', whenEnIncludes: 'string' },
     { pattern: /在职的/g, replacement: '处理中', whenEnIncludes: 'Working' },
     { pattern: /编曲/g, replacement: '编排', whenEnIncludes: 'Orchestration' },
-    { pattern: /复印门票/g, replacement: '复制工单', whenEnIncludes: 'Copy ticket' },
+    { pattern: /复制票据/g, replacement: '复制参考 ID', whenEnIncludes: 'Copy reference ID' },
     { pattern: /达尔文/g, replacement: 'darwin', whenEnIncludes: 'darwin' },
     { pattern: /外貌/g, replacement: '外观', whenEnIncludes: 'Appearance' },
     { pattern: /一般的/g, replacement: '通用', whenEnIncludes: 'General' },
@@ -197,6 +197,9 @@ export const LOCALE_PHRASE_FIXES = {
       replacement: '拉取请求已合并',
       whenEnIncludes: 'Pull request merged'
     },
+    { pattern: /PR已/g, replacement: '拉取请求已', whenEnIncludes: 'Pull request' },
+    { pattern: /此PR/g, replacement: '此拉取请求', whenEnIncludes: 'pull request' },
+    { pattern: /先生！/g, replacement: 'MR !', whenEnIncludes: 'MR' },
     { pattern: /USB设备/g, replacement: 'USB 设备', whenEnIncludes: 'USB Devices' },
     { pattern: /球队/g, replacement: '团队', whenEnIncludes: 'teams' },
     {

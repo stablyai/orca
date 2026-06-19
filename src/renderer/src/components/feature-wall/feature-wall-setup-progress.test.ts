@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { FeatureWallSetupProgressInput } from './feature-wall-setup-progress'
 import { getFeatureWallSetupProgress } from './feature-wall-setup-progress'
@@ -67,7 +69,7 @@ describe('getFeatureWallSetupProgress', () => {
     expect(progress.coreTotal).toBe(9)
   })
 
-  it('orders visible parallel work before setup tasks', () => {
+  it('preserves the durable setup step definition order', () => {
     expect(getFeatureWallSetupSteps().map((step) => step.id)).toEqual([
       'split-terminal',
       'two-worktrees',
@@ -97,7 +99,20 @@ describe('getFeatureWallSetupProgress', () => {
     ])
   })
 
-  it('auto-selects incomplete parallel work before setup steps', () => {
+  it('renders Setup before Milestones and numbers Milestones after Setup', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/feature-wall/FeatureWallSetupChecklist.tsx'),
+      'utf8'
+    )
+    const setupSectionIndex = source.indexOf('steps={setupSteps}')
+    const milestonesSectionIndex = source.indexOf('steps={parallelWorkSteps}')
+
+    expect(setupSectionIndex).toBeGreaterThanOrEqual(0)
+    expect(milestonesSectionIndex).toBeGreaterThan(setupSectionIndex)
+    expect(source).toContain('startOrdinal={setupSteps.length + 1}')
+  })
+
+  it('auto-selects incomplete parallel work after setup steps are complete', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         settings: {

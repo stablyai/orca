@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../../shared/types'
-import type { Row } from './worktree-list-groups'
+import { PINNED_GROUP_KEY, type Row } from './worktree-list-groups'
 import { addHostSectionRows, type HostSectionRow } from './host-section-rows'
 
 function repo(id: string, connectionId?: string | null): Repo {
@@ -54,8 +54,11 @@ function repoHeader(project: Repo): Extract<Row, { type: 'header' }> {
 }
 
 function item(id: string, project: Repo): Extract<Row, { type: 'item' }> {
+  const sectionKey = `repo:${project.id}`
   return {
     type: 'item',
+    rowKey: `${sectionKey}:${id}`,
+    sectionKey,
     worktree: worktree(id, project.id),
     repo: project,
     depth: 0,
@@ -64,6 +67,14 @@ function item(id: string, project: Repo): Extract<Row, { type: 'item' }> {
     isLastLineageChild: true,
     lineageChildCount: 0
   }
+}
+
+function pinnedItem(id: string, project: Repo, sectionKey: string): Extract<Row, { type: 'item' }> {
+  const row = item(id, project)
+  row.worktree.isPinned = true
+  row.rowKey = `${sectionKey}:${id}`
+  row.sectionKey = sectionKey
+  return row
 }
 
 function folderWorkspaceRow(
@@ -280,6 +291,56 @@ describe('addHostSectionRows', () => {
       'host:ssh:ssh-1',
       'done',
       'ssh-wt'
+    ])
+  })
+
+  it('copies global pinned and all headers into each mixed-host section', () => {
+    const local = repo('local')
+    const ssh = repo('ssh', 'ssh-1')
+    const rows = [
+      header(PINNED_GROUP_KEY, 'Pinned'),
+      pinnedItem('local-pinned', local, PINNED_GROUP_KEY),
+      pinnedItem('ssh-pinned', ssh, PINNED_GROUP_KEY),
+      header('all', 'All'),
+      pinnedItem('local-pinned', local, 'all'),
+      item('local-normal', local),
+      pinnedItem('ssh-pinned', ssh, 'all'),
+      item('ssh-normal', ssh)
+    ]
+
+    const sectioned = addHostSectionRows({
+      rows,
+      hostOptions: [
+        {
+          id: 'local',
+          kind: 'local',
+          label: 'Local Mac',
+          detail: 'This computer',
+          health: 'local'
+        },
+        { id: 'ssh:ssh-1', kind: 'ssh', label: 'Builder', detail: 'SSH', health: 'available' }
+      ],
+      workspaceHostScope: 'all',
+      defaultHostId: 'local'
+    })
+
+    expect(sectioned.map((row) => (row.type === 'item' ? row.rowKey : row.key))).toEqual([
+      'host:local',
+      'pinned',
+      'pinned:local-pinned',
+      'all',
+      'all:local-pinned',
+      'repo:local:local-normal',
+      'host:ssh:ssh-1',
+      'pinned',
+      'pinned:ssh-pinned',
+      'all',
+      'all:ssh-pinned',
+      'repo:ssh:ssh-normal'
+    ])
+    expect(sectioned.filter((row) => row.type === 'host-header')).toMatchObject([
+      { label: 'Local Mac', count: 2 },
+      { label: 'Builder', count: 2 }
     ])
   })
 

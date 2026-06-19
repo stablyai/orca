@@ -271,8 +271,8 @@ export function FeatureWallSetupChecklist(
     activeStep?.id === 'two-worktrees' ||
     activeStep?.id === 'browser' ||
     activeStep?.id === 'add-two-repos'
-  const parallelWorkSteps = getFeatureWallSetupStepsForSection('parallel-work')
   const setupSteps = getFeatureWallSetupStepsForSection('setup')
+  const parallelWorkSteps = getFeatureWallSetupStepsForSection('parallel-work')
   const visualBreakpoint = isEmbedded ? 'xl' : 'sm'
   const visualGridClass =
     visualBreakpoint === 'xl'
@@ -296,10 +296,10 @@ export function FeatureWallSetupChecklist(
       >
         <SetupSection
           title={translate(
-            'auto.components.feature.wall.FeatureWallSetupChecklist.713cc529a5',
-            'Milestones'
+            'auto.components.feature.wall.FeatureWallSetupChecklist.1a6a7d6c80',
+            'Setup'
           )}
-          steps={parallelWorkSteps}
+          steps={setupSteps}
           startOrdinal={1}
           activeStepId={activeStep?.id ?? null}
           progress={progress}
@@ -308,11 +308,11 @@ export function FeatureWallSetupChecklist(
         />
         <SetupSection
           title={translate(
-            'auto.components.feature.wall.FeatureWallSetupChecklist.1a6a7d6c80',
-            'Setup'
+            'auto.components.feature.wall.FeatureWallSetupChecklist.713cc529a5',
+            'Milestones'
           )}
-          steps={setupSteps}
-          startOrdinal={parallelWorkSteps.length + 1}
+          steps={parallelWorkSteps}
+          startOrdinal={setupSteps.length + 1}
           activeStepId={activeStep?.id ?? null}
           progress={progress}
           onSelectStep={onSelectStep}

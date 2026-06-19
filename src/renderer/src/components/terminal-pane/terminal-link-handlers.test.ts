@@ -196,11 +196,70 @@ describe('isTerminalFilePathLocalToClient', () => {
 })
 
 describe('handleOscLink', () => {
-  it('ignores http links without the platform modifier', () => {
+  it('routes http links on ordinary click', () => {
     setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
+    const preventDefault = vi.fn()
 
-    handleOscLink('https://example.com', { metaKey: false, ctrlKey: false }, deps)
+    handleOscLink('https://example.com', { metaKey: false, ctrlKey: false, preventDefault }, deps)
+
     expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(preventDefault).toHaveBeenCalled()
+  })
+
+  it('ignores non-primary OSC link clicks', () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
+    const preventDefault = vi.fn()
+
+    handleOscLink(
+      'https://example.com',
+      {
+        button: 1,
+        metaKey: false,
+        ctrlKey: false,
+        preventDefault
+      },
+      deps
+    )
+    handleOscLink(
+      'https://example.com',
+      {
+        button: 2,
+        metaKey: false,
+        ctrlKey: false,
+        preventDefault
+      },
+      deps
+    )
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+  })
+
+  it('does not steal macOS ctrl-click context-menu gestures for OSC links', () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
+    const preventDefault = vi.fn()
+
+    handleOscLink(
+      'https://example.com',
+      {
+        button: 0,
+        metaKey: false,
+        ctrlKey: true,
+        preventDefault
+      },
+      deps
+    )
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
   })
 
   it('routes to the system browser when openLinksInApp is off', () => {
@@ -328,7 +387,8 @@ describe('handleOscLink', () => {
     await flushDoubleRaf()
 
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/main.ts' })
+      expect.objectContaining({ filePath: '/tmp/src/main.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -384,7 +444,8 @@ describe('handleOscLink', () => {
 
     expect(openFilePathMock).toHaveBeenCalledWith('/tmp/src/main.ts')
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/main.ts' })
+      expect.objectContaining({ filePath: '/tmp/src/main.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -425,14 +486,10 @@ describe('handleOscLink', () => {
     )
   })
 
-  it('opens local file URL links in Orca when the platform modifier is pressed', async () => {
+  it('opens local file URL links in Orca on ordinary click', async () => {
     setPlatform('Windows')
 
     handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: false }, deps)
-    // Without modifier, nothing happens
-    expect(openFilePathMock).not.toHaveBeenCalled()
-
-    handleOscLink('file:///tmp/test.txt', { metaKey: false, ctrlKey: true }, deps)
 
     // openDetectedFilePath is async (fire-and-forget), so flush the microtask queue
     // before asserting on positive behavior.
@@ -440,7 +497,8 @@ describe('handleOscLink', () => {
 
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/test.txt' })
+      expect.objectContaining({ filePath: '/tmp/test.txt' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -464,7 +522,8 @@ describe('handleOscLink', () => {
       targetPath: 'C:/repo/src/index.ts'
     })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' })
+      expect.objectContaining({ filePath: 'C:/repo/src/index.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -492,7 +551,8 @@ describe('handleOscLink', () => {
       targetPath: '//server/share/repo/test.txt'
     })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '//server/share/repo/test.txt' })
+      expect.objectContaining({ filePath: '//server/share/repo/test.txt' }),
+      { forceContentReload: true }
     )
   })
 
@@ -523,7 +583,8 @@ describe('handleOscLink', () => {
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/test.txt' })
+      expect.objectContaining({ filePath: '/tmp/test.txt' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -564,7 +625,8 @@ describe('handleOscLink', () => {
 
     expect(authorizeExternalPathMock).toHaveBeenCalledWith({ targetPath: '/tmp/test.txt' })
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/test.txt' })
+      expect.objectContaining({ filePath: '/tmp/test.txt' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -596,7 +658,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '//server/Share/Repo/src/app.ts',
         relativePath: 'src/app.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -628,7 +691,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/tmp/project/docs/README.md',
         relativePath: 'project/docs/README.md'
-      })
+      }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -654,7 +718,8 @@ describe('handleOscLink', () => {
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/home/alice/file.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -686,7 +751,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/tmp/src/main.ts',
         relativePath: 'src/main.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -719,7 +785,8 @@ describe('handleOscLink', () => {
         filePath: '/tmp/src/main.ts',
         relativePath: 'src/main.ts',
         runtimeEnvironmentId: 'env-1'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -743,7 +810,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/home/me/repo/src/main.ts',
         relativePath: 'src/main.ts'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -763,7 +831,8 @@ describe('handleOscLink', () => {
       expect.objectContaining({
         filePath: '/home/me/repo/report.html',
         relativePath: 'report.html'
-      })
+      }),
+      { forceContentReload: true }
     )
   })
 
@@ -912,7 +981,8 @@ describe('handleOscLink', () => {
     expect(openFilePathMock).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledTimes(1)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/second.ts' })
+      expect.objectContaining({ filePath: '/tmp/src/second.ts' }),
+      { forceContentReload: true }
     )
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
     expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(2, {
@@ -1371,7 +1441,8 @@ describe('createFilePathLinkProvider range bounds', () => {
     // existence probe; openDetectedFilePath still stats before routing.
     expect(window.api.shell.pathExists).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/package.json' })
+      expect.objectContaining({ filePath: '/tmp/package.json' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1480,7 +1551,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/Users/alice/Documents/Path/file_name' })
+      expect.objectContaining({ filePath: '/Users/alice/Documents/Path/file_name' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1504,7 +1576,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/home/alice/Documents/Path/file_name' })
+      expect.objectContaining({ filePath: '/home/alice/Documents/Path/file_name' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1593,7 +1666,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(opened).toBe(true)
     expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/repo/My Folder' })
+      expect.objectContaining({ filePath: '/repo/My Folder' }),
+      { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
@@ -1702,7 +1776,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     disposable.dispose()
   })
 
-  it('opens regular URLs from a direct modifier-click fallback when xterm did not handle them', async () => {
+  it('opens regular URLs from a direct ordinary-click fallback when xterm did not handle them', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: false }
     const rows = [
@@ -1716,7 +1790,7 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     mouseUp({
       button: 0,
-      metaKey: true,
+      metaKey: false,
       ctrlKey: false,
       shiftKey: false,
       defaultPrevented: false,
@@ -1735,6 +1809,34 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     disposable.dispose()
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
+  })
+
+  it('does not steal macOS ctrl-click context-menu gestures in the URL fallback', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: false }
+    const rows = [makeBufferLine('Open https://github.com/stablyai/orca/pull/2914')]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+    const preventDefault = vi.fn()
+
+    mouseUp({
+      button: 0,
+      metaKey: false,
+      ctrlKey: true,
+      shiftKey: false,
+      defaultPrevented: false,
+      clientX: 90,
+      clientY: 25,
+      preventDefault,
+      stopPropagation: vi.fn()
+    } as unknown as MouseEvent)
+
+    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(terminal.clearSelection).not.toHaveBeenCalled()
+
+    disposable.dispose()
   })
 
   it('asks for the first-use preference from the direct URL click fallback', async () => {

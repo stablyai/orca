@@ -355,6 +355,53 @@ describe('pr-refresh-coordinator', () => {
     )
   })
 
+  it('does not coalesce host and WSL refreshes for the same local branch', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ number: 12 }),
+        fetchedAt: Date.now()
+      })
+      .mockResolvedValueOnce({
+        kind: 'found',
+        pr: makePR({ number: 44 }),
+        fetchedAt: Date.now()
+      })
+
+    enqueuePRRefresh(makeCandidate({ cacheKey: 'host::repo-1::feature/test' }), 'active', 80, 1)
+    enqueuePRRefresh(
+      makeCandidate({
+        cacheKey: 'wsl::repo-1::feature/test',
+        localGitOptions: { wslDistro: 'Ubuntu' }
+      }),
+      'active',
+      80,
+      1
+    )
+    await vi.runOnlyPendingTimersAsync()
+    await vi.runOnlyPendingTimersAsync()
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(
+      1,
+      '/repo',
+      'feature/test',
+      null,
+      null,
+      null
+    )
+    expect(getPRForBranchOutcomeMock).toHaveBeenNthCalledWith(
+      2,
+      '/repo',
+      'feature/test',
+      null,
+      null,
+      null,
+      { localGitExecOptions: { wslDistro: 'Ubuntu' } }
+    )
+  })
+
   it('preserves coalesced aliases across visible follow-up refreshes', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
     getPRForBranchOutcomeMock

@@ -1,4 +1,5 @@
-import { lazy, type RefObject } from 'react'
+import { type RefObject } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
@@ -7,6 +8,7 @@ import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
 import type { DiffSection } from './diff-section-types'
 import { translate } from '@/i18n/i18n'
+import { LargeDiffFallback } from './LargeDiffFallback'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -21,6 +23,7 @@ type DiffSectionBodyProps = {
     startLine?: number
     top: number
     left?: number
+    lineHeight: number
   } | null
   addLineCommentPlaceholder?: string
   addLineCommentLabel?: string
@@ -35,6 +38,7 @@ type DiffSectionBodyProps = {
   onCancelComment: () => void
   onSubmitComment: (body: string) => Promise<void>
   onRetrySection: (index: number) => void
+  onSaveLimitedDiff: () => void
   onMount: DiffOnMount
 }
 
@@ -58,15 +62,18 @@ export function DiffSectionBody({
   onCancelComment,
   onSubmitComment,
   onRetrySection,
+  onSaveLimitedDiff,
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
+  const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
+
   return (
     <div
       ref={sectionBodyRef}
       className={cn('relative', useIntrinsicImageHeight && 'overflow-visible')}
       style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
     >
-      {popover ? (
+      {popover && !renderLimit?.limited ? (
         // Why: key by lineNumber so the popover remounts when the anchor
         // line changes instead of leaking draft state across lines.
         <DiffCommentPopover
@@ -75,6 +82,7 @@ export function DiffSectionBody({
           startLine={popover.startLine}
           top={popover.top}
           left={popover.left}
+          lineHeight={popover.lineHeight}
           placeholder={addLineCommentPlaceholder}
           submitLabel={addLineCommentLabel}
           submittingLabel="Posting…"
@@ -142,6 +150,23 @@ export function DiffSectionBody({
             </div>
           </div>
         )
+      ) : renderLimit?.limited ? (
+        <LargeDiffFallback
+          filePath={section.path}
+          renderLimit={renderLimit}
+          action={
+            isEditable && section.dirty
+              ? {
+                  label: translate('auto.components.editor.DiffSectionBody.b5675b0694', 'Save'),
+                  description: translate(
+                    'auto.components.editor.DiffSectionBody.593f2193f6',
+                    'This draft crossed the safe display limit, but it can still be saved.'
+                  ),
+                  onClick: onSaveLimitedDiff
+                }
+              : undefined
+          }
+        />
       ) : (
         <DiffEditor
           height="100%"

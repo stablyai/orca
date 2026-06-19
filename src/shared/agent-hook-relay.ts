@@ -46,6 +46,7 @@ export type AgentHookSource =
   | 'grok'
   | 'copilot'
   | 'hermes'
+  | 'devin'
 
 /** Env marker used by the remote relay. It is a transport/location marker, not
  *  a dev-vs-prod build tag, so main-process env mismatch diagnostics ignore it. */
@@ -98,7 +99,7 @@ export const AGENT_HOOK_REQUEST_REPLAY_METHOD = 'agent_hook.requestReplay' as co
 
 /** JSON-RPC request method Orca issues at session-ready to ship the
  *  OpenCode/Pi plugin source files to the relay so it can materialize the
- *  per-PTY overlay dirs on the remote. */
+ *  overlay dirs on the remote. */
 export const AGENT_HOOK_INSTALL_PLUGINS_METHOD = 'agent_hook.installPlugins' as const
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.

@@ -30,6 +30,7 @@ export class SttService {
   private activeHotwordsFilePath: string | undefined
   private activeOwner: string | null = null
   private startingOwner: string | null = null
+  private startingModelId: string | null = null
   private starting = false
   private canceledOwners = new Set<string>()
   private eventSink: SttEventSink | null = null
@@ -59,6 +60,7 @@ export class SttService {
     }
     this.starting = true
     this.startingOwner = owner
+    this.startingModelId = modelId
     this.clearIdleTeardownTimer()
 
     try {
@@ -71,6 +73,7 @@ export class SttService {
     } finally {
       this.starting = false
       this.startingOwner = null
+      this.startingModelId = null
       this.canceledOwners.delete(owner)
     }
   }
@@ -382,6 +385,18 @@ export class SttService {
     return this.activeModelId
   }
 
+  async prepareModelForDeletion(modelId: string): Promise<void> {
+    if (this.startingModelId === modelId || (this.activeOwner && this.activeModelId === modelId)) {
+      throw new Error('voice_model_in_use')
+    }
+    if (this.worker && this.activeModelId === modelId) {
+      await this.teardownIdleWorker({ ignoreTerminateErrors: false })
+      if (this.worker && this.activeModelId === modelId) {
+        throw new Error('voice_model_in_use')
+      }
+    }
+  }
+
   private getWorkerPath(): string {
     if (app.isPackaged) {
       return join(process.resourcesPath, 'app.asar', 'out', 'main', 'stt-worker.js')
@@ -407,16 +422,24 @@ export class SttService {
     this.idleTeardownTimer.unref?.()
   }
 
-  private async teardownIdleWorker(): Promise<void> {
+  private async teardownIdleWorker(
+    options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
+  ): Promise<void> {
     this.clearIdleTeardownTimer()
     if (!this.worker || this.activeOwner || this.startingOwner) {
       return
     }
     const worker = this.worker
     worker.postMessage({ type: 'teardown' })
+    try {
+      await worker.terminate()
+    } catch (error) {
+      if (!options.ignoreTerminateErrors) {
+        throw error
+      }
+    }
     this.cleanupActiveWorkerLifecycleListeners()
     worker.removeAllListeners()
-    await worker.terminate().catch(() => undefined)
     if (this.worker === worker) {
       this.worker = null
       this.activeModelId = null

@@ -50,10 +50,10 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
   it('uses the current status target when pointerup hit-testing succeeds', () => {
     expect(
       resolveWorktreeSidebarStatusDropCommitTarget({
-        currentTarget: { status: 'completed', isPinDrop: false },
+        currentTarget: { status: 'completed', isPinDrop: false, lineageParentId: null },
         currentPreview: preview,
         latestTrackedTarget: {
-          target: { status: 'in-progress', isPinDrop: false },
+          target: { status: 'in-progress', isPinDrop: false, lineageParentId: null },
           preview: null,
           x: 100,
           y: 100
@@ -62,7 +62,7 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         y: 100
       })
     ).toEqual({
-      target: { status: 'completed', isPinDrop: false },
+      target: { status: 'completed', isPinDrop: false, lineageParentId: null },
       preview
     })
   })
@@ -70,10 +70,10 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
   it('reuses the latest status target when pointerup hit-testing blanks at the same point', () => {
     expect(
       resolveWorktreeSidebarStatusDropCommitTarget({
-        currentTarget: { status: null, isPinDrop: false },
+        currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
         currentPreview: null,
         latestTrackedTarget: {
-          target: { status: 'completed', isPinDrop: false },
+          target: { status: 'completed', isPinDrop: false, lineageParentId: null },
           preview,
           x: 100,
           y: 100
@@ -82,18 +82,38 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         y: 101
       })
     ).toEqual({
-      target: { status: 'completed', isPinDrop: false },
+      target: { status: 'completed', isPinDrop: false, lineageParentId: null },
       preview
+    })
+  })
+
+  it('reuses the latest lineage target when pointerup hit-testing blanks at the same point', () => {
+    expect(
+      resolveWorktreeSidebarStatusDropCommitTarget({
+        currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
+        currentPreview: null,
+        latestTrackedTarget: {
+          target: { status: null, isPinDrop: false, lineageParentId: 'parent-worktree' },
+          preview: null,
+          x: 100,
+          y: 100
+        },
+        x: 102,
+        y: 101
+      })
+    ).toEqual({
+      target: { status: null, isPinDrop: false, lineageParentId: 'parent-worktree' },
+      preview: null
     })
   })
 
   it('does not reuse a stale status target after the pointer has moved away', () => {
     expect(
       resolveWorktreeSidebarStatusDropCommitTarget({
-        currentTarget: { status: null, isPinDrop: false },
+        currentTarget: { status: null, isPinDrop: false, lineageParentId: null },
         currentPreview: null,
         latestTrackedTarget: {
-          target: { status: 'completed', isPinDrop: false },
+          target: { status: 'completed', isPinDrop: false, lineageParentId: null },
           preview,
           x: 100,
           y: 100
@@ -102,7 +122,7 @@ describe('resolveWorktreeSidebarStatusDropCommitTarget', () => {
         y: 100
       })
     ).toEqual({
-      target: { status: null, isPinDrop: false },
+      target: { status: null, isPinDrop: false, lineageParentId: null },
       preview: null
     })
   })

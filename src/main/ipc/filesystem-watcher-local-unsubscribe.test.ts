@@ -26,7 +26,11 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn()
 }))
 
-import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import {
+  closeAllWatchers,
+  closeLocalWatcherForWorktreePath,
+  registerFilesystemWatcherHandlers
+} from './filesystem-watcher'
 import { stat } from 'fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 
@@ -250,5 +254,80 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('closes a live local watcher immediately for worktree deletion', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    const unsubscribeMock = vi.fn()
+    vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
+    const sender = {
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn(),
+      id: 1
+    }
+
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
+    await closeLocalWatcherForWorktreePath('/tmp/repo')
+
+    expect(unsubscribeMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes a pending grace-teardown watcher immediately for worktree deletion', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    const unsubscribeMock = vi.fn()
+    vi.mocked(subscribeParcelWatcher).mockResolvedValue({ unsubscribe: unsubscribeMock } as never)
+    const sender = {
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn(),
+      id: 1
+    }
+
+    await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/repo' })
+
+    vi.useFakeTimers()
+    try {
+      handlers['fs:unwatchWorktree']({ sender: { id: 1 } }, { worktreePath: '/tmp/repo' })
+
+      expect(vi.getTimerCount()).toBe(1)
+      await closeLocalWatcherForWorktreePath('/tmp/repo')
+
+      expect(unsubscribeMock).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels an opening local watcher for worktree deletion', async () => {
+    vi.mocked(stat).mockResolvedValue({ isDirectory: () => true } as never)
+    let resolveSubscribe: (subscription: { unsubscribe: () => void }) => void = () => {}
+    const unsubscribeMock = vi.fn()
+    vi.mocked(subscribeParcelWatcher).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSubscribe = resolve as typeof resolveSubscribe
+        })
+    )
+    const sender = {
+      isDestroyed: () => false,
+      send: vi.fn(),
+      once: vi.fn(),
+      id: 1
+    }
+
+    const watchPromise = handlers['fs:watchWorktree'](
+      { sender },
+      { worktreePath: '/tmp/repo' }
+    ) as Promise<unknown>
+    await vi.waitFor(() => {
+      expect(subscribeParcelWatcher).toHaveBeenCalled()
+    })
+    const closePromise = closeLocalWatcherForWorktreePath('/tmp/repo')
+    resolveSubscribe({ unsubscribe: unsubscribeMock })
+    await Promise.all([watchPromise, closePromise])
+
+    expect(unsubscribeMock).toHaveBeenCalledTimes(1)
   })
 })

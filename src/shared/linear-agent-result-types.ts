@@ -216,6 +216,36 @@ export type LinearIssueListResult = {
   }
 }
 
+export type LinearAgentProjectSummary = {
+  id: string
+  name: string
+  url?: string
+  workspaceId?: string
+  workspaceName?: string
+  teams?: {
+    id: string
+    name: string
+    key?: string
+  }[]
+}
+
+export type LinearProjectListResult = {
+  projects: LinearAgentProjectSummary[]
+  meta: {
+    query?: string
+    workspaceId?: string | 'all'
+    limit: number
+    returned: number
+    hasMore: boolean
+    partial: boolean
+    workspaceErrors: {
+      workspace: LinearWorkspaceCandidate
+      code: LinearErrorCode
+      message: string
+    }[]
+  }
+}
+
 export type LinearStatusSetResult = {
   issue: LinearWriteIssueRef
   state: { id: string; name: string; type: string }
@@ -264,6 +294,7 @@ export type LinearCreateResult = {
     team: { id: string; key: string; name: string }
     state: { id: string; name: string } | null
     parent: { id: string; identifier: string } | null
+    project?: LinearNamedEntity | null
     assignee?: LinearUserSummary | null
     priority?: number | null
     estimate?: number | null

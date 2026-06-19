@@ -10,7 +10,6 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
-import type { RepoKind } from './create-project-defaults'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 
@@ -29,7 +28,6 @@ export function useCreateRepo(
 ) {
   const [createName, setCreateName] = useState('')
   const [createParent, setCreateParent] = useState('')
-  const [createKind, setCreateKind] = useState<RepoKind>('git')
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const mountedRef = useMountedRef()
@@ -46,7 +44,6 @@ export function useCreateRepo(
     createGenRef.current++
     setCreateName('')
     setCreateParent('')
-    setCreateKind('git')
     setCreateError(null)
     setIsCreating(false)
   }, [])
@@ -101,6 +98,9 @@ export function useCreateRepo(
             ...useAppStore.getState().settings,
             activeRuntimeEnvironmentId: null
           })
+      // Why: Create Project is intentionally Git-only; non-Git folders use the
+      // existing add-folder flows instead of this path.
+      const createKind = 'git' as const
       const result = options.sshTargetId
         ? await window.api.repos.createRemote({
             connectionId: options.sshTargetId,
@@ -218,7 +218,6 @@ export function useCreateRepo(
   }, [
     createName,
     createParent,
-    createKind,
     fetchWorktrees,
     mountedRef,
     closeModal,
@@ -230,12 +229,10 @@ export function useCreateRepo(
   return {
     createName,
     createParent,
-    createKind,
     createError,
     isCreating,
     setCreateName,
     setCreateParent,
-    setCreateKind,
     setCreateError,
     resetCreateState,
     handlePickParent,

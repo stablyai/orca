@@ -160,13 +160,9 @@ function containsBrailleSpinner(title: string): boolean {
   return false
 }
 
-function containsLegacyAgentName(title: string): boolean {
-  return titleHasAnyLegacyAgentName(title)
-}
-
 function containsAgentName(title: string): boolean {
   return (
-    containsLegacyAgentName(title) ||
+    titleHasAnyLegacyAgentName(title) ||
     AGY_AGENT_NAME_RE.test(title) ||
     DROID_AGENT_NAME_RE.test(title) ||
     HERMES_AGENT_NAME_RE.test(title)
@@ -381,6 +377,9 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'grok')) {
     return 'Grok'
   }
+  if (titleHasAgentName(title, 'devin')) {
+    return 'Devin'
+  }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
   }
@@ -468,7 +467,7 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
-  const hasLegacyAgentName = containsLegacyAgentName(title)
+  const hasLegacyAgentName = titleHasAnyLegacyAgentName(title)
   if (hasLegacyAgentName || hasDroidAgentName || hasHermesAgentName || hasAgyAgentName) {
     if (containsAny(title, ['action required', 'permission', 'waiting'])) {
       return 'permission'

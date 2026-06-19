@@ -74,6 +74,7 @@ const terminalTabSchema = z.object({
   quickCommandLabel: z.string().nullable().optional(),
   customTitle: z.string().nullable(),
   color: z.string().nullable(),
+  isPinned: z.boolean().optional(),
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),
@@ -109,7 +110,8 @@ const sleepingAgentSessionRecordSchema = z.object({
   updatedAt: z.number().finite().positive(),
   terminalTitle: z.string().optional(),
   lastAssistantMessage: z.string().optional(),
-  connectionId: z.string().nullable().optional()
+  connectionId: z.string().nullable().optional(),
+  origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()
 })
 
 const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
@@ -135,6 +137,7 @@ const tabContentTypeSchema = z.enum([
   'editor',
   'diff',
   'conflict-review',
+  'check-details',
   'browser',
   'simulator'
 ])

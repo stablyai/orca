@@ -49,6 +49,13 @@ describe('tab create entry classification', () => {
     })
   })
 
+  it('does not classify invalid numeric hosts as URLs', () => {
+    expect(classifyTabEntryQuery('999.999.999.999', readyFiles([]))).toEqual({
+      kind: 'new-file',
+      relativePath: '999.999.999.999'
+    })
+  })
+
   it('keeps common source/document filenames as file candidates', () => {
     expect(classifyTabEntryQuery('README.md', readyFiles([]))).toEqual({
       kind: 'new-file',

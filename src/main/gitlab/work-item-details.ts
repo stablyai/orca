@@ -21,6 +21,7 @@ import {
   glabExecFileAsync,
   release,
   resolveIssueSource,
+  type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
 import type { IssueSourcePreference } from '../../shared/types'
@@ -86,7 +87,8 @@ async function fetchDiscussions(
   projectRef: ProjectRef,
   type: 'issue' | 'mr',
   iid: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabRawDiscussion[]> {
   const resource = type === 'mr' ? 'merge_requests' : 'issues'
   const { stdout } = await glabExecFileAsync(
@@ -97,7 +99,7 @@ async function fetchDiscussions(
       // Walking every historic discussion can retain and render huge note sets.
       `projects/${encodedProject(projectRef.path)}/${resource}/${iid}/discussions?per_page=100`
     ],
-    glabRepoExecOptions(repoPath, connectionId)
+    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
   )
   return JSON.parse(stdout) as GitLabRawDiscussion[]
 }
@@ -150,7 +152,8 @@ async function fetchPipelineJobs(
   repoPath: string,
   projectRef: ProjectRef,
   pipelineId: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabPipelineJob[]> {
   const { stdout } = await glabExecFileAsync(
     [
@@ -160,7 +163,7 @@ async function fetchPipelineJobs(
       // large pipelines; the first 100 jobs match the visible summary budget.
       `projects/${encodedProject(projectRef.path)}/pipelines/${pipelineId}/jobs?per_page=100`
     ],
-    glabRepoExecOptions(repoPath, connectionId)
+    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
   )
   const data = JSON.parse(stdout) as GitLabRawJob[]
   return data.map((job) => mapPipelineJob(job, pipelineId))
@@ -216,7 +219,8 @@ async function fetchMRFiles(
   repoPath: string,
   projectRef: ProjectRef,
   iid: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabMRFile[]> {
   const { stdout } = await glabExecFileAsync(
     [
@@ -226,7 +230,7 @@ async function fetchMRFiles(
       // the paginated diffs endpoint; cap the file snapshot at one visible page.
       `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/diffs?per_page=100`
     ],
-    glabRepoExecOptions(repoPath, connectionId)
+    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
   )
   const data = JSON.parse(stdout) as Parameters<typeof mapMRFile>[0][]
   return data.map(mapMRFile).filter((file) => file.path)
@@ -251,7 +255,8 @@ async function fetchMRReviewers(
   repoPath: string,
   projectRef: ProjectRef,
   iid: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabAssignableUser[]> {
   const { stdout } = await glabExecFileAsync(
     [
@@ -259,7 +264,7 @@ async function fetchMRReviewers(
       ...glabHostnameArgs(projectRef, connectionId),
       `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/reviewers`
     ],
-    glabRepoExecOptions(repoPath, connectionId)
+    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
   )
   const data = JSON.parse(stdout) as { user?: GitLabRawUser | null }[]
   return data
@@ -271,7 +276,8 @@ async function fetchMRApprovalState(
   repoPath: string,
   projectRef: ProjectRef,
   iid: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabMRApprovalState | undefined> {
   const [approvalsRes, stateRes] = await Promise.allSettled([
     glabExecFileAsync(
@@ -280,7 +286,7 @@ async function fetchMRApprovalState(
         ...glabHostnameArgs(projectRef, connectionId),
         `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/approvals`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     ),
     glabExecFileAsync(
       [
@@ -288,7 +294,7 @@ async function fetchMRApprovalState(
         ...glabHostnameArgs(projectRef, connectionId),
         `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}/approval_state`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
   ])
   if (approvalsRes.status === 'rejected' && stateRes.status === 'rejected') {
@@ -343,23 +349,32 @@ export async function getWorkItemDetails(
   type: 'issue' | 'mr',
   preference?: IssueSourcePreference,
   connectionId?: string | null,
-  projectRefOverride?: ProjectRef | null
+  projectRefOverride?: ProjectRef | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabWorkItemDetails | null> {
   // Why: detail fetches must use the same project source as the list row
   // that opened them, otherwise forked repos can show a row from one remote
   // and a detail sheet from another.
   const projectRef =
     projectRefOverride ??
-    (await resolveIssueSource(repoPath, preference, await getGlabKnownHosts(), connectionId)).source
+    (
+      await resolveIssueSource(
+        repoPath,
+        preference,
+        await getGlabKnownHosts(),
+        connectionId,
+        localGitOptions
+      )
+    ).source
   if (!projectRef) {
     return null
   }
   await acquire()
   try {
     if (type === 'issue') {
-      return await fetchIssueDetails(repoPath, projectRef, iid, connectionId)
+      return await fetchIssueDetails(repoPath, projectRef, iid, connectionId, localGitOptions)
     }
-    return await fetchMRDetails(repoPath, projectRef, iid, connectionId)
+    return await fetchMRDetails(repoPath, projectRef, iid, connectionId, localGitOptions)
   } catch {
     return null
   } finally {
@@ -371,7 +386,8 @@ async function fetchIssueDetails(
   repoPath: string,
   projectRef: ProjectRef,
   iid: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabWorkItemDetails | null> {
   // Why: fan out the two reads. Issues don't have a pipeline so this
   // pair covers everything the dialog renders.
@@ -382,9 +398,9 @@ async function fetchIssueDetails(
         ...glabHostnameArgs(projectRef, connectionId),
         `projects/${encodedProject(projectRef.path)}/issues/${iid}`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     ),
-    fetchDiscussions(repoPath, projectRef, 'issue', iid, connectionId)
+    fetchDiscussions(repoPath, projectRef, 'issue', iid, connectionId, localGitOptions)
   ])
   const issueRaw = JSON.parse(issueRes.stdout) as GitLabRawIssue
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
@@ -409,7 +425,8 @@ async function fetchMRDetails(
   repoPath: string,
   projectRef: ProjectRef,
   iid: number,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabWorkItemDetails | null> {
   // Why: MR detail + discussions in parallel. The pipeline jobs fetch
   // depends on `head_pipeline.id` from the MR payload, so it has to
@@ -421,9 +438,9 @@ async function fetchMRDetails(
         ...glabHostnameArgs(projectRef, connectionId),
         `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`
       ],
-      glabRepoExecOptions(repoPath, connectionId)
+      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     ),
-    fetchDiscussions(repoPath, projectRef, 'mr', iid, connectionId)
+    fetchDiscussions(repoPath, projectRef, 'mr', iid, connectionId, localGitOptions)
   ])
   const mrRaw = JSON.parse(mrRes.stdout) as GitLabRawMR
   const item: Omit<GitLabWorkItem, 'repoId'> = (() => {
@@ -434,14 +451,22 @@ async function fetchMRDetails(
   const pipelineId = mrRaw.head_pipeline?.id
   const pipelineJobs =
     typeof pipelineId === 'number'
-      ? await fetchPipelineJobs(repoPath, projectRef, pipelineId, connectionId).catch(() => [])
+      ? await fetchPipelineJobs(
+          repoPath,
+          projectRef,
+          pipelineId,
+          connectionId,
+          localGitOptions
+        ).catch(() => [])
       : undefined
   const [reviewers, approvalState, files] = await Promise.all([
-    fetchMRReviewers(repoPath, projectRef, iid, connectionId).catch(() =>
+    fetchMRReviewers(repoPath, projectRef, iid, connectionId, localGitOptions).catch(() =>
       (mrRaw.reviewers ?? []).map(mapGitLabUser).filter((u): u is GitLabAssignableUser => !!u)
     ),
-    fetchMRApprovalState(repoPath, projectRef, iid, connectionId).catch(() => undefined),
-    fetchMRFiles(repoPath, projectRef, iid, connectionId).catch(() => [])
+    fetchMRApprovalState(repoPath, projectRef, iid, connectionId, localGitOptions).catch(
+      () => undefined
+    ),
+    fetchMRFiles(repoPath, projectRef, iid, connectionId, localGitOptions).catch(() => [])
   ])
   return {
     item,

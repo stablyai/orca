@@ -48,6 +48,52 @@ describe('HeadlessEmulator', () => {
       const snapshot = emulator.getSnapshot()
       expect(snapshot.snapshotAnsi).toContain('red text')
     })
+
+    it('captures OSC 8 link ranges in snapshot metadata', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('\x1b]8;;https://news.ycombinator.com\x07Hacker News\x1b]8;;\x07')
+
+      expect(emulator.getSnapshot().oscLinks).toEqual([
+        {
+          row: 0,
+          startCol: 0,
+          endCol: 11,
+          uri: 'https://news.ycombinator.com'
+        }
+      ])
+    })
+
+    it('captures scrollback OSC 8 ranges in unrestricted snapshots', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 2, scrollback: 10 })
+      await emulator.write('\x1b]8;;https://example.com/old\x07old\x1b]8;;\x07\r\nplain\r\nvisible')
+
+      expect(emulator.getSnapshot().oscLinks).toContainEqual({
+        row: 0,
+        startCol: 0,
+        endCol: 3,
+        uri: 'https://example.com/old'
+      })
+      expect(
+        emulator
+          .getSnapshot({ scrollbackRows: 0 })
+          .oscLinks?.some((link) => link.uri === 'https://example.com/old')
+      ).toBe(false)
+    })
+
+    it('projects restored OSC 8 ranges into serialized snapshot windows', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('issue #1234 done')
+      emulator.setRestoredOscLinks([
+        { row: 0, startCol: 6, endCol: 11, uri: 'https://example.com/issue/1234' }
+      ])
+
+      expect(emulator.getSnapshot().oscLinks).toContainEqual({
+        row: 0,
+        startCol: 6,
+        endCol: 11,
+        uri: 'https://example.com/issue/1234'
+      })
+    })
   })
 
   describe('OSC-7 CWD tracking', () => {

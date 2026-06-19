@@ -2,6 +2,7 @@ import { existsSync } from 'fs'
 import { appendFile, readFile, stat } from 'fs/promises'
 import * as path from 'path'
 import { checkIgnoredPaths } from './check-ignored-paths'
+import type { GitRuntimeOptions } from './git-runtime-options'
 
 // Why: the overwhelmingly common cause of a status listing big enough to hit the
 // entry limit is a dependency/build folder that should have been ignored. Offer
@@ -13,7 +14,10 @@ const KNOWN_HUGE_FOLDER_NAMES = ['node_modules', '.next', 'dist', 'build', 'targ
  * Return the relative names of known-huge folders that exist in the worktree and
  * are NOT already git-ignored — candidates to offer adding to .gitignore.
  */
-export async function findKnownHugeFolderPathsToIgnore(worktreePath: string): Promise<string[]> {
+export async function findKnownHugeFolderPathsToIgnore(
+  worktreePath: string,
+  options: GitRuntimeOptions = {}
+): Promise<string[]> {
   const existing: string[] = []
   for (const name of KNOWN_HUGE_FOLDER_NAMES) {
     const full = path.join(worktreePath, name)
@@ -32,7 +36,7 @@ export async function findKnownHugeFolderPathsToIgnore(worktreePath: string): Pr
     return []
   }
   // Why: a folder already covered by an existing rule shouldn't be offered again.
-  const ignored = new Set(await checkIgnoredPaths(worktreePath, existing).catch(() => []))
+  const ignored = new Set(await checkIgnoredPaths(worktreePath, existing, options).catch(() => []))
   return existing.filter((name) => !ignored.has(name))
 }
 

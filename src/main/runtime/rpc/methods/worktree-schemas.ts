@@ -20,6 +20,13 @@ const OptionalTuiAgent = z
   .transform((value): TuiAgent | undefined => (isTuiAgent(value) ? value : undefined))
   .optional()
 
+const AutomationWorkspaceProvenanceRequest = z.object({
+  automationId: z.string(),
+  automationRunId: z.string(),
+  dispatchToken: z.string(),
+  createRequestId: z.string()
+})
+
 export const WorktreeListParams = z.object({
   repo: OptionalString,
   limit: OptionalFiniteNumber
@@ -55,6 +62,7 @@ export const WorktreeCreate = z
       .pipe(z.string().min(1, 'Missing repo selector')),
     name: OptionalString,
     baseBranch: OptionalString,
+    compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
@@ -92,6 +100,8 @@ export const WorktreeCreate = z
       .optional(),
     runHooks: OptionalBoolean,
     activate: OptionalBoolean,
+    parentWorkspace: OptionalString,
+    envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
     cwdParentWorktree: OptionalString,
     noParent: OptionalBoolean,
@@ -115,6 +125,7 @@ export const WorktreeCreate = z
     // terminal pane launches the selected agent instead of an idle shell.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),
+    startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
     // Why: CLI clients should not hardcode agent launch quoting because SSH
     // workspaces execute in a different shell than the client process.
     startupAgent: OptionalTuiAgent,
@@ -125,13 +136,20 @@ export const WorktreeCreate = z
     createdWithAgent: z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
-      .optional()
+      .optional(),
+    automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional()
   })
   .superRefine((params, ctx) => {
-    if (params.parentWorktree && params.noParent === true) {
+    if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Choose either --parent-worktree or --no-parent, not both.'
+        message: 'Choose either one parent selector or --no-parent.'
+      })
+    }
+    if (params.parentWorkspace && params.parentWorktree) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose either one parent selector or --no-parent.'
       })
     }
     if (params.startupPrompt !== undefined && params.startupAgent === undefined) {
@@ -223,6 +241,7 @@ export const WorktreeResolvePrBase = z.object({
     .transform((v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0))
     .pipe(z.number().int().positive('Missing PR number')),
   headRefName: OptionalString,
+  baseRefName: OptionalString,
   isCrossRepository: OptionalBoolean
 })
 
@@ -236,5 +255,6 @@ export const WorktreeResolveMrBase = z.object({
     .transform((v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0))
     .pipe(z.number().int().positive('Missing MR number')),
   sourceBranch: OptionalString,
+  targetBranch: OptionalString,
   isCrossRepository: OptionalBoolean
 })

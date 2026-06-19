@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { sshExecMock } = vi.hoisted(() => ({
+const { gitExecFileAsyncMock, sshExecMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
   sshExecMock: vi.fn()
+}))
+
+vi.mock('../git/runner', () => ({
+  gitExecFileAsync: gitExecFileAsyncMock
 }))
 
 import {
@@ -14,6 +19,7 @@ import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/s
 
 describe('parseAzureDevOpsRepoRef', () => {
   beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
     sshExecMock.mockReset()
     unregisterSshGitProvider('conn-1')
     _resetAzureDevOpsRepoRefCache()
@@ -112,6 +118,45 @@ describe('parseAzureDevOpsRepoRef', () => {
     })
 
     expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps local host and local WSL repository-ref cache entries separate', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: 'https://dev.azure.com/acme/Host/_git/repo.git\n',
+        stderr: ''
+      })
+      .mockResolvedValueOnce({
+        stdout: 'https://dev.azure.com/acme/Wsl/_git/repo.git\n',
+        stderr: ''
+      })
+
+    await expect(getAzureDevOpsRepoRefForRemote('/repo', 'origin')).resolves.toMatchObject({
+      project: 'Host',
+      repository: 'repo'
+    })
+    await expect(
+      getAzureDevOpsRepoRefForRemote('/repo', 'origin', null, { wslDistro: 'Ubuntu' })
+    ).resolves.toMatchObject({
+      project: 'Wsl',
+      repository: 'repo'
+    })
+    await expect(
+      getAzureDevOpsRepoRefForRemote('/repo', 'origin', null, { wslDistro: 'Ubuntu' })
+    ).resolves.toMatchObject({
+      project: 'Wsl',
+      repository: 'repo'
+    })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu'
+    })
   })
 
   it('bounds cached repository refs for distinct repo paths', async () => {

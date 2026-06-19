@@ -30,6 +30,7 @@ import type { WorkspaceCleanupSlice } from './slices/workspace-cleanup'
 import type { RuntimeStatusSlice } from './slices/runtime-status'
 import type { PullRequestGenerationSlice } from './slices/pull-request-generation'
 import type { CommitMessageGenerationSlice } from './slices/commit-message-generation'
+import type { PinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
 
 export type AppState = RepoSlice &
   SparsePresetsSlice &
@@ -62,4 +63,5 @@ export type AppState = RepoSlice &
   WorkspaceCleanupSlice &
   RuntimeStatusSlice &
   PullRequestGenerationSlice &
-  CommitMessageGenerationSlice
+  CommitMessageGenerationSlice &
+  PinnedTabCloseConfirmSlice

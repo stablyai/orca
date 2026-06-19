@@ -11,7 +11,34 @@ const mockTrack = vi.fn()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 const store = {
+  activeRepoId: 'repo-1',
+  activeWorktreeId: 'wt-1',
   settings: { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null as string | null },
+  projects: [
+    {
+      id: 'repo-1',
+      localWindowsRuntimePreference: { kind: 'inherit-global' as const }
+    }
+  ] as {
+    id: string
+    localWindowsRuntimePreference:
+      | { kind: 'inherit-global' }
+      | { kind: 'windows-host' }
+      | { kind: 'wsl'; distro: string | null }
+  }[],
+  repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
+  worktreesByRepo: {
+    'repo-1': [
+      {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        projectId: 'repo-1',
+        path: '/repo/worktree',
+        displayName: 'main'
+      }
+    ]
+  },
+  allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1']),
   tabsByWorktree: {
     'wt-1': [{ id: 'tab-1' }]
   },
@@ -72,7 +99,27 @@ describe('launchAgentInNewTab', () => {
     vi.clearAllMocks()
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
     mockCreateWebRuntimeSessionTerminal.mockResolvedValue(true)
+    store.activeRepoId = 'repo-1'
+    store.activeWorktreeId = 'wt-1'
     store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
+    store.projects = [
+      {
+        id: 'repo-1',
+        localWindowsRuntimePreference: { kind: 'inherit-global' }
+      }
+    ]
+    store.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
+    store.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'wt-1',
+          repoId: 'repo-1',
+          projectId: 'repo-1',
+          path: '/repo/worktree',
+          displayName: 'main'
+        }
+      ]
+    }
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
     store.openFiles = []
     store.browserTabsByWorktree = {}
@@ -225,6 +272,42 @@ describe('launchAgentInNewTab', () => {
       'tab-1',
       expect.objectContaining({
         command: "claude '--dangerously-skip-permissions' --prefill 'review Bob''s change'"
+      })
+    )
+  })
+
+  it('uses WSL launch quoting by default for Windows-path projects forced to WSL', async () => {
+    store.projects = [
+      {
+        id: 'repo-1',
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    ]
+    store.repos = [{ id: 'repo-1', connectionId: null, path: 'C:\\Users\\jinwo\\repo' }]
+    store.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'wt-1',
+          repoId: 'repo-1',
+          projectId: 'repo-1',
+          path: 'C:\\Users\\jinwo\\repo\\feature',
+          displayName: 'feature'
+        }
+      ]
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: "review Bob's change",
+      promptDelivery: 'draft'
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
       })
     )
   })

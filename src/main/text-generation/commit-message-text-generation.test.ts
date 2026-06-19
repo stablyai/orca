@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: local/remote generation, cancellation, and
    env propagation share subprocess mocks; splitting would obscure the
    cross-path invariants these tests protect. */
-import { spawn } from 'child_process'
+import { exec, spawn } from 'child_process'
 import type * as ChildProcess from 'child_process'
 import { EventEmitter } from 'events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -24,10 +24,17 @@ vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
   return {
     ...actual,
+    exec: vi.fn((_command, callback) => {
+      if (typeof callback === 'function') {
+        callback(null, '', '')
+      }
+      return new actual.ChildProcess()
+    }),
     spawn: vi.fn(actual.spawn)
   }
 })
 
+const execMock = vi.mocked(exec)
 const spawnMock = vi.mocked(spawn)
 
 type MockDiscoveryChild = EventEmitter & {
@@ -62,7 +69,17 @@ function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   }
 }
 
+function expectChildTerminated(child: { pid: number; kill: ReturnType<typeof vi.fn> }): void {
+  if (process.platform === 'win32') {
+    expect(execMock).toHaveBeenCalledWith(`taskkill /pid ${child.pid} /T /F`, expect.any(Function))
+    expect(child.kill).not.toHaveBeenCalled()
+    return
+  }
+  expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+}
+
 beforeEach(() => {
+  execMock.mockClear()
   spawnMock.mockClear()
 })
 
@@ -350,11 +367,60 @@ describe('discoverCommitMessageModelsLocal', () => {
       success: true,
       defaultModelId: 'auto'
     })
-    expect(spawnMock).toHaveBeenCalledWith(
-      'npx',
-      ['cursor-agent', '--list-models'],
-      expect.objectContaining({ windowsHide: true })
-    )
+    if (process.platform === 'win32') {
+      expect(spawnMock).toHaveBeenCalledWith(
+        expect.stringMatching(/cmd\.exe$/i),
+        ['/d', '/c', expect.stringMatching(/npx\.cmd$/i), 'cursor-agent', '--list-models'],
+        expect.objectContaining({ windowsHide: true })
+      )
+    } else {
+      expect(spawnMock).toHaveBeenCalledWith(
+        'npx',
+        ['cursor-agent', '--list-models'],
+        expect.objectContaining({ windowsHide: true })
+      )
+    }
+  })
+
+  it('discovers dynamic models through the selected WSL distro login shell', async () => {
+    await withPlatform('win32', async () => {
+      const listeners = new Map<string, (value: unknown) => void>()
+      const child = {
+        pid: 123,
+        kill: vi.fn(),
+        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+        stdin: { end: vi.fn() },
+        on: vi.fn((event, callback) => listeners.set(event, callback))
+      }
+      spawnMock.mockReturnValue(child as never)
+
+      const pending = discoverCommitMessageModelsLocal('cursor', undefined, undefined, {
+        cwd: 'C:\\repo',
+        wslDistro: 'Ubuntu'
+      })
+
+      listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
+      listeners.get('close')?.(0)
+
+      await expect(pending).resolves.toMatchObject({
+        success: true,
+        defaultModelId: 'auto'
+      })
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu', '--', 'sh', '-lc', expect.any(String)],
+        expect.objectContaining({
+          cwd: undefined,
+          windowsHide: true
+        })
+      )
+      const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
+      expect(shellCommand).toContain('getent passwd')
+      expect(shellCommand).toContain('/mnt/c/repo')
+      expect(shellCommand).toContain("'cursor-agent'")
+      expect(shellCommand).toContain('--list-models')
+    })
   })
 
   it('falls back to static models when dynamic discovery returns no parseable models', async () => {
@@ -428,7 +494,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       await vi.advanceTimersByTimeAsync(60_000)
 
       await assertion
-      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      expectChildTerminated(child)
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
@@ -450,7 +516,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       success: false,
       error: 'Cursor returned too much model data.'
     })
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildTerminated(child)
     expect(child.stdout.listenerCount('data')).toBe(0)
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
@@ -807,7 +873,7 @@ describe('generateCommitMessageFromContext', () => {
       error:
         'agent CLI command produced too much output. Check the agent CLI configuration and try again.'
     })
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildTerminated(child)
   })
 
   it('passes prepared provider environment to local agent subprocesses', async () => {
@@ -856,8 +922,70 @@ describe('generateCommitMessageFromContext', () => {
     )
   })
 
+  it('routes WSL local commit generation through the selected distro login shell', async () => {
+    await withPlatform('win32', async () => {
+      process.env.ORCA_HOST_ONLY_SECRET = 'do-not-leak'
+      const listeners = new Map<string, (value: unknown) => void>()
+      const child = {
+        pid: 123,
+        kill: vi.fn(),
+        stdout: { on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback)) },
+        stderr: { on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback)) },
+        stdin: { end: vi.fn() },
+        on: vi.fn((event, callback) => listeners.set(event, callback))
+      }
+      spawnMock.mockReturnValue(child as never)
+
+      const pending = generateCommitMessageFromContext(
+        {
+          branch: 'main',
+          stagedSummary: 'M\tREADME.md',
+          stagedPatch: '+hello'
+        },
+        {
+          agentId: 'custom',
+          model: '',
+          customAgentCommand: 'agent --mode fast'
+        },
+        {
+          kind: 'local',
+          cwd: 'C:\\repo',
+          wslDistro: 'Ubuntu 24.04',
+          env: { ...process.env, CODEX_HOME: '/home/tester/.codex' }
+        }
+      )
+
+      listeners.get('stdout:data')?.(Buffer.from('Update README\n'))
+      listeners.get('close')?.(0)
+
+      await expect(pending).resolves.toMatchObject({
+        success: true,
+        message: 'Update README'
+      })
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu 24.04', '--', 'sh', '-lc', expect.any(String)],
+        expect.objectContaining({
+          cwd: undefined,
+          windowsHide: true,
+          env: expect.objectContaining({ CODEX_HOME: '/home/tester/.codex' })
+        })
+      )
+      const spawnEnv = spawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv
+      expect(spawnEnv.ORCA_HOST_ONLY_SECRET).toBeUndefined()
+      const shellCommand = spawnMock.mock.calls[0]?.[1]?.[5] as string
+      expect(shellCommand).toContain('getent passwd')
+      expect(shellCommand).toContain('exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('/mnt/c/repo')
+      expect(shellCommand).toContain("'agent'")
+      expect(shellCommand).toContain('--mode')
+      expect(shellCommand).toContain('fast')
+    })
+  })
+
   it('keeps local commit-message and pull-request cancellation lanes separate', async () => {
     const children: {
+      pid: number
       kill: ReturnType<typeof vi.fn>
       listeners: Map<string, (value: unknown) => void>
     }[] = []
@@ -871,7 +999,7 @@ describe('generateCommitMessageFromContext', () => {
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
-      children.push({ kill: child.kill, listeners })
+      children.push({ pid: child.pid, kill: child.kill, listeners })
       return child as never
     })
 
@@ -916,7 +1044,7 @@ describe('generateCommitMessageFromContext', () => {
 
     cancelGenerateCommitMessageLocal('/repo')
 
-    expect(children[0]?.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildTerminated(children[0]!)
     expect(children[1]?.kill).not.toHaveBeenCalled()
 
     children[0]?.listeners.get('close')?.(null)
@@ -947,6 +1075,7 @@ describe('generateCommitMessageFromContext', () => {
 
   it('keeps local pull-request cancellation from stopping commit-message generation', async () => {
     const children: {
+      pid: number
       kill: ReturnType<typeof vi.fn>
       listeners: Map<string, (value: unknown) => void>
     }[] = []
@@ -960,7 +1089,7 @@ describe('generateCommitMessageFromContext', () => {
         stdin: { end: vi.fn() },
         on: vi.fn((event, callback) => listeners.set(event, callback))
       }
-      children.push({ kill: child.kill, listeners })
+      children.push({ pid: child.pid, kill: child.kill, listeners })
       return child as never
     })
 
@@ -1006,7 +1135,7 @@ describe('generateCommitMessageFromContext', () => {
     cancelGeneratePullRequestFieldsLocal('/repo')
 
     expect(children[0]?.kill).not.toHaveBeenCalled()
-    expect(children[1]?.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildTerminated(children[1]!)
 
     const commitStdout = children[0]?.listeners.get('stdout:data')
     commitStdout?.(Buffer.from('Update README\n'))
@@ -1151,7 +1280,7 @@ describe('generateCommitMessageFromContext', () => {
     cancelGeneratePullRequestFieldsLocal('/repo')
     listeners.get('close')?.(null)
 
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expectChildTerminated(child)
     await expect(pullRequest).resolves.toEqual({
       success: false,
       error: 'Generation canceled.',
@@ -1207,7 +1336,7 @@ describe('generateCommitMessageFromContext', () => {
       )
 
       cancelGenerateCommitMessageLocal('/repo')
-      expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+      expectChildTerminated(child)
       await Promise.resolve()
       await Promise.resolve()
       await Promise.resolve()

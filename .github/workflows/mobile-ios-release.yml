@@ -1,0 +1,108 @@
+name: Mobile iOS Release
+
+# Why a separate workflow from Android: iOS releases go through App Store
+# review, which can take days. Decoupling the triggers lets an Android release
+# ship immediately without waiting on iOS, and vice versa.
+on:
+  push:
+    tags:
+      - 'mobile-ios-v*'
+  workflow_dispatch:
+
+jobs:
+  ios-build:
+    # GitHub-hosted macOS runner: required for Xcode. Expo SDK 55's
+    # expo-modules-core declares swift_version 6.0 and uses Swift 6 syntax
+    # (@MainActor isolation). Xcode 16.x (macos-15) can't even parse it
+    # ("unknown attribute 'MainActor'"), so we need Xcode 26.x → macos-26.
+    runs-on: macos-26
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          # Xcode 26.x ships the Swift 6.x toolchain Expo SDK 55 requires.
+          xcode-version: '26.5'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Ruby and fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+
+      - name: Expo prebuild
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Install CocoaPods
+        run: npx pod-install ios
+
+      # Why: `-allowProvisioningUpdates` + the App Store Connect API key can
+      # create/refresh provisioning profiles, but it cannot recreate the
+      # distribution certificate's PRIVATE KEY across runs. So we import a
+      # pre-exported distribution .p12 (created once via Apple Developer) into a
+      # throwaway keychain. The keychain is ephemeral to the runner and torn
+      # down with the VM; nothing secret is written to the repo.
+      - name: Import distribution certificate
+        env:
+          IOS_DIST_CERT_P12: ${{ secrets.IOS_DIST_CERT_P12 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/orca-signing.keychain-db"
+          # Random per-run keychain password; never persisted.
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          CERT_PATH="$RUNNER_TEMP/orca-dist-cert.p12"
+
+          echo "$IOS_DIST_CERT_P12" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$IOS_DIST_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          # Allow codesign/xcodebuild to use the key without an interactive prompt.
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+          # Put our keychain in the search list so xcodebuild can find the identity.
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          rm -f "$CERT_PATH"
+
+      - name: Build and upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Keep fastlane non-interactive and quiet about analytics in CI.
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_HIDE_CHANGELOG: '1'
+        run: bundle exec fastlane ios release
+
+      - name: Upload .ipa artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-mobile-ipa
+          path: mobile/build/*.ipa
+          if-no-files-found: ignore

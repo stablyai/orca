@@ -57,6 +57,24 @@ describe('tui agent startup plans', () => {
     })
 
     expect(plan?.launchCommand).toBe("codex 'fix it'")
+    expect(plan?.startupCommandDelivery).toBe('shell-ready')
+  })
+
+  it('keeps plain empty Codex startup on the fast delivery path', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan).toEqual({
+      agent: 'codex',
+      launchCommand: 'codex',
+      expectedProcess: 'codex',
+      followupPrompt: null
+    })
   })
 
   it('launches Claude without Orca settings injection', () => {
@@ -69,6 +87,18 @@ describe('tui agent startup plans', () => {
 
     expect(plan?.launchCommand).toBe("claude 'fix it'")
     expect(plan?.launchCommand).not.toContain('--settings')
+  })
+
+  it('uses the Linux Orca CLI command for Claude Agent Teams launches', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude-agent-teams',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('orca-ide claude-teams')
   })
 
   it('launches OpenClaude as a distinct argv agent', () => {
@@ -248,12 +278,11 @@ describe('tui agent startup plans', () => {
   })
 
   it('returns an OMP draft plan with ORCA_OMP_PREFILL (OMP-scoped, not Pi-shared)', () => {
-    // Why: OMP owns its own overlay tree, bundled prefill extension, and
-    // prefill env var. The OMP overlay's orca-prefill.ts reads
-    // ORCA_OMP_PREFILL — see src/main/pi/titlebar-extension-service.ts —
-    // so a draft plan for OMP MUST emit that name. A regression here would
-    // either silently drop the draft (Pi var ignored by OMP overlay) or
-    // honor a stale Pi-PTY draft from a previous launch.
+    // Why: OMP owns its own managed prefill extension and env var.
+    // orca-prefill.ts reads ORCA_OMP_PREFILL for OMP launches — see
+    // src/main/pi/titlebar-extension-service.ts — so a draft plan for OMP
+    // MUST emit that name. A regression here would either silently drop the
+    // draft (Pi var ignored by OMP) or honor a stale Pi-PTY draft.
     const plan = buildAgentDraftLaunchPlan({
       agent: 'omp',
       draft: 'fix the omp regression',
@@ -265,6 +294,28 @@ describe('tui agent startup plans', () => {
     expect(plan?.env).toEqual({ ORCA_OMP_PREFILL: 'fix the omp regression' })
     expect(plan?.expectedProcess).toBe('omp')
     expect(plan?.launchCommand).toBe('omp; unset ORCA_OMP_PREFILL')
+  })
+
+  it('returns null for oversized Windows flag drafts so callers paste after ready', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'claude',
+        draft: 'x'.repeat(25_000),
+        cmdOverrides: {},
+        platform: 'win32'
+      })
+    ).toBeNull()
+  })
+
+  it('returns null for oversized Windows env-var drafts so callers paste after ready', () => {
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'pi',
+        draft: 'x'.repeat(25_000),
+        cmdOverrides: {},
+        platform: 'win32'
+      })
+    ).toBeNull()
   })
 
   it('launches Devin with stdin-after-start prompt delivery', () => {

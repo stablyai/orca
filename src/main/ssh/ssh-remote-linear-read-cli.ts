@@ -11,6 +11,7 @@ import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-linea
 import {
   LINEAR_ISSUE_FLAGS,
   LINEAR_LIST_FLAGS,
+  LINEAR_PROJECT_LIST_FLAGS,
   LINEAR_SEARCH_FLAGS,
   LINEAR_TEAM_LIST_FLAGS,
   LINEAR_TEAM_LOOKUP_FLAGS
@@ -77,6 +78,19 @@ export async function tryDispatchRemoteLinearReadCli(
       ['linear', 'team', 'labels'],
       'linear.agentTeamLabels'
     )
+  }
+  if (isRemoteCommand(parsed, 'linear', 'project', 'list')) {
+    validateLinearRemoteArgs(parsed, {
+      command: ['linear', 'project', 'list'],
+      allowedFlags: LINEAR_PROJECT_LIST_FLAGS,
+      positionalFlag: 'id',
+      maxPositionals: 0
+    })
+    return await call(dispatcher, 'linear.agentProjectList', {
+      query: optionalString(parsed.flags, 'query'),
+      limit: clampLinearSearchLimit(optionalPositiveInteger(parsed.flags, 'limit')),
+      workspaceId: optionalString(parsed.flags, 'workspace')
+    })
   }
   if (isRemoteCommand(parsed, 'linear', 'list')) {
     validateLinearRemoteArgs(parsed, {

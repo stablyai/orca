@@ -16,6 +16,7 @@ import { applyDocumentTheme } from '@/lib/document-theme'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
 import { DEFAULT_APP_FONT_FAMILY, getDefaultVoiceSettings } from '../../../../shared/constants'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { GeneralPane } from './GeneralPane'
 import { BrowserPane } from './BrowserPane'
 import { AppearancePane } from './AppearancePane'
@@ -28,6 +29,7 @@ import { useWarpThemeImport } from './useWarpThemeImport'
 import { RepositoryPane } from './RepositoryPane'
 import { GitPane } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
+import { GitProviderApiBudgetPane } from './GitProviderApiBudgetPane'
 import { NotificationsPane } from './NotificationsPane'
 import { VoicePane } from './VoicePane'
 import { SshPane } from './SshPane'
@@ -79,6 +81,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import {
   deriveNeededRepoIds,
   deriveNeededSectionIds,
@@ -86,6 +89,7 @@ import {
   getRuntimeTargetIdentity
 } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
+import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
 
 const SETTINGS_NAV_GROUPS = [
   {
@@ -232,6 +236,9 @@ function Settings(): React.JSX.Element {
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
+  const projects = useAppStore((s) => s.projects)
+  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
+  const updateProject = useAppStore((s) => s.updateProject)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const removeProject = useAppStore((s) => s.removeProject)
   const settingsNavigationTarget = useAppStore((s) => s.settingsNavigationTarget)
@@ -250,11 +257,14 @@ function Settings(): React.JSX.Element {
   const isMac = isMacUserAgent()
   const isWebClient = isWebClientLocation()
   const showDesktopOnlySettings = !isWebClient
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
     enabled: showDesktopOnlySettings,
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
@@ -269,6 +279,10 @@ function Settings(): React.JSX.Element {
   const warpThemes = useWarpThemeImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
+  )
+  const terminalFontSuggestions = useMemo(
+    () => fontSuggestions.filter((font) => font !== DEFAULT_APP_FONT_FAMILY),
+    [fontSuggestions]
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
@@ -637,6 +651,22 @@ function Settings(): React.JSX.Element {
     () => new Set(visibleNavSections.map((section) => section.id)),
     [visibleNavSections]
   )
+  const projectByRepoId = useMemo(() => {
+    const projection = getProjectHostSetupProjectionFromState({
+      repos,
+      projects,
+      projectHostSetups
+    })
+    const projectById = new Map(projection.projects.map((project) => [project.id, project]))
+    const nextProjectByRepoId = new Map<string, (typeof projection.projects)[number]>()
+    for (const setup of projection.setups) {
+      const project = projectById.get(setup.projectId)
+      if (project && setup.repoId.trim()) {
+        nextProjectByRepoId.set(setup.repoId, project)
+      }
+    }
+    return nextProjectByRepoId
+  }, [projectHostSetups, projects, repos])
   const neededSectionIds = useMemo(
     () =>
       deriveNeededSectionIds({
@@ -654,13 +684,17 @@ function Settings(): React.JSX.Element {
   )
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+  const needsRepoWindowsRuntimeCapabilities = [...neededSectionIds].some((sectionId) =>
+    sectionId.startsWith('repo-')
+  )
   const shouldLoadWindowsTerminalCapabilities =
     hasActiveRuntimeEnvironment ||
     ((isWindows || isWebClient) &&
       (neededSectionIds.has('terminal') ||
         neededSectionIds.has('general') ||
         neededSectionIds.has('accounts') ||
-        neededSectionIds.has('agents')))
+        neededSectionIds.has('agents') ||
+        needsRepoWindowsRuntimeCapabilities))
   // Why: General owns the Orca CLI controls, including WSL skill-location setup.
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldLoadWindowsTerminalCapabilities,
@@ -1122,6 +1156,7 @@ function Settings(): React.JSX.Element {
                       updateSettings={updateSettings}
                       wslSupportedPlatform={wslSupportedPlatform}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
+                      wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
                     />
                   ) : null}
@@ -1172,6 +1207,7 @@ function Settings(): React.JSX.Element {
                         customPromptDiscardSignal={sourceControlAiPromptDiscardSignal}
                         settingsSearchQuery={settingsSearchQuery}
                       />
+                      <GitProviderApiBudgetPane settingsSearchQuery={settingsSearchQuery} />
                     </>
                   ) : null}
                 </SettingsSection>
@@ -1310,9 +1346,7 @@ function Settings(): React.JSX.Element {
                       updateSettings={updateSettings}
                       applyTheme={applyTheme}
                       fontSuggestions={fontSuggestions}
-                      terminalFontSuggestions={fontSuggestions.filter(
-                        (font) => font !== DEFAULT_APP_FONT_FAMILY
-                      )}
+                      terminalFontSuggestions={terminalFontSuggestions}
                       systemPrefersDark={systemPrefersDark}
                       ghostty={ghostty}
                       warpThemes={warpThemes}
@@ -1518,6 +1552,7 @@ function Settings(): React.JSX.Element {
                 {repos.map((repo) => {
                   const repoSectionId = `repo-${repo.id}`
                   const repoHooksState = repoHooksMap[repo.id]
+                  const project = projectByRepoId.get(repo.id) ?? null
 
                   return (
                     <SettingsSection
@@ -1540,6 +1575,15 @@ function Settings(): React.JSX.Element {
                           mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
                           updateRepo={updateRepo}
                           removeProject={removeProject}
+                          project={project}
+                          isLocalWindowsProject={
+                            getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+                            isWindowsTerminalHost
+                          }
+                          wslAvailable={windowsTerminalCapabilities.wslAvailable}
+                          wslDistros={windowsTerminalCapabilities.wslDistros}
+                          wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                          updateProject={updateProject}
                         />
                       ) : null}
                     </SettingsSection>

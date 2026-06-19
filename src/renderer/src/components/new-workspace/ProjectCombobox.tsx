@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, FolderOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -142,11 +142,18 @@ export default function ProjectCombobox({
           data-project-combobox-root="true"
         >
           {selectedProject ? (
-            <RepoBadgeLabel
-              name={selectedProject.displayName}
-              color={selectedProject.badgeColor}
-              badgeClassName="size-1.5"
-            />
+            selectedProject.kind === 'project-group' ? (
+              <span className="flex min-w-0 items-center gap-1.5">
+                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{selectedProject.displayName}</span>
+              </span>
+            ) : (
+              <RepoBadgeLabel
+                name={selectedProject.displayName}
+                color={selectedProject.badgeColor}
+                badgeClassName="size-1.5"
+              />
+            )
           ) : (
             <span className="text-muted-foreground">{placeholder}</span>
           )}
@@ -193,11 +200,18 @@ export default function ProjectCombobox({
                   )}
                 />
                 <div className="min-w-0 flex-1">
-                  <RepoBadgeLabel
-                    name={option.displayName}
-                    color={option.badgeColor}
-                    className="max-w-full"
-                  />
+                  {option.kind === 'project-group' ? (
+                    <div className="flex min-w-0 items-center gap-1.5 text-sm">
+                      <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{option.displayName}</span>
+                    </div>
+                  ) : (
+                    <RepoBadgeLabel
+                      name={option.displayName}
+                      color={option.badgeColor}
+                      className="max-w-full"
+                    />
+                  )}
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                     {option.detail}
                   </p>

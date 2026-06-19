@@ -437,6 +437,114 @@ describe('active agent note send', () => {
 
     expect(testState.callRuntimeRpc).not.toHaveBeenCalled()
   })
+
+  it('sends notes to an explicit note target even when no terminal pane is focused', async () => {
+    testState.appState.activeTabType = 'editor'
+    testState.appState.activeTabIdByWorktree = {}
+    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle: 'term-2',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-9',
+              leafId: OTHER_LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.isRunningAgent') {
+        return { isRunningAgent: true }
+      }
+      if (method === 'terminal.wait') {
+        return {
+          wait: {
+            handle: 'term-2',
+            condition: 'tui-idle',
+            satisfied: true,
+            status: 'running',
+            exitCode: null
+          }
+        }
+      }
+      if (method === 'terminal.send') {
+        return { send: { handle: 'term-2', accepted: true, bytesWritten: params.text.length } }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    await expect(
+      sendNotesToActiveAgentSession({
+        worktreeId: 'wt-1',
+        prompt: 'notes',
+        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID }
+      })
+    ).resolves.toEqual({ status: 'sent' })
+
+    expect(testState.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'terminal.send',
+      {
+        terminal: 'term-2',
+        text: 'notes',
+        enter: true,
+        client: { id: 'orca-desktop', type: 'desktop' }
+      },
+      { timeoutMs: 15000 }
+    )
+  })
+
+  it('returns no-active-terminal when the explicit note target is absent from the runtime list', async () => {
+    testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle: 'term-1',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-1',
+              leafId: LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    await expect(
+      sendNotesToActiveAgentSession({
+        worktreeId: 'wt-1',
+        prompt: 'notes',
+        noteTarget: { tabId: 'tab-1', leafId: OTHER_LEAF_ID }
+      })
+    ).resolves.toEqual({ status: 'no-active-terminal' })
+
+    expect(testState.callRuntimeRpc).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'terminal.send',
+      expect.anything(),
+      expect.anything()
+    )
+  })
 })
 
 function agentStatusEntry(

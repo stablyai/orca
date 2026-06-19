@@ -261,11 +261,27 @@
   align-items: center;
   padding: 0 8px;
   font-size: 13px;
-  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   color: var(--orca-pane-title-fg, rgb(255 255 255 / 0.52));
   background: transparent;
   border-bottom: none;
   user-select: none;
+}
+
+.session-restored-banner {
+  position: absolute;
+  top: 0;
+  left: 8px;
+  z-index: 5;
+  height: var(--orca-pane-title-height);
+  display: flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--orca-pane-title-fg);
+  background: transparent;
+  user-select: none;
+  pointer-events: none;
 }
 
 .pane-title-text {

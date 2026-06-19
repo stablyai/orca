@@ -367,6 +367,72 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows[1].entry.orchestration).toMatchObject({ parentPaneKey: PANE_KEY_1 })
   })
 
+  it('does not synthesize a working parent row for a completed worktree-attributed worker', () => {
+    const parentPaneKey = PANE_KEY_1
+    const childPaneKey = PANE_KEY_2
+    const child = makeEntry(childPaneKey, 1000, {
+      state: 'done',
+      worktreeId: 'wt-1',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentPaneKey
+      }
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [child],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'Codex working'
+        }
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-parent']
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeSinglePaneLayout(LEAF_ID_1)
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.state])).toEqual([[childPaneKey, 'done']])
+  })
+
+  it('does not synthesize a working parent row for a retained completed worker', () => {
+    const parentPaneKey = PANE_KEY_1
+    const retainedChild = makeRetained(PANE_KEY_2, 'wt-1', 1000, {
+      entry: makeEntry(PANE_KEY_2, 1000, {
+        state: 'done',
+        orchestration: {
+          taskId: 'task-1',
+          dispatchId: 'ctx-1',
+          parentPaneKey
+        }
+      })
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [retainedChild],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'Codex working'
+        }
+      },
+      ptyIdsByTabId: {
+        'tab-1': ['pty-parent']
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeSinglePaneLayout(LEAF_ID_1)
+      },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.paneKey, row.state])).toEqual([[PANE_KEY_2, 'done']])
+  })
+
   it('groups child rows by parent terminal handle when parent pane key is missing', () => {
     const parent = makeEntry(PANE_KEY_1, 1000, {
       prompt: 'parent',

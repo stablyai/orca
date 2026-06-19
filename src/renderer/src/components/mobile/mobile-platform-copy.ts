@@ -23,6 +23,6 @@ export const PLATFORM_COPY: Record<
       )
     },
     ctaLabel: 'Download APK',
-    url: 'https://github.com/stablyai/orca/releases/download/mobile-v0.0.13/app-release.apk'
+    url: 'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.14/app-release.apk'
   }
 }

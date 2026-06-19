@@ -21,11 +21,17 @@ import {
   resolveCurrentWorktreeSelector
 } from '../selectors'
 import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { printLineageSummary } from './worktree-lineage-summary'
 import {
   assertWorkspaceTargetFlagsCompatible,
   hasWorkspaceProjectTarget,
   resolveProjectCreateRepoSelector
 } from '../worktree-project-target'
+import {
+  assertCreateParentFlagsCompatible,
+  resolveCreateParentSelector
+} from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 
 type HookWarningResult = {
@@ -52,33 +58,7 @@ function printPreservedBranchWarning(result: PreservedBranchResult, json: boolea
   }
 }
 
-function printLineageSummary(result: RuntimeWorktreeCreateResult, json: boolean): void {
-  if (json) {
-    return
-  }
-  for (const warning of result.warnings ?? []) {
-    console.error(`warning: ${warning.message}`)
-  }
-  if (result.lineage) {
-    const source =
-      result.lineage.capture.source === 'terminal-context'
-        ? 'terminal'
-        : result.lineage.capture.source === 'cwd-context'
-          ? 'cwd'
-          : result.lineage.capture.source === 'orchestration-context'
-            ? 'orchestration'
-            : result.lineage.capture.source === 'explicit-cli-flag'
-              ? 'explicit flag'
-              : 'manual action'
-    console.error(
-      `parent: ${result.lineage.parentWorktreeId} (${result.lineage.capture.confidence} from ${source})`
-    )
-  } else {
-    console.error('parent: none')
-  }
-}
-
-function assertParentFlagsCompatible(flags: Map<string, string | boolean>): void {
+function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean>): void {
   if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -92,6 +72,18 @@ function assertParentFlagsCompatible(flags: Map<string, string | boolean>): void
   ) {
     throw new RuntimeClientError('invalid_argument', 'Missing required --parent-worktree')
   }
+}
+
+function getEnvParentWorkspace(): string | undefined {
+  const workspaceId = process.env.ORCA_WORKSPACE_ID
+  if (typeof workspaceId === 'string' && isWorkspaceKey(workspaceId)) {
+    return workspaceId
+  }
+  const worktreeId = process.env.ORCA_WORKTREE_ID
+  if (typeof worktreeId === 'string' && worktreeId.length > 0) {
+    return isWorkspaceKey(worktreeId) ? worktreeId : worktreeWorkspaceKey(worktreeId)
+  }
+  return undefined
 }
 
 function getPresentStringFlag(
@@ -204,25 +196,29 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree create': async ({ flags, client, cwd, json }) => {
-    assertParentFlagsCompatible(flags)
+    assertCreateParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
     const callerTerminalHandle =
       typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
       process.env.ORCA_TERMINAL_HANDLE.length > 0
         ? process.env.ORCA_TERMINAL_HANDLE
         : undefined
-    const explicitParentWorktree = await getOptionalWorktreeSelector(
-      flags,
-      'parent-worktree',
-      cwd,
-      client
-    )
+    const explicitParent = await resolveCreateParentSelector(flags, cwd, client)
+    const explicitParentWorktree = explicitParent.parentWorktree
+    const explicitParentWorkspace = explicitParent.parentWorkspace
     const startupAgent = getOptionalStartupAgent(flags)
     const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
+    const envParentWorkspace =
+      !noParent && !explicitParentWorkspace && !explicitParentWorktree
+        ? getEnvParentWorkspace()
+        : undefined
     let cwdParentWorktree: string | undefined
     const needsCwdRepoInference = !flags.has('repo') && !hasWorkspaceProjectTarget(flags)
-    if ((!explicitParentWorktree && !noParent) || needsCwdRepoInference) {
+    if (
+      (!explicitParentWorktree && !explicitParentWorkspace && !noParent) ||
+      needsCwdRepoInference
+    ) {
       try {
         // Why: agent shells can lose ORCA_TERMINAL_HANDLE while still running
         // inside an Orca worktree. Cwd keeps CLI-created children nestable and
@@ -245,6 +241,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         flags.get('activate') === true || flags.get('run-hooks') === true || Boolean(startupAgent),
       ...(setupDecision ? { setupDecision } : {}),
       parentWorktree: explicitParentWorktree,
+      ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
+      ...(envParentWorkspace ? { envParentWorkspace } : {}),
       ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
       noParent,
       callerTerminalHandle,
@@ -260,7 +258,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
-    assertParentFlagsCompatible(flags)
+    assertParentWorktreeFlagsCompatible(flags)
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })

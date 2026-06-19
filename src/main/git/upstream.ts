@@ -6,14 +6,26 @@ import { getPublishTargetStatus } from '../../shared/git-publish-target-status'
 import { gitExecFileAsync } from './runner'
 import { validateGitPushTarget } from './push-target-validation'
 
+type GitExecOptions = {
+  wslDistro?: string
+}
+
+function gitExecOptions(
+  cwd: string,
+  options: GitExecOptions = {}
+): { cwd: string; wslDistro?: string } {
+  return options.wslDistro ? { cwd, wslDistro: options.wslDistro } : { cwd }
+}
+
 async function getBehindCommitsArePatchEquivalent(
   worktreePath: string,
-  upstreamName: string
+  upstreamName: string,
+  options: GitExecOptions = {}
 ): Promise<boolean> {
   try {
     const { stdout } = await gitExecFileAsync(
       ['log', '--oneline', '--cherry-mark', '--right-only', `HEAD...${upstreamName}`, '--'],
-      { cwd: worktreePath }
+      gitExecOptions(worktreePath, options)
     )
     return upstreamOnlyCommitsArePatchEquivalent(stdout)
   } catch {
@@ -25,20 +37,21 @@ async function getBehindCommitsArePatchEquivalent(
 
 export async function getUpstreamStatus(
   worktreePath: string,
-  pushTarget?: GitPushTarget
+  pushTarget?: GitPushTarget,
+  options: GitExecOptions = {}
 ): Promise<GitUpstreamStatus> {
   try {
     if (pushTarget) {
-      const target = await validateGitPushTarget(worktreePath, pushTarget)
+      const target = await validateGitPushTarget(worktreePath, pushTarget, options)
       return await getPublishTargetStatus(
-        (args) => gitExecFileAsync(args, { cwd: worktreePath }),
+        (args) => gitExecFileAsync(args, gitExecOptions(worktreePath, options)),
         target,
-        (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
+        (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName, options)
       )
     }
     return await getEffectiveGitUpstreamStatus(
-      (args) => gitExecFileAsync(args, { cwd: worktreePath }),
-      (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
+      (args) => gitExecFileAsync(args, gitExecOptions(worktreePath, options)),
+      (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName, options)
     )
   } catch (error) {
     // Why: we only swallow clearly-no-upstream signals — that's an expected
