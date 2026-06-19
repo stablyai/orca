@@ -17,12 +17,25 @@ vi.mock('electron', () => ({
 }))
 
 import { registerRuntimeHandlers } from './runtime'
+import { setTrustedRendererWebContentsId } from './trusted-renderer-ipc'
+
+const TRUSTED_WEB_CONTENTS_ID = 42
+
+function trustedEvent(): { sender: { id: number; isDestroyed: () => boolean } } {
+  return {
+    sender: {
+      id: TRUSTED_WEB_CONTENTS_ID,
+      isDestroyed: () => false
+    }
+  }
+}
 
 describe('registerRuntimeHandlers', () => {
   beforeEach(() => {
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     fromWebContentsMock.mockReset()
+    setTrustedRendererWebContentsId(TRUSTED_WEB_CONTENTS_ID)
   })
 
   it('routes sync requests through the authoritative browser window id', () => {
@@ -42,7 +55,7 @@ describe('registerRuntimeHandlers', () => {
     fromWebContentsMock.mockReturnValue({ id: 17 })
 
     const handler = syncRegistration![1]
-    const result = handler({ sender: {} }, { tabs: [], leaves: [] })
+    const result = handler(trustedEvent(), { tabs: [], leaves: [] })
 
     expect(runtime.syncWindowGraph).toHaveBeenCalledWith(17, { tabs: [], leaves: [] })
     expect(result).toEqual({ graphStatus: 'ready' })
@@ -68,7 +81,7 @@ describe('registerRuntimeHandlers', () => {
     expect(callRegistration).toBeTruthy()
 
     const handler = callRegistration![1]
-    const result = await handler({ sender: {} }, { method: 'status.get' })
+    const result = await handler(trustedEvent(), { method: 'status.get' })
 
     expect(result).toMatchObject({
       ok: true,
@@ -91,12 +104,31 @@ describe('registerRuntimeHandlers', () => {
     expect(callRegistration).toBeTruthy()
 
     const handler = callRegistration![1]
-    const result = await handler({ sender: {} }, { method: 'projectGroup.list' })
+    const result = await handler(trustedEvent(), { method: 'projectGroup.list' })
 
     expect(result).toMatchObject({
       ok: true,
       result: { groups: [{ id: 'group-1', name: 'Platform' }] },
       _meta: { runtimeId: 'runtime-1' }
     })
+  })
+
+  it('rejects generic runtime RPC calls from untrusted senders', async () => {
+    const runtime = {
+      syncWindowGraph: vi.fn(),
+      getStatus: vi.fn(),
+      getRuntimeId: vi.fn().mockReturnValue('runtime-1')
+    }
+
+    registerRuntimeHandlers(runtime as never)
+
+    const callRegistration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
+    expect(callRegistration).toBeTruthy()
+
+    const handler = callRegistration![1]
+
+    expect(() =>
+      handler({ sender: { id: 999, isDestroyed: () => false } }, { method: 'status.get' })
+    ).toThrow('runtime:call must originate from the trusted Orca renderer')
   })
 })

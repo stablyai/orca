@@ -38,6 +38,7 @@ const {
   registerBrowserHandlersMock,
   setAgentBrowserBridgeRefMock,
   setTrustedBrowserRendererWebContentsIdMock,
+  setTrustedRendererWebContentsIdMock,
   registerFilesystemWatcherHandlersMock,
   registerAppHandlersMock,
   registerLinearHandlersMock,
@@ -87,6 +88,7 @@ const {
   registerBrowserHandlersMock: vi.fn(),
   setAgentBrowserBridgeRefMock: vi.fn(),
   setTrustedBrowserRendererWebContentsIdMock: vi.fn(),
+  setTrustedRendererWebContentsIdMock: vi.fn(),
   registerFilesystemWatcherHandlersMock: vi.fn(),
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
@@ -268,6 +270,10 @@ vi.mock('./browser', () => ({
   setAgentBrowserBridgeRef: setAgentBrowserBridgeRefMock
 }))
 
+vi.mock('./trusted-renderer-ipc', () => ({
+  setTrustedRendererWebContentsId: setTrustedRendererWebContentsIdMock
+}))
+
 vi.mock('./app', () => ({
   registerAppHandlers: registerAppHandlersMock
 }))
@@ -327,6 +333,7 @@ describe('registerCoreHandlers', () => {
     registerBrowserHandlersMock.mockReset()
     setAgentBrowserBridgeRefMock.mockReset()
     setTrustedBrowserRendererWebContentsIdMock.mockReset()
+    setTrustedRendererWebContentsIdMock.mockReset()
     registerFilesystemWatcherHandlersMock.mockReset()
     registerAppHandlersMock.mockReset()
     registerLinearHandlersMock.mockReset()
@@ -414,6 +421,7 @@ describe('registerCoreHandlers', () => {
     expect(registerShellHandlersMock).toHaveBeenCalled()
     expect(registerClipboardHandlersMock).toHaveBeenCalled()
     expect(registerUpdaterHandlersMock).toHaveBeenCalled()
+    expect(setTrustedRendererWebContentsIdMock).toHaveBeenCalledWith(null)
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(null)
     expect(registerBrowserHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemWatcherHandlersMock).toHaveBeenCalled()
@@ -447,6 +455,7 @@ describe('registerCoreHandlers', () => {
     )
 
     // Web contents ID should always be updated
+    expect(setTrustedRendererWebContentsIdMock).toHaveBeenCalledWith(42)
     expect(setTrustedBrowserRendererWebContentsIdMock).toHaveBeenCalledWith(42)
     // IPC handlers should NOT be registered again
     expect(registerCliHandlersMock).not.toHaveBeenCalled()

@@ -21,6 +21,7 @@ import {
   resetSharedControlSupport,
   subscribeRuntimeEnvironment
 } from './runtime-environment-transport-routing'
+import { handleTrustedRenderer, isTrustedRendererSender } from './trusted-renderer-ipc'
 
 const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:list',
@@ -66,10 +67,10 @@ export function registerRuntimeEnvironmentHandlers(): void {
   }
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
 
-  ipcMain.handle('runtimeEnvironments:list', (): PublicKnownRuntimeEnvironment[] =>
+  handleTrustedRenderer('runtimeEnvironments:list', (): PublicKnownRuntimeEnvironment[] =>
     listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
   )
-  ipcMain.handle(
+  handleTrustedRenderer(
     'runtimeEnvironments:addFromPairingCode',
     (
       _event,
@@ -78,12 +79,12 @@ export function registerRuntimeEnvironmentHandlers(): void {
       environment: redactRuntimeEnvironment(addEnvironmentFromPairingCode(getUserDataPath(), args))
     })
   )
-  ipcMain.handle(
+  handleTrustedRenderer(
     'runtimeEnvironments:resolve',
     (_event, args: { selector: string }): PublicKnownRuntimeEnvironment =>
       redactRuntimeEnvironment(resolveEnvironment(getUserDataPath(), args.selector))
   )
-  ipcMain.handle(
+  handleTrustedRenderer(
     'runtimeEnvironments:remove',
     (_event, args: { selector: string }): { removed: PublicKnownRuntimeEnvironment } => {
       const removed = removeEnvironment(getUserDataPath(), args.selector)
@@ -97,7 +98,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )
-  ipcMain.handle(
+  handleTrustedRenderer(
     'runtimeEnvironments:disconnect',
     (_event, args: { selector: string }): { disconnected: PublicKnownRuntimeEnvironment } => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
@@ -113,7 +114,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       return { disconnected: redactRuntimeEnvironment(environment) }
     }
   )
-  ipcMain.handle(
+  handleTrustedRenderer(
     'runtimeEnvironments:getStatus',
     async (
       _event,
@@ -122,7 +123,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       return getRuntimeEnvironmentStatus(getUserDataPath(), args.selector, args.timeoutMs)
     }
   )
-  ipcMain.handle(
+  handleTrustedRenderer(
     'runtimeEnvironments:call',
     async (
       _event,
@@ -137,7 +138,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       )
     }
   )
-  ipcMain.handle(
+  handleTrustedRenderer(
     'runtimeEnvironments:subscribe',
     async (
       event,
@@ -228,7 +229,7 @@ export function registerRuntimeEnvironmentHandlers(): void {
       return { subscriptionId, requestId: subscription.requestId }
     }
   )
-  ipcMain.handle(
+  handleTrustedRenderer(
     'runtimeEnvironments:unsubscribe',
     (event, args: { subscriptionId: string }): { unsubscribed: boolean } => {
       const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
@@ -243,6 +244,9 @@ export function registerRuntimeEnvironmentHandlers(): void {
   ipcMain.on(
     'runtimeEnvironments:subscriptionBinary',
     (event, args: { subscriptionId?: unknown; bytes?: unknown }) => {
+      if (!isTrustedRendererSender(event.sender)) {
+        return
+      }
       if (typeof args.subscriptionId !== 'string') {
         return
       }

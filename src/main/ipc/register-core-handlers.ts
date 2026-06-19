@@ -41,6 +41,7 @@ import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
 import { registerShellHandlers } from './shell'
+import { setTrustedRendererWebContentsId } from './trusted-renderer-ipc'
 import { registerPetHandlers } from './pet'
 import { registerUIHandlers } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
@@ -91,6 +92,7 @@ export function registerCoreHandlers(
   // openMainWindow() is called again on 'activate'. ipcMain.handle() throws
   // if a channel is registered twice, so we guard to register only once and
   // just update the per-window web-contents ID on subsequent calls.
+  setTrustedRendererWebContentsId(mainWindowWebContentsId)
   setTrustedBrowserRendererWebContentsId(mainWindowWebContentsId)
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
   if (registered) {
