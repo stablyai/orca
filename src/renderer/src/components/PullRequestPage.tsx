@@ -95,7 +95,7 @@ import {
   getStoredTextDiffContent,
   getStoredTextDiffResult
 } from '@/components/editor/large-diff-section-content'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
+import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-status-style'
 import { SourceControlAgentActionDialog } from '@/components/right-sidebar/SourceControlAgentActionDialog'
 import {
   createGitHubChecksTabState,

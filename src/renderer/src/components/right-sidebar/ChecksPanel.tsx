@@ -1,17 +1,7 @@
 /* eslint-disable max-lines -- Why: the checks panel co-locates PR header, checks, comments,
 merge actions, and conflict state in one component to keep the data flow straightforward. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  LoaderCircle,
-  RefreshCw,
-  Check,
-  X,
-  Pencil,
-  GitMerge,
-  Ellipsis,
-  Link,
-  Unlink
-} from 'lucide-react'
+import { LoaderCircle, Check, X, Pencil } from 'lucide-react'
 import { useAppStore, type AppState } from '@/store'
 import {
   mergePRCommentIntoList,
@@ -20,46 +10,25 @@ import {
 } from '@/store/slices/github'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
-import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { Button } from '@/components/ui/button'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
-import {
-  getTerminalUrlSystemBrowserHint,
-  isMacPlatform
-} from '../terminal-pane/terminal-link-open-hints'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { isMacPlatform } from '../terminal-pane/terminal-link-open-hints'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import HostedReviewActions from './HostedReviewActions'
 import {
-  PullRequestIcon,
-  prStateColor,
   ConflictingFilesSection,
   MergeConflictNotice,
-  ChecksList,
-  isMutablePRConversationComment,
-  PRCommentsList,
   PRTriageStrip
-} from './checks-panel-content'
+} from './checks-panel-conflict-sections'
+import { ChecksList } from './checks-list'
+import { isMutablePRConversationComment } from './pr-comment-mutation-model'
+import { PRCommentsList } from './pr-comments-list'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
-import type {
-  GitLabDiscussionResolveResult,
-  GitLabWorkItemDetails,
-  PRInfo,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRComment
-} from '../../../../shared/types'
+import type { PRInfo, PRCheckDetail, PRCheckRunDetails, PRComment } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
-import {
-  buildResolvePullRequestConflictsPrompt,
-  pickDefaultSourceControlAgent
-} from './SourceControl'
+import { buildResolvePullRequestConflictsPrompt } from './source-control-ai-prompts'
+import { pickDefaultSourceControlAgent } from './source-control-default-agent'
 import {
   buildFixBrokenChecksPrompt,
   getBrokenChecks,
@@ -111,7 +80,6 @@ import {
 } from './checks-panel-git-status-snapshot'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { gitLabPipelineJobsToPRChecks } from '../../../../shared/gitlab-pipeline-checks'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { SourceControlAgentActionDialog } from './SourceControlAgentActionDialog'
@@ -141,6 +109,13 @@ import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
 import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
 import { openChecksPanelHostedReviewUrl } from './checks-panel-hosted-review-click-routing'
+import { ChecksPanelReviewHeader } from './checks-panel-review-header'
+import {
+  fetchGitLabMRDetailsForChecks,
+  gitLabMRCommentsToPRComments,
+  isGitLabChecksPanelReview,
+  resolveGitLabMRDiscussionForChecks
+} from './checks-panel-gitlab-review-adapter'
 
 const RUNTIME_SSH_STATUS_REFRESH_MS = 3000
 const GIT_STATUS_FAILURE_RETRY_MS = 3000
@@ -165,178 +140,6 @@ type ChecksAgentComposerState = {
     selectedThreadIds: string[]
     selectedGroups: PRCommentGroup[]
   }
-}
-type ChecksPanelReviewHeaderProps = {
-  review: ChecksPanelReview
-  isRefreshing: boolean
-  canUnlinkPullRequest: boolean
-  showSystemBrowserHint: boolean
-  onRefresh: () => void
-  onOpenReview: (event: React.MouseEvent<HTMLButtonElement>) => void
-  onUnlinkPullRequest: () => void
-  onLinkAnotherPullRequest: () => void
-}
-
-export function ChecksPanelReviewHeader({
-  review,
-  isRefreshing,
-  canUnlinkPullRequest,
-  showSystemBrowserHint,
-  onRefresh,
-  onOpenReview,
-  onUnlinkPullRequest,
-  onLinkAnotherPullRequest
-}: ChecksPanelReviewHeaderProps): React.JSX.Element {
-  const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
-  const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
-  const showPullRequestMenu = review.provider === 'github'
-  const openTitle = translate(
-    'auto.components.right.sidebar.ChecksPanel.5c88c6db07',
-    'Open on {{value0}}',
-    { value0: reviewHostLabel }
-  )
-  const title = showSystemBrowserHint
-    ? `${openTitle}. ${getTerminalUrlSystemBrowserHint()}`
-    : openTitle
-
-  return (
-    <div className="flex items-center gap-2">
-      <ReviewIcon className="size-4 text-muted-foreground shrink-0" />
-      <button
-        type="button"
-        className="rounded px-0.5 text-[12px] font-semibold text-foreground underline decoration-border underline-offset-2 hover:text-foreground hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        title={title}
-        onClick={onOpenReview}
-      >
-        {reviewNumberLabel}
-      </button>
-      <span
-        className={cn(
-          'text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border',
-          prStateColor(review.state)
-        )}
-      >
-        {review.state}
-      </span>
-      <div className="flex-1" />
-      <button
-        className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-50"
-        title={translate('auto.components.right.sidebar.ChecksPanel.7f4489f370', 'Refresh')}
-        onClick={onRefresh}
-        disabled={isRefreshing}
-      >
-        <RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />
-      </button>
-      {showPullRequestMenu && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={translate(
-                'auto.components.right.sidebar.ChecksPanel.653c105ecc',
-                'More PR actions'
-              )}
-              title={translate(
-                'auto.components.right.sidebar.ChecksPanel.653c105ecc',
-                'More PR actions'
-              )}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Ellipsis className="size-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem disabled={!canUnlinkPullRequest} onSelect={onUnlinkPullRequest}>
-              <Unlink className="size-3.5" />
-              {translate('auto.components.right.sidebar.ChecksPanel.7202f4a40a', 'unlink PR')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={onLinkAnotherPullRequest}>
-              <Link className="size-3.5" />
-              {translate('auto.components.right.sidebar.ChecksPanel.07871c0589', 'Link another PR')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-    </div>
-  )
-}
-
-function isGitLabChecksPanelReview(
-  review: ChecksPanelReview | null
-): review is ChecksPanelReview & { provider: 'gitlab' } {
-  return review?.provider === 'gitlab'
-}
-
-function gitLabMRCommentsToPRComments(
-  comments: GitLabWorkItemDetails['comments'] | undefined
-): PRComment[] {
-  return (comments ?? []).map((comment) => {
-    const { reactions: _reactions, ...compatibleComment } = comment
-    // Why: the shared comments renderer expects GitHub reaction content enums;
-    // GitLab emoji award names are open-ended, so omit them in this view.
-    return compatibleComment
-  })
-}
-
-async function fetchGitLabMRDetailsForChecks(args: {
-  repoPath: string
-  repoId?: string
-  settings: Parameters<typeof getActiveRuntimeTarget>[0]
-  iid: number
-}): Promise<GitLabWorkItemDetails | null> {
-  const target = getActiveRuntimeTarget(args.settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<GitLabWorkItemDetails | null>(
-      target,
-      'gitlab.workItemDetails',
-      {
-        repo: args.repoId ?? args.repoPath,
-        iid: args.iid,
-        type: 'mr'
-      },
-      { timeoutMs: 30_000 }
-    )
-  }
-  return (await window.api.gl.workItemDetails({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    iid: args.iid,
-    type: 'mr'
-  })) as GitLabWorkItemDetails | null
-}
-
-async function resolveGitLabMRDiscussionForChecks(args: {
-  repoPath: string
-  repoId?: string
-  settings: Parameters<typeof getActiveRuntimeTarget>[0]
-  iid: number
-  discussionId: string
-  resolved: boolean
-}): Promise<GitLabDiscussionResolveResult> {
-  const target = getActiveRuntimeTarget(args.settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<GitLabDiscussionResolveResult>(
-      target,
-      'gitlab.resolveMRDiscussion',
-      {
-        repo: args.repoId ?? args.repoPath,
-        iid: args.iid,
-        discussionId: args.discussionId,
-        resolved: args.resolved
-      },
-      { timeoutMs: 30_000 }
-    )
-  }
-  return window.api.gl.resolveMRDiscussion({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    iid: args.iid,
-    discussionId: args.discussionId,
-    resolved: args.resolved
-  })
 }
 
 export default function ChecksPanel(): React.JSX.Element {

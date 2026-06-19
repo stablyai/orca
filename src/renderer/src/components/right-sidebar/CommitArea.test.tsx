@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { CommitArea, ConflictSummaryCard, OperationBanner } from './SourceControl'
+import { CommitArea } from './source-control-commit-area'
+import { ConflictSummaryCard, OperationBanner } from './source-control-conflict-summary-card'
 import {
   resolveCommitAreaPrimaryAction,
   type PrimaryActionInputs

@@ -3,16 +3,16 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PRCheckDetail, PRComment, PRInfo } from '../../../../shared/types'
+import { CheckJobLogTail } from './check-job-log-tail'
+import { ChecksList } from './checks-list'
+import { getFailedChecksForDetails } from './checks-list-model'
 import {
-  CheckJobLogTail,
-  ChecksList,
   ConflictTriageStrip,
-  getFailedChecksForDetails,
   MergeConflictNotice,
-  isMutablePRConversationComment,
-  PRCommentsList,
   PRTriageStrip
-} from './checks-panel-content'
+} from './checks-panel-conflict-sections'
+import { isMutablePRConversationComment } from './pr-comment-mutation-model'
+import { PRCommentsList } from './pr-comments-list'
 
 function renderWithTooltips(element: React.ReactElement): string {
   return renderToStaticMarkup(React.createElement(TooltipProvider, null, element))

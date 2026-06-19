@@ -4,13 +4,8 @@ import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { translate } from '@/i18n/i18n'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
-import {
-  CHECK_COLOR,
-  CHECK_ICON,
-  ChecksList,
-  prStateColor,
-  PullRequestIcon
-} from './checks-panel-content'
+import { CHECK_COLOR, CHECK_ICON, prStateColor, PullRequestIcon } from './checks-panel-status-style'
+import { ChecksList } from './checks-list'
 import type { ParentPrChecksRow } from './parent-pr-checks-rows'
 
 type FolderWorkspacePrChecksRowProps = {

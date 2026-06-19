@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { CommitArea } from './SourceControl'
+import { CommitArea } from './source-control-commit-area'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
 import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
 

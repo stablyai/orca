@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
-import { ChecksList } from './checks-panel-content'
+import { ChecksList } from './checks-list'
 
 const openCheckRunDetails = vi.fn()
 const patchOpenCheckRunDetails = vi.fn()

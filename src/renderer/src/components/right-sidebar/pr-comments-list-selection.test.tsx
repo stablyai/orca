@@ -7,7 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PRComment } from '../../../../shared/types'
 import type { PRCommentGroup } from '@/lib/pr-comment-groups'
 import { clearPRCommentsListSelection } from './pr-comments-list-selection'
-import { PRCommentsList } from './checks-panel-content'
+import { PRCommentsList } from './pr-comments-list'
 
 let container: HTMLDivElement
 let root: Root

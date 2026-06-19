@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ChecksPanelReviewHeader } from './ChecksPanel'
+import { ChecksPanelReviewHeader } from './checks-panel-review-header'
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,

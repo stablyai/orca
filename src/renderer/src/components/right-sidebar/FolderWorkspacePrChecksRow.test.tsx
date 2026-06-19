@@ -21,7 +21,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-vi.mock('./checks-panel-content', () => ({
+vi.mock('./checks-panel-status-style', () => ({
   CHECK_COLOR: {
     success: 'success-color',
     failure: 'failure-color',
@@ -34,9 +34,12 @@ vi.mock('./checks-panel-content', () => ({
     pending: (props: { className?: string }) => <span data-icon="pending" {...props} />,
     neutral: (props: { className?: string }) => <span data-icon="neutral" {...props} />
   },
-  ChecksList: () => <div data-testid="checks-list" />,
   PullRequestIcon: (props: { className?: string }) => <span data-icon="review" {...props} />,
   prStateColor: () => 'state-color'
+}))
+
+vi.mock('./checks-list', () => ({
+  ChecksList: () => <div data-testid="checks-list" />
 }))
 
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'

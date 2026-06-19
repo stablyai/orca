@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  buildResolveConflictsPrompt,
   normalizeSourceControlViewMode,
-  pickDefaultSourceControlAgent,
   readCommitDraftForWorktree,
   refreshSourceControlAfterRemoteAction,
   shouldRenderCommitArea,
   writeCommitDraftForWorktree
 } from './SourceControl'
+import { buildResolveConflictsPrompt } from './source-control-ai-prompts'
+import { pickDefaultSourceControlAgent } from './source-control-default-agent'
 import { getNextSourceControlViewMode } from './source-control-header-toolbar'
 
 describe('SourceControl commit drafts by worktree', () => {

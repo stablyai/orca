@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { resolveSourceControlBaseRef, resolveSourceControlPickerBaseRef } from './SourceControl'
 import {
   CompareSummary,
   CompareSummaryToolbarButton,
-  resolveSourceControlBaseRef,
-  resolveSourceControlPickerBaseRef,
   shouldShowCompareSummary
-} from './SourceControl'
+} from './source-control-compare-summary'
 import type { GitBranchCompareSummary } from '../../../../shared/types'
 
 type ReactElementLike = {
