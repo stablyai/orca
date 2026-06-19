@@ -447,6 +447,10 @@ const TerminalResolveActive = z.object({
   worktree: OptionalString
 })
 
+const TerminalResolvePane = z.object({
+  paneKey: requiredString('Missing pane key')
+})
+
 const TerminalRead = TerminalHandle.extend({
   cursor: z
     .unknown()
@@ -685,6 +689,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalResolveActive,
     handler: async (params, { runtime }) => ({
       handle: await runtime.resolveActiveTerminal(params.worktree)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.resolvePane',
+    params: TerminalResolvePane,
+    handler: async (params, { runtime }) => ({
+      terminal: runtime.resolveTerminalPane(params.paneKey)
     })
   }),
   defineMethod({

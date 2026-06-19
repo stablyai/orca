@@ -27,6 +27,7 @@ import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { copyTerminalHandleForPane } from './terminal-handle-copy'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -67,6 +68,7 @@ type TerminalMenuState = {
   menuPaneId: number | null
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onCopy: () => Promise<void>
+  onCopyTerminalId: () => Promise<void>
   onCopyPaneId: () => Promise<void>
   onPaste: () => Promise<void>
   onSplitRight: () => void
@@ -159,6 +161,36 @@ export function useTerminalPaneContextMenu({
       )
     )
     pane.terminal.focus()
+  }
+
+  const onCopyTerminalId = async (): Promise<void> => {
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    try {
+      await copyTerminalHandleForPane({
+        tabId,
+        leafId: pane.leafId,
+        callRuntime: window.api.runtime.call,
+        writeClipboardText: window.api.ui.writeClipboardText
+      })
+      toast.success(
+        translate(
+          'auto.components.terminal.pane.use.terminal.pane.context.menu.terminal.id.copied',
+          'Terminal ID copied'
+        )
+      )
+    } catch {
+      toast.error(
+        translate(
+          'auto.components.terminal.pane.use.terminal.pane.context.menu.terminal.id.copy.failed',
+          'Unable to copy terminal ID'
+        )
+      )
+    } finally {
+      pane.terminal.focus()
+    }
   }
 
   const onPaste = async (): Promise<void> => {
@@ -369,6 +401,7 @@ export function useTerminalPaneContextMenu({
     menuPaneId,
     onContextMenuCapture,
     onCopy,
+    onCopyTerminalId,
     onCopyPaneId,
     onPaste,
     onSplitRight,

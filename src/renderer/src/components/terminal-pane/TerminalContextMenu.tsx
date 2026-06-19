@@ -59,6 +59,7 @@ type TerminalContextMenuProps = {
   onAddQuickCommand: () => void
   onToggleExpand: () => void
   onSetTitle: () => void
+  onCopyTerminalId: () => void
   onCopyPaneId: () => void
 }
 
@@ -87,6 +88,7 @@ export default function TerminalContextMenu({
   onAddQuickCommand,
   onToggleExpand,
   onSetTitle,
+  onCopyTerminalId,
   onCopyPaneId
 }: TerminalContextMenuProps): React.JSX.Element {
   const shortcuts = useMemo(
@@ -293,6 +295,13 @@ export default function TerminalContextMenu({
         <DropdownMenuItem onSelect={onSetTitle}>
           <Pencil />
           {translate('auto.components.terminal.pane.TerminalContextMenu.39809d152f', 'Set Title…')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onCopyTerminalId}>
+          <Copy />
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.copyTerminalId',
+            'Copy Terminal ID'
+          )}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCopyPaneId}>
           <Copy />

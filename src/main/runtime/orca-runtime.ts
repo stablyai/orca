@@ -223,6 +223,7 @@ import type {
   RuntimeTerminalFocus,
   RuntimeTerminalClose,
   RuntimeTerminalListResult,
+  RuntimeTerminalResolvePane,
   RuntimeTerminalState,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
@@ -236,6 +237,11 @@ import type {
   RuntimeSpeechSetupState,
   RuntimeTerminalShow,
   RuntimeTerminalSummary,
+  RuntimeTerminalVisualGroupNode,
+  RuntimeTerminalVisualLayout,
+  RuntimeTerminalVisualLayoutNode,
+  RuntimeTerminalVisualPaneNode,
+  RuntimeTerminalVisualTab,
   RuntimeSyncedLeaf,
   RuntimeSyncedTab,
   RuntimeMarkdownReadTabResult,
@@ -7492,11 +7498,207 @@ export class OrcaRuntimeService {
       terminals.push(this.buildPtyTerminalSummary(pty, worktreesById))
     }
 
+    const listedTerminals = terminals.slice(0, limit)
+    const visualLayouts = this.buildTerminalVisualLayouts(
+      listedTerminals,
+      worktreesById,
+      targetWorktreeId
+    )
+
     return {
-      terminals: terminals.slice(0, limit),
+      terminals: listedTerminals,
+      ...(visualLayouts.length > 0 ? { visualLayouts } : {}),
       totalCount: terminals.length,
       truncated: terminals.length > limit
     }
+  }
+
+  private buildTerminalVisualLayouts(
+    terminals: RuntimeTerminalSummary[],
+    worktreesById: Map<string, ResolvedWorktree>,
+    targetWorktreeId: string | null
+  ): RuntimeTerminalVisualLayout[] {
+    if (terminals.length === 0) {
+      return []
+    }
+    // Why: the mobile/session snapshot supplies topology, but terminal.list
+    // must print the same handles in both the flat list and visual tree.
+    const summariesByLeafKey = new Map(
+      terminals.map((terminal) => [this.getLeafKey(terminal.tabId, terminal.leafId), terminal])
+    )
+    const summariesByWorktree = new Map<string, RuntimeTerminalSummary[]>()
+    for (const terminal of terminals) {
+      const existing = summariesByWorktree.get(terminal.worktreeId)
+      if (existing) {
+        existing.push(terminal)
+      } else {
+        summariesByWorktree.set(terminal.worktreeId, [terminal])
+      }
+    }
+    const snapshots = targetWorktreeId
+      ? [this.mobileSessionTabsByWorktree.get(targetWorktreeId)].filter(
+          (snapshot): snapshot is RuntimeMobileSessionTabsSnapshot => snapshot !== undefined
+        )
+      : [...this.mobileSessionTabsByWorktree.values()]
+    const layouts: RuntimeTerminalVisualLayout[] = []
+    for (const snapshot of snapshots) {
+      const worktreeTerminals = summariesByWorktree.get(snapshot.worktree)
+      if (!worktreeTerminals || worktreeTerminals.length === 0) {
+        continue
+      }
+      const groups = this.buildTerminalVisualGroups(snapshot, summariesByLeafKey)
+      if (groups.length === 0) {
+        continue
+      }
+      const groupsById = new Map(
+        groups
+          .filter((group): group is RuntimeTerminalVisualGroupNode & { groupId: string } =>
+            Boolean(group.groupId)
+          )
+          .map((group) => [group.groupId, group])
+      )
+      const root =
+        this.buildTerminalVisualGroupLayout(snapshot.tabGroupLayout, groupsById) ?? groups[0]
+      if (!root) {
+        continue
+      }
+      const worktree = worktreesById.get(snapshot.worktree)
+      layouts.push({
+        worktreeId: snapshot.worktree,
+        worktreePath: worktree?.path ?? worktreeTerminals[0]?.worktreePath ?? '',
+        root
+      })
+    }
+    return layouts
+  }
+
+  private buildTerminalVisualGroups(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    summariesByLeafKey: ReadonlyMap<string, RuntimeTerminalSummary>
+  ): RuntimeTerminalVisualGroupNode[] {
+    const terminalTabs = snapshot.tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+    )
+    if (terminalTabs.length === 0) {
+      return []
+    }
+    const tabsByParentId = new Map<string, RuntimeMobileSessionTerminalTab[]>()
+    const parentOrder: string[] = []
+    for (const tab of terminalTabs) {
+      const existing = tabsByParentId.get(tab.parentTabId)
+      if (existing) {
+        existing.push(tab)
+      } else {
+        parentOrder.push(tab.parentTabId)
+        tabsByParentId.set(tab.parentTabId, [tab])
+      }
+    }
+    const groupSources =
+      snapshot.tabGroups && snapshot.tabGroups.length > 0
+        ? snapshot.tabGroups
+        : [{ id: null, activeTabId: snapshot.activeTabId, tabOrder: parentOrder }]
+    return groupSources
+      .map((group): RuntimeTerminalVisualGroupNode | null => {
+        const tabs = group.tabOrder
+          .map((tabId) => {
+            const surfaces =
+              tabsByParentId.get(tabId) ?? terminalTabs.filter((tab) => tab.id === tabId)
+            return this.buildTerminalVisualTab(tabId, surfaces, summariesByLeafKey)
+          })
+          .filter((tab): tab is RuntimeTerminalVisualTab => tab !== null)
+        if (tabs.length === 0) {
+          return null
+        }
+        return {
+          type: 'group',
+          groupId: group.id,
+          activeTabId: group.activeTabId,
+          tabs
+        }
+      })
+      .filter((group): group is RuntimeTerminalVisualGroupNode => group !== null)
+  }
+
+  private buildTerminalVisualTab(
+    tabId: string,
+    surfaces: RuntimeMobileSessionTerminalTab[],
+    summariesByLeafKey: ReadonlyMap<string, RuntimeTerminalSummary>
+  ): RuntimeTerminalVisualTab | null {
+    const firstSurface = surfaces[0]
+    if (!firstSurface) {
+      return null
+    }
+    const parentTabId = firstSurface.parentTabId
+    const activeLeafId =
+      firstSurface.parentLayout?.activeLeafId ??
+      surfaces.find((surface) => surface.isActive)?.leafId ??
+      firstSurface.leafId
+    const root = firstSurface.parentLayout?.root ?? {
+      type: 'leaf' as const,
+      leafId: firstSurface.leafId
+    }
+    const panes = this.buildTerminalVisualPane(root, parentTabId, activeLeafId, summariesByLeafKey)
+    if (!panes) {
+      return null
+    }
+    return {
+      tabId: parentTabId || tabId,
+      title: this.tabs.get(parentTabId)?.title ?? firstSurface.title ?? null,
+      activeLeafId,
+      panes
+    }
+  }
+
+  private buildTerminalVisualPane(
+    node: TerminalPaneLayoutNode,
+    tabId: string,
+    activeLeafId: string | null,
+    summariesByLeafKey: ReadonlyMap<string, RuntimeTerminalSummary>
+  ): RuntimeTerminalVisualPaneNode | null {
+    if (node.type === 'leaf') {
+      const summary = summariesByLeafKey.get(this.getLeafKey(tabId, node.leafId))
+      if (!summary) {
+        return null
+      }
+      return {
+        type: 'terminal',
+        handle: summary.handle,
+        tabId: summary.tabId,
+        leafId: summary.leafId,
+        title: summary.title,
+        connected: summary.connected,
+        active: summary.leafId === activeLeafId
+      }
+    }
+    const first = this.buildTerminalVisualPane(node.first, tabId, activeLeafId, summariesByLeafKey)
+    const second = this.buildTerminalVisualPane(
+      node.second,
+      tabId,
+      activeLeafId,
+      summariesByLeafKey
+    )
+    if (first && second) {
+      return { type: 'pane-split', direction: node.direction, first, second }
+    }
+    return first ?? second
+  }
+
+  private buildTerminalVisualGroupLayout(
+    node: TabGroupLayoutNode | null | undefined,
+    groupsById: ReadonlyMap<string, RuntimeTerminalVisualGroupNode>
+  ): RuntimeTerminalVisualLayoutNode | null {
+    if (!node) {
+      return null
+    }
+    if (node.type === 'leaf') {
+      return groupsById.get(node.groupId) ?? null
+    }
+    const first = this.buildTerminalVisualGroupLayout(node.first, groupsById)
+    const second = this.buildTerminalVisualGroupLayout(node.second, groupsById)
+    if (first && second) {
+      return { type: 'split', direction: node.direction, first, second }
+    }
+    return first ?? second
   }
 
   // Why: when --terminal is omitted, the CLI auto-resolves to the active
@@ -7558,6 +7760,23 @@ export class OrcaRuntimeService {
     }
 
     throw new Error('no_active_terminal')
+  }
+
+  resolveTerminalPane(paneKey: string): RuntimeTerminalResolvePane {
+    // Why: the renderer context menu only knows the stable pane key; main owns
+    // the runtime terminal handle that agents and CLI commands can address.
+    const handle = this.getTerminalHandleForPaneKey(paneKey)
+    if (!handle) {
+      throw new Error('terminal_not_found')
+    }
+    const record = this.handles.get(handle)
+    const parsed = parsePaneKey(paneKey)
+    return {
+      handle,
+      tabId: record?.tabId ?? parsed?.tabId ?? '',
+      leafId: record?.leafId ?? parsed?.leafId ?? '',
+      ptyId: record?.ptyId ?? null
+    }
   }
 
   async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
