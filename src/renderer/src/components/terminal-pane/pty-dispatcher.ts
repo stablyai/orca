@@ -26,6 +26,10 @@ export type PtyBufferSnapshot = {
   rows: number
   seq?: number
   source?: 'headless' | 'renderer'
+  /** True when captured while a TUI held the alternate screen, so the snapshot
+   *  carries no normal-buffer scrollback. The hidden-output restore uses this to
+   *  skip the destructive ESC[3J clear and keep the renderer's history (#5723). */
+  alternateScreen?: boolean
 }
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()

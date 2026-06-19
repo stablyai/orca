@@ -4147,6 +4147,7 @@ export class OrcaRuntimeService {
     lastTitle?: string
     seq?: number
     source?: 'headless' | 'renderer'
+    alternateScreen?: boolean
   } | null> {
     return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
@@ -4473,6 +4474,7 @@ export class OrcaRuntimeService {
     lastTitle?: string
     seq?: number
     source?: 'headless'
+    alternateScreen?: boolean
   } | null> {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
@@ -4498,7 +4500,11 @@ export class OrcaRuntimeService {
           cwd: snapshot.cwd,
           lastTitle: snapshot.lastTitle,
           seq: state.outputSequence,
-          source: 'headless'
+          source: 'headless',
+          // Why: lets the desktop hidden-restore know this snapshot holds no
+          // normal-buffer scrollback (alt screen) so it won't clear the
+          // renderer's existing scrollback when replaying it (#5723).
+          alternateScreen: snapshot.modes.alternateScreen
         }
       : null
   }

@@ -4852,6 +4852,61 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
+  it('skips the destructive scrollback clear when restoring an alternate-screen snapshot (#5723)', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
+    const live = 'visible-after\r\n'
+    // An alt-screen snapshot enters the alternate buffer itself (?1049h) and
+    // carries no normal-buffer scrollback.
+    const altSnapshot = '\x1b[?1049h\x1b[HALT SCREEN BODY'
+    getMainBufferSnapshot.mockResolvedValue({
+      data: altSnapshot,
+      cols: 100,
+      rows: 30,
+      seq: hidden.length + live.length,
+      alternateScreen: true
+    })
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(live, {
+      seq: hidden.length + live.length,
+      rawLength: live.length
+    })
+    await flushAsyncTicks(20)
+
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+    // Clearing scrollback (ESC[3J) before replaying a scrollback-less alt-screen
+    // snapshot is exactly what wiped the renderer's history in #5723. The guard
+    // must skip it; the snapshot's own ?1049h still gives a clean alt buffer.
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      '\x1b[2J\x1b[3J\x1b[H',
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).toHaveBeenCalledWith(altSnapshot, expect.any(Function))
+    disposable.dispose()
+  })
+
   it('ignores an async hidden-backlog snapshot if the pane changes PTYs first', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('old-pty-id')

@@ -4975,6 +4975,25 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('reports alternateScreen on main snapshots so the desktop restore can preserve scrollback (#5723)', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+
+    runtime.onPtyData('pty-1', 'normal-buffer line\r\n', 100)
+    const normalSnapshot = await runtime.serializeMainTerminalBuffer('pty-1', {
+      scrollbackRows: 1000
+    })
+    expect(normalSnapshot?.alternateScreen).toBe(false)
+
+    // A TUI takes the alternate screen — the snapshot now carries no scrollback,
+    // so it must advertise that so the renderer skips its destructive clear.
+    runtime.onPtyData('pty-1', '\x1b[?1049h\x1b[2JALT', 200)
+    const altSnapshot = await runtime.serializeMainTerminalBuffer('pty-1', {
+      scrollbackRows: 1000
+    })
+    expect(altSnapshot?.alternateScreen).toBe(true)
+  })
+
   it('emits explicit OSC 9999 agent status from runtime PTY data', () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
     const runtime = new OrcaRuntimeService(store, undefined, {

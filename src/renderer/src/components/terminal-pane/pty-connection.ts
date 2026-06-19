@@ -2791,6 +2791,7 @@ export function connectPanePty(
       cols: number
       rows: number
       seq?: number
+      alternateScreen?: boolean
     }): void {
       const scrollState = captureScrollStateForSnapshotReplay()
       discardTerminalOutput(pane.terminal)
@@ -2805,7 +2806,14 @@ export function connectPanePty(
         // dimensions. Replay at those dimensions first, then fit back below.
         pane.terminal.resize(snapshot.cols, snapshot.rows)
       }
-      writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      // Why: an alternate-screen snapshot carries no normal-buffer scrollback
+      // (the headless serializer strips it). Clearing the renderer's scrollback
+      // with ESC[3J before replaying it wipes history the user can still scroll;
+      // the snapshot's own ?1049h enters a clean alt buffer, and the safeFit +
+      // SIGWINCH below force the TUI to repaint. (#5723)
+      if (!snapshot.alternateScreen) {
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+      }
       writeReplayData(snapshot.data)
       writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
       hiddenRendererStateDirty = false
