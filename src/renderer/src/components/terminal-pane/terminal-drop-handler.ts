@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
@@ -70,9 +71,21 @@ export async function handleInternalTerminalFileDrop({
   if (!worktreePath) {
     return { status: 'ignored', reason: 'worktree-unavailable' }
   }
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   const connectionId = getConnectionId(worktreeId)
+  if (!runtimeEnvironmentId && connectionId === undefined) {
+    // Why: unresolved connection metadata means we cannot know whether these
+    // worktree-owned paths belong to a local, WSL, or SSH terminal.
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.drop.handler.0c77693641',
+        'Worktree not ready — try again in a moment.'
+      )
+    )
+    return { status: 'ignored', reason: 'worktree-unavailable' }
+  }
   const targetShell = resolveTerminalDropTargetShell({
-    activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId),
+    activeRuntimeEnvironmentId: runtimeEnvironmentId,
     worktreePath,
     // Why: internal Explorer drags paste worktree-owned paths directly, so SSH
     // shell semantics must come from the remote session, not the client OS.

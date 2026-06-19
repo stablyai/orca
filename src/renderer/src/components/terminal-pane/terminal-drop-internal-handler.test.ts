@@ -193,6 +193,35 @@ describe('handleInternalTerminalFileDrop', () => {
     expect(focus).toHaveBeenCalled()
   })
 
+  it('does not paste internal paths when connection metadata is not hydrated', async () => {
+    mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
+    mocks.storeState.repos = []
+    const sendInput = vi.fn(() => true)
+    const focus = vi.fn()
+    const manager = {
+      getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
+      getPanes: () => []
+    }
+
+    const result = await handleInternalTerminalFileDrop({
+      manager: manager as never,
+      paneTransports: new Map([[1, createTerminalTransport(sendInput)]]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      dataTransfer: {
+        getData: (type) =>
+          type === WORKSPACE_FILE_PATHS_MIME ? encodeWorkspaceFilePaths(['/repo/a.ts']) : ''
+      }
+    })
+
+    expect(result).toEqual({ status: 'ignored', reason: 'worktree-unavailable' })
+    expect(sendInput).not.toHaveBeenCalled()
+    expect(focus).not.toHaveBeenCalled()
+    expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith('Worktree not ready — try again in a moment.')
+  })
+
   it('uses the terminal worktree owner runtime instead of the focused runtime', async () => {
     mocks.storeState.repos = [
       {

@@ -12,6 +12,8 @@ import {
 } from '@/lib/primary-selection-paste'
 import { readCurrentPrimarySelectionText } from '@/lib/primary-selection-capture'
 
+const PRIMARY_SELECTION_PENDING_TARGET_TTL_MS = 750
+
 export function resolvePrimarySelectionMiddleClickPaste(
   setting: boolean | undefined,
   userAgent: string = typeof navigator === 'undefined' ? '' : navigator.userAgent
@@ -71,7 +73,9 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         return false
       }
       pendingMiddleTarget = target
-      pendingMiddleUntil = Date.now() + 750
+      // Why: native Linux middle-click paste emits follow-up input shortly
+      // after mousedown; keep ownership only for the same gesture.
+      pendingMiddleUntil = Date.now() + PRIMARY_SELECTION_PENDING_TARGET_TTL_MS
       return true
     }
 

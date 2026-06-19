@@ -121,6 +121,7 @@ afterEach(async () => {
   document.body.replaceChildren()
   setUserAgent(originalUserAgent)
   vi.clearAllMocks()
+  vi.useRealTimers()
 })
 
 describe('usePrimarySelectionPaste', () => {
@@ -189,5 +190,23 @@ describe('usePrimarySelectionPaste', () => {
     expect(auxClick.defaultPrevented).toBe(true)
     expect(readPrimarySelectionTextMock).toHaveBeenCalledTimes(1)
     expect(textarea.value).toBe('alpha beta')
+  })
+
+  it('does not keep middle-click ownership after the gesture window expires', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    readPrimarySelectionTextMock.mockResolvedValue('late')
+    await renderProbe()
+    const textarea = appendTextarea('unchanged')
+    textarea.focus()
+
+    dispatchMiddleMouseDown(textarea)
+    vi.setSystemTime(1_751)
+    const mouseUp = dispatchMiddleMouseUp(textarea)
+    await flushPromises()
+
+    expect(mouseUp.defaultPrevented).toBe(false)
+    expect(readPrimarySelectionTextMock).not.toHaveBeenCalled()
+    expect(textarea.value).toBe('unchanged')
   })
 })

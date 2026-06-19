@@ -9,6 +9,12 @@ export function setTrustedUIRendererWebContentsId(webContentsId: number | null):
   trustedUIRendererWebContentsId = webContentsId
 }
 
+export function clearTrustedUIRendererWebContentsId(webContentsId: number): void {
+  if (trustedUIRendererWebContentsId === webContentsId) {
+    trustedUIRendererWebContentsId = null
+  }
+}
+
 export function registerUIHandlers(store: Store): void {
   // Why: UI view-state is shared between the desktop renderer and mobile (ui.set
   // RPC). Broadcast every change so the desktop re-hydrates when mobile (or
@@ -69,5 +75,7 @@ function isTrustedUIRenderer(sender: WebContents): boolean {
     }
   }
 
-  return senderUrl.startsWith('file://')
+  // Why: packaged fallback must be tied to the created main window id, not any
+  // file:// document that can obtain this IPC channel.
+  return false
 }

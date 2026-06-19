@@ -1,7 +1,10 @@
 import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from './terminal-bracketed-paste'
 import { iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
-import { TERMINAL_PASTE_OPERATION_TIMEOUT_MS } from './terminal-paste-limits'
+import {
+  TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
+  TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
+} from './terminal-paste-limits'
 import { runTerminalPasteOperationWithTimeout } from './terminal-paste-operation-timeout'
 import type {
   TerminalPasteExecutionReason,
@@ -28,7 +31,7 @@ export async function executeTerminalPastePlan(
     isTargetCurrent,
     canContinue,
     yieldToEventLoop = defaultYieldToEventLoop,
-    operationTimeoutMs = TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
+    operationTimeoutMs = getTerminalPasteOperationTimeoutMs(plan),
     now = defaultNow
   }: ExecuteTerminalPastePlanArgs
 ): Promise<TerminalPasteExecutionResult> {
@@ -101,6 +104,14 @@ export async function executeTerminalPastePlan(
     await yieldToEventLoop()
   }
   return finish('pasted', chunksWritten)
+}
+
+export function getTerminalPasteOperationTimeoutMs(plan: TerminalPastePlan): number {
+  // Why: SSH/remote-runtime acknowledged PTY writes can include network
+  // backpressure; keep local paste hangs tight without aborting slow remotes.
+  return plan.target.runtime.kind === 'ssh' || plan.target.runtime.kind === 'remote-runtime'
+    ? TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
+    : TERMINAL_PASTE_OPERATION_TIMEOUT_MS
 }
 
 function result(

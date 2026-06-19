@@ -8,9 +8,12 @@ import {
   chunkTerminalPastePlan,
   createTerminalPastePayload,
   executeTerminalPastePlan,
+  getTerminalPasteOperationTimeoutMs,
   iterateTerminalPastePlanChunks,
   planTerminalPaste,
   planTerminalPasteWithYield,
+  TERMINAL_PASTE_OPERATION_TIMEOUT_MS,
+  TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS,
   type TerminalPasteRuntime,
   type TerminalPasteTarget
 } from './terminal-paste-coordinator'
@@ -324,6 +327,22 @@ describe('terminal paste coordinator', () => {
       expect(plan.runtimeKey, name).toBe(runtime.runtimeKey)
       expect(plan.redactedDiagnostic, name).toContain(`runtime=${runtime.runtimeKey}`)
       expect(writePty.mock.calls.map((call) => call[0]).join(''), name).toBe(text)
+    }
+  })
+
+  it('uses a longer paste safety timeout for network-backed terminal runtimes', () => {
+    for (const { name, runtime } of RUNTIME_MATRIX) {
+      const plan = planTerminalPaste({
+        text: 'echo timeout-policy',
+        source: 'keyboard',
+        target: terminalTarget({ runtime })
+      })
+
+      expect(getTerminalPasteOperationTimeoutMs(plan), name).toBe(
+        runtime.kind === 'ssh' || runtime.kind === 'remote-runtime'
+          ? TERMINAL_REMOTE_PASTE_OPERATION_TIMEOUT_MS
+          : TERMINAL_PASTE_OPERATION_TIMEOUT_MS
+      )
     }
   })
 
