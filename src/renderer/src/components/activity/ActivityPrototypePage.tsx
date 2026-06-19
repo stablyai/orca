@@ -60,6 +60,7 @@ import {
   type ActivityTerminalPortalTarget
 } from './activity-terminal-portal'
 import {
+  ACTIVITY_THREAD_VIRTUALIZER_OVERSCAN,
   buildActivityThreadVirtualRows,
   estimateActivityThreadVirtualRowSize,
   getActiveActivityThreadStickyIndex,
@@ -1463,7 +1464,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     getItemKey: (index) => virtualThreadRows[index]?.key ?? index,
     estimateSize: (index) =>
       estimateActivityThreadVirtualRowSize(virtualThreadRows[index], compactMode),
-    overscan: 8,
+    overscan: ACTIVITY_THREAD_VIRTUALIZER_OVERSCAN,
     rangeExtractor: useCallback(
       (range: Range) => {
         const activeStickyIndex = getActiveActivityThreadStickyIndex(

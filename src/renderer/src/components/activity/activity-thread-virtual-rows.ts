@@ -18,9 +18,13 @@ export type ActivityThreadVirtualRow<TGroup, TThread> =
       thread: TThread
     }
 
-const ACTIVITY_THREAD_GROUP_ROW_ESTIMATE_PX = 30
-const ACTIVITY_THREAD_COMPACT_ROW_ESTIMATE_PX = 58
-const ACTIVITY_THREAD_REGULAR_ROW_ESTIMATE_PX = 84
+// Why: these estimates intentionally mirror the Activity row CSS and skew
+// slightly high; TanStack corrects with measured elements, while underestimates
+// are more likely to expose blank space during fast first-pass scrolling.
+export const ACTIVITY_THREAD_GROUP_ROW_ESTIMATE_PX = 30
+export const ACTIVITY_THREAD_COMPACT_ROW_ESTIMATE_PX = 66
+export const ACTIVITY_THREAD_REGULAR_ROW_ESTIMATE_PX = 112
+export const ACTIVITY_THREAD_VIRTUALIZER_OVERSCAN = 12
 
 export function buildActivityThreadVirtualRows<
   TThread,

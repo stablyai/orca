@@ -256,13 +256,26 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
     })
     .not.toEqual([])
 
-  const candidateIds = await readCandidateIds()
+  let candidateIds = await readCandidateIds()
 
   if (candidateIds.length === 0) {
     // Why: blind-probing arbitrary PTY IDs can write into unrelated shells and
     // hides real regressions in the tab->PTY mapping the test depends on.
     throw new Error('discoverActivePtyId: active tab has no PTY candidates in store')
   }
+
+  let activePanePtyId: string | null = null
+  try {
+    activePanePtyId = await waitForActivePanePtyId(page)
+  } catch {
+    activePanePtyId = null
+  }
+  if (activePanePtyId) {
+    return activePanePtyId
+  }
+  // Why: the active PaneManager binding is the route execInTerminal uses; the
+  // slower shell probe is only needed while direct pane metadata is unavailable.
+  candidateIds = await readCandidateIds()
 
   await page.evaluate(
     ({ marker, candidateIds }) => {

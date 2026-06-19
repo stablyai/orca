@@ -8,7 +8,11 @@ import {
   isTerminalContainerResizeSettling,
   resetTerminalContainerResizeSettleForTests
 } from '@/lib/pane-manager/terminal-container-resize-settle'
-import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
+import {
+  TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS,
+  TERMINAL_CONTAINER_RESIZE_MAX_SETTLE_MS,
+  useTerminalContainerFitSync
+} from './use-terminal-container-fit-sync'
 
 const mocks = vi.hoisted(() => ({
   cleanupCallbacks: [] as (() => void)[],
@@ -99,7 +103,7 @@ describe('useTerminalContainerFitSync', () => {
     expect(isTerminalContainerResizeSettling()).toBe(true)
     expect(queuePanePtyResizeIfHeld(paneElement, 100, 30)).toBe(true)
 
-    vi.advanceTimersByTime(149)
+    vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS - 1)
 
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(paneElement.dispatchEvent).not.toHaveBeenCalled()
@@ -112,6 +116,70 @@ describe('useTerminalContainerFitSync', () => {
     const event = vi.mocked(paneElement.dispatchEvent).mock.calls[0]?.[0] as CustomEvent
     expect(event.type).toBe(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT)
     expect(event.detail).toEqual({ cols: 100, rows: 30 })
+  })
+
+  it('resets the quiet-period debounce when resize observations continue', () => {
+    const paneElement = createPaneElement()
+    const container = {
+      classList: { contains: () => false },
+      querySelectorAll: () => [paneElement]
+    } as unknown as HTMLDivElement
+
+    useTerminalContainerFitSync({
+      isVisible: true,
+      isSyncFitEnabled: true,
+      managerRef: { current: { fitAllPanes: vi.fn() } as never },
+      containerRef: { current: container }
+    })
+
+    mockResizeObservers[0]?.trigger()
+    vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS - 1)
+    mockResizeObservers[0]?.trigger()
+    vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS - 1)
+
+    expect(mocks.fitPanes).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+
+    expect(mocks.fitPanes).toHaveBeenCalledTimes(1)
+  })
+
+  it('forces a final fit when resize observations never go quiet', () => {
+    const paneElement = createPaneElement()
+    const container = {
+      classList: { contains: () => false },
+      querySelectorAll: () => [paneElement]
+    } as unknown as HTMLDivElement
+
+    useTerminalContainerFitSync({
+      isVisible: true,
+      isSyncFitEnabled: true,
+      managerRef: { current: { fitAllPanes: vi.fn() } as never },
+      containerRef: { current: container }
+    })
+
+    mockResizeObservers[0]?.trigger()
+    expect(queuePanePtyResizeIfHeld(paneElement, 110, 32)).toBe(true)
+
+    let elapsedMs = 0
+    while (
+      elapsedMs + TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS <
+      TERMINAL_CONTAINER_RESIZE_MAX_SETTLE_MS
+    ) {
+      vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS - 1)
+      elapsedMs += TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS - 1
+      mockResizeObservers[0]?.trigger()
+    }
+
+    expect(mocks.fitPanes).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_MAX_SETTLE_MS - elapsedMs)
+
+    expect(mocks.fitPanes).toHaveBeenCalledTimes(1)
+    expect(isTerminalContainerResizeSettling()).toBe(false)
+    expect(paneElement.dispatchEvent).toHaveBeenCalledTimes(1)
+    const event = vi.mocked(paneElement.dispatchEvent).mock.calls[0]?.[0] as CustomEvent
+    expect(event.detail).toEqual({ cols: 110, rows: 32 })
   })
 
   it('cancels a held PTY resize when the observed container unmounts before settling', () => {
@@ -134,7 +202,7 @@ describe('useTerminalContainerFitSync', () => {
     for (const cleanup of mocks.cleanupCallbacks.splice(0)) {
       cleanup()
     }
-    vi.advanceTimersByTime(150)
+    vi.advanceTimersByTime(TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS)
 
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(paneElement.dispatchEvent).not.toHaveBeenCalled()

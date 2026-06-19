@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ACTIVITY_THREAD_COMPACT_ROW_ESTIMATE_PX,
+  ACTIVITY_THREAD_GROUP_ROW_ESTIMATE_PX,
+  ACTIVITY_THREAD_REGULAR_ROW_ESTIMATE_PX,
+  ACTIVITY_THREAD_VIRTUALIZER_OVERSCAN,
   buildActivityThreadVirtualRows,
   estimateActivityThreadVirtualRowSize,
   getActiveActivityThreadStickyIndex,
@@ -57,5 +61,18 @@ describe('activity thread virtual rows', () => {
     expect(estimateActivityThreadVirtualRowSize(rows[1], true)).toBeLessThan(
       estimateActivityThreadVirtualRowSize(rows[1], false)
     )
+    expect(estimateActivityThreadVirtualRowSize(rows[0], false)).toBe(
+      ACTIVITY_THREAD_GROUP_ROW_ESTIMATE_PX
+    )
+    expect(estimateActivityThreadVirtualRowSize(rows[1], true)).toBe(
+      ACTIVITY_THREAD_COMPACT_ROW_ESTIMATE_PX
+    )
+    expect(estimateActivityThreadVirtualRowSize(rows[1], false)).toBe(
+      ACTIVITY_THREAD_REGULAR_ROW_ESTIMATE_PX
+    )
+  })
+
+  it('keeps enough overscan for fast scrolling before low-end devices measure rows', () => {
+    expect(ACTIVITY_THREAD_VIRTUALIZER_OVERSCAN).toBeGreaterThanOrEqual(12)
   })
 })

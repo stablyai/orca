@@ -12,6 +12,9 @@ type UseTerminalContainerFitSyncArgs = {
   containerRef: React.RefObject<HTMLDivElement | null>
 }
 
+export const TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS = 150
+export const TERMINAL_CONTAINER_RESIZE_MAX_SETTLE_MS = 1000
+
 export function useTerminalContainerFitSync({
   isVisible,
   isSyncFitEnabled,
@@ -55,15 +58,37 @@ export function useTerminalContainerFitSync({
     // the viewport scroll position. On Windows, a single reflow of 10 000
     // scrollback lines can block the renderer for 500 ms-2 s, freezing the
     // UI while a sidebar opens or a window resizes.
-    const RESIZE_DEBOUNCE_MS = 150
     let timerId: ReturnType<typeof setTimeout> | null = null
+    let maxSettleTimerId: ReturnType<typeof setTimeout> | null = null
     let releaseResizeSettle: (() => void) | null = null
     let ptyResizeHold: ReturnType<typeof holdPtyResizesForPaneSubtrees> | null = null
-    const beginResizeSettle = (): void => {
-      releaseResizeSettle ??= beginTerminalContainerResizeSettle()
-      ptyResizeHold ??= holdPtyResizesForPaneSubtrees([container])
+    function clearTimer(): void {
+      if (timerId !== null) {
+        clearTimeout(timerId)
+        timerId = null
+      }
     }
-    const releasePendingResizeSettle = (flush: boolean): void => {
+    function clearMaxSettleTimer(): void {
+      if (maxSettleTimerId !== null) {
+        clearTimeout(maxSettleTimerId)
+        maxSettleTimerId = null
+      }
+    }
+    function beginResizeSettle(): void {
+      if (releaseResizeSettle) {
+        return
+      }
+      releaseResizeSettle = beginTerminalContainerResizeSettle()
+      ptyResizeHold = holdPtyResizesForPaneSubtrees([container])
+      // Why: resize observers can keep firing during a long drag or platform
+      // window animation. A hard cap keeps suppression from starving the final
+      // xterm fit if the quiet-period debounce never gets a turn.
+      maxSettleTimerId = setTimeout(() => {
+        maxSettleTimerId = null
+        finishResizeSettle(true)
+      }, TERMINAL_CONTAINER_RESIZE_MAX_SETTLE_MS)
+    }
+    function releasePendingResizeSettle(flush: boolean): void {
       releaseResizeSettle?.()
       releaseResizeSettle = null
       const hold = ptyResizeHold
@@ -77,36 +102,37 @@ export function useTerminalContainerFitSync({
         hold.cancel()
       }
     }
+    function finishResizeSettle(flush: boolean): void {
+      clearTimer()
+      clearMaxSettleTimer()
+      const manager = managerRef.current
+      if (flush && manager) {
+        // Why: while the outer terminal container is resizing, per-pane
+        // observers skip heavy xterm reflows and PTY resize forwarding is
+        // held. Fit once after the drag settles, then flush the final
+        // SIGWINCH-sized grid instead of every transient grid.
+        try {
+          fitPanes(manager)
+        } finally {
+          releasePendingResizeSettle(true)
+        }
+        return
+      }
+      releasePendingResizeSettle(false)
+    }
     const resizeObserver = new ResizeObserver(() => {
       beginResizeSettle()
-      if (timerId !== null) {
-        clearTimeout(timerId)
-      }
+      clearTimer()
       timerId = setTimeout(() => {
         timerId = null
-        const manager = managerRef.current
-        if (manager) {
-          // Why: while the outer terminal container is resizing, per-pane
-          // observers skip heavy xterm reflows and PTY resize forwarding is
-          // held. Fit once after the drag settles, then flush the final
-          // SIGWINCH-sized grid instead of every transient grid.
-          try {
-            fitPanes(manager)
-          } finally {
-            releasePendingResizeSettle(true)
-          }
-        } else {
-          releasePendingResizeSettle(false)
-        }
-      }, RESIZE_DEBOUNCE_MS)
+        finishResizeSettle(true)
+      }, TERMINAL_CONTAINER_RESIZE_DEBOUNCE_MS)
     })
     resizeObserver.observe(container)
     return () => {
       resizeObserver.disconnect()
-      if (timerId !== null) {
-        clearTimeout(timerId)
-      }
-      releasePendingResizeSettle(false)
+      clearTimer()
+      finishResizeSettle(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible])
