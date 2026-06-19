@@ -18,6 +18,10 @@ function ok(result: unknown): RpcSuccess {
 function fail(message: string): RpcFailure {
   return { id: 'r', ok: false, error: { code: 'x', message }, _meta: { runtimeId: 'rt' } }
 }
+function malformedFailure(error: { code?: string; message?: string }): RpcResponse {
+  return { id: 'r', ok: false, error, _meta: { runtimeId: 'rt' } } as unknown as RpcResponse
+}
+
 function clientWith(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & {
   calls: Array<{ method: string; params: unknown }>
 } {
@@ -83,6 +87,56 @@ describe('rpc wrappers', () => {
   it('surfaces RPC failures as errors', async () => {
     const client = clientWith([fail('disconnected')])
     await expect(fetchDictationSetup(client)).rejects.toThrow('disconnected')
+  })
+
+  it('maps legacy desktop denials to update guidance', async () => {
+    const client = clientWith([
+      {
+        id: 'r',
+        ok: false,
+        error: {
+          code: 'forbidden',
+          message: "Method 'speech.models.list' is not available to mobile clients"
+        },
+        _meta: { runtimeId: 'rt' }
+      }
+    ])
+
+    await expect(fetchDictationSetup(client)).rejects.toThrow(
+      'Update the paired desktop Orca app to use mobile voice settings.'
+    )
+  })
+
+  it('maps legacy desktop method-not-found failures to update guidance', async () => {
+    const client = clientWith([
+      malformedFailure({
+        code: 'method_not_found',
+        message: "Method 'speech.models.list' not found"
+      })
+    ])
+
+    await expect(fetchDictationSetup(client)).rejects.toThrow(
+      'Update the paired desktop Orca app to use mobile voice settings.'
+    )
+  })
+
+  it('keeps unrelated speech model failures specific', async () => {
+    const client = clientWith([
+      malformedFailure({
+        code: 'internal_error',
+        message: 'speech.models.list failed unexpectedly'
+      })
+    ])
+
+    await expect(fetchDictationSetup(client)).rejects.toThrow(
+      'speech.models.list failed unexpectedly'
+    )
+  })
+
+  it('falls back when runtime failures omit a message', async () => {
+    const client = clientWith([malformedFailure({ code: 'internal_error' })])
+
+    await expect(fetchDictationSetup(client)).rejects.toThrow('Failed to load dictation models')
   })
 })
 
