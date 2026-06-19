@@ -123,9 +123,7 @@
     "ko": "리뷰어 삭제 {{value0}}"
   },
   "auto.components.GitLabItemDialog.4168eb2c51": {
-    "ko": "해결",
-    "zh": "解决",
-    "ja": "解決"
+    "ko": "해결"
   },
   "auto.components.GitLabItemDialog.7a7204417f": {
     "ko": "줄"
@@ -395,9 +393,7 @@
     "ko": "열린 항목 모두"
   },
   "auto.components.TaskPage.524f095d55": {
-    "ko": "리뷰 필요",
-    "zh": "待评审",
-    "ja": "レビュー待ち"
+    "ko": "리뷰 필요"
   },
   "auto.components.TaskPage.5d2d835467": {
     "ko": "정렬 순서"
@@ -442,9 +438,7 @@
     "ko": "PR 체크 열기"
   },
   "auto.components.TaskPage.9cd11ba218": {
-    "ko": "Jira",
-    "zh": "Jira",
-    "ja": "Jira"
+    "ko": "Jira"
   },
   "auto.components.TaskPage.9f2b4c03a6": {
     "ko": "등록 위치: "
@@ -1254,9 +1248,7 @@
     "ko": "작성자"
   },
   "auto.components.github.PRFilterDropdowns.19bb6f115f": {
-    "ko": "reviewed-by",
-    "zh": "reviewed-by",
-    "ja": "reviewed-by"
+    "ko": "reviewed-by"
   },
   "auto.components.github.PRFilterDropdowns.7f1ba66c3e": {
     "ko": "리뷰한 사람"
@@ -1547,9 +1539,7 @@
     "ko": "Orca는 모든 CLI agent와 함께 작동합니다. 가장 자주 사용할 agent를 선택하세요. 언제든지 전환할 수 있습니다."
   },
   "auto.components.onboarding.OnboardingFlow.a5e5da02f7": {
-    "ko": "연동",
-    "zh": "集成",
-    "ja": "連携"
+    "ko": "연동"
   },
   "auto.components.onboarding.OnboardingFlow.windowsTerminalSubtitle": {
     "ko": "새 창에서 사용할 기본 셸과 terminal에서 오른쪽 클릭이 동작하는 방식을 선택하세요."
@@ -2100,6 +2090,30 @@
   "auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.unavailable": {
     "ko": "폴더 워크스페이스에서만 워크스페이스가 표시됩니다."
   },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.allChecksPassing": {
+    "ko": "모든 검사 통과"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCount": {
+    "ko": "{{value0}}개 실패"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneFailing": {
+    "ko": "1개 실패"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.onePending": {
+    "ko": "1개 대기 중"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneWorktree": {
+    "ko": "워크트리 1개"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCount": {
+    "ko": "{{value0}}개 대기 중"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.reviewChecks": {
+    "ko": "리뷰 검사"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCount": {
+    "ko": "워크트리 {{value0}}개"
+  },
   "auto.components.settings.AccountsPane.350b2a1aa7": {
     "ko": "현재 사용 중인"
   },
@@ -2231,6 +2245,21 @@
   },
   "auto.components.settings.DeveloperPermissionsPane.e119f0d66b": {
     "ko": "자동화"
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription": {
+    "ko": "완료된 백그라운드 agent를 Orca가 최대 절전 모드로 전환하기 전에 기다릴 유휴 시간(분)입니다."
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel": {
+    "ko": "최대 절전까지"
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix": {
+    "ko": "분"
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.title": {
+    "ko": "Agent 최대 절전"
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.toggleLabel": {
+    "ko": "Agent 최대 절전 전환"
   },
   "auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy": {
     "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
@@ -2728,9 +2757,7 @@
     "ko": "예: cloudflared access ssh --hostname %h"
   },
   "auto.components.settings.TasksPane.6b23a34f6d": {
-    "ko": "Jira",
-    "zh": "Jira",
-    "ja": "Jira"
+    "ko": "Jira"
   },
   "auto.components.settings.TerminalAppearanceSection.16c471ee03": {
     "ko": "켜짐"
@@ -3260,6 +3287,12 @@
   "auto.components.settings.experimental.search.f10d307468": {
     "ko": "완료"
   },
+  "auto.components.settings.experimental.search.agentHibernation.hibernate": {
+    "ko": "최대 절전"
+  },
+  "auto.components.settings.experimental.search.agentHibernation.title": {
+    "ko": "Agent 최대 절전"
+  },
   "auto.components.settings.experimental.search.newWorktreeCardStyle.description": {
     "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
   },
@@ -3366,84 +3399,52 @@
     "ko": "붙여넣기"
   },
   "auto.components.settings.integrations.search.03a7b275be": {
-    "ko": "ADO",
-    "zh": "ADO",
-    "ja": "ADO"
+    "ko": "ADO"
   },
   "auto.components.settings.integrations.search.129fc59aa8": {
-    "ko": "Gitea",
-    "zh": "Gitea",
-    "ja": "Gitea"
+    "ko": "Gitea"
   },
   "auto.components.settings.integrations.search.20540996ef": {
-    "ko": "자격 증명",
-    "zh": "凭据",
-    "ja": "認証情報"
+    "ko": "자격 증명"
   },
   "auto.components.settings.integrations.search.581844769a": {
-    "ko": "MR",
-    "zh": "MR",
-    "ja": "MR"
+    "ko": "MR"
   },
   "auto.components.settings.integrations.search.617603509b": {
-    "ko": "Jira 연동",
-    "zh": "Jira 集成",
-    "ja": "Jira 連携"
+    "ko": "Jira 연동"
   },
   "auto.components.settings.integrations.search.67a2a0e868": {
-    "ko": "Bitbucket 연동",
-    "zh": "Bitbucket 集成",
-    "ja": "Bitbucket 連携"
+    "ko": "Bitbucket 연동"
   },
   "auto.components.settings.integrations.search.aab86d64e5": {
-    "ko": "Gitea 연동",
-    "zh": "Gitea 集成",
-    "ja": "Gitea 連携"
+    "ko": "Gitea 연동"
   },
   "auto.components.settings.integrations.search.af6611fa6e": {
-    "ko": "Azure DevOps 연동",
-    "zh": "Azure DevOps 集成",
-    "ja": "Azure DevOps 連携"
+    "ko": "Azure DevOps 연동"
   },
   "auto.components.settings.integrations.search.b027b4b318": {
-    "ko": "Linear 연동",
-    "zh": "Linear 集成",
-    "ja": "Linear 連携"
+    "ko": "Linear 연동"
   },
   "auto.components.settings.integrations.search.b40cbe5de4": {
-    "ko": "glab",
-    "zh": "glab",
-    "ja": "glab"
+    "ko": "glab"
   },
   "auto.components.settings.integrations.search.b50b71ef9d": {
-    "ko": "GitLab 연동",
-    "zh": "GitLab 集成",
-    "ja": "GitLab 連携"
+    "ko": "GitLab 연동"
   },
   "auto.components.settings.integrations.search.b79c21bd42": {
-    "ko": "GitHub",
-    "zh": "GitHub",
-    "ja": "GitHub"
+    "ko": "GitHub"
   },
   "auto.components.settings.integrations.search.c450244ad7": {
-    "ko": "연동",
-    "zh": "集成",
-    "ja": "連携"
+    "ko": "연동"
   },
   "auto.components.settings.integrations.search.e1263dd748": {
-    "ko": "Jira",
-    "zh": "Jira",
-    "ja": "Jira"
+    "ko": "Jira"
   },
   "auto.components.settings.integrations.search.f16e41cc72": {
-    "ko": "GitHub 연동",
-    "zh": "GitHub 集成",
-    "ja": "GitHub 連携"
+    "ko": "GitHub 연동"
   },
   "auto.components.settings.jira.integration.card.09742875cd": {
-    "ko": "Jira",
-    "zh": "Jira",
-    "ja": "Jira"
+    "ko": "Jira"
   },
   "auto.components.settings.jira.integration.card.3df81cb0ac": {
     "ko": "확인"
@@ -4366,6 +4367,9 @@
   "auto.components.sidebar.WorktreeContextMenu.3baa7d6507": {
     "ko": "고정"
   },
+  "auto.components.sidebar.WorktreeContextMenu.8d9cd19d09": {
+    "ko": "상위 워크스페이스 열기"
+  },
   "auto.components.sidebar.WorktreeContextMenu.8dacff1fe0": {
     "ko": "읽음으로 표시"
   },
@@ -4445,9 +4449,7 @@
     "ko": "재생"
   },
   "auto.components.sidebar.workspace.status.409528031f": {
-    "ko": "리뷰",
-    "zh": "评审",
-    "ja": "レビュー"
+    "ko": "리뷰"
   },
   "auto.components.sidebar.workspace.status.52e3c6e2a4": {
     "ko": "중립"
@@ -4459,9 +4461,7 @@
     "ko": "하늘색"
   },
   "auto.components.sidebar.workspace.status.6c1efa2cf8": {
-    "ko": "리뷰 중",
-    "zh": "评审中",
-    "ja": "レビュー中"
+    "ko": "리뷰 중"
   },
   "auto.components.sidebar.workspace.status.7adb43ecf0": {
     "ko": "장미색"
@@ -4473,19 +4473,13 @@
     "ko": "징크"
   },
   "auto.components.sidebar.workspace.status.caebe3c10f": {
-    "ko": "Conductor 리뷰",
-    "zh": "Conductor 评审",
-    "ja": "Conductor レビュー"
+    "ko": "Conductor 리뷰"
   },
   "auto.components.sidebar.worktree.list.groups.6798dc7c94": {
-    "ko": "리뷰 중",
-    "zh": "评审中",
-    "ja": "レビュー中"
+    "ko": "리뷰 중"
   },
   "auto.components.skills.SkillsPage.b088e0785d": {
-    "ko": "베타",
-    "zh": "测试版",
-    "ja": "ベータ"
+    "ko": "베타"
   },
   "auto.components.source.control.SourceControlActionVariableChips.4bf6d88039": {
     "ko": "(비어 있음)"
@@ -4704,9 +4698,7 @@
     "ko": "확보 가능"
   },
   "auto.components.status.bar.WorkspaceSpaceCompactPanel.c361440dc0": {
-    "ko": "베타",
-    "zh": "测试版",
-    "ja": "ベータ"
+    "ko": "베타"
   },
   "auto.components.status.bar.WorkspaceSpaceManagerPanel.0bc756efaf": {
     "ko": "Git 변경사항"
@@ -4955,9 +4947,7 @@
     "ko": "팀 검색..."
   },
   "auto.components.workspace.cleanup.WorkspaceCleanupDialog.1b18868569": {
-    "ko": "리뷰 필요",
-    "zh": "待评审",
-    "ja": "レビュー待ち"
+    "ko": "리뷰 필요"
   },
   "auto.components.workspace.cleanup.WorkspaceCleanupDialog.7eee951968": {
     "ko": "워크스페이스 안전성 확인 중"
@@ -4978,9 +4968,7 @@
     "ko": "워크스페이스 디스크 사용량과 회수 가능한 워크트리 저장 공간."
   },
   "auto.components.workspace.space.WorkspaceSpacePage.e8d6ba11ab": {
-    "ko": "베타",
-    "zh": "测试版",
-    "ja": "ベータ"
+    "ko": "베타"
   },
   "auto.hooks.useAutomationDispatchEvents.3ad7d77f57": {
     "ko": "대상 워크스페이스가 이 자동화 실행 대상과 다른 호스트에 있습니다."
@@ -4995,9 +4983,7 @@
     "ko": "Orca 및 코딩 agents의 모바일 에뮬레이터 지원을 구성합니다."
   },
   "auto.hooks.useSettingsNavigationMetadata.40d80bad8a": {
-    "ko": "베타",
-    "zh": "测试版",
-    "ja": "ベータ"
+    "ko": "베타"
   },
   "auto.hooks.useSettingsNavigationMetadata.7682607591": {
     "ko": "agent 및 terminal 이벤트에 대한 네이티브 데스크톱 알림입니다."

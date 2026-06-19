@@ -834,7 +834,7 @@
         "1b19cdc510": "리뷰어 삭제 {{value0}}",
         "cb55b0390f": "관리",
         "4f9313984d": "리뷰어",
-        "02cbe2de44": "Pi프라인",
+        "02cbe2de44": "파이프라인",
         "be3d291837": "파일",
         "c996e2962c": "대화",
         "b3c156dd51": "새로고침",
@@ -4632,7 +4632,7 @@
         "CommitMessageAiPane": {
           "841ed9884a": "소스 제어 AI를 사용자 정의하지 않은 리포지토리에서 사용됩니다.",
           "ad66ff886d": "소스 제어 AI 기본값",
-          "347094560b": "전역 호스팅 PR 기본값을 상속하는 repos에서 사용됩니다.",
+          "347094560b": "전역 호스팅 PR 기본값을 상속하는 저장소에서 사용됩니다.",
           "2dafc7646e": "호스팅 리뷰 생성 기본값",
           "e9d46a544d": "호스팅 PR 작성기가 열릴 때 사용되는 기본값입니다.",
           "b125eabffa": "제출 후 브라우저에서 생성된 호스팅 리뷰를 엽니다.",
@@ -11281,7 +11281,7 @@
             "repoHealth": {
               "category": "Repo 상태",
               "name": "평일 repo 감사",
-              "prompt": "repos 상태를 리뷰합니다. 종속성 업데이트, 실패한 테스트, lint/typecheck 상태, 위험한 공개 변경 사항을 확인하세요. 조사 결과를 요약하고 다음 조치를 제안합니다."
+              "prompt": "저장소 상태를 리뷰합니다. 종속성 업데이트, 실패한 테스트, lint/typecheck 상태, 위험한 공개 변경 사항을 확인하세요. 조사 결과를 요약하고 다음 조치를 제안합니다."
             },
             "releasePrep": {
               "category": "출시 준비",
@@ -11410,14 +11410,14 @@
           "summary": "{{value0}}개 연결됨 · PR/MR 있음 {{value1}}개 · 주의 필요 {{value2}}개 · 대기 중 {{value3}}개 · 통과 {{value4}}개 · PR 없음 {{value5}}개 · 알 수 없음 {{value6}}개",
           "showDetails": "{{value0}} PR 검사 세부 정보 표시",
           "hideDetails": "{{value0}} PR 검사 세부 정보 숨기기",
-          "reviewChecks": "Review checks",
-          "allChecksPassing": "all checks passing",
-          "oneWorktree": "1 worktree",
-          "worktreeCount": "{{value0}} worktrees",
-          "oneFailing": "1 failing",
-          "failingCount": "{{value0}} failing",
-          "onePending": "1 pending",
-          "pendingCount": "{{value0}} pending"
+          "reviewChecks": "리뷰 검사",
+          "allChecksPassing": "모든 검사 통과",
+          "oneWorktree": "워크트리 1개",
+          "worktreeCount": "워크트리 {{value0}}개",
+          "oneFailing": "1개 실패",
+          "failingCount": "{{value0}}개 실패",
+          "onePending": "1개 대기 중",
+          "pendingCount": "{{value0}}개 대기 중"
         },
         "parentPrChecks": {
           "rowSummary": {
