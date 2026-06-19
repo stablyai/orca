@@ -24,6 +24,10 @@ import { SYNC_FIT_PANES_EVENT, TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/const
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import {
+  isPairedWebClientWindow,
+  shouldRenderDesktopWindowChrome
+} from '@/lib/desktop-window-chrome'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { buildAppFontFamily } from '@/lib/app-font-family'
@@ -153,13 +157,15 @@ import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialo
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
-const isLinux = !isMac && !isWindows
 const shortcutPlatform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
 // Why: Windows and Linux both run with the native title bar removed (Windows
 // via titleBarStyle: 'hidden', Linux via frame: false), so the renderer draws
-// its own logo/menu anchor and min/max/close controls on both. macOS keeps the
-// native traffic lights, so it's excluded.
-const hasCustomTitleBar = isWindows || isLinux
+// its own logo/menu anchor and min/max/close controls on both. Paired web
+// clients run in a browser tab, so they must not render desktop window chrome.
+const hasCustomTitleBar = shouldRenderDesktopWindowChrome({
+  platform: shortcutPlatform,
+  isWebClient: isPairedWebClientWindow()
+})
 
 function getKeybindingContext(target: EventTarget | null): KeybindingContext {
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
@@ -2119,9 +2125,9 @@ function App(): React.JSX.Element {
                               {
                                 // Why: right: var(--window-controls-width) is the single
                                 // mechanism that keeps the toggle clear of the
-                                // fixed-position window-controls overlay on Windows (138px)
-                                // and sits at the right edge on non-Windows (0px). No
-                                // internal spacer needed — adding one would push the button
+                                // fixed-position window-controls overlay on custom desktop
+                                // chrome (138px) and sits at the right edge otherwise (0px).
+                                // No internal spacer needed — adding one would push the button
                                 // a further 138px to the left and cover the pane-actions
                                 // Ellipsis button with an un-clickable div.
                                 right: 'var(--window-controls-width)',

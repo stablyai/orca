@@ -3244,19 +3244,19 @@ const api = {
       ipcRenderer.on('window:fullscreen-changed', listener)
       return () => ipcRenderer.removeListener('window:fullscreen-changed', listener)
     },
-    /** Windows only: minimize the window via the renderer-drawn title bar. */
+    /** Desktop custom titlebar only: minimize via renderer-drawn window controls. */
     minimize: (): void => {
       ipcRenderer.send('window:minimize')
     },
-    /** Windows only: toggle maximize/restore via the renderer-drawn title bar. */
+    /** Desktop custom titlebar only: toggle maximize/restore via renderer-drawn controls. */
     maximize: (): void => {
       ipcRenderer.send('window:maximize')
     },
-    /** Windows only: read the current maximize state on mount, since
+    /** Desktop custom titlebar only: read the current maximize state on mount, since
      *  window:maximize-changed only fires on transitions and a window that
      *  starts maximized would otherwise show the wrong icon. */
     isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:isMaximized'),
-    /** Windows only: subscribe to maximize state changes so the renderer-drawn
+    /** Desktop custom titlebar only: subscribe to maximize state changes so the renderer-drawn
      *  maximize button can show the correct restore/maximize icon. */
     onMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean) =>
@@ -3264,14 +3264,14 @@ const api = {
       ipcRenderer.on('window:maximize-changed', listener)
       return () => ipcRenderer.removeListener('window:maximize-changed', listener)
     },
-    /** Windows only: request a close from the renderer-drawn close button.
+    /** Desktop custom titlebar only: request a close from the renderer-drawn close button.
      *  Routes through main so the BrowserWindow 'close' event fires and the
      *  terminal-running confirmation guard in the renderer stays active.
      *  window.close() is unreliable in sandboxed renderers. */
     requestClose: (): void => {
       ipcRenderer.send('window:request-close')
     },
-    /** Windows only: pop up the application menu at the cursor position.
+    /** Desktop custom titlebar only: pop up the application menu at the cursor position.
      *  Replicates the Alt-key reveal that autoHideMenuBar normally provides,
      *  triggered by the ··· button in the renderer-drawn title bar. */
     popupMenu: (): void => {

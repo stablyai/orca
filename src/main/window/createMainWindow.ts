@@ -993,8 +993,8 @@ export function createMainWindow(
   }
   ipcMain.on(trafficLightChannel, onSyncTrafficLights)
 
-  // Why: renderer-drawn window controls on Windows send these to replicate the
-  // native title bar buttons that 'hidden' titleBarStyle removes.
+  // Why: renderer-drawn window controls on Windows/Linux desktop send these to
+  // replicate the native title bar buttons hidden by custom chrome.
   const minimizeChannel = 'window:minimize'
   const onMinimize = (): void => {
     if (!mainWindow.isDestroyed()) {
@@ -1026,9 +1026,9 @@ export function createMainWindow(
       mainWindow.webContents.send('window:close-requested', { isQuitting: false })
     }
   }
-  // Why: the ··· button in the renderer-drawn title bar on Windows pops up
-  // the application menu at the cursor position, replicating the Alt-key
-  // reveal that autoHideMenuBar normally provides.
+  // Why: the ··· button in the renderer-drawn title bar on Windows/Linux
+  // desktop pops up the application menu at the cursor position, replicating
+  // the Alt-key reveal that autoHideMenuBar normally provides.
   const popupMenuChannel = 'menu:popup'
   const onPopupMenu = (): void => {
     Menu.getApplicationMenu()?.popup({ window: mainWindow })
