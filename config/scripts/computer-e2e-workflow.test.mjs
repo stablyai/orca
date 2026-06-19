@@ -60,6 +60,7 @@ describe('computer-use e2e workflow', () => {
         'tests/e2e/vitest.config.ts'
       ])
     )
+    expect(triggerPaths).not.toContain('src/shared/runtime-types.ts')
   })
 
   it('runs focused computer-use regression tests in the PR native-smoke job', () => {

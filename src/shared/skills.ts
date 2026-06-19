@@ -1,3 +1,5 @@
+import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
+
 export type SkillProvider = 'codex' | 'claude' | 'agent-skills'
 
 export type SkillSourceKind = 'home' | 'repo' | 'bundled' | 'plugin'
@@ -36,6 +38,7 @@ export type SkillDiscoveryResult = {
 export type SkillDiscoveryTarget = {
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
+  projectRuntime?: ProjectExecutionRuntimeResolution
 }
 
 export type SkillFrontmatterSummary = {

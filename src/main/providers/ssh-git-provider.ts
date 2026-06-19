@@ -10,13 +10,15 @@ import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
   GitConflictOperation,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
   GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo,
   RemoveWorktreeResult
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
-import { buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
+import { buildHostedRemoteCommitUrl, buildHostedRemoteFileUrl } from '../git/hosted-remote-url'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
@@ -361,6 +363,19 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.abortRebase', { worktreePath })
   }
 
+  async checkoutBranch(worktreePath: string, branch: string): Promise<void> {
+    await this.mux.request('git.checkout', { worktreePath, branch })
+  }
+
+  async listLocalBranches(
+    worktreePath: string
+  ): Promise<{ current: string | null; branches: string[] }> {
+    return (await this.mux.request('git.localBranches', { worktreePath })) as {
+      current: string | null
+      branches: string[]
+    }
+  }
+
   async getBranchCompare(worktreePath: string, baseRef: string): Promise<GitBranchCompareResult> {
     return (await this.mux.request('git.branchCompare', {
       worktreePath,
@@ -418,6 +433,16 @@ export class SshGitProvider implements IGitProvider {
     await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
   }
 
+  async syncForkDefaultBranch(
+    worktreePath: string,
+    expectedUpstream: GitForkSyncExpectedUpstream
+  ): Promise<GitForkSyncResult> {
+    return (await this.mux.request('git.forkSync', {
+      worktreePath,
+      ...(expectedUpstream ? { expectedUpstream } : {})
+    })) as GitForkSyncResult
+  }
+
   async fetchRemoteTrackingRef(
     worktreePath: string,
     remote: string,
@@ -429,6 +454,18 @@ export class SshGitProvider implements IGitProvider {
       remote,
       branch,
       ref
+    })
+  }
+
+  async fetchGitLabMergeRequestHead(
+    worktreePath: string,
+    remote: string,
+    mrIid: number
+  ): Promise<void> {
+    await this.mux.request('git.fetchGitLabMergeRequestHead', {
+      worktreePath,
+      remote,
+      mrIid
     })
   }
 
@@ -624,18 +661,21 @@ export class SshGitProvider implements IGitProvider {
 
   // Why: SSH worktrees need the remote URL from the relay-side .git/config
   // before local code can map it to a hosted source link.
+  private async readOriginRemoteUrl(worktreePath: string): Promise<string | null> {
+    try {
+      const result = await this.exec(['remote', 'get-url', 'origin'], worktreePath)
+      return result.stdout.trim() || null
+    } catch {
+      return null
+    }
+  }
+
   async getRemoteFileUrl(
     worktreePath: string,
     relativePath: string,
     line: number
   ): Promise<string | null> {
-    let remoteUrl: string
-    try {
-      const result = await this.exec(['remote', 'get-url', 'origin'], worktreePath)
-      remoteUrl = result.stdout.trim()
-    } catch {
-      return null
-    }
+    const remoteUrl = await this.readOriginRemoteUrl(worktreePath)
     if (!remoteUrl) {
       return null
     }
@@ -655,5 +695,13 @@ export class SshGitProvider implements IGitProvider {
     }
 
     return buildHostedRemoteFileUrl(remoteUrl, relativePath, defaultBranch, line)
+  }
+
+  async getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null> {
+    const remoteUrl = await this.readOriginRemoteUrl(worktreePath)
+    if (!remoteUrl) {
+      return null
+    }
+    return buildHostedRemoteCommitUrl(remoteUrl, sha)
   }
 }

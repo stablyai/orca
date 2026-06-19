@@ -451,9 +451,14 @@ describe('uploadBundle and deleteBundle', () => {
   })
 
   it('does not include transport error details in thrown errors', async () => {
+    const baseUrl = await listen((req) => {
+      // Why: external DNS failures are CI-timing dependent; destroying a local
+      // socket exercises the same transport-error redaction path deterministically.
+      req.socket.destroy(new Error('transport detail with sk-ant-api03-secret'))
+    })
     await expect(
       uploadBundle({
-        tokenEndpoint: 'http://diagnostics-secret.example.invalid/diagnostics/token',
+        tokenEndpoint: `${baseUrl}/diagnostics/token`,
         payload: '{}\n',
         bundleSubmissionId: generateBundleSubmissionId()
       })
@@ -483,6 +488,39 @@ describe('uploadBundle and deleteBundle', () => {
         bundleSubmissionId: generateBundleSubmissionId()
       })
     ).rejects.toThrow(/^diagnostic response exceeded size limit$/)
+  })
+
+  it('returns only the diagnostic ticket from successful uploads', async () => {
+    const baseUrl = await listen((req, res) => {
+      res.setHeader('content-type', 'application/json')
+      if (req.url === '/token') {
+        res.end(
+          JSON.stringify({
+            token: 'test-token',
+            expires_at: new Date(Date.now() + 60_000).toISOString(),
+            upload_url: `${baseUrl}/upload`,
+            max_bytes: _internalsForTests.MAX_BUNDLE_BYTES
+          })
+        )
+        return
+      }
+      res.statusCode = 201
+      res.end(
+        JSON.stringify({
+          ticket_id: 'ticketabcdefghijklmnop'
+        })
+      )
+    })
+
+    await expect(
+      uploadBundle({
+        tokenEndpoint: `${baseUrl}/token`,
+        payload: '{}\n',
+        bundleSubmissionId: generateBundleSubmissionId()
+      })
+    ).resolves.toEqual({
+      ticketId: 'ticketabcdefghijklmnop'
+    })
   })
 
   it('posts deletion requests to the diagnostics delete endpoint for a ticket', async () => {

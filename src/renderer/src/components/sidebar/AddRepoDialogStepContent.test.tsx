@@ -53,7 +53,6 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     nestedGroupName: 'platform',
     createName: '',
     createParent: '',
-    createKind: 'git',
     createError: null,
     isCreating: false,
     createDefaultParent: '',
@@ -82,7 +81,6 @@ function renderStepContent(overrides: Partial<StepContentProps>): string {
     onImportNestedRepos: vi.fn(),
     onCreateNameChange: vi.fn(),
     onCreateParentChange: vi.fn(),
-    onCreateKindChange: vi.fn(),
     onPickCreateParent: vi.fn(),
     onCreate: vi.fn(),
     ...overrides

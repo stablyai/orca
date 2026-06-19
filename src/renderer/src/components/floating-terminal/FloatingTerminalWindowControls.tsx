@@ -78,6 +78,9 @@ export function FloatingTerminalWindowControls({
     state.queueTabStartupCommand(tab.id, {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
+      ...(startupPlan.startupCommandDelivery
+        ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+        : {}),
       telemetry: {
         agent_kind: tuiAgentToAgentKind(defaultAgent),
         launch_source: 'shortcut',

@@ -41,4 +41,20 @@ describe('pane manager registry', () => {
 
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
   })
+
+  it('continues resetting later managers when one manager throws', () => {
+    const broken = {
+      resetWebglTextureAtlases: vi.fn<() => void>(() => {
+        throw new Error('pane disposed')
+      })
+    }
+    registerLivePaneManager(broken)
+    registeredManagers.push(broken)
+    const healthy = registerManager()
+
+    expect(() => resetAllTerminalWebglAtlases()).not.toThrow()
+
+    expect(broken.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(healthy.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+  })
 })

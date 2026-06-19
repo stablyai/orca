@@ -9,6 +9,7 @@ import type {
   TabContentType,
   TabGroup,
   TabGroupLayoutNode,
+  TerminalTab,
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
@@ -28,6 +29,7 @@ import {
 import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydration'
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
@@ -165,6 +167,48 @@ export type TabsSlice = {
   hydrateTabsSession: (session: WorkspaceSessionState) => void
 }
 
+// Why: keep the TerminalTab (tabsByWorktree) pin in sync with the unified-tab
+// pin so reconcile's `existing.isPinned` fallback stays authoritative locally.
+// Returns an empty patch when the tab isn't a persisted TerminalTab.
+function patchTerminalTabPinned(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  worktreeId: string,
+  tabId: string,
+  isPinned: boolean
+): Partial<Pick<AppState, 'tabsByWorktree'>> {
+  const tabs = tabsByWorktree[worktreeId]
+  if (!tabs?.some((tab) => tab.id === tabId)) {
+    return {}
+  }
+  return {
+    tabsByWorktree: {
+      ...tabsByWorktree,
+      [worktreeId]: tabs.map((tab) => (tab.id === tabId ? { ...tab, isPinned } : tab))
+    }
+  }
+}
+
+// Why: pin is host-authoritative for remote-server tabs, so mirror it to the
+// host (like setTabColor) or it's lost on reconnect/restart/other clients.
+// Dynamic import keeps this store slice off the runtime layer.
+function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: boolean): void {
+  const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+  // Why: only terminal tab pins are persisted host-side today (browser/editor
+  // tracked in #5729), so skip the RPC for other types instead of a no-op round
+  // trip.
+  if (
+    !found ||
+    found.tab.contentType !== 'terminal' ||
+    !getRuntimeEnvironmentIdForWorktree(state, found.worktreeId)
+  ) {
+    return
+  }
+  const worktreeId = found.worktreeId
+  void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+    setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
+  )
+}
+
 function buildSplitNode(
   existingGroupId: string,
   newGroupId: string,
@@ -239,7 +283,12 @@ function applyTabOrderSortValues(tabs: Tab[], tabOrder: string[]): Tab[] {
 }
 
 function isReplaceablePreviewContentType(contentType: Tab['contentType']): boolean {
-  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+  return (
+    contentType === 'editor' ||
+    contentType === 'diff' ||
+    contentType === 'conflict-review' ||
+    contentType === 'check-details'
+  )
 }
 
 function canReplacePreviewContentType(
@@ -382,7 +431,8 @@ function deriveActiveSurfaceForWorktree(
     activeFileId =
       activeUnifiedTab.contentType === 'editor' ||
       activeUnifiedTab.contentType === 'diff' ||
-      activeUnifiedTab.contentType === 'conflict-review'
+      activeUnifiedTab.contentType === 'conflict-review' ||
+      activeUnifiedTab.contentType === 'check-details'
         ? activeUnifiedTab.entityId
         : fileStillOpen
           ? restoredFileId
@@ -990,12 +1040,17 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ...state.unifiedTabsByWorktree,
           [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
         },
+        // Why: reconcile derives a tab's pin from the TerminalTab (tabsByWorktree),
+        // so mirror the pin there too — otherwise an unrelated host snapshot
+        // recomputes isPinned:false and visually un-pins during the echo window.
+        ...patchTerminalTabPinned(state.tabsByWorktree, worktreeId, tabId, true),
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: updateGroup(groups, { ...group, tabOrder })
         }
       }
     })
+    mirrorTabPinnedToHost(get(), tabId, true)
     if (exists) {
       get().recordFeatureInteraction?.('terminal-tabs')
     }
@@ -1025,12 +1080,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
           ...state.unifiedTabsByWorktree,
           [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
         },
+        ...patchTerminalTabPinned(state.tabsByWorktree, worktreeId, tabId, false),
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: updateGroup(groups, { ...group, tabOrder })
         }
       }
     })
+    mirrorTabPinnedToHost(get(), tabId, false)
     if (exists) {
       get().recordFeatureInteraction?.('terminal-tabs')
     }

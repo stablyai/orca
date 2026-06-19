@@ -6,7 +6,10 @@ import {
   shouldIgnoreNestedWorktreeContextMenuScope,
   shouldRemoveProjectFromContextMenu,
   shouldSuppressContextMenuFollowUpClick,
-  shouldContinueDeleteSiblingPositionRestore
+  shouldContinueDeleteSiblingPositionRestore,
+  getWorktreeParentPickerAnchor,
+  getWorktreeParentPickerLabel,
+  isWorktreeParentPickerDisabled
 } from './WorktreeContextMenu'
 
 describe('shouldUseNativeContextMenu', () => {
@@ -103,6 +106,39 @@ describe('shouldContinueDeleteSiblingPositionRestore', () => {
         stableFrames: 6
       })
     ).toBe(false)
+  })
+})
+
+describe('parent picker context menu affordance', () => {
+  it('uses set/change labels based on valid parent presence', () => {
+    expect(getWorktreeParentPickerLabel(null)).toBe('Set Parent Worktree...')
+    expect(getWorktreeParentPickerLabel('parent-1')).toBe('Change Parent Worktree...')
+  })
+
+  it('disables the parent picker while deleting or without candidates', () => {
+    expect(isWorktreeParentPickerDisabled({ isDeleting: true, eligibleParentCount: 1 })).toBe(true)
+    expect(isWorktreeParentPickerDisabled({ isDeleting: false, eligibleParentCount: 0 })).toBe(true)
+    expect(isWorktreeParentPickerDisabled({ isDeleting: false, eligibleParentCount: 1 })).toBe(
+      false
+    )
+  })
+
+  it('snapshots the stable row anchor before the context menu closes', () => {
+    const card = { dataset: { worktreeDragId: 'child' } } as unknown as HTMLElement
+    const scope = {
+      closest: (selector: string) => (selector === '[data-worktree-drag-id]' ? card : null)
+    } as HTMLElement
+
+    expect(getWorktreeParentPickerAnchor(scope, 'child')).toBe(card)
+  })
+
+  it('uses the child scope instead of climbing to a different workspace drag row', () => {
+    const parentCard = { dataset: { worktreeDragId: 'parent' } } as unknown as HTMLElement
+    const scope = {
+      closest: (selector: string) => (selector === '[data-worktree-drag-id]' ? parentCard : null)
+    } as HTMLElement
+
+    expect(getWorktreeParentPickerAnchor(scope, 'child')).toBe(scope)
   })
 })
 

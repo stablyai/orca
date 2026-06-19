@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { linearError } from '../../../linear/issue-context-errors'
+import { isLinearUuid } from '../../../../shared/linear-uuid'
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const LINEAR_DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const LinearDueDate = z.string().refine((value) => LINEAR_DUE_DATE_PATTERN.test(value), {
   message: 'Linear due dates must use YYYY-MM-DD'
@@ -31,6 +31,12 @@ const LinearTeamLookup = z.object({
 const LinearIssueList = z.object({
   filter: z.enum(['assigned', 'created', 'all', 'completed', 'open']).optional(),
   teamInput: OptionalString,
+  limit: OptionalFiniteNumber,
+  workspaceId: z.union([z.string(), z.literal('all')]).optional()
+})
+
+const LinearProjectList = z.object({
+  query: OptionalString,
   limit: OptionalFiniteNumber,
   workspaceId: z.union([z.string(), z.literal('all')]).optional()
 })
@@ -107,6 +113,7 @@ const LinearIssueCreate = z.object({
   estimate: z.number().int().min(0).optional(),
   dueDate: OptionalLinearDueDate,
   labels: z.array(z.string()).optional(),
+  projectInput: OptionalString,
   parentInput: OptionalString,
   parentCurrent: z.boolean().optional(),
   workspaceId: OptionalString.refine((value) => value !== 'all', {
@@ -120,7 +127,7 @@ function parseLinearWriteId(writeId: string | undefined): string | undefined {
   if (writeId === undefined) {
     return undefined
   }
-  if (!UUID_PATTERN.test(writeId)) {
+  if (!isLinearUuid(writeId)) {
     throw linearError('linear_invalid_write_id', '--write-id must be a UUID')
   }
   return writeId
@@ -166,6 +173,11 @@ export const LINEAR_AGENT_ACCESS_METHODS: RpcMethod[] = [
     name: 'linear.agentIssueList',
     params: LinearIssueList,
     handler: async (params, { runtime }) => runtime.linearIssueListForAgents(params)
+  }),
+  defineMethod({
+    name: 'linear.agentProjectList',
+    params: LinearProjectList,
+    handler: async (params, { runtime }) => runtime.linearProjectListForAgents(params)
   }),
   defineMethod({
     name: 'linear.resolveCurrentIssue',

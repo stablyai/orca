@@ -122,6 +122,7 @@ const MergePr = RepoSelector.extend({
 const SetPrAutoMerge = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   enabled: z.boolean(),
+  method: z.enum(['merge', 'squash', 'rebase']).optional(),
   prRepo: SlugRepo.nullable().optional()
 })
 
@@ -462,6 +463,7 @@ export const GITHUB_METHODS: RpcMethod[] = [
         params.repo,
         params.prNumber,
         params.enabled,
+        params.method,
         params.prRepo ?? null
       )
   }),

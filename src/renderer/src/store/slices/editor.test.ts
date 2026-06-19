@@ -120,6 +120,24 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarTabByWorktree).toEqual({})
   })
 
+  it('increments the right sidebar route request id for explicit route actions', () => {
+    const store = createEditorStore()
+
+    expect(store.getState().rightSidebarRouteRequestId).toBe(0)
+
+    store.getState().setRightSidebarTab('checks')
+    expect(store.getState().rightSidebarRouteRequestId).toBe(1)
+
+    store.getState().setRightSidebarExplorerView('files')
+    expect(store.getState().rightSidebarRouteRequestId).toBe(2)
+
+    store.getState().showRightSidebarFiles()
+    expect(store.getState().rightSidebarRouteRequestId).toBe(3)
+
+    store.getState().showRightSidebarSearch()
+    expect(store.getState().rightSidebarRouteRequestId).toBe(4)
+  })
+
   it('setRightSidebarTab with no active worktree does not mutate the worktree map', () => {
     const store = createEditorStore()
     const remembered = { 'wt-1': 'checks' as const }
@@ -224,6 +242,7 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarOpen).toBe(true)
     expect(store.getState().rightSidebarTab).toBe('explorer')
     expect(store.getState().rightSidebarExplorerView).toBe('files')
+    expect(store.getState().rightSidebarRouteRequestId).toBe(1)
     expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ 'wt-2': 'files' })
     expect(store.getState().rightSidebarTabByWorktree).toBe(remembered)
     expect(store.getState().pendingExplorerReveal).toMatchObject({
@@ -452,6 +471,62 @@ describe('createEditorSlice openDiff', () => {
 
     store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
     expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(2)
+  })
+
+  it('bumps fileContentReloadNonce when re-opening an existing clean file with reload requested', () => {
+    const store = createEditorStore()
+
+    const openFileWithReloadRequest = (): void =>
+      store.getState().openFile(
+        {
+          filePath: '/repo/file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'edit'
+        },
+        { forceContentReload: true }
+      )
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(1)
+
+    openFileWithReloadRequest()
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(2)
+  })
+
+  it('does not bump fileContentReloadNonce when a dirty file is re-opened', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().markFileDirty('/repo/file.ts', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/file.ts',
+        relativePath: 'file.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { forceContentReload: true }
+    )
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        isDirty: true,
+        fileContentReloadNonce: undefined
+      })
+    )
   })
 
   it('opens the visible diff tab in the requested split group', () => {
@@ -1148,6 +1223,78 @@ describe('createEditorSlice untitled cleanup routing', () => {
   })
 })
 
+describe('createEditorSlice recently closed editor tabs', () => {
+  function openMirroredEditor(store: StoreApi<AppState>, filePath: string, preview = false): void {
+    store.getState().openFile(
+      {
+        filePath,
+        relativePath: filePath.replace('/repo/', ''),
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        runtimeEnvironmentId: 'env-1',
+        mirroredFromRuntimeSession: true,
+        mode: 'edit'
+      },
+      { preview }
+    )
+  }
+
+  it('reopens a closed mirrored editor tab as a local tab', () => {
+    const store = createEditorStore()
+    openMirroredEditor(store, '/repo/notes.md')
+
+    store.getState().closeFile('/repo/notes.md')
+
+    const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
+    expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(recent).not.toHaveProperty('mirroredFromRuntimeSession')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+    expect(store.getState().openFiles[0]).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(store.getState().openFiles[0]).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
+
+  it('reopens close-all mirrored editor tabs as local tabs', () => {
+    const store = createEditorStore()
+    openMirroredEditor(store, '/repo/notes.md')
+
+    store.getState().closeAllFiles()
+
+    const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
+    expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(recent).not.toHaveProperty('mirroredFromRuntimeSession')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+    expect(store.getState().openFiles[0]).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(store.getState().openFiles[0]).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
+
+  it('reopens replaced mirrored preview tabs as local tabs', () => {
+    const store = createEditorStore()
+    openMirroredEditor(store, '/repo/notes.md', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/guide.md',
+        relativePath: 'guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        runtimeEnvironmentId: 'env-1',
+        mode: 'edit'
+      },
+      { preview: true, recordReplacedPreview: true }
+    )
+
+    const recent = store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]
+    expect(recent).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(recent).not.toHaveProperty('mirroredFromRuntimeSession')
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+    expect(store.getState().openFiles.at(-1)).toMatchObject({ filePath: '/repo/notes.md' })
+    expect(store.getState().openFiles.at(-1)).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
+})
+
 describe('createEditorSlice markdown view state', () => {
   it('updates stale language metadata when reopening an existing file', () => {
     const store = createEditorStore()
@@ -1785,6 +1932,320 @@ describe('createEditorSlice conflict status reconciliation', () => {
     expect(store.getState().gitStatusByWorktree['wt-clean']).toEqual([])
   })
 
+  it('treats a blank git status HEAD as unknown without invalidating branch compare', () => {
+    const store = createEditorStore()
+    const summary = {
+      baseRef: 'refs/remotes/origin/main',
+      baseOid: 'base-old',
+      compareRef: 'feature',
+      headOid: 'head-old',
+      mergeBase: 'base-old',
+      changedFiles: 0,
+      commitsAhead: 0,
+      status: 'ready' as const
+    }
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: summary.headOid,
+      branch: 'refs/heads/feature'
+    })
+    store.getState().beginGitBranchCompareRequest('wt-1', 'req-clean', summary.baseRef)
+    store.getState().setGitBranchCompareResult('wt-1', 'req-clean', {
+      summary,
+      entries: []
+    })
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: '',
+      branch: 'refs/heads/feature'
+    })
+
+    expect(store.getState().gitStatusHeadByWorktree['wt-1']).toBeUndefined()
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual(summary)
+  })
+
+  it('rejects a stale clean branch compare after git status reports a newer HEAD', () => {
+    const store = createEditorStore()
+    const cleanSummary = {
+      baseRef: 'refs/remotes/origin/main',
+      baseOid: 'base-old',
+      compareRef: 'feature',
+      headOid: 'head-old',
+      mergeBase: 'base-old',
+      changedFiles: 0,
+      commitsAhead: 0,
+      status: 'ready' as const
+    }
+    const updatedSummary = {
+      ...cleanSummary,
+      headOid: 'head-new',
+      mergeBase: 'merge-new',
+      changedFiles: 1,
+      commitsAhead: 1
+    }
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: cleanSummary.headOid,
+      branch: 'refs/heads/feature'
+    })
+    store.getState().beginGitBranchCompareRequest('wt-1', 'req-clean', cleanSummary.baseRef)
+    store.getState().setGitBranchCompareResult('wt-1', 'req-clean', {
+      summary: cleanSummary,
+      entries: []
+    })
+    store
+      .getState()
+      .beginGitBranchCompareRequest(
+        'wt-1',
+        'req-refresh-before-head-change',
+        cleanSummary.baseRef,
+        { preserveExistingSummary: true }
+      )
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: updatedSummary.headOid,
+      branch: 'refs/heads/feature'
+    })
+    store.getState().setGitBranchCompareResult('wt-1', 'req-refresh-before-head-change', {
+      summary: cleanSummary,
+      entries: []
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual({
+      baseRef: cleanSummary.baseRef,
+      baseOid: null,
+      compareRef: 'HEAD',
+      headOid: null,
+      mergeBase: null,
+      changedFiles: 0,
+      status: 'loading'
+    })
+    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([])
+    expect(store.getState().gitBranchCompareRequestKeyByWorktree['wt-1']).toBe(
+      'req-refresh-before-head-change'
+    )
+
+    store.getState().setGitBranchCompareResult('wt-1', 'req-refresh-before-head-change', {
+      summary: updatedSummary,
+      entries: [{ path: 'src/new.ts', status: 'modified' }]
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual(updatedSummary)
+    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([
+      { path: 'src/new.ts', status: 'modified' }
+    ])
+  })
+
+  it('rejects a stale unborn branch compare after git status reports a committed HEAD', () => {
+    const store = createEditorStore()
+    const unbornSummary = {
+      baseRef: 'refs/remotes/origin/main',
+      baseOid: 'base-old',
+      compareRef: 'feature',
+      headOid: null,
+      mergeBase: null,
+      changedFiles: 0,
+      commitsAhead: 0,
+      status: 'ready' as const
+    }
+    const committedSummary = {
+      ...unbornSummary,
+      headOid: 'head-new',
+      mergeBase: 'base-old',
+      changedFiles: 1,
+      commitsAhead: 1
+    }
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: '(initial)',
+      branch: 'refs/heads/feature'
+    })
+    store.getState().beginGitBranchCompareRequest('wt-1', 'req-unborn', unbornSummary.baseRef)
+    store.getState().setGitBranchCompareResult('wt-1', 'req-unborn', {
+      summary: unbornSummary,
+      entries: []
+    })
+    store
+      .getState()
+      .beginGitBranchCompareRequest('wt-1', 'req-before-first-commit', unbornSummary.baseRef, {
+        preserveExistingSummary: true
+      })
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: committedSummary.headOid,
+      branch: 'refs/heads/feature'
+    })
+    store.getState().setGitBranchCompareResult('wt-1', 'req-before-first-commit', {
+      summary: unbornSummary,
+      entries: []
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual({
+      baseRef: unbornSummary.baseRef,
+      baseOid: null,
+      compareRef: 'HEAD',
+      headOid: null,
+      mergeBase: null,
+      changedFiles: 0,
+      status: 'loading'
+    })
+
+    store.getState().setGitBranchCompareResult('wt-1', 'req-before-first-commit', {
+      summary: committedSummary,
+      entries: [{ path: 'src/first.ts', status: 'added' }]
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual(committedSummary)
+    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([
+      { path: 'src/first.ts', status: 'added' }
+    ])
+  })
+
+  it('accepts an unborn branch compare when git status reports the initial branch marker', () => {
+    const store = createEditorStore()
+    const unbornSummary = {
+      baseRef: 'refs/remotes/origin/main',
+      baseOid: 'base-old',
+      compareRef: 'feature',
+      headOid: null,
+      mergeBase: null,
+      changedFiles: 0,
+      commitsAhead: 0,
+      status: 'ready' as const
+    }
+
+    store.getState().beginGitBranchCompareRequest('wt-1', 'req-unborn', unbornSummary.baseRef)
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: '(initial)',
+      branch: 'refs/heads/feature'
+    })
+    store.getState().setGitBranchCompareResult('wt-1', 'req-unborn', {
+      summary: unbornSummary,
+      entries: []
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual(unbornSummary)
+    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([])
+  })
+
+  it('keeps loading branch compare state when an older HEAD result arrives', () => {
+    const store = createEditorStore()
+
+    store.getState().beginGitBranchCompareRequest('wt-1', 'req-stale', 'refs/remotes/origin/main')
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: 'head-new',
+      branch: 'refs/heads/feature'
+    })
+    store.getState().setGitBranchCompareResult('wt-1', 'req-stale', {
+      summary: {
+        baseRef: 'refs/remotes/origin/main',
+        baseOid: 'base-old',
+        compareRef: 'feature',
+        headOid: 'head-old',
+        mergeBase: 'base-old',
+        changedFiles: 0,
+        commitsAhead: 0,
+        status: 'ready'
+      },
+      entries: []
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual({
+      baseRef: 'refs/remotes/origin/main',
+      baseOid: null,
+      compareRef: 'HEAD',
+      headOid: null,
+      mergeBase: null,
+      changedFiles: 0,
+      status: 'loading'
+    })
+    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toBeUndefined()
+  })
+
+  it('accepts a newer branch compare before git status catches up', () => {
+    const store = createEditorStore()
+    const summary = {
+      baseRef: 'refs/remotes/origin/main',
+      baseOid: 'base-old',
+      compareRef: 'feature',
+      headOid: 'head-new',
+      mergeBase: 'base-old',
+      changedFiles: 1,
+      commitsAhead: 1,
+      status: 'ready' as const
+    }
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: 'head-old',
+      branch: 'refs/heads/feature'
+    })
+    store.getState().beginGitBranchCompareRequest('wt-1', 'req-newer', summary.baseRef)
+    store.getState().setGitBranchCompareResult('wt-1', 'req-newer', {
+      summary,
+      entries: [{ path: 'src/new.ts', status: 'modified' }]
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual(summary)
+    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([
+      { path: 'src/new.ts', status: 'modified' }
+    ])
+  })
+
+  it('preserves a newer branch compare when an unchanged older status refresh returns', () => {
+    const store = createEditorStore()
+    const summary = {
+      baseRef: 'refs/remotes/origin/main',
+      baseOid: 'base-old',
+      compareRef: 'feature',
+      headOid: 'head-new',
+      mergeBase: 'base-old',
+      changedFiles: 1,
+      commitsAhead: 1,
+      status: 'ready' as const
+    }
+
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: 'head-old',
+      branch: 'refs/heads/feature'
+    })
+    store.getState().beginGitBranchCompareRequest('wt-1', 'req-newer', summary.baseRef)
+    store.getState().setGitBranchCompareResult('wt-1', 'req-newer', {
+      summary,
+      entries: [{ path: 'src/new.ts', status: 'modified' }]
+    })
+    store.getState().setGitStatus('wt-1', {
+      conflictOperation: 'unknown',
+      entries: [],
+      head: 'head-old',
+      branch: 'refs/heads/feature'
+    })
+
+    expect(store.getState().gitBranchCompareSummaryByWorktree['wt-1']).toEqual(summary)
+    expect(store.getState().gitBranchChangesByWorktree['wt-1']).toEqual([
+      { path: 'src/new.ts', status: 'modified' }
+    ])
+  })
+
   it('clears ignored path cache when status refresh omits ignored paths', () => {
     const store = createEditorStore()
 
@@ -1837,6 +2298,166 @@ describe('createEditorSlice conflict status reconciliation', () => {
         conflictStatusSource: 'session'
       }
     ])
+  })
+
+  it('reloads an open check-details tab from the hosted provider', async () => {
+    const fetchPRCheckDetails = vi.fn().mockResolvedValue({
+      name: 'verify',
+      status: 'completed',
+      conclusion: 'success',
+      url: null,
+      detailsUrl: null,
+      startedAt: null,
+      completedAt: null,
+      title: 'Build passed',
+      summary: null,
+      text: null,
+      annotations: [],
+      jobs: []
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = createStore<any>()((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      repos: [{ id: 'repo-1', path: '/repo' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+      fetchPRCheckDetails,
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    })) as unknown as StoreApi<AppState>
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: false,
+      error: null
+    })
+
+    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
+
+    expect(fetchPRCheckDetails).toHaveBeenCalledWith(
+      '/repo',
+      expect.objectContaining({ checkRunId: 42, checkName: 'verify' }),
+      { repoId: 'repo-1' }
+    )
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::check-run:42',
+        checkRunDetails: expect.objectContaining({
+          loading: false,
+          details: expect.objectContaining({ title: 'Build passed', conclusion: 'success' })
+        })
+      })
+    )
+  })
+
+  it('patches an open check-details tab without changing the active file', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().openFile({
+      filePath: '/repo/other.ts',
+      relativePath: 'other.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
+      details: {
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'failure',
+        url: null,
+        detailsUrl: null,
+        startedAt: null,
+        completedAt: null,
+        title: 'Build failed',
+        summary: null,
+        text: null,
+        annotations: [],
+        jobs: []
+      },
+      loading: false,
+      error: null
+    })
+
+    expect(store.getState().activeFileId).toBe('/repo/other.ts')
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::check-run:42',
+        checkRunDetails: expect.objectContaining({
+          loading: false,
+          details: expect.objectContaining({ title: 'Build failed' })
+        })
+      })
+    )
+  })
+
+  it('opens check full details as a center-pane editor tab', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: {
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'failure',
+        url: null,
+        detailsUrl: null,
+        startedAt: null,
+        completedAt: null,
+        title: 'Build failed',
+        summary: null,
+        text: null,
+        annotations: [],
+        jobs: []
+      },
+      loading: false,
+      error: null
+    })
+
+    expect(store.getState().activeFileId).toBe('wt-1::check-details::check-run:42')
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::check-run:42',
+        mode: 'check-details',
+        relativePath: 'verify',
+        checkRunDetails: expect.objectContaining({
+          contextKey: 'repo:99',
+          check,
+          details: expect.objectContaining({ title: 'Build failed' })
+        })
+      })
+    )
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toContainEqual(
+      expect.objectContaining({
+        entityId: 'wt-1::check-details::check-run:42',
+        contentType: 'check-details',
+        label: 'verify'
+      })
+    )
   })
 
   it('keeps the conflict review active when selecting a conflict from its tree', () => {

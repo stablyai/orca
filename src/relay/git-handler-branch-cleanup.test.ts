@@ -14,6 +14,10 @@ function worktreeList(...entries: { path: string; branch?: string }[]): string {
     .join('\n\n')
 }
 
+function resolvedRepoPath(): string {
+  return '/repo'
+}
+
 describe('removeWorktreeOp branch cleanup', () => {
   it('deletes a squash-merged SSH branch when merging it into the base is a no-op', async () => {
     let zListCount = 0
@@ -134,7 +138,7 @@ describe('removeWorktreeOp branch cleanup', () => {
     const updateRefIndex = commandIndex(['update-ref', '-d', 'refs/heads/feature/test', '1'])
 
     expect(fetchIndex).toBeGreaterThanOrEqual(0)
-    expect(calls[fetchIndex]?.cwd).toBe('/repo')
+    expect(calls[fetchIndex]?.cwd).toBe(resolvedRepoPath())
     expect(fetchIndex).toBeLessThan(mergeTreeIndex)
     expect(fetchIndex).toBeLessThan(updateRefIndex)
   })

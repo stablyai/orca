@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 
 type OverlayProps = {
+  actionLabel: string
   actionPending: boolean
   allActionLabel?: string
   allActionPending?: boolean
@@ -101,13 +102,29 @@ describe('MobileDriverOverlay', () => {
     expect(overlay.props.actionPending).toBe(false)
   })
 
+  it('exposes held-fit restore labels for single and all terminals', () => {
+    hookRuntime.stateIndex = 0
+    hookRuntime.refIndex = 0
+
+    const overlay = MobileDriverOverlay({
+      driver: { kind: 'idle' } as never,
+      hasFitOverride: true,
+      onAction: vi.fn(),
+      onAllAction: vi.fn()
+    }) as OverlayElement
+
+    expect(overlay.props.actionLabel).toBe('Restore this terminal')
+    expect(overlay.props.allActionLabel).toBe('Restore all terminals')
+  })
+
   it('exposes an all-terminals restore action when provided', async () => {
     const onAction = vi.fn()
     const onAllAction = vi.fn()
 
     const overlay = renderOverlay(onAction, onAllAction)
 
-    expect(overlay.props.allActionLabel).toBe('Resize all terminals')
+    expect(overlay.props.actionLabel).toBe('Take back this terminal')
+    expect(overlay.props.allActionLabel).toBe('Take back all terminals')
     expect(overlay.props.allActionPending).toBe(false)
     await overlay.props.onAllAction?.()
 

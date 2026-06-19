@@ -51,6 +51,9 @@ import {
 } from '../gitlab/client'
 import { getWorkItemDetails } from '../gitlab/work-item-details'
 import type { ProjectRef } from '../gitlab/gl-utils'
+import type { LocalGitExecOptions } from '../gitlab/gitlab-project-ref-resolution'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 
 type GitLabRepoSelectorArgs = {
   repoPath: string
@@ -94,6 +97,18 @@ function repoConnectionId(repo: Repo): string | null {
   return repo.connectionId ?? null
 }
 
+function localGitOptionArgs(store: Store, repo: Repo): [] | [LocalGitExecOptions] {
+  const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+  return localGitOptions.wslDistro ? [{ wslDistro: localGitOptions.wslDistro }] : []
+}
+
+function hostedReviewOptionArgs(store: Store, repo: Repo): [] | [HostedReviewExecutionOptions] {
+  const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+  return localGitOptions.wslDistro
+    ? [{ localGitExecOptions: { wslDistro: localGitOptions.wslDistro } }]
+    : []
+}
+
 export function registerGitLabHandlers(store: Store): void {
   ipcMain.handle('gitlab:viewer', async () => {
     return getAuthenticatedViewer()
@@ -109,7 +124,7 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle('gitlab:projectSlug', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
-    return getProjectSlug(repo.path, repoConnectionId(repo))
+    return getProjectSlug(repo.path, repoConnectionId(repo), ...hostedReviewOptionArgs(store, repo))
   })
 
   ipcMain.handle(
@@ -123,14 +138,20 @@ export function registerGitLabHandlers(store: Store): void {
         repo.path,
         args.branch,
         args.linkedMRIid ?? null,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...hostedReviewOptionArgs(store, repo)
       )
     }
   )
 
   ipcMain.handle('gitlab:mr', async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
     const repo = assertRegisteredRepo(args, store)
-    return getMergeRequest(repo.path, args.iid, repoConnectionId(repo))
+    return getMergeRequest(
+      repo.path,
+      args.iid,
+      repoConnectionId(repo),
+      ...hostedReviewOptionArgs(store, repo)
+    )
   })
 
   ipcMain.handle(
@@ -157,7 +178,8 @@ export function registerGitLabHandlers(store: Store): void {
         perPage,
         repo.issueSourcePreference,
         undefined,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -166,7 +188,12 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:issue',
     async (_event, args: GitLabRepoSelectorArgs & { number: number }) => {
       const repo = assertRegisteredRepo(args, store)
-      return getIssue(repo.path, args.number, repoConnectionId(repo))
+      return getIssue(
+        repo.path,
+        args.number,
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
+      )
     }
   )
 
@@ -193,7 +220,8 @@ export function registerGitLabHandlers(store: Store): void {
         repo.issueSourcePreference,
         state,
         assignee,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
       // Why: Tasks page expects GitLabWorkItem[] so it can share row
       // rendering with MRs. Map IssueInfo → WorkItem here so the renderer
@@ -223,7 +251,8 @@ export function registerGitLabHandlers(store: Store): void {
         args.title,
         args.body,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -240,7 +269,9 @@ export function registerGitLabHandlers(store: Store): void {
         args.number,
         args.updates,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        undefined,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -254,19 +285,31 @@ export function registerGitLabHandlers(store: Store): void {
         args.number,
         args.body,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        undefined,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
 
   ipcMain.handle('gitlab:listLabels', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
-    return listLabels(repo.path, repo.issueSourcePreference, repoConnectionId(repo))
+    return listLabels(
+      repo.path,
+      repo.issueSourcePreference,
+      repoConnectionId(repo),
+      ...localGitOptionArgs(store, repo)
+    )
   })
 
   ipcMain.handle('gitlab:listAssignableUsers', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
-    return listAssignableUsers(repo.path, repo.issueSourcePreference, repoConnectionId(repo))
+    return listAssignableUsers(
+      repo.path,
+      repo.issueSourcePreference,
+      repoConnectionId(repo),
+      ...localGitOptionArgs(store, repo)
+    )
   })
 
   // Why: combined MR + issue list — Tasks screen and any future picker
@@ -293,7 +336,8 @@ export function registerGitLabHandlers(store: Store): void {
         normalizeGitLabPositiveInteger(args.perPage, 20, 100),
         repo.issueSourcePreference,
         undefined,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -309,7 +353,9 @@ export function registerGitLabHandlers(store: Store): void {
         args.iid,
         args.type,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        undefined,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -318,7 +364,14 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:closeMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
       const repo = assertRegisteredRepo(args, store)
-      return closeMR(repo.path, args.iid, repo.issueSourcePreference, repoConnectionId(repo))
+      return closeMR(
+        repo.path,
+        args.iid,
+        repo.issueSourcePreference,
+        repoConnectionId(repo),
+        undefined,
+        ...localGitOptionArgs(store, repo)
+      )
     }
   )
 
@@ -326,7 +379,14 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:reopenMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
       const repo = assertRegisteredRepo(args, store)
-      return reopenMR(repo.path, args.iid, repo.issueSourcePreference, repoConnectionId(repo))
+      return reopenMR(
+        repo.path,
+        args.iid,
+        repo.issueSourcePreference,
+        repoConnectionId(repo),
+        undefined,
+        ...localGitOptionArgs(store, repo)
+      )
     }
   )
 
@@ -342,7 +402,9 @@ export function registerGitLabHandlers(store: Store): void {
         args.iid,
         args.method ?? 'merge',
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        undefined,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -356,7 +418,9 @@ export function registerGitLabHandlers(store: Store): void {
         args.iid,
         args.updates,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        undefined,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -381,7 +445,8 @@ export function registerGitLabHandlers(store: Store): void {
         args.reviewerIds,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        args.projectRef
+        args.projectRef,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -395,7 +460,9 @@ export function registerGitLabHandlers(store: Store): void {
         args.iid,
         args.body,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        undefined,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -420,7 +487,8 @@ export function registerGitLabHandlers(store: Store): void {
         args.input,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        args.projectRef
+        args.projectRef,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -438,7 +506,9 @@ export function registerGitLabHandlers(store: Store): void {
         args.discussionId,
         args.resolved,
         repo.issueSourcePreference,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        undefined,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -455,7 +525,8 @@ export function registerGitLabHandlers(store: Store): void {
         args.jobId,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        args.projectRef
+        args.projectRef,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -472,7 +543,8 @@ export function registerGitLabHandlers(store: Store): void {
         args.jobId,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        args.projectRef
+        args.projectRef,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -482,7 +554,7 @@ export function registerGitLabHandlers(store: Store): void {
   // care about cwd because the endpoint is user-scoped.
   ipcMain.handle('gitlab:todos', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
-    return listTodos(repo.path, repoConnectionId(repo))
+    return listTodos(repo.path, repoConnectionId(repo), ...localGitOptionArgs(store, repo))
   })
 
   // Why: paste-URL flow in the picker. The user pastes a GitLab URL that
@@ -507,7 +579,8 @@ export function registerGitLabHandlers(store: Store): void {
         projectRef,
         args.iid,
         args.type,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
       // Why: only persist a recent entry when the lookup actually
       // produced an item. A 404 / auth failure shouldn't pollute the

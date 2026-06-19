@@ -137,7 +137,10 @@ export class SshPtyProvider implements IPtyProvider {
       // relay does not execute `command` itself — the user types it into
       // the shell — but receiving it as a hint lets overlay resolution be
       // per-launch instead of always-Pi.
-      ...(opts.command ? { command: opts.command } : {})
+      ...(opts.command ? { command: opts.command } : {}),
+      ...(opts.startupCommandDelivery
+        ? { startupCommandDelivery: opts.startupCommandDelivery }
+        : {})
     })
     return {
       ...(result as PtySpawnResult),

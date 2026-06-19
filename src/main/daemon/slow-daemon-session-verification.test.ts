@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, createServer, type Server, type Socket } from 'net'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { mkdtempSync, rmSync } from 'fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'fs'
 import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { healthCheckDaemon } from './daemon-health'
+import { getDaemonSocketPath } from './daemon-spawner'
 import type { ListSessionsResult } from './types'
 import type { SubprocessHandle } from './session'
 
@@ -72,9 +73,12 @@ describe('slow daemon session verification', () => {
   const clients: DaemonClient[] = []
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'daemon-slow-verification-test-'))
-    daemonSocketPath = join(dir, 'daemon.sock')
-    proxySocketPath = join(dir, 'proxy.sock')
+    // Why: real Unix socket paths have tight platform limits, especially on macOS.
+    dir = mkdtempSync(join(tmpdir(), 'ds-'))
+    mkdirSync(join(dir, 'daemon'), { recursive: true })
+    mkdirSync(join(dir, 'proxy'), { recursive: true })
+    daemonSocketPath = getDaemonSocketPath(join(dir, 'daemon'))
+    proxySocketPath = getDaemonSocketPath(join(dir, 'proxy'))
     tokenPath = join(dir, 'daemon.token')
   })
 
@@ -82,8 +86,12 @@ describe('slow daemon session verification', () => {
     for (const client of clients.splice(0)) {
       client.disconnect()
     }
-    await new Promise<void>((resolve) => proxy?.close(() => resolve()))
-    await server?.shutdown()
+    if (proxy) {
+      await new Promise<void>((resolve) => proxy.close(() => resolve()))
+    }
+    if (server) {
+      await server.shutdown()
+    }
     rmSync(dir, { recursive: true, force: true })
   })
 

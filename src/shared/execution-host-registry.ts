@@ -1,5 +1,6 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
+  getLocalExecutionHostLabel,
   getSettingsFocusedExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -182,7 +183,7 @@ export function buildExecutionHostRegistry(args: {
   hosts.set(LOCAL_EXECUTION_HOST_ID, {
     id: LOCAL_EXECUTION_HOST_ID,
     kind: 'local',
-    label: 'Local Mac',
+    label: getLocalExecutionHostLabel(),
     detail: 'This computer',
     health: 'local'
   })

@@ -16,11 +16,7 @@ import {
 } from '@/lib/workspace-create-error-format'
 import type { CreateWorktreeResult } from '../../../shared/types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
-
-// Why: most local creates finish in well under this window; holding the loader
-// back this long means a fast create swaps prior content → terminal with no
-// loader flash, while a genuinely slow create still surfaces one promptly.
-const CREATION_LOADER_DEBOUNCE_MS = 280
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 // Why: mirrors the startup-opt the composer used to build inline. The renderer
 // only seeds the first terminal when the backend did not already spawn it.
@@ -35,6 +31,7 @@ function buildStartupOpt(
   return {
     command: plan.launchCommand,
     ...(plan.env ? { env: plan.env } : {}),
+    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
     // Why: command-code shows its prompt in the tab status before the first
     // hook fires, so the prompt is threaded through here.
     ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
@@ -44,7 +41,18 @@ function buildStartupOpt(
   }
 }
 
-async function preflightAgentTrust(request: WorktreeCreationRequest, path: string): Promise<void> {
+function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boolean {
+  if (request.worktreeCreateProgressMode) {
+    return request.worktreeCreateProgressMode === 'indeterminate'
+  }
+  return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
+}
+
+async function preflightAgentTrust(
+  request: WorktreeCreationRequest,
+  path: string,
+  connectionId?: string | null
+): Promise<void> {
   // Why: trust-gated agents (cursor-agent, copilot) consume the bracketed paste
   // as menu input on first launch. Pre-write the trust artifact before any
   // terminal spawns. Best-effort — the worktree already exists, so a failure
@@ -57,7 +65,11 @@ async function preflightAgentTrust(request: WorktreeCreationRequest, path: strin
     return
   }
   try {
-    await window.api.agentTrust.markTrusted({ preset: preflight, workspacePath: path })
+    await window.api.agentTrust.markTrusted({
+      preset: preflight,
+      workspacePath: path,
+      ...(connectionId ? { connectionId } : {})
+    })
   } catch {
     // Best-effort: continue with launch.
   }
@@ -95,7 +107,8 @@ async function executeWorktreeCreation(
         request.linkedLinearIssueOrganizationUrlKey,
         request.linkedBitbucketPR,
         request.linkedAzureDevOpsPR,
-        request.linkedGiteaPR
+        request.linkedGiteaPR,
+        request.compareBaseRef
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
@@ -104,12 +117,11 @@ async function executeWorktreeCreation(
       return
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
-    // Why: an error must surface immediately even if it lands before the loader
-    // debounce fired, so force the loader visible alongside the error.
+    // Why: an error must stay on the same creation surface that owns the faux
+    // tab strip, rather than falling back to stale previous-workspace tabs.
     useAppStore.getState().updatePendingWorktreeCreation(creationId, {
       status: 'error',
-      error: message,
-      loaderVisible: true
+      error: message
     })
     // Why: only toast when the panel isn't already showing this error (the user
     // navigated away), so a visible failure isn't announced twice.
@@ -133,7 +145,9 @@ async function executeWorktreeCreation(
   const startupOpt = buildStartupOpt(request, backendSpawned)
 
   if (worktree.path) {
-    await preflightAgentTrust(request, worktree.path)
+    const repoConnectionId =
+      useAppStore.getState().repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null
+    await preflightAgentTrust(request, worktree.path, repoConnectionId)
   }
 
   // `createWorktree` already inserted the real worktree row. Whether we steal
@@ -196,30 +210,28 @@ async function executeWorktreeCreation(
  * surface on the pending creation's sidebar row and content panel.
  */
 export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): void {
-  const creationId = crypto.randomUUID()
+  // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN web
+  // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
+  const creationId = createBrowserUuid()
   const store = useAppStore.getState()
   // Why: the remote/runtime create path emits no progress events, so the stepped
-  // checklist would freeze on step 1. Mark it indeterminate up front so the panel
-  // shows a single spinner instead of implying phase progress that never arrives.
-  const indeterminate = getActiveRuntimeTarget(store.settings).kind !== 'local'
+  // checklist would freeze on step 1. Use the request's captured repo owner so
+  // Retry does not change shape when focus moves to another runtime.
+  const indeterminate = getWorktreeCreationIndeterminate(request)
   store.beginPendingWorktreeCreation({
     creationId,
     phase: 'fetching',
     status: 'creating',
     indeterminate,
-    loaderVisible: false,
+    // Why: the creation surface owns the tab strip immediately. Delaying this
+    // caused the real workspace tab bar to flash out when the debounce elapsed.
+    loaderVisible: true,
     request
   })
   // Why: the creation panel only renders under the terminal view (App content
   // router), so force it active so the panel is what fills the content area.
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
-  // Why: debounce the loader so a fast create never flashes it. The prior
-  // workspace stays visible until the delay elapses; if the create resolves
-  // first, removePendingWorktreeCreation clears the entry and this update no-ops.
-  setTimeout(() => {
-    useAppStore.getState().updatePendingWorktreeCreation(creationId, { loaderVisible: true })
-  }, CREATION_LOADER_DEBOUNCE_MS)
   void executeWorktreeCreation(creationId, request)
 }
 

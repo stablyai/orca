@@ -1,3 +1,10 @@
+import {
+  appendDiagnosticBundleLines,
+  type CrashReportDiagnosticBundle
+} from './crash-reporting-diagnostic-bundle'
+
+export type { CrashReportDiagnosticBundle } from './crash-reporting-diagnostic-bundle'
+
 export type CrashReportStatus = 'pending' | 'sent' | 'dismissed'
 export type CrashReportSource = 'renderer' | 'child'
 
@@ -32,6 +39,16 @@ export type CrashReportRecord = {
   chromeVersion: string
   details: Record<string, CrashReportDetailValue>
   breadcrumbs?: CrashReportBreadcrumb[]
+}
+
+export type UncapturedCrashReportContext = {
+  createdAt: string
+  appVersion: string
+  platform: NodeJS.Platform
+  osRelease: string
+  arch: string
+  electronVersion: string
+  chromeVersion: string
 }
 
 export type CrashReportCreateInput = Omit<
@@ -75,14 +92,21 @@ export type ReactErrorBoundaryReportResult =
 export type CrashReportSubmitArgs = {
   reportId?: string
   notes?: string
+  includeDiagnosticLogs?: boolean
   submitAnonymously?: boolean
   githubLogin: string | null
   githubEmail: string | null
 }
 
 export type CrashReportSubmitResult =
-  | { ok: true; report: CrashReportRecord }
-  | { ok: false; status: number | null; error: string; report?: CrashReportRecord }
+  | { ok: true; report: CrashReportRecord | null; diagnosticBundle?: CrashReportDiagnosticBundle }
+  | {
+      ok: false
+      status: number | null
+      error: string
+      report?: CrashReportRecord | null
+      diagnosticBundle?: CrashReportDiagnosticBundle
+    }
 
 const MAX_STRING_DETAIL_LENGTH = 240
 const MAX_STACK_DETAIL_LENGTH = 4_000
@@ -105,7 +129,6 @@ const PATH_PATTERNS = [
   /[A-Za-z]:\\(?:(?!\s+(?:\/|[A-Za-z]:\\|\\\\|gh[pousr]_|sk-|(?:token|api[_-]?key|secret|password)=))[^"'`<>\n\r)])+/gi,
   /\\\\[^\\\s"'`<>\n\r)]+\\(?:(?!\s+(?:\/|[A-Za-z]:\\|\\\\|gh[pousr]_|sk-|(?:token|api[_-]?key|secret|password)=))[^"'`<>\n\r)])+/gi
 ]
-
 export function isCrashReportReason(reason: string): boolean {
   return [
     'abnormal-exit',
@@ -192,7 +215,11 @@ export function sanitizeCrashReportBreadcrumbs(
   return sanitized.length > 0 ? sanitized : undefined
 }
 
-export function formatCrashReportText(report: CrashReportRecord, notes?: string): string {
+export function formatCrashReportText(
+  report: CrashReportRecord,
+  notes?: string,
+  diagnosticBundle?: CrashReportDiagnosticBundle
+): string {
   const lines = [
     '[Crash Report]',
     '',
@@ -208,6 +235,8 @@ export function formatCrashReportText(report: CrashReportRecord, notes?: string)
     `Electron: ${report.electronVersion}`,
     `Chrome: ${report.chromeVersion}`
   ]
+
+  appendDiagnosticBundleLines(lines, diagnosticBundle, sanitizeCrashReportString)
 
   const details = Object.entries(report.details)
   if (details.length > 0) {
@@ -228,6 +257,41 @@ export function formatCrashReportText(report: CrashReportRecord, notes?: string)
       lines.push(`- ${breadcrumb.createdAt}: ${breadcrumb.name}${suffix}`)
     }
   }
+
+  const trimmedNotes = notes?.trim()
+  if (trimmedNotes) {
+    lines.push('', 'User notes:', sanitizeCrashReportString(trimmedNotes))
+  }
+
+  return truncateFormattedCrashReport(lines.join('\n'))
+}
+
+export function formatUncapturedCrashReportText(
+  context: UncapturedCrashReportContext,
+  notes?: string,
+  diagnosticBundle?: CrashReportDiagnosticBundle
+): string {
+  const lines = [
+    '[Crash Report]',
+    '',
+    'Report ID: not captured',
+    `Created: ${context.createdAt}`,
+    'Status: uncaptured',
+    'Source: user-reported',
+    'Process: unknown',
+    'Reason: no captured crash report',
+    'Exit code: unknown',
+    `App version: ${context.appVersion}`,
+    `Platform: ${context.platform} ${context.osRelease} ${context.arch}`,
+    `Electron: ${context.electronVersion}`,
+    `Chrome: ${context.chromeVersion}`,
+    '',
+    'Details:',
+    '- captured_crash_report: false',
+    '- report_source: help_menu'
+  ]
+
+  appendDiagnosticBundleLines(lines, diagnosticBundle, sanitizeCrashReportString)
 
   const trimmedNotes = notes?.trim()
   if (trimmedNotes) {

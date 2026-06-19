@@ -1,4 +1,4 @@
-import type { Page } from '@stablyai/playwright-test'
+import type { Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import type { CreateHostedReviewResult } from '../../src/shared/hosted-review'
@@ -69,6 +69,25 @@ async function forceCreatePREligibleStatus(
     },
     { worktreeId, branch }
   )
+}
+
+function getCreatePRComposer(page: Page): Locator {
+  const titleInput = page.getByRole('textbox', { name: 'Pull request title' })
+  const descriptionLabelPredicate =
+    'translate(@aria-label, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")=' +
+    '"pull request description"'
+  return titleInput.locator(
+    `
+    xpath=ancestor::*[.//textarea[${descriptionLabelPredicate}]
+      and .//button[normalize-space(.)="Create PR"]][1]
+  `.trim()
+  )
+}
+
+function getCreatePRComposerSubmitButton(page: Page): Locator {
+  // Why: the header and composer currently share the same accessible name.
+  // Anchor to the field container so this submits the editable composer.
+  return getCreatePRComposer(page).getByRole('button', { name: 'Create PR' })
 }
 
 async function seedCreatePREligibleBranch(
@@ -188,13 +207,13 @@ test.describe('Source Control create pull request', () => {
     await openSourceControl(orcaPage, worktreeId)
     await forceCreatePREligibleStatus(orcaPage, worktreeId, branch)
 
-    const createButton = orcaPage.getByRole('button', { name: 'Create PR' })
-    await expect(createButton).toBeVisible({ timeout: 10_000 })
-    await expect(createButton).toBeDisabled()
     const titleInput = orcaPage.getByRole('textbox', { name: 'Pull request title' })
     const descriptionInput = orcaPage.getByRole('textbox', {
       name: 'Pull request description'
     })
+    const createButton = getCreatePRComposerSubmitButton(orcaPage)
+    await expect(createButton).toBeVisible({ timeout: 10_000 })
+    await expect(createButton).toBeDisabled()
     await expect(titleInput).toHaveValue('')
     await expect(orcaPage.getByRole('textbox', { name: 'Pull request base branch' })).toHaveValue(
       'main'
@@ -245,11 +264,11 @@ test.describe('Source Control create pull request', () => {
     await openSourceControl(orcaPage, worktreeId)
     await forceCreatePREligibleStatus(orcaPage, worktreeId, branch)
 
-    const createButton = orcaPage.getByRole('button', { name: 'Create PR' })
     const titleInput = orcaPage.getByRole('textbox', { name: 'Pull request title' })
     const descriptionInput = orcaPage.getByRole('textbox', {
       name: 'Pull request description'
     })
+    const createButton = getCreatePRComposerSubmitButton(orcaPage)
     await expect(createButton).toBeVisible({ timeout: 10_000 })
     await titleInput.fill('Failing PR from E2E')
     await descriptionInput.fill('This draft should survive a failed create attempt.')

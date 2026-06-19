@@ -1,0 +1,6 @@
+# Pins fastlane for reproducible iOS releases in CI (see fastlane/Fastfile and
+# .github/workflows/mobile-build.yml). macOS runners ship a fastlane, but
+# pinning here keeps the release toolchain stable across runner image bumps.
+source "https://rubygems.org"
+
+gem "fastlane"

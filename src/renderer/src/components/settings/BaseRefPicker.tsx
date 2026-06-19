@@ -1,6 +1,5 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: base-ref defaults and search results come from runtime repo IPC and must clear stale repo results before new requests resolve. */
-import { useEffect, useState } from 'react'
-import { ScrollArea } from '../ui/scroll-area'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { useAppStore } from '@/store'
@@ -39,6 +38,25 @@ export function BaseRefPicker({
   const [baseRefQuery, setBaseRefQuery] = useState('')
   const [baseRefResults, setBaseRefResults] = useState<string[]>([])
   const [isSearchingBaseRefs, setIsSearchingBaseRefs] = useState(false)
+  const baseRefResultsListRef = useRef<HTMLDivElement>(null)
+
+  // Why: Radix Dialog scroll-lock cancels wheel events on in-dialog scroll
+  // regions, so we scroll the results list manually (same pattern as CommandList).
+  useEffect(() => {
+    const el = baseRefResultsListRef.current
+    if (!el) {
+      return
+    }
+    const onWheel = (event: WheelEvent): void => {
+      if (el.scrollHeight <= el.clientHeight) {
+        return
+      }
+      event.preventDefault()
+      el.scrollTop += event.deltaY
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [baseRefResults.length])
 
   useEffect(() => {
     let stale = false
@@ -195,7 +213,10 @@ export function BaseRefPicker({
 
       {!isSearchingBaseRefs && baseRefQuery.trim().length >= 2 ? (
         baseRefResults.length > 0 ? (
-          <ScrollArea className="max-h-48 rounded-md border border-border/50">
+          <div
+            ref={baseRefResultsListRef}
+            className="max-h-[min(12rem,40vh)] overflow-y-auto overflow-x-hidden rounded-md border border-border/50 scrollbar-sleek"
+          >
             <div className="p-1">
               {baseRefResults.map((ref) => (
                 <button
@@ -225,7 +246,7 @@ export function BaseRefPicker({
                 </button>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         ) : (
           <p className="text-xs text-muted-foreground">
             {translate(

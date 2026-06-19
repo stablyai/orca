@@ -147,7 +147,23 @@ function makeExecResponses(opts: {
   // Override probe stdout for shell-noise pressure tests. If set, replaces
   // the load-test stdout entirely (useful for testing pollution prefixes).
   probeStdoutOverride?: string
+  // Raw stdout for the build-toolchain probe that runs in installNativeDeps'
+  // catch when `npm install` rejects on Linux. Defaults to a fully-present
+  // toolchain so the original npm error propagates unchanged.
+  toolchainProbe?: string
 }): ExecResponse[] {
+  // npm install failure aborts the deploy after the catch probes the remote's
+  // build toolchain — no chmod/probe/launch slots are reached.
+  if (opts.npmInstall !== 'ok') {
+    return [
+      'Linux x86_64',
+      '/home/u',
+      '', // mkdir remoteDir (uploadRelay)
+      '', // chmod +x node
+      opts.npmInstall, // npm install rejects
+      opts.toolchainProbe ?? 'HAVE make\nHAVE g++\nHAVE cc\nHAVE python3\nPKG apt-get'
+    ]
+  }
   const probeSlot: ExecResponse =
     opts.probeStdoutOverride !== undefined
       ? opts.probeStdoutOverride
@@ -275,6 +291,78 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
     const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
     expect(warnMessages.some((m) => m.includes('[ssh-relay][NATIVE-DEPS-INSTALL-FAIL]'))).toBe(true)
+  })
+
+  it('rewrites the npm failure into an actionable build-tools message when the remote toolchain is missing', async () => {
+    const conn = makeMockConnection(sftpCapture)
+    feed(
+      makeExecResponses({
+        npmInstall: { reject: 'gyp ERR! stack Error: not found: make' },
+        probe: 'ok',
+        // No HAVE lines → make/g++ absent; apk present → tailored hint must
+        // come from the remote probe rather than a hardcoded apt fallback.
+        toolchainProbe: 'PKG apk'
+      })
+    )
+
+    const error = await deployAndLaunchRelay(conn).catch((e: Error) => e)
+    expect(error).toBeInstanceOf(Error)
+    const message = (error as Error).message
+    // Actionable: names the missing tools and the exact install command.
+    expect(message).toContain('build tools')
+    expect(message).toContain('make')
+    expect(message).toContain('sudo apk add build-base python3')
+    // The raw npm/node-gyp output is preserved for triage, not discarded.
+    expect(message).toContain('not found: make')
+
+    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    expect(
+      execCalls.some((c) => c.includes('command -v "$t"') && c.includes('command -v "$p"'))
+    ).toBe(true)
+    expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+  })
+
+  it('preserves the original npm error when it is not a native build-tool failure', async () => {
+    const conn = makeMockConnection(sftpCapture)
+    feed(
+      makeExecResponses({
+        npmInstall: { reject: 'npm ERR! network ETIMEDOUT' },
+        probe: 'ok',
+        // Even if the host also lacks build tools, a network error should stay
+        // a network error instead of being relabeled as an install-tools fix.
+        toolchainProbe: 'PKG apt-get'
+      })
+    )
+
+    // The npm output is something else (network, registry), so surface the
+    // real error rather than a misleading "install build tools".
+    const error = await deployAndLaunchRelay(conn).catch((e: Error) => e)
+    expect((error as Error).message).toContain('npm ERR! network ETIMEDOUT')
+    expect((error as Error).message).not.toContain('build tools')
+
+    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    expect(execCalls.some((c) => c.includes('command -v "$t"'))).toBe(false)
+  })
+
+  it('preserves redirected npm stdout for non-toolchain failures without probing', async () => {
+    const conn = makeMockConnection(sftpCapture)
+    feed(
+      makeExecResponses({
+        npmInstall: {
+          reject:
+            'Command "export PATH=/usr/bin:$PATH && cd /home/u/.orca-remote/relay && npm install node-pty@1.1.0 2>&1" failed (exit 1): npm ERR! network ETIMEDOUT'
+        },
+        probe: 'ok',
+        toolchainProbe: 'PKG apt-get'
+      })
+    )
+
+    const error = await deployAndLaunchRelay(conn).catch((e: Error) => e)
+    expect((error as Error).message).toContain('npm ERR! network ETIMEDOUT')
+    expect((error as Error).message).not.toContain('build tools')
+
+    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    expect(execCalls.some((c) => c.includes('command -v "$t"'))).toBe(false)
   })
 
   it('warns clearly when node-pty installs but require() fails (built-but-unloadable)', async () => {

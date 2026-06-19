@@ -38,7 +38,7 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
           onClick={handleOpenSettings}
           aria-label={translate(
             'auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9',
-            'Connect an AI account to see usage'
+            'Configure usage tracking'
           )}
           className="inline-flex h-5 cursor-pointer items-center gap-1.5 rounded px-1.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
         >
@@ -46,7 +46,7 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
           <span>
             {translate(
               'auto.components.status.bar.StatusBarUsageEmptyCta.d663430cf9',
-              'Connect an AI account to see usage'
+              'Configure usage tracking'
             )}
           </span>
         </button>

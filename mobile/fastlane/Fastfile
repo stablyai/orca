@@ -1,0 +1,81 @@
+# Orca Mobile iOS release lane.
+#
+# Builds the prebuilt iOS workspace, signs it with the distribution identity
+# imported into the CI keychain plus an explicit App Store provisioning profile
+# fetched via the App Store Connect API key, then uploads the .ipa to
+# TestFlight. All Apple credentials come from CI env vars
+# (see .github/workflows/mobile-ios-release.yml) so nothing secret lives in the
+# repo.
+#
+# Why manual signing (not -allowProvisioningUpdates / automatic cloud signing):
+# mixing a pre-imported distribution .p12 with xcodebuild's cloud-managed
+# automatic signing produced "Cloud signing permission error / No profiles
+# found" at exportArchive (cloud signing also needs an Admin-role API key).
+# Instead we fetch an explicit profile with the API key (sigh) and sign
+# manually against the imported cert — works with any team API key.
+
+require "base64"
+
+default_platform(:ios)
+
+WORKSPACE = "ios/Orca.xcworkspace"
+SCHEME = "Orca"
+BUNDLE_ID = "com.stably.orca.mobile"
+
+platform :ios do
+  desc "Build, sign, and upload Orca Mobile to TestFlight"
+  lane :release do
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV.fetch("ASC_ISSUER_ID"),
+      key_content: ENV.fetch("ASC_API_KEY_P8"),
+      is_key_content_base64: true,
+      in_house: false,
+    )
+
+    team_id = ENV.fetch("APPLE_TEAM_ID")
+
+    # Fetch (or create) the App Store distribution profile via the API key and
+    # install it locally, then feed its name to the manual archive + export.
+    get_provisioning_profile(
+      api_key: api_key,
+      app_identifier: BUNDLE_ID,
+      force: true,
+    )
+    # sigh exposes the chosen profile's name in SIGH_NAME (SIGH_PROFILE_MAPPING
+    # doesn't exist in this fastlane version).
+    profile_name = lane_context[SharedValues::SIGH_NAME]
+
+    # Manual signing: the archive needs the team, profile, and signing style set
+    # explicitly (no -allowProvisioningUpdates). Without DEVELOPMENT_TEAM the
+    # archive fails: "Signing for Orca requires a development team".
+    build_app(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      xcargs: "DEVELOPMENT_TEAM=#{team_id} " \
+        "CODE_SIGN_STYLE=Manual " \
+        "CODE_SIGN_IDENTITY='Apple Distribution' " \
+        "PROVISIONING_PROFILE_SPECIFIER='#{profile_name}'",
+      export_options: {
+        teamID: team_id,
+        signingStyle: "manual",
+        provisioningProfiles: {
+          BUNDLE_ID => profile_name,
+        },
+      },
+      output_directory: "build",
+      output_name: "Orca.ipa",
+      clean: true,
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true,
+      # Why: the human still drafts "What's New" + review notes in the ASC web
+      # UI (see the mobile-app-store-release skill). CI only delivers the build.
+      distribute_external: false,
+    )
+  end
+end

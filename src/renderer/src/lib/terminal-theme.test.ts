@@ -3,10 +3,54 @@ import {
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT,
   getAvailableTerminalThemeOptions,
+  getBuiltinTheme,
   getTerminalThemePreview,
   isTerminalBackgroundLight,
   resolveEffectiveTerminalAppearance
 } from './terminal-theme'
+
+// Mirrors Codex instruction block gray so the dark selection cannot disappear into it.
+const INSTRUCTION_BLOCK_BACKGROUND = '#3e4451'
+
+function parseHexColor(color: string): [number, number, number] | null {
+  const match = /^#([0-9a-f]{6})$/i.exec(color)
+  const hex = match?.[1]
+  if (!hex) {
+    return null
+  }
+
+  const value = Number.parseInt(hex, 16)
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255]
+}
+
+function toLinearChannel(channel: number): number {
+  const scaled = channel / 255
+  return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4
+}
+
+function relativeLuminance([red, green, blue]: [number, number, number]): number {
+  return (
+    0.2126 * toLinearChannel(red) + 0.7152 * toLinearChannel(green) + 0.0722 * toLinearChannel(blue)
+  )
+}
+
+function contrastRatio(first: string, second: string): number {
+  const firstRgb = parseHexColor(first)
+  const secondRgb = parseHexColor(second)
+
+  expect(firstRgb, `${first} should be a 6-digit hex color`).not.toBeNull()
+  expect(secondRgb, `${second} should be a 6-digit hex color`).not.toBeNull()
+  if (!firstRgb || !secondRgb) {
+    throw new Error('Expected contrast colors to parse as 6-digit hex values')
+  }
+
+  const firstLuminance = relativeLuminance(firstRgb)
+  const secondLuminance = relativeLuminance(secondRgb)
+  const lighter = Math.max(firstLuminance, secondLuminance)
+  const darker = Math.min(firstLuminance, secondLuminance)
+
+  return (lighter + 0.05) / (darker + 0.05)
+}
 
 describe('resolveEffectiveTerminalAppearance', () => {
   it('uses the light terminal theme for system theme on light OS when light variant is enabled', () => {
@@ -187,6 +231,28 @@ describe('resolveEffectiveTerminalAppearance', () => {
         sourceLabel: 'Warp'
       })
     )
+  })
+})
+
+describe('default dark terminal theme selection contrast', () => {
+  it('keeps selection distinct from instruction blocks while preserving readable selected text', () => {
+    const theme = getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK)
+
+    expect(theme, `${DEFAULT_TERMINAL_THEME_DARK} should exist`).not.toBeNull()
+
+    const selectionBackground = theme?.selectionBackground
+    const selectionForeground = theme?.selectionForeground
+
+    expect(selectionBackground, 'selectionBackground should be defined').toBeDefined()
+    expect(selectionForeground, 'selectionForeground should be defined').toBeDefined()
+    if (!selectionBackground || !selectionForeground) {
+      throw new Error(`${DEFAULT_TERMINAL_THEME_DARK} is missing selection colors`)
+    }
+
+    expect(contrastRatio(selectionBackground, INSTRUCTION_BLOCK_BACKGROUND)).toBeGreaterThanOrEqual(
+      2
+    )
+    expect(contrastRatio(selectionForeground, selectionBackground)).toBeGreaterThanOrEqual(4.5)
   })
 })
 

@@ -52,18 +52,37 @@ function entry(
 
 function state(
   overrides: Partial<
-    Pick<AppState, 'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId'>
+    Pick<
+      AppState,
+      'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId' | 'ptyIdsByTabId'
+    >
   > = {}
 ) {
+  const terminalLayoutsByTabId = overrides.terminalLayoutsByTabId ?? {}
   return {
     agentStatusByPaneKey: {},
     tabsByWorktree: {
       [WORKTREE_ID]: [tab(TAB_ID)],
       [OTHER_WORKTREE_ID]: [tab(OTHER_TAB_ID, OTHER_WORKTREE_ID)]
     },
-    terminalLayoutsByTabId: {},
+    terminalLayoutsByTabId,
+    ptyIdsByTabId: deriveLivePtyIdsByTabId(terminalLayoutsByTabId),
     ...overrides
-  } as Pick<AppState, 'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId'>
+  } as Pick<
+    AppState,
+    'agentStatusByPaneKey' | 'tabsByWorktree' | 'terminalLayoutsByTabId' | 'ptyIdsByTabId'
+  >
+}
+
+function deriveLivePtyIdsByTabId(
+  terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
+): AppState['ptyIdsByTabId'] {
+  return Object.fromEntries(
+    Object.entries(terminalLayoutsByTabId).map(([tabId, layout]) => [
+      tabId,
+      Object.values(layout?.ptyIdsByLeafId ?? {})
+    ])
+  )
 }
 
 describe('running agent send targets', () => {
@@ -193,6 +212,34 @@ describe('running agent send targets', () => {
             ptyIdsByLeafId: { [LEFT_LEAF_ID]: 'pty-left' }
           }
         }
+      }),
+      WORKTREE_ID,
+      paneKey,
+      NOW
+    )
+
+    expect(target).toMatchObject({
+      paneKey,
+      ptyId: null,
+      status: 'disabled',
+      disabledReason: 'Terminal is no longer available'
+    })
+  })
+
+  it('disables a stale layout PTY after the live PTY map has been cleared', () => {
+    const paneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
+    const target = resolveRunningAgentSendTarget(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
+        terminalLayoutsByTabId: {
+          [TAB_ID]: {
+            root: { type: 'leaf', leafId: LEFT_LEAF_ID },
+            activeLeafId: LEFT_LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEFT_LEAF_ID]: 'pty-left' }
+          }
+        },
+        ptyIdsByTabId: { [TAB_ID]: [] }
       }),
       WORKTREE_ID,
       paneKey,

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   createGitHubPullRequestMock,
   createGitLabMergeRequestMock,
+  createAzureDevOpsPullRequestMock,
+  createGiteaPullRequestMock,
   getAzureDevOpsRepoSlugMock,
   getBitbucketRepoSlugMock,
   getGiteaRepoSlugMock,
@@ -13,6 +15,8 @@ const {
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
   createGitLabMergeRequestMock: vi.fn(),
+  createAzureDevOpsPullRequestMock: vi.fn(),
+  createGiteaPullRequestMock: vi.fn(),
   getAzureDevOpsRepoSlugMock: vi.fn(),
   getBitbucketRepoSlugMock: vi.fn(),
   getGiteaRepoSlugMock: vi.fn(),
@@ -50,10 +54,18 @@ vi.mock('../azure-devops/client', () => ({
   getAzureDevOpsPullRequest: vi.fn()
 }))
 
+vi.mock('../azure-devops/pull-request-creation', () => ({
+  createAzureDevOpsPullRequest: createAzureDevOpsPullRequestMock
+}))
+
 vi.mock('../gitea/client', () => ({
   getGiteaRepoSlug: getGiteaRepoSlugMock,
   getGiteaPullRequestForBranch: vi.fn(),
   getGiteaPullRequest: vi.fn()
+}))
+
+vi.mock('../gitea/pull-request-creation', () => ({
+  createGiteaPullRequest: createGiteaPullRequestMock
 }))
 
 import {
@@ -67,6 +79,8 @@ describe('forge provider interface', () => {
   beforeEach(() => {
     createGitHubPullRequestMock.mockReset()
     createGitLabMergeRequestMock.mockReset()
+    createAzureDevOpsPullRequestMock.mockReset()
+    createGiteaPullRequestMock.mockReset()
     getAzureDevOpsRepoSlugMock.mockReset()
     getBitbucketRepoSlugMock.mockReset()
     getGiteaRepoSlugMock.mockReset()
@@ -94,8 +108,8 @@ describe('forge provider interface', () => {
       ['gitlab', true],
       ['github', true],
       ['bitbucket', false],
-      ['azure-devops', false],
-      ['gitea', false]
+      ['azure-devops', true],
+      ['gitea', true]
     ])
     createGitHubPullRequestMock.mockResolvedValue({
       ok: true,
@@ -152,6 +166,78 @@ describe('forge provider interface', () => {
       '/repo',
       {
         provider: 'gitlab',
+        base: 'main',
+        head: 'feature/provider-interface',
+        title: 'Add provider interface'
+      },
+      'ssh-1'
+    )
+  })
+
+  it('routes Azure DevOps review creation through the shared provider contract', async () => {
+    createAzureDevOpsPullRequestMock.mockResolvedValue({
+      ok: true,
+      number: 88,
+      url: 'https://dev.azure.com/acme/Project/_git/orca/pullrequest/88'
+    })
+
+    const provider = getForgeProviderById('azure-devops')
+    await expect(
+      provider.createReview?.(
+        '/repo',
+        {
+          provider: 'azure-devops',
+          base: 'main',
+          head: 'feature/provider-interface',
+          title: 'Add provider interface'
+        },
+        'ssh-1'
+      )
+    ).resolves.toEqual({
+      ok: true,
+      number: 88,
+      url: 'https://dev.azure.com/acme/Project/_git/orca/pullrequest/88'
+    })
+    expect(createAzureDevOpsPullRequestMock).toHaveBeenCalledWith(
+      '/repo',
+      {
+        provider: 'azure-devops',
+        base: 'main',
+        head: 'feature/provider-interface',
+        title: 'Add provider interface'
+      },
+      'ssh-1'
+    )
+  })
+
+  it('routes Gitea review creation through the shared provider contract', async () => {
+    createGiteaPullRequestMock.mockResolvedValue({
+      ok: true,
+      number: 19,
+      url: 'https://git.example.com/team/orca/pulls/19'
+    })
+
+    const provider = getForgeProviderById('gitea')
+    await expect(
+      provider.createReview?.(
+        '/repo',
+        {
+          provider: 'gitea',
+          base: 'main',
+          head: 'feature/provider-interface',
+          title: 'Add provider interface'
+        },
+        'ssh-1'
+      )
+    ).resolves.toEqual({
+      ok: true,
+      number: 19,
+      url: 'https://git.example.com/team/orca/pulls/19'
+    })
+    expect(createGiteaPullRequestMock).toHaveBeenCalledWith(
+      '/repo',
+      {
+        provider: 'gitea',
         base: 'main',
         head: 'feature/provider-interface',
         title: 'Add provider interface'

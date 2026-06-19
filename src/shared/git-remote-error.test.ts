@@ -19,6 +19,20 @@ describe('normalizeGitErrorMessage', () => {
       "Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
     )
   })
+
+  it('explains how to configure a pull policy for divergent branches', () => {
+    const error = new Error(
+      'Command failed: git pull\n' +
+        'hint: You have divergent branches and need to specify how to reconcile them.\n' +
+        'fatal: Need to specify how to reconcile divergent branches.'
+    )
+
+    expect(normalizeGitErrorMessage(error, 'pull')).toBe(
+      'Pull needs a Git pull policy for divergent branches. Configure one for this repository ' +
+        'or host, then try again: git config pull.rebase false (merge), ' +
+        'git config pull.rebase true (rebase), or git config pull.ff only (fast-forward only).'
+    )
+  })
 })
 
 describe('formatSubmodulePushFailureDetail', () => {

@@ -115,6 +115,14 @@ export function listWslDistros(): string[] {
   }
 }
 
+export function hasCachedWslDistros(): boolean {
+  return wslDistroCache !== null
+}
+
+export function getCachedWslDistros(): string[] | null {
+  return wslDistroCache
+}
+
 export function getDefaultWslDistro(): string | null {
   return listWslDistros()[0] ?? null
 }
@@ -179,4 +187,26 @@ export function isWslAvailable(): boolean {
   }
 
   return wslAvailableCache
+}
+
+export function hasCachedWslAvailability(): boolean {
+  return wslAvailableCache !== null
+}
+
+export function getCachedWslAvailability(): boolean | null {
+  return wslAvailableCache
+}
+
+export function _resetWslCachesForTests(): void {
+  wslHomeCache.clear()
+  wslDistroCache = null
+  wslAvailableCache = null
+}
+
+export function _setWslCachesForTests(args: {
+  available?: boolean | null
+  distros?: string[] | null
+}): void {
+  wslAvailableCache = args.available ?? null
+  wslDistroCache = args.distros ?? null
 }

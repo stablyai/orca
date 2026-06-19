@@ -1,5 +1,5 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
-import { ALL_GROUP_KEY } from './worktree-list-groups'
+import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './worktree-list-groups'
 
 export type WorktreeDragUnitGroup = WorktreeDragGroup & {
   units: { worktreeId: string; worktreeIds: string[] }[]
@@ -8,7 +8,7 @@ export type WorktreeDragUnitGroup = WorktreeDragGroup & {
 type WorktreeDragUnitRow =
   | { type: 'host-header' }
   | { type: 'header'; key: string }
-  | { type: 'item'; worktree: { id: string }; depth: number }
+  | { type: 'item'; worktree: { id: string }; depth: number; sectionKey: string }
   | { type: 'imported-worktrees-card' }
   | { type: 'pending-creation' }
   | { type: 'folder-workspace' }
@@ -35,6 +35,9 @@ export function getWorktreeDragUnitGroups(
       row.type === 'pending-creation' ||
       row.type === 'folder-workspace'
     ) {
+      continue
+    }
+    if (row.sectionKey === PINNED_GROUP_KEY) {
       continue
     }
     if (!current) {

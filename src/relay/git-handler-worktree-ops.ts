@@ -1,9 +1,8 @@
 import * as path from 'path'
-import type { RemoveWorktreeResult } from '../shared/types'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
-import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
 import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
+export { removeWorktreeOp } from './git-handler-worktree-remove'
 
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
@@ -112,108 +111,10 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
   }
 }
 
-export async function removeWorktreeOp(
-  git: GitExec,
-  params: Record<string, unknown>
-): Promise<RemoveWorktreeResult> {
-  const worktreePath = params.worktreePath as string
-  const force = params.force as boolean | undefined
-  const deleteBranch = params.deleteBranch !== false
-  const forceBranchDelete = params.forceBranchDelete === true
-
-  let repoPath = worktreePath
-  try {
-    const { stdout } = await git(['rev-parse', '--git-common-dir'], worktreePath)
-    const commonDir = stdout.trim()
-    if (commonDir && commonDir !== '.git') {
-      repoPath = path.resolve(worktreePath, commonDir, '..')
-    }
-  } catch {
-    // fall through with worktreePath as repo
-  }
-
-  const worktreesBeforeRemoval = await listRelayWorktrees(git, repoPath)
-  const removedWorktree = worktreesBeforeRemoval.find((worktree) =>
-    areRelayWorktreePathsEqual(worktree.path, worktreePath)
-  )
-  const branchName = normalizeLocalBranchRef(removedWorktree?.branch ?? '')
-  const branchHead = removedWorktree?.head ?? ''
-
-  const args = ['worktree', 'remove']
-  if (force) {
-    args.push('--force')
-  }
-  args.push(worktreePath)
-  await git(args, repoPath)
-  await git(['worktree', 'prune'], repoPath)
-
-  if (!branchName) {
-    return {}
-  }
-  if (!deleteBranch) {
-    return {}
-  }
-
-  // Why: SSH worktree deletion should mirror local deletion. Dropping the
-  // branch also removes its upstream config, which lets fork-remotes cleanup
-  // after the last PR review worktree is gone.
-  const worktreesAfterPrune = await listRelayWorktrees(git, repoPath)
-  const branchStillInUse = worktreesAfterPrune.some(
-    (worktree) => normalizeLocalBranchRef(worktree.branch ?? '') === branchName
-  )
-  if (branchStillInUse) {
-    return {}
-  }
-
-  try {
-    // Why: use `-d` (not `-D`) to mirror the local removeWorktree fix — Git
-    // refuses to delete a branch with commits not merged into its upstream or
-    // HEAD, so unpublished work on a remote worktree is preserved rather than
-    // force-deleted. forceBranchDelete is reserved for failed create rollback.
-    await git(['branch', forceBranchDelete ? '-D' : '-d', '--', branchName], repoPath)
-    return {}
-  } catch (error) {
-    if (!forceBranchDelete && branchHead) {
-      try {
-        if (
-          await deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
-            git,
-            repoPath,
-            branchName,
-            branchHead
-          )
-        ) {
-          return {}
-        }
-      } catch (alreadyMergedDeleteError) {
-        // Why: worktree is gone; preserve branch recovery on cleanup races.
-        console.warn(
-          `relay removeWorktree: failed to delete already-merged local branch "${branchName}" after removing worktree`,
-          alreadyMergedDeleteError
-        )
-      }
-    }
-    // Expected when the branch still has unmerged/unpublished commits: keep it.
-    console.warn(
-      `relay removeWorktree: preserved local branch "${branchName}" after removing worktree (not fully merged)`,
-      error
-    )
-    return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
-  }
-}
-
 type RelayWorktreeInfo = {
   path: string
   branch?: string
   head?: string
-}
-
-async function listRelayWorktrees(git: GitExec, repoPath: string): Promise<RelayWorktreeInfo[]> {
-  try {
-    return await readRelayWorktreeList(git, repoPath)
-  } catch {
-    return []
-  }
 }
 
 export async function readRelayWorktreeList(
@@ -244,14 +145,29 @@ function normalizeRelayWorktrees(worktrees: Record<string, unknown>[]): RelayWor
     .filter((worktree) => worktree.path.length > 0)
 }
 
-function normalizeLocalBranchRef(branch: string): string {
-  return branch.replace(/^refs\/heads\//, '')
+function isPosixAbsolutePath(value: string): boolean {
+  return value.startsWith('/')
+}
+
+function isWindowsAbsolutePath(value: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\')
+}
+
+function normalizeRelayWorktreePathForCompare(value: string): string {
+  if (isPosixAbsolutePath(value)) {
+    return path.posix.normalize(path.posix.resolve(value))
+  }
+  if (isWindowsAbsolutePath(value)) {
+    return path.win32.normalize(path.win32.resolve(value))
+  }
+  return path.normalize(path.resolve(value))
 }
 
 export function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolean {
-  const left = path.normalize(path.resolve(leftPath))
-  const right = path.normalize(path.resolve(rightPath))
-  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
+  const left = normalizeRelayWorktreePathForCompare(leftPath)
+  const right = normalizeRelayWorktreePathForCompare(rightPath)
+  const compareCaseInsensitive = isWindowsAbsolutePath(leftPath) && isWindowsAbsolutePath(rightPath)
+  return compareCaseInsensitive ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
 export async function worktreeIsCleanOp(

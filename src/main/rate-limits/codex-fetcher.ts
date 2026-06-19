@@ -1,8 +1,15 @@
 /* eslint-disable max-lines -- Why: keeping both Codex RPC and PTY fallback
 paths together in one file makes it easier to audit the protocol/parsing
 differences and ensure account-scoped env handling stays identical. */
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type {
+  CodexRateLimitResetOutcome,
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { codexAuthExists } from './codex-auth-presence'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
@@ -37,6 +44,10 @@ type RpcRateWindow = {
   resetsAt?: number // Unix seconds
 }
 
+type RateLimitResetCredits = {
+  availableCount: number
+}
+
 type RpcRateLimitsResult = {
   primary?: RpcRateWindow
   secondary?: RpcRateWindow
@@ -46,6 +57,30 @@ type RpcRateLimitsResult = {
 // The actual response shape is `{ rateLimits: { primary, secondary, ... } }`.
 type RpcRateLimitsResponse = {
   rateLimits?: RpcRateLimitsResult
+  rateLimitResetCredits?: {
+    availableCount?: number
+  } | null
+}
+
+type CodexAuthFile = {
+  tokens?: {
+    access_token?: string
+    account_id?: string
+  }
+}
+
+type BackendUsageResponse = {
+  rate_limit_reset_credits?: {
+    available_count?: number
+  } | null
+}
+
+type BackendConsumeRateLimitResetCreditResponse = {
+  code?: string
+}
+
+type CodexBackendAuthHeaders = {
+  headers: Record<string, string>
 }
 
 function shellQuote(value: string): string {
@@ -81,6 +116,131 @@ function cloneProcessEnvWithoutCodexHome(): NodeJS.ProcessEnv {
 
 function buildRpcMessage(id: number, method: string, params?: unknown): string {
   return `${JSON.stringify({ jsonrpc: '2.0', id, method, params: params ?? {} })}\n`
+}
+
+function getCodexHomePath(codexHomePath?: string | null): string {
+  return codexHomePath ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
+}
+
+function mapRpcRateLimitResetCredits(
+  raw: RpcRateLimitsResponse['rateLimitResetCredits']
+): RateLimitResetCredits | null | undefined {
+  if (!raw) {
+    return raw
+  }
+  if (typeof raw.availableCount !== 'number' || !Number.isFinite(raw.availableCount)) {
+    return null
+  }
+  return { availableCount: Math.max(0, Math.floor(raw.availableCount)) }
+}
+
+function mapBackendRateLimitResetCredits(
+  raw: BackendUsageResponse['rate_limit_reset_credits']
+): RateLimitResetCredits | null | undefined {
+  if (!raw) {
+    return raw
+  }
+  if (typeof raw.available_count !== 'number' || !Number.isFinite(raw.available_count)) {
+    return null
+  }
+  return { availableCount: Math.max(0, Math.floor(raw.available_count)) }
+}
+
+async function getCodexBackendAuthHeaders(
+  options?: FetchCodexRateLimitsOptions
+): Promise<CodexBackendAuthHeaders | null> {
+  const authPath = join(getCodexHomePath(options?.codexHomePath), 'auth.json')
+  const auth = JSON.parse(await readFile(authPath, 'utf8')) as CodexAuthFile
+  const accessToken = auth.tokens?.access_token
+  if (!accessToken) {
+    return null
+  }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    'User-Agent': 'codex-cli'
+  }
+  if (auth.tokens?.account_id) {
+    headers['ChatGPT-Account-Id'] = auth.tokens.account_id
+  }
+  return { headers }
+}
+
+async function fetchBackendRateLimitResetCredits(
+  options?: FetchCodexRateLimitsOptions
+): Promise<RateLimitResetCredits | null> {
+  const auth = await getCodexBackendAuthHeaders(options)
+  if (!auth) {
+    return null
+  }
+  // Why: published Codex 0.140 can read windows through app-server but strips
+  // reset-credit metadata that the backend already returns.
+  const response = await fetch('https://chatgpt.com/backend-api/wham/usage', auth)
+  if (!response.ok) {
+    return null
+  }
+  const payload = (await response.json()) as BackendUsageResponse
+  return mapBackendRateLimitResetCredits(payload.rate_limit_reset_credits) ?? null
+}
+
+async function withBackendRateLimitResetCredits(
+  limits: ProviderRateLimits,
+  options?: FetchCodexRateLimitsOptions
+): Promise<ProviderRateLimits> {
+  if (limits.provider !== 'codex' || limits.rateLimitResetCredits !== undefined) {
+    return limits
+  }
+  try {
+    const rateLimitResetCredits = await fetchBackendRateLimitResetCredits(options)
+    return rateLimitResetCredits === null ? limits : { ...limits, rateLimitResetCredits }
+  } catch {
+    return limits
+  }
+}
+
+function mapBackendConsumeOutcome(code: string | undefined): CodexRateLimitResetOutcome {
+  if (code === 'reset') {
+    return 'reset'
+  }
+  if (code === 'nothing_to_reset') {
+    return 'nothingToReset'
+  }
+  if (code === 'no_credit') {
+    return 'noCredit'
+  }
+  if (code === 'already_redeemed') {
+    return 'alreadyRedeemed'
+  }
+  throw new Error(`Unknown Codex reset outcome: ${code ?? 'missing'}`)
+}
+
+export async function consumeCodexRateLimitResetCredit(options: {
+  codexHomePath?: string | null
+  idempotencyKey: string
+}): Promise<CodexRateLimitResetOutcome> {
+  if (!options.idempotencyKey.trim()) {
+    throw new Error('Codex reset idempotency key is required')
+  }
+  const auth = await getCodexBackendAuthHeaders(options)
+  if (!auth) {
+    throw new Error('Codex not signed in')
+  }
+  const response = await fetch(
+    'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume',
+    {
+      method: 'POST',
+      headers: {
+        ...auth.headers,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ redeem_request_id: options.idempotencyKey })
+    }
+  )
+  if (!response.ok) {
+    throw new Error(`Codex reset failed: HTTP ${response.status}`)
+  }
+  const payload = (await response.json()) as BackendConsumeRateLimitResetCreditResponse
+  return mapBackendConsumeOutcome(payload.code)
 }
 
 function mapRpcWindow(
@@ -273,12 +433,16 @@ async function fetchViaRpc(options?: FetchCodexRateLimitsOptions): Promise<Provi
             const result = wrapper?.rateLimits
             const session = mapRpcWindow(result?.primary, 300)
             const weekly = mapRpcWindow(result?.secondary, 10080)
+            const rateLimitResetCredits = mapRpcRateLimitResetCredits(
+              wrapper?.rateLimitResetCredits
+            )
 
             settle(
               {
                 provider: 'codex',
                 session,
                 weekly,
+                ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {}),
                 updatedAt: Date.now(),
                 error: null,
                 status: 'ok'
@@ -539,7 +703,7 @@ export async function fetchCodexRateLimits(
   try {
     const rpcResult = await fetchViaRpc(options)
     if (rpcResult.status === 'ok' || rpcResult.status === 'unavailable') {
-      return rpcResult
+      return await withBackendRateLimitResetCredits(rpcResult, options)
     }
     if (isCodexAuthError(rpcResult.error)) {
       return rpcResult
@@ -565,7 +729,7 @@ export async function fetchCodexRateLimits(
 
   // Path B: PTY fallback
   try {
-    return await fetchViaPty(options)
+    return await withBackendRateLimitResetCredits(await fetchViaPty(options), options)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     const isNotInstalled = message.includes('ENOENT')

@@ -9,6 +9,7 @@ import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
+import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
   PROTOCOL_VERSION,
   type CreateOrAttachResult,
@@ -20,6 +21,15 @@ import {
 } from './types'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { isShellProcess } from '../../shared/agent-detection'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+
+type ColdRestorePayload = {
+  scrollback: string
+  cwd: string
+  oscLinks?: TerminalOscLinkRange[]
+}
 
 export type DaemonPtyAdapterOptions = {
   socketPath: string
@@ -69,7 +79,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // Why: React StrictMode double-mounts: mount → cold restore → unmount →
   // mount → ??? The sticky cache returns the same cold restore data on the
   // second mount until the renderer explicitly acknowledges it.
-  private coldRestoreCache = new Map<string, { scrollback: string; cwd: string }>()
+  private coldRestoreCache = new Map<string, ColdRestorePayload>()
   private activeSessionIds = new Set<string>()
   private dirtySessionVersions = new Map<string, number>()
   // Why: a cold-restored session is a fresh shell whose on-disk checkpoint and
@@ -133,6 +143,20 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     await this.ensureConnected()
 
+    const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+    const isCodexStartupCommand =
+      recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
+    const shouldWaitForShellReady =
+      isCodexStartupCommand &&
+      shouldUseShellReadyStartupDelivery({
+        command: opts.command,
+        startupCommandDelivery: opts.startupCommandDelivery
+      })
+    const shellReadyTimeoutMs =
+      shellReadySupported && isCodexStartupCommand && !shouldWaitForShellReady
+        ? CODEX_SHELL_READY_TIMEOUT_MS
+        : undefined
+
     const result = await this.client.request<CreateOrAttachResult>('createOrAttach', {
       sessionId,
       cols: effectiveCols,
@@ -141,6 +165,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       env: opts.env,
       envToDelete: opts.envToDelete,
       command: opts.command,
+      startupCommandDelivery: opts.startupCommandDelivery,
       // Why: without this, the daemon always spawns cmd.exe (COMSPEC) or
       // PowerShell as a fallback — regardless of which shell the renderer
       // asked for in the "+" menu or persisted as the default. Forwarding
@@ -149,7 +174,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
-      shellReadySupported: opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+      shellReadySupported,
+      ...(shellReadyTimeoutMs !== undefined ? { shellReadyTimeoutMs } : {})
     })
 
     if (effectiveCwd) {
@@ -202,7 +228,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
       }
       if (scrollback) {
-        const coldRestore = { scrollback, cwd: restoreInfo.cwd }
+        const coldRestore = { scrollback, cwd: restoreInfo.cwd, oscLinks: restoreInfo.oscLinks }
         this.coldRestoreCache.set(sessionId, coldRestore)
         return { id: sessionId, pid, coldRestore }
       }
@@ -268,10 +294,20 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.client.request('kill', { sessionId: id })
+    // Why: sleep/exact-stop must preserve restorable terminal history,
+    // so force a final checkpoint before killing the daemon session.
+    if (opts.keepHistory) {
+      await this.checkpointSessions([id], { final: true })
+    }
+    await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
     this.activeSessionIds.delete(id)
     this.dirtySessionVersions.delete(id)
     this.coldRestoreCache.delete(id)
+    // Why: the !keepHistory close path doesn't take a final checkpoint, so a
+    // session stranded in sessionsNeedingFullCheckpoint would never be cleared.
+    // (Under keepHistory the final checkpoint above already cleared the flag, so
+    // this is a harmless no-op there — kept unconditional to cover both paths.)
+    this.sessionsNeedingFullCheckpoint.delete(id)
     this.stopCheckpointTimerIfIdle()
     this.initialCwds.delete(id)
     // Why: history removal is for the "user explicitly closed this terminal"
@@ -367,7 +403,15 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   /** Called on app launch. Lists daemon sessions, kills orphans whose
-   *  workspaceId no longer exists, and caches alive session IDs. */
+   *  workspaceId no longer exists, and caches alive session IDs.
+   *
+   *  IMPORTANT: a session id embeds the worktree id it was minted under, which is
+   *  the worktree's *path* at spawn time. When a worktree folder is renamed, its
+   *  id changes but live sessions keep the old id. Callers MUST therefore seed
+   *  `validWorktreeIds` with each live worktree's `WorktreeMeta.priorWorktreeIds`
+   *  (the pre-rename aliases) or those sessions will be reaped as false orphans.
+   *  This reconcile has no production caller yet; wire the alias in when it gains
+   *  one. */
   async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
     alive: string[]
     killed: string[]
@@ -834,6 +878,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.activeSessionIds.delete(event.sessionId)
         this.dirtySessionVersions.delete(event.sessionId)
         this.coldRestoreCache.delete(event.sessionId)
+        // Why: an exited session can never be checkpointed again, so its pending
+        // full-checkpoint flag is dead state. Without this, a cold-restored
+        // session that exits before its first checkpoint leaks a permanent entry.
+        this.sessionsNeedingFullCheckpoint.delete(event.sessionId)
         this.stopCheckpointTimerIfIdle()
         if (this.historyManager) {
           void this.historyManager

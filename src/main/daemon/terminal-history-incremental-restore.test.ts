@@ -72,6 +72,23 @@ describe('incremental terminal history restore', () => {
     expect(restore!.scrollbackAnsi).toContain('from tail after checkpoint')
   })
 
+  it('preserves checkpoint OSC link ranges while replaying the log tail', async () => {
+    await manager.checkpoint(
+      SESSION_ID,
+      snapshotOf(['\x1b]8;;https://example.com/issue/1234\x07#1234\x1b]8;;\x07\r\n'])
+    )
+    await manager.appendIncrements(SESSION_ID, 1, [{ kind: 'output', data: 'tail\r\n' }])
+
+    const restore = reader.detectColdRestore(SESSION_ID)
+    expect(restore).not.toBeNull()
+    expect(restore!.oscLinks).toContainEqual({
+      row: 0,
+      startCol: 0,
+      endCol: 5,
+      uri: 'https://example.com/issue/1234'
+    })
+  })
+
   it('ignores a stale log whose generation predates the checkpoint', async () => {
     await manager.appendIncrements(SESSION_ID, 1, [{ kind: 'output', data: 'stale tail\r\n' }])
     // Simulate a crash between checkpoint rename and log reset: write the

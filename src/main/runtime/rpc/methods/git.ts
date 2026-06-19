@@ -7,17 +7,20 @@ import {
   GitBranchDiff,
   GitBulkPaths,
   GitCheckIgnored,
+  GitCheckout,
   GitCommit,
   GitCommitCompare,
   GitCommitDiff,
   GitDiscoverCommitMessageModels,
   GitDiff,
   GitFilePath,
+  GitForkSync,
   GitGenerateCommitMessage,
   GitGeneratePullRequestFields,
   GitHistory,
   GitPush,
   GitRebaseFromBase,
+  GitRemoteCommitUrl,
   GitRemoteFileUrl,
   GitStatusParams,
   GitTargetedRemote,
@@ -120,6 +123,17 @@ export const GIT_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
   }),
   defineMethod({
+    name: 'git.checkout',
+    params: GitCheckout,
+    handler: async (params, { runtime }) =>
+      runtime.checkoutRuntimeGitBranch(params.worktree, params.branch)
+  }),
+  defineMethod({
+    name: 'git.localBranches',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.listRuntimeGitLocalBranches(params.worktree)
+  }),
+  defineMethod({
     name: 'git.diff',
     params: GitDiff,
     handler: async (params, { runtime }) =>
@@ -157,6 +171,12 @@ export const GIT_METHODS: RpcMethod[] = [
       params.pushTarget === undefined
         ? runtime.fetchRuntimeGit(params.worktree)
         : runtime.fetchRuntimeGit(params.worktree, params.pushTarget)
+  }),
+  defineMethod({
+    name: 'git.forkSync',
+    params: GitForkSync,
+    handler: async (params, { runtime }) =>
+      runtime.syncRuntimeGitForkDefaultBranch(params.worktree, params.expectedUpstream)
   }),
   defineMethod({
     name: 'git.pull',
@@ -258,7 +278,9 @@ export const GIT_METHODS: RpcMethod[] = [
         base: params.base,
         title: params.title,
         body: params.body,
-        draft: params.draft
+        draft: params.draft,
+        provider: params.provider,
+        useTemplate: params.useTemplate
       }
       const override = buildCommitMessageGenerationOverride(params)
       if (override === undefined) {
@@ -314,5 +336,11 @@ export const GIT_METHODS: RpcMethod[] = [
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>
       runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
+  }),
+  defineMethod({
+    name: 'git.remoteCommitUrl',
+    params: GitRemoteCommitUrl,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitRemoteCommitUrl(params.worktree, params.sha)
   })
 ]

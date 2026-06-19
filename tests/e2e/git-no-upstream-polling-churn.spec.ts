@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process'
-import { existsSync, readFileSync, realpathSync } from 'fs'
+import { existsSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'fs'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 
@@ -91,8 +91,16 @@ async function readDiagnosticsStatus(page: Page): Promise<DiagnosticsStatus> {
   return page.evaluate(() => window.api.diagnostics.getStatus() as Promise<DiagnosticsStatus>)
 }
 
-async function clearTraceFile(page: Page): Promise<void> {
-  await page.evaluate(() => window.api.diagnostics.clearTraces())
+function clearTraceFile(diagnostics: DiagnosticsStatus): void {
+  if (existsSync(diagnostics.traceFilePath)) {
+    writeFileSync(diagnostics.traceFilePath, '', 'utf8')
+  }
+  for (let i = 1; i < 10; i++) {
+    const rotatedPath = `${diagnostics.traceFilePath}.${i}`
+    if (existsSync(rotatedPath)) {
+      unlinkSync(rotatedPath)
+    }
+  }
 }
 
 async function flushTraceFile(page: Page, diagnostics: DiagnosticsStatus): Promise<void> {
@@ -195,7 +203,7 @@ test.describe('Git no-upstream polling churn repro', () => {
     const diagnostics = await readDiagnosticsStatus(orcaPage)
     test.skip(!diagnostics.localFileEnabled, 'local diagnostic traces are disabled')
 
-    await clearTraceFile(orcaPage)
+    clearTraceFile(diagnostics)
     const measurement = await measureRendererDuringPolling(orcaPage)
     await flushTraceFile(orcaPage, diagnostics)
     const counts = readGitProbeFailureCounts(diagnostics.traceFilePath, repoPath)

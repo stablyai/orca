@@ -1,76 +1,25 @@
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 
-// Why: keep these shapes in lockstep with src/shared/types.ts and
-// src/shared/rate-limit-types.ts. We don't import from desktop here because
-// the mobile bundle must not pull in Electron-coupled type files.
-export type RateLimitWindow = {
-  usedPercent: number
-  windowMinutes: number
-  resetsAt: number | null
-  resetDescription: string | null
-}
-
-export type ProviderRateLimits = {
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go'
-  session: RateLimitWindow | null
-  weekly: RateLimitWindow | null
-  monthly?: RateLimitWindow | null
-  updatedAt: number
-  error: string | null
-  status: 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
-}
-
-export type InactiveAccountUsage = {
-  accountId: string
-  claude: ProviderRateLimits | null
-  updatedAt: number
-  isFetching: boolean
-}
-
-export type ClaudeAccountSummary = {
-  id: string
-  email: string
-  organizationName?: string | null
-}
-
-export type CodexAccountSummary = {
-  id: string
-  email: string
-  workspaceLabel?: string | null
-}
-
-export type AccountsSnapshot = {
-  claude: { accounts: ClaudeAccountSummary[]; activeAccountId: string | null }
-  codex: { accounts: CodexAccountSummary[]; activeAccountId: string | null }
-  rateLimits: {
-    claude: ProviderRateLimits | null
-    codex: ProviderRateLimits | null
-    inactiveClaudeAccounts: InactiveAccountUsage[]
-    inactiveCodexAccounts: InactiveAccountUsage[]
-  }
-}
-
-export type ProviderKey = 'claude' | 'codex'
-
-export function getActiveProviderRateLimits(
-  snapshot: AccountsSnapshot,
-  provider: ProviderKey
-): ProviderRateLimits | null {
-  return provider === 'claude' ? snapshot.rateLimits.claude : snapshot.rateLimits.codex
-}
-
-export function getInactiveProviderUsage(
-  snapshot: AccountsSnapshot,
-  provider: ProviderKey,
-  accountId: string
-): InactiveAccountUsage | null {
-  const list =
-    provider === 'claude'
-      ? snapshot.rateLimits.inactiveClaudeAccounts
-      : snapshot.rateLimits.inactiveCodexAccounts
-  return list.find((u) => u.accountId === accountId) ?? null
-}
+// Pure types and selectors live in account-usage-state.ts (no RN imports) so
+// they are unit-testable; re-exported here so existing import sites are stable.
+export type {
+  RateLimitWindow,
+  ProviderRateLimits,
+  InactiveAccountUsage,
+  ClaudeAccountSummary,
+  CodexAccountSummary,
+  AccountsSnapshot,
+  ProviderKey,
+  UsageBarState
+} from './account-usage-state'
+export {
+  getActiveProviderRateLimits,
+  getInactiveProviderUsage,
+  getUsageBarState,
+  hasActiveProviderUsage,
+  hasRenderableUsage
+} from './account-usage-state'
 
 // Why: matches desktop StatusBar convention — bars show percent remaining
 // (so a fresh account renders full, a depleted one renders empty), not

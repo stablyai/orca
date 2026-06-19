@@ -23,6 +23,11 @@ export function unregisterLivePaneManager(manager: AtlasResettablePaneManager): 
  */
 export function resetAllTerminalWebglAtlases(): void {
   for (const manager of liveManagers) {
-    manager.resetWebglTextureAtlases()
+    try {
+      manager.resetWebglTextureAtlases()
+    } catch {
+      // Why: stale WebGL recovery is best-effort during pane teardown; one
+      // disposed manager should not prevent sibling terminals from repainting.
+    }
   }
 }

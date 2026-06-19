@@ -15,6 +15,7 @@ export type GitHubPRMergeStateInput = {
   checksStatus?: CheckStatus
   checksSummary?: GitHubPRCheckSummary
   autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
 }
 
@@ -58,12 +59,13 @@ function isConflicting(item: GitHubPRMergeStateInput): boolean {
 }
 
 // Why: GitHub rejects enabling auto-merge on a conflicting PR, so offering it
-// there only yields an error toast. Already-armed and merge-queue PRs have their
-// own actions; everything else open can arm auto-merge like GitHub's own box.
+// there only yields an error toast. Repos can also disable auto-merge entirely,
+// so suppress the action when GitHub explicitly reports that setting is off.
 function canEnableAutoMerge(item: GitHubPRMergeStateInput): boolean {
   return (
     item.state === 'open' &&
     item.autoMergeEnabled !== true &&
+    item.autoMergeAllowed !== false &&
     item.mergeQueueRequired !== true &&
     !isConflicting(item)
   )

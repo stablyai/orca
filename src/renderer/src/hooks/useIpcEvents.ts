@@ -8,6 +8,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
+import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
   SPLIT_TERMINAL_PANE_EVENT,
@@ -78,6 +79,7 @@ import {
 } from '@/components/browser-pane/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
 import { detectLanguage } from '@/lib/language-detect'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
@@ -87,6 +89,7 @@ import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { AppState } from '../store/types'
+import { guardPinnedTabClose, resolvePinnedTabLabel } from '../store/pinned-tab-close-guard'
 import {
   closeWebRuntimeSessionTab,
   createWebRuntimeSessionBrowserTab,
@@ -111,6 +114,7 @@ import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-tit
 import { titleHasAgentName } from '../../../shared/agent-detection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { translate } from '@/i18n/i18n'
+import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -211,6 +215,13 @@ const MAX_PENDING_AGENT_STATUS_EVENTS = 100
 // Why: mobile driver hydration is async; cap transient replay so a stuck IPC
 // snapshot cannot retain an unbounded startup buffer.
 const MAX_PENDING_MOBILE_STATE_EVENTS = 300
+// Why: a folder rename emits a burst of `worktrees:changed` events while the
+// worktree list lags the on-disk move, so the deletion diff can transiently see
+// the old OR new id as "removed" and tear down the live worktree's PTYs. Protect
+// both ids of a recent rename from that diff for a short grace window — genuine
+// out-of-band deletions still purge once it lapses. Keyed worktreeId -> expiry ms.
+const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
+const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 let remoteWorkspaceSnapshotApplyDepth = 0
 let remoteWorkspaceSnapshotWriteSuppressUntil = 0
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
@@ -715,13 +726,27 @@ export function useIpcEvents(): void {
     type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
     const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
     let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
-    const runtimeClientEventsSubscriptions = new Map<string, () => void>()
-    const runtimeClientEventsPending = new Set<string>()
-    let runtimeClientEventsGeneration = 0
 
     unsubs.push(attachMobileMarkdownBridge())
 
-    const handleWorktreesChanged = async (repoId: string): Promise<void> => {
+    const handleWorktreesChanged = async (
+      repoId: string,
+      renamed?: { oldWorktreeId: string; newWorktreeId: string }
+    ): Promise<void> => {
+      // Why: a folder rename changes the worktree's path-derived id. Re-key every
+      // worktree-scoped map to the new id BEFORE the deletion diff below so the
+      // rename is not mistaken for a deletion that would tear down the live
+      // worktree. Capture active-ness before migrating (which moves the pointer).
+      const renamedWasActive =
+        renamed != null && useAppStore.getState().activeWorktreeId === renamed.oldWorktreeId
+      if (renamed) {
+        // Shield both ids from the deletion diff across the rename's event burst
+        // (any event, any order) — the worktree list lags the on-disk move.
+        const expiry = Date.now() + WORKTREE_RENAME_PURGE_GRACE_MS
+        recentlyRenamedWorktreeIdExpiry.set(renamed.oldWorktreeId, expiry)
+        recentlyRenamedWorktreeIdExpiry.set(renamed.newWorktreeId, expiry)
+        useAppStore.getState().migrateWorktreeIdentity(renamed.oldWorktreeId, renamed.newWorktreeId)
+      }
       // Why: diff before vs. after fetchWorktrees to detect server-side
       // deletions (CLI `orca worktree rm`, other window, out-of-band RPC)
       // and purge worktree-scoped state for removed ids. Without this,
@@ -734,15 +759,35 @@ export function useIpcEvents(): void {
         getVisibleWorktreeIdsForRepo(state, repoId)
       await state.fetchWorktrees(repoId)
       await useAppStore.getState().fetchWorktreeLineage()
+      // Why: changing the worktree's id unmounts the active pane without
+      // re-rendering it under the new id. Now that the list has refreshed,
+      // re-activate the renamed worktree so its tab model reconciles and the
+      // pane reconnects — otherwise the tab vanishes until manual re-selection.
+      if (renamedWasActive && renamed) {
+        useAppStore.getState().setActiveWorktree(renamed.newWorktreeId)
+      }
       const afterState = useAppStore.getState()
       const after = getAuthoritativeDetectedWorktreeIds(afterState, repoId)
       if (!after) {
         return
       }
+      const now = Date.now()
       const removed: string[] = []
       for (const id of before) {
-        if (!after.has(id)) {
-          removed.push(id)
+        if (after.has(id)) {
+          continue
+        }
+        // A recently renamed worktree's old/new id is not a deletion — its
+        // state moved (or is moving) to the new id; the list just lags.
+        const graceExpiry = recentlyRenamedWorktreeIdExpiry.get(id)
+        if (graceExpiry != null && graceExpiry > now) {
+          continue
+        }
+        removed.push(id)
+      }
+      for (const [id, expiry] of recentlyRenamedWorktreeIdExpiry) {
+        if (expiry <= now) {
+          recentlyRenamedWorktreeIdExpiry.delete(id)
         }
       }
       if (removed.length > 0) {
@@ -834,76 +879,15 @@ export function useIpcEvents(): void {
         })
     }
 
-    const stopRuntimeClientEvents = (): void => {
-      runtimeClientEventsGeneration += 1
-      for (const unsubscribe of runtimeClientEventsSubscriptions.values()) {
-        unsubscribe()
-      }
-      runtimeClientEventsSubscriptions.clear()
-      runtimeClientEventsPending.clear()
-    }
+    const runtimeClientEventsSync = createRuntimeClientEventsSync({
+      getDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds,
+      subscribe: subscribeRuntimeClientEvents,
+      onEvent: handleRuntimeClientEvent
+    })
 
-    const syncRuntimeClientEventsSubscription = (): void => {
-      const desiredIds = new Set(getRuntimeClientEventEnvironmentIds())
-      for (const [environmentId, unsubscribe] of runtimeClientEventsSubscriptions) {
-        if (desiredIds.has(environmentId)) {
-          continue
-        }
-        unsubscribe()
-        runtimeClientEventsSubscriptions.delete(environmentId)
-      }
-      for (const environmentId of desiredIds) {
-        if (
-          runtimeClientEventsSubscriptions.has(environmentId) ||
-          runtimeClientEventsPending.has(environmentId)
-        ) {
-          continue
-        }
-        runtimeClientEventsPending.add(environmentId)
-        const generation = runtimeClientEventsGeneration
-        void subscribeRuntimeClientEvents(
-          environmentId,
-          (event) => handleRuntimeClientEvent(environmentId, event),
-          (error) => {
-            console.warn('[runtime-client-events] subscription error:', error)
-          }
-        )
-          .then((subscription) => {
-            runtimeClientEventsPending.delete(environmentId)
-            if (
-              generation !== runtimeClientEventsGeneration ||
-              !getRuntimeClientEventEnvironmentIds().includes(environmentId)
-            ) {
-              subscription.unsubscribe()
-              return
-            }
-            runtimeClientEventsSubscriptions.set(environmentId, subscription.unsubscribe)
-          })
-          .catch((error) => {
-            runtimeClientEventsPending.delete(environmentId)
-            if (generation === runtimeClientEventsGeneration) {
-              console.warn('[runtime-client-events] failed to subscribe:', error)
-            }
-          })
-      }
-      for (const environmentId of runtimeClientEventsPending) {
-        if (desiredIds.has(environmentId)) {
-          continue
-        }
-        runtimeClientEventsPending.delete(environmentId)
-      }
-      if (desiredIds.size === 0 && runtimeClientEventsSubscriptions.size === 0) {
-        runtimeClientEventsGeneration += 1
-      }
-    }
-
-    const unsubscribeRuntimeClientEventsSubscription = (): void => {
-      stopRuntimeClientEvents()
-    }
-
-    syncRuntimeClientEventsSubscription()
-    unsubs.push(useAppStore.subscribe(syncRuntimeClientEventsSubscription))
-    unsubs.push(unsubscribeRuntimeClientEventsSubscription)
+    runtimeClientEventsSync.sync()
+    unsubs.push(useAppStore.subscribe(runtimeClientEventsSync.sync))
+    unsubs.push(runtimeClientEventsSync.stop)
 
     unsubs.push(
       window.api.repos.onChanged(() => {
@@ -921,14 +905,21 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.worktrees.onChanged(async (data: { repoId: string }) => {
-        if (isRuntimeEnvironmentActive()) {
-          // Why: local worktree events carry local repo ids. Fetching the
-          // active runtime with those ids can purge or overwrite server state.
-          return
+      window.api.worktrees.onChanged(
+        async (data: {
+          repoId: string
+          renamed?: { oldWorktreeId: string; newWorktreeId: string }
+        }) => {
+          if (isRuntimeEnvironmentActive()) {
+            // Why: local worktree events carry local repo ids. Fetching the
+            // active runtime with those ids can purge or overwrite server state.
+            return
+          }
+          // A folder rename changes the worktree id; handleWorktreesChanged
+          // re-keys state and shields it from the deletion diff (see there).
+          await handleWorktreesChanged(data.repoId, data.renamed)
         }
-        await handleWorktreesChanged(data.repoId)
-      })
+      )
     )
 
     unsubs.push(
@@ -1008,6 +999,15 @@ export function useIpcEvents(): void {
             }
           }
         })
+      })
+    )
+
+    // Why: UI view-state (group/sort/filters, collapsed groups, etc.) is shared
+    // with mobile via the ui.set RPC. When mobile changes it, main broadcasts so
+    // the desktop re-hydrates and the sidebar reflects it live — bi-directional.
+    unsubs.push(
+      window.api.ui.onStateChanged((ui) => {
+        useAppStore.getState().hydratePersistedUI(ui)
       })
     )
 
@@ -1092,6 +1092,19 @@ export function useIpcEvents(): void {
             return
           }
           runWorktreeDelete(store.activeWorktreeId)
+        })
+      )
+    }
+
+    if (window.api.ui.onOpenWorkspaceBoard) {
+      unsubs.push(
+        window.api.ui.onOpenWorkspaceBoard(() => {
+          const store = useAppStore.getState()
+          if (store.activeView === 'settings') {
+            return
+          }
+          store.setSidebarOpen(true)
+          window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
         })
       )
     }
@@ -1415,7 +1428,12 @@ export function useIpcEvents(): void {
             store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
           }
           if (data.command) {
-            store.queueTabStartupCommand(tab.id, { command: data.command })
+            store.queueTabStartupCommand(tab.id, {
+              command: data.command,
+              ...(data.startupCommandDelivery
+                ? { startupCommandDelivery: data.startupCommandDelivery }
+                : {})
+            })
           }
           window.api.ui.replyTerminalCreate({
             requestId: data.requestId,
@@ -1531,16 +1549,18 @@ export function useIpcEvents(): void {
         const store = useAppStore.getState()
         const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
         if (browserTarget) {
-          if (isPinnedSessionTab(store, worktreeId, browserTarget.workspaceId)) {
-            return
-          }
-          store.closeBrowserTab(browserTarget.workspaceId)
+          guardPinnedTabClose({
+            isPinned: isPinnedSessionTab(store, worktreeId, browserTarget.workspaceId),
+            tabLabel: resolvePinnedTabLabel(store, worktreeId, browserTarget.workspaceId),
+            onClose: () => useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
+          })
           return
         }
-        if (isPinnedSessionTab(store, worktreeId, tabId)) {
-          return
-        }
-        store.closeUnifiedTab(tabId)
+        guardPinnedTabClose({
+          isPinned: isPinnedSessionTab(store, worktreeId, tabId),
+          tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
+          onClose: () => useAppStore.getState().closeUnifiedTab(tabId)
+        })
       })
     )
 
@@ -1614,15 +1634,7 @@ export function useIpcEvents(): void {
           const detail: CloseTerminalPaneDetail = { tabId, paneRuntimeId }
           window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail }))
         } else {
-          const store = useAppStore.getState()
-          const worktreeId =
-            Object.entries(store.tabsByWorktree).find(([, tabs]) =>
-              tabs.some((tab) => tab.id === tabId)
-            )?.[0] ?? null
-          if (worktreeId && isPinnedSessionTab(store, worktreeId, tabId)) {
-            return
-          }
-          store.closeTab(tabId)
+          closeTerminalTab(tabId)
         }
       })
     )
@@ -1904,11 +1916,15 @@ export function useIpcEvents(): void {
               )
             : undefined
 
+          // Why: a user-initiated open (data.activate, e.g. mobile tapping an HTML
+          // path) foregrounds the tab so it lands in the active group's order and
+          // publishes to mobile in the right place. Agent/automation opens stay in
+          // the background (activate:false) in the active browser group.
           const workspace = store.createBrowserTab(worktreeId, data.url, {
             title: data.url,
-            targetGroupId: activeBrowserUnifiedTab?.groupId,
+            targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
             sessionProfileId: data.sessionProfileId,
-            activate: false
+            activate: data.activate === true
           })
           // Why: registerGuest fires with the page ID (not workspace ID) as
           // browserPageId. Return the page ID so waitForTabRegistration can
@@ -1996,7 +2012,32 @@ export function useIpcEvents(): void {
           }
           const store = useAppStore.getState()
           const explicitTargetId = data.tabId ?? null
-          let tabToClose =
+          const replyPinnedBrowserCloseCanceled = (tabId: string): void => {
+            window.api.ui.replyTabClose({
+              requestId: data.requestId,
+              error: translate(
+                'auto.hooks.useIpcEvents.2f6637fe6c',
+                'Browser tab {{value0}} is pinned',
+                { value0: tabId }
+              )
+            })
+          }
+          const closeBrowserWorkspaceWithReply = (
+            worktreeId: string,
+            workspaceId: string
+          ): void => {
+            const currentStore = useAppStore.getState()
+            guardPinnedTabClose({
+              isPinned: isPinnedSessionTab(currentStore, worktreeId, workspaceId),
+              tabLabel: resolvePinnedTabLabel(currentStore, worktreeId, workspaceId),
+              onClose: () => {
+                useAppStore.getState().closeBrowserTab(workspaceId)
+                window.api.ui.replyTabClose({ requestId: data.requestId })
+              },
+              onCancel: () => replyPinnedBrowserCloseCanceled(workspaceId)
+            })
+          }
+          const tabToClose =
             explicitTargetId ??
             (data.worktreeId
               ? (store.activeBrowserTabIdByWorktree?.[data.worktreeId] ?? null)
@@ -2030,15 +2071,8 @@ export function useIpcEvents(): void {
                   Object.entries(store.browserTabsByWorktree).find(([, tabs]) =>
                     tabs.some((tab) => tab.id === workspaceId)
                   )?.[0] ?? null
-                if (owningWorktreeId && isPinnedSessionTab(store, owningWorktreeId, workspaceId)) {
-                  window.api.ui.replyTabClose({
-                    requestId: data.requestId,
-                    error: translate(
-                      'auto.hooks.useIpcEvents.0e3cf53060',
-                      'Browser tab {{value0}} is pinned',
-                      { value0: workspaceId }
-                    )
-                  })
+                if (owningWorktreeId) {
+                  closeBrowserWorkspaceWithReply(owningWorktreeId, workspaceId)
                   return
                 }
                 store.closeBrowserTab(workspaceId)
@@ -2049,6 +2083,14 @@ export function useIpcEvents(): void {
               return
             }
           }
+          const owningWorktreeId =
+            Object.entries(store.browserTabsByWorktree).find(([, tabs]) =>
+              tabs.some((tab) => tab.id === tabToClose)
+            )?.[0] ?? null
+          if (owningWorktreeId) {
+            closeBrowserWorkspaceWithReply(owningWorktreeId, tabToClose)
+            return
+          }
           if (explicitTargetId) {
             window.api.ui.replyTabClose({
               requestId: data.requestId,
@@ -2056,21 +2098,6 @@ export function useIpcEvents(): void {
                 'auto.hooks.useIpcEvents.0e3cf53060',
                 'Browser tab {{value0}} not found',
                 { value0: explicitTargetId }
-              )
-            })
-            return
-          }
-          const owningWorktreeId =
-            Object.entries(store.browserTabsByWorktree).find(([, tabs]) =>
-              tabs.some((tab) => tab.id === tabToClose)
-            )?.[0] ?? null
-          if (owningWorktreeId && isPinnedSessionTab(store, owningWorktreeId, tabToClose)) {
-            window.api.ui.replyTabClose({
-              requestId: data.requestId,
-              error: translate(
-                'auto.hooks.useIpcEvents.0e3cf53060',
-                'Browser tab {{value0}} is pinned',
-                { value0: tabToClose }
               )
             })
             return
@@ -2145,28 +2172,34 @@ export function useIpcEvents(): void {
         }
         const store = useAppStore.getState()
         if (store.activeTabType === 'browser' && store.activeBrowserTabId) {
-          if (
-            store.activeWorktreeId &&
-            isPinnedSessionTab(store, store.activeWorktreeId, store.activeBrowserTabId)
-          ) {
-            return
-          }
-          const environmentId = getWorktreeRuntimeEnvironmentId(store.activeWorktreeId)
-          if (environmentId && store.activeWorktreeId) {
-            if (!isWebRuntimeSessionActive(environmentId)) {
-              store.closeBrowserTab(store.activeBrowserTabId)
-              return
-            }
-            void (async () => {
-              await closeWebRuntimeSessionTab({
-                worktreeId: store.activeWorktreeId!,
-                tabId: store.activeBrowserTabId!,
+          const tabId = store.activeBrowserTabId
+          const worktreeId = store.activeWorktreeId
+          const closeActiveBrowserTab = (): void => {
+            const currentStore = useAppStore.getState()
+            const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
+            if (environmentId && worktreeId) {
+              if (!isWebRuntimeSessionActive(environmentId)) {
+                currentStore.closeBrowserTab(tabId)
+                return
+              }
+              void closeWebRuntimeSessionTab({
+                worktreeId,
+                tabId,
                 environmentId
               })
-            })()
+              return
+            }
+            currentStore.closeBrowserTab(tabId)
+          }
+          if (worktreeId && isPinnedSessionTab(store, worktreeId, tabId)) {
+            guardPinnedTabClose({
+              isPinned: true,
+              tabLabel: resolvePinnedTabLabel(store, worktreeId, tabId),
+              onClose: closeActiveBrowserTab
+            })
             return
           }
-          store.closeBrowserTab(store.activeBrowserTabId)
+          closeActiveBrowserTab()
         }
       })
     )
@@ -2694,10 +2727,14 @@ export function useIpcEvents(): void {
         // Why: local Codex/Claude hooks arrive through this main-process IPC
         // path, not the PTY OSC fallback, so task-complete notifications must
         // observe accepted hook state here as well.
+        const notificationPayload =
+          typeof data.stateStartedAt === 'number'
+            ? { ...resolvedPayload, stateStartedAt: data.stateStartedAt }
+            : resolvedPayload
         observeAgentHookCompletionForNotification({
           paneKey: data.paneKey,
           worktreeId: statusWorktreeId,
-          payload: resolvedPayload
+          payload: notificationPayload
         })
       }
       return 'applied'

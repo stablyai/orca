@@ -100,14 +100,17 @@ export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearc
     {
       title: translate(
         'auto.components.settings.repository.search.01b3377ebc',
-        'Worktree Symlinks'
+        'Worktree Shared Paths'
       ),
       description: translate(
         'auto.components.settings.repository.search.ed885e589f',
-        'Paths to symlink from the primary checkout into newly created worktrees.'
+        'Paths to materialize from the primary checkout into newly created worktrees.'
       ),
       keywords: [
         repo.displayName,
+        ...translateSearchKeyword('auto.components.settings.repository.search.apfs', 'apfs'),
+        ...translateSearchKeyword('auto.components.settings.repository.search.clone', 'clone'),
+        ...translateSearchKeyword('auto.components.settings.repository.search.copy', 'copy'),
         ...translateSearchKeyword(
           'auto.components.settings.repository.search.c06adcf136',
           'symlink'

@@ -20,7 +20,11 @@ import {
   getTerminalRenderingSearchEntries,
   getTerminalTypographySearchEntries
 } from './terminal-typography-search'
-import { getTerminalWindowsSearchEntries } from './terminal-windows-search'
+import {
+  getTerminalRightClickToPasteSearchEntry,
+  getTerminalWindowsPowershellImplementationSearchEntry,
+  getTerminalWindowsShellSearchEntry
+} from './terminal-windows-search'
 import {
   getManageSessionsSearchEntries,
   getTerminalSetupScriptSearchEntries,
@@ -91,15 +95,23 @@ export function getTerminalAppearanceSearchEntries(
 
 export function getTerminalPaneSearchEntries(platform: {
   isWindows: boolean
+  isWindowsTerminalHost?: boolean
   isMac: boolean
 }): SettingsSearchEntry[] {
+  const isWindowsTerminalHost = platform.isWindowsTerminalHost ?? platform.isWindows
   // Why: the settings search index must mirror the visible controls. Keeping
   // platform-only controls out of other platforms' search results prevents
   // users from landing on an option the UI intentionally hides.
   return [
     ...getTerminalRenderingSearchEntries(),
     ...getTerminalPaneInteractionSearchEntries(),
-    ...(platform.isWindows ? getTerminalWindowsSearchEntries() : []),
+    ...(isWindowsTerminalHost
+      ? [
+          ...getTerminalWindowsShellSearchEntry(),
+          ...getTerminalWindowsPowershellImplementationSearchEntry()
+        ]
+      : []),
+    ...(platform.isWindows ? getTerminalRightClickToPasteSearchEntry() : []),
     ...getTerminalSetupScriptSearchEntries(),
     ...getManageSessionsSearchEntries(),
     ...getTerminalAdvancedSearchEntries(),
