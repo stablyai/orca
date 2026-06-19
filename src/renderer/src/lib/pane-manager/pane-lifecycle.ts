@@ -100,7 +100,7 @@ export function createPaneDOM(
     {
       hover: (_event, uri) => {
         if (uri) {
-          linkTooltip.textContent = `${uri} (${openLinkHint})`
+          linkTooltip.textContent = `${uri} (${options.getTerminalUrlHoverHint?.(id, uri) ?? openLinkHint})`
           linkTooltip.style.display = ''
         }
       },

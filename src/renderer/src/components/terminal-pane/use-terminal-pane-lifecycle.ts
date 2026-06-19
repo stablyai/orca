@@ -10,16 +10,16 @@ import { useAppStore } from '@/store'
 import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
-  getTerminalUrlOpenHint,
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
+import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import {
-  installHttpLinkClickFallback,
-  type TerminalLinkRoutingPreferenceRequester
-} from './terminal-url-link-hit-testing'
+  getTerminalHttpUrlOpenHint,
+  type TerminalBrowserTipNotifier
+} from './terminal-http-link-routing'
 import type {
   GlobalSettings,
   SetupSplitDirection,
@@ -145,7 +145,7 @@ type UseTerminalPaneLifecycleDeps = {
   systemPrefersDark: boolean
   settings: GlobalSettings | null | undefined
   settingsRef: React.RefObject<GlobalSettings | null | undefined>
-  requestOpenLinksInAppPreference: TerminalLinkRoutingPreferenceRequester
+  notifyTerminalBrowserTip: TerminalBrowserTipNotifier
   /** Resolved Option-as-Alt value: `'auto'` has already been mapped to
    *  `'true' | 'false'` via the keyboard-layout probe. Passed separately
    *  from `settings` because the probe lives outside the settings store. */
@@ -336,7 +336,7 @@ export function useTerminalPaneLifecycle({
   systemPrefersDark,
   settings,
   settingsRef,
-  requestOpenLinksInAppPreference,
+  notifyTerminalBrowserTip,
   effectiveMacOptionAsAlt,
   effectiveMacOptionAsAltRef,
   initialLayoutRef,
@@ -569,7 +569,15 @@ export function useTerminalPaneLifecycle({
     })
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
-    const urlOpenLinkHint = getTerminalUrlOpenHint()
+    const getPaneHttpLinkContext = (paneId: number) => ({
+      worktreeId,
+      activeRuntimeEnvironmentId: settingsRef.current?.activeRuntimeEnvironmentId ?? null,
+      runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(paneId) ?? null,
+      connectionId: getConnectionId(worktreeId),
+      openLinksInApp: settingsRef.current?.openLinksInApp
+    })
+    const getPaneUrlOpenLinkHint = (paneId: number): string =>
+      getTerminalHttpUrlOpenHint(getPaneHttpLinkContext(paneId))
     const osc7UncHost = extractUncHost(cwd)
 
     let releaseWebviewDragPassthrough: (() => void) | null = null
@@ -717,7 +725,8 @@ export function useTerminalPaneLifecycle({
         fileLinkClickFallbackDisposablesRef.current.set(pane.id, fileLinkClickFallbackDisposable)
         const httpLinkClickFallbackDisposable = installHttpLinkClickFallback(pane.terminal, {
           ...linkDeps,
-          requestOpenLinksInAppPreference
+          getRouteContext: () => getPaneHttpLinkContext(pane.id),
+          notifyTerminalBrowserTip
         })
         httpLinkClickFallbackDisposables.set(pane.id, httpLinkClickFallbackDisposable)
         seedStartupSessionRestoredBanner(ptyDeps.startup, pane.id, onShowSessionRestoredBanner)
@@ -787,7 +796,10 @@ export function useTerminalPaneLifecycle({
             handleOscLink(text, event as MouseEvent | undefined, {
               ...linkDeps,
               runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
-              requestOpenLinksInAppPreference
+              activeRuntimeEnvironmentId: settingsRef.current?.activeRuntimeEnvironmentId ?? null,
+              connectionId: getConnectionId(worktreeId),
+              openLinksInApp: settingsRef.current?.openLinksInApp,
+              notifyTerminalBrowserTip
             })
             // Why: Cmd/Ctrl+clicking a link activates Orca handling (open file,
             // new browser tab, system browser) which can steal focus from the
@@ -803,7 +815,7 @@ export function useTerminalPaneLifecycle({
           // GitHub owner/repo#issue references emitted by CLI tools) — same
           // behaviour as the WebLinksAddon provides for plain-text URLs.
           hover: (_event, text) => {
-            pane.linkTooltip.textContent = `${text} (${urlOpenLinkHint})`
+            pane.linkTooltip.textContent = `${text} (${getPaneUrlOpenLinkHint(pane.id)})`
             pane.linkTooltip.style.display = ''
           },
           leave: () => {
@@ -1055,7 +1067,10 @@ export function useTerminalPaneLifecycle({
           runtimeEnvironmentId: activePane
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
             : null,
-          requestOpenLinksInAppPreference
+          activeRuntimeEnvironmentId: settingsRef.current?.activeRuntimeEnvironmentId ?? null,
+          connectionId: getConnectionId(worktreeId),
+          openLinksInApp: settingsRef.current?.openLinksInApp,
+          notifyTerminalBrowserTip
         })
         // Why: Cmd/Ctrl+click on a plain-text URL (WebLinksAddon) takes focus
         // away from the terminal before the click's mouseup reaches
@@ -1066,6 +1081,7 @@ export function useTerminalPaneLifecycle({
         // SelectionService._removeMouseDownListeners).
         managerRef.current?.getActivePane()?.terminal.clearSelection()
       },
+      getTerminalUrlHoverHint: (paneId) => getPaneUrlOpenLinkHint(paneId),
       // Why: TerminalPane instances stay mounted for hidden visited worktrees
       // so PTYs survive navigation. Creating WebGL for those offscreen panes
       // still consumes Chromium's context budget and can blank visible panes.

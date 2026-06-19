@@ -37,7 +37,7 @@ const setActiveWorktreeMock = vi.fn()
 const createBrowserTabMock = vi.fn()
 const setPendingEditorRevealMock = vi.fn()
 
-const deps = { worktreeId: 'wt-1', worktreePath: '/tmp' }
+const deps = { worktreeId: 'wt-1', worktreePath: '/tmp', connectionId: null }
 const storeState = {
   settings: undefined as
     | {
@@ -255,30 +255,30 @@ describe('handleOscLink', () => {
     expect(setActiveWorktreeMock).not.toHaveBeenCalled()
   })
 
-  it('waits for the first-use preference before routing terminal http links', async () => {
+  it('notifies first-use education without delaying terminal http routing', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: false, openLinksInAppPreferencePrompted: false }
-    const requestOpenLinksInAppPreference = vi.fn(async () => {
-      storeState.settings = { openLinksInApp: true, openLinksInAppPreferencePrompted: true }
-      return true
-    })
+    const notifyTerminalBrowserTip = vi.fn()
 
     handleOscLink(
       'https://example.com',
       { metaKey: true, ctrlKey: false, shiftKey: false },
-      { ...deps, requestOpenLinksInAppPreference }
+      { ...deps, notifyTerminalBrowserTip, openLinksInApp: false }
     )
 
-    expect(requestOpenLinksInAppPreference).toHaveBeenCalledWith('https://example.com/')
-    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(notifyTerminalBrowserTip).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      activeRuntimeEnvironmentId: undefined,
+      runtimeEnvironmentId: undefined,
+      connectionId: null,
+      openLinksInApp: false
+    })
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
 
     await flushAsyncWork()
 
-    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true
-    })
-    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
   it('uses the system browser for shift+cmd/ctrl+click even when Orca browser tabs are enabled', () => {
@@ -286,6 +286,35 @@ describe('handleOscLink', () => {
     storeState.settings = { openLinksInApp: true }
 
     handleOscLink('https://example.com', { metaKey: false, ctrlKey: true, shiftKey: true }, deps)
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('uses the platform primary modifier for alternate routing into Orca', () => {
+    setPlatform('Windows')
+    storeState.settings = { openLinksInApp: false }
+
+    handleOscLink('https://example.com', { metaKey: false, ctrlKey: true, shiftKey: true }, deps)
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps SSH-backed terminal http links in the system browser', () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
+
+    handleOscLink(
+      'https://example.com',
+      { metaKey: true, ctrlKey: false, shiftKey: false },
+      {
+        ...deps,
+        connectionId: 'ssh-1'
+      }
+    )
 
     expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
@@ -1724,6 +1753,41 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
   })
 
+  it('uses live SSH routing context for direct ordinary-click URL fallback', async () => {
+    setPlatform('Macintosh')
+    storeState.settings = { openLinksInApp: true }
+    const rows = [makeBufferLine('Open https://github.com/stablyai/orca/pull/2914')]
+    const { terminal, element } = makeFallbackTerminal(rows)
+    const getRouteContext = vi.fn(() => ({
+      worktreeId: 'wt-1',
+      connectionId: 'ssh-1',
+      openLinksInApp: true
+    }))
+    const disposable = installHttpLinkClickFallback(terminal, {
+      worktreeId: 'wt-1',
+      getRouteContext
+    })
+    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
+
+    mouseUp({
+      button: 0,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      defaultPrevented: false,
+      clientX: 90,
+      clientY: 25,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn()
+    } as unknown as MouseEvent)
+
+    expect(getRouteContext).toHaveBeenCalled()
+    expect(openUrlMock).toHaveBeenCalledWith('https://github.com/stablyai/orca/pull/2914')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+
+    disposable.dispose()
+  })
+
   it('does not steal macOS ctrl-click context-menu gestures in the URL fallback', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: false }
@@ -1752,20 +1816,19 @@ describe('createFilePathLinkProvider range bounds', () => {
     disposable.dispose()
   })
 
-  it('asks for the first-use preference from the direct URL click fallback', async () => {
+  it('notifies first-use education from the direct URL click fallback without delaying routing', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: false, openLinksInAppPreferencePrompted: false }
     const rows = [
       makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
     ]
-    const requestOpenLinksInAppPreference = vi.fn(async () => {
-      storeState.settings = { openLinksInApp: true, openLinksInAppPreferencePrompted: true }
-      return true
-    })
+    const notifyTerminalBrowserTip = vi.fn()
     const { terminal, element } = makeFallbackTerminal(rows)
     const disposable = installHttpLinkClickFallback(terminal, {
       worktreeId: 'wt-1',
-      requestOpenLinksInAppPreference
+      notifyTerminalBrowserTip,
+      connectionId: null,
+      openLinksInApp: false
     })
     const mouseUp = getRegisteredBubbleMouseUpHandler(element)
     const preventDefault = vi.fn()
@@ -1782,19 +1845,21 @@ describe('createFilePathLinkProvider range bounds', () => {
       stopPropagation: vi.fn()
     } as unknown as MouseEvent)
 
-    expect(requestOpenLinksInAppPreference).toHaveBeenCalledWith(
+    expect(notifyTerminalBrowserTip).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      activeRuntimeEnvironmentId: undefined,
+      runtimeEnvironmentId: undefined,
+      connectionId: null,
+      openLinksInApp: false
+    })
+    expect(openUrlMock).toHaveBeenCalledWith(
       'https://github.com/stablyai/orca-marketing-website/pull/82'
     )
-    expect(openUrlMock).not.toHaveBeenCalled()
     expect(createBrowserTabMock).not.toHaveBeenCalled()
 
     await flushAsyncWork()
 
-    expect(createBrowserTabMock).toHaveBeenCalledWith(
-      'wt-1',
-      'https://github.com/stablyai/orca-marketing-website/pull/82',
-      { activate: true }
-    )
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(preventDefault).toHaveBeenCalled()
     expect(terminal.clearSelection).toHaveBeenCalled()
 

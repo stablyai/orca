@@ -1,22 +1,32 @@
 import type { IBufferLine, IBufferRange, IDisposable, Terminal } from '@xterm/xterm'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { buildCandidateLogicalLinesForBufferPosition } from './terminal-file-link-hit-testing'
+import {
+  getTerminalHttpRouteModeForEvent,
+  type TerminalHttpRouteContext,
+  type TerminalBrowserTipNotifier
+} from './terminal-http-link-routing'
 import { rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 
 type UrlLinkHitTestDeps = {
   worktreeId: string
-  forceSystemBrowser?: boolean
-  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  routeMode?: 'default' | 'force-system' | 'force-orca-if-supported' | 'alternate'
+  runtimeEnvironmentId?: string | null
+  activeRuntimeEnvironmentId?: string | null
+  connectionId?: string | null
+  openLinksInApp?: boolean
+  notifyTerminalBrowserTip?: TerminalBrowserTipNotifier
 }
 
 type UrlLinkClickFallbackDeps = {
   worktreeId: string
-  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  runtimeEnvironmentId?: string | null
+  activeRuntimeEnvironmentId?: string | null
+  connectionId?: string | null
+  openLinksInApp?: boolean
+  getRouteContext?: () => TerminalHttpRouteContext
+  notifyTerminalBrowserTip?: TerminalBrowserTipNotifier
 }
-
-export type TerminalLinkRoutingPreferenceRequester = (
-  url: string
-) => boolean | Promise<boolean> | null | undefined
 
 type ParsedTerminalHttpLink = {
   url: string
@@ -105,10 +115,15 @@ export function installHttpLinkClickFallback(
     // Why: xterm's WebLinksAddon only activates after hover state exists. This
     // direct mouseup fallback preserves ordinary link clicks when the hover link
     // was never established, while defaultPrevented avoids duplicate opens.
+    const routeContext = deps.getRouteContext?.() ?? deps
     const opened = openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, {
-      worktreeId: deps.worktreeId,
-      forceSystemBrowser: event.shiftKey,
-      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
+      worktreeId: routeContext.worktreeId ?? deps.worktreeId,
+      routeMode: getTerminalHttpRouteModeForEvent(event),
+      runtimeEnvironmentId: routeContext.runtimeEnvironmentId,
+      activeRuntimeEnvironmentId: routeContext.activeRuntimeEnvironmentId,
+      connectionId: routeContext.connectionId,
+      openLinksInApp: routeContext.openLinksInApp,
+      notifyTerminalBrowserTip: deps.notifyTerminalBrowserTip
     })
     if (opened) {
       event.preventDefault()
@@ -151,30 +166,19 @@ export function openHttpLinkAtBufferPosition(
 }
 
 export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): void {
-  if (deps.forceSystemBrowser) {
-    openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true })
-    return
-  }
-
-  const preferenceDecision = deps.requestOpenLinksInAppPreference?.(url)
-  if (preferenceDecision === null || preferenceDecision === undefined) {
-    openHttpLink(url, { worktreeId: deps.worktreeId })
-    return
-  }
-
-  // Why: the first terminal link click may need an async preference dialog.
-  // Suppress the browser's default link handling first, then route after the
-  // persisted choice is available.
-  void Promise.resolve(preferenceDecision)
-    .then((openInOrca) => {
-      openHttpLink(url, {
-        worktreeId: deps.worktreeId,
-        forceSystemBrowser: !openInOrca
-      })
-    })
-    .catch(() => {
-      openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true })
-    })
+  void deps.notifyTerminalBrowserTip?.({
+    worktreeId: deps.worktreeId,
+    activeRuntimeEnvironmentId: deps.activeRuntimeEnvironmentId,
+    runtimeEnvironmentId: deps.runtimeEnvironmentId,
+    connectionId: deps.connectionId,
+    openLinksInApp: deps.openLinksInApp
+  })
+  openHttpLink(url, {
+    worktreeId: deps.worktreeId,
+    routeMode: deps.routeMode ?? 'default',
+    runtimeEnvironmentId: deps.runtimeEnvironmentId,
+    connectionId: deps.connectionId
+  })
 }
 
 function rangeContainsBufferPosition(

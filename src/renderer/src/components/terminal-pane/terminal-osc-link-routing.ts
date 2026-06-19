@@ -3,10 +3,11 @@ import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-pat
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from './terminal-file-url-target'
 import { openDetectedFilePath } from './terminal-file-open-routing'
+import { openTerminalHttpLink } from './terminal-url-link-hit-testing'
 import {
-  openTerminalHttpLink,
-  type TerminalLinkRoutingPreferenceRequester
-} from './terminal-url-link-hit-testing'
+  getTerminalHttpRouteModeForEvent,
+  type TerminalBrowserTipNotifier
+} from './terminal-http-link-routing'
 
 type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
   Partial<Pick<MouseEvent, 'button' | 'shiftKey' | 'preventDefault' | 'stopPropagation'>>
@@ -28,7 +29,10 @@ export function handleOscLink(
   event: TerminalLinkEvent | undefined,
   deps: Pick<LinkHandlerDeps, 'worktreeId' | 'worktreePath'> &
     Partial<Pick<LinkHandlerDeps, 'runtimeEnvironmentId' | 'startupCwd' | 'terminalHomePath'>> & {
-      requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+      activeRuntimeEnvironmentId?: string | null
+      connectionId?: string | null
+      openLinksInApp?: boolean
+      notifyTerminalBrowserTip?: TerminalBrowserTipNotifier
     }
 ): void {
   if (!isPrimaryOscLinkActivation(event)) {
@@ -81,8 +85,12 @@ export function handleOscLink(
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
     openTerminalHttpLink(parsed.toString(), {
       worktreeId: deps.worktreeId,
-      forceSystemBrowser: Boolean(event?.shiftKey),
-      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
+      routeMode: event ? getTerminalHttpRouteModeForEvent(event) : 'default',
+      runtimeEnvironmentId: deps.runtimeEnvironmentId,
+      activeRuntimeEnvironmentId: deps.activeRuntimeEnvironmentId,
+      connectionId: deps.connectionId,
+      openLinksInApp: deps.openLinksInApp,
+      notifyTerminalBrowserTip: deps.notifyTerminalBrowserTip
     })
     return
   }

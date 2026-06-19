@@ -8,7 +8,6 @@ import { useAppStore } from '../../store'
 import { isUnifiedTabPinned } from '@/store/pinned-tab-close-guard'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
 import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
@@ -99,6 +98,8 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
+import type { TerminalBrowserTipNotifier } from './terminal-http-link-routing'
+import { showTerminalBrowserTipToast } from './terminal-browser-tip-toast'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -416,7 +417,9 @@ export default function TerminalPane({
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
   const updateSettings = useAppStore((store) => store.updateSettings)
-  const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
+  const setSettingsSearchQuery = useAppStore((store) => store.setSettingsSearchQuery)
+  const openSettingsTarget = useAppStore((store) => store.openSettingsTarget)
+  const openSettingsPage = useAppStore((store) => store.openSettingsPage)
   const keybindings = useAppStore((store) => store.keybindings)
   // Why: Windows is the only platform where bare right-click is repurposed as
   // a paste gesture; on macOS/Linux the terminal still owns right-click for the
@@ -534,37 +537,19 @@ export default function TerminalPane({
 
   const settingsRef = useRef(settings)
   settingsRef.current = settings
-  const openLinksInAppPreferencePromiseRef = useRef<Promise<boolean> | null>(null)
 
-  const requestOpenLinksInAppPreference = useCallback(
-    (url: string): Promise<boolean> | null => {
-      if (settingsRef.current?.openLinksInAppPreferencePrompted === true) {
-        return null
-      }
-      if (!settingsRef.current) {
-        return null
-      }
-      if (openLinksInAppPreferencePromiseRef.current) {
-        return openLinksInAppPreferencePromiseRef.current
-      }
-      const preferencePromise = (async () => {
-        const openInOrca = await requestLinkRoutingPreference({
-          openLinksInAppDefault: settingsRef.current?.openLinksInApp === true,
-          url
-        })
-        await updateSettings({
-          openLinksInApp: openInOrca,
-          openLinksInAppPreferencePrompted: true
-        })
-        return openInOrca
-      })()
-      openLinksInAppPreferencePromiseRef.current = preferencePromise
-      void preferencePromise.finally(() => {
-        openLinksInAppPreferencePromiseRef.current = null
+  const notifyTerminalBrowserTip = useCallback<TerminalBrowserTipNotifier>(
+    (context) => {
+      showTerminalBrowserTipToast({
+        context,
+        settings: settingsRef.current,
+        updateSettings,
+        setSettingsSearchQuery,
+        openSettingsTarget,
+        openSettingsPage
       })
-      return preferencePromise
     },
-    [requestLinkRoutingPreference, updateSettings]
+    [openSettingsPage, openSettingsTarget, setSettingsSearchQuery, updateSettings]
   )
   // Why: the persisted setting can be 'auto' (default) or one of the four
   // explicit modes. useEffectiveMacOptionAsAlt resolves 'auto' into
@@ -902,7 +887,7 @@ export default function TerminalPane({
     systemPrefersDark,
     settings,
     settingsRef,
-    requestOpenLinksInAppPreference,
+    notifyTerminalBrowserTip,
     effectiveMacOptionAsAlt,
     effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,

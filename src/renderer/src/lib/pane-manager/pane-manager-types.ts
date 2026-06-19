@@ -39,6 +39,7 @@ export type PaneManagerOptions = {
   onPaneDragActiveChange?: (active: boolean) => void
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   onLinkClick?: (event: MouseEvent | undefined, url: string) => void
+  getTerminalUrlHoverHint?: (paneId: number, uri: string) => string
   initialRenderingSuspended?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
   // Why: diagnostic label for log correlation. safeFit and other internal

@@ -11518,6 +11518,23 @@
             "later": "Later"
           }
         }
+      },
+      "terminalPane": {
+        "terminalBrowserTipToast": {
+          "openSettings": "Open Settings"
+        },
+        "terminalHttpLinkRouting": {
+          "localTerminalsOnlyHint": "Click opens system browser; Orca Browser routing is available for local terminals.",
+          "settingsLoadingHint": "Click opens system browser; Orca Browser routing is available after settings load.",
+          "orcaDefaultHint": "Click opens in Orca; {{value0}} opens system browser once.",
+          "systemDefaultHint": "Click opens system browser; {{value0}} opens in Orca once.",
+          "systemBrowserHereTitle": "Terminal links use your system browser here",
+          "localTerminalRoutingDescription": "Orca Browser link routing is available for local terminal links in Settings -> Browser.",
+          "orcaDefaultTitle": "Terminal links open in Orca Browser",
+          "orcaDefaultDescription": "Use {{value0}} for your system browser, or change Link Routing in Settings -> Browser.",
+          "systemDefaultTitle": "Terminal links can open in Orca Browser",
+          "systemDefaultDescription": "Use {{value0}} once, or turn on Link Routing in Settings -> Browser."
+        }
       }
     },
     "i18n": {

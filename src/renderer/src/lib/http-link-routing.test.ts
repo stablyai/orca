@@ -108,4 +108,87 @@ describe('openHttpLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(setActiveWorktreeMock).not.toHaveBeenCalled()
   })
+
+  it('force-orca-if-supported opens in Orca without changing the default', () => {
+    storeState.settings = { openLinksInApp: false }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      routeMode: 'force-orca-if-supported'
+    })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('does not force Orca routing before settings hydrate', () => {
+    storeState.settings = undefined
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      routeMode: 'force-orca-if-supported'
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps terminal links in the system browser while connection lookup is unresolved', () => {
+    storeState.settings = { openLinksInApp: true }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      connectionId: undefined
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('alternate opens in Orca once when the default is system browser', () => {
+    storeState.settings = { openLinksInApp: false }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1', routeMode: 'alternate' })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('alternate opens in the system browser once when the default is Orca', () => {
+    storeState.settings = { openLinksInApp: true }
+
+    openHttpLink('https://example.com/', { worktreeId: 'wt-1', routeMode: 'alternate' })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps force-orca-if-supported in the system browser for SSH-backed worktrees', () => {
+    storeState.settings = { openLinksInApp: false }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      routeMode: 'force-orca-if-supported',
+      connectionId: 'ssh-1'
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps default routing in the system browser for SSH-backed worktrees', () => {
+    storeState.settings = { openLinksInApp: true }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      connectionId: 'ssh-1'
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
 })
