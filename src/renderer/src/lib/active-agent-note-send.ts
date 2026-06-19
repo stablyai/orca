@@ -2,7 +2,11 @@ import type { RuntimeTerminalSend, RuntimeTerminalWait } from '../../../shared/r
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
-import { findActiveRuntimeTerminal, getActiveTerminalNoteTarget } from './active-agent-note-target'
+import {
+  findActiveRuntimeTerminal,
+  getActiveTerminalNoteTarget,
+  type ActiveTerminalNoteTarget
+} from './active-agent-note-target'
 
 export {
   getActiveAgentNoteTarget,
@@ -31,10 +35,12 @@ export type ActiveAgentNotesSendResult = {
 export async function sendNotesToActiveAgentSession({
   worktreeId,
   prompt,
+  noteTarget: explicitNoteTarget,
   timeoutMs = ACTIVE_AGENT_SEND_TIMEOUT_MS
 }: {
   worktreeId: string
   prompt: string
+  noteTarget?: ActiveTerminalNoteTarget
   timeoutMs?: number
 }): Promise<ActiveAgentNotesSendResult> {
   const trimmedPrompt = prompt.trim()
@@ -43,7 +49,11 @@ export async function sendNotesToActiveAgentSession({
   }
 
   const state = useAppStore.getState()
-  const noteTarget = getActiveTerminalNoteTarget(state, worktreeId)
+  // Why: an explicit target lets the notes dropdown address ANY running agent of
+  // the worktree, not just the focused pane; omitted, fall back to the focused
+  // active terminal so existing callers keep their behavior. Routing below still
+  // resolves the worktree's owner host, so explicit targets stay SSH/remote-correct.
+  const noteTarget = explicitNoteTarget ?? getActiveTerminalNoteTarget(state, worktreeId)
   if (!noteTarget) {
     return { status: 'no-active-terminal' }
   }

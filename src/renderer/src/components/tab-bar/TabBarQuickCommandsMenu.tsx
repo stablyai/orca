@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, Pencil, Play, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, Pencil, Play, Trash2 } from 'lucide-react'
 import {
   Command,
   CommandEmpty,
@@ -200,7 +200,7 @@ export function TabBarQuickCommandsMenu({
             : command.command}
         </span>
       </span>
-      <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/qc:opacity-100 group-data-[selected=true]/qc:opacity-100">
+      <span className="flex shrink-0 items-center gap-0.5 can-hover:opacity-0 transition-opacity group-hover/qc:opacity-100 group-data-[selected=true]/qc:opacity-100">
         <button
           type="button"
           onClick={(event) => {
@@ -373,10 +373,10 @@ export function TabBarQuickCommandsMenu({
                 }}
                 className="flex w-full items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <Plus className="size-3.5" />
+                <Play className="size-3.5" />
                 {translate(
                   'auto.components.tab.bar.TabBarQuickCommandsButton.a2c7a33831',
-                  'Add command'
+                  'Command'
                 )}
               </button>
             </div>

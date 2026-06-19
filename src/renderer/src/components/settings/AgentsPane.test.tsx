@@ -13,6 +13,7 @@ import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import {
   AgentAvailabilityControl,
+  AgentPermissionsSetting,
   AgentGeneratedTabTitlesSetting,
   AgentStatusHooksSetting,
   AgentsPane,
@@ -21,6 +22,7 @@ import {
   createAgentAvailabilityUpdateQueue
 } from './AgentsPane'
 import { matchesSettingsSearch } from './settings-search'
+import { TooltipProvider } from '../ui/tooltip'
 
 const detectedAgentsMock = vi.hoisted(() => ({
   detectedIds: ['claude'] as TuiAgent[] | null,
@@ -64,11 +66,15 @@ function renderPane(
   props: Partial<React.ComponentProps<typeof AgentsPane>> = {}
 ): string {
   return renderToStaticMarkup(
-    React.createElement(AgentsPane, {
-      settings,
-      updateSettings: vi.fn(),
-      ...props
-    })
+    React.createElement(
+      TooltipProvider,
+      null,
+      React.createElement(AgentsPane, {
+        settings,
+        updateSettings: vi.fn(),
+        ...props
+      })
+    )
   )
 }
 
@@ -141,7 +147,7 @@ describe('AgentsPane', () => {
     expect(markup).toContain('aria-checked="false"')
   })
 
-  it('keeps the agent location aligned with a WSL default terminal while capabilities load', () => {
+  it('does not render the legacy agent location control on Windows', () => {
     const markup = renderPane(
       {
         ...getDefaultSettings('/tmp'),
@@ -150,8 +156,9 @@ describe('AgentsPane', () => {
       { wslSupportedPlatform: true, wslCapabilitiesLoading: true }
     )
 
-    expect(markup).toContain('Show installed agents from WSL default.')
-    expect(markup).toContain('role="radio" aria-checked="true" disabled=""')
+    expect(markup).not.toContain('Agent location')
+    expect(markup).not.toContain('aria-label="Agent location"')
+    expect(markup).not.toContain('Show installed agents from WSL default.')
   })
 
   it('hides the WSL agent location controls on platforms without WSL support', () => {
@@ -259,6 +266,30 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('hide', getAgentsPaneSearchEntries())).toBe(true)
   })
 
+  it('includes agent permission search metadata', () => {
+    expect(matchesSettingsSearch('permission', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('yolo', getAgentsPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('manual', getAgentsPaneSearchEntries())).toBe(true)
+  })
+
+  it('applies the selected agent permission mode from settings without a mixed segment', () => {
+    const onChange = vi.fn()
+    const element = AgentPermissionsSetting({ mode: 'mixed', onChange })
+    const props = element.props.children.props.action.props as {
+      value: 'yolo'
+      onChange: (value: 'yolo' | 'manual' | 'mixed') => void
+      options: { value: string }[]
+    }
+
+    expect(props.value).toBe('yolo')
+    expect(props.options.map((option) => option.value)).toEqual(['yolo', 'manual'])
+    props.onChange('mixed')
+    expect(onChange).not.toHaveBeenCalled()
+
+    props.onChange('manual')
+    expect(onChange).toHaveBeenCalledWith('manual')
+  })
+
   it('keeps catalog agent ids, labels, and commands discoverable in settings search', () => {
     for (const agent of AGENT_CATALOG) {
       expect(matchesSettingsSearch(agent.id, getAgentsPaneSearchEntries())).toBe(true)
@@ -344,9 +375,11 @@ describe('AgentsPane', () => {
     })
   })
 
-  it('includes agent location search metadata', () => {
-    expect(matchesSettingsSearch('wsl', getAgentsPaneSearchEntries())).toBe(true)
-    expect(matchesSettingsSearch('windows', getAgentsPaneSearchEntries())).toBe(true)
+  it('does not include legacy agent location search metadata', () => {
+    expect(matchesSettingsSearch('agent location', getAgentsPaneSearchEntries())).toBe(false)
+    expect(matchesSettingsSearch('installed agents in wsl', getAgentsPaneSearchEntries())).toBe(
+      false
+    )
   })
 
   it('serializes rapid availability writes against the latest settings snapshot', async () => {

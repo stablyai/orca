@@ -25,11 +25,22 @@ export type ProviderRateLimits = {
   monthly?: RateLimitWindow | null
   /** Named per-model buckets (Gemini only). */
   buckets?: RateLimitBucket[]
+  /** Available earned Codex rate-limit reset credits, if reported. */
+  rateLimitResetCredits?: {
+    availableCount: number
+  } | null
   /** Unix ms timestamp of the last successful data update. */
   updatedAt: number
   /** Human-readable error message, null when status is 'ok'. */
   error: string | null
   status: ProviderRateLimitStatus
+}
+
+export type CodexRateLimitResetOutcome = 'reset' | 'nothingToReset' | 'noCredit' | 'alreadyRedeemed'
+
+export type CodexRateLimitResetResult = {
+  outcome: CodexRateLimitResetOutcome
+  state: RateLimitState
 }
 
 export type RateLimitRuntimeTarget = {

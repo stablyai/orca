@@ -1,6 +1,10 @@
 /* eslint-disable max-lines -- Why: git status/discard/chunking behavior is verified together here to keep the command contract readable in one place. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'path'
+import {
+  MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
+  MAX_RENDERED_DIFF_LINES_PER_SIDE
+} from '../../shared/large-diff-render-limit'
 
 const {
   gitExecFileAsyncMock,
@@ -356,6 +360,73 @@ describe('getDiff', () => {
     expect(result.modifiedContent).toBe('')
   })
 
+  it('omits over-limit text bodies before returning the diff payload', async () => {
+    const oversizedText = 'a'.repeat(MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1)
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: Buffer.from('index-content\n') })
+    statMock.mockResolvedValueOnce({
+      isFile: () => true,
+      size: oversizedText.length
+    })
+    readFileMock.mockResolvedValue(Buffer.from(oversizedText))
+
+    const result = await getDiff('/repo', 'dist/large.log', false)
+
+    expect(result.kind).toBe('text')
+    if (result.kind !== 'text') {
+      throw new Error('expected text diff result')
+    }
+    expect(result.originalContent).toBe('')
+    expect(result.modifiedContent).toBe('')
+    expect(result.largeDiffRenderLimit?.limited).toBe(true)
+    if (result.largeDiffRenderLimit?.limited !== true) {
+      throw new Error('expected large diff render limit')
+    }
+    expect(result.largeDiffRenderLimit.reason).toBe('character-count')
+    expect(result.largeDiffRenderLimit.characterCount).toBe(
+      oversizedText.length + 'index-content\n'.length
+    )
+  })
+
+  it('omits over-limit text bodies when line-count exceeds the cap', async () => {
+    const oversizedByLines = 'x\n'.repeat(MAX_RENDERED_DIFF_LINES_PER_SIDE)
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: Buffer.from('index-content\n') })
+    statMock.mockResolvedValueOnce({
+      isFile: () => true,
+      size: oversizedByLines.length
+    })
+    readFileMock.mockResolvedValue(Buffer.from(oversizedByLines))
+
+    const result = await getDiff('/repo', 'dist/large-lines.log', false)
+
+    expect(result.kind).toBe('text')
+    if (result.kind !== 'text') {
+      throw new Error('expected text diff result')
+    }
+    expect(result.originalContent).toBe('')
+    expect(result.modifiedContent).toBe('')
+    expect(result.largeDiffRenderLimit?.limited).toBe(true)
+    if (result.largeDiffRenderLimit?.limited !== true) {
+      throw new Error('expected large diff render limit')
+    }
+    expect(result.largeDiffRenderLimit.reason).toBe('line-count')
+    expect(result.largeDiffRenderLimit.lineCounts?.modified).toBeGreaterThan(
+      MAX_RENDERED_DIFF_LINES_PER_SIDE
+    )
+  })
+
+  it('marks git blobs that overflow maxBuffer as binary instead of pretending they are missing', async () => {
+    gitExecFileAsyncBufferMock.mockRejectedValueOnce(
+      Object.assign(new Error('stdout maxBuffer length exceeded'), { code: 'ENOBUFS' })
+    )
+    readFileMock.mockResolvedValue(Buffer.from('working-tree-content'))
+
+    const result = await getDiff('/repo', 'src/file.txt', false)
+
+    expect(result.kind).toBe('binary')
+    expect(result.originalIsBinary).toBe(true)
+    expect(result.originalContent).toBe('')
+  })
+
   it('includes preview metadata for pdf diffs', async () => {
     const pdfBuffer = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x00])
     gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: pdfBuffer })
@@ -559,17 +630,33 @@ describe('getStatus', () => {
   it('reports no upstream from porcelain v2 status when no same-name origin branch exists', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
-      })
-      .mockResolvedValueOnce({ stdout: 'feature/prompts\n' })
-      .mockRejectedValueOnce(new Error('fatal: no upstream configured'))
-      .mockRejectedValueOnce(new Error('missing remote branch'))
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === '-c' && args.includes('status')) {
+        return Promise.resolve({
+          stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
+        })
+      }
+      if (args[0] === 'symbolic-ref') {
+        return Promise.resolve({ stdout: 'feature/prompts\n' })
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        return Promise.reject(new Error('fatal: no upstream configured'))
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature/prompts')) {
+        return Promise.reject(new Error('missing remote branch'))
+      }
+      if (args[0] === 'config') {
+        return Promise.reject(new Error(`missing ${args[2] ?? 'config'}`))
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
 
     const result = await getStatus('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/feature/prompts'],
+      { cwd: '/repo' }
+    )
     expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
   })
 

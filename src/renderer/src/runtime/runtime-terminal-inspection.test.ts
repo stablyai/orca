@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   inspectRuntimeTerminalProcess,
+  recordRuntimeTerminalInputForPtyId,
   sendRuntimePtyInput,
   sendRuntimePtyInputVerified
 } from './runtime-terminal-inspection'
@@ -9,6 +10,10 @@ import {
   type RuntimeEnvironmentCallRequest
 } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
+import { useAppStore } from '../store'
+
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const PANE_KEY = `tab-1:${LEAF_ID}`
 
 describe('runtime terminal owner routing', () => {
   const runtimeCall = vi.fn()
@@ -40,6 +45,29 @@ describe('runtime terminal owner routing', () => {
         }
       }
     })
+    useAppStore.setState({
+      settings: { experimentalAgentHibernation: true } as never,
+      terminalLayoutsByTabId: {},
+      lastTerminalInputAtByPaneKey: {}
+    })
+  })
+
+  it('records runtime input markers even before hibernation is enabled', () => {
+    useAppStore.setState({
+      settings: { experimentalAgentHibernation: false } as never,
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'local-pty' }
+        }
+      }
+    })
+
+    recordRuntimeTerminalInputForPtyId('local-pty', 123)
+
+    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBe(123)
   })
 
   it('sends input through the PTY owning environment instead of the active one', async () => {
@@ -94,6 +122,63 @@ describe('runtime terminal owner routing', () => {
     ).resolves.toEqual({ foregroundProcess: null, hasChildProcesses: false })
   })
 
+  it('records accepted fire-and-forget runtime input against the owning pane key', async () => {
+    runtimeCall.mockResolvedValue({
+      ok: true,
+      result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    useAppStore.setState({
+      settings: { experimentalAgentHibernation: true } as never,
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-1' }
+        }
+      }
+    })
+
+    expect(
+      sendRuntimePtyInput({ activeRuntimeEnvironmentId: 'env-2' }, 'remote:env-1@@terminal-1', 'x')
+    ).toBe(true)
+
+    await vi.waitFor(() => {
+      expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toEqual(
+        expect.any(Number)
+      )
+    })
+  })
+
+  it('does not record declined fire-and-forget runtime input', async () => {
+    runtimeCall.mockResolvedValue({
+      ok: true,
+      result: { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    useAppStore.setState({
+      settings: { experimentalAgentHibernation: true } as never,
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-1' }
+        }
+      }
+    })
+
+    expect(
+      sendRuntimePtyInput({ activeRuntimeEnvironmentId: 'env-2' }, 'remote:env-1@@terminal-1', 'x')
+    ).toBe(true)
+
+    await vi.waitFor(() => {
+      expect(runtimeCall).toHaveBeenCalled()
+    })
+    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBeUndefined()
+  })
+
   it('reports stale remote terminal handles as rejected during verified send', async () => {
     runtimeCall.mockResolvedValue({
       ok: false,
@@ -145,6 +230,84 @@ describe('runtime terminal owner routing', () => {
 
     expect(localWriteAccepted).toHaveBeenCalledWith('local-pty', 'x')
     expect(localWrite).not.toHaveBeenCalled()
+  })
+
+  it('records accepted runtime input against the owning pane key', async () => {
+    runtimeCall.mockResolvedValue({
+      ok: true,
+      result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    useAppStore.setState({
+      settings: { experimentalAgentHibernation: true } as never,
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-1' }
+        }
+      }
+    })
+
+    await expect(
+      sendRuntimePtyInputVerified(
+        { activeRuntimeEnvironmentId: 'env-2' },
+        'remote:env-1@@terminal-1',
+        'x'
+      )
+    ).resolves.toBe(true)
+
+    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toEqual(
+      expect.any(Number)
+    )
+  })
+
+  it('does not record rejected runtime input against the owning pane key', async () => {
+    runtimeCall.mockResolvedValue({
+      ok: true,
+      result: { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    useAppStore.setState({
+      settings: { experimentalAgentHibernation: true } as never,
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'remote:env-1@@terminal-1' }
+        }
+      }
+    })
+
+    await expect(
+      sendRuntimePtyInputVerified(
+        { activeRuntimeEnvironmentId: 'env-2' },
+        'remote:env-1@@terminal-1',
+        'x'
+      )
+    ).resolves.toBe(false)
+
+    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBeUndefined()
+  })
+
+  it('can record a runtime input marker from a PTY id mapping', () => {
+    useAppStore.setState({
+      settings: { experimentalAgentHibernation: true } as never,
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: 'local-pty' }
+        }
+      }
+    })
+
+    recordRuntimeTerminalInputForPtyId('local-pty', 123)
+
+    expect(useAppStore.getState().lastTerminalInputAtByPaneKey[PANE_KEY]).toBe(123)
   })
 
   it('reports success after fallback fire-and-forget writes when local acceptance cannot be verified', async () => {

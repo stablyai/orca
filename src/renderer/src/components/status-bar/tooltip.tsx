@@ -284,6 +284,7 @@ export function ProviderPanel({
   }
 
   const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
+  const resetCreditCount = p.provider === 'codex' ? p.rateLimitResetCredits?.availableCount : null
 
   const PanelWindowSection = ({
     w,
@@ -326,6 +327,20 @@ export function ProviderPanel({
           {name}
         </div>
         <div className={faintClass}>{updatedAgo}</div>
+        {resetCreditCount !== null && resetCreditCount !== undefined ? (
+          <div className={mutedClass}>
+            {resetCreditCount === 1
+              ? translate(
+                  'auto.components.status.bar.tooltip.45198c7d95',
+                  '1 rate-limit reset available'
+                )
+              : translate(
+                  'auto.components.status.bar.tooltip.bce421cba3',
+                  '{{value0}} rate-limit resets available',
+                  { value0: resetCreditCount }
+                )}
+          </div>
+        ) : null}
       </div>
 
       <div className={`border-t ${dividerClass}`} />

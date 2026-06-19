@@ -123,6 +123,17 @@ describe('provider usage error copy', () => {
       'Network error while refreshing OAuth usage: ECONNRESET'
     )
   })
+
+  it('keeps live-Claude refresh deferral copy visible', () => {
+    const p = provider({
+      error:
+        'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.'
+    })
+
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.'
+    )
+  })
 })
 
 describe('getWindowSections', () => {

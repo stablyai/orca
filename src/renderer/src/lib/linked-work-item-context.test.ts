@@ -190,7 +190,7 @@ describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
     ).toEqual({ prompt: 'use this note', draftPrompt: null })
   })
 
-  it('falls back to the URL for non-Linear quick creates', () => {
+  it('drafts the note above the URL for non-Linear quick creates', () => {
     expect(
       resolveQuickCreateLinkedWorkItemPrompt(
         { number: 42, url: 'https://github.com/acme/repo/issues/42' },
@@ -199,7 +199,7 @@ describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
       )
     ).toEqual({
       prompt: '',
-      draftPrompt: 'https://github.com/acme/repo/issues/42'
+      draftPrompt: 'note\n\nhttps://github.com/acme/repo/issues/42'
     })
   })
 })

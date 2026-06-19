@@ -2,7 +2,8 @@ import { ipcMain, BrowserWindow, systemPreferences, app } from 'electron'
 import { join } from 'path'
 import { writeFile, unlink } from 'fs/promises'
 import { createHash } from 'crypto'
-import { SPEECH_MODEL_CATALOG, getCatalogModel } from '../speech/model-catalog'
+import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
+import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import {
   clearOpenAiSpeechApiKey,
@@ -69,10 +70,12 @@ export function registerSpeechHandlers(store: Store): void {
   })
 
   ipcMain.handle('speech:deleteModel', async (_event, modelId: string) => {
-    if (!getCatalogModel(modelId)) {
-      throw new Error(`Unknown model: ${modelId}`)
-    }
-    await getSpeechModelManager(store).deleteModel(modelId)
+    await deleteLocalSpeechModel({
+      store,
+      modelManager: getSpeechModelManager(store),
+      sttService: getSpeechSttService(store),
+      modelId
+    })
   })
 
   const getHotwordsFilePath = (content: string): string => {

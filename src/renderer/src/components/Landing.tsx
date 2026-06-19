@@ -1,72 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star } from 'lucide-react'
+import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
+import type { Repo } from '../../../shared/types'
+import {
+  dismissPreflightIssue,
+  githubProjectKeys,
+  isPreflightIssueDismissed
+} from './landing-preflight-dismissal'
 import { ShortcutKeyCombo } from './ShortcutKeyCombo'
-import { useShortcutKeys } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails, type ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
+import {
+  getLandingPreflightIssues,
+  hasGitHubBackedProject,
+  type PreflightIssue
+} from './landing-preflight-issues'
 
 type ShortcutItem = {
   id: string
-  keys: string[]
+  shortcut: ShortcutKeyComboDetails
   action: string
-}
-
-type PreflightIssue = {
-  id: string
-  title: string
-  description: string
-  fixLabel: string
-  fixUrl: string
-}
-
-function getPreflightIssues(status: {
-  git: { installed: boolean }
-  gh: { installed: boolean; authenticated: boolean }
-}): PreflightIssue[] {
-  const issues: PreflightIssue[] = []
-
-  if (!status.git.installed) {
-    issues.push({
-      id: 'git',
-      title: translate('auto.components.Landing.e5b7296d9d', 'Git is not installed'),
-      description: translate(
-        'auto.components.Landing.b673e7cf1b',
-        'Git is required for Git projects, source control, and workspace management.'
-      ),
-      fixLabel: 'Install Git',
-      fixUrl: 'https://git-scm.com/downloads'
-    })
-  }
-
-  if (!status.gh.installed) {
-    issues.push({
-      id: 'gh',
-      title: translate('auto.components.Landing.5beaef5f9e', 'GitHub CLI is not installed'),
-      description: translate(
-        'auto.components.Landing.73e1ad4282',
-        'Orca uses the GitHub CLI (gh) to show pull requests, issues, and checks.'
-      ),
-      fixLabel: 'Install GitHub CLI',
-      fixUrl: 'https://cli.github.com'
-    })
-  } else if (!status.gh.authenticated) {
-    issues.push({
-      id: 'gh-auth',
-      title: translate('auto.components.Landing.9f96d018b7', 'GitHub CLI is not authenticated'),
-      description: translate(
-        'auto.components.Landing.00cee697c1',
-        'Run "gh auth login" in a terminal to connect your GitHub account.'
-      ),
-      fixLabel: 'Learn more',
-      fixUrl: 'https://cli.github.com/manual/gh_auth_login'
-    })
-  }
-
-  return issues
 }
 
 const ORCA_STARGAZERS_URL = 'https://github.com/stablyai/orca/stargazers'
@@ -116,7 +73,6 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
     }
     if (state === 'web-fallback') {
       await window.api.shell.openUrl(ORCA_STARGAZERS_URL)
-      await window.api.starNag.complete()
       return
     }
     if (state !== 'not-starred') {
@@ -190,32 +146,83 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
   )
 }
 
-function PreflightBanner({ issues }: { issues: PreflightIssue[] }): React.JSX.Element {
+function PreflightBanner({
+  issues,
+  repos
+}: {
+  issues: PreflightIssue[]
+  repos: Repo[]
+}): React.JSX.Element | null {
+  // Why: keying the seed on the current GitHub project set means adding a new
+  // GitHub project (which changes the key) re-evaluates dismissals, so a lapsed
+  // dismissal re-surfaces the nudge without a manual reset.
+  const githubKey = githubProjectKeys(repos).join('|')
+  const [dismissed, setDismissed] = useState<Set<string>>(
+    () =>
+      new Set(
+        issues
+          .filter((issue) => issue.dismissible && isPreflightIssueDismissed(issue.id, repos))
+          .map((issue) => issue.id)
+      )
+  )
+
+  useEffect(() => {
+    setDismissed(
+      new Set(
+        issues
+          .filter((issue) => issue.dismissible && isPreflightIssueDismissed(issue.id, repos))
+          .map((issue) => issue.id)
+      )
+    )
+    // Why: re-seed only when the GitHub project set changes; issues identity is
+    // stable per render and would otherwise reset transient dismiss state.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [githubKey])
+
+  const visibleIssues = issues.filter((issue) => !dismissed.has(issue.id))
+  if (visibleIssues.length === 0) {
+    return null
+  }
+
+  const dismiss = (issue: PreflightIssue): void => {
+    dismissPreflightIssue(issue.id, repos)
+    setDismissed((prev) => new Set(prev).add(issue.id))
+  }
+
   return (
-    <div className="w-full rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4 space-y-3">
-      <div className="flex items-center gap-2 text-yellow-500">
-        <AlertTriangle className="size-4 shrink-0" />
-        <span className="text-sm font-medium">
-          {translate('auto.components.Landing.ce44fad849', 'Missing dependencies')}
-        </span>
-      </div>
-      <div className="space-y-2.5">
-        {issues.map((issue) => (
-          <div key={issue.id} className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">{issue.title}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{issue.description}</p>
-            </div>
+    // Why: cap width below the max-w-lg column so the card reads as part of the
+    // centered content stack instead of stretching edge-to-edge. The styleguide
+    // reserves color for true error state — these are soft setup nudges, so use
+    // the quiet muted/border surface, not an amber frame.
+    <div className="w-full max-w-sm space-y-1.5 rounded-lg border border-border bg-muted/40 p-3">
+      {visibleIssues.map((issue) => (
+        <div
+          key={issue.id}
+          className="flex items-start gap-3 rounded-md px-1 py-1.5 first:pt-0 last:pb-0"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-500/70" />
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <p className="text-[13px] font-medium leading-snug text-foreground">{issue.title}</p>
+            <p className="text-xs leading-snug text-muted-foreground">{issue.description}</p>
             <button
-              className="inline-flex items-center gap-1 shrink-0 text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+              className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary underline-offset-4 hover:underline cursor-pointer"
               onClick={() => window.api.shell.openUrl(issue.fixUrl)}
             >
               {issue.fixLabel}
               <ExternalLink className="size-3" />
             </button>
           </div>
-        ))}
-      </div>
+          {issue.dismissible && (
+            <button
+              className="-mr-1 -mt-0.5 shrink-0 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
+              onClick={() => dismiss(issue)}
+              aria-label={translate('auto.components.Landing.preflightDismiss', 'Dismiss')}
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -227,6 +234,8 @@ export default function Landing(): React.JSX.Element {
   const createTargetLabel =
     repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
   const canCreateWorktree = repos.length > 0
+  const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
+  const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
 
   const [preflightIssues, setPreflightIssues] = useState<PreflightIssue[]>([])
 
@@ -237,7 +246,9 @@ export default function Landing(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        setPreflightIssues(getPreflightIssues(status))
+        setPreflightIssues(
+          getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
+        )
       })
     }
 
@@ -260,7 +271,7 @@ export default function Landing(): React.JSX.Element {
       document.removeEventListener('visibilitychange', handleWindowActive)
       window.removeEventListener('focus', handleWindowActive)
     }
-  }, [])
+  }, [hasGitHubProject])
 
   useEffect(() => {
     if (preflightIssues.length === 0) {
@@ -275,7 +286,9 @@ export default function Landing(): React.JSX.Element {
         if (cancelled) {
           return
         }
-        setPreflightIssues(getPreflightIssues(status))
+        setPreflightIssues(
+          getLandingPreflightIssues(status, { hasGitHubBackedProject: hasGitHubProject })
+        )
       })
     }, 30000)
 
@@ -283,22 +296,22 @@ export default function Landing(): React.JSX.Element {
       cancelled = true
       window.clearInterval(intervalId)
     }
-  }, [preflightIssues.length])
+  }, [hasGitHubProject, preflightIssues.length])
 
-  const createWorktreeKeys = useShortcutKeys('workspace.create')
-  const previousWorktreeKeys = useShortcutKeys('worktree.navigateUp')
-  const nextWorktreeKeys = useShortcutKeys('worktree.navigateDown')
+  const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')
+  const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')
+  const nextWorktreeShortcut = useShortcutKeyDetails('worktree.navigateDown')
   const shortcuts = useMemo<ShortcutItem[]>(() => {
     return [
       {
         id: 'create',
-        keys: createWorktreeKeys,
+        shortcut: createWorktreeShortcut,
         action: `Create ${createTargetLabel.toLowerCase()}`
       },
-      { id: 'up', keys: previousWorktreeKeys, action: 'Move up workspace' },
-      { id: 'down', keys: nextWorktreeKeys, action: 'Move down workspace' }
+      { id: 'up', shortcut: previousWorktreeShortcut, action: 'Move up workspace' },
+      { id: 'down', shortcut: nextWorktreeShortcut, action: 'Move down workspace' }
     ]
-  }, [createTargetLabel, createWorktreeKeys, nextWorktreeKeys, previousWorktreeKeys])
+  }, [createTargetLabel, createWorktreeShortcut, nextWorktreeShortcut, previousWorktreeShortcut])
 
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-background">
@@ -318,7 +331,7 @@ export default function Landing(): React.JSX.Element {
             {translate('auto.components.Landing.6ca6ff404e', 'ORCA')}
           </h1>
 
-          {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} />}
+          {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} repos={repos} />}
 
           <p className="text-sm text-muted-foreground text-center">
             {canCreateWorktree
@@ -359,7 +372,8 @@ export default function Landing(): React.JSX.Element {
               <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
                 <span className="text-sm text-muted-foreground">{shortcut.action}</span>
                 <ShortcutKeyCombo
-                  keys={shortcut.keys}
+                  keys={shortcut.shortcut.keys}
+                  doubleTap={shortcut.shortcut.doubleTap}
                   separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
                 />
               </div>
@@ -368,9 +382,11 @@ export default function Landing(): React.JSX.Element {
         </div>
       </div>
 
-      <div className="absolute bottom-6 left-0 right-0 flex justify-center">
-        <GitHubStarButton hasRepos={repos.length > 0} />
-      </div>
+      {showGitHubSupportFooter && (
+        <div className="absolute bottom-6 left-0 right-0 flex justify-center">
+          <GitHubStarButton hasRepos={repos.length > 0} />
+        </div>
+      )}
     </div>
   )
 }

@@ -1,14 +1,20 @@
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
+const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
+  readFileMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
   ptySpawnMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -52,6 +58,12 @@ describe('fetchCodexRateLimits', () => {
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
     vi.mocked(codexAuthExists).mockReturnValue(true)
+    readFileMock.mockRejectedValue(new Error('no auth fixture'))
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('does not spawn Codex when the user is not signed in', async () => {
@@ -213,6 +225,112 @@ describe('fetchCodexRateLimits', () => {
 
     expect(result.session?.windowMinutes).toBe(300)
     expect(result.weekly?.windowMinutes).toBe(10080)
+  })
+
+  it('fills reset-credit count from the backend when the installed app-server omits it', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: {
+          access_token: 'access-token',
+          account_id: 'account-id'
+        }
+      })
+    )
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ rate_limit_reset_credits: { available_count: 2 } })
+    } as Response)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: {
+                  rateLimits: {
+                    primary: { usedPercent: 3 },
+                    secondary: { usedPercent: 4 }
+                  }
+                }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    const resultPromise = fetchCodexRateLimits({ codexHomePath: '/managed/codex-home' })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await resultPromise
+
+    expect(result.rateLimitResetCredits).toEqual({ availableCount: 2 })
+    expect(readFileMock).toHaveBeenCalledWith(join('/managed/codex-home', 'auth.json'), 'utf8')
+    expect(fetch).toHaveBeenCalledWith(
+      'https://chatgpt.com/backend-api/wham/usage',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer access-token',
+          'ChatGPT-Account-Id': 'account-id'
+        })
+      })
+    )
+  })
+
+  it('uses reset-credit count from newer app-server responses without backend fallback', async () => {
+    const rpcChild = makeRpcChild()
+    childSpawnMock.mockReturnValue(rpcChild)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                result: {
+                  rateLimits: { primary: { usedPercent: 5 } },
+                  rateLimitResetCredits: { availableCount: 1 }
+                }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await resultPromise
+
+    expect(result.rateLimitResetCredits).toEqual({ availableCount: 1 })
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('runs rate-limit RPC through WSL when the Codex home is a WSL managed account', async () => {

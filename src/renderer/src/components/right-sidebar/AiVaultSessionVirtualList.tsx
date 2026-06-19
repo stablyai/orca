@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -15,6 +15,7 @@ import {
 } from './ai-vault-virtual-rows'
 
 const VAULT_ROW_OVERSCAN = 8
+const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 360
 
 type AiVaultListRow =
   | { type: 'group'; group: AiVaultSessionGroup }
@@ -58,6 +59,7 @@ export function AiVaultSessionVirtualList({
   const listScrollRef = useRef<HTMLDivElement>(null)
   const stickyRangeStartIndexRef = useRef(0)
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
+  const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(() => new Set())
 
   const vaultRows = useMemo(() => {
     const rows: AiVaultListRow[] = []
@@ -77,8 +79,16 @@ export function AiVaultSessionVirtualList({
   const virtualizer = useVirtualizer({
     count: vaultRows.length,
     getScrollElement: () => listScrollRef.current,
-    estimateSize: (index) =>
-      vaultRows[index]?.type === 'group' ? VAULT_GROUP_HEADER_ROW_HEIGHT : VAULT_SESSION_ROW_HEIGHT,
+    estimateSize: (index) => {
+      const row = vaultRows[index]
+      if (row?.type === 'group') {
+        return VAULT_GROUP_HEADER_ROW_HEIGHT
+      }
+      if (row?.type === 'session' && expandedSessionIds.has(row.session.id)) {
+        return VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT
+      }
+      return VAULT_SESSION_ROW_HEIGHT
+    },
     overscan: VAULT_ROW_OVERSCAN,
     // Why: keep the active group header mounted so CSS sticky can pin it while
     // its sessions scroll underneath in the virtual list.
@@ -97,6 +107,18 @@ export function AiVaultSessionVirtualList({
       return row.type === 'group' ? `group:${row.group.key}` : `session:${row.session.id}`
     }
   })
+
+  const toggleSessionDetails = useCallback((sessionId: string) => {
+    setExpandedSessionIds((current) => {
+      const next = new Set(current)
+      if (next.has(sessionId)) {
+        next.delete(sessionId)
+      } else {
+        next.add(sessionId)
+      }
+      return next
+    })
+  }, [])
 
   const virtualItems = virtualizer.getVirtualItems()
   activeStickyHeaderIndexRef.current = getActiveStickyHeaderIndexForScroll({
@@ -139,9 +161,11 @@ export function AiVaultSessionVirtualList({
               activeStickyHeaderIndex={activeStickyHeaderIndexRef.current}
               measureElement={virtualizer.measureElement}
               collapsedGroups={collapsedGroups}
+              expandedSessionIds={expandedSessionIds}
               resumeDisabled={resumeDisabled}
               buildResumeCommand={buildResumeCommand}
               onToggleGroup={onToggleGroup}
+              onToggleSessionDetails={toggleSessionDetails}
               onResume={onResume}
               onCopyResume={onCopyResume}
               onCopyId={onCopyId}
@@ -164,9 +188,11 @@ function AiVaultVirtualRow({
   activeStickyHeaderIndex,
   measureElement,
   collapsedGroups,
+  expandedSessionIds,
   resumeDisabled,
   buildResumeCommand,
   onToggleGroup,
+  onToggleSessionDetails,
   onResume,
   onCopyResume,
   onCopyId,
@@ -181,9 +207,11 @@ function AiVaultVirtualRow({
   activeStickyHeaderIndex: number | null
   measureElement: (node: Element | null) => void
   collapsedGroups: ReadonlySet<string>
+  expandedSessionIds: ReadonlySet<string>
   resumeDisabled: boolean
   buildResumeCommand: (session: AiVaultSession) => string
   onToggleGroup: (key: string) => void
+  onToggleSessionDetails: (sessionId: string) => void
   onResume: (session: AiVaultSession) => void
   onCopyResume: (session: AiVaultSession) => void
   onCopyId: (session: AiVaultSession) => void
@@ -218,7 +246,9 @@ function AiVaultVirtualRow({
         <VaultSessionRow
           session={row.session}
           resumeCommand={buildResumeCommand(row.session)}
+          detailsExpanded={expandedSessionIds.has(row.session.id)}
           resumeDisabled={resumeDisabled}
+          onToggleDetails={() => onToggleSessionDetails(row.session.id)}
           onResume={() => onResume(row.session)}
           onCopyResume={() => onCopyResume(row.session)}
           onCopyId={() => onCopyId(row.session)}

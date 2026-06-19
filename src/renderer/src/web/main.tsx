@@ -1,6 +1,7 @@
 import '../assets/main.css'
 
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import ReactDOM from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import WebConnect from './WebConnect'
@@ -46,7 +47,7 @@ function WebRoot(): React.JSX.Element {
 
   installWebPreloadApi()
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+    <Suspense fallback={<div className="min-h-dvh bg-background" />}>
       <App />
     </Suspense>
   )

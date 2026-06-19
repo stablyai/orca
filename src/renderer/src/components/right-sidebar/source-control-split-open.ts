@@ -26,14 +26,19 @@ export function shouldOpenSourceControlRowAsPreview(
   return !targetGroupId && event?.openAsPermanent !== true
 }
 
-export function toPermanentSourceControlRowOpenEvent(
+export function toSourceControlRowOpenEvent(
   event: SourceControlOpenModifierKeys
 ): SourceControlRowOpenEvent {
   return {
     altKey: event.altKey,
     ctrlKey: event.ctrlKey,
     metaKey: event.metaKey,
-    shiftKey: event.shiftKey,
-    openAsPermanent: true
+    shiftKey: event.shiftKey
   }
+}
+
+export function toPermanentSourceControlRowOpenEvent(
+  event: SourceControlOpenModifierKeys
+): SourceControlRowOpenEvent {
+  return { ...toSourceControlRowOpenEvent(event), openAsPermanent: true }
 }

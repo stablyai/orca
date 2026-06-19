@@ -87,6 +87,22 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches Ante first and injects the draft prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'ante',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'ante',
+      launchCommand: 'ante',
+      expectedProcess: 'ante',
+      followupPrompt: 'Summarize the failing tests'
+    })
+  })
+
   it('uses cursor-agent as the actual launch binary', () => {
     expect(
       buildAgentStartupPlan({
@@ -305,6 +321,7 @@ describe('buildAgentDraftLaunchPlan', () => {
 describe('isShellProcess', () => {
   it('treats common shells as non-agent foreground processes', () => {
     expect(isShellProcess('bash')).toBe(true)
+    expect(isShellProcess('C:\\Program Files\\Git\\bin\\bash.exe')).toBe(true)
     expect(isShellProcess('pwsh.exe')).toBe(true)
     expect(isShellProcess('/bin/zsh')).toBe(true)
     expect(isShellProcess('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')).toBe(

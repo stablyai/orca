@@ -11,7 +11,29 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'github.updateIssue',
   'github.updatePRState',
   'gitlab.updateIssue',
-  'gitlab.updateMR'
+  'gitlab.updateMR',
+  // PR-sidebar reads/mutations: the mobile github-pr-rpc/mutations wrappers pass
+  // the method name as a positional arg to sendGithubPrRead/sendMutation, so the
+  // literal sendRequest('...') scan below cannot see them. List them here so the
+  // allowlist + registration are still enforced.
+  'github.repoSlug',
+  'github.prForBranch',
+  'github.workItemDetails',
+  'github.prChecks',
+  'github.prCheckDetails',
+  'github.listAssignableUsers',
+  'github.mergePR',
+  'github.setPRAutoMerge',
+  'github.requestPRReviewers',
+  'github.removePRReviewers',
+  'github.rerunPRChecks',
+  'github.updatePRTitle',
+  'github.addPRReviewCommentReply',
+  'github.addIssueComment',
+  'github.resolveReviewThread',
+  'github.project.updateIssueCommentBySlug',
+  'github.project.deleteIssueCommentBySlug',
+  'hostedReview.forBranch'
 ]
 
 const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [

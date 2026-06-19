@@ -2,6 +2,7 @@ import type {
   LinearIssueContextResult,
   LinearIssueListResult,
   LinearIssueTaskUpdateResult,
+  LinearProjectListResult,
   LinearSearchIssueSummary,
   LinearSearchResult,
   LinearTeamListResult,
@@ -14,11 +15,16 @@ import type {
   LinearCreateResult
 } from '../../shared/linear-agent-access'
 import {
+  formatLinearProjectListRows,
+  linearProjectListWarningLines
+} from '../../shared/linear-project-list-format'
+import {
   isLinearAttachResult,
   isLinearCommentAddResult,
   isLinearCreateResult,
   isLinearIssueContextResult,
   isLinearIssueListResult,
+  isLinearProjectListResult,
   isLinearSearchResult,
   isLinearStatusSetResult,
   isLinearTaskUpdateResult,
@@ -42,6 +48,12 @@ export function formatRemoteLinearCli(result: unknown): { stdout: string; stderr
     return {
       stdout: `${formatLinearIssueRows(result.issues)}\n`,
       stderr: linearListWarnings(result)
+    }
+  }
+  if (isLinearProjectListResult(result)) {
+    return {
+      stdout: `${formatLinearProjectListRows(result)}\n`,
+      stderr: linearProjectListWarnings(result)
     }
   }
   if (isLinearTeamListResult(result)) {
@@ -195,8 +207,9 @@ function formatLinearAttach(result: LinearAttachResult): string {
 
 function formatLinearCreate(result: LinearCreateResult): string {
   const parent = result.issue.parent ? ` under ${result.issue.parent.identifier}` : ''
+  const project = result.issue.project?.name ? ` in ${result.issue.project.name}` : ''
   const suffix = result.meta.deduplicated ? ' (already created)' : ''
-  return `Created ${result.issue.identifier}${parent}: ${result.issue.title}${suffix}.`
+  return `Created ${result.issue.identifier}${parent}${project}: ${result.issue.title}${suffix}.`
 }
 
 function taskOperationLabel(operation: LinearIssueTaskUpdateResult['operation']): string {
@@ -230,5 +243,10 @@ function linearListWarnings(
   for (const error of meta.workspaceErrors ?? []) {
     warnings.push(`warning: ${error.workspace.name} unavailable for ${label}: ${error.message}`)
   }
+  return warnings.length > 0 ? `${warnings.join('\n')}\n` : ''
+}
+
+function linearProjectListWarnings(result: LinearProjectListResult): string {
+  const warnings = linearProjectListWarningLines(result)
   return warnings.length > 0 ? `${warnings.join('\n')}\n` : ''
 }

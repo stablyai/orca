@@ -3,9 +3,9 @@
  * setting (jamo decomposition: typing 가나다 produced ㄱㅏㄴㅏㄷㅏ).
  *
  * Why CDP: Playwright's keyboard API cannot drive IME composition. The CDP
- * `Input.imeSetComposition` / `Input.insertText` commands go through Blink's
- * real composition pipeline, so a controlled-input value reset mid-composition
- * cancels the composition exactly like a real OS IME session.
+ * `Input.imeSetComposition` command goes through Blink's real composition
+ * pipeline, so a controlled-input value reset mid-composition cancels the
+ * composition exactly like a real OS IME session.
  */
 import type { CDPSession, Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -34,6 +34,8 @@ async function openRepoSettings(page: Page, repoId: string): Promise<void> {
 function combineJamo(pending: string, key: string): { commit?: string; compose: string } {
   const joins: Record<string, { commit?: string; compose: string }> = {
     'ㄱ+ㅏ': { compose: '가' },
+    'ㄴ+ㅏ': { compose: '나' },
+    'ㄷ+ㅏ': { compose: '다' },
     '가+ㄴ': { compose: '간' },
     '간+ㅏ': { commit: '가', compose: '나' },
     '나+ㄷ': { compose: '낟' },
@@ -89,28 +91,26 @@ async function typeHangulGanadaSlowly(
       return clobbered
     })
 
+  let committed = ''
   let pending = ''
   for (const key of ['ㄱ', 'ㅏ', 'ㄴ', 'ㅏ', 'ㄷ', 'ㅏ']) {
     if (await takeClobbered()) {
+      committed = await input.inputValue()
       pending = ''
     }
     const { commit, compose } = combineJamo(pending, key)
     if (commit) {
-      await session.send('Input.insertText', { text: commit })
+      committed += commit
     }
+    const compositionText = `${committed}${compose}`
     await session.send('Input.imeSetComposition', {
-      text: compose,
-      selectionStart: compose.length,
-      selectionEnd: compose.length
+      text: compositionText,
+      selectionStart: compositionText.length,
+      selectionEnd: compositionText.length
     })
     pending = compose
     // Slow typing: let the async store echo land before the next key.
     await page.waitForTimeout(200)
-  }
-  // A clobbered final composition was already committed by the page's own
-  // echo; only a still-live composition needs an explicit IME commit.
-  if (!(await takeClobbered())) {
-    await session.send('Input.insertText', { text: pending })
   }
 }
 

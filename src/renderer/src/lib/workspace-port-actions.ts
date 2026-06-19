@@ -46,6 +46,37 @@ export function shouldOpenWorkspacePortInOrcaBrowser(
   return settings?.openLinksInApp === true
 }
 
+function isMacShortcutPlatform(): boolean {
+  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+}
+
+export function getPortSystemBrowserHint(isMac: boolean = isMacShortcutPlatform()): string {
+  return isMac ? '⇧⌘+click for system browser' : 'Shift+Ctrl+click for system browser'
+}
+
+export function getPortOpenBrowserTooltipLabel(openLabel: string, isMac?: boolean): string {
+  return `${openLabel}. ${getPortSystemBrowserHint(isMac)}`
+}
+
+type PortOpenClickEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>
+
+export function resolvePortOpenInOrcaBrowser({
+  settings,
+  event,
+  isMac
+}: {
+  settings: { openLinksInApp?: boolean } | null | undefined
+  event?: PortOpenClickEvent | null
+  isMac: boolean
+}): boolean {
+  // Why: Shift+Cmd/Ctrl is the external-browser escape hatch; no pointer
+  // event means context-menu and keyboard opens should keep the saved setting.
+  if (event?.shiftKey && (isMac ? event.metaKey : event.ctrlKey)) {
+    return false
+  }
+  return shouldOpenWorkspacePortInOrcaBrowser(settings)
+}
+
 export function workspacePortOwnerWorktreeId(port: WorkspacePort): string | null {
   return port.kind === 'workspace' ? port.owner.worktreeId : null
 }

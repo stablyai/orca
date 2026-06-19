@@ -41,6 +41,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     isGenerating: false,
     generateError: null as string | null,
     stagedCount: inputs.stagedCount,
+    hasPartiallyStagedChanges: inputs.hasPartiallyStagedChanges,
     hasUnresolvedConflicts: inputs.hasUnresolvedConflicts,
     isRemoteOperationActive: inputs.isRemoteOperationActive,
     inFlightRemoteOpKind: inputs.inFlightRemoteOpKind ?? null,

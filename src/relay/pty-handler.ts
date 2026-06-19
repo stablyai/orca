@@ -12,6 +12,7 @@ import {
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 
 // Why: node-pty is a native addon that may not be installed on the remote.
 // Dynamic import keeps the require() lazy so loadPty() returns null gracefully
@@ -433,7 +434,15 @@ export class PtyHandler {
     const paneKey = typeof env?.ORCA_PANE_KEY === 'string' ? env.ORCA_PANE_KEY : undefined
     const command = typeof params.command === 'string' ? params.command : undefined
     const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
-    const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv)
+    // Why: only explicit shell-ready hints are trusted here; native Codex
+    // prefill detection still auto-enables readiness through the predicate.
+    const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
+      emitReadyMarker: shouldUseShellReadyStartupDelivery({
+        command,
+        startupCommandDelivery:
+          params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
+      })
+    })
 
     // Why: SSH exec channels give the relay a minimal environment without
     // .zprofile/.bash_profile sourced. Spawning a login shell ensures PATH
@@ -665,13 +674,14 @@ export class PtyHandler {
     if (!managed || managed.disposed) {
       return null
     }
-    return await getForegroundProcessName(managed.pty.pid)
+    return await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)
   }
 
   private async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
     const results: { id: string; cwd: string; title: string }[] = []
     for (const [id, managed] of this.ptys) {
-      const title = (await getForegroundProcessName(managed.pty.pid)) || 'shell'
+      const title =
+        (await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
       results.push({ id, cwd: managed.initialCwd, title })
     }
     return results
@@ -735,14 +745,11 @@ export class PtyHandler {
       const shell = resolveDefaultShell()
       // Why: `command` is intentionally absent from this revive path because
       // SerializedPtyEntry (see line 99) does not persist it — ManagedPty
-      // never stored the renderer-chosen launch command. The Pi/OMP overlay
-      // augmenter in src/relay/relay.ts therefore sees `ctx.command ===
-      // undefined` for revived PTYs and falls back to the Pi-default kind
-      // (see detectPiAgentKindFromCommand in src/shared/pi-agent-kind.ts).
-      // Acceptable pre-OMP fallback: a cold-restart revived OMP shell that
-      // later relaunches `omp` keeps the historical behavior of loading the
-      // Pi overlay. Plumbing `command` through serialization is a separate,
-      // larger change (out of scope for PR #2662).
+      // never stored the renderer-chosen launch command. The Pi/OMP extension
+      // installer in src/relay/relay.ts therefore sees `ctx.command ===
+      // undefined` for revived PTYs and prepares the Pi default plus OMP's
+      // typed-command wrapper. Plumbing `command` through serialization is a
+      // separate, larger change.
       const spawnEnv = this.buildSpawnEnv(revivedEnv, {
         id: entry.id,
         paneKey: entry.paneKey,

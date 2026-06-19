@@ -18,6 +18,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'Gemini CLI': 'gemini',
   'GitHub Copilot': 'copilot',
   Grok: 'grok',
+  Devin: 'devin',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   Aider: 'aider',

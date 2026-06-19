@@ -138,20 +138,27 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows).toHaveLength(0)
   })
 
-  it('does not add title-derived rows for the Claude agents management screen', () => {
-    const rows = buildWorktreeAgentRows({
-      tabs: [makeTab('tab-1')],
-      entries: [],
-      retained: [],
-      runtimePaneTitlesByTabId: {
-        'tab-1': { 1: 'claude agents' }
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-claude-agents'] },
-      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
-      now: 2000
-    })
+  it('adds an idle Claude row for the Claude agents surface', () => {
+    for (const title of [
+      'claude agents',
+      String.raw`C:\Users\dev\AppData\Roaming\npm\claude.cmd agents`
+    ]) {
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1')],
+        entries: [],
+        retained: [],
+        runtimePaneTitlesByTabId: {
+          'tab-1': { 1: title }
+        },
+        ptyIdsByTabId: { 'tab-1': ['pty-claude-agents'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        now: 2000
+      })
 
-    expect(rows).toHaveLength(0)
+      expect(rows.map((row) => [row.agentType, row.state, row.entry.lastAssistantMessage])).toEqual(
+        [['claude', 'idle', 'Idle']]
+      )
+    }
   })
 
   it('does not turn generic Codex-launched task titles into Claude Code rows', () => {

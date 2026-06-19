@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, fromWebContentsMock, getSpeechModelManagerMock, getSpeechSttServiceMock } =
-  vi.hoisted(() => ({
-    handleMock: vi.fn(),
-    fromWebContentsMock: vi.fn(),
-    getSpeechModelManagerMock: vi.fn(),
-    getSpeechSttServiceMock: vi.fn()
-  }))
+const {
+  handleMock,
+  fromWebContentsMock,
+  getSpeechModelManagerMock,
+  getSpeechSttServiceMock,
+  deleteLocalSpeechModelMock
+} = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  fromWebContentsMock: vi.fn(),
+  getSpeechModelManagerMock: vi.fn(),
+  getSpeechSttServiceMock: vi.fn(),
+  deleteLocalSpeechModelMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp/orca-speech-test') },
@@ -33,6 +39,10 @@ vi.mock('../speech/speech-runtime-service', () => ({
   getSpeechSttService: getSpeechSttServiceMock
 }))
 
+vi.mock('../speech/speech-model-deletion', () => ({
+  deleteLocalSpeechModel: deleteLocalSpeechModelMock
+}))
+
 import { registerSpeechHandlers } from './speech'
 
 type SpeechDownloadHandler = (event: { sender: { id: number } }, modelId: string) => Promise<void>
@@ -51,6 +61,7 @@ describe('registerSpeechHandlers', () => {
     fromWebContentsMock.mockReset()
     getSpeechModelManagerMock.mockReset()
     getSpeechSttServiceMock.mockReset()
+    deleteLocalSpeechModelMock.mockReset()
   })
 
   it('clears the model download progress callback after completion', async () => {
@@ -125,5 +136,24 @@ describe('registerSpeechHandlers', () => {
 
     expect(clearProgressCallback).toHaveBeenCalledTimes(1)
     expect(window.off).toHaveBeenCalledWith('closed', expect.any(Function))
+  })
+
+  it('routes desktop model deletion through the shared deletion helper', async () => {
+    const store = {} as never
+    const manager = { deleteModel: vi.fn() }
+    const sttService = { prepareModelForDeletion: vi.fn() }
+    getSpeechModelManagerMock.mockReturnValue(manager)
+    getSpeechSttServiceMock.mockReturnValue(sttService)
+    deleteLocalSpeechModelMock.mockResolvedValue(undefined)
+    registerSpeechHandlers(store)
+
+    await getHandler('speech:deleteModel')({ sender: { id: 7 } }, 'model-1')
+
+    expect(deleteLocalSpeechModelMock).toHaveBeenCalledWith({
+      store,
+      modelManager: manager,
+      sttService,
+      modelId: 'model-1'
+    })
   })
 })

@@ -115,7 +115,7 @@ export default function ProjectRow({
           </div>
         )
       })}
-      <div className="flex items-center justify-end gap-1 opacity-0 transition group-hover:opacity-100">
+      <div className="flex items-center justify-end gap-1 can-hover:opacity-0 transition group-hover:opacity-100">
         {row.content.url ? (
           <Tooltip>
             <TooltipTrigger asChild>

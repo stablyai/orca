@@ -9,10 +9,12 @@ import { z } from 'zod'
 import type { Store } from '../persistence'
 import type {
   BaseRefSearchResult,
+  Project,
   Repo,
   ProjectGroup,
   FolderWorkspace,
   ProjectGroupImportResult,
+  ProjectUpdateArgs,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
   ProjectHostSetupDeleteArgs,
@@ -67,6 +69,7 @@ import {
   resolveDefaultBaseRefViaExec,
   buildSearchBaseRefsArgv,
   isForEachRefExcludeUnsupportedError,
+  mergeBaseRefSearchResultGroups,
   searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
@@ -87,6 +90,7 @@ import {
   getFolderWorkspacePathStatusForPath
 } from '../project-groups/folder-workspace-path-status'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
+import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
 // they add?" — so the IPC the renderer invoked IS the method. We never send
@@ -177,7 +181,10 @@ async function addLocalRepoFromPath(
     return { error: `Not a valid git repository: ${path}` }
   }
 
-  const existing = store.getRepos().find((r) => r.path === path)
+  const pathKey = normalizeRuntimePathForComparison(path)
+  const existing = store
+    .getRepos()
+    .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
   if (existing) {
     return { repo: existing, alreadyExisted: true }
   }
@@ -203,6 +210,7 @@ async function addLocalRepoFromPath(
   }
 
   store.addRepo(repo)
+  await prepareLocalWorktreeRootForRepo(store, repo)
   return { repo, alreadyExisted: false }
 }
 
@@ -674,6 +682,19 @@ const ProjectHostSetupExistingFolderIpcArgs = z.object({
   setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional()
 })
 
+const LocalWindowsRuntimePreferenceIpcArgs = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('inherit-global') }),
+  z.object({ kind: z.literal('windows-host') }),
+  z.object({ kind: z.literal('wsl'), distro: z.string().min(1) })
+])
+
+const ProjectUpdateIpcArgs = z.object({
+  projectId: z.string().min(1),
+  updates: z.object({
+    localWindowsRuntimePreference: LocalWindowsRuntimePreferenceIpcArgs.optional()
+  })
+})
+
 const ProjectHostSetupCreateIpcArgs = z.object({
   projectId: z.string().min(1),
   hostId: z
@@ -1077,6 +1098,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:reorder')
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('projects:list')
+  ipcMain.removeHandler('projects:update')
   ipcMain.removeHandler('projectHostSetups:list')
   ipcMain.removeHandler('projectHostSetups:create')
   ipcMain.removeHandler('projectHostSetups:setupExistingFolder')
@@ -1096,6 +1118,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('folderWorkspaces:delete')
   ipcMain.removeHandler('folderWorkspaces:getPathStatus')
   ipcMain.removeHandler('repos:pickFolder')
+  ipcMain.removeHandler('repos:pickFolders')
   ipcMain.removeHandler('repos:pickDirectory')
   ipcMain.removeHandler('repos:clone')
   ipcMain.removeHandler('repos:cloneAbort')
@@ -1118,6 +1141,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   ipcMain.handle('projects:list', () => store.getProjects())
+
+  ipcMain.handle('projects:update', (_event, rawArgs: ProjectUpdateArgs): Project | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectUpdateIpcArgs,
+      rawArgs,
+      'project_update_invalid_args'
+    )
+    return store.updateProject(args.projectId, args.updates)
+  })
 
   ipcMain.handle('projectHostSetups:list', () => store.getProjectHostSetups())
 
@@ -1149,6 +1181,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const result = store.updateProjectHostSetup(args)
       if (!result) {
         throw new Error(`Project host setup not found: ${args.setupId}`)
+      }
+      if ('worktreeBasePath' in args.updates && result.repo) {
+        void prepareLocalWorktreeRootForRepo(store, result.repo)
+        invalidateAuthorizedRootsCache()
       }
       notifyReposChanged(mainWindow)
       return result
@@ -1212,7 +1248,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted)
-      return alignRepoWithRequestedProject(store, result.repo, args.projectId, args.setupMethod)
+      const aligned = alignRepoWithRequestedProject(
+        store,
+        result.repo,
+        args.projectId,
+        args.setupMethod
+      )
+      if (result.alreadyExisted) {
+        await prepareLocalWorktreeRootForRepo(store, aligned.repo)
+      }
+      return aligned
     }
   )
 
@@ -1492,6 +1537,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               : {})
           }
           store.addRepo(repo)
+          await prepareLocalWorktreeRootForRepo(store, repo)
           if (args.connectionId) {
             getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
               rootPath: repoPath
@@ -1540,6 +1586,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const result = await addLocalRepoFromPath(store, args.path, args.kind)
       if ('error' in result) {
         return result
+      }
+      if (result.alreadyExisted) {
+        await prepareLocalWorktreeRootForRepo(store, result.repo)
       }
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
@@ -1784,6 +1833,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
 
       store.addRepo(repo)
+      await prepareLocalWorktreeRootForRepo(store, repo)
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       // Why: `repos:create` git-inits when kind is 'git', so `repoKind` is the
@@ -1834,6 +1884,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'kind'
             | 'symlinkPaths'
             | 'issueSourcePreference'
+            | 'forkSyncMode'
             | 'externalWorktreeVisibility'
             | 'externalWorktreeVisibilityPromptDismissedAt'
             | 'projectGroupId'
@@ -1858,7 +1909,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       ) {
         delete updates.issueSourcePreference
       }
-      // Why: `symlinkPaths` is consumed by `createWorktreeSymlinks` which
+      if (
+        'forkSyncMode' in updates &&
+        updates.forkSyncMode !== undefined &&
+        updates.forkSyncMode !== 'ask' &&
+        updates.forkSyncMode !== 'safe-auto' &&
+        updates.forkSyncMode !== 'off'
+      ) {
+        delete updates.forkSyncMode
+      }
+      // Why: `symlinkPaths` is consumed by worktree path materialization, which
       // calls `.trim()` on each entry. A renderer bug or preload-version skew
       // that persists a non-`string[]` value (e.g. `[42, null]`, a bare
       // string) would throw inside the worktree-create path with no UI
@@ -1927,6 +1987,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const updated = store.updateRepo(args.repoId, updates)
       if (updated) {
         if ('worktreeBasePath' in updates) {
+          void prepareLocalWorktreeRootForRepo(store, updated)
           invalidateAuthorizedRootsCache()
         }
         notifyReposChanged(mainWindow)
@@ -1992,6 +2053,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       return null
     }
     return result.filePaths[0]
+  })
+
+  ipcMain.handle('repos:pickFolders', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory', 'multiSelections']
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return []
+    }
+    return result.filePaths
   })
 
   // Why: pickDirectory is a generic "choose a folder" picker, separate from
@@ -2165,6 +2236,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
                 projectHostSetupMethod: 'cloned'
               })
               if (updated) {
+                await prepareLocalWorktreeRootForRepo(store, updated)
+                invalidateAuthorizedRootsCache()
                 notifyReposChanged(mainWindow)
                 // Why: folder→git upgrade is a real new git repo provisioning event.
                 emitRepoAdded('clone_url', false, true)
@@ -2190,6 +2263,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           }
 
           store.addRepo(repo)
+          await prepareLocalWorktreeRootForRepo(store, repo)
           invalidateAuthorizedRootsCache()
           notifyReposChanged(mainWindow)
           emitRepoAdded('clone_url', false, true)
@@ -2350,29 +2424,51 @@ async function searchBaseRefDetailsForRepo(
     try {
       // Why: argv (including the two-remote-glob rationale) lives in
       // buildSearchBaseRefsArgv so the SSH and local paths cannot drift.
-      const remotesPromise = provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
-      let result: { stdout: string }
-      try {
-        result = await provider.exec(buildSearchBaseRefsArgv(normalizedQuery, limit), repo.path)
-      } catch (err) {
-        if (!isForEachRefExcludeUnsupportedError(err)) {
-          throw err
-        }
-        result = await provider.exec(
-          buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
-          repo.path
-        )
-      }
-      const remotesResult = await remotesPromise
-      // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
-      // to the shared helper so the SSH and local paths cannot diverge.
-      // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
-      // HEAD-filter rationale.
+      const remotesResult = await provider.exec(['remote'], repo.path).catch(() => ({ stdout: '' }))
       const remotes = remotesResult.stdout
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
-      return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
+      const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
+        try {
+          return (
+            await provider.exec(
+              buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                remoteNames: remotes,
+                patternGroup
+              }),
+              repo.path
+            )
+          ).stdout
+        } catch (err) {
+          if (!isForEachRefExcludeUnsupportedError(err)) {
+            throw err
+          }
+          return (
+            await provider.exec(
+              buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                excludeRemoteHead: false,
+                remoteNames: remotes,
+                patternGroup
+              }),
+              repo.path
+            )
+          ).stdout
+        }
+      }
+      // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
+      // to the shared helper so the SSH and local paths cannot diverge.
+      // See parseAndFilterSearchRefs in ../git/repo.ts for the dedup +
+      // HEAD-filter rationale.
+      const searchTokens = normalizedQuery.split('/').filter((token) => token.length > 0)
+      if (searchTokens.length > 1) {
+        const results = await Promise.all([runSearch('segmented'), runSearch('branchRoot')])
+        return mergeBaseRefSearchResultGroups(
+          results.map((stdout) => parseAndFilterSearchRefDetails(stdout, limit, remotes)),
+          limit
+        )
+      }
+      return parseAndFilterSearchRefDetails(await runSearch(), limit, remotes)
     } catch (err) {
       console.warn('[repos:searchBaseRefs] SSH for-each-ref failed', {
         path: repo.path,

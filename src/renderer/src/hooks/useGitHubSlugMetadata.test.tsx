@@ -16,9 +16,7 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: vi.fn(),
-  getActiveRuntimeTarget: (
-    settings?: { activeRuntimeEnvironmentId?: string | null } | null
-  ) =>
+  getActiveRuntimeTarget: (settings?: { activeRuntimeEnvironmentId?: string | null } | null) =>
     settings?.activeRuntimeEnvironmentId
       ? { kind: 'environment', environmentId: settings.activeRuntimeEnvironmentId }
       : { kind: 'local' }
@@ -106,12 +104,9 @@ describe('useGitHubSlugMetadata', () => {
 
     function AssigneesProbe(): null {
       renders += 1
-      const metadata = useRepoAssigneesBySlug(
-        'stablyai',
-        'orca',
-        ['jinwoo'],
-        { activeRuntimeEnvironmentId: null }
-      )
+      const metadata = useRepoAssigneesBySlug('stablyai', 'orca', ['jinwoo'], {
+        activeRuntimeEnvironmentId: null
+      })
       assigneeLogins = metadata.data.map((user) => user.login)
       return null
     }

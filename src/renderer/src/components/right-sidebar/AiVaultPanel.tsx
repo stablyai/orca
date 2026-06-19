@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { buildAiVaultResumeCommandForWorktree } from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { useAppStore } from '@/store'
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { agentLabel, filterAiVaultSessions, groupAiVaultSessions } from './ai-vault-session-filters'
 import {
   AI_VAULT_AGENTS,
-  buildAiVaultResumeCommand,
   type AiVaultAgent,
   type AiVaultGroup,
   type AiVaultListResult,
@@ -15,6 +14,7 @@ import {
   type AiVaultSession,
   type AiVaultSort
 } from '../../../../shared/ai-vault-types'
+import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
@@ -120,15 +120,13 @@ export default function AiVaultPanel(): React.JSX.Element {
 
   const buildResumeCommand = useCallback(
     (session: AiVaultSession): string =>
-      buildAiVaultResumeCommand({
-        agent: session.agent,
-        sessionId: session.sessionId,
-        cwd: session.cwd,
-        platform: CLIENT_PLATFORM,
-        commandOverride: agentCmdOverrides[session.agent],
-        codexHome: session.codexHome
+      buildAiVaultResumeCommandForWorktree({
+        state: useAppStore.getState(),
+        worktreeId: activeWorktree?.id ?? null,
+        session,
+        commandOverride: agentCmdOverrides[session.agent]
       }),
-    [agentCmdOverrides]
+    [activeWorktree?.id, agentCmdOverrides]
   )
 
   const copyResumeCommand = useCallback(
@@ -219,7 +217,7 @@ export default function AiVaultPanel(): React.JSX.Element {
   }, [])
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-sidebar">
+    <div className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar">
       <AiVaultPanelHeader
         query={query}
         loading={loading}
@@ -247,7 +245,8 @@ export default function AiVaultPanel(): React.JSX.Element {
         <div className="border-b border-sidebar-border px-3 py-2 text-[11px] leading-4 text-muted-foreground">
           {translate(
             'auto.components.right.sidebar.AiVaultPanel.remoteBrowseLocalHistory',
-            'SSH-host workspaces can browse local history. Resume actions run from Local Mac workspaces.'
+            'SSH-host workspaces can browse local history. Resume actions run from {{value0}} workspaces.',
+            { value0: getLocalExecutionHostLabel() }
           )}
         </div>
       ) : null}

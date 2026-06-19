@@ -207,6 +207,8 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
   const draftPrompt = linearDraft
     ? [trimmedNote, linearDraft].filter(Boolean).join('\n\n')
     : linkedUrl
+      ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
+      : null
   const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote) && !draftPrompt
   return {
     prompt: isLinearTypedOnly ? trimmedNote : '',

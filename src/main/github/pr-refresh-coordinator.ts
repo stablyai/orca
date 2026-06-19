@@ -10,6 +10,7 @@ import type {
   GitHubPRRefreshSkippedReason,
   PRRefreshOutcome
 } from '../../shared/types'
+import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import { getPRForBranchOutcome } from './client'
 import { getRateLimit, noteRateLimitSpend, rateLimitGuard } from './rate-limit'
 
@@ -28,6 +29,14 @@ type PRRefreshOutcomeObserver = (
   candidate: GitHubPRRefreshCandidate,
   outcome: PRRefreshOutcome
 ) => void
+
+function hostedReviewOptionArgs(
+  localGitOptions?: GitHubPRRefreshCandidate['localGitOptions']
+): [] | [HostedReviewExecutionOptions] {
+  return localGitOptions?.wslDistro
+    ? [{ localGitExecOptions: { wslDistro: localGitOptions.wslDistro } }]
+    : []
+}
 
 const MIN_BACKGROUND_REFRESH_AGE_MS = 60_000
 const MERGEABILITY_PENDING_REFRESH_MS = 10_000
@@ -93,10 +102,13 @@ function broadcast(event: Omit<GitHubPRRefreshEvent, 'sequence'>, sequenceOverri
 
 function refreshKey(candidate: GitHubPRRefreshCandidate): string {
   const connectionScope = candidate.connectionId ?? 'local'
+  const runtimeScope = candidate.connectionId
+    ? 'remote'
+    : `runtime:${candidate.localGitOptions?.wslDistro ? `wsl:${candidate.localGitOptions.wslDistro}` : 'host'}`
   if (typeof candidate.linkedPRNumber === 'number') {
-    return `${connectionScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
+    return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
   }
-  return `${connectionScope}::${candidate.repoPath}::branch::${candidate.branch}`
+  return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.branch}`
 }
 
 function isVisibleKey(key: string): boolean {
@@ -519,7 +531,8 @@ async function drainQueue(): Promise<void> {
         next.candidate.branch,
         next.candidate.linkedPRNumber ?? null,
         next.candidate.connectionId ?? null,
-        next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null
+        next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null,
+        ...hostedReviewOptionArgs(next.candidate.localGitOptions)
       )
       outcomeObserver?.(next.candidate, outcome)
       broadcast({ aliases, reason: next.reason, outcome, requestStartedAt }, requestSequence)
@@ -645,7 +658,8 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
     candidate.branch,
     candidate.linkedPRNumber ?? null,
     candidate.connectionId ?? null,
-    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null
+    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
+    ...hostedReviewOptionArgs(candidate.localGitOptions)
   )
   outcomeObserver?.(candidate, outcome)
   broadcast({ aliases, reason: 'manual', outcome, requestStartedAt }, requestSequence)
