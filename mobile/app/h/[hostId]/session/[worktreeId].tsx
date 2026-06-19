@@ -1024,6 +1024,7 @@ export default function SessionScreen() {
   // switching back to the terminal work). A ref breaks the callback dep cycle.
   const pendingBrowserFocusPageIdRef = useRef<string | null>(null)
   const switchSessionTabRef = useRef<((tab: MobileSessionTab) => void) | null>(null)
+  const pendingTerminalActivationAttemptRef = useRef<string | null>(null)
   // Why: handleTerminalOpenUrl is memoized on terminalLinkOpenMode, but
   // handleCreateBrowser is a per-render closure that captures the live `client`.
   // A terminal URL tap must run the CURRENT closure (the memoized one can hold a
@@ -2494,6 +2495,7 @@ export default function SessionScreen() {
     pendingActiveSessionTabIdRef.current = null
     pendingActiveTerminalHandleRef.current = null
     pendingBrowserFocusPageIdRef.current = null
+    pendingTerminalActivationAttemptRef.current = null
     initialEmptySessionAutoCreateRef.current = null
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
@@ -4025,6 +4027,53 @@ export default function SessionScreen() {
     activeSessionTab?.type === 'terminal' && typeof activeSessionTab.terminal !== 'string'
       ? activeSessionTab
       : null
+
+  useEffect(() => {
+    if (!client || connState !== 'connected' || !activePendingTerminalTab) {
+      if (connState !== 'connected' || !activePendingTerminalTab) {
+        pendingTerminalActivationAttemptRef.current = null
+      }
+      return
+    }
+    const activationKey = `${worktreeId}:${activePendingTerminalTab.id}:${activePendingTerminalTab.leafId ?? ''}`
+    if (pendingTerminalActivationAttemptRef.current === activationKey) {
+      return
+    }
+    // Why: a hydrated headless/server-owned tab can already be active but still
+    // pending; activation is the RPC that materializes or focuses its PTY handle.
+    pendingTerminalActivationAttemptRef.current = activationKey
+    void client
+      .sendRequest('session.tabs.activate', {
+        worktree: `id:${worktreeId}`,
+        tabId: activePendingTerminalTab.id,
+        leafId: activePendingTerminalTab.leafId
+      })
+      .then((response) => {
+        if (!response.ok) {
+          if (pendingTerminalActivationAttemptRef.current === activationKey) {
+            pendingTerminalActivationAttemptRef.current = null
+          }
+          return
+        }
+        applySessionTabs((response as RpcSuccess).result as SessionTabsResult)
+        scheduleDelayedAction(() => void fetchSessionTabs(), 300)
+        scheduleDelayedAction(() => void fetchSessionTabs(), 1200)
+      })
+      .catch(() => {
+        if (pendingTerminalActivationAttemptRef.current === activationKey) {
+          pendingTerminalActivationAttemptRef.current = null
+        }
+      })
+  }, [
+    activePendingTerminalTab,
+    applySessionTabs,
+    client,
+    connState,
+    fetchSessionTabs,
+    scheduleDelayedAction,
+    worktreeId
+  ])
+
   const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
