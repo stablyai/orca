@@ -252,23 +252,30 @@ export function useTabGroupWorkspaceModel({
         }
         return
       }
-      if (
-        item.contentType === 'browser' &&
-        isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-        browserWorkspaceHasRemoteOwner(useAppStore.getState(), item.entityId, runtimeEnvironmentId)
-      ) {
-        // Why: paired web clients mirror host-owned tabs. Closing locally races
-        // the host session snapshot and leaves stale terminal/browser handles.
-        void closeWebRuntimeSessionTab({
-          worktreeId,
-          tabId: item.id,
-          environmentId: runtimeEnvironmentId
-        })
-        return
-      }
       if (item.contentType === 'browser') {
-        destroyWorkspaceWebviews(useAppStore.getState().browserPagesByWorkspace, item.entityId)
+        const browserState = useAppStore.getState()
+        const hasLocalPages = (browserState.browserPagesByWorkspace[item.entityId] ?? []).length > 0
+        // Why: ask the host to close (idempotent) for a remote-owned browser, OR
+        // for a host-mirror whose local page list is momentarily empty — that
+        // pageless case was the bug: it has no remote-owned PAGES so the old gate
+        // skipped the host close AND the local close couldn't resolve it, leaving
+        // the tab un-closable. A genuine client-local fallback browser always has
+        // local pages, so it stays local. Always run local cleanup so the visible
+        // tab is removed no matter what.
+        const shouldCloseOnHost =
+          isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+          (browserWorkspaceHasRemoteOwner(browserState, item.entityId, runtimeEnvironmentId) ||
+            !hasLocalPages)
+        if (shouldCloseOnHost) {
+          void closeWebRuntimeSessionTab({
+            worktreeId,
+            tabId: item.id,
+            environmentId: runtimeEnvironmentId
+          })
+        }
+        destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
         closeBrowserTab(item.entityId)
+        closeUnifiedTab(item.id)
       } else if (item.contentType === 'simulator') {
         closeUnifiedTab(item.id)
       } else {
@@ -303,28 +310,37 @@ export function useTabGroupWorkspaceModel({
           useAppStore.getState(),
           worktreeId
         )
-        if (
-          (item.contentType === 'terminal' ||
-            (item.contentType === 'browser' &&
-              browserWorkspaceHasRemoteOwner(
-                useAppStore.getState(),
-                item.entityId,
-                runtimeEnvironmentId
-              ))) &&
-          isWebRuntimeSessionActive(runtimeEnvironmentId)
-        ) {
+        if (item.contentType === 'terminal' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
           void closeWebRuntimeSessionTab({
             worktreeId,
-            tabId: item.contentType === 'browser' ? item.id : item.entityId,
+            tabId: item.entityId,
             environmentId: runtimeEnvironmentId
           })
           continue
         }
-        if (item.contentType === 'terminal') {
-          closeTab(item.entityId)
-        } else if (item.contentType === 'browser') {
-          destroyWorkspaceWebviews(useAppStore.getState().browserPagesByWorkspace, item.entityId)
+        if (item.contentType === 'browser') {
+          // Why: see closeItem — host-close a remote-owned browser OR a pageless
+          // host-mirror (the dead-end case), keep genuine local fallbacks local,
+          // and always remove the visible tab.
+          const browserState = useAppStore.getState()
+          const hasLocalPages =
+            (browserState.browserPagesByWorkspace[item.entityId] ?? []).length > 0
+          const shouldCloseOnHost =
+            isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+            (browserWorkspaceHasRemoteOwner(browserState, item.entityId, runtimeEnvironmentId) ||
+              !hasLocalPages)
+          if (shouldCloseOnHost) {
+            void closeWebRuntimeSessionTab({
+              worktreeId,
+              tabId: item.id,
+              environmentId: runtimeEnvironmentId
+            })
+          }
+          destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
+          closeUnifiedTab(item.id)
+        } else if (item.contentType === 'terminal') {
+          closeTab(item.entityId)
         } else if (item.contentType === 'simulator') {
           closeUnifiedTab(item.id)
         } else {

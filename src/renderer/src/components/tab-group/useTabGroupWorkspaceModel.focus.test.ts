@@ -299,4 +299,57 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     )
     expect(mocks.closeBrowserTab).toHaveBeenCalledWith('browser-workspace-1')
   })
+
+  it('closes a host-mirrored browser with an empty page list via the host (no dead-end)', async () => {
+    // Regression: a host-owned browser whose local page list was momentarily
+    // empty had no remote-owned PAGES, so the close skipped the host RPC and the
+    // local close couldn't resolve it — the tab became un-closable. It must now
+    // route to the host close AND remove the visible unified tab.
+    mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    storeBox.state = {
+      ...storeBox.state,
+      // No pages for this workspace — the corrupt/transient state.
+      browserPagesByWorkspace: {},
+      browserTabsByWorktree: { 'wt-1': [] },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: 'browser-unified-1',
+            tabOrder: ['browser-unified-1']
+          }
+        ]
+      },
+      remoteBrowserPageHandlesByPageId: {},
+      settings: { activeRuntimeEnvironmentId: 'remote-runtime' },
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'browser-unified-1',
+            entityId: 'browser-workspace-1',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'browser',
+            label: 'New Browser Tab',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeItem('browser-unified-1')
+
+    // Host close fires (idempotent) and the visible unified tab is removed.
+    expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'wt-1', tabId: 'browser-unified-1' })
+    )
+    expect(mocks.closeUnifiedTab).toHaveBeenCalledWith('browser-unified-1')
+  })
 })
