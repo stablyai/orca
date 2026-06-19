@@ -4,7 +4,6 @@ import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
 import { browserSessionRegistry } from './browser-session-registry'
-import { BrowserError } from './cdp-bridge'
 
 // Why: headless orca serve has no renderer window to host a <webview>, so each
 // browser page is backed by a main-process offscreen BrowserWindow. The window
@@ -53,27 +52,25 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       this.browserManager.unregisterGuest(browserPageId)
     })
 
-    const url = params.url || 'about:blank'
-    try {
-      await this.loadUrl(win, url)
-    } catch (error) {
-      this.windowsByPageId.delete(browserPageId)
-      try {
-        win.destroy()
-      } catch {
-        // already gone
-      }
-      throw new BrowserError(
-        'browser_error',
-        error instanceof Error ? error.message : 'Failed to load page in headless browser'
-      )
-    }
-
+    // Why: register the guest and return immediately so the new tab appears
+    // without waiting for the page to finish loading. Previously createTab
+    // awaited the full navigation, so clicking "New Browser Tab" did nothing for
+    // up to a second on real URLs. The page loads asynchronously and streams
+    // once it paints; a failed load leaves the (usable) tab open, matching how a
+    // normal browser tab survives a failed navigation.
     this.browserManager.registerOffscreenGuest({
       browserPageId,
       worktreeId: params.worktreeId,
       sessionProfileId: profile?.id ?? null,
       webContentsId: win.webContents.id
+    })
+
+    const url = params.url || 'about:blank'
+    void this.loadUrl(win, url).catch((error) => {
+      console.warn(
+        '[offscreen-browser] page load failed:',
+        error instanceof Error ? error.message : String(error)
+      )
     })
 
     return { browserPageId }

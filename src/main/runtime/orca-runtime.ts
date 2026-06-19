@@ -13633,6 +13633,11 @@ export class OrcaRuntimeService {
       leafId?: string
       sessionId?: string
       persistHostSessionBinding?: boolean
+      // Why: the headless mobile-session create publishes its own authoritative
+      // snapshot (with the correct target group) right after spawn. Skip the
+      // intermediate pty-backed publish so the new tab doesn't briefly flash in
+      // the wrong (active) group before the corrected snapshot lands.
+      deferMobileSessionPublish?: boolean
     } = {}
   ): Promise<RuntimeTerminalCreate> {
     // Why: pre-diff createTerminal fell back to the renderer's active worktree
@@ -13730,7 +13735,7 @@ export class OrcaRuntimeService {
         pty.paneKey = paneKey
       }
       const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
-      if (pty) {
+      if (pty && opts.deferMobileSessionPublish !== true) {
         this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
           tabId,
           leafId,
@@ -13989,7 +13994,10 @@ export class OrcaRuntimeService {
         : stableSessionId
           ? { sessionId: stableSessionId }
           : {}),
-      persistHostSessionBinding: true
+      persistHostSessionBinding: true,
+      // Why: this method publishes the authoritative snapshot (with the target
+      // group) below; skip the intermediate publish to avoid a wrong-group flash.
+      deferMobileSessionPublish: true
     })
     const livePty = this.getLivePtyForHandle(terminal.handle)
     if (!livePty) {
