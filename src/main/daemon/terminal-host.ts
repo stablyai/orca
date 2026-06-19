@@ -137,7 +137,7 @@ export class TerminalHost {
 
     const token = session.attachClient(opts.streamClient)
 
-    if (opts.command) {
+    if (opts.command && !subprocess.startupCommandDeliveredInShellArgs) {
       // Why: startup commands must run inside the long-lived interactive shell
       // the daemon keeps for the pane. Session.write() handles the shell-ready
       // barrier for supported shells and falls back to an immediate write for

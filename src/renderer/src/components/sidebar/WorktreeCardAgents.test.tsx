@@ -191,7 +191,7 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('data-testid="agent-row"')
     expect(markup).not.toContain('<button')
     expect(markup).not.toContain('aria-expanded')
-  }, 10_000)
+  }, 30_000)
 
   it('uses compact mode when the display preference is absent', async () => {
     mockAgents = [mockAgent({ agentType: 'codex', startedAt: 1000, prompt: 'Run tests' })]

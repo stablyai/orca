@@ -39,7 +39,7 @@ import {
   getSystemCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
-import { syncSystemCodexSessionsIntoManagedHome } from '../codex/codex-session-bridge'
+import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -133,7 +133,9 @@ export class CodexRuntimeHomeService {
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
-    syncSystemCodexSessionsIntoManagedHome()
+    // Why: historical Codex sessions can be large; bridge them after launch
+    // setup so starting a fresh Codex TUI never waits on a full tree walk.
+    void startSystemCodexSessionBridgeInBackground()
     return this.getRuntimeHomePath()
   }
 

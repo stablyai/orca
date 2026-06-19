@@ -11,6 +11,8 @@ import {
   getPowerShellOsc133Bootstrap
 } from '../powershell-osc133-bootstrap'
 
+const STARTUP_COMMAND_ARG_MAX_CHARS = 6000
+
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *
  *  Why this module exists: both the in-process LocalPtyProvider and the
@@ -21,6 +23,7 @@ import {
  *  decision here keeps both paths honest. */
 export type WindowsShellLaunchArgs = {
   shellArgs: string[]
+  startupCommandDeliveredInShellArgs?: boolean
   /** The cwd node-pty should be spawned with. WSL cannot cd into a Windows
    *  path, so the wsl.exe branch returns the user's home as the effective cwd
    *  and injects `cd '<linux path>'` into shellArgs instead. */
@@ -34,6 +37,13 @@ export type WindowsShellLaunchArgs = {
 export type WindowsShellWslContext = {
   distro: string
   treatPosixCwdAsWsl?: boolean
+}
+
+function getShellArgStartupCommand(command?: string): string | null {
+  if (!command || command.length > STARTUP_COMMAND_ARG_MAX_CHARS) {
+    return null
+  }
+  return command
 }
 
 function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
@@ -61,13 +71,19 @@ export function resolveWindowsShellLaunchArgs(
   shellPath: string,
   cwd: string,
   defaultCwd: string,
-  wslContext?: WindowsShellWslContext
+  wslContext?: WindowsShellWslContext,
+  startupCommand?: string
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
+  const shellArgStartupCommand = getShellArgStartupCommand(startupCommand)
 
   if (shellBasename === 'cmd.exe') {
     return {
-      shellArgs: ['/K', 'chcp 65001 > nul'],
+      shellArgs: [
+        '/K',
+        shellArgStartupCommand ? `chcp 65001 > nul & ${shellArgStartupCommand}` : 'chcp 65001 > nul'
+      ],
+      ...(shellArgStartupCommand ? { startupCommandDeliveredInShellArgs: true } : {}),
       effectiveCwd: cwd,
       validationCwd: cwd
     }
@@ -81,8 +97,13 @@ export function resolveWindowsShellLaunchArgs(
         '-NoLogo',
         '-NoExit',
         '-EncodedCommand',
-        encodePowerShellCommand(getPowerShellOsc133Bootstrap())
+        encodePowerShellCommand(
+          shellArgStartupCommand
+            ? `${getPowerShellOsc133Bootstrap()}\n${shellArgStartupCommand}`
+            : getPowerShellOsc133Bootstrap()
+        )
       ],
+      ...(shellArgStartupCommand ? { startupCommandDeliveredInShellArgs: true } : {}),
       effectiveCwd: cwd,
       validationCwd: cwd
     }

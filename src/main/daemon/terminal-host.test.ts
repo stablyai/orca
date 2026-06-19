@@ -3,11 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session'
 
-function createMockSubprocess(): SubprocessHandle {
+function createMockSubprocess(
+  options: { startupCommandDeliveredInShellArgs?: boolean } = {}
+): SubprocessHandle {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 99999,
+    ...(options.startupCommandDeliveredInShellArgs
+      ? { startupCommandDeliveredInShellArgs: true }
+      : {}),
     getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
@@ -162,6 +167,31 @@ describe('TerminalHost', () => {
       expect(lastSubprocess.write).toHaveBeenCalledWith(
         process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
       )
+    })
+
+    it('does not write startup commands already embedded in shell args', async () => {
+      spawnFn = vi.fn(() => {
+        const sub = createMockSubprocess({
+          startupCommandDeliveredInShellArgs: true
+        }) as ReturnType<typeof createMockSubprocess> & {
+          _onDataCb: ((data: string) => void) | null
+          _onExitCb: ((code: number) => void) | null
+        }
+        lastSubprocess = sub
+        return sub
+      })
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        command: 'codex --no-alt-screen',
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(lastSubprocess.write).not.toHaveBeenCalled()
     })
   })
 

@@ -281,6 +281,7 @@ export class LocalPtyProvider implements IPtyProvider {
     let shellArgs: string[]
     let effectiveCwd: string
     let validationCwd: string
+    let startupCommandDeliveredInShellArgs = false
     let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
     let getFallbackShellReadyConfig:
       | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
@@ -340,11 +341,13 @@ export class LocalPtyProvider implements IPtyProvider {
         shellPath,
         cwd,
         defaultCwd,
-        worktreeWslContext ?? preferredWslContext
+        worktreeWslContext ?? preferredWslContext,
+        args.command
       )
       shellArgs = resolved.shellArgs
       effectiveCwd = resolved.effectiveCwd
       validationCwd = resolved.validationCwd
+      startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
     } else {
       shellPath = args.env?.SHELL || process.env.SHELL || '/bin/zsh'
       shellArgs = ['-l']
@@ -441,6 +444,8 @@ export class LocalPtyProvider implements IPtyProvider {
               shellArgs = resolved.shellArgs
               effectiveCwd = resolved.effectiveCwd
               validationCwd = resolved.validationCwd
+              startupCommandDeliveredInShellArgs =
+                resolved.startupCommandDeliveredInShellArgs === true
             }
           }
         } else if (isHostCodexHomeForWsl(finalEnv.CODEX_HOME)) {
@@ -651,7 +656,7 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     ptyDisposables.set(id, disposables)
 
-    if (args.command) {
+    if (args.command && !startupCommandDeliveredInShellArgs) {
       writeStartupCommandWhenShellReady(shellReadyPromise, proc, args.command, (cleanup) => {
         startupCommandCleanup = cleanup
       })

@@ -16,7 +16,11 @@ vi.mock('os', async () => {
 })
 
 import { DevinHookService } from './hook-service'
-import { getDevinConfigPath, getDevinManagedCommand } from './hook-settings'
+import {
+  getDevinConfigPath,
+  getDevinManagedCommand,
+  getDevinManagedScriptFileName
+} from './hook-settings'
 
 describe('DevinHookService', () => {
   let homeDir: string
@@ -24,9 +28,11 @@ describe('DevinHookService', () => {
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), 'orca-devin-home-'))
     homedirMock.mockReturnValue(homeDir)
+    vi.stubEnv('APPDATA', join(homeDir, '.config'))
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     vi.clearAllMocks()
     rmSync(homeDir, { recursive: true, force: true })
   })
@@ -57,7 +63,10 @@ describe('DevinHookService', () => {
     for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
       expect(config.hooks[eventName][0].matcher).toBeUndefined()
     }
-    const script = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'devin-hook.sh'), 'utf8')
+    const script = readFileSync(
+      join(homeDir, '.orca', 'agent-hooks', getDevinManagedScriptFileName()),
+      'utf8'
+    )
     expect(script).toContain('/hook/devin')
   })
 
@@ -155,7 +164,7 @@ describe('DevinHookService', () => {
 
   it('returns partial status when some managed hooks are missing', () => {
     const configPath = join(homeDir, '.config', 'devin', 'config.json')
-    const scriptPath = join(homeDir, '.orca', 'agent-hooks', 'devin-hook.sh')
+    const scriptPath = join(homeDir, '.orca', 'agent-hooks', getDevinManagedScriptFileName())
     const command = getDevinManagedCommand(scriptPath)
     mkdirSync(dirname(configPath), { recursive: true })
     mkdirSync(dirname(scriptPath), { recursive: true })

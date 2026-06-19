@@ -31,6 +31,7 @@ export type SubprocessHandle = {
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(): string | null
+  startupCommandDeliveredInShellArgs?: boolean
   write(data: string): void
   resize(cols: number, rows: number): void
   kill(): void

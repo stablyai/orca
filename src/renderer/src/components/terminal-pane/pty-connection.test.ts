@@ -596,7 +596,7 @@ describe('connectPanePty', () => {
     expect((globalThis as Record<string, unknown>).__ptyConnectDiag).toBeUndefined()
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('[pty-connect]'))
     logSpy.mockRestore()
-  })
+  }, 30_000)
 
   it('threads the resolved local project runtime into IPC terminal transport options', async () => {
     const { connectPanePty } = await import('./pty-connection')

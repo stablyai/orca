@@ -45,7 +45,7 @@ describe('wsl login shell command helpers', () => {
     expect(escaped).toContain('\\$(getent passwd "\\$(id -un)"')
     expect(escaped).toContain('\\$HISTFILE')
     expectValidShSyntax(command)
-  }, 15_000)
+  }, 30_000)
 
   it('does not double-escape wrapper shell variables', () => {
     const command = 'echo \\$_orca_wsl_shell "$_orca_wsl_shell"'
@@ -65,7 +65,7 @@ describe('wsl login shell command helpers', () => {
       "'HISTFILE=/tmp/orca-history printf \"\\$HISTFILE\"; printf '\\''%s'\\'' \"\\$SHELL\"'"
     )
     expectValidShSyntax(command)
-  }, 15_000)
+  }, 30_000)
 
   it('preserves user command variables across the Windows-to-WSL argv boundary', () => {
     if (process.platform !== 'win32') {
@@ -81,7 +81,7 @@ describe('wsl login shell command helpers', () => {
     const escaped = escapeWslShCommandForWindows(command)
 
     expect(execFileSync('wsl.exe', ['--', 'sh', '-lc', escaped], { encoding: 'utf8' })).toBe('<ok>')
-  }, 15_000)
+  }, 30_000)
 
   it('starts an interactive login shell without assuming bash', () => {
     const command = buildWslInteractiveLoginShellCommand()

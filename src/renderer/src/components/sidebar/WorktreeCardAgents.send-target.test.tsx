@@ -157,7 +157,7 @@ describe('WorktreeCardAgents send targets', () => {
     expect(markup).toContain('data-disabled-reason="Agent is working"')
     expect(markup).toContain(`data-pane-key="${WORKING_PANE_KEY}"`)
     expect(markup).toContain('data-has-send-handler="true"')
-  }, 10_000)
+  }, 30_000)
 
   it('leaves other worktree rows in ordinary mode during target selection', async () => {
     mockStoreState = {

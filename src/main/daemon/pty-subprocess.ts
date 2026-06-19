@@ -392,6 +392,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let shellPath =
     cwdWslInfo || sessionWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
+  let startupCommandDeliveredInShellArgs = false
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
   const requestedCwd = opts.cwd || getDefaultCwd()
@@ -436,11 +437,13 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellPath,
       spawnCwd,
       getDefaultCwd(),
-      sessionWslContext ?? preferredWslContext
+      sessionWslContext ?? preferredWslContext,
+      opts.command
     )
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
     validationCwd = resolved.validationCwd
+    startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
     if (isWindowsGitBashShellPath(shellPath)) {
       // Why: Git for Windows login startup files otherwise cd to $HOME,
       // ignoring node-pty's cwd for repo-scoped terminals.
@@ -466,11 +469,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
               getDefaultCwd(),
               {
                 distro: codexHomeWslInfo.distro
-              }
+              },
+              opts.command
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd
             validationCwd = resolved.validationCwd
+            startupCommandDeliveredInShellArgs =
+              resolved.startupCommandDeliveredInShellArgs === true
           }
         }
       } else if (isHostCodexHomeForWsl(env.CODEX_HOME)) {
@@ -683,6 +689,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   return {
     pid: proc.pid,
+    ...(startupCommandDeliveredInShellArgs ? { startupCommandDeliveredInShellArgs: true } : {}),
     getForegroundProcess: () => {
       // Why: node-pty's `.process` getter reports the PTY's live foreground
       // process name (the agent running in the shell, or the shell itself) and

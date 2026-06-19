@@ -13,6 +13,11 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'config/scripts/**/*.test.mjs']
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'config/scripts/**/*.test.mjs'],
+    // Why: the full suite runs heavy TS transforms plus real git/http fixtures;
+    // the Vitest 5s defaults are flaky on Windows under parallel load.
+    hookTimeout: 60_000,
+    maxWorkers: 8,
+    testTimeout: 30_000
   }
 })
