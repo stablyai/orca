@@ -3744,7 +3744,8 @@
           "ca74db7550": "通过 SSH 远程项目",
           "021538e1d1": "SSH 已断开连接",
           "runtimeHostDisconnected": "Server disconnected",
-          "runtimeHostProject": "Project on Orca server"
+          "runtimeHostProject": "Project on Orca server",
+          "automationCreated": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"

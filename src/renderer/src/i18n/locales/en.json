@@ -3777,7 +3777,8 @@
           "ca74db7550": "Project on SSH host",
           "021538e1d1": "SSH disconnected",
           "runtimeHostDisconnected": "Server disconnected",
-          "runtimeHostProject": "Project on Orca server"
+          "runtimeHostProject": "Project on Orca server",
+          "automationCreated": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4418,10 +4419,10 @@
           "5f5142a62a": "Previous icon"
         },
         "AppearancePane": {
+          "3057983501": "Unassigned",
           "872af9556e": "System Tray",
           "2edf606c46": "Minimize to Tray on Close",
           "b707773a0d": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",
-          "3057983501": "Unassigned",
           "0cd9b8228f": "Choose the app icon shown in the Dock and window switcher.",
           "ca1590d42f": "App Icon",
           "61d842eca0": "Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.",

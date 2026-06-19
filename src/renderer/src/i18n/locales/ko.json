@@ -3744,7 +3744,8 @@
           "ca74db7550": "SSH를 통한 원격 프로젝트",
           "021538e1d1": "SSH 연결이 끊어졌습니다.",
           "runtimeHostDisconnected": "Server disconnected",
-          "runtimeHostProject": "Project on Orca server"
+          "runtimeHostProject": "Project on Orca server",
+          "automationCreated": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4403,10 +4404,10 @@
           "5f5142a62a": "이전 아이콘"
         },
         "AppearancePane": {
+          "3057983501": "할당되지 않음",
           "872af9556e": "시스템 트레이",
           "2edf606c46": "닫을 때 트레이로 최소화",
           "b707773a0d": "활성화하면 창을 닫아도 Orca가 종료되지 않고 시스템 트레이에서 계속 실행됩니다.",
-          "3057983501": "할당되지 않음",
           "0cd9b8228f": "Dock 및 창 전환기에 표시된 앱 아이콘을 선택합니다.",
           "ca1590d42f": "앱 아이콘",
           "61d842eca0": "사이드바에 Orca Mobile 바로가기를 표시합니다. 도구 상자에서는 계속 사용할 수 있습니다.",
