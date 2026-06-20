@@ -8,6 +8,9 @@ describe('normalizeCredentialOrigin', () => {
 
   it('keeps http scheme distinct from https', () => {
     expect(normalizeCredentialOrigin('http://example.com/a')).toBe('http://example.com')
+    expect(normalizeCredentialOrigin('http://x.com')).not.toBe(
+      normalizeCredentialOrigin('https://x.com')
+    )
   })
 
   it('rejects non-web schemes', () => {
@@ -24,5 +27,11 @@ describe('hostnameFromOrigin', () => {
 
   it('returns null for invalid origins', () => {
     expect(hostnameFromOrigin('garbage')).toBeNull()
+  })
+
+  it('rejects non-web schemes', () => {
+    expect(hostnameFromOrigin('file:///etc/passwd')).toBeNull()
+    expect(hostnameFromOrigin('ftp://example.com')).toBeNull()
+    expect(hostnameFromOrigin('about:blank')).toBeNull()
   })
 })

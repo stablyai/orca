@@ -19,7 +19,15 @@ export function normalizeCredentialOrigin(input: string): string | null {
 
 export function hostnameFromOrigin(origin: string): string | null {
   try {
-    return new URL(origin).hostname?.toLowerCase() || null
+    const url = new URL(origin)
+    if (!ALLOWED_SCHEMES.has(url.protocol)) {
+      return null
+    }
+    const hostname = url.hostname
+    if (!hostname) {
+      return null
+    }
+    return hostname.toLowerCase()
   } catch {
     return null
   }
