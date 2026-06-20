@@ -11,27 +11,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '@/lib/github-links'
+import { parseGitHubIssueOrPRNumber } from '@/lib/github-links'
+import { buildWorktreeMetaUpdates, type WorktreeMetaSavedPayload } from './worktree-meta-updates'
+import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
-import type { WorktreeMeta } from '../../../../shared/types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-
-type WorktreeMetaSavedPayload = {
-  worktreeId: string
-  updates: Partial<WorktreeMeta>
-}
-
-function parseExplicitGitHubIssueUrl(input: string): string | null {
-  const trimmed = input.trim()
-  const link = parseGitHubIssueOrPRLink(trimmed)
-  if (!link || link.type !== 'issue') {
-    return null
-  }
-
-  return trimmed
-}
 
 function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = 'auto'
@@ -43,7 +29,6 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const fetchIssue = useAppStore((s) => s.fetchIssue)
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
 
   const isEditMeta = activeModal === 'edit-meta'
@@ -68,7 +53,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [prInput, setPrInput] = useState('')
   const [commentInput, setCommentInput] = useState('')
   const [saving, setSaving] = useState(false)
-  const [openingIssue, setOpeningIssue] = useState(false)
+  const { canOpenIssue, openingIssue, handleOpenIssue, resetOpeningIssue } = useWorktreeIssueLink({
+    worktreeId,
+    issueInput
+  })
 
   const issueInputRef = useRef<HTMLInputElement>(null)
   const prInputRef = useRef<HTMLInputElement>(null)
@@ -81,34 +69,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     setIssueInput(currentIssue)
     setPrInput(currentPR)
     setCommentInput(currentComment)
-    setOpeningIssue(false)
+    resetOpeningIssue()
   }
   prevIsOpenRef.current = isOpen
-
-  const issueNumber = useMemo(() => parseGitHubIssueOrPRNumber(issueInput), [issueInput])
-  const issueUrlFromInput = useMemo(() => parseExplicitGitHubIssueUrl(issueInput), [issueInput])
-  const issueInputLooksLikeUrl = useMemo(
-    () => /^https?:\/\//i.test(issueInput.trim()),
-    [issueInput]
-  )
-  const issueRepo = useAppStore((s) => {
-    const worktree = Object.values(s.worktreesByRepo)
-      .flat()
-      .find((item) => item.id === worktreeId)
-    if (!worktree) {
-      return undefined
-    }
-    return s.repos.find((repo) => repo.id === worktree.repoId)
-  })
-  const cachedIssueUrl = useAppStore((s) => {
-    if (!issueRepo || issueNumber === null) {
-      return null
-    }
-    return s.issueCache[`${issueRepo.id}::${issueNumber}`]?.data?.url ?? null
-  })
-  const canOpenIssue = issueInputLooksLikeUrl
-    ? Boolean(issueUrlFromInput)
-    : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
 
   const setCommentTextareaRef = useCallback(
     (textarea: HTMLTextAreaElement | null) => {
@@ -152,28 +115,13 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     }
     setSaving(true)
     try {
-      const trimmedIssue = issueInput.trim()
-      const linkedIssueNumber = parseGitHubIssueOrPRNumber(trimmedIssue)
-      const finalLinkedIssue =
-        trimmedIssue === '' ? null : linkedIssueNumber !== null ? linkedIssueNumber : undefined
-      const trimmedPR = prInput.trim()
-      const linkedPRNumber = parseGitHubIssueOrPRNumber(trimmedPR)
-      const finalLinkedPR =
-        trimmedPR === '' ? null : linkedPRNumber !== null ? linkedPRNumber : undefined
-
-      const trimmedDisplayName = displayNameInput.trim()
-      const updates: Partial<WorktreeMeta> = {
-        comment: commentInput.trim(),
-        ...(trimmedDisplayName !== currentDisplayName && {
-          displayName: trimmedDisplayName || undefined
-        })
-      }
-      if (finalLinkedIssue !== undefined) {
-        updates.linkedIssue = finalLinkedIssue
-      }
-      if (finalLinkedPR !== undefined) {
-        updates.linkedPR = finalLinkedPR
-      }
+      const updates = buildWorktreeMetaUpdates({
+        displayNameInput,
+        currentDisplayName,
+        issueInput,
+        prInput,
+        commentInput
+      })
 
       await updateWorktreeMeta(worktreeId, updates)
       closeModal()
@@ -224,51 +172,6 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     },
     [handleSave]
   )
-
-  const handleOpenIssue = useCallback(async () => {
-    if (openingIssue) {
-      return
-    }
-
-    if (issueUrlFromInput) {
-      void window.api.shell.openUrl(issueUrlFromInput)
-      return
-    }
-
-    if (issueInputLooksLikeUrl) {
-      return
-    }
-
-    if (cachedIssueUrl) {
-      void window.api.shell.openUrl(cachedIssueUrl)
-      return
-    }
-
-    if (!issueRepo || issueNumber === null) {
-      return
-    }
-
-    setOpeningIssue(true)
-    try {
-      const issue = await fetchIssue(issueRepo.path, issueNumber, { repoId: issueRepo.id })
-      if (issue?.url) {
-        void window.api.shell.openUrl(issue.url)
-      }
-    } finally {
-      if (mountedRef.current) {
-        setOpeningIssue(false)
-      }
-    }
-  }, [
-    cachedIssueUrl,
-    fetchIssue,
-    issueInputLooksLikeUrl,
-    issueNumber,
-    issueRepo,
-    issueUrlFromInput,
-    mountedRef,
-    openingIssue
-  ])
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>

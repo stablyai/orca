@@ -1,6 +1,10 @@
 /* eslint-disable max-lines -- Why: git status/discard/chunking behavior is verified together here to keep the command contract readable in one place. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'path'
+import {
+  MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
+  MAX_RENDERED_DIFF_LINES_PER_SIDE
+} from '../../shared/large-diff-render-limit'
 
 const {
   gitExecFileAsyncMock,
@@ -25,6 +29,20 @@ const {
 vi.mock('./runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileAsyncBuffer: gitExecFileAsyncBufferMock,
+  // Why: getStatus now streams status output. The mock pulls the next queued
+  // stdout from gitExecFileAsyncMock and feeds it to onStdout, so existing tests
+  // that seed the status call via `gitExecFileAsyncMock.mockResolvedValueOnce`
+  // keep working unchanged and call ordering (status, then numstat) is preserved.
+  gitStreamStdout: async (
+    args: string[],
+    options: { onStdout: (chunk: string) => boolean | void }
+  ) => {
+    // Forward args so arg-routing mock implementations (e.g. `args.includes`)
+    // still match the status read.
+    const { stdout } = await gitExecFileAsyncMock(args)
+    const stoppedEarly = options.onStdout(stdout ?? '') === true
+    return { stoppedEarly }
+  },
   gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
     ...env,
     GIT_OPTIONAL_LOCKS: '0'
@@ -342,6 +360,73 @@ describe('getDiff', () => {
     expect(result.modifiedContent).toBe('')
   })
 
+  it('omits over-limit text bodies before returning the diff payload', async () => {
+    const oversizedText = 'a'.repeat(MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1)
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: Buffer.from('index-content\n') })
+    statMock.mockResolvedValueOnce({
+      isFile: () => true,
+      size: oversizedText.length
+    })
+    readFileMock.mockResolvedValue(Buffer.from(oversizedText))
+
+    const result = await getDiff('/repo', 'dist/large.log', false)
+
+    expect(result.kind).toBe('text')
+    if (result.kind !== 'text') {
+      throw new Error('expected text diff result')
+    }
+    expect(result.originalContent).toBe('')
+    expect(result.modifiedContent).toBe('')
+    expect(result.largeDiffRenderLimit?.limited).toBe(true)
+    if (result.largeDiffRenderLimit?.limited !== true) {
+      throw new Error('expected large diff render limit')
+    }
+    expect(result.largeDiffRenderLimit.reason).toBe('character-count')
+    expect(result.largeDiffRenderLimit.characterCount).toBe(
+      oversizedText.length + 'index-content\n'.length
+    )
+  })
+
+  it('omits over-limit text bodies when line-count exceeds the cap', async () => {
+    const oversizedByLines = 'x\n'.repeat(MAX_RENDERED_DIFF_LINES_PER_SIDE)
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: Buffer.from('index-content\n') })
+    statMock.mockResolvedValueOnce({
+      isFile: () => true,
+      size: oversizedByLines.length
+    })
+    readFileMock.mockResolvedValue(Buffer.from(oversizedByLines))
+
+    const result = await getDiff('/repo', 'dist/large-lines.log', false)
+
+    expect(result.kind).toBe('text')
+    if (result.kind !== 'text') {
+      throw new Error('expected text diff result')
+    }
+    expect(result.originalContent).toBe('')
+    expect(result.modifiedContent).toBe('')
+    expect(result.largeDiffRenderLimit?.limited).toBe(true)
+    if (result.largeDiffRenderLimit?.limited !== true) {
+      throw new Error('expected large diff render limit')
+    }
+    expect(result.largeDiffRenderLimit.reason).toBe('line-count')
+    expect(result.largeDiffRenderLimit.lineCounts?.modified).toBeGreaterThan(
+      MAX_RENDERED_DIFF_LINES_PER_SIDE
+    )
+  })
+
+  it('marks git blobs that overflow maxBuffer as binary instead of pretending they are missing', async () => {
+    gitExecFileAsyncBufferMock.mockRejectedValueOnce(
+      Object.assign(new Error('stdout maxBuffer length exceeded'), { code: 'ENOBUFS' })
+    )
+    readFileMock.mockResolvedValue(Buffer.from('working-tree-content'))
+
+    const result = await getDiff('/repo', 'src/file.txt', false)
+
+    expect(result.kind).toBe('binary')
+    expect(result.originalIsBinary).toBe(true)
+    expect(result.originalContent).toBe('')
+  })
+
   it('includes preview metadata for pdf diffs', async () => {
     const pdfBuffer = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x00])
     gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: pdfBuffer })
@@ -447,17 +532,14 @@ describe('getStatus', () => {
     // "docs/\346\227\245\346\234\254\350\252\236/sample.md" (octal-escaped,
     // wrapped in double quotes) and the parser would store that literal
     // string as entry.path, breaking sidebar display + downstream blob reads.
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'status',
-        '--porcelain=v2',
-        '--branch',
-        '--untracked-files=all'
-      ],
-      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
-    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all'
+    ])
     expect(result.entries).toEqual([
       { path: 'docs/日本語/sample.md', status: 'modified', area: 'unstaged' }
     ])
@@ -498,18 +580,15 @@ describe('getStatus', () => {
 
     const result = await getStatus('/repo', { includeIgnored: true })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'status',
-        '--porcelain=v2',
-        '--branch',
-        '--untracked-files=all',
-        '--ignored=matching'
-      ],
-      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
-    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all',
+      '--ignored=matching'
+    ])
     expect(result.ignoredPaths).toEqual(['dist/', 'generated/file.js'])
   })
 
@@ -551,17 +630,33 @@ describe('getStatus', () => {
   it('reports no upstream from porcelain v2 status when no same-name origin branch exists', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({
-        stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
-      })
-      .mockResolvedValueOnce({ stdout: 'feature/prompts\n' })
-      .mockRejectedValueOnce(new Error('fatal: no upstream configured'))
-      .mockRejectedValueOnce(new Error('missing remote branch'))
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === '-c' && args.includes('status')) {
+        return Promise.resolve({
+          stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
+        })
+      }
+      if (args[0] === 'symbolic-ref') {
+        return Promise.resolve({ stdout: 'feature/prompts\n' })
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        return Promise.reject(new Error('fatal: no upstream configured'))
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature/prompts')) {
+        return Promise.reject(new Error('missing remote branch'))
+      }
+      if (args[0] === 'config') {
+        return Promise.reject(new Error(`missing ${args[2] ?? 'config'}`))
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
 
     const result = await getStatus('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/feature/prompts'],
+      { cwd: '/repo' }
+    )
     expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
   })
 
@@ -595,17 +690,14 @@ describe('getStatus', () => {
 
     const result = await getStatus('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'status',
-        '--porcelain=v2',
-        '--branch',
-        '--untracked-files=all'
-      ],
-      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
-    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all'
+    ])
     expect('ignoredPaths' in result).toBe(false)
   })
 
@@ -618,18 +710,15 @@ describe('getStatus', () => {
 
     const result = await getStatus('/repo', { includeIgnored: true })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      [
-        '-c',
-        'core.quotePath=false',
-        'status',
-        '--porcelain=v2',
-        '--branch',
-        '--untracked-files=all',
-        '--ignored=matching'
-      ],
-      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
-    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all',
+      '--ignored=matching'
+    ])
     expect(result.ignoredPaths).toEqual(['dist/', '.env', 'coverage/'])
     expect(result.entries).toEqual([])
   })
@@ -771,6 +860,38 @@ describe('getStatus', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
+
+  it('truncates and flags didHitLimit when entries exceed the limit', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    const stdout = `${Array.from({ length: 25 }, (_, i) => `? file${i}.txt`).join('\n')}\n`
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout })
+
+    const result = await getStatus('/repo', { limit: 10 })
+
+    expect(result.didHitLimit).toBe(true)
+    expect(result.statusLength).toBeGreaterThan(10)
+    // First `limit` entries are kept; the rest are dropped.
+    expect(result.entries.length).toBe(10)
+    // attachLineStats (numstat) must be skipped when the limit was hit — only
+    // the single streamed status read should have happened.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not flag didHitLimit for a normal repo under the limit', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '? a.txt\n? b.txt\n' })
+
+    const result = await getStatus('/repo', { limit: 10 })
+
+    expect(result.didHitLimit).toBeUndefined()
+    expect(result.entries.length).toBe(2)
+  })
 })
 
 describe('abortMerge', () => {
@@ -832,6 +953,34 @@ describe('getStagedCommitContext', () => {
       }
     )
   })
+
+  it('falls back to the file summary when the staged patch overflows the buffer', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature/ai\n' })
+      .mockResolvedValueOnce({ stdout: 'A\thuge.jsonl\n' })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('stdout maxBuffer length exceeded'), {
+          code: 'ENOBUFS'
+        })
+      )
+
+    const result = await getStagedCommitContext('/repo')
+
+    expect(result).toEqual({
+      branch: 'feature/ai',
+      stagedSummary: 'A\thuge.jsonl',
+      stagedPatch: ''
+    })
+  })
+
+  it('rethrows staged patch failures that are not buffer overflows', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature/ai\n' })
+      .mockResolvedValueOnce({ stdout: 'M\tREADME.md\n' })
+      .mockRejectedValueOnce(new Error('fatal: bad revision'))
+
+    await expect(getStagedCommitContext('/repo')).rejects.toThrow('fatal: bad revision')
+  })
 })
 
 describe('detectConflictOperation', () => {
@@ -877,6 +1026,7 @@ describe('getBranchCompare', () => {
   it('returns a pinned branch compare snapshot and parsed branch entries', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'main\n' })
+      .mockResolvedValueOnce({ stdout: 'remote-base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'head-oid\n' })
       .mockResolvedValueOnce({ stdout: 'base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
@@ -911,6 +1061,8 @@ describe('getBranchCompare', () => {
   it('returns invalid-base when the compare ref does not resolve', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'main\n' })
+      .mockRejectedValueOnce(new Error('missing remote base'))
+      .mockRejectedValueOnce(new Error('missing local base'))
       .mockResolvedValueOnce({ stdout: 'head-oid\n' })
       .mockRejectedValueOnce(new Error('missing base'))
 
@@ -924,6 +1076,7 @@ describe('getBranchCompare', () => {
   it('returns unborn-head when HEAD cannot be resolved', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'main\n' })
+      .mockResolvedValueOnce({ stdout: 'remote-base-oid\n' })
       .mockRejectedValueOnce(new Error('unborn'))
       .mockRejectedValueOnce(new Error('missing base'))
 
@@ -937,6 +1090,7 @@ describe('getBranchCompare', () => {
   it('treats an unborn branch with a resolvable base as having no committed branch changes', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'feature\n' })
+      .mockResolvedValueOnce({ stdout: 'remote-base-oid\n' })
       .mockRejectedValueOnce(new Error('unborn'))
       .mockResolvedValueOnce({ stdout: 'base-oid\n' })
 
@@ -958,6 +1112,7 @@ describe('getBranchCompare', () => {
   it('returns no-merge-base when histories do not intersect', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'main\n' })
+      .mockResolvedValueOnce({ stdout: 'remote-base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'head-oid\n' })
       .mockResolvedValueOnce({ stdout: 'base-oid\n' })
       .mockRejectedValueOnce(new Error('no merge base'))
@@ -972,6 +1127,7 @@ describe('getBranchCompare', () => {
   it('passes core.quotePath=false to diff --name-status and parses UTF-8 paths', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'main\n' })
+      .mockResolvedValueOnce({ stdout: 'remote-base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'head-oid\n' })
       .mockResolvedValueOnce({ stdout: 'base-oid\n' })
       .mockResolvedValueOnce({ stdout: 'merge-base-oid\n' })
@@ -982,7 +1138,7 @@ describe('getBranchCompare', () => {
     const result = await getBranchCompare('/repo', 'origin/main')
 
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
-      5,
+      6,
       [
         '-c',
         'core.quotePath=false',
@@ -998,6 +1154,52 @@ describe('getBranchCompare', () => {
     expect(result.entries).toEqual([
       { path: 'docs/日本語/sample.md', status: 'modified', added: 2, removed: 1 }
     ])
+  })
+
+  it('compares short remote labels through fully qualified remote-tracking refs', async () => {
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'branch') {
+        return Promise.resolve({ stdout: 'feature\n' })
+      }
+      if (
+        args[0] === 'rev-parse' &&
+        args.includes('--quiet') &&
+        args.includes('refs/remotes/origin/main^{commit}')
+      ) {
+        return Promise.resolve({ stdout: 'remote-base-oid\n' })
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD')) {
+        return Promise.resolve({ stdout: 'head-oid\n' })
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main')) {
+        return Promise.resolve({ stdout: 'base-oid\n' })
+      }
+      if (args[0] === 'merge-base') {
+        return Promise.resolve({ stdout: 'merge-base-oid\n' })
+      }
+      if (args.includes('--name-status')) {
+        return Promise.resolve({ stdout: '' })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({ stdout: '' })
+      }
+      if (args[0] === 'rev-list') {
+        return Promise.resolve({ stdout: '0\n' })
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+
+    const result = await getBranchCompare('/repo', 'origin/main')
+
+    expect(result.summary).toMatchObject({
+      baseRef: 'origin/main',
+      baseOid: 'base-oid',
+      status: 'ready'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--end-of-options', 'refs/remotes/origin/main'],
+      { cwd: '/repo' }
+    )
   })
 
   it('attaches counts for branch compare paths containing rename markers', async () => {

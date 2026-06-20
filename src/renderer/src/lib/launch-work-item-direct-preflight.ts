@@ -1,42 +1,49 @@
-import { useAppStore, type AppState } from '@/store'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSetupConfig } from '@/lib/new-workspace'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import type {
   GitHubPrStartPoint,
+  GlobalSettings,
   OrcaHooks,
   RepoHookSettings,
   SetupDecision
 } from '../../../shared/types'
 
+// Why: preflight routes by the repo's owner host, which `getSettingsForRepoRuntimeOwner`
+// hands back as a narrow runtime-scope pick rather than the full GlobalSettings.
+type PreflightSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+
 export async function resolveDirectPrStartPoint(
   repoId: string,
   prNumber: number,
-  settings: AppState['settings']
+  settings: PreflightSettings,
+  hints: {
+    branchName?: string
+    headRefName?: string
+    baseRefName?: string
+    isCrossRepository?: boolean
+  } = {}
 ): Promise<GitHubPrStartPoint> {
-  const target = getActiveRuntimeTarget(settings)
-  const result =
-    target.kind === 'local'
-      ? await window.api.worktrees.resolvePrBase({ repoId, prNumber })
-      : await callRuntimeRpc<GitHubPrStartPoint | { error: string }>(
-          target,
-          'worktree.resolvePrBase',
-          { repo: repoId, prNumber },
-          { timeoutMs: 30_000 }
-        )
-  if ('error' in result) {
-    throw new Error(result.error)
-  }
-  return result
+  return resolveGitHubPrStartPointForRepo({
+    repoId,
+    prNumber,
+    settings,
+    headRefName: hints.headRefName ?? hints.branchName,
+    baseRefName: hints.baseRefName,
+    isCrossRepository: hints.isCrossRepository
+  })
 }
 
 export async function resolveDirectSetupDecision(
   repoId: string,
-  repo: { hookSettings?: RepoHookSettings }
+  repo: { hookSettings?: RepoHookSettings },
+  settings: PreflightSettings
 ): Promise<{ kind: 'decided'; decision: SetupDecision } | { kind: 'needs-modal' }> {
   let yamlHooks: OrcaHooks | null = null
   try {
-    const result = await checkRuntimeHooks(useAppStore.getState().settings, repoId)
+    // Why: route the hooks probe by the repo's owner host (passed in) so preflight
+    // and the subsequent owner-routed createWorktree hit the same host.
+    const result = await checkRuntimeHooks(settings, repoId)
     yamlHooks = (result.hooks as OrcaHooks | null) ?? null
   } catch {
     yamlHooks = null

@@ -21,6 +21,7 @@ import {
   parseNumstat,
   type GitLineStats
 } from '../shared/git-uncommitted-line-stats'
+import { DEFAULT_GIT_STATUS_LIMIT } from '../shared/git-status-limit'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
@@ -67,15 +68,26 @@ export async function getStatusOp(
   branch?: string
   upstreamStatus?: GitUpstreamStatus
   ignoredPaths?: string[]
+  didHitLimit?: boolean
+  statusLength?: number
 }> {
   const worktreePath = params.worktreePath as string
   const includeIgnored = params.includeIgnored === true
+  // Why: reject non-finite/negative limits so the cap guard stays reliable
+  // (NaN would silently disable capping; negatives would over-truncate).
+  const rawLimit = params.limit
+  const limit =
+    typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit >= 0
+      ? Math.floor(rawLimit)
+      : DEFAULT_GIT_STATUS_LIMIT
   const conflictOperation = await detectConflictOperation(worktreePath)
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
   let branch: string | undefined
   let upstreamStatus: GitUpstreamStatus | undefined
   let ignoredPaths: string[] = []
+  let didHitLimit = false
+  let statusLength = 0
 
   try {
     // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8 in
@@ -99,28 +111,41 @@ export async function getStatusOp(
       disableOptionalLocks: true
     })
     const parsed = parseStatusOutput(stdout)
-    // Why: huge worktrees can produce enough status rows to exceed JavaScript's
-    // spread-argument limit during routine source-control polling.
-    for (const entry of parsed.entries) {
-      entries.push(entry)
-    }
     head = parsed.head
     branch = parsed.branch
     upstreamStatus = parsed.upstreamStatus
     ignoredPaths = parsed.ignoredPaths
-    if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
-      try {
-        upstreamStatus = await getEffectiveGitUpstreamStatus((args) => git(args, worktreePath))
-      } catch {
-        // Why: status polling should keep returning working-tree entries even
-        // if the richer upstream probe hits a transient SSH/git ref error.
+    statusLength = parsed.entries.length
+    // Why: cap the entry count to match the local path. A repo with an enormous
+    // un-ignored folder would otherwise push tens of thousands of rows through
+    // every poll; truncating keeps the SCM view (and its "too many changes"
+    // state) consistent across local and SSH repos.
+    if (limit !== 0 && parsed.entries.length > limit) {
+      didHitLimit = true
+      for (let i = 0; i < limit; i++) {
+        entries.push(parsed.entries[i])
+      }
+    } else {
+      for (const entry of parsed.entries) {
+        entries.push(entry)
       }
     }
 
-    for (const uLine of parsed.unmergedLines) {
-      const entry = parseUnmergedEntry(worktreePath, uLine)
-      if (entry) {
-        entries.push(entry)
+    if (!didHitLimit) {
+      if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
+        try {
+          upstreamStatus = await getEffectiveGitUpstreamStatus((args) => git(args, worktreePath))
+        } catch {
+          // Why: status polling should keep returning working-tree entries even
+          // if the richer upstream probe hits a transient SSH/git ref error.
+        }
+      }
+
+      for (const uLine of parsed.unmergedLines) {
+        const entry = parseUnmergedEntry(worktreePath, uLine)
+        if (entry) {
+          entries.push(entry)
+        }
       }
     }
   } catch {
@@ -129,10 +154,12 @@ export async function getStatusOp(
 
   // Why: attach per-area line counts for the sidebar. Diffs run after status
   // (we need the entry list first) and only for areas that have entries, so a
-  // clean tree costs zero extra git calls. Staged and unstaged are diffed
-  // separately so each row reflects only its own staging area; untracked files
-  // have no baseline and count their full contents as additions.
-  await attachLineStats(git, worktreePath, entries)
+  // clean tree costs zero extra git calls. Skipped when the limit was hit —
+  // running numstat over a huge change set would reintroduce the cost the limit
+  // exists to avoid.
+  if (!didHitLimit) {
+    await attachLineStats(git, worktreePath, entries)
+  }
 
   return {
     entries,
@@ -140,7 +167,8 @@ export async function getStatusOp(
     head,
     branch,
     upstreamStatus,
-    ...(includeIgnored ? { ignoredPaths } : {})
+    ...(includeIgnored ? { ignoredPaths } : {}),
+    ...(didHitLimit ? { didHitLimit: true, statusLength } : {})
   }
 }
 

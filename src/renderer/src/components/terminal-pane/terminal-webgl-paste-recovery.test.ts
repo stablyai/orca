@@ -1,8 +1,24 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
+import {
+  registerLivePaneManager,
+  unregisterLivePaneManager
+} from '@/lib/pane-manager/pane-manager-registry'
 import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 
 describe('terminal image paste WebGL recovery', () => {
+  const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
+
+  function registerManager(): { resetWebglTextureAtlases: Mock<() => void> } {
+    const manager = { resetWebglTextureAtlases: vi.fn<() => void>() }
+    registerLivePaneManager(manager)
+    registeredManagers.push(manager)
+    return manager
+  }
+
   afterEach(() => {
+    for (const manager of registeredManagers.splice(0)) {
+      unregisterLivePaneManager(manager)
+    }
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
@@ -17,13 +33,17 @@ describe('terminal image paste WebGL recovery', () => {
         return rafCallbacks.length
       })
     )
-    const manager = { resetWebglTextureAtlases: vi.fn() }
+    // Why: resets go through the live-manager registry so every terminal
+    // sharing the glyph atlas rebuilds, not just the pasted-into pane.
+    const manager = registerManager()
+    const otherManager = registerManager()
 
-    scheduleImagePasteWebglAtlasRecovery(manager)
+    scheduleImagePasteWebglAtlasRecovery()
 
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     rafCallbacks[0]?.(0)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(otherManager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(120)
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(2)
@@ -34,9 +54,9 @@ describe('terminal image paste WebGL recovery', () => {
   it('falls back to a timeout when animation frames are unavailable', () => {
     vi.useFakeTimers()
     vi.stubGlobal('requestAnimationFrame', undefined)
-    const manager = { resetWebglTextureAtlases: vi.fn() }
+    const manager = registerManager()
 
-    scheduleImagePasteWebglAtlasRecovery(manager)
+    scheduleImagePasteWebglAtlasRecovery()
 
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
     vi.advanceTimersByTime(0)
@@ -57,8 +77,10 @@ describe('terminal image paste WebGL recovery', () => {
         throw new Error('pane disposed')
       })
     }
+    registerLivePaneManager(manager)
+    registeredManagers.push(manager)
 
-    expect(() => scheduleImagePasteWebglAtlasRecovery(manager)).not.toThrow()
+    expect(() => scheduleImagePasteWebglAtlasRecovery()).not.toThrow()
     expect(() => vi.runAllTimers()).not.toThrow()
   })
 })

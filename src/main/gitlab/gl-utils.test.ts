@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: GitLab remote parsing coverage needs many URL/host fixtures against the same mocked git/glab helpers. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { gitExecFileAsyncMock, glabExecFileAsyncMock, sshExecMock } = vi.hoisted(() => ({
@@ -22,95 +21,11 @@ import {
   getGlabKnownHosts,
   getProjectRef,
   getProjectRefForRemote,
-  parseGitLabProjectRef,
   parseGlabApiResponse,
   parseGlabAuthStatusHosts,
   resolveIssueSource
 } from './gl-utils'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
-
-describe('gitlab project ref parsing', () => {
-  it('parses HTTPS and SSH GitLab.com remotes', () => {
-    expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-    expect(parseGitLabProjectRef('git@gitlab.com:stablyai/orca.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'stablyai/orca'
-    })
-  })
-
-  it('preserves nested group paths', () => {
-    expect(parseGitLabProjectRef('git@gitlab.com:group/subgroup/project.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'group/subgroup/project'
-    })
-    expect(parseGitLabProjectRef('https://gitlab.com/g1/g2/g3/proj.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'g1/g2/g3/proj'
-    })
-  })
-
-  it('returns null for non-GitLab hosts when host not in knownHosts', () => {
-    expect(parseGitLabProjectRef('git@github.com:stablyai/orca.git')).toBeNull()
-    expect(parseGitLabProjectRef('git@example.com:foo/bar.git')).toBeNull()
-  })
-
-  it('matches self-hosted hosts when included in knownHosts', () => {
-    expect(
-      parseGitLabProjectRef('git@gitlab.example.com:team/api.git', [
-        'gitlab.com',
-        'gitlab.example.com'
-      ])
-    ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
-  })
-
-  it('parses GitLab remotes with non-standard ports without treating the port as a path segment', () => {
-    expect(
-      parseGitLabProjectRef('ssh://git@gitlab.example.com:2222/team/api.git', [
-        'gitlab.com',
-        'gitlab.example.com'
-      ])
-    ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
-    expect(
-      parseGitLabProjectRef('https://gitlab.example.com:8443/team/api.git', [
-        'gitlab.com',
-        'gitlab.example.com'
-      ])
-    ).toEqual({ host: 'gitlab.example.com', path: 'team/api' })
-  })
-
-  it('rejects single-segment paths (host root or user-only)', () => {
-    expect(parseGitLabProjectRef('git@gitlab.com:foo.git')).toBeNull()
-    expect(parseGitLabProjectRef('https://gitlab.com/foo.git')).toBeNull()
-  })
-
-  it('handles missing .git suffix', () => {
-    expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-  })
-
-  it('strips trailing slashes after .git suffixes', () => {
-    expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets.git/')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-    expect(parseGitLabProjectRef('ssh://git@gitlab.com/acme/widgets.git/')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-  })
-
-  it('preserves git protocol remote support', () => {
-    expect(parseGitLabProjectRef('git://gitlab.com/acme/widgets.git')).toEqual({
-      host: 'gitlab.com',
-      path: 'acme/widgets'
-    })
-  })
-})
 
 describe('gitlab project ref resolution', () => {
   beforeEach(() => {
@@ -175,6 +90,38 @@ describe('gitlab project ref resolution', () => {
     await expect(getIssueProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
       path: 'stablyai/orca'
+    })
+  })
+
+  it('keeps local host and local WSL project-ref cache entries separate for the same path', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:host/orca.git\n' })
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:wsl/orca.git\n' })
+
+    await expect(getProjectRef('/repo')).resolves.toEqual({
+      host: 'gitlab.com',
+      path: 'host/orca'
+    })
+    await expect(getProjectRef('/repo', undefined, null, { wslDistro: 'Ubuntu' })).resolves.toEqual(
+      {
+        host: 'gitlab.com',
+        path: 'wsl/orca'
+      }
+    )
+    await expect(getProjectRef('/repo', undefined, null, { wslDistro: 'Ubuntu' })).resolves.toEqual(
+      {
+        host: 'gitlab.com',
+        path: 'wsl/orca'
+      }
+    )
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['remote', 'get-url', 'origin'], {
+      cwd: '/repo',
+      wslDistro: 'Ubuntu'
     })
   })
 
@@ -374,6 +321,24 @@ gitlab.example.com:
   Logged in as user2
     `
     expect(parseGlabAuthStatusHosts(out)).toContain('gitlab.example.com')
+  })
+
+  it('extracts hosts from bare auth-status section headers', () => {
+    const out = `
+gitlab.com
+  ✓ Logged in to gitlab.com as user1 (/home/user/.config/glab-cli/config.yml)
+  ✓ Token: **************************
+gitlab.internal
+  ✓ Logged in as user2
+  ✓ Token: **************************
+Self-hosted-git
+  ✓ Logged in as user3
+    `
+    expect(parseGlabAuthStatusHosts(out).sort()).toEqual([
+      'gitlab.com',
+      'gitlab.internal',
+      'self-hosted-git'
+    ])
   })
 
   it('returns empty list for output with no hosts', () => {

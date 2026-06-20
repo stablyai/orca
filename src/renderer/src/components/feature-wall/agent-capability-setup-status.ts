@@ -12,6 +12,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
 
 export type AgentCapabilityInstallStatusTone = 'ready' | 'pending' | 'checking' | 'error'
@@ -40,13 +41,17 @@ export type AgentCapabilitySetupStatus = {
 }
 
 export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
   const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const computerUsePermissionStatus = useComputerUsePermissionStatus(computerUseSkill.installed)
@@ -79,7 +84,10 @@ export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
     () => ({
       browserUse: getSkillInstallStatus(browserUseSkill),
       computerUse: getComputerUseInstallStatus(computerUseSkill, computerUsePermissionStatus),
-      orchestration: getSkillInstallStatus(orchestrationSkill)
+      orchestration: getSkillInstallStatus(orchestrationSkill),
+      // Why: linearTickets remains in the onboarding selection shape, but the
+      // generic feature wall must not become a Linear skill install surface.
+      linearTickets: getFeatureWallExcludedLinearTicketsStatus()
     }),
     [browserUseSkill, computerUsePermissionStatus, computerUseSkill, orchestrationSkill]
   )
@@ -97,7 +105,8 @@ export function getDefaultAgentCapabilitySetupSelection(
     computerUse:
       !readiness.computerUseSkillInstalled ||
       (!readiness.computerUseReady && !readiness.computerUseUnavailable),
-    orchestration: !readiness.orchestrationSkillInstalled
+    orchestration: !readiness.orchestrationSkillInstalled,
+    linearTickets: false
   }
 }
 
@@ -160,6 +169,13 @@ function getSkillInstallStatus(skill: {
       'auto.components.feature.wall.agent.capability.setup.status.aae94eeb52',
       'Click Install CLI & Skills'
     ),
+    tone: 'pending'
+  }
+}
+
+function getFeatureWallExcludedLinearTicketsStatus(): AgentCapabilityInstallStatus {
+  return {
+    label: '',
     tone: 'pending'
   }
 }

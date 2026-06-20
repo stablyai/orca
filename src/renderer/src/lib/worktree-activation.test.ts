@@ -176,6 +176,27 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setActiveTab).not.toHaveBeenCalled()
   })
 
+  it('creates a local initial terminal for explicitly local worktrees while a runtime is focused', () => {
+    useAppStore.setState((state) => ({
+      settings: state.settings
+        ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
+        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings)
+    }))
+    const store = createMockStore({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime-1' },
+      repos: [{ id: 'repo-1', executionHostId: 'local', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] }
+    })
+
+    const result = ensureWorktreeHasInitialTerminal(store, 'wt-1')
+
+    expect(result).toBe('tab-1')
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true
+    })
+    expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
+  })
+
   it('does not create or queue anything when the worktree already has renderable content', () => {
     const store = createMockStore({
       reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 }))

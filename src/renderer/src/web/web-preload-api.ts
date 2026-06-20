@@ -21,6 +21,7 @@ import type {
   StatsSummary,
   Worktree,
   WorktreeLineage,
+  WorkspaceLineage,
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../shared/types'
@@ -30,16 +31,24 @@ import {
   getDefaultSettings,
   getDefaultUIState,
   getDefaultWorkspaceSession,
+  getWorktreeCardModeProperties,
   normalizeAgentActivityDisplayMode,
+  normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION
 } from '../../../shared/constants'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
+import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../shared/tui-agent-launch-defaults'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
+import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
@@ -76,6 +85,7 @@ import {
 } from '../../../shared/feature-interactions'
 import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
 import { translate } from '@/i18n/i18n'
+import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -425,6 +435,20 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       pickFloatingMarkdownDocument: () => Promise.resolve(null),
       pickFloatingWorkspaceDirectory: () => Promise.resolve(null)
     },
+    starNag: {
+      onShow: () => noopUnsubscribe,
+      onHide: () => noopUnsubscribe,
+      dismiss: () => Promise.resolve(),
+      later: () => Promise.resolve(),
+      complete: () => Promise.resolve(),
+      disable: () => Promise.resolve(),
+      openWeb: () => Promise.resolve(),
+      starOrca: () => Promise.resolve(false),
+      forceShow: () => Promise.resolve(),
+      agentValueMoment: () => Promise.resolve({ status: 'skipped' }),
+      showAgentValueMoment: () => Promise.resolve(),
+      onboardingCompleted: () => Promise.resolve()
+    },
     platform: {
       get: () => ({
         platform: getBrowserPlatform(),
@@ -435,7 +459,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getConfig: () => createE2EConfig({})
     },
     settings: {
-      get: async () => getStoredSettings(),
+      get: async () => getRuntimeBackedStoredSettings(),
       set: async (updates) => {
         if (updates.activeRuntimeEnvironmentId === null) {
           disconnectActiveRuntimeEnvironment()
@@ -448,7 +472,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
         writeJson(SETTINGS_STORAGE_KEY, next)
-        return next
+        return syncRuntimeBackedSettings(sanitizedUpdates, next)
       },
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
@@ -477,38 +501,36 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getStatus: () =>
         Promise.resolve({
           localFileEnabled: false,
-          otlpEnabled: false,
           bundleEnabled: false,
-          otlpStatus: 'Unavailable on web',
           traceFilePath: '',
           traceFamilySize: 0
         }),
-      openTraceFolder: () => Promise.resolve(),
-      clearTraces: () => Promise.resolve(),
-      collectBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
-      openBundlePreview: () =>
-        Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
+      collectBundle: () => Promise.reject(new Error('Review files are unavailable on web.')),
+      openBundlePreview: () => Promise.reject(new Error('Review files are unavailable on web.')),
       discardBundlePreview: () => Promise.resolve(),
-      uploadBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.')),
-      deleteBundle: () => Promise.reject(new Error('Diagnostic bundles are unavailable on web.'))
+      uploadBundle: () => Promise.reject(new Error('Sending diagnostics is unavailable on web.')),
+      deleteBundle: () => Promise.reject(new Error('Sent diagnostics are unavailable on web.'))
     },
     session: {
-      get: () => Promise.resolve(getStoredWorkspaceSession()),
-      set: async (session) => {
-        writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
+      // hostId mirrors the desktop bridge: omitted/'local' targets the existing
+      // storage key; non-local hosts persist under a host-suffixed key so their
+      // sessions stay isolated from the local one.
+      get: (hostId) => Promise.resolve(getStoredWorkspaceSession(hostId)),
+      set: async (session, hostId) => {
+        writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))
       },
-      patch: async (patch: WorkspaceSessionPatch) => {
+      patch: async (patch: WorkspaceSessionPatch, hostId) => {
         writeJson(
-          SESSION_STORAGE_KEY,
+          sessionStorageKeyForHost(hostId),
           sanitizeWebRuntimeWorkspaceSession({
-            ...getStoredWorkspaceSession(),
+            ...getStoredWorkspaceSession(hostId),
             ...patch
           })
         )
       },
       readTerminalScrollback: () => null,
-      setSync: (session) => {
-        writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
+      setSync: (session, hostId) => {
+        writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))
       }
     },
     onboarding: {
@@ -564,6 +586,14 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
+    },
+    aiVault: {
+      listSessions: () =>
+        Promise.resolve({
+          sessions: [],
+          issues: [],
+          scannedAt: new Date().toISOString()
+        })
     },
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
@@ -695,7 +725,7 @@ function normalizeStoredWebOverrides(
         section,
         actionId,
         message: translate(
-          'auto.web.web.preload.api.10898045f3',
+          'auto.web.web.preload.api.76122208ca',
           'Shortcut for "{{value0}}" was ignored: {{value1}}',
           { value0: actionId, value1: error }
         )
@@ -959,6 +989,13 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
       }
       return { removed: redactStoredWebRuntimeEnvironment(environment) }
     },
+    disconnect: async ({ selector }) => {
+      const environment = resolveEnvironment(selector)
+      if (activeEnvironment?.id === environment.id) {
+        disconnectActiveRuntimeEnvironment()
+      }
+      return { disconnected: redactStoredWebRuntimeEnvironment(environment) }
+    },
     getStatus: ({ selector, timeoutMs }) =>
       callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
     call: ({ selector, method, params, timeoutMs }) =>
@@ -986,12 +1023,23 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     update: async ({ repoId, updates }) =>
       (await callRuntimeResult<{ repo: Repo }>('repo.update', { repo: repoId, updates })).repo,
     pickFolder: () => Promise.resolve(null),
+    pickFolders: () => Promise.resolve([]),
     pickDirectory: () => Promise.resolve(null),
     clone: async ({ url, destination }) => {
       invalidateRuntimeWorktreeCaches()
       return (
         await callRuntimeResult<{ repo: Repo }>('repo.clone', { url, destination }, 10 * 60_000)
       ).repo
+    },
+    cloneRemote: async () => {
+      // Why: SSH relay cloning is owned by the desktop main process; paired web
+      // clients must not pretend they can run that local IPC path directly.
+      throw new Error('SSH clone is unavailable in paired web clients.')
+    },
+    createRemote: async () => {
+      // Why: SSH relay project creation is owned by the desktop main process;
+      // paired web clients cannot create folders through local SSH IPC.
+      throw new Error('Creating projects on SSH hosts is unavailable in paired web clients.')
     },
     cloneAbort: () => Promise.resolve(),
     addRemote: async ({ remotePath, displayName, kind }) => {
@@ -1012,6 +1060,14 @@ function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     create: async ({ parentPath, name, kind }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult('repo.create', { parentPath, name, kind })
+    },
+    isGitAvailable: async () =>
+      (await callRuntimeResult<{ available: boolean }>('repo.gitAvailable')).available,
+    getDefaultCreateProjectParent: async () => {
+      const result = await callRuntimeResult<{ resolvedPath: string }>('files.browseServerDir', {
+        path: '~'
+      })
+      return getDefaultCreateProjectParent(result.resolvedPath)
     },
     onCloneProgress: () => noopUnsubscribe,
     getGitUsername: () => Promise.resolve(''),
@@ -1057,20 +1113,28 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         repo: args.repoId,
         name: args.name,
         baseBranch: args.baseBranch,
+        compareBaseRef: args.compareBaseRef,
         branchNameOverride: args.branchNameOverride,
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
         linkedLinearIssue: args.linkedLinearIssue,
+        linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId,
+        linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
         linkedGitLabIssue: args.linkedGitLabIssue,
         linkedGitLabMR: args.linkedGitLabMR,
+        linkedBitbucketPR: args.linkedBitbucketPR,
+        linkedAzureDevOpsPR: args.linkedAzureDevOpsPR,
+        linkedGiteaPR: args.linkedGiteaPR,
         displayName: args.displayName,
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
         setupDecision: args.setupDecision,
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
+        parentWorkspace: args.parentWorkspace,
         workspaceStatus: args.workspaceStatus,
-        manualOrder: args.manualOrder
+        manualOrder: args.manualOrder,
+        automationProvenanceRequest: args.automationProvenanceRequest
       })
     },
     // Why: the runtime create path emits no two-phase progress, so the web
@@ -1082,18 +1146,20 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         baseBranch
       })
     },
-    resolvePrBase: async ({ repoId, prNumber, headRefName, isCrossRepository }) =>
+    resolvePrBase: async ({ repoId, prNumber, headRefName, baseRefName, isCrossRepository }) =>
       callRuntimeResult('worktree.resolvePrBase', {
         repo: repoId,
         prNumber,
         headRefName,
+        baseRefName,
         isCrossRepository
       }),
-    resolveMrBase: async ({ repoId, mrIid, sourceBranch, isCrossRepository }) =>
+    resolveMrBase: async ({ repoId, mrIid, sourceBranch, targetBranch, isCrossRepository }) =>
       callRuntimeResult('worktree.resolveMrBase', {
         repo: repoId,
         mrIid,
         sourceBranch,
+        targetBranch,
         isCrossRepository
       }),
     remove: async ({ worktreeId, force }) => {
@@ -1117,11 +1183,10 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         })
       ).worktree,
     listLineage: async () =>
-      (
-        await callRuntimeResult<{ lineage: Record<string, WorktreeLineage> }>(
-          'worktree.lineageList'
-        )
-      ).lineage,
+      await callRuntimeResult<{
+        lineage: Record<string, WorktreeLineage>
+        workspaceLineage?: Record<string, WorkspaceLineage>
+      }>('worktree.lineageList'),
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
       invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{
@@ -1287,6 +1352,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         paths
       })
     },
+    // Why: the "add huge folder to .gitignore" flow is a local-desktop helper;
+    // in the web runtime there's no offer, so return no candidates / no-op.
+    findHugeFoldersToIgnore: async () => [],
+    appendGitignore: async () => false,
     history: async ({ worktreePath, limit, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.history', {
@@ -1349,6 +1418,17 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         pushTarget
       })
+    },
+    syncFork: async ({ worktreePath, expectedUpstream }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult(
+        'git.forkSync',
+        {
+          worktree: toRuntimeWorktreeSelector(worktree.id),
+          expectedUpstream
+        },
+        60_000
+      )
     },
     push: async ({ worktreePath, publish, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -1448,6 +1528,13 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         relativePath,
         line
+      })
+    },
+    remoteCommitUrl: async ({ worktreePath, sha }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.remoteCommitUrl', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        sha
       })
     }
   }
@@ -1905,6 +1992,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
+    // No desktop main process to push state changes; the web client re-reads
+    // via ui.get on interaction instead.
+    onStateChanged: () => noopUnsubscribe,
     onToggleLeftSidebar: () => noopUnsubscribe,
     onToggleRightSidebar: () => noopUnsubscribe,
     onToggleWorktreePalette: () => noopUnsubscribe,
@@ -1914,6 +2004,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
+    onOpenWorkspaceBoard: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
     onJumpToTabIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
@@ -1930,6 +2021,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFocusBrowserAddressBar: () => noopUnsubscribe,
     onFindInBrowserPage: () => noopUnsubscribe,
     onReloadBrowserPage: () => noopUnsubscribe,
+    onBrowserHistoryNavigate: () => noopUnsubscribe,
     onZoomBrowserPage: () => noopUnsubscribe,
     onHardReloadBrowserPage: () => noopUnsubscribe,
     onCloseActiveTab: () => noopUnsubscribe,
@@ -1941,7 +2033,6 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onCtrlTabKeyUp: () => noopUnsubscribe,
     onToggleStatusBar: () => noopUnsubscribe,
     onDictationKeyDown: () => noopUnsubscribe,
-    onExportPdfRequested: () => noopUnsubscribe,
     onActivateWorktree: () => noopUnsubscribe,
     onCreateTerminal: () => noopUnsubscribe,
     onRequestTerminalCreate: () => noopUnsubscribe,
@@ -2050,9 +2141,9 @@ function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
     getInstallStatus: () => Promise.resolve(status),
     install: () => Promise.resolve(status),
     remove: () => Promise.resolve(status),
-    getWslInstallStatus: () => Promise.resolve(status),
-    installWsl: () => Promise.resolve(status),
-    removeWsl: () => Promise.resolve(status)
+    getWslInstallStatus: (_args?: { distro?: string | null }) => Promise.resolve(status),
+    installWsl: (_args?: { distro?: string | null }) => Promise.resolve(status),
+    removeWsl: (_args?: { distro?: string | null }) => Promise.resolve(status)
   } as NonNullable<Partial<PreloadApi>['cli']>
 }
 
@@ -2071,6 +2162,7 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
       | 'grok'
       | 'copilot'
       | 'hermes'
+      | 'devin'
   ) =>
     Promise.resolve({
       agent,
@@ -2091,7 +2183,8 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     commandCodeStatus: () => status('command-code'),
     grokStatus: () => status('grok'),
     copilotStatus: () => status('copilot'),
-    hermesStatus: () => status('hermes')
+    hermesStatus: () => status('hermes'),
+    devinStatus: () => status('devin')
   }
 }
 
@@ -2177,6 +2270,9 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     get: () => Promise.resolve(empty),
     refresh: () => Promise.resolve(empty),
     refreshCodexForTarget: () => Promise.resolve(empty),
+    // Why: web clients do not own local Codex auth, so reset-credit
+    // redemption remains desktop-only and reports the safe no-credit outcome.
+    consumeCodexResetCredit: () => Promise.resolve({ outcome: 'noCredit', state: empty }),
     refreshClaudeForTarget: () => Promise.resolve(empty),
     setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
@@ -2502,6 +2598,7 @@ function getStoredSettings(): GlobalSettings {
     ...stored,
     ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
     ...normalizeTerminalCursorStyleDefault(stored),
+    terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
     uiLanguage: normalizeUiLanguage(stored.uiLanguage)
   }
   if (
@@ -2512,6 +2609,7 @@ function getStoredSettings(): GlobalSettings {
       stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
       stored.terminalCursorStyleDefaultedToBlock !==
         migratedStored.terminalCursorStyleDefaultedToBlock ||
+      stored.terminalCustomThemes !== migratedStored.terminalCustomThemes ||
       stored.uiLanguage !== migratedStored.uiLanguage)
   ) {
     try {
@@ -2534,6 +2632,66 @@ function getStoredSettings(): GlobalSettings {
   )
 }
 
+async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
+  const local = getStoredSettings()
+  if (!requireActiveEnvironmentOrNull()) {
+    return local
+  }
+  try {
+    const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
+      'settings.get',
+      undefined,
+      15_000
+    )
+    const runtimeSettings: Partial<GlobalSettings> = {}
+    if (typeof result.settings.experimentalNewWorktreeCardStyle === 'boolean') {
+      runtimeSettings.experimentalNewWorktreeCardStyle =
+        result.settings.experimentalNewWorktreeCardStyle
+    }
+    if (typeof result.settings.compactWorktreeCards === 'boolean') {
+      runtimeSettings.compactWorktreeCards = result.settings.compactWorktreeCards
+    }
+    const next = mergeSettings(local, runtimeSettings)
+    writeJson(SETTINGS_STORAGE_KEY, next)
+    return next
+  } catch {
+    // Why: unpaired/offline web clients keep a local settings fallback.
+    return local
+  }
+}
+
+async function syncRuntimeBackedSettings(
+  updates: Partial<GlobalSettings>,
+  localNext: GlobalSettings
+): Promise<GlobalSettings> {
+  if (!requireActiveEnvironmentOrNull()) {
+    return localNext
+  }
+  const runtimeUpdates: Partial<GlobalSettings> = {}
+  if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
+    runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
+  }
+  if (typeof updates.compactWorktreeCards === 'boolean') {
+    runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
+  }
+  if (Object.keys(runtimeUpdates).length === 0) {
+    return localNext
+  }
+  try {
+    const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
+      'settings.update',
+      runtimeUpdates,
+      15_000
+    )
+    const next = mergeSettings(localNext, result.settings)
+    writeJson(SETTINGS_STORAGE_KEY, next)
+    return next
+  } catch {
+    // Why: unpaired/offline web clients still need local settings persistence.
+    return localNext
+  }
+}
+
 function getStoredOnboarding(): OnboardingState {
   const storedRaw = window.localStorage.getItem(ONBOARDING_STORAGE_KEY)
   if (storedRaw) {
@@ -2552,7 +2710,22 @@ function getStoredOnboarding(): OnboardingState {
   return closed
 }
 
-function getStoredWorkspaceSession(): WorkspaceSessionState {
+/** Resolve the localStorage key for a session partition. Non-'local' hosts get
+ *  a host-suffixed key so their sessions never clobber the local one. */
+function sessionStorageKeyForHost(hostId?: string | null): string {
+  const resolved = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+  return resolved === LOCAL_EXECUTION_HOST_ID
+    ? SESSION_STORAGE_KEY
+    : `${SESSION_STORAGE_KEY}.${resolved}`
+}
+
+function getStoredWorkspaceSession(hostId?: string | null): WorkspaceSessionState {
+  const resolvedHostId = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+  if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
+    return sanitizeWebRuntimeWorkspaceSession(
+      readJson(sessionStorageKeyForHost(resolvedHostId), getDefaultWorkspaceSession())
+    )
+  }
   const localSession = sanitizeWebRuntimeWorkspaceSession(
     readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())
   )
@@ -2586,11 +2759,19 @@ function closeWebOnboarding(base: OnboardingState): OnboardingState {
 function readLocalWebUIState(): PersistedUIState {
   const defaults = getDefaultUIState()
   const stored = readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {})
-  if (typeof stored.rightSidebarOpen === 'boolean') {
-    return mergeWebUIState(defaults, stored)
-  }
   const storedSettings = getStoredSettings()
-  return mergeWebUIState(defaults, {
+  const base = {
+    ...defaults,
+    // Why: when runtime ui.get is unavailable, web fallback must mirror the
+    // main-process missing-property seed from the legacy card layout mode.
+    worktreeCardProperties: getWorktreeCardModeProperties(
+      storedSettings.compactWorktreeCards ? 'Compact' : 'Default'
+    )
+  }
+  if (typeof stored.rightSidebarOpen === 'boolean') {
+    return mergeWebUIState(base, stored)
+  }
+  return mergeWebUIState(base, {
     ...stored,
     // Why: web fallback lacks main-process normalization, so migrate the
     // retired setting only when the local UI preference is still absent.
@@ -2602,11 +2783,21 @@ function mergeWebUIState(
   base: PersistedUIState,
   updates: Partial<PersistedUIState>
 ): PersistedUIState {
+  const { featureInteractionTelemetryBuckets: _reserved, ...safeUpdates } =
+    updates as Partial<PersistedUIState> & {
+      featureInteractionTelemetryBuckets?: unknown
+    }
+  void _reserved
   return {
     ...base,
-    ...updates,
+    ...safeUpdates,
+    worktreeCardProperties: normalizeWorktreeCardProperties(
+      safeUpdates.worktreeCardProperties ?? base.worktreeCardProperties
+    ),
+    _worktreeCardModeDefaulted:
+      safeUpdates._worktreeCardModeDefaulted ?? base._worktreeCardModeDefaulted,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
-      updates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+      safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
     )
   }
 }
@@ -2668,11 +2859,18 @@ function mergeSettings(
     disabledTuiAgents: normalizeDisabledTuiAgents(
       updates.disabledTuiAgents ?? base.disabledTuiAgents
     ),
+    agentDefaultArgs: normalizeTuiAgentArgsRecord(
+      updates.agentDefaultArgs ?? base.agentDefaultArgs
+    ),
+    agentDefaultEnv: normalizeTuiAgentEnvRecord(updates.agentDefaultEnv ?? base.agentDefaultEnv),
     voice: {
       ...(base.voice ?? defaults.voice),
       ...updates.voice
     } as NonNullable<GlobalSettings['voice']>,
     activeRuntimeEnvironmentId: activeEnvironment?.id ?? updates.activeRuntimeEnvironmentId ?? null,
+    terminalCustomThemes: normalizeTerminalCustomThemes(
+      updates.terminalCustomThemes ?? base.terminalCustomThemes
+    ),
     uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }
   return {

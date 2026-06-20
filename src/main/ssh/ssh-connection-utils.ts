@@ -74,6 +74,16 @@ export function isTransientError(err: Error): boolean {
   return false
 }
 
+const SYSTEM_SSH_FALLBACK_ERROR_CODES = new Set(['EHOSTUNREACH', 'ENETUNREACH'])
+
+export function isSystemSshFallbackError(err: Error): boolean {
+  const code = (err as NodeJS.ErrnoException).code
+  if (code && SYSTEM_SSH_FALLBACK_ERROR_CODES.has(code)) {
+    return true
+  }
+  return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }

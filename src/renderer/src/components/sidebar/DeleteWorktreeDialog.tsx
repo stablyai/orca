@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
@@ -11,13 +10,16 @@ import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitStatus } from '@/runtime/runtime-git-client'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 import { DeleteWorktreeSkipConfirmOption } from './DeleteWorktreeSkipConfirmOption'
 import { DeleteWorktreeDialogFooter } from './DeleteWorktreeDialogFooter'
+import { DeleteWorktreeDialogDescription } from './DeleteWorktreeDialogDescription'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 import { DeleteWorktreeWarningPanels } from './DeleteWorktreeWarningPanels'
+import { persistDeleteWorktreeConfirmSkipPreference } from './delete-worktree-preference-toast'
 import {
   countFolderWorkspaceDeletes,
   getDeleteWorktreeDialogCopy,
@@ -188,7 +190,12 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     let cancelled = false
     for (const item of statusTargets) {
       void getRuntimeGitStatus({
-        settings,
+        // Why: delete warnings inspect git state for the selected workspace;
+        // a later focused-host switch must not make this preload query another host.
+        settings: getSettingsForWorktreeRuntimeOwner(
+          { repos, settings, worktreesByRepo: useAppStore.getState().worktreesByRepo },
+          item.id
+        ),
         worktreeId: item.id,
         worktreePath: item.path,
         connectionId: getConnectionId(item.id) ?? undefined
@@ -206,7 +213,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     return () => {
       cancelled = true
     }
-  }, [deleteTargets, gitStatusByWorktree, isOpen, repoMap, setGitStatus, settings])
+  }, [deleteTargets, gitStatusByWorktree, isOpen, repoMap, repos, setGitStatus, settings])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -232,37 +239,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   )
 
   const persistDontAskAgainPreference = useCallback((): void => {
-    void updateSettings({ skipDeleteWorktreeConfirm: true })
-    // Why: the toast confirms the preference was saved and points the user at
-    // where to undo it. The "Open Settings" action deep-links to the General
-    // pane so they never have to hunt for the toggle if they change their mind.
-    toast.success(
-      translate(
-        'auto.components.sidebar.DeleteWorktreeDialog.dd3a45bbbd',
-        "We'll skip this confirmation next time."
-      ),
-      {
-        description: translate(
-          'auto.components.sidebar.DeleteWorktreeDialog.2b56b35f53',
-          'You can change this in Settings.'
-        ),
-        duration: 8000,
-        action: {
-          label: translate(
-            'auto.components.sidebar.DeleteWorktreeDialog.5cc1a6701c',
-            'Open Settings'
-          ),
-          onClick: () => {
-            openSettingsPage()
-            openSettingsTarget({
-              pane: 'general',
-              repoId: null,
-              sectionId: 'general-skip-delete-worktree-confirm'
-            })
-          }
-        }
-      }
-    )
+    persistDeleteWorktreeConfirmSkipPreference({
+      updateSettings,
+      openSettingsPage,
+      openSettingsTarget
+    })
   }, [openSettingsPage, openSettingsTarget, updateSettings])
 
   const handleForceDeletedFromToast = useCallback(
@@ -399,22 +380,17 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                   'Delete Workspace'
                 )}
           </DialogTitle>
-          <DialogDescription className="text-xs">
-            {translate('auto.components.sidebar.DeleteWorktreeDialog.91492c9ad6', 'Remove')}
-            <span className={deleteCopy.targetClassName}>{deleteCopy.targetLabel}</span>
-            {canDeleteAllLineage ? (
-              <>
-                {' '}
-                {translate('auto.components.sidebar.DeleteWorktreeDialog.ff2a74ac0e', 'and')}{' '}
-                <span className="font-medium text-foreground">
-                  {lineageDeleteCopy.childTargetLabel}
-                </span>{' '}
-                {lineageDeleteCopy.descriptionSuffix}
-              </>
-            ) : (
-              <> {deleteCopy.descriptionSuffix}</>
-            )}
-          </DialogDescription>
+          <DeleteWorktreeDialogDescription
+            targetClassName={deleteCopy.targetClassName}
+            targetLabel={deleteCopy.targetLabel}
+            canDeleteAllLineage={canDeleteAllLineage}
+            childTargetLabel={lineageDeleteCopy.childTargetLabel}
+            descriptionSuffix={
+              canDeleteAllLineage
+                ? lineageDeleteCopy.descriptionSuffix
+                : deleteCopy.descriptionSuffix
+            }
+          />
         </DialogHeader>
 
         <DeleteWorktreeTargetPreview

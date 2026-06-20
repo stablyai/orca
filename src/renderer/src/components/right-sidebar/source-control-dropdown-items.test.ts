@@ -95,6 +95,23 @@ describe('resolveDropdownItems', () => {
     expect(byKind.fetch.disabled).toBe(false)
   })
 
+  it('does not offer Publish Branch when HEAD is detached', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 4,
+        hasCurrentBranch: false
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.push.title).toBe('Check out a branch before pushing commits')
+    expect(byKind.publish.label).toBe('No Branch')
+    expect(byKind.publish.title).toBe('Check out a branch before publishing commits')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
   it('disables Publish Branch when branch already has an upstream', () => {
     const items = resolveDropdownItems(
       inputs({
@@ -477,6 +494,50 @@ describe('resolveDropdownItems', () => {
     expect(byKind.publish.disabled).toBe(true)
   })
 
+  it('offers Push instead of Publish Branch when an open linked review has no upstream', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 1,
+        prState: 'open',
+        canPushLinkedReviewWithoutUpstream: true
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit_push.disabled).toBe(false)
+    expect(byKind.push.title).toBe('Push updates to the linked review branch')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.publish.label).toBe('Linked Review')
+    expect(byKind.publish.title).toBe('Linked review branch already exists')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
+  it('blocks Push when an open linked review has no upstream and no branch target', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 1,
+        prState: 'open'
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.commit_push.disabled).toBe(true)
+    expect(byKind.commit_push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.publish.label).toBe('Linked Review')
+    expect(byKind.publish.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
   it('waits for linked PR state before showing a publish prompt', () => {
     const items = resolveDropdownItems(
       inputs({
@@ -577,6 +638,54 @@ describe('resolveDropdownItems', () => {
     expect(byKind.push_create_pr.label).toBe('Push before MR')
     expect(byKind.push_create_pr.title).toBe('Push local commits before creating a merge request')
     expect(byKind.push_create_pr.disabled).toBe(false)
+  })
+
+  it.each(['azure-devops', 'gitea'] as const)(
+    'enables push-before-PR recovery for %s review creation',
+    (provider) => {
+      const items = resolveDropdownItems(
+        inputs({
+          upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
+          hostedReviewCreation: {
+            provider,
+            review: null,
+            canCreate: false,
+            blockedReason: 'needs_push',
+            nextAction: 'push'
+          }
+        })
+      )
+      const byKind = Object.fromEntries(
+        items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+      )
+      expect(byKind.create_pr.label).toBe('Create PR')
+      expect(byKind.create_pr.hint).toBe('Push first')
+      expect(byKind.push_create_pr.label).toBe('Push before PR')
+      expect(byKind.push_create_pr.title).toBe('Push local commits before creating a pull request')
+      expect(byKind.push_create_pr.disabled).toBe(false)
+    }
+  )
+
+  it.each([
+    ['azure-devops', 'Set ORCA_AZURE_DEVOPS_TOKEN in this environment'],
+    ['gitea', 'Set ORCA_GITEA_TOKEN in this environment']
+  ] as const)('uses token auth copy when %s PR creation needs authentication', (provider, hint) => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+        hostedReviewCreation: {
+          provider,
+          review: null,
+          canCreate: false,
+          blockedReason: 'auth_required',
+          nextAction: 'authenticate'
+        }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.create_pr.hint).toBe(hint)
   })
 
   it('uses GitLab auth copy when MR creation needs authentication', () => {

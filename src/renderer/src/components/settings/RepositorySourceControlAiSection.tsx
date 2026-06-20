@@ -34,6 +34,7 @@ import {
   completeRepoActionRecipe,
   readInheritedCommandTemplate
 } from './repository-source-control-ai-labels'
+import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 
 export {
@@ -89,6 +90,7 @@ export function RepositorySourceControlAiSection({
 }: RepositorySourceControlAiSectionProps): React.JSX.Element {
   const mountedRef = useMountedRef()
   const settings = useAppStore((state) => state.settings)
+  const ownership = getSettingOwnershipSummary('repositorySourceControlAi')
   const source = normalizeSourceControlAiSettings(
     settings?.sourceControlAi,
     settings?.commitMessageAi
@@ -302,12 +304,7 @@ export function RepositorySourceControlAiSection({
               'Source Control AI'
             )}
           </h3>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.RepositorySourceControlAiSection.8b8bc5913a',
-              'Repository action recipes. Global settings are used until this repository customizes them.'
-            )}
-          </p>
+          <p className="text-xs text-muted-foreground">{ownership.description}</p>
           {saveError ? <p className="text-xs text-destructive">{saveError}</p> : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">

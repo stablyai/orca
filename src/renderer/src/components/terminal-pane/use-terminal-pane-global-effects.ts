@@ -7,6 +7,7 @@ import {
   type PasteTerminalTextDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { resetAllTerminalWebglAtlases } from '@/lib/pane-manager/pane-manager-registry'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
@@ -21,6 +22,7 @@ import { restoreScrollStateAfterLayout } from '@/lib/pane-manager/pane-scroll'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
 import { pasteTerminalText } from './terminal-bracketed-paste'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 
 const VISIBLE_RESUME_FLUSH_CHARS = 256 * 1024
 
@@ -118,7 +120,9 @@ export function useTerminalPaneGlobalEffects({
             restoreScrollStateAfterLayout(pane.terminal, position)
           }
         }
-        manager.resetWebglTextureAtlases()
+        // Why: this clear wipes the glyph atlas shared with other same-config
+        // terminals; the global reset rebuilds their render models too.
+        resetAllTerminalWebglAtlases()
       })
       wasVisibleRef.current = true
       applyPendingFollowOutputRequests()
@@ -137,17 +141,32 @@ export function useTerminalPaneGlobalEffects({
   }, [isActive, isVisible])
 
   useEffect(() => {
-    if (!isActive || !isVisible) {
+    if (!isVisible) {
       return
     }
-    const onFocus = (): void => {
+    const recoverWebglAtlases = (): void => {
       // Why: WebGL atlas corruption does not always raise context loss; window
-      // focus regain is a low-cost recovery point for agent TUI glyph damage.
-      managerRef.current?.resetWebglTextureAtlases()
+      // foregrounding is a low-cost recovery point. Visible terminals can be
+      // inactive in split groups, and same-config terminals share the atlas.
+      resetAllTerminalWebglAtlases()
+    }
+    const onFocus = (): void => recoverWebglAtlases()
+    const onVisibilityChange = (): void => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        recoverWebglAtlases()
+      }
     }
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [isActive, isVisible, managerRef])
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', onVisibilityChange)
+    }
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
+        document.removeEventListener('visibilitychange', onVisibilityChange)
+      }
+    }
+  }, [isVisible])
 
   useEffect(() => {
     const manager = managerRef.current
@@ -219,6 +238,7 @@ export function useTerminalPaneGlobalEffects({
         return
       }
       pasteTerminalText(pane.terminal, detail.text)
+      recordTerminalUserInputForLeaf(tabId, pane.leafId)
       pane.terminal.focus()
     }
     window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, onPasteText)
@@ -258,8 +278,8 @@ export function useTerminalPaneGlobalEffects({
       if (!transport) {
         return
       }
-      if (text) {
-        transport.sendInput(text)
+      if (text && transport.sendInput(text)) {
+        recordTerminalUserInputForLeaf(tabId, pane.leafId)
       }
     }
     document.addEventListener('dictation:insertText', onDictationInsert)
@@ -296,6 +316,7 @@ export function useTerminalPaneGlobalEffects({
         manager,
         paneTransports: paneTransportsRef.current,
         worktreeId: wtId,
+        tabId,
         cwd: cwdRef.current,
         data
       })

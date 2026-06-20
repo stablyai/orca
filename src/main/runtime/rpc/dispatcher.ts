@@ -121,6 +121,7 @@ export class RpcDispatcher {
         const result = await method.handler(parsedParams.value, {
           runtime: this.runtime,
           signal: options?.signal,
+          requestId: request.id,
           connectionId: options?.connectionId,
           clientId: options?.clientId,
           sendBinary: options?.sendBinary,
@@ -153,6 +154,7 @@ export class RpcDispatcher {
         {
           runtime: this.runtime,
           signal: options?.signal,
+          requestId: request.id,
           connectionId: options?.connectionId,
           clientId: options?.clientId,
           sendBinary: options?.sendBinary,

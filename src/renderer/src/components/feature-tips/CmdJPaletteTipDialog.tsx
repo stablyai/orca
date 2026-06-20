@@ -67,16 +67,21 @@ export function CmdJPaletteTipDialog({
               >
                 {tip.eyebrow.toUpperCase()}
               </Badge>
+              {/* Why: flow the shortcut chip as inline text (not a flex item) so the
+                  short Mac label (⌘⇧J) stays on one line, while a wide label like
+                  "Ctrl+Shift+J" wraps to the next line only when it doesn't fit —
+                  instead of being pushed to the right edge on Win/Linux. */}
               <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
-                <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 md:flex-nowrap">
-                  <span>{titlePrefix.trimEnd()}</span>
-                  {displayShortcutLabel ? (
-                    <kbd className="inline-flex shrink-0 items-center rounded-md border border-border bg-card px-2 py-0.5 font-mono text-base font-medium text-foreground">
+                {titlePrefix.trimEnd()}
+                {displayShortcutLabel ? (
+                  <>
+                    {' '}
+                    <kbd className="ml-0.5 inline-flex items-center whitespace-nowrap rounded-md border border-border bg-card px-2 py-0.5 align-middle font-mono text-base font-medium text-foreground">
                       {displayShortcutLabel}
                     </kbd>
-                  ) : null}
-                  {titleSuffix ? <span>{titleSuffix}</span> : null}
-                </span>
+                  </>
+                ) : null}
+                {titleSuffix ? ` ${titleSuffix}` : null}
               </DialogTitle>
               <DialogDescription className="mt-3 max-w-2xl space-y-3 text-sm leading-relaxed">
                 <span className="block">{tip.description}</span>

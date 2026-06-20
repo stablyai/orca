@@ -240,7 +240,7 @@ describe('deployAndLaunchRelay', () => {
     expect(sawLegacyDir).toBe(false)
   })
 
-  it('has a 120-second overall timeout', async () => {
+  it('has a 300-second overall timeout', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
 
@@ -252,11 +252,11 @@ describe('deployAndLaunchRelay', () => {
     // Catch the rejection immediately to avoid unhandled rejection warning
     const promise = deployAndLaunchRelay(conn).catch((err: Error) => err)
 
-    await vi.advanceTimersByTimeAsync(121_000)
+    await vi.advanceTimersByTimeAsync(301_000)
 
     const result = await promise
     expect(result).toBeInstanceOf(Error)
-    expect((result as Error).message).toBe('Relay deployment timed out after 120s')
+    expect((result as Error).message).toBe('Relay deployment timed out after 300s')
 
     vi.useRealTimers()
   })
@@ -311,7 +311,7 @@ describe('deployAndLaunchRelay', () => {
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
       .mockResolvedValueOnce('') // no persisted active pipe
       .mockResolvedValueOnce('WAITING') // named pipe probe
-      .mockResolvedValueOnce('') // Start-Process launch
+      .mockResolvedValueOnce('') // WMI relay launch
       .mockResolvedValueOnce('READY') // named pipe poll
       .mockResolvedValueOnce('') // persist active pipe marker
 
@@ -326,14 +326,14 @@ describe('deployAndLaunchRelay', () => {
     const decodedScripts = mockExecCommand.mock.calls
       .map(([, command]) => decodePowerShellCommand(command))
       .filter((script): script is string => script !== null)
-    const launchScript = decodedScripts.find((script) => script.includes('Start-Process')) ?? ''
+    const launchScript = decodedScripts.find((script) => script.includes('Invoke-CimMethod')) ?? ''
     expect(launchScript).toContain(
       '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/relay.js"'
     )
-    expect(launchScript).toContain('--endpoint-dir')
     expect(launchScript).toContain(
       '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/agent-hooks/orca-relay-'
     )
+    expect(launchScript).toContain('--endpoint-dir')
     expect(launchScript).not.toContain('\\\\.\\pipe\\agent-hooks')
     const waitScript = decodedScripts.find((script) => script.includes('deadline=Date.now()')) ?? ''
     expect(waitScript).toContain('setTimeout(attempt,intervalMs)')
@@ -358,7 +358,7 @@ describe('deployAndLaunchRelay', () => {
       .mockResolvedValueOnce('') // no persisted active pipe yet
       .mockResolvedValueOnce('READY') // existing named pipe probe
       .mockResolvedValueOnce('WAITING') // deterministic fallback pipe is not already running
-      .mockResolvedValueOnce('') // Start-Process launch on fallback pipe
+      .mockResolvedValueOnce('') // WMI relay launch on fallback pipe
       .mockResolvedValueOnce('READY') // fallback pipe poll
       .mockResolvedValueOnce('') // persist fallback active pipe marker
 
@@ -378,7 +378,7 @@ describe('deployAndLaunchRelay', () => {
     const launchScript =
       mockExecCommand.mock.calls
         .map(([, command]) => decodePowerShellCommand(command))
-        .find((script) => script?.includes('Start-Process')) ?? ''
+        .find((script) => script?.includes('Invoke-CimMethod')) ?? ''
     expect(launchScript).toContain(fallbackPipe)
     expect(launchScript).not.toContain(primaryPipe)
 
@@ -417,7 +417,7 @@ describe('deployAndLaunchRelay', () => {
     const decodedExecScripts = mockExecCommand.mock.calls
       .map(([, command]) => decodePowerShellCommand(command))
       .filter((script): script is string => script !== null)
-    expect(decodedExecScripts.some((script) => script.includes('Start-Process'))).toBe(false)
+    expect(decodedExecScripts.some((script) => script.includes('Invoke-CimMethod'))).toBe(false)
   })
 
   it('scopes persisted Windows active pipe markers by relay target', async () => {

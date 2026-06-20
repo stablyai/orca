@@ -37,6 +37,11 @@ import {
   buildMobileBrowserScreencastRequest
 } from './browser-screencast-request'
 import {
+  MobileBrowserPointerModifiers,
+  type BrowserPointerModifier
+} from './MobileBrowserPointerModifiers'
+import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
+import {
   clampBrowserZoomState,
   computeBrowserFrameGeometry,
   computeBrowserTouchClickRadiusCss,
@@ -150,6 +155,7 @@ export function MobileBrowserPane({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<BrowserDialogState | null>(null)
+  const [pointerModifiers, setPointerModifiers] = useState<BrowserPointerModifier[]>([])
   const [zoom, setZoom] = useState<BrowserZoomState>(DEFAULT_ZOOM)
   const [layout, setLayout] = useState<BrowserTouchLayout | null>(null)
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
@@ -652,6 +658,7 @@ export function MobileBrowserPane({
           x: point.x,
           y: point.y,
           button,
+          modifiers: pointerModifiers,
           ...(button === 'left'
             ? {
                 radius: computeBrowserTouchClickRadiusCss(
@@ -665,7 +672,7 @@ export function MobileBrowserPane({
         },
         { suppressError: true, timeoutMs: 5_000 }
       )
-      if (clickResult !== null) {
+      if (clickResult !== null || pointerModifiers.length > 0) {
         return
       }
       try {
@@ -687,8 +694,16 @@ export function MobileBrowserPane({
         // actionable failures still surface through navigation/stream errors.
       }
     },
-    [client, pageParams, sendBrowserRequest]
+    [client, pageParams, pointerModifiers, sendBrowserRequest]
   )
+
+  const togglePointerModifier = useCallback((modifier: BrowserPointerModifier) => {
+    setPointerModifiers((current) =>
+      current.includes(modifier)
+        ? current.filter((candidate) => candidate !== modifier)
+        : [...current, modifier]
+    )
+  }, [])
 
   const sendWheel = useCallback(
     (point: BrowserPoint, screenDx: number, screenDy: number) => {
@@ -1223,24 +1238,15 @@ export function MobileBrowserPane({
           { paddingBottom: bottomInset, transform: [{ translateY: -keyboardLift }] }
         ]}
       >
-        <View style={styles.keyRow}>
-          {['Enter', 'Backspace', 'Tab', 'Escape'].map((key) => (
-            <Pressable
-              key={key}
-              style={({ pressed }) => [
-                styles.keyButton,
-                pressed && styles.keyButtonPressed,
-                controlsDisabled && styles.disabled
-              ]}
-              disabled={controlsDisabled}
-              onPress={() => void sendKeypress(key)}
-            >
-              <Text style={[styles.keyButtonText, controlsDisabled && styles.disabledText]}>
-                {key === 'Backspace' ? '⌫' : key === 'Escape' ? 'Esc' : key}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <MobileBrowserPointerModifiers
+          disabled={controlsDisabled}
+          selectedModifiers={pointerModifiers}
+          onToggle={togglePointerModifier}
+        />
+        <MobileBrowserKeyRow
+          disabled={controlsDisabled}
+          onKeypress={(key) => void sendKeypress(key)}
+        />
         <View style={styles.inputRow}>
           <TextInput
             style={styles.keyboardInput}
@@ -1627,29 +1633,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
-  },
-  keyRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.xs
-  },
-  keyButton: {
-    minHeight: 30,
-    minWidth: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm
-  },
-  keyButtonPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  keyButtonText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: typography.monoFamily
   },
   inputRow: {
     flexDirection: 'row',

@@ -26,6 +26,8 @@ import {
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { copyTerminalHandleForPane } from './terminal-handle-copy'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -53,6 +55,7 @@ type UseTerminalPaneContextMenuDeps = {
   onSetTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
+  forceBracketedMultilineTextPaste: boolean
   rightClickToPaste: boolean
 }
 
@@ -65,6 +68,7 @@ type TerminalMenuState = {
   menuPaneId: number | null
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onCopy: () => Promise<void>
+  onCopyTerminalId: () => Promise<void>
   onCopyPaneId: () => Promise<void>
   onPaste: () => Promise<void>
   onSplitRight: () => void
@@ -92,6 +96,7 @@ export function useTerminalPaneContextMenu({
   onSetTitle,
   onPasteError,
   onAgentSessionForkReady,
+  forceBracketedMultilineTextPaste,
   rightClickToPaste
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
   const contextPaneIdRef = useRef<number | null>(null)
@@ -158,6 +163,36 @@ export function useTerminalPaneContextMenu({
     pane.terminal.focus()
   }
 
+  const onCopyTerminalId = async (): Promise<void> => {
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    try {
+      await copyTerminalHandleForPane({
+        tabId,
+        leafId: pane.leafId,
+        callRuntime: window.api.runtime.call,
+        writeClipboardText: window.api.ui.writeClipboardText
+      })
+      toast.success(
+        translate(
+          'auto.components.terminal.pane.use.terminal.pane.context.menu.terminal.id.copied',
+          'Terminal ID copied'
+        )
+      )
+    } catch {
+      toast.error(
+        translate(
+          'auto.components.terminal.pane.use.terminal.pane.context.menu.terminal.id.copy.failed',
+          'Unable to copy terminal ID'
+        )
+      )
+    } finally {
+      pane.terminal.focus()
+    }
+  }
+
   const onPaste = async (): Promise<void> => {
     const pane = resolveMenuPane()
     if (!pane) {
@@ -168,13 +203,14 @@ export function useTerminalPaneContextMenu({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
+      forceBracketedMultilineTextPaste,
       pasteText: (text, options) => {
         pasteTerminalText(pane.terminal, text, options)
-        if (options?.forceBracketedPaste) {
-          const manager = managerRef.current
-          if (manager) {
-            scheduleImagePasteWebglAtlasRecovery(manager)
-          }
+        if (text) {
+          recordTerminalUserInputForLeaf(tabId, pane.leafId)
+        }
+        if (options?.recoverImagePasteWebglAtlas) {
+          scheduleImagePasteWebglAtlasRecovery()
         }
       },
       onImagePasteError: (error) => {
@@ -293,6 +329,7 @@ export function useTerminalPaneContextMenu({
     sendTerminalQuickCommandToPane({
       command,
       pane,
+      tabId,
       transport: paneTransportsRef.current.get(pane.id)
     })
   }
@@ -364,6 +401,7 @@ export function useTerminalPaneContextMenu({
     menuPaneId,
     onContextMenuCapture,
     onCopy,
+    onCopyTerminalId,
     onCopyPaneId,
     onPaste,
     onSplitRight,

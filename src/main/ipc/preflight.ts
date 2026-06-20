@@ -11,14 +11,12 @@ import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
 import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
+import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
+import { buildLocalPreflightEnv } from './preflight-local-env'
+import { getPreflightWslTarget, type PreflightRuntimeContext } from './preflight-runtime-target'
 const execFileAsync = promisify(execFile)
 const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
-
-type PreflightRuntimeContext = {
-  wslDistro?: string | null
-  wslDefault?: boolean
-}
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -90,9 +88,11 @@ async function execLocalPreflightCommand(
   command: string,
   args: string[]
 ): Promise<PreflightCommandResult> {
+  const env = buildLocalPreflightEnv()
   const commandPromise = execFileAsync(command, args, {
     encoding: 'utf-8',
-    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS
+    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS,
+    ...(env ? { env } : {})
   }) as Promise<PreflightCommandResult>
 
   return withPreflightTimeout(command, commandPromise)
@@ -102,11 +102,7 @@ async function execCommandInWsl(
   target: WslPreflightTarget,
   command: string
 ): Promise<{ stdout: string; stderr: string }> {
-  const distroArgs = target.distro ? ['-d', target.distro] : []
-  const commandPromise = execFileAsync('wsl.exe', [...distroArgs, '--', 'bash', '-lc', command], {
-    encoding: 'utf-8',
-    timeout: PREFLIGHT_COMMAND_TIMEOUT_MS
-  }) as Promise<{ stdout: string; stderr: string }>
+  const commandPromise = runPreflightCommandInWsl(target, command, PREFLIGHT_COMMAND_TIMEOUT_MS)
   return withPreflightTimeout('wsl.exe', commandPromise)
 }
 
@@ -151,17 +147,6 @@ const KNOWN_AGENT_COMMANDS = Object.entries(TUI_AGENT_CONFIG).flatMap(([id, conf
 
 function uniqueAgentIds(ids: Iterable<string>): string[] {
   return [...new Set(ids)]
-}
-
-function getPreflightWslTarget(context?: PreflightRuntimeContext): WslPreflightTarget | null {
-  if (process.platform !== 'win32') {
-    return null
-  }
-  const distro = context?.wslDistro?.trim()
-  if (distro) {
-    return { distro }
-  }
-  return context?.wslDefault ? {} : null
 }
 
 async function detectCommandRuntime(
@@ -236,6 +221,17 @@ export type RefreshAgentsResult = {
 export async function refreshShellPathAndDetectAgents(
   context?: PreflightRuntimeContext
 ): Promise<RefreshAgentsResult> {
+  if (getPreflightWslTarget(context)) {
+    const agents = await detectInstalledAgents(context)
+    return {
+      agents,
+      addedPathSegments: [],
+      shellHydrationOk: true,
+      pathSource: 'sync_seed_only',
+      pathFailureReason: 'none'
+    }
+  }
+
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
   const agents = await detectInstalledAgents(context)
@@ -251,7 +247,9 @@ export async function refreshShellPathAndDetectAgents(
 export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
   const mux = getActiveMultiplexer(args.connectionId)
   if (!mux || mux.isDisposed()) {
-    throw new Error(`No active SSH connection for "${args.connectionId}"`)
+    // Why: remote agent detection is passive UI polling. A disconnected host has
+    // no detectable agents until reconnect, but should not spam IPC errors.
+    return []
   }
   const result = (await mux.request('preflight.detectAgents', {
     commands: KNOWN_AGENT_COMMANDS

@@ -748,7 +748,7 @@ export function RemoteFileBrowser({
           ? FILE_HINT_TEXT
           : translate(
               'auto.components.sidebar.RemoteFileBrowser.971d85cc84',
-              'Opens as a remote project · {{value0}}',
+              'Opens as a project on this host · {{value0}}',
               { value0: resolvedPath }
             )}
       </p>

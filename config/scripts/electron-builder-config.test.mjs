@@ -67,6 +67,10 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.linux.icon).toBe('resources/build/icon.icns')
   })
 
+  it('matches the Linux desktop entry to Electron window class', () => {
+    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
+  })
+
   it('builds RPMs without changing existing Linux artifact names', () => {
     expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb', 'rpm'])
     expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')

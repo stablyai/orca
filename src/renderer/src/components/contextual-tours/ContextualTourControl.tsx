@@ -42,12 +42,6 @@ function AutoRenameBranchFromWorkControl(): JSX.Element {
               'Auto-name from first message'
             )}
           </div>
-          <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-            {translate(
-              'auto.components.contextual.tours.ContextualTourControl.02e8373219',
-              'Auto-generates a new name when you leave this text box empty.'
-            )}
-          </div>
         </div>
         <button
           type="button"

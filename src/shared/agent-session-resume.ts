@@ -9,7 +9,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'antigravity',
   'opencode',
   'droid',
-  'grok'
+  'grok',
+  'devin'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -34,6 +35,12 @@ export type SleepingAgentSessionRecord = {
   terminalTitle?: string
   lastAssistantMessage?: string
   connectionId?: string | null
+  /** How the record was captured. Worktree-sleep records (legacy records have
+   *  no origin) are consumed by worktree activation, which opens a fresh tab.
+   *  Quit/live records describe panes that still exist in the restored session,
+   *  so only the pane's own cold-restore path may consume them — activation
+   *  launching a tab too would duplicate a warm-reattached session (#5232). */
+  origin?: 'worktree-sleep' | 'quit' | 'live'
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
@@ -100,7 +107,9 @@ export function extractAgentProviderSession(
     case 'claude':
     case 'codex':
     case 'gemini':
-    case 'droid': {
+    case 'droid':
+    // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
+    case 'kimi': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
@@ -114,6 +123,10 @@ export function extractAgentProviderSession(
     }
     case 'grok': {
       const id = readSessionId(payload, ['sessionId', 'session_id'])
+      return id ? { key: 'session_id', id } : null
+    }
+    case 'devin': {
+      const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
     case 'amp':
@@ -147,5 +160,7 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['droid', '--resume', id] : null
     case 'grok':
       return providerSession.key === 'session_id' ? ['grok', '--resume', id] : null
+    case 'devin':
+      return providerSession.key === 'session_id' ? ['devin', '--resume', id] : null
   }
 }

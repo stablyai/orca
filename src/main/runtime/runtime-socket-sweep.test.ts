@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
   createRuntimeTransportMetadata,
@@ -63,8 +63,8 @@ describe('sweepOrphanedRuntimeSockets', () => {
     if (transport.kind !== 'unix') {
       throw new Error('expected unix transport')
     }
-    const basename = transport.endpoint.slice(transport.endpoint.lastIndexOf('/') + 1)
-    expect(RUNTIME_SOCKET_NAME_REGEX.test(basename)).toBe(true)
+    const socketName = basename(transport.endpoint)
+    expect(RUNTIME_SOCKET_NAME_REGEX.test(socketName)).toBe(true)
   })
 
   it('regex invariant: also matches the fallback runtimeId suffix ("rt")', () => {
@@ -76,8 +76,8 @@ describe('sweepOrphanedRuntimeSockets', () => {
     if (transport.kind !== 'unix') {
       throw new Error('expected unix transport')
     }
-    const basename = transport.endpoint.slice(transport.endpoint.lastIndexOf('/') + 1)
-    expect(RUNTIME_SOCKET_NAME_REGEX.test(basename)).toBe(true)
-    expect(basename).toBe('o-99-rt.sock')
+    const socketName = basename(transport.endpoint)
+    expect(RUNTIME_SOCKET_NAME_REGEX.test(socketName)).toBe(true)
+    expect(socketName).toBe('o-99-rt.sock')
   })
 })

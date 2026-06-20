@@ -5,20 +5,18 @@ import { PassThrough } from 'stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ModelManager } from './model-manager'
 
-const { httpsGetMock } = vi.hoisted(() => ({
-  httpsGetMock: vi.fn()
+const { netRequestMock } = vi.hoisted(() => ({
+  netRequestMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
     getPath: () => '/tmp/orca-speech-models-test'
+  },
+  net: {
+    request: netRequestMock
   }
 }))
-
-vi.mock('https', async () => {
-  const actual = await vi.importActual('https')
-  return { ...(actual as Record<string, unknown>), get: httpsGetMock }
-})
 
 type ModelManagerInternals = {
   downloadFile: (
@@ -33,7 +31,7 @@ type ModelManagerInternals = {
 
 describe('ModelManager stream cleanup', () => {
   beforeEach(() => {
-    httpsGetMock.mockReset()
+    netRequestMock.mockReset()
   })
 
   it('removes response progress listeners after a model download finishes', async () => {
@@ -45,16 +43,24 @@ describe('ModelManager stream cleanup', () => {
       }
       response.statusCode = 200
       response.headers = { 'content-length': '4' }
+      const responseHandlers: ((response: unknown) => void)[] = []
       const request = {
-        destroy: vi.fn(() => request),
-        setTimeout: vi.fn(() => request),
-        on: vi.fn(() => request),
+        abort: vi.fn(() => request),
+        end: vi.fn(() => {
+          for (const handler of responseHandlers) {
+            handler(response)
+          }
+          return request
+        }),
+        on: vi.fn((event: string, cb: (response: unknown) => void) => {
+          if (event === 'response') {
+            responseHandlers.push(cb)
+          }
+          return request
+        }),
         off: vi.fn(() => request)
       }
-      httpsGetMock.mockImplementation((_url: URL, cb: (response: unknown) => void) => {
-        cb(response)
-        return request
-      })
+      netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
 
       const download = manager.downloadFile(

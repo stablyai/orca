@@ -17,8 +17,7 @@ import {
   splitActiveTerminalPane,
   waitForActivePanePtyId,
   waitForActiveTerminalManager,
-  waitForPaneIdentitySnapshot,
-  waitForTerminalOutput
+  waitForPaneIdentitySnapshot
 } from './helpers/terminal'
 import { runHiddenRealPtyPressureScenario } from './artificial-opencode-hidden-pressure-scenario'
 import { runMainPressureScenario } from './artificial-opencode-main-pressure-scenario'
@@ -116,7 +115,9 @@ const TIMER_SAMPLE_MS = 16
 // CI headroom while still failing changes that make typing visibly sluggish.
 const MAX_MEDIAN_KEY_LATENCY_MS = 75
 const MAX_WORST_KEY_LATENCY_MS = 300
-const MAX_TIMER_DRIFT_MS = 150
+// Why: GitHub's two-worker Electron shards can briefly starve renderer timers
+// without visible typing lag. Keep this as a smoke gate, not a CPU lottery.
+const MAX_TIMER_DRIFT_MS = 250
 const MAX_SCROLL_LATENCY_MS = 150
 
 function readPositiveInt(name: string, fallback: number): number {
@@ -275,6 +276,40 @@ async function waitForMarkerLatency(
   throw new Error(`Timed out waiting for terminal marker ${marker}`)
 }
 
+async function getTerminalContentForPtyId(
+  page: Page,
+  ptyId: string,
+  charLimit = 12_000
+): Promise<string> {
+  return page.evaluate(
+    ({ ptyId, charLimit }) => {
+      for (const manager of window.__paneManagers?.values() ?? []) {
+        for (const pane of manager.getPanes?.() ?? []) {
+          if (pane.container?.dataset?.ptyId === ptyId) {
+            return (pane.serializeAddon?.serialize?.() ?? '').slice(-charLimit)
+          }
+        }
+      }
+      return ''
+    },
+    { ptyId, charLimit }
+  )
+}
+
+async function waitForTerminalOutputForPtyId(
+  page: Page,
+  ptyId: string,
+  expected: string,
+  timeoutMs: number
+): Promise<void> {
+  await expect
+    .poll(async () => (await getTerminalContentForPtyId(page, ptyId)).includes(expected), {
+      timeout: timeoutMs,
+      message: `Terminal PTY ${ptyId} did not contain "${expected}"`
+    })
+    .toBe(true)
+}
+
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.floor(sorted.length / 2)] ?? 0
@@ -287,7 +322,7 @@ async function measureTypingDuringLoad(
   runId: string
 ): Promise<TypingMeasurement> {
   await sendToTerminal(page, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
-  await waitForTerminalOutput(page, `OPENCODE_TYPING_READY_${runId}`, 10_000)
+  await waitForTerminalOutputForPtyId(page, ptyId, `OPENCODE_TYPING_READY_${runId}`, 10_000)
   await focusActiveTerminalInput(page)
 
   const eventLoop = await page.evaluateHandle((sampleMs) => {

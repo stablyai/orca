@@ -29,6 +29,7 @@ import {
   type HoveredTabInsertion
 } from './tab-insertion'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 export type { HoveredTabInsertion }
 
@@ -71,7 +72,7 @@ function mirrorWebRuntimeTabMove(
     worktreeId: string
   }
 ): void {
-  const environmentId = useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ?? null
+  const environmentId = getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId)
   if (!isWebRuntimeSessionActive(environmentId)) {
     return
   }
@@ -144,7 +145,7 @@ function getDragCenter(
   }
 }
 
-function resolveDropZone(
+export function resolveDropZone(
   rect: { left: number; top: number; width: number; height: number },
   point: { x: number; y: number }
 ): TabDropZone {

@@ -28,28 +28,48 @@ const TASK_STATUSES: TaskStatus[] = [
   'blocked'
 ]
 
-const SendParams = z.object({
-  to: requiredString('Missing --to'),
-  subject: requiredString('Missing --subject'),
-  from: OptionalString,
-  body: OptionalString,
-  type: z
-    .enum([
-      'status',
-      'dispatch',
-      'worker_done',
-      'merge_ready',
-      'escalation',
-      'handoff',
-      'decision_gate',
-      'heartbeat'
-    ])
-    .optional(),
-  priority: z.enum(['normal', 'high', 'urgent']).optional(),
-  threadId: OptionalString,
-  payload: OptionalString,
-  devMode: OptionalBoolean
-})
+function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
+  return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
+}
+
+const SendParams = z
+  .object({
+    to: requiredString('Missing --to'),
+    subject: requiredString('Missing --subject'),
+    from: OptionalString,
+    body: OptionalString,
+    type: z
+      .enum([
+        'status',
+        'dispatch',
+        'worker_done',
+        'merge_ready',
+        'escalation',
+        'handoff',
+        'decision_gate',
+        'heartbeat'
+      ])
+      .optional(),
+    priority: z.enum(['normal', 'high', 'urgent']).optional(),
+    threadId: OptionalString,
+    payload: OptionalString,
+    devMode: OptionalBoolean
+  })
+  .superRefine((params, ctx) => {
+    if (
+      (params.type !== 'worker_done' && params.type !== 'heartbeat') ||
+      !isGroupAddress(params.to)
+    ) {
+      return
+    }
+    // Why: dispatch lifecycle messages are authority/liveness signals for one
+    // coordinator. Fanout creates lifecycle mail in unrelated terminals.
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: getLifecycleGroupRecipientError(params.type),
+      path: ['to']
+    })
+  })
 
 const CheckParams = z.object({
   terminal: OptionalString,

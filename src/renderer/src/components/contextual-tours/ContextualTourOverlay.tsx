@@ -15,7 +15,6 @@ import {
   getContextualTourCleanupOutcome,
   measureContextualTourOverlayRenderState
 } from './contextual-tour-overlay-measurement'
-import { getContextualTourOverlayPanelPosition } from './contextual-tour-overlay-position'
 import {
   ContextualTourOverlaySurface,
   getContextualTourFocusableElements,
@@ -336,25 +335,11 @@ export function ContextualTourOverlay(): JSX.Element | null {
     })
   }
 
-  const viewport = {
-    width: typeof window === 'undefined' ? 1024 : window.innerWidth,
-    height: typeof window === 'undefined' ? 768 : window.innerHeight
-  }
-  const { panelPosition, panelPlacement } = getContextualTourOverlayPanelPosition({
-    targetRect: renderState.rect,
-    panelElement: panelRef.current,
-    panelHost: renderState.panelHost,
-    preferredPlacement: renderState.preferredPlacement,
-    viewport
-  })
-
   return (
     <ContextualTourOverlaySurface
       activeTourId={activeTourId}
       renderState={renderState}
       panelRef={panelRef}
-      panelPosition={panelPosition}
-      panelPlacement={panelPlacement}
       panelHost={renderState.panelHost}
       onSkip={(id) => {
         emitContextualTourOutcome('skipped')

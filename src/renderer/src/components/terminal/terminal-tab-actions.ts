@@ -10,8 +10,15 @@ import {
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
 
-const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>(['editor', 'diff', 'conflict-review'])
+const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
+  'editor',
+  'diff',
+  'conflict-review',
+  'check-details'
+])
 
 type TerminalTabActionState = ReturnType<typeof useAppStore.getState>
 
@@ -100,13 +107,14 @@ export function createNewTerminalTab(
     return
   }
   const state = useAppStore.getState()
-  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     // Why: paired web clients receive host-owned terminal tabs through
     // session.tabs. Creating a local tab first races the host snapshot and can
     // leave stale remote handles in the web store.
     void createWebRuntimeSessionTerminal({
       worktreeId: activeWorktreeId,
+      environmentId: runtimeEnvironmentId,
       command: shellOverride,
       activate: true
     })
@@ -134,7 +142,7 @@ export function createNewTerminalTab(
   state.setTabBarOrder(activeWorktreeId, order)
 }
 
-export function closeTerminalTab(tabId: string): void {
+export function closeTerminalTab(tabId: string, options?: { force?: boolean }): void {
   const state = useAppStore.getState()
   const target = resolveCloseTerminalTabTarget(state, tabId)
   if (!target) {
@@ -142,11 +150,18 @@ export function closeTerminalTab(tabId: string): void {
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
 
-  if (isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)) {
+  // Why: a pinned tab routes through the confirmation guard instead of closing
+  // outright. `force` is the post-confirmation re-entry, which skips the guard.
+  if (!options?.force && isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)) {
+    guardPinnedTabClose({
+      isPinned: true,
+      tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
+      onClose: () => closeTerminalTab(tabId, { force: true })
+    })
     return
   }
 
-  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, owningWorktreeId)
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     const hostBackedTabId =
       resolveHostSessionTabIdForWebSessionTab(state, {
@@ -212,7 +227,7 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
   const state = useAppStore.getState()
   const currentTabs = state.tabsByWorktree[activeWorktreeId] ?? []
   state.setActiveTab(tabId)
-  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
   const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
   for (const tab of currentTabs) {
     if (tab.id !== tabId) {
@@ -242,7 +257,7 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
   const state = useAppStore.getState()
   const currentTerminalTabs = state.tabsByWorktree[activeWorktreeId] ?? []
   const currentEditorFiles = state.openFiles.filter((f) => f.worktreeId === activeWorktreeId)
-  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
   const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
   const terminalIds = currentTerminalTabs.map((t) => t.id)
   const terminalIdSet = new Set(terminalIds)
@@ -290,7 +305,7 @@ export function activateTerminalTab(tabId: string): void {
     Object.entries(s.tabsByWorktree).find(([, worktreeTabs]) =>
       worktreeTabs.some((tab) => tab.id === tabId)
     )?.[0] ?? null
-  const runtimeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, owningWorktreeId)
   if (owningWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     // Why: activation needs to update the host's active tab as well as the
     // local optimistic state, otherwise the next host snapshot snaps back.

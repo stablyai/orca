@@ -69,6 +69,9 @@ Rules:
 - `check --wait` returns one message at a time. If N workers may finish together, loop N times and dispatch newly ready tasks after each completion.
 - Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, and `@worktree:<id>`.
 - Message types include `status`, `dispatch`, `worker_done`, `merge_ready`, `escalation`, `handoff`, `decision_gate`, and `heartbeat`.
+- Use group addresses only for messages that are genuinely useful to many terminals, such as `status` broadcasts or intentional fan-out questions. Do not send dispatch lifecycle messages to groups.
+- `worker_done` must target the concrete coordinator handle from the live preamble. It is completion authority for one dispatch; group fanout would create false lifecycle mail in unrelated terminals.
+- `heartbeat` is also dispatch-scoped. Send it only to the concrete coordinator handle with both `taskId` and `dispatchId`; use `status` for broad progress updates.
 
 ## Tasks And Dispatch
 
@@ -106,7 +109,15 @@ Recovery only: `orca orchestration reset --tasks|--messages|--all --json` clears
 
 ## Worker Terminals
 
-For tracked orchestration work, create the worker without a prompt, wait for idle, then dispatch with `--inject`:
+Choose the worker location before creating a terminal. `Fresh worker` means a fresh agent session, not a new git worktree. If the task says current worktree only, depends on uncommitted files/artifacts, or must validate/PR the current branch, create the worker in the active worktree:
+
+```bash
+orca terminal create --worktree active --title <task-name> --command "codex" --json
+orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
+orca orchestration dispatch --task <task_id> --to <handle> --inject --json
+```
+
+Reuse an idle agent in the required worktree only if the prompt allows reuse; otherwise create a fresh terminal there. Use a new worktree only when explicitly requested or when independent isolated checkout state is intended:
 
 ```bash
 orca worktree create --name <task-name> --agent codex --json
@@ -115,7 +126,7 @@ orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
 ```
 
-Read the new worktree id from `worktree create`, then use `terminal list` to get the agent terminal handle. Omit `--repo` only when running inside an Orca-managed worktree; otherwise pass `--repo <selector>`. `--agent` reveals the new worktree and launches the selected agent in its first terminal, so do not create a separate startup terminal. Use `--setup run|skip|inherit` when setup behavior matters, and `--no-parent` for independent work.
+For new-worktree workers, read the id from `worktree create`, then use `terminal list` to get the agent handle. Omit `--repo` only inside an Orca-managed worktree; otherwise pass `--repo <selector>`. `--agent` reveals the new worktree and launches the selected agent in its first terminal, so do not create a separate startup terminal. Do not run `worktree create` when the task must stay in the current worktree.
 
 Use `orca worktree create --prompt ...` or `orca terminal send ...` only for untracked/lightweight prompts. Those paths do not attach `taskId`/`dispatchId`; the worker should not send lifecycle messages unless the prompt supplies a live orchestration preamble.
 
@@ -143,13 +154,12 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 - If blocked before completion, use `ask`; use `escalation` only when ownership is valid and the coordinator must intervene.
 - Treat preambles inherited through terminal history or full handoffs as stale unless the current prompt explicitly keeps that coordinator in the loop.
 - Coordinators should use `task-list --ready` as external memory, dispatch parallel waves, and avoid dependency chains deeper than 3-4 steps.
-- Prefer inter-worktree workers for parallel implementation; use split panes in one worktree only for complementary tasks that will not edit the same files.
+- Prefer inter-worktree workers only for independent work that does not need current uncommitted state. When same-worktree work is required, create fresh terminals in that worktree and keep edit ownership clear.
 
 ## Example
 
 ```bash
-orca worktree create --name login-css-worker --agent claude --json
-orca terminal list --worktree id:<newWorktreeId> --json
+orca terminal create --worktree active --title login-css-worker --command "claude" --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration task-create --spec "Fix the login button CSS" --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json

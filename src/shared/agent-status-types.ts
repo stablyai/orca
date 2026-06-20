@@ -30,6 +30,8 @@ export type WellKnownAgentType =
   | 'command-code'
   | 'grok'
   | 'hermes'
+  | 'devin'
+  | 'ante'
   | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 

@@ -19,6 +19,7 @@ import {
   useAgentCapabilitySetupStatus,
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
+import { FullDiskAccessSetupPrompt } from './FullDiskAccessSetupPrompt'
 import { translate } from '@/i18n/i18n'
 
 export function AgentCapabilitiesSetupAction(props: {
@@ -142,38 +143,50 @@ type AgentCapabilitySetupRow = {
 const AGENT_CAPABILITY_SETUP_ROWS: readonly AgentCapabilitySetupRow[] = [
   {
     id: 'orchestration',
-    title: translate(
-      'auto.components.feature.wall.AgentCapabilitiesSetupAction.ac07f8887f',
-      'Agent Orchestration'
-    ),
-    description: translate(
-      'auto.components.feature.wall.AgentCapabilitiesSetupAction.c61c91e642',
-      'Let agents coordinate through Orca to keep large, multi-step tasks moving to completion.'
-    ),
+    get title() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.ac07f8887f',
+        'Agent Orchestration'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.c61c91e642',
+        'Let agents coordinate through Orca to keep large, multi-step tasks moving to completion.'
+      )
+    },
     icon: <Workflow className="size-4" />
   },
   {
     id: 'browserUse',
-    title: translate(
-      'auto.components.feature.wall.AgentCapabilitiesSetupAction.e638da007a',
-      'Agent Browser Use'
-    ),
-    description: translate(
-      'auto.components.feature.wall.AgentCapabilitiesSetupAction.5e8fe5a72d',
-      "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see."
-    ),
+    get title() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.e638da007a',
+        'Agent Browser Use'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.5e8fe5a72d',
+        "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see."
+      )
+    },
     icon: <Globe2 className="size-4" />
   },
   {
     id: 'computerUse',
-    title: translate(
-      'auto.components.feature.wall.AgentCapabilitiesSetupAction.362a07517d',
-      'Computer Use'
-    ),
-    description: translate(
-      'auto.components.feature.wall.AgentCapabilitiesSetupAction.1b51644c2d',
-      'Let agents control the desktop, moving the cursor, clicking, and typing in any app.'
-    ),
+    get title() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.362a07517d',
+        'Computer Use'
+      )
+    },
+    get description() {
+      return translate(
+        'auto.components.feature.wall.AgentCapabilitiesSetupAction.1b51644c2d',
+        'Let agents control the desktop, moving the cursor, clicking, and typing in any app.'
+      )
+    },
     icon: <MonitorCog className="size-4" />
   }
 ]
@@ -197,6 +210,7 @@ function AgentCapabilitySetupControls(props: {
         onChange={props.onFeatureSetupChange}
         installStatus={props.installStatus}
       />
+      <FullDiskAccessSetupPrompt />
       {showSetupAction ? (
         <div className="mt-6 flex items-center">
           <Button

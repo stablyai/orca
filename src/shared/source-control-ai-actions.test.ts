@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   normalizeSourceControlAiActionDefaults,
+  SOURCE_CONTROL_ACTION_VARIABLES,
+  SOURCE_CONTROL_LAUNCH_ACTION_IDS,
+  SOURCE_CONTROL_LAUNCH_ACTION_LABELS,
   readSourceControlActionDefault,
   renderSourceControlActionCommandTemplate,
   resolveSourceControlActionCommandTemplate,
@@ -17,6 +20,9 @@ describe('source-control AI launch action defaults', () => {
           agentArgs: '  --model gpt-5.5  '
         },
         resolveConflicts: { agentId: null },
+        resolveComments: {
+          commandInputTemplate: 'Resolve {basePrompt}'
+        },
         pullRequest: { agentId: 'claude' }
       })
     ).toEqual({
@@ -26,6 +32,9 @@ describe('source-control AI launch action defaults', () => {
         agentArgs: '  --model gpt-5.5  '
       },
       resolveConflicts: { agentId: null },
+      resolveComments: {
+        commandInputTemplate: 'Resolve {basePrompt}'
+      },
       pullRequest: { agentId: 'claude' }
     })
   })
@@ -107,6 +116,15 @@ describe('source-control AI launch action defaults', () => {
       fixChecks: { agentId: 'codex' },
       resolveConflicts: { agentId: 'claude' }
     })
+  })
+
+  it('exposes review-comment resolution as a launch action', () => {
+    expect(SOURCE_CONTROL_LAUNCH_ACTION_IDS).toContain('resolveComments')
+    expect(SOURCE_CONTROL_LAUNCH_ACTION_LABELS.resolveComments).toBe('Review comment resolution')
+    expect(resolveSourceControlActionCommandTemplate(undefined, 'resolveComments')).toBe(
+      '{basePrompt}'
+    )
+    expect(SOURCE_CONTROL_ACTION_VARIABLES.resolveComments).toEqual(['basePrompt'])
   })
 
   it('renders known template variables and leaves unknown variables visible', () => {

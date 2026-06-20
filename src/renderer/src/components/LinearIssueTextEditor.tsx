@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { linearUpdateIssue } from '@/runtime/runtime-linear-client'
 import type { LinearIssue } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
 import {
   getLinearIssueTextSavePlan,
   type LinearIssueTextField
@@ -24,6 +25,7 @@ type LinearIssueTextEditorProps = {
   onIssueChange: (patch: Pick<LinearIssue, 'title'> | Pick<LinearIssue, 'description'>) => void
   density?: 'page' | 'drawer'
   fields?: 'all' | 'title' | 'description'
+  sourceContext?: TaskSourceContext | null
 }
 
 function useAutosizeTextArea(value: string): React.RefObject<HTMLTextAreaElement | null> {
@@ -45,9 +47,11 @@ export function LinearIssueTextEditor({
   issue,
   onIssueChange,
   density = 'page',
-  fields = 'all'
+  fields = 'all',
+  sourceContext
 }: LinearIssueTextEditorProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const providerSettings = sourceContext ?? settings
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const [draftState, setDraftState] = useState(() => createLinearIssueTextDraftState(issue))
   const [savingField, setSavingField] = useState<LinearIssueTextField | null>(null)
@@ -111,7 +115,7 @@ export function LinearIssueTextEditor({
       onIssueChange(patch)
       patchLinearIssue(issue.id, patch)
       try {
-        const result = await linearUpdateIssue(settings, issue.id, patch, issue.workspaceId)
+        const result = await linearUpdateIssue(providerSettings, issue.id, patch, issue.workspaceId)
         if (!result.ok) {
           throw new Error(result.error)
         }
@@ -156,7 +160,7 @@ export function LinearIssueTextEditor({
       mountedRef,
       onIssueChange,
       patchLinearIssue,
-      settings,
+      providerSettings,
       titleDraft,
       updateDescriptionDraft,
       updateTitleDraft

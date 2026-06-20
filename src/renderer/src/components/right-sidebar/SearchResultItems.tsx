@@ -11,6 +11,7 @@ import {
   ContextMenuContent,
   ContextMenuItem
 } from '@/components/ui/context-menu'
+import { normalizeSearchFileMatchCount } from '../../../../shared/search-match-count'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
@@ -64,6 +65,7 @@ export function FileResultRow({
   const parentDir = dirname(fileResult.relativePath)
   const dirPath = parentDir === '.' ? '' : parentDir
   const FileIcon = getFileTypeIcon(fileResult.relativePath)
+  const matchCount = normalizeSearchFileMatchCount(fileResult)
 
   return (
     <div className="pt-1.5">
@@ -95,7 +97,7 @@ export function FileResultRow({
                     </span>
                   </div>
                   <span className="text-[10px] text-muted-foreground flex-shrink-0 bg-muted/80 rounded-full px-1.5">
-                    {fileResult.matches.length}
+                    {matchCount}
                   </span>
                 </Button>
               </TooltipTrigger>

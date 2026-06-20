@@ -9,6 +9,7 @@ import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { createCoalescedPollRunner } from './coalesced-poll-runner'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -19,6 +20,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const allWorktrees = useAllWorktrees()
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
+  const gitStatusHugeByWorktree = useAppStore((s) => s.gitStatusHugeByWorktree)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
@@ -26,6 +28,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const openFiles = useAppStore((s) => s.openFiles)
   const repoMap = useRepoMap()
   const statusPollInFlightRef = useRef(false)
@@ -79,6 +82,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         worktreePath,
         rightSidebarOpen,
         rightSidebarTab,
+        rightSidebarExplorerView,
         openFiles
       }) ||
       !activeRepoSupportsGit
@@ -88,10 +92,18 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     if (!isConnectionReady(activeConnectionId)) {
       return
     }
+    // Why: once a repo's status was truncated at the entry limit, re-running git
+    // status every 3s just re-does expensive work and re-truncates. Pause the
+    // automatic poll while huge (a manual refresh still goes through its own
+    // path); resolving the changes (e.g. .gitignoring the huge folder) clears
+    // the flag and polling resumes. Mirrors a "huge repo" disabling auto status.
+    if (gitStatusHugeByWorktree?.[activeWorktreeId]) {
+      return
+    }
     try {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       await refreshGitStatusForWorktree({
-        settings: useAppStore.getState().settings,
+        settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
         worktreeId: activeWorktreeId,
         worktreePath,
         connectionId,
@@ -113,8 +125,10 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     activeWorktreeId,
     enabled,
     fetchUpstreamStatus,
+    gitStatusHugeByWorktree,
     isConnectionReady,
     openFiles,
+    rightSidebarExplorerView,
     rightSidebarOpen,
     rightSidebarTab,
     worktreePath,
@@ -172,7 +186,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
             continue
           }
           const op = (await getRuntimeGitConflictOperation({
-            settings: useAppStore.getState().settings,
+            settings: getRightSidebarWorktreeRuntimeSettings(id),
             worktreeId: id,
             worktreePath: path,
             connectionId

@@ -2,11 +2,18 @@ import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { formatRemoteCli } from './ssh-remote-cli-format'
+import {
+  RemoteCliArgumentError,
+  getRemoteLinearHelp,
+  tryDispatchRemoteLinearCli
+} from './ssh-remote-linear-cli'
 
 export type RemoteOrcaCliRequest = {
   argv: string[]
   cwd: string
   env: Record<string, string>
+  stdin?: string
 }
 
 export type RemoteOrcaCliResult = {
@@ -20,6 +27,25 @@ type ParsedRemoteCli = {
   flags: Map<string, string | boolean>
 }
 
+const REMOTE_BOOLEAN_FLAGS = new Set([
+  'all',
+  'attachments',
+  'children',
+  'comments',
+  'current',
+  'full',
+  'help',
+  'inject',
+  'json',
+  'me',
+  'relations',
+  'parent-current',
+  'unread',
+  'wait'
+])
+const REPEATED_FLAG_SEPARATOR = '\u0000'
+const REPEATABLE_REMOTE_STRING_FLAGS = new Set(['label'])
+
 export async function runRemoteOrcaCli(
   runtime: OrcaRuntimeService,
   request: RemoteOrcaCliRequest
@@ -27,19 +53,34 @@ export async function runRemoteOrcaCli(
   const dispatcher = new RpcDispatcher({ runtime })
   const parsed = parseRemoteCliArgs(request.argv)
   const json = parsed.flags.has('json')
+  const help = getRemoteLinearHelp(parsed)
+  if (help) {
+    return { stdout: `${help}\n`, stderr: '', exitCode: 0 }
+  }
 
   try {
-    const response = await dispatchRemoteCli(dispatcher, parsed, request.env)
+    const response = await dispatchRemoteCli(dispatcher, parsed, request.env, request.stdin)
+    const formatted = json
+      ? { stdout: `${JSON.stringify(response, null, 2)}\n`, stderr: '' }
+      : formatRemoteCli(response)
     return {
-      stdout: json ? `${JSON.stringify(response, null, 2)}\n` : `${formatRemoteCli(response)}\n`,
-      stderr: '',
+      stdout: formatted.stdout,
+      stderr: formatted.stderr,
       exitCode: response.ok ? 0 : 1
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    const code =
+      err instanceof RemoteCliArgumentError
+        ? err.code
+        : err instanceof Error &&
+            'code' in err &&
+            typeof (err as { code: unknown }).code === 'string'
+          ? (err as { code: string }).code
+          : 'runtime_error'
     if (json) {
       return {
-        stdout: `${JSON.stringify(buildLocalError(message), null, 2)}\n`,
+        stdout: `${JSON.stringify(buildLocalError(message, code), null, 2)}\n`,
         stderr: '',
         exitCode: 1
       }
@@ -51,9 +92,14 @@ export async function runRemoteOrcaCli(
 async function dispatchRemoteCli(
   dispatcher: RpcDispatcher,
   parsed: ParsedRemoteCli,
-  env: Record<string, string>
+  env: Record<string, string>,
+  stdin?: string
 ): Promise<RpcResponse> {
   const command = parsed.commandPath.join(' ')
+  const linearResponse = await tryDispatchRemoteLinearCli(dispatcher, parsed, env, stdin)
+  if (linearResponse) {
+    return linearResponse
+  }
   switch (command) {
     case 'status': {
       const response = await call(dispatcher, 'status.get')
@@ -141,20 +187,37 @@ function parseRemoteCliArgs(argv: string[]): ParsedRemoteCli {
     // form as the local CLI, including values that themselves start with `--`.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
-      flags.set(assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      setRemoteFlag(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
       continue
     }
 
     const flag = assignment
     const next = argv[i + 1]
-    if (next && !next.startsWith('--')) {
-      flags.set(flag, next)
+    if (!REMOTE_BOOLEAN_FLAGS.has(flag) && next && !next.startsWith('--')) {
+      setRemoteFlag(flags, flag, next)
       i += 1
     } else {
-      flags.set(flag, true)
+      setRemoteFlag(flags, flag, true)
     }
   }
   return { commandPath, flags }
+}
+
+function setRemoteFlag(
+  flags: Map<string, string | boolean>,
+  name: string,
+  value: string | boolean
+): void {
+  const previous = flags.get(name)
+  if (
+    typeof previous === 'string' &&
+    typeof value === 'string' &&
+    REPEATABLE_REMOTE_STRING_FLAGS.has(name)
+  ) {
+    flags.set(name, `${previous}${REPEATED_FLAG_SEPARATOR}${value}`)
+    return
+  }
+  flags.set(name, value)
 }
 
 function resolveHandle(
@@ -184,33 +247,17 @@ function optionalNumber(flags: Map<string, string | boolean>, name: string): num
     return undefined
   }
   const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : undefined
+  if (!Number.isFinite(parsed)) {
+    throw new RemoteCliArgumentError('invalid_argument', `Invalid numeric value for --${name}`)
+  }
+  return parsed
 }
 
-function formatRemoteCli(response: RpcResponse): string {
-  if (!response.ok) {
-    return response.error.message
-  }
-  const result = response.result as Record<string, unknown>
-  if ('app' in result && 'runtime' in result && 'graph' in result) {
-    const status = result as CliStatusResult
-    return [
-      `appRunning: ${status.app.running}`,
-      `pid: ${status.app.pid ?? 'none'}`,
-      `runtimeState: ${status.runtime.state}`,
-      `runtimeReachable: ${status.runtime.reachable}`,
-      `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
-      `graphState: ${status.graph.state}`
-    ].join('\n')
-  }
-  return JSON.stringify(response.result)
-}
-
-function buildLocalError(message: string): RpcResponse {
+function buildLocalError(message: string, code = 'runtime_error'): RpcResponse {
   return {
     id: 'remote-cli-local',
     ok: false,
-    error: { code: 'runtime_error', message },
+    error: { code, message },
     _meta: { runtimeId: 'unknown' }
   }
 }

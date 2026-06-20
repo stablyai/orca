@@ -61,7 +61,7 @@ export function getSidebarProjectDropAffordance(args: {
       ),
       description: translate(
         'auto.components.sidebar.sidebar.project.drop.740e8d0d46',
-        'Use Add Project for server paths'
+        'Use Add Project for host paths'
       )
     }
   }

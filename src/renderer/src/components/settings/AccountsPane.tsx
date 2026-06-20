@@ -56,7 +56,9 @@ type AccountsPaneProps = {
 }
 
 function getHostRuntimeLabel(): string {
-  return navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
+  return navigator.userAgent.includes('Windows')
+    ? 'Windows'
+    : translate('auto.components.settings.AccountsPane.9baf45d071', 'This device')
 }
 
 function getCodexAccountLabel(
@@ -229,7 +231,9 @@ function getSelectedAccountRuntime(
     return {
       runtime: 'wsl',
       wslDistro: selectedDistro,
-      label: selectedDistro ? `WSL ${selectedDistro}` : 'WSL default'
+      label: selectedDistro
+        ? `WSL ${selectedDistro}`
+        : translate('auto.components.settings.AccountsPane.2358ac71d2', 'WSL default')
     }
   }
   return { runtime: 'host', label: getHostRuntimeLabel() }
@@ -597,11 +601,10 @@ export function AccountsPane({
                 {translate('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate('auto.components.settings.AccountsPane.c0a52abfc5', 'Showing')}
-                {accountRuntime.label}{' '}
                 {translate(
-                  'auto.components.settings.AccountsPane.5568bb6d5c',
-                  'accounts. New accounts are added there.'
+                  'auto.components.settings.AccountsPane.c0a52abfc5',
+                  'Showing accounts for {{value0}}. New accounts are added there.',
+                  { value0: accountRuntime.label }
                 )}
               </p>
             </div>
@@ -668,11 +671,10 @@ export function AccountsPane({
                 </div>
                 <span className="truncate text-[11px] text-muted-foreground">
                   {translate(
-                    'auto.components.settings.AccountsPane.fcc4093fc1',
-                    'Use your current'
+                    'auto.components.settings.AccountsPane.e05d0ff737',
+                    'Use your current {{value0}} Claude login.',
+                    { value0: accountRuntime.label }
                   )}
-                  {accountRuntime.label}{' '}
-                  {translate('auto.components.settings.AccountsPane.3455cf43fa', 'Claude login.')}
                 </span>
               </div>
             </button>
@@ -680,12 +682,8 @@ export function AccountsPane({
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.AccountsPane.3fe7862418',
-                  'No managed Claude accounts for'
-                )}
-                {accountRuntime.label}
-                {translate(
-                  'auto.components.settings.AccountsPane.dea08560b4',
-                  ". Orca will use that environment's system default Claude login until you add one here."
+                  "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
+                  { value0: accountRuntime.label }
                 )}
               </div>
             ) : (
@@ -856,11 +854,10 @@ export function AccountsPane({
                 {translate('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate('auto.components.settings.AccountsPane.c0a52abfc5', 'Showing')}
-                {accountRuntime.label}{' '}
                 {translate(
-                  'auto.components.settings.AccountsPane.5568bb6d5c',
-                  'accounts. New accounts are added there.'
+                  'auto.components.settings.AccountsPane.c0a52abfc5',
+                  'Showing accounts for {{value0}}. New accounts are added there.',
+                  { value0: accountRuntime.label }
                 )}
               </p>
             </div>
@@ -961,12 +958,8 @@ export function AccountsPane({
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.AccountsPane.b4c9450319',
-                  'No managed Codex accounts for'
-                )}
-                {accountRuntime.label}
-                {translate(
-                  'auto.components.settings.AccountsPane.d46f735a85',
-                  ". Orca will use that environment's system default Codex login until you add one here."
+                  "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
+                  { value0: accountRuntime.label }
                 )}
               </div>
             ) : (
@@ -1163,12 +1156,8 @@ export function AccountsPane({
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.AccountsPane.c2aee76420',
-                'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for'
-              )}
-              {accountRuntime.label}
-              {translate(
-                'auto.components.settings.AccountsPane.d708749337',
-                '. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.'
+                'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.',
+                { value0: accountRuntime.label }
               )}
             </p>
           </div>

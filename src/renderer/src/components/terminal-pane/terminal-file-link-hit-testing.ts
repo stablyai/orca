@@ -3,6 +3,7 @@ import { extractTerminalFileLinkCandidates, resolveTerminalFileLink } from '@/li
 import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-client'
 import { getTerminalFileContext, openDetectedFilePath } from './terminal-file-open-routing'
 import { getTerminalPathExistsCacheKey } from './terminal-path-exists-cache'
+import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import {
   buildHardWrappedPathLogicalLineCandidates,
   buildWrappedLogicalLine,
@@ -38,6 +39,7 @@ export function openFilePathLinkAtBufferPosition(
       column: number | null
       pathText: string
       cachedExists: boolean | undefined
+      isKnownWorktreeRoot: boolean
     }[] = []
     for (const parsed of extractTerminalFileLinkCandidates(logicalLine.text)) {
       const resolved = deps.startupCwd
@@ -61,20 +63,28 @@ export function openFilePathLinkAtBufferPosition(
         isRemoteRuntimePath: isRemoteRuntimeFileOperation(fileContext, resolved.absolutePath),
         runtimeEnvironmentId: deps.runtimeEnvironmentId
       })
+      const isKnownWorktreeRoot = Boolean(resolveKnownWorktreeRootPathLink(resolved.absolutePath))
+      if (/[\\/]$/.test(parsed.pathText) && !isKnownWorktreeRoot) {
+        continue
+      }
       matches.push({
         absolutePath: resolved.absolutePath,
         line: resolved.line,
         column: resolved.column,
         pathText: parsed.pathText,
-        cachedExists: deps.pathExistsCache?.get(cacheKey)
+        cachedExists: deps.pathExistsCache?.get(cacheKey),
+        isKnownWorktreeRoot
       })
     }
 
     const cachedMatch = matches
       .filter((match) => match.cachedExists)
       .sort((a, b) => b.pathText.length - a.pathText.length)[0]
+    const knownWorktreeRootMatch = matches
+      .filter((match) => match.isKnownWorktreeRoot)
+      .sort((a, b) => b.pathText.length - a.pathText.length)[0]
     const uncachedMatch = matches.find((match) => match.cachedExists !== false)
-    const match = cachedMatch ?? uncachedMatch
+    const match = cachedMatch ?? knownWorktreeRootMatch ?? uncachedMatch
     if (match) {
       openDetectedFilePath(match.absolutePath, match.line, match.column, {
         ...deps,

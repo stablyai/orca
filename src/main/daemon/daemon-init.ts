@@ -40,6 +40,16 @@ import {
   unbindLocalProviderListeners,
   rebindLocalProviderListeners
 } from '../ipc/pty'
+import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
+
+// Why: daemon init runs concurrently with window load, so harness-side stderr
+// arrival times are useless — in-process `t` lets the startup benchmark derive
+// how long the daemon cold-start path actually took.
+function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
+  if (isStartupDiagnosticsEnabled()) {
+    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
+  }
+}
 
 let spawner: DaemonSpawner | null = null
 let adapter: DaemonPtyRouter | DaemonPtyAdapter | null = null
@@ -184,10 +194,10 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         // launched it. In dev this happens after deleting/rebuilding a
         // worktree; in packaged apps it happens when the stable
         // /Applications/Orca.app path is replaced during update.
-        const identity = getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
+        const identity = await getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
         const stalePackagedBundle =
           app.isPackaged &&
-          isDaemonStaleForCurrentBundle(runtimeDir, socketPath, tokenPath, app.getVersion())
+          (await isDaemonStaleForCurrentBundle(runtimeDir, socketPath, tokenPath, app.getVersion()))
         if (identity === 'mismatch' || stalePackagedBundle) {
           // Why: replacing a healthy daemon kills its child PTYs; defer code
           // freshness until no live terminal sessions would be lost.
@@ -208,6 +218,20 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           // responded to a protocol-level ping. Safe to reuse.
           return createPreservedDaemonHandle(runtimeDir)
         }
+      }
+    } else {
+      // Why: a busy machine (e.g. right after an update) can time out the
+      // health check while the daemon is alive and owning terminals. Killing
+      // it would destroy every live session, so re-verify with a session list
+      // first. Only a verified non-empty list preserves: a daemon that cannot
+      // even list sessions cannot serve terminals, and replacing it is the
+      // only recovery.
+      const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+      if (liveSessionCount !== null && liveSessionCount > 0) {
+        console.warn(
+          `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+        )
+        return createPreservedDaemonHandle(runtimeDir)
       }
     }
 
@@ -330,6 +354,15 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
 }
 
 export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void> {
+  logDaemonMilestone('daemon-init-start')
+  // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init
+  // that deterministically outlasts the first-window timeout. Real triggers
+  // (stale-daemon cleanup, legacy probes on a busy disk) are not controllable
+  // from a test.
+  const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
+  if (Number.isFinite(e2eInitDelayMs) && e2eInitDelayMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
+  }
   const runtimeDir = getRuntimeDir()
 
   const newSpawner = new DaemonSpawner({
@@ -341,6 +374,7 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
   // throws, a stale spawner would prevent shutdownDaemon() from cleaning up
   // correctly on retry.
   const info = await newSpawner.ensureRunning()
+  logDaemonMilestone('daemon-current-ready')
   if (signal?.aborted) {
     // Why: startup fail-open may already have allowed fallback LocalPtyProvider
     // PTYs to spawn. A late daemon swap would strand those PTYs on the old owner.
@@ -386,6 +420,7 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
   // before daemon init finishes. Rebind here so daemon PTYs still fan out
   // data/exit events through the renderer and runtime listeners.
   rebindLocalProviderListeners()
+  logDaemonMilestone('daemon-init-done', { legacyAdapters: legacyAdapters.length })
 }
 
 // Why: the Manage Sessions IPC handlers need read access to the current
@@ -614,6 +649,28 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
     const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
     const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
     if (!(await probeSocket(socketPath))) {
+      // Why: dead legacy daemons leave pid/token files behind forever (one per
+      // protocol bump). A stale pid eventually gets recycled by an unrelated
+      // process, turning any future identity check into a PowerShell spawn.
+      // The socket is provably dead, so remove the leftovers — mirrors what
+      // cleanupDaemonForProtocol already does for the current version.
+      for (const stalePath of [
+        getDaemonPidPath(runtimeDir, protocolVersion),
+        getDaemonTokenPath(runtimeDir, protocolVersion)
+      ]) {
+        try {
+          unlinkSync(stalePath)
+        } catch {
+          // Best-effort
+        }
+      }
+      if (process.platform !== 'win32' && existsSync(socketPath)) {
+        try {
+          unlinkSync(socketPath)
+        } catch {
+          // Best-effort
+        }
+      }
       continue
     }
     // Why: old daemon PTYs can be running long-lived agents during an app

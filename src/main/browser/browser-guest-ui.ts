@@ -9,12 +9,18 @@ import {
   redactKagiSessionToken
 } from '../../shared/browser-url'
 import {
+  isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord,
-  resolveWindowShortcutAction
+  resolveWindowShortcutAction,
+  type WindowShortcutInput
 } from '../../shared/window-shortcut-policy'
 import { readGuestNavigationState } from './browser-guest-navigation-state'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../shared/keybindings'
 import type { BrowserPageZoomDirection } from '../../shared/browser-page-zoom'
+import {
+  ModifierDoubleTapDetector,
+  toModifierDoubleTapEvent
+} from '../../shared/modifier-double-tap-detector'
 
 type ResolveRenderer = (browserTabId: string) => Electron.WebContents | null
 type ShouldForwardDictationShortcut = () => boolean
@@ -49,10 +55,6 @@ export function resolveGuestMouseWheelZoomDirection(
     return null
   }
   return deltaY < 0 ? 'in' : 'out'
-}
-
-function isControlKeyRelease(input: Electron.Input): boolean {
-  return input.type === 'keyUp' && (input.code === 'ControlLeft' || input.code === 'ControlRight')
 }
 
 export function setupGuestContextMenu(args: {
@@ -266,48 +268,30 @@ export function setupGuestShortcutForwarding(args: {
     getKeybindings
   } = args
   let ctrlTabSwitching = false
-  const handler = (event: Electron.Event, input: Electron.Input): void => {
+  const doubleTapDetector = new ModifierDoubleTapDetector()
+  const resetDoubleTapDetector = (): void => doubleTapDetector.reset()
+  type GuestShortcutInput = WindowShortcutInput & { isAutoRepeat?: boolean }
+
+  const forwardShortcutInput = (
+    event: Electron.Event,
+    input: GuestShortcutInput,
+    action = resolveWindowShortcutAction(input, process.platform, getKeybindings?.())
+  ): boolean => {
     const keybindings = getKeybindings?.()
-    if (matchesRecentTabSwitcherChord(input, process.platform, keybindings)) {
-      event.preventDefault()
-      if (input.type === 'keyDown') {
-        ctrlTabSwitching = true
-        const renderer = resolveRenderer(browserTabId)
-        renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
-      }
-      return
-    }
-
-    if (ctrlTabSwitching && isControlKeyRelease(input)) {
-      event.preventDefault()
-      ctrlTabSwitching = false
-      const renderer = resolveRenderer(browserTabId)
-      renderer?.send('ui:ctrlTabKeyUp')
-      return
-    }
-
-    if (input.type !== 'keyDown') {
-      return
-    }
-    // Why: resolve the policy action once per keystroke. The history-navigate
-    // chord (Cmd/Ctrl+Alt+Arrow) is the only allowlisted chord that carries
-    // Alt and must be handled before the generic modifier-chord gate below,
-    // which rejects Alt. Every other chord handled further down can reuse
-    // the same `action` rather than re-running the full predicate chain.
-    const action = resolveWindowShortcutAction(input, process.platform, keybindings)
     if (action?.type === 'zoom') {
       // Why: browser page zoom must consume repeats and teardown races before
       // Chromium or the guest page can apply its own shortcut behavior.
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:zoomBrowserPage', action.direction)
-      return
+      return true
     }
     if (input.isAutoRepeat) {
       if (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
         event.preventDefault()
+        return true
       }
-      return
+      return false
     }
     if (action?.type === 'worktreeHistoryNavigate') {
       // Why: preventDefault unconditionally — if we cannot resolve the
@@ -319,14 +303,14 @@ export function setupGuestShortcutForwarding(args: {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:worktreeHistoryNavigate', action.direction)
-      return
+      return true
     }
 
     if (action?.type === 'toggleFloatingTerminal') {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:toggleFloatingTerminal')
-      return
+      return true
     }
 
     // Why: Cmd/Ctrl+Alt+[ / ] cycles across every tab type. Handled before
@@ -346,14 +330,14 @@ export function setupGuestShortcutForwarding(args: {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:switchTabAcrossAllTypes', switchAllTypesDirection)
-      return
+      return true
     }
 
     if (keybindingMatchesAction('tab.previousRecent', input, process.platform, keybindings)) {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:switchRecentTab')
-      return
+      return true
     }
 
     // Why: terminal-only tab switching defaults to Ctrl+PageUp/PageDown on every
@@ -372,12 +356,12 @@ export function setupGuestShortcutForwarding(args: {
       event.preventDefault()
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:switchTerminalTab', terminalTabDirection)
-      return
+      return true
     }
 
     const renderer = resolveRenderer(browserTabId)
     if (!renderer) {
-      return
+      return false
     }
     if (keybindingMatchesAction('tab.newBrowser', input, process.platform, keybindings)) {
       renderer.send('ui:newBrowserTab')
@@ -421,6 +405,15 @@ export function setupGuestShortcutForwarding(args: {
       // guest handle it natively would open Chromium's built-in find UI inside
       // the guest frame, which is invisible behind Orca's chrome.
       renderer.send('ui:findInBrowserPage')
+    } else if (keybindingMatchesAction('browser.back', input, process.platform, keybindings)) {
+      // Why: macOS Logitech side-button remaps arrive as browser history
+      // keystrokes, not mouse/app-command events. Forward out of the guest so
+      // the renderer-owned webview ref can call goBack().
+      renderer.send('ui:browserHistoryNavigate', 'back')
+    } else if (keybindingMatchesAction('browser.forward', input, process.platform, keybindings)) {
+      // Why: same as browser.back; the focused guest cannot call the
+      // renderer-owned parked webview's goForward() path directly.
+      renderer.send('ui:browserHistoryNavigate', 'forward')
     } else if (keybindingMatchesAction('tab.close', input, process.platform, keybindings)) {
       renderer.send('ui:closeActiveTab')
     } else if (keybindingMatchesAction('tab.nextSameType', input, process.platform, keybindings)) {
@@ -435,12 +428,12 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:openQuickOpen')
     } else if (action?.type === 'openNewWorkspace') {
       renderer.send('ui:openNewWorkspace')
+    } else if (action?.type === 'openWorkspaceBoard') {
+      renderer.send('ui:openWorkspaceBoard')
     } else if (action?.type === 'openTasks') {
       renderer.send('ui:openTasks')
     } else if (action?.type === 'openSettings') {
       renderer.send('ui:openSettings')
-    } else if (action?.type === 'exportPdf') {
-      renderer.send('export:requestPdf')
     } else if (action?.type === 'forceReload') {
       renderer.reloadIgnoringCache()
     } else if (action?.type === 'jumpToWorktreeIndex') {
@@ -449,21 +442,84 @@ export function setupGuestShortcutForwarding(args: {
       renderer.send('ui:jumpToTabIndex', action.index)
     } else if (action?.type === 'dictationKeyDown') {
       if (!shouldForwardDictationShortcut?.()) {
-        return
+        return false
       }
       renderer.send('ui:dictationKeyDown')
     } else {
-      return
+      return false
     }
     // Why: preventDefault stops the guest page from also processing the chord
     // (e.g. Cmd+T opening a browser-internal new-tab page).
     event.preventDefault()
+    return true
+  }
+
+  const handler = (event: Electron.Event, input: Electron.Input): void => {
+    const keybindings = getKeybindings?.()
+    if (
+      input.type === 'keyDown' &&
+      matchesRecentTabSwitcherChord(input, process.platform, keybindings)
+    ) {
+      event.preventDefault()
+      ctrlTabSwitching = true
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
+      return
+    }
+
+    if (ctrlTabSwitching && isRecentTabSwitcherCommitRelease(input)) {
+      event.preventDefault()
+      ctrlTabSwitching = false
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:ctrlTabKeyUp')
+      return
+    }
+
+    if (input.type === 'keyDown' || input.type === 'keyUp') {
+      const detected = doubleTapDetector.process(
+        toModifierDoubleTapEvent({
+          type: input.type,
+          code: input.code,
+          key: input.key,
+          shift: input.shift,
+          control: input.control,
+          alt: input.alt,
+          meta: input.meta,
+          isAutoRepeat: input.isAutoRepeat
+        }),
+        Date.now()
+      )
+      if (detected) {
+        const doubleTapInput: GuestShortcutInput = { doubleTapModifier: detected.modifier }
+        forwardShortcutInput(
+          event,
+          doubleTapInput,
+          resolveWindowShortcutAction(doubleTapInput, process.platform, keybindings, {
+            context: 'app'
+          })
+        )
+        return
+      }
+    }
+
+    if (input.type !== 'keyDown') {
+      return
+    }
+    // Why: resolve the policy action once per keystroke. The history-navigate
+    // chord (Cmd/Ctrl+Alt+Arrow) is the only allowlisted chord that carries
+    // Alt and must be handled before the generic modifier-chord gate below,
+    // which rejects Alt. Every other chord handled further down can reuse
+    // the same `action` rather than re-running the full predicate chain.
+    const action = resolveWindowShortcutAction(input, process.platform, keybindings)
+    forwardShortcutInput(event, input, action)
   }
 
   guest.on('before-input-event', handler)
+  guest.on('blur', resetDoubleTapDetector)
   return () => {
     try {
       guest.off('before-input-event', handler)
+      guest.off('blur', resetDoubleTapDetector)
     } catch {
       // Why: best-effort — guest may already be destroyed during teardown.
     }

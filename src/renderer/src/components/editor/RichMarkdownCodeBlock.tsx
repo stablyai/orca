@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
@@ -14,100 +15,148 @@ import { translate } from '@/i18n/i18n'
 const LANGUAGES = [
   {
     value: '',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.13822cdfda', 'Plain text')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.13822cdfda', 'Plain text')
+    }
   },
   {
     value: 'bash',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.4227cf50fe', 'Bash')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.4227cf50fe', 'Bash')
+    }
   },
   { value: 'c', label: 'C' },
   {
     value: 'cpp',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.4daed43ae3', 'C++')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.4daed43ae3', 'C++')
+    }
   },
   {
     value: 'css',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.026653f21f', 'CSS')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.026653f21f', 'CSS')
+    }
   },
   {
     value: 'diff',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.bf6ee5caaa', 'Diff')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.bf6ee5caaa', 'Diff')
+    }
   },
   {
     value: 'go',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.edfcc64182', 'Go')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.edfcc64182', 'Go')
+    }
   },
   {
     value: 'graphql',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.706fd85738', 'GraphQL')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.706fd85738', 'GraphQL')
+    }
   },
   {
     value: 'html',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.8c4a3fa02d', 'HTML')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.8c4a3fa02d', 'HTML')
+    }
   },
   {
     value: 'java',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.36536ad539', 'Java')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.36536ad539', 'Java')
+    }
   },
   {
     value: 'javascript',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.a209c57063', 'JavaScript')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.a209c57063', 'JavaScript')
+    }
   },
   {
     value: 'json',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.78eba32de4', 'JSON')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.78eba32de4', 'JSON')
+    }
   },
   {
     value: 'kotlin',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.bcb236e2d8', 'Kotlin')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.bcb236e2d8', 'Kotlin')
+    }
   },
   {
     value: 'markdown',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.983b9576b4', 'Markdown')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.983b9576b4', 'Markdown')
+    }
   },
   {
     value: 'mermaid',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.89d6cc14fb', 'Mermaid')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.89d6cc14fb', 'Mermaid')
+    }
   },
   {
     value: 'python',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.2391f9cda9', 'Python')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.2391f9cda9', 'Python')
+    }
   },
   {
     value: 'ruby',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.96182a2f64', 'Ruby')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.96182a2f64', 'Ruby')
+    }
   },
   {
     value: 'rust',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.e72e6b03f4', 'Rust')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.e72e6b03f4', 'Rust')
+    }
   },
   {
     value: 'scss',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.5af8251002', 'SCSS')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.5af8251002', 'SCSS')
+    }
   },
   {
     value: 'shell',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.d01f55be57', 'Shell')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.d01f55be57', 'Shell')
+    }
   },
   {
     value: 'sql',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.3009f722b9', 'SQL')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.3009f722b9', 'SQL')
+    }
   },
   {
     value: 'swift',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.9e384d48dc', 'Swift')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.9e384d48dc', 'Swift')
+    }
   },
   {
     value: 'typescript',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.88d777bc07', 'TypeScript')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.88d777bc07', 'TypeScript')
+    }
   },
   {
     value: 'xml',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.5ef5605cb7', 'XML')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.5ef5605cb7', 'XML')
+    }
   },
   {
     value: 'yaml',
-    label: translate('auto.components.editor.RichMarkdownCodeBlock.74eab1d9b2', 'YAML')
+    get label() {
+      return translate('auto.components.editor.RichMarkdownCodeBlock.74eab1d9b2', 'YAML')
+    }
   }
 ]
 
@@ -115,6 +164,7 @@ export function RichMarkdownCodeBlock({
   node,
   updateAttributes
 }: NodeViewProps): React.JSX.Element {
+  useTranslation()
   const language = (node.attrs.language as string) || ''
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)

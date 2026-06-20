@@ -14,6 +14,8 @@ import type {
   GitHubPRRefreshReason,
   PRRefreshOutcome
 } from '../../shared/types'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
@@ -59,6 +61,7 @@ import {
 import { getWorkItemDetails, getPRFileContents } from '../github/work-item-details'
 import { getRateLimit } from '../github/rate-limit'
 import { diagnoseGhAuth } from '../github/auth-diagnose'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import type { GitHubPRFile } from '../../shared/types'
 import { dispatchWorkItem, type WorkItemArgs } from './github-work-item-args'
 import {
@@ -130,7 +133,11 @@ function broadcastWorkItemMutated(
 
 // Why: returns the full Repo object instead of just the path string so that
 // callers have access to repo.id for stat tracking and other context.
-type RepoScopedArgs = { repoPath: string; repoId?: string }
+type RepoScopedArgs = {
+  repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
+}
 
 function assertRegisteredRepo(args: string | RepoScopedArgs, store: Store): Repo {
   const repoPath = typeof args === 'string' ? args : args.repoPath
@@ -145,11 +152,23 @@ function assertRegisteredRepo(args: string | RepoScopedArgs, store: Store): Repo
   if (repoId && resolve(repo.path) !== resolvedRepoPath) {
     throw new Error('Access denied: repository path does not match repo id')
   }
+  if (
+    typeof args !== 'string' &&
+    args.sourceContext?.provider === 'github' &&
+    args.sourceContext.hostId !== getRepoExecutionHostId(repo)
+  ) {
+    throw new Error('Access denied: GitHub source host does not match repository host')
+  }
   return repo
 }
 
 function repoConnectionId(repo: Repo): string | null {
   return repo.connectionId ?? null
+}
+
+function localGitOptionArgs(store: Store, repo: Repo): [] | [{ wslDistro?: string }] {
+  const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+  return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
 }
 
 export function registerGitHubHandlers(store: Store, stats: StatsCollector): void {
@@ -185,12 +204,16 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+      const localGitOptions = localGitOptionArgs(store, repo)[0]
+      const hostedReviewOptionArgs: [] | [{ localGitExecOptions: { wslDistro?: string } }] =
+        localGitOptions ? [{ localGitExecOptions: localGitOptions }] : []
       const pr = await getPRForBranch(
         repo.path,
         args.branch,
         args.linkedPRNumber ?? null,
         repoConnectionId(repo),
-        args.linkedPRNumber == null ? (args.fallbackPRNumber ?? null) : null
+        args.linkedPRNumber == null ? (args.fallbackPRNumber ?? null) : null,
+        ...hostedReviewOptionArgs
       )
       // Emit pr_created when a PR is first detected for a branch.
       // Why here: the renderer polls gh:prForBranch to check PR status per worktree.
@@ -211,10 +234,12 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:refreshPRNow',
     async (_event, args: { candidate: GitHubPRRefreshCandidate }) => {
       const repo = assertRegisteredRepo(args.candidate.repoPath, store)
+      const localGitOptions = localGitOptionArgs(store, repo)[0]
       const outcome = await refreshPRNow({
         ...args.candidate,
         repoPath: repo.path,
         repoId: repo.id,
+        ...(localGitOptions ? { localGitOptions } : {}),
         connectionId: repo.connectionId ?? args.candidate.connectionId,
         connectionState: repo.connectionId ? 'connected' : args.candidate.connectionState
       })
@@ -234,11 +259,13 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       }
     ) => {
       const repo = assertRegisteredRepo(args.candidate.repoPath, store)
+      const localGitOptions = localGitOptionArgs(store, repo)[0]
       enqueuePRRefresh(
         {
           ...args.candidate,
           repoPath: repo.path,
           repoId: repo.id,
+          ...(localGitOptions ? { localGitOptions } : {}),
           connectionId: repo.connectionId ?? args.candidate.connectionId,
           connectionState: repo.connectionId ? 'connected' : args.candidate.connectionState
         },
@@ -262,10 +289,12 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       }
       const candidates = args.candidates.map((candidate) => {
         const repo = assertRegisteredRepo(candidate.repoPath, store)
+        const localGitOptions = localGitOptionArgs(store, repo)[0]
         return {
           ...candidate,
           repoPath: repo.path,
           repoId: repo.id,
+          ...(localGitOptions ? { localGitOptions } : {}),
           connectionId: repo.connectionId ?? candidate.connectionId,
           connectionState: repo.connectionId ? 'connected' : candidate.connectionState
         }
@@ -275,10 +304,26 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     }
   )
 
-  ipcMain.handle('gh:issue', (_event, args: { repoPath: string; number: number }) => {
-    const repo = assertRegisteredRepo(args, store)
-    return getIssue(repo.path, args.number, repoConnectionId(repo))
-  })
+  ipcMain.handle(
+    'gh:issue',
+    (
+      _event,
+      args: {
+        repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
+        number: number
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args, store)
+      return getIssue(
+        repo.path,
+        args.number,
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
+      )
+    }
+  )
 
   ipcMain.handle('gh:listIssues', (_event, args: { repoPath: string; limit?: number }) => {
     const repo = assertRegisteredRepo(args, store)
@@ -289,13 +334,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       repo.path,
       args.limit,
       repo.issueSourcePreference,
-      repoConnectionId(repo)
+      repoConnectionId(repo),
+      ...localGitOptionArgs(store, repo)
     ).then((r) => r.items)
   })
 
   ipcMain.handle(
     'gh:createIssue',
-    (_event, args: { repoPath: string; title: string; body: string } & GitHubCreateIssueFields) => {
+    (_event, args: RepoScopedArgs & { title: string; body: string } & GitHubCreateIssueFields) => {
       const repo = assertRegisteredRepo(args, store)
       const fields =
         args.labels !== undefined || args.assignees !== undefined
@@ -307,7 +353,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.body,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        fields
+        fields,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -333,19 +380,27 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.before,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        args.noCache
+        args.noCache,
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
 
   ipcMain.handle('gh:countWorkItems', (_event, args: { repoPath: string; query?: string }) => {
     const repo = assertRegisteredRepo(args, store)
-    return countWorkItems(repo.path, args.query, repo.issueSourcePreference, repoConnectionId(repo))
+    return countWorkItems(
+      repo.path,
+      args.query,
+      repo.issueSourcePreference,
+      repoConnectionId(repo),
+      ...localGitOptionArgs(store, repo)
+    )
   })
 
-  ipcMain.handle('gh:workItem', (_event, args: WorkItemArgs) =>
-    dispatchWorkItem(args, assertRegisteredRepo(args, store), getWorkItem)
-  )
+  ipcMain.handle('gh:workItem', (_event, args: WorkItemArgs) => {
+    const repo = assertRegisteredRepo(args, store)
+    return dispatchWorkItem(args, repo, getWorkItem, localGitOptionArgs(store, repo)[0])
+  })
   ipcMain.handle(
     'gh:workItemByOwnerRepo',
     (
@@ -364,13 +419,15 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         { owner: args.owner, repo: args.repo },
         args.number,
         args.type,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
-  ipcMain.handle('gh:workItemDetails', (_event, args: WorkItemArgs) =>
-    dispatchWorkItem(args, assertRegisteredRepo(args, store), getWorkItemDetails)
-  )
+  ipcMain.handle('gh:workItemDetails', (_event, args: WorkItemArgs) => {
+    const repo = assertRegisteredRepo(args, store)
+    return dispatchWorkItem(args, repo, getWorkItemDetails, localGitOptionArgs(store, repo)[0])
+  })
 
   ipcMain.handle(
     'gh:prFileContents',
@@ -390,6 +447,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       return getPRFileContents({
         repoPath: repo.path,
         connectionId: repoConnectionId(repo),
+        localGitOptions: localGitOptionArgs(store, repo)[0],
         prNumber: args.prNumber,
         path: args.path,
         oldPath: args.oldPath,
@@ -402,12 +460,18 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle('gh:repoSlug', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args, store)
-    return getRepoSlug(repo.path, repoConnectionId(repo))
+    const localGitOptions = localGitOptionArgs(store, repo)[0]
+    return localGitOptions
+      ? getRepoSlug(repo.path, repoConnectionId(repo), { localGitExecOptions: localGitOptions })
+      : getRepoSlug(repo.path, repoConnectionId(repo))
   })
 
   ipcMain.handle('gh:repoUpstream', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredRepo(args, store)
-    return getRepoUpstream(repo.path, repoConnectionId(repo))
+    const localGitOptions = localGitOptionArgs(store, repo)[0]
+    return localGitOptions
+      ? getRepoUpstream(repo.path, repoConnectionId(repo), { localGitExecOptions: localGitOptions })
+      : getRepoUpstream(repo.path, repoConnectionId(repo))
   })
 
   ipcMain.handle(
@@ -416,6 +480,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       _event,
       args: {
         repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
         prNumber: number
         headSha?: string
         prRepo?: GitHubOwnerRepo | null
@@ -431,7 +497,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         {
           noCache: args.noCache
         },
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -442,6 +509,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       _event,
       args: {
         repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
         checkRunId?: number
         workflowRunId?: number
         checkName?: string
@@ -459,7 +528,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
           url: args.url,
           prRepo: args.prRepo ?? null
         },
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
@@ -470,6 +540,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       _event,
       args: {
         repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
         prNumber: number
         prRepo?: GitHubOwnerRepo | null
         noCache?: boolean
@@ -480,21 +552,37 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.prNumber,
         { noCache: args.noCache, prRepo: args.prRepo ?? null },
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
 
   ipcMain.handle(
     'gh:resolveReviewThread',
-    async (_event, args: { repoPath: string; threadId: string; resolve: boolean }) => {
+    async (
+      _event,
+      args: {
+        repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
+        threadId: string
+        resolve: boolean
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       // Why: thread resolve doesn't carry the PR number, so we cannot target
       // a specific cache entry. The renderer cache stores per-(repo, type, number)
       // entries — emitting a path-wide invalidation here would require a new
       // event shape; instead, the drawer's existing thread-resolve UI updates
       // its local state immediately and the next reopen pays one fresh fetch.
-      return resolveReviewThread(repo.path, args.threadId, args.resolve, repoConnectionId(repo))
+      return resolveReviewThread(
+        repo.path,
+        args.threadId,
+        args.resolve,
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
+      )
     }
   )
 
@@ -525,6 +613,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       const ok = await setPRFileViewed({
         repoPath: repo.path,
         connectionId: repoConnectionId(repo),
+        localGitOptions: localGitOptionArgs(store, repo)[0],
         pullRequestId: args.pullRequestId.trim(),
         path: args.path,
         viewed: Boolean(args.viewed)
@@ -546,6 +635,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       args: {
         repoPath: string
         repoId?: string
+        sourceContext?: TaskSourceContext | null
         prNumber: number
         commentId: number
         body: string
@@ -582,7 +672,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.path,
         args.line,
         repoConnectionId(repo),
-        args.prRepo ?? null
+        args.prRepo ?? null,
+        ...localGitOptionArgs(store, repo)
       )
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -645,7 +736,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         line: args.line,
         startLine: args.startLine,
         body: args.body.trim(),
-        connectionId: repoConnectionId(repo)
+        connectionId: repoConnectionId(repo),
+        localGitOptions: localGitOptionArgs(store, repo)[0]
       })
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -669,7 +761,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.prNumber,
         args.title,
         repoConnectionId(repo),
-        args.prRepo ?? null
+        args.prRepo ?? null,
+        ...localGitOptionArgs(store, repo)
       )
       if (ok) {
         broadcastWorkItemMutated(
@@ -687,6 +780,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       event,
       args: {
         repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
         prNumber: number
         method?: 'merge' | 'squash' | 'rebase'
         prRepo?: GitHubOwnerRepo | null
@@ -698,7 +793,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.prNumber,
         args.method,
         repoConnectionId(repo),
-        args.prRepo ?? null
+        args.prRepo ?? null,
+        ...localGitOptionArgs(store, repo)
       )
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -716,8 +812,11 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       event,
       args: {
         repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
         prNumber: number
         enabled: boolean
+        method?: 'merge' | 'squash' | 'rebase'
         prRepo?: GitHubOwnerRepo | null
       }
     ) => {
@@ -726,8 +825,10 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.prNumber,
         args.enabled,
+        args.method,
         repoConnectionId(repo),
-        args.prRepo ?? null
+        args.prRepo ?? null,
+        ...localGitOptionArgs(store, repo)
       )
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -743,7 +844,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:updatePRState',
     async (
       event,
-      args: { repoPath: string; prNumber: number; updates: GitHubPullRequestStateUpdate }
+      args: RepoScopedArgs & { prNumber: number; updates: GitHubPullRequestStateUpdate }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       if (
@@ -757,7 +858,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.prNumber,
         args.updates,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -773,7 +875,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     'gh:rerunPRChecks',
     async (
       _event,
-      args: { repoPath: string; prNumber: number; headSha?: string; failedOnly?: boolean }
+      args: RepoScopedArgs & { prNumber: number; headSha?: string; failedOnly?: boolean }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       if (
@@ -787,20 +889,22 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         repo.path,
         args.prNumber,
         { headSha: args.headSha, failedOnly: args.failedOnly },
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
     }
   )
 
   ipcMain.handle(
     'gh:requestPRReviewers',
-    async (event, args: { repoPath: string; prNumber: number; reviewers: string[] }) => {
+    async (event, args: RepoScopedArgs & { prNumber: number; reviewers: string[] }) => {
       const repo = assertRegisteredRepo(args, store)
       const result = await requestPRReviewers(
         repo.path,
         args.prNumber,
         args.reviewers,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -814,13 +918,14 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:removePRReviewers',
-    async (event, args: { repoPath: string; prNumber: number; reviewers: string[] }) => {
+    async (event, args: RepoScopedArgs & { prNumber: number; reviewers: string[] }) => {
       const repo = assertRegisteredRepo(args, store)
       const result = await removePRReviewers(
         repo.path,
         args.prNumber,
         args.reviewers,
-        repoConnectionId(repo)
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
       )
       if (result.ok) {
         broadcastWorkItemMutated(
@@ -834,10 +939,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
 
   ipcMain.handle(
     'gh:updateIssue',
-    async (
-      event,
-      args: { repoPath: string; repoId?: string; number: number; updates: GitHubIssueUpdate }
-    ) => {
+    async (event, args: RepoScopedArgs & { number: number; updates: GitHubIssueUpdate }) => {
       const repo = assertRegisteredRepo(args, store)
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
         return { ok: false, error: 'Invalid issue number' }
@@ -845,7 +947,13 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       if (!args.updates || typeof args.updates !== 'object') {
         return { ok: false, error: 'Updates object is required' }
       }
-      const result = await updateIssue(repo.path, args.number, args.updates, repoConnectionId(repo))
+      const result = await updateIssue(
+        repo.path,
+        args.number,
+        args.updates,
+        repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
+      )
       if (result.ok) {
         broadcastWorkItemMutated(
           { repoPath: repo.path, repoId: repo.id, type: 'issue', number: args.number },
@@ -863,6 +971,7 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
       args: {
         repoPath: string
         repoId?: string
+        sourceContext?: TaskSourceContext | null
         number: number
         body: string
         type?: 'issue' | 'pr'
@@ -881,7 +990,8 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.number,
         args.body.trim(),
         repoConnectionId(repo),
-        args.prRepo ?? null
+        args.prRepo ?? null,
+        ...localGitOptionArgs(store, repo)
       )
       if (result.ok) {
         // Why: PR conversation comments hit `/issues/N/comments` too, but the
@@ -898,14 +1008,24 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
     }
   )
 
-  ipcMain.handle('gh:listLabels', (_event, args: { repoPath: string }) => {
+  ipcMain.handle('gh:listLabels', (_event, args: RepoScopedArgs) => {
     const repo = assertRegisteredRepo(args, store)
-    return listLabels(repo.path, repo.issueSourcePreference, repoConnectionId(repo))
+    return listLabels(
+      repo.path,
+      repo.issueSourcePreference,
+      repoConnectionId(repo),
+      ...localGitOptionArgs(store, repo)
+    )
   })
 
-  ipcMain.handle('gh:listAssignableUsers', (_event, args: { repoPath: string }) => {
+  ipcMain.handle('gh:listAssignableUsers', (_event, args: RepoScopedArgs) => {
     const repo = assertRegisteredRepo(args, store)
-    return listAssignableUsers(repo.path, repo.issueSourcePreference, repoConnectionId(repo))
+    return listAssignableUsers(
+      repo.path,
+      repo.issueSourcePreference,
+      repoConnectionId(repo),
+      ...localGitOptionArgs(store, repo)
+    )
   })
 
   // Star operations target the Orca repo itself — no repoPath validation needed

@@ -10,7 +10,7 @@
    close/reopen, merge, and a top-level comment composer. Files /
    inline review-comment positioning / approvals are deferred to v1.5
    since they mirror substantial GitHub-side surface area. */
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Check,
   CircleDot,
@@ -31,6 +31,7 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import type {
   GitLabAssignableUser,
   GitLabPipelineJob,
@@ -39,13 +40,22 @@ import type {
   GitLabWorkItemDetails,
   MRComment
 } from '../../../shared/types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
   item: GitLabWorkItem | null
   repoPath: string | null
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
   onClose: () => void
   onCreateWorkspace?: (item: GitLabWorkItem) => void
+}
+
+type GitLabDialogRepoSelector = {
+  repoPath: string
+  repoId?: string | null
+  sourceContext?: TaskSourceContext | null
 }
 
 type JobTraceState = {
@@ -310,6 +320,8 @@ function PipelineJobRow({
 export default function GitLabItemDialog({
   item,
   repoPath,
+  repoId,
+  sourceContext,
   onClose,
   onCreateWorkspace
 }: Props): React.JSX.Element {
@@ -350,6 +362,16 @@ export default function GitLabItemDialog({
   const [retryingJobId, setRetryingJobId] = useState<number | null>(null)
   const [actionInFlight, setActionInFlight] = useState<'close' | 'reopen' | 'merge' | null>(null)
   const mountedRef = useMountedRef()
+  const repoSelector = useMemo<GitLabDialogRepoSelector | null>(() => {
+    if (!repoPath) {
+      return null
+    }
+    return {
+      repoPath,
+      ...(repoId ? { repoId } : {}),
+      ...(sourceContext ? { sourceContext } : {})
+    }
+  }, [repoId, repoPath, sourceContext])
   const updateCommentDraft = useCallback(
     (value: string): void => {
       setCommentDraftState({ itemId, value })
@@ -358,7 +380,7 @@ export default function GitLabItemDialog({
   )
 
   useEffect(() => {
-    if (!item || !repoPath) {
+    if (!item || !repoSelector) {
       setDetails(null)
       setLoading(false)
       setError(null)
@@ -369,7 +391,7 @@ export default function GitLabItemDialog({
     setLoading(true)
     setError(null)
     void window.api.gl
-      .workItemDetails({ repoPath, iid: item.number, type: item.type })
+      .workItemDetails({ ...repoSelector, iid: item.number, type: item.type })
       .then((data) => {
         if (stale) {
           return
@@ -393,7 +415,7 @@ export default function GitLabItemDialog({
     return () => {
       stale = true
     }
-  }, [item, repoPath, refreshNonce])
+  }, [item, repoSelector, refreshNonce])
 
   // Why: clear item-scoped dialog state when the sheet target changes. The
   // top-level comment draft is reconciled during render so it cannot flash stale.
@@ -422,12 +444,12 @@ export default function GitLabItemDialog({
   }, [])
 
   const loadGitLabLabelOptions = useCallback(async (): Promise<void> => {
-    if (!repoPath || labelOptions !== null || labelOptionsLoading) {
+    if (!repoSelector || labelOptions !== null || labelOptionsLoading) {
       return
     }
     setLabelOptionsLoading(true)
     try {
-      const labels = await window.api.gl.listLabels({ repoPath })
+      const labels = await window.api.gl.listLabels(repoSelector)
       if (mountedRef.current) {
         setLabelOptions(normalizeGitLabLabels(labels))
       }
@@ -440,15 +462,15 @@ export default function GitLabItemDialog({
         setLabelOptionsLoading(false)
       }
     }
-  }, [labelOptions, labelOptionsLoading, mountedRef, repoPath])
+  }, [labelOptions, labelOptionsLoading, mountedRef, repoSelector])
 
   const loadGitLabReviewerOptions = useCallback(async (): Promise<void> => {
-    if (!repoPath || reviewerOptions !== null || reviewerOptionsLoading) {
+    if (!repoSelector || reviewerOptions !== null || reviewerOptionsLoading) {
       return
     }
     setReviewerOptionsLoading(true)
     try {
-      const users = await window.api.gl.listAssignableUsers({ repoPath })
+      const users = await window.api.gl.listAssignableUsers(repoSelector)
       if (mountedRef.current) {
         setReviewerOptions(dedupeGitLabUsers(users))
       }
@@ -461,7 +483,7 @@ export default function GitLabItemDialog({
         setReviewerOptionsLoading(false)
       }
     }
-  }, [mountedRef, repoPath, reviewerOptions, reviewerOptionsLoading])
+  }, [mountedRef, repoSelector, reviewerOptions, reviewerOptionsLoading])
 
   const handleStartDetailsEdit = useCallback((): void => {
     if (!item || !details || item.type !== 'mr') {
@@ -482,7 +504,7 @@ export default function GitLabItemDialog({
   }, [])
 
   const handleSaveDetails = useCallback(async (): Promise<void> => {
-    if (!item || !details || !repoPath || item.type !== 'mr') {
+    if (!item || !details || !repoSelector || item.type !== 'mr') {
       return
     }
     const currentTitle = details.item.title || item.title
@@ -520,7 +542,7 @@ export default function GitLabItemDialog({
 
     setDetailsSaving(true)
     try {
-      const res = await window.api.gl.updateMR({ repoPath, iid: item.number, updates })
+      const res = await window.api.gl.updateMR({ ...repoSelector, iid: item.number, updates })
       if (res.ok) {
         if (mountedRef.current) {
           setDetails((current) =>
@@ -539,6 +561,7 @@ export default function GitLabItemDialog({
           setTitleDraft('')
           setBodyDraft('')
           setLabelDraft('')
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         }
       } else if (mountedRef.current) {
         toast.error(res.error)
@@ -555,7 +578,7 @@ export default function GitLabItemDialog({
     item,
     labelDraft,
     mountedRef,
-    repoPath,
+    repoSelector,
     titleDraft
   ])
 
@@ -566,7 +589,7 @@ export default function GitLabItemDialog({
         return
       }
       setExpandedJobId(job.id)
-      if (!repoPath || !item || jobTraceById[job.id]?.trace || jobTraceById[job.id]?.error) {
+      if (!repoSelector || !item || jobTraceById[job.id]?.trace || jobTraceById[job.id]?.error) {
         return
       }
       setJobTraceById((current) => ({
@@ -575,7 +598,7 @@ export default function GitLabItemDialog({
       }))
       try {
         const result = await window.api.gl.jobTrace({
-          repoPath,
+          ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
         })
@@ -600,18 +623,18 @@ export default function GitLabItemDialog({
         }
       }
     },
-    [details?.item.projectRef, expandedJobId, item, jobTraceById, mountedRef, repoPath]
+    [details?.item.projectRef, expandedJobId, item, jobTraceById, mountedRef, repoSelector]
   )
 
   const handleRetryJob = useCallback(
     async (job: GitLabPipelineJob): Promise<void> => {
-      if (!repoPath || !item) {
+      if (!repoSelector || !item) {
         return
       }
       setRetryingJobId(job.id)
       try {
         const result = await window.api.gl.retryJob({
-          repoPath,
+          ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
         })
@@ -646,12 +669,12 @@ export default function GitLabItemDialog({
         }
       }
     },
-    [details?.item.projectRef, handleRefresh, item, mountedRef, repoPath]
+    [details?.item.projectRef, handleRefresh, item, mountedRef, repoSelector]
   )
 
   const handleSetReviewers = useCallback(
     async (nextReviewers: GitLabAssignableUser[]): Promise<void> => {
-      if (!repoPath || !item || !details || item.type !== 'mr') {
+      if (!repoSelector || !item || !details || item.type !== 'mr') {
         return
       }
       const reviewerIds = nextReviewers
@@ -669,7 +692,7 @@ export default function GitLabItemDialog({
       setReviewerUpdating(true)
       try {
         const result = await window.api.gl.updateMRReviewers({
-          repoPath,
+          ...repoSelector,
           iid: item.number,
           reviewerIds,
           projectRef: details.item.projectRef ?? item.projectRef ?? null
@@ -685,6 +708,7 @@ export default function GitLabItemDialog({
           setReviewerOptions((current) =>
             current ? dedupeGitLabUsers([...current, ...result.reviewers]) : current
           )
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         } else {
           toast.error(result.error)
         }
@@ -694,11 +718,11 @@ export default function GitLabItemDialog({
         }
       }
     },
-    [details, item, mountedRef, repoPath]
+    [details, item, mountedRef, repoSelector]
   )
 
   const handleSubmitInlineComment = useCallback(async (): Promise<void> => {
-    if (!repoPath || !item || !details || item.type !== 'mr') {
+    if (!repoSelector || !item || !details || item.type !== 'mr') {
       return
     }
     const file = (details.files ?? []).find((row) => row.path === inlineCommentFilePath)
@@ -725,7 +749,7 @@ export default function GitLabItemDialog({
     setInlineCommentSubmitting(true)
     try {
       const result = await window.api.gl.addMRInlineComment({
-        repoPath,
+        ...repoSelector,
         iid: item.number,
         projectRef: details.item.projectRef ?? item.projectRef ?? null,
         input: {
@@ -746,6 +770,7 @@ export default function GitLabItemDialog({
           current ? { ...current, comments: [...current.comments, result.comment] } : current
         )
         setInlineCommentBody('')
+        useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         toast.success(
           translate('auto.components.GitLabItemDialog.60c13320c4', 'Inline comment added')
         )
@@ -764,18 +789,19 @@ export default function GitLabItemDialog({
     inlineCommentLine,
     item,
     mountedRef,
-    repoPath
+    repoSelector
   ])
 
   const handleClose = useCallback(async (): Promise<void> => {
-    if (!item || !repoPath || item.type !== 'mr') {
+    if (!item || !repoSelector || item.type !== 'mr') {
       return
     }
     setActionInFlight('close')
     try {
-      const res = await window.api.gl.closeMR({ repoPath, iid: item.number })
+      const res = await window.api.gl.closeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           toast.success(
             translate('auto.components.GitLabItemDialog.9b11cd233f', 'Closed MR !{{value0}}', {
               value0: item.number
@@ -793,17 +819,18 @@ export default function GitLabItemDialog({
         setActionInFlight(null)
       }
     }
-  }, [item, repoPath, mountedRef, handleRefresh])
+  }, [item, repoSelector, mountedRef, handleRefresh])
 
   const handleReopen = useCallback(async (): Promise<void> => {
-    if (!item || !repoPath || item.type !== 'mr') {
+    if (!item || !repoSelector || item.type !== 'mr') {
       return
     }
     setActionInFlight('reopen')
     try {
-      const res = await window.api.gl.reopenMR({ repoPath, iid: item.number })
+      const res = await window.api.gl.reopenMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           toast.success(
             translate('auto.components.GitLabItemDialog.865ea2703e', 'Reopened MR !{{value0}}', {
               value0: item.number
@@ -821,17 +848,18 @@ export default function GitLabItemDialog({
         setActionInFlight(null)
       }
     }
-  }, [item, repoPath, mountedRef, handleRefresh])
+  }, [item, repoSelector, mountedRef, handleRefresh])
 
   const handleMerge = useCallback(async (): Promise<void> => {
-    if (!item || !repoPath || item.type !== 'mr') {
+    if (!item || !repoSelector || item.type !== 'mr') {
       return
     }
     setActionInFlight('merge')
     try {
-      const res = await window.api.gl.mergeMR({ repoPath, iid: item.number })
+      const res = await window.api.gl.mergeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           toast.success(
             translate('auto.components.GitLabItemDialog.e089f62594', 'Merged MR !{{value0}}', {
               value0: item.number
@@ -849,11 +877,11 @@ export default function GitLabItemDialog({
         setActionInFlight(null)
       }
     }
-  }, [item, repoPath, mountedRef, handleRefresh])
+  }, [item, repoSelector, mountedRef, handleRefresh])
 
   const handleSubmitComment = useCallback(async (): Promise<void> => {
     const body = commentDraft.trim()
-    if (!body || !item || !repoPath) {
+    if (!body || !item || !repoSelector) {
       return
     }
     setCommentSubmitting(true)
@@ -862,13 +890,14 @@ export default function GitLabItemDialog({
       // Branch on the item type to hit the right channel.
       const res =
         item.type === 'mr'
-          ? await window.api.gl.addMRComment({ repoPath, iid: item.number, body })
-          : await window.api.gl.addIssueComment({ repoPath, number: item.number, body })
+          ? await window.api.gl.addMRComment({ ...repoSelector, iid: item.number, body })
+          : await window.api.gl.addIssueComment({ ...repoSelector, number: item.number, body })
       if (res.ok) {
         if (mountedRef.current) {
           setCommentDraftState((current) =>
             current.itemId === itemId ? { itemId, value: '' } : current
           )
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           handleRefresh()
         }
       } else {
@@ -881,17 +910,17 @@ export default function GitLabItemDialog({
         setCommentSubmitting(false)
       }
     }
-  }, [commentDraft, item, itemId, repoPath, mountedRef, handleRefresh])
+  }, [commentDraft, item, itemId, repoSelector, mountedRef, handleRefresh])
 
   const handleResolveDiscussion = useCallback(
     async (threadId: string, resolved: boolean): Promise<void> => {
-      if (!item || !repoPath || item.type !== 'mr') {
+      if (!item || !repoSelector || item.type !== 'mr') {
         return
       }
       setResolvingThreadId(threadId)
       try {
         const res = await window.api.gl.resolveMRDiscussion({
-          repoPath,
+          ...repoSelector,
           iid: item.number,
           discussionId: threadId,
           resolved
@@ -908,6 +937,7 @@ export default function GitLabItemDialog({
                   }
                 : current
             )
+            useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           }
         } else if (mountedRef.current) {
           toast.error(res.error)
@@ -918,7 +948,7 @@ export default function GitLabItemDialog({
         }
       }
     },
-    [item, repoPath, mountedRef]
+    [item, repoSelector, mountedRef]
   )
 
   // Why: GitMerge for MRs visually disambiguates from GitBranch (and

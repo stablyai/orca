@@ -80,6 +80,10 @@ export function isPermissionError(error: unknown): boolean {
 // and always available on Windows. Cached because it never changes in-process.
 let cachedIdentity: string | null | undefined
 
+export function resolveCurrentWindowsIdentity(): string | null {
+  return resolveCurrentIdentity()
+}
+
 function resolveCurrentIdentity(): string | null {
   if (cachedIdentity !== undefined) {
     return cachedIdentity

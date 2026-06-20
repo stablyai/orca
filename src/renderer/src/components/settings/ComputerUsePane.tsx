@@ -1,61 +1,42 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import {
-  Accessibility,
-  Camera,
-  ExternalLink,
-  MonitorCog,
-  RefreshCw,
-  ShieldCheck
-} from 'lucide-react'
+import { Accessibility, Camera, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import type {
   ComputerUsePermissionId,
   ComputerUsePermissionState,
   ComputerUsePermissionStatus
 } from '../../../../shared/computer-use-permissions-types'
-import {
-  COMPUTER_USE_SKILL_INSTALL_COMMAND,
-  COMPUTER_USE_SKILL_NAME
-} from '@/lib/agent-feature-install-commands'
-import {
-  AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
-} from '@/lib/agent-skill-cli-prerequisite'
-import {
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
 import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
-import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import { ComputerUseSkillSetupPanel } from './ComputerUseSkillSetupPanel'
 import { translate } from '@/i18n/i18n'
 export { getComputerUsePaneSearchEntries } from './computer-use-search'
 
 type PermissionDefinition = {
   id: ComputerUsePermissionId
-  label: string
-  description: string
+  labelKey: string
+  labelDefault: string
+  descriptionKey: string
+  descriptionDefault: string
   icon: ReactNode
 }
 
 const PERMISSIONS: PermissionDefinition[] = [
   {
     id: 'accessibility',
-    label: translate('auto.components.settings.ComputerUsePane.6b5a2cd3a5', 'Accessibility'),
-    description: translate(
-      'auto.components.settings.ComputerUsePane.4d03dec2d0',
-      'Read app interface trees and perform requested actions.'
-    ),
+    labelKey: 'auto.components.settings.ComputerUsePane.6b5a2cd3a5',
+    labelDefault: 'Accessibility',
+    descriptionKey: 'auto.components.settings.ComputerUsePane.4d03dec2d0',
+    descriptionDefault: 'Read app interface trees and perform requested actions.',
     icon: <Accessibility className="size-4" />
   },
   {
     id: 'screenshots',
-    label: translate('auto.components.settings.ComputerUsePane.07bbe4c4cb', 'Screenshots'),
-    description: translate(
-      'auto.components.settings.ComputerUsePane.0c9a33f468',
-      'Capture app windows so agents can inspect visual state.'
-    ),
+    labelKey: 'auto.components.settings.ComputerUsePane.07bbe4c4cb',
+    labelDefault: 'Screenshots',
+    descriptionKey: 'auto.components.settings.ComputerUsePane.0c9a33f468',
+    descriptionDefault: 'Capture app windows so agents can inspect visual state.',
     icon: <Camera className="size-4" />
   }
 ]
@@ -90,14 +71,6 @@ export function ComputerUsePane(): React.JSX.Element {
   const permissionOperationSequence = useRef(0)
   const mountedRef = useRef(true)
   const [helperUnavailableReason, setHelperUnavailableReason] = useState<string | null>(null)
-  const {
-    installed: computerUseSkillDetected,
-    loading: computerUseSkillLoading,
-    error: computerUseSkillError,
-    refresh: refreshComputerUseSkill
-  } = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
 
   const stateById = useMemo(
     () => new Map(states.map((state) => [state.id, state.status] as const)),
@@ -328,7 +301,9 @@ export function ComputerUsePane(): React.JSX.Element {
                       <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>
                       <div className="min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium">{permission.label}</span>
+                          <span className="text-sm font-medium">
+                            {translate(permission.labelKey, permission.labelDefault)}
+                          </span>
                           <span
                             className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusClass(
                               status
@@ -337,7 +312,9 @@ export function ComputerUsePane(): React.JSX.Element {
                             {statusLabel(status)}
                           </span>
                         </div>
-                        <p className="text-xs text-muted-foreground">{permission.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {translate(permission.descriptionKey, permission.descriptionDefault)}
+                        </p>
                       </div>
                     </div>
                     <div className="flex w-28 shrink-0 justify-end">
@@ -378,30 +355,7 @@ export function ComputerUsePane(): React.JSX.Element {
         </>
       ) : null}
 
-      <AgentSkillSetupPanel
-        title={translate(
-          'auto.components.settings.ComputerUsePane.93255aaf18',
-          'Computer Use skill'
-        )}
-        description={translate(
-          'auto.components.settings.ComputerUsePane.1735461723',
-          'Enables agents to inspect and operate local desktop apps.'
-        )}
-        command={COMPUTER_USE_SKILL_INSTALL_COMMAND}
-        terminalTitle="Computer Use setup"
-        terminalAriaLabel="Computer Use skill install terminal"
-        terminalWorktreeId="settings-computer-use-skill-terminal"
-        installed={computerUseSkillDetected}
-        loading={computerUseSkillLoading}
-        error={computerUseSkillError}
-        icon={<MonitorCog className="size-5" />}
-        preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-        onBeforeOpenTerminal={async () => {
-          useAppStore.getState().recordFeatureInteraction('computer-use-setup')
-          await ensureOrcaCliAvailableForAgentSkillTerminal()
-        }}
-        onRecheck={refreshComputerUseSkill}
-      />
+      <ComputerUseSkillSetupPanel />
     </div>
   )
 }

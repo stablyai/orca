@@ -2,6 +2,7 @@ import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
+import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   AgentLetterIcon,
   AiderIcon,
@@ -26,6 +27,20 @@ export type AgentCatalogEntry = {
   homepageUrl: string
 }
 
+function getCatalogPlatform(): NodeJS.Platform {
+  const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  if (userAgent.includes('Windows')) {
+    return 'win32'
+  }
+  if (userAgent.includes('Mac')) {
+    return 'darwin'
+  }
+  if (userAgent) {
+    return 'linux'
+  }
+  return typeof process === 'undefined' ? 'linux' : process.platform
+}
+
 export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] => [
   {
     id: 'claude',
@@ -36,7 +51,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'claude-agent-teams',
     label: translate('auto.lib.agent.catalog.bf53f09bf8', 'Claude Agent Teams'),
-    cmd: 'orca claude-teams',
+    cmd: getTuiAgentLaunchCommand(TUI_AGENT_CONFIG['claude-agent-teams'], getCatalogPlatform()),
     homepageUrl: 'https://code.claude.com/docs/agent-teams'
   },
   {
@@ -73,6 +88,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'opencode',
     faviconDomain: 'opencode.ai',
     homepageUrl: 'https://opencode.ai/docs/cli/'
+  },
+  {
+    id: 'ante',
+    label: translate('auto.lib.agent.catalog.da41abbdd4', 'Ante'),
+    cmd: 'ante',
+    faviconDomain: 'antigma.ai',
+    homepageUrl: 'https://github.com/AntigmaLabs/ante-preview'
   },
   {
     id: 'pi',
@@ -187,7 +209,9 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   {
     id: 'continue',
     label: translate('auto.lib.agent.catalog.9e2a9bb87b', 'Continue'),
-    cmd: 'continue',
+    // Why: Continue's terminal agent installs as `cn`; `continue` resolves to
+    // a shell builtin in common shells and is not a reliable executable hint.
+    cmd: 'cn',
     faviconDomain: 'continue.dev',
     homepageUrl: 'https://docs.continue.dev/guides/cli'
   },
@@ -241,6 +265,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'hermes',
     faviconDomain: 'nousresearch.com',
     homepageUrl: 'https://hermes-agent.nousresearch.com/docs/'
+  },
+  {
+    id: 'devin',
+    label: translate('auto.lib.agent.catalog.fc80296033', 'Devin'),
+    cmd: 'devin',
+    faviconDomain: 'devin.ai',
+    homepageUrl: 'https://devin.ai/cli'
   },
   {
     id: 'openclaw',

@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from 'react'
+import { useState, type ComponentType, type ReactNode } from 'react'
 import { FolderOpen, Globe, Lightbulb, Loader2, Server } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,8 @@ type AddRepoServerPathStartStepProps = {
   runtimeEnvironmentId: string | null | undefined
   isAddingServerPath: boolean
   addProjectBusyLabel: string | null
+  hostSelector?: ReactNode
+  initialBrowsing?: boolean
   onServerPathChange: (path: string) => void
   onAddServerPath: (kind: 'git' | 'folder') => void
   onOpenCloneStep: () => void
@@ -23,13 +25,15 @@ export function AddRepoServerPathStartStep({
   runtimeEnvironmentId,
   isAddingServerPath,
   addProjectBusyLabel,
+  hostSelector,
+  initialBrowsing = false,
   onServerPathChange,
   onAddServerPath,
   onOpenCloneStep,
   onOpenCreateStep
 }: AddRepoServerPathStartStepProps): React.JSX.Element {
-  const [browsing, setBrowsing] = useState(false)
-  const [pathEntryOpen, setPathEntryOpen] = useState(false)
+  const [browsing, setBrowsing] = useState(initialBrowsing)
+  const [pathEntryOpen, setPathEntryOpen] = useState(initialBrowsing)
 
   if (browsing && runtimeEnvironmentId) {
     return (
@@ -38,7 +42,7 @@ export function AddRepoServerPathStartStep({
           <DialogTitle>
             {translate(
               'auto.components.sidebar.AddRepoServerStartStep.ac66a3ed2d',
-              'Browse server filesystem'
+              'Browse host filesystem'
             )}
           </DialogTitle>
           <DialogDescription>
@@ -77,18 +81,19 @@ export function AddRepoServerPathStartStep({
           <DialogDescription>
             {translate(
               'auto.components.sidebar.AddRepoServerStartStep.8efa930eb5',
-              'Add another project from the selected runtime server.'
+              'Add another project from the selected host.'
             )}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 pt-2">
+          {hostSelector}
           <div className="grid grid-cols-3 gap-2">
             <AddRepoServerStartAction
               icon={FolderOpen}
               title={translate(
                 'auto.components.sidebar.AddRepoServerStartStep.0adf083af7',
-                'Browse server'
+                'Browse host'
               )}
               description={translate(
                 'auto.components.sidebar.AddRepoServerStartStep.516187414c',
@@ -114,7 +119,7 @@ export function AddRepoServerPathStartStep({
               icon={Server}
               title={translate(
                 'auto.components.sidebar.AddRepoServerStartStep.a81ffa0a99',
-                'Create on server'
+                'Create on host'
               )}
               description={translate(
                 'auto.components.sidebar.AddRepoServerStartStep.d40d751517',
@@ -145,7 +150,7 @@ export function AddRepoServerPathStartStep({
           >
             {translate(
               'auto.components.sidebar.AddRepoServerStartStep.438493f214',
-              'Or enter a server path manually'
+              'Or enter a host path manually'
             )}
           </button>
         </div>
@@ -159,24 +164,25 @@ export function AddRepoServerPathStartStep({
         <DialogTitle>
           {translate(
             'auto.components.sidebar.AddRepoServerStartStep.3d0c035483',
-            'Open server project'
+            'Open host project'
           )}
         </DialogTitle>
         <DialogDescription>
           {translate(
             'auto.components.sidebar.AddRepoServerStartStep.423b5d3d31',
-            'Add a Git repository or folder that already exists on the selected runtime server.'
+            'Add a Git repository or folder that already exists on the selected host.'
           )}
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-3 pt-2">
+        {hostSelector}
         <div className="space-y-1">
           <label
             htmlFor="server-project-path"
             className="block text-[11px] font-medium text-muted-foreground"
           >
-            {translate('auto.components.sidebar.AddRepoServerStartStep.867692f505', 'Server path')}
+            {translate('auto.components.sidebar.AddRepoServerStartStep.867692f505', 'Host path')}
           </label>
           <div className="flex gap-2">
             <Input
@@ -203,7 +209,7 @@ export function AddRepoServerPathStartStep({
                   disabled={isAddingServerPath || !runtimeEnvironmentId}
                   aria-label={translate(
                     'auto.components.sidebar.AddRepoServerStartStep.ac66a3ed2d',
-                    'Browse server filesystem'
+                    'Browse host filesystem'
                   )}
                 >
                   <FolderOpen className="size-4" />
@@ -212,7 +218,7 @@ export function AddRepoServerPathStartStep({
               <TooltipContent side="top" sideOffset={4}>
                 {translate(
                   'auto.components.sidebar.AddRepoServerStartStep.ac66a3ed2d',
-                  'Browse server filesystem'
+                  'Browse host filesystem'
                 )}
               </TooltipContent>
             </Tooltip>

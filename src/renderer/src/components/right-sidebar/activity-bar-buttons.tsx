@@ -1,6 +1,6 @@
 import React from 'react'
 import { MoreHorizontal } from 'lucide-react'
-import type { RightSidebarTab } from '@/store/slices/editor'
+import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import type { CheckStatus } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -15,12 +15,14 @@ import {
 import { translate } from '@/i18n/i18n'
 
 export type ActivityBarItem = {
-  id: RightSidebarTab
+  id: ActiveRightSidebarTab
   icon: React.ComponentType<{ size?: number; className?: string }>
   title: string
   shortcut: string
   /** When true, hidden for non-git (folder-mode) repos. */
   gitOnly?: boolean
+  /** When true, shown only for folder workspaces. */
+  folderOnly?: boolean
   /** When true, shown only for worktrees that belong to an SSH repo. */
   sshOnly?: boolean
 }
@@ -39,8 +41,8 @@ export function TopActivityOverflowMenu({
   checksStatus
 }: {
   items: ActivityBarItem[]
-  activeTab: RightSidebarTab
-  onSelect: (tab: RightSidebarTab) => void
+  activeTab: ActiveRightSidebarTab
+  onSelect: (tab: ActiveRightSidebarTab) => void
   checksStatus?: CheckStatus | null
 }): React.JSX.Element {
   const hiddenChecksStatus =

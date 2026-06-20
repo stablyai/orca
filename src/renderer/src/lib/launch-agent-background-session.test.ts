@@ -32,11 +32,34 @@ function expectStablePaneSpawn(): string {
 }
 
 const state = {
+  activeRepoId: 'repo-1',
+  activeWorktreeId: 'wt-1',
   settings: { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null as string | null },
-  repos: [{ id: 'repo-1', connectionId: null as string | null }],
-  allWorktrees: vi.fn(() => [
-    { id: 'wt-1', repoId: 'repo-1', path: '/repo/worktree', displayName: 'main' }
-  ]),
+  projects: [
+    {
+      id: 'repo-1',
+      localWindowsRuntimePreference: { kind: 'inherit-global' as const }
+    }
+  ] as {
+    id: string
+    localWindowsRuntimePreference:
+      | { kind: 'inherit-global' }
+      | { kind: 'windows-host' }
+      | { kind: 'wsl'; distro: string | null }
+  }[],
+  repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
+  worktreesByRepo: {
+    'repo-1': [
+      {
+        id: 'wt-1',
+        repoId: 'repo-1',
+        projectId: 'repo-1',
+        path: '/repo/worktree',
+        displayName: 'main'
+      }
+    ]
+  },
+  allWorktrees: vi.fn(() => state.worktreesByRepo['repo-1']),
   createTab: mockCreateTab,
   setTabCustomTitle: mockSetTabCustomTitle,
   updateTabPtyId: mockUpdateTabPtyId,
@@ -75,8 +98,27 @@ describe('launchAgentBackgroundSession', () => {
       (args) =>
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
     )
+    state.activeRepoId = 'repo-1'
+    state.activeWorktreeId = 'wt-1'
     state.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
-    state.repos = [{ id: 'repo-1', connectionId: null }]
+    state.projects = [
+      {
+        id: 'repo-1',
+        localWindowsRuntimePreference: { kind: 'inherit-global' }
+      }
+    ]
+    state.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
+    state.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'wt-1',
+          repoId: 'repo-1',
+          projectId: 'repo-1',
+          path: '/repo/worktree',
+          displayName: 'main'
+        }
+      ]
+    }
     mockCreateTab.mockReturnValue({ id: 'tab-1', title: 'Terminal 1' })
     mockSpawn.mockResolvedValue({ id: 'pty-1' })
     mockRuntimeEnvironmentCall.mockResolvedValue({
@@ -126,7 +168,7 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/repo/worktree',
-        command: "claude 'run the automation'",
+        command: "claude '--dangerously-skip-permissions' 'run the automation'",
         env: expect.objectContaining({
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1'
@@ -155,6 +197,45 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(result).toMatchObject({ tabId: 'tab-1', ptyId: 'pty-1' })
+  })
+
+  it('uses WSL launch quoting for Windows-path projects forced to WSL', async () => {
+    state.projects = [
+      {
+        id: 'repo-1',
+        localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    ]
+    state.repos = [{ id: 'repo-1', connectionId: null, path: 'C:\\Users\\jinwo\\repo' }]
+    state.worktreesByRepo = {
+      'repo-1': [
+        {
+          id: 'wt-1',
+          repoId: 'repo-1',
+          projectId: 'repo-1',
+          path: 'C:\\Users\\jinwo\\repo\\feature',
+          displayName: 'feature'
+        }
+      ]
+    }
+
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: "don't use powershell quoting"
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: 'C:\\Users\\jinwo\\repo\\feature',
+        command: "claude '--dangerously-skip-permissions' 'don'\\''t use powershell quoting'",
+        connectionId: null,
+        worktreeId: 'wt-1',
+        tabId: 'tab-1'
+      })
+    )
   })
 
   it('pre-marks trust for agents with first-launch trust prompts', async () => {
@@ -261,7 +342,9 @@ describe('launchAgentBackgroundSession', () => {
       prompt: 'run the automation'
     })
 
-    expect(mockSpawn).toHaveBeenCalledWith(expect.objectContaining({ command: 'aider' }))
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({ command: "aider '--yes-always'" })
+    )
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
       expect.objectContaining({
         tabId: 'tab-1',
@@ -272,10 +355,10 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
-  it('injects startup commands into SSH background sessions after shell output arrives', async () => {
+  it('injects fast startup commands into SSH background sessions after shell output arrives', async () => {
     vi.useFakeTimers()
     try {
-      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
       const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
       await launchAgentBackgroundSession({
@@ -285,12 +368,120 @@ describe('launchAgentBackgroundSession', () => {
         title: 'Nightly audit'
       })
 
-      expect(mockSpawn.mock.calls[0]?.[0]?.command).toBeUndefined()
+      expect(mockSpawn.mock.calls[0]?.[0]?.command).toBe(
+        "claude '--dangerously-skip-permissions' 'run the automation'"
+      )
+      expect(mockSpawn.mock.calls[0]?.[0]?.startupCommandDelivery).toBeUndefined()
       const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
       dataSidecar('user@remote repo % ')
       vi.advanceTimersByTime(50)
 
-      expect(mockWrite).toHaveBeenCalledWith('pty-1', "claude 'run the automation'\r")
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "claude '--dangerously-skip-permissions' 'run the automation'\r"
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for shell-ready before injecting payload-bearing SSH background commands', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation',
+        title: 'Nightly audit'
+      })
+
+      expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'",
+          startupCommandDelivery: 'shell-ready'
+        })
+      )
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      dataSidecar('user@remote repo % ')
+      vi.advanceTimersByTime(50)
+      expect(mockWrite).not.toHaveBeenCalled()
+
+      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for shell-ready for SSH background Codex native prefill commands without a hint', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      state.settings = {
+        agentCmdOverrides: { codex: "codex --prefill 'draft from override'" },
+        activeRuntimeEnvironmentId: null
+      }
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        title: 'Nightly audit'
+      })
+
+      expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({
+          command:
+            "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'"
+        })
+      )
+      expect(mockSpawn.mock.calls[0]?.[0]).not.toHaveProperty('startupCommandDelivery')
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      dataSidecar('user@remote repo % ')
+      vi.advanceTimersByTime(50)
+      expect(mockWrite).not.toHaveBeenCalled()
+
+      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).toHaveBeenCalledWith(
+        'pty-1',
+        "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'\r"
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not rearm SSH background startup delivery after exit cleanup', async () => {
+    vi.useFakeTimers()
+    try {
+      state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: 'codex',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation',
+        title: 'Nightly audit'
+      })
+
+      const dataSidecar = mockSubscribeToPtyData.mock.calls[0]?.[1] as (data: string) => void
+      const exitSidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1] as (code: number) => void
+      exitSidecar(0)
+
+      dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
+      vi.advanceTimersByTime(50)
+
+      expect(mockWrite).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
@@ -324,7 +515,7 @@ describe('launchAgentBackgroundSession', () => {
       method: 'terminal.create',
       params: expect.objectContaining({
         worktree: 'id:wt-1',
-        command: "claude 'run the automation'",
+        command: "claude '--dangerously-skip-permissions' 'run the automation'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: `tab-1:${leafId}`,
           ORCA_TAB_ID: 'tab-1',

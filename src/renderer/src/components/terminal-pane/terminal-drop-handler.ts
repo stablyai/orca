@@ -2,17 +2,23 @@ import { toast } from 'sonner'
 import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { isWindowsUserAgent, shellEscapePath } from './pane-helpers'
 import type { PtyTransport } from './pty-transport'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { translate } from '@/i18n/i18n'
+import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 
 type Args = {
   manager: PaneManager
   paneTransports: Map<number, PtyTransport>
   worktreeId: string
+  tabId: string
   cwd: string | undefined
   data: { paths: string[]; target: string; tabId?: string }
 }
@@ -52,7 +58,7 @@ export function resolveTerminalDropTargetShell({
  * docs/terminal-drop-ssh.md.
  */
 export async function handleTerminalFileDrop(args: Args): Promise<void> {
-  const { manager, paneTransports, worktreeId, cwd, data } = args
+  const { manager, paneTransports, worktreeId, tabId, cwd, data } = args
   if (data.paths.length === 0) {
     return
   }
@@ -65,8 +71,9 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
   if (!transport) {
     return
   }
-  const settings = useAppStore.getState().settings
-  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim()
+  const state = useAppStore.getState()
+  const settings = state.settings
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   const worktreePath = resolveWorktreePath(worktreeId, cwd)
   if (!worktreePath) {
     toast.error(
@@ -78,7 +85,7 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
     return
   }
 
-  if (activeRuntimeEnvironmentId) {
+  if (runtimeEnvironmentId) {
     const targetShell = getTerminalTargetShellForWorktreePath(worktreePath)
     const destinationDir = joinRuntimeDropDir(worktreePath)
     const pending = toast.loading(
@@ -91,7 +98,9 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
     try {
       const { results } = await importExternalPathsToRuntime(
         {
-          settings,
+          // Why: drops into existing worktrees must follow the worktree owner,
+          // not the currently focused host in the sidebar.
+          settings: { ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId },
           worktreeId,
           worktreePath
         },
@@ -103,11 +112,16 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
       const failed = results.filter((result) => result.status === 'failed')
       const liveTransport = paneTransports.get(paneId)
       if (liveTransport) {
+        let sentAnyPath = false
         for (const result of imported) {
           const shellPath = isWindowsPathLike(worktreePath)
             ? result.destPath.replace(/\//g, '\\')
             : result.destPath
-          liveTransport.sendInput(`${shellEscapePath(shellPath, targetShell)} `)
+          sentAnyPath =
+            liveTransport.sendInput(`${shellEscapePath(shellPath, targetShell)} `) || sentAnyPath
+        }
+        if (sentAnyPath) {
+          recordTerminalUserInputForLeaf(tabId, pane.leafId)
         }
         pane.terminal.focus()
       }
@@ -140,13 +154,21 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
     worktreePath,
     connectionId
   })
+  const localWslDrop = !isRemote && isWorktreeUsingLocalWslRuntime(state, worktreeId)
+  const localTargetShell = localWslDrop ? 'posix' : targetShell
 
   // Why: local fast path — no IPC round-trip, no toast — preserves today's
   // zero-latency drop behavior. Trailing space separates multiple paths in
   // the terminal input, matching standard drag-and-drop UX conventions.
   if (!isRemote) {
+    let sentAnyPath = false
     for (const p of data.paths) {
-      transport.sendInput(`${shellEscapePath(p, targetShell)} `)
+      const terminalPath = localWslDrop ? toLocalWslDropPath(p) : p
+      sentAnyPath =
+        transport.sendInput(`${shellEscapePath(terminalPath, localTargetShell)} `) || sentAnyPath
+    }
+    if (sentAnyPath) {
+      recordTerminalUserInputForLeaf(tabId, pane.leafId)
     }
     pane.terminal.focus()
     return
@@ -171,8 +193,12 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
     // acknowledged limitation — see docs/terminal-drop-ssh.md.
     const liveTransport = paneTransports.get(paneId)
     if (liveTransport) {
+      let sentAnyPath = false
       for (const p of resolvedPaths) {
-        liveTransport.sendInput(`${shellEscapePath(p, targetShell)} `)
+        sentAnyPath = liveTransport.sendInput(`${shellEscapePath(p, targetShell)} `) || sentAnyPath
+      }
+      if (sentAnyPath) {
+        recordTerminalUserInputForLeaf(tabId, pane.leafId)
       }
       pane.terminal.focus()
     }
@@ -236,4 +262,27 @@ function joinRuntimeDropDir(worktreePath: string): string {
 
 function isWindowsPathLike(path: string): boolean {
   return isWindowsAbsolutePathLike(path) || path.includes('\\')
+}
+
+function isWorktreeUsingLocalWslRuntime(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string
+): boolean {
+  const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, CLIENT_PLATFORM)
+  if (projectRuntime?.status === 'repair-required') {
+    return projectRuntime.repair.preferredRuntime.kind === 'wsl'
+  }
+  return projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl'
+}
+
+function toLocalWslDropPath(path: string): string {
+  const wslUnc = parseWslUncPath(path)
+  if (wslUnc) {
+    return wslUnc.linuxPath
+  }
+  if (/^[A-Za-z]:[\\/]/.test(path)) {
+    const drive = path[0].toLowerCase()
+    return `/mnt/${drive}/${path.slice(3).replace(/\\/g, '/')}`
+  }
+  return path.replace(/\\/g, '/')
 }

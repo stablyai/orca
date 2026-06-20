@@ -1,0 +1,5051 @@
+{
+  "auto.App.03a14f6b5b": {
+    "ko": "페이지를 다시 시도하거나 다른 Orca 화면으로 이동하세요."
+  },
+  "auto.App.8d1e160ed1": {
+    "ko": "사이드바를 다시 시도하거나 탭을 전환해 이 화면을 다시 불러오세요."
+  },
+  "auto.App.98d4ea2823": {
+    "ko": "이 워크스페이스에서 Terminal, 브라우저 또는 편집기 렌더링에 실패했습니다. 다시 시도해 보세요."
+  },
+  "auto.components.FirstLaunchBanner.958d2cc31b": {
+    "ko": "어떤 기능을 사용하는지에 대한 익명 집계는 무엇을 우선 개발할지 정하는 데 도움이 됩니다. 파일 내용, 프롬프트, terminal 출력 등 사용자를 식별할 수 있는 정보는 수집하지 않습니다. 설정 -> 개인 정보 보호 및 텔레메트리에서 언제든지 변경할 수 있습니다."
+  },
+  "auto.components.GitHubItemDialog.03e542fcfe": {
+    "ko": "실패한 체크를 수정하기 위해 AI agent를 시작하지 못했습니다: {{value0}}"
+  },
+  "auto.components.GitHubItemDialog.0ae387d8ca": {
+    "ko": "작성자"
+  },
+  "auto.components.GitHubItemDialog.0bbdc673c1": {
+    "ko": "체크를 새로고침하지 못했습니다."
+  },
+  "auto.components.GitHubItemDialog.1690fd7f4a": {
+    "ko": "수정할 실패한 체크가 없습니다."
+  },
+  "auto.components.GitHubItemDialog.2511f44bb7": {
+    "ko": "실패한 체크 수정"
+  },
+  "auto.components.GitHubItemDialog.28986b3747": {
+    "ko": "실패한 체크를 위한 AI agent를 시작했습니다."
+  },
+  "auto.components.GitHubItemDialog.2d89a38d9d": {
+    "ko": "{{value0}} {{value1}}을(를) 본 것으로 표시"
+  },
+  "auto.components.GitHubItemDialog.5932578f51": {
+    "ko": "병합하려면 등록된 로컬 repo가 필요합니다."
+  },
+  "auto.components.GitHubItemDialog.71c11aff84": {
+    "ko": "모든 체크 다시 실행"
+  },
+  "auto.components.GitHubItemDialog.744197c84d": {
+    "ko": "이 체크에는 인라인 출력이 없습니다."
+  },
+  "auto.components.GitHubItemDialog.745c9089ec": {
+    "ko": "repos 경로가 없으면 답글을 달 수 없습니다."
+  },
+  "auto.components.GitHubItemDialog.773ff70035": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.GitHubItemDialog.829674460a": {
+    "ko": "PR commit SHA가 누락되어 diff를 사용할 수 없습니다."
+  },
+  "auto.components.GitHubItemDialog.8b15a5e91c": {
+    "ko": "리뷰어 삭제 {{value0}}"
+  },
+  "auto.components.GitHubItemDialog.8c45901789": {
+    "ko": "리뷰어 요청 {{value0}}"
+  },
+  "auto.components.GitHubItemDialog.9157d48ddb": {
+    "ko": "체크 수정"
+  },
+  "auto.components.GitHubItemDialog.924c2fe05e": {
+    "ko": "파괴적"
+  },
+  "auto.components.GitHubItemDialog.934d87ab96": {
+    "ko": "체크 세부 정보 로드 중…"
+  },
+  "auto.components.GitHubItemDialog.9e7c221b8d": {
+    "ko": "체크를 다시 실행하지 못했습니다."
+  },
+  "auto.components.GitHubItemDialog.af924014f8": {
+    "ko": "봤음"
+  },
+  "auto.components.GitHubItemDialog.b7bf31b8de": {
+    "ko": "본 상태를 GitHub와 동기화하지 못했습니다."
+  },
+  "auto.components.GitHubItemDialog.ba8e329d92": {
+    "ko": "본 것으로 표시 해제"
+  },
+  "auto.components.GitHubItemDialog.bd3b4492a0": {
+    "ko": "PR이 다시 열렸습니다"
+  },
+  "auto.components.GitHubItemDialog.bd7be7b1fd": {
+    "ko": "댓글 L"
+  },
+  "auto.components.GitHubItemDialog.c0253318d6": {
+    "ko": "이 PR의 조회 상태를 동기화할 수 없습니다."
+  },
+  "auto.components.GitHubItemDialog.d23bbb6416": {
+    "ko": "{{value0}} 건너뜀"
+  },
+  "auto.components.GitHubItemDialog.dc1ca081a8": {
+    "ko": "열림"
+  },
+  "auto.components.GitHubItemDialog.e31651a224": {
+    "ko": "실패한 체크 다시 실행"
+  },
+  "auto.components.GitHubItemDialog.e463ec935f": {
+    "ko": "체크 재실행 요청됨"
+  },
+  "auto.components.GitHubItemDialog.e7007aa1d8": {
+    "ko": "repos 경로가 없으면 체크를 새로고침할 수 없습니다."
+  },
+  "auto.components.GitHubItemDialog.ea985e657f": {
+    "ko": "리뷰어가 요청됨"
+  },
+  "auto.components.GitHubItemDialog.ecffebc251": {
+    "ko": "체크를 찾을 수 없습니다."
+  },
+  "auto.components.GitHubItemDialog.f4b1292569": {
+    "ko": "이 체크에 기본 AI agent 시작"
+  },
+  "auto.components.GitHubItemDialog.fedc09eeb9": {
+    "ko": "리뷰어 요청 취소 {{value0}}"
+  },
+  "auto.components.GitLabItemDialog.00d0d25825": {
+    "ko": "파일, 줄, 댓글이 필요합니다."
+  },
+  "auto.components.GitLabItemDialog.00f3bab87b": {
+    "ko": " / 총 {{value0}}개 필요"
+  },
+  "auto.components.GitLabItemDialog.1b19cdc510": {
+    "ko": "리뷰어 삭제 {{value0}}"
+  },
+  "auto.components.GitLabItemDialog.4168eb2c51": {
+    "ko": "해결"
+  },
+  "auto.components.GitLabItemDialog.7a7204417f": {
+    "ko": "줄"
+  },
+  "auto.components.GitLabItemDialog.865ea2703e": {
+    "ko": "MR !{{value0}}을(를) 다시 열었습니다."
+  },
+  "auto.components.GitLabItemDialog.9b11cd233f": {
+    "ko": "MR !{{value0}}을(를) 닫았습니다."
+  },
+  "auto.components.GitLabItemDialog.9bfb4a24d7": {
+    "ko": "작성자"
+  },
+  "auto.components.GitLabItemDialog.a7eb4f4916": {
+    "ko": "이전 경로: "
+  },
+  "auto.components.GitLabItemDialog.f11e3e7675": {
+    "ko": "이 MR에 실행된 파이프라인이 없습니다."
+  },
+  "auto.components.GitLabItemDialog.ffdd9a78e1": {
+    "ko": "인라인 댓글에는 MR diff 참조를 사용할 수 없습니다."
+  },
+  "auto.components.JiraIssueWorkspace.2a829a2f00": {
+    "ko": "우선순위"
+  },
+  "auto.components.JiraIssueWorkspace.666cfdd835": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.JiraIssueWorkspace.693be070d0": {
+    "ko": "전환"
+  },
+  "auto.components.LinearIssueMarkdownDescriptionEditor.28fd951b83": {
+    "ko": "취소선"
+  },
+  "auto.components.LinearIssueMarkdownDescriptionEditor.5666b4493d": {
+    "ko": "기울임"
+  },
+  "auto.components.LinearIssueMarkdownDescriptionEditor.caa88f50d0": {
+    "ko": "굵게"
+  },
+  "auto.components.LinearIssueWorkspace.8a33c85e9c": {
+    "ko": "누군가"
+  },
+  "auto.components.LinearIssueWorkspace.c23e79e5c0": {
+    "ko": "작업"
+  },
+  "auto.components.LinearIssueWorkspace.ca8778c124": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.LinearItemDrawer.48e17e8cbd": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.LinearItemDrawer.59b6cd3706": {
+    "ko": "상태 로드 중"
+  },
+  "auto.components.LinearItemDrawer.780ea6ed89": {
+    "ko": "상태를 찾을 수 없습니다."
+  },
+  "auto.components.LinearItemDrawer.fbb90300e2": {
+    "ko": "사용자 지정 추정치"
+  },
+  "auto.components.NewWorkspaceComposerCard.cloneHostSetup": {
+    "ko": "클론"
+  },
+  "auto.components.NewWorkspaceComposerCard.cloneProjectOnHost": {
+    "ko": "프로젝트 클론"
+  },
+  "auto.components.NewWorkspaceComposerCard.cloningHostSetup": {
+    "ko": "클론 중..."
+  },
+  "auto.components.NewWorkspaceComposerCard.connectingSsh": {
+    "ko": "SSH 연결 중..."
+  },
+  "auto.components.NewWorkspaceComposerCard.importExistingFolderOnHost": {
+    "ko": "기존 폴더 가져오기"
+  },
+  "auto.components.NewWorkspaceComposerCard.importingHostSetup": {
+    "ko": "가져오는 중..."
+  },
+  "auto.components.NewWorkspaceComposerCard.notConnected": {
+    "ko": "연결되지 않음"
+  },
+  "auto.components.NewWorkspaceComposerCard.preparingSshConnection": {
+    "ko": "SSH 연결 준비 중..."
+  },
+  "auto.components.NewWorkspaceComposerCard.reconnectingSsh": {
+    "ko": "SSH 다시 연결 중..."
+  },
+  "auto.components.NewWorkspaceComposerCard.setupHostExistingFolderHelp": {
+    "ko": "해당 호스트에 이미 있는 체크아웃을 연결한 다음, 그 호스트에서 이 워크스페이스를 만듭니다."
+  },
+  "auto.components.NewWorkspaceComposerCard.setupHostExistingFolderTitle": {
+    "ko": "{{value0}} 설정"
+  },
+  "auto.components.NewWorkspaceComposerCard.setupKindGit": {
+    "ko": "Git 리포지토리"
+  },
+  "auto.components.NewWorkspaceComposerCard.sshAuthenticationFailed": {
+    "ko": "SSH 인증 실패"
+  },
+  "auto.components.NewWorkspaceComposerCard.sshNotConnected": {
+    "ko": "SSH가 연결되지 않음"
+  },
+  "auto.components.NewWorkspaceComposerCard.sshReconnectionFailed": {
+    "ko": "SSH 다시 연결 실패"
+  },
+  "auto.components.NewWorkspaceComposerModal.fa90f739a5": {
+    "ko": "워크스페이스를 만들기 전에 프로젝트, 워크스페이스 이름, agent를 선택하세요."
+  },
+  "auto.components.PullRequestPage.00b7b82329": {
+    "ko": "헤드 브랜치"
+  },
+  "auto.components.PullRequestPage.0fa8b8faec": {
+    "ko": "이 체크에 기본 AI agent 시작"
+  },
+  "auto.components.PullRequestPage.1550675e5f": {
+    "ko": "이 체크에는 인라인 출력이 없습니다."
+  },
+  "auto.components.PullRequestPage.18f2af42ac": {
+    "ko": "체크 재실행 요청됨"
+  },
+  "auto.components.PullRequestPage.19f19560d5": {
+    "ko": "파괴적"
+  },
+  "auto.components.PullRequestPage.246b2c6456": {
+    "ko": "체크를 새로고침하지 못했습니다."
+  },
+  "auto.components.PullRequestPage.36b514a457": {
+    "ko": "{{value0}} 리뷰 요청 취소"
+  },
+  "auto.components.PullRequestPage.3c891789f6": {
+    "ko": "작성자"
+  },
+  "auto.components.PullRequestPage.41d275d3ec": {
+    "ko": "리뷰어 {{value0}} 요청"
+  },
+  "auto.components.PullRequestPage.45877f5089": {
+    "ko": "체크를 찾을 수 없습니다."
+  },
+  "auto.components.PullRequestPage.4d18310d55": {
+    "ko": "변경된 파일"
+  },
+  "auto.components.PullRequestPage.51c65c0265": {
+    "ko": "수정할 실패한 체크가 없습니다."
+  },
+  "auto.components.PullRequestPage.51ed0cf38b": {
+    "ko": "아래 줄 더 보기"
+  },
+  "auto.components.PullRequestPage.54cddd1858": {
+    "ko": "모든 체크 다시 실행"
+  },
+  "auto.components.PullRequestPage.68605516dd": {
+    "ko": "실패한 체크 다시 실행"
+  },
+  "auto.components.PullRequestPage.6885c619e7": {
+    "ko": "repos 경로가 없으면 답글을 달 수 없습니다."
+  },
+  "auto.components.PullRequestPage.710e47aa06": {
+    "ko": "PR이 다시 열렸습니다"
+  },
+  "auto.components.PullRequestPage.74660bd80b": {
+    "ko": "PR commit SHA가 누락되어 diff를 사용할 수 없습니다."
+  },
+  "auto.components.PullRequestPage.77d9388fb0": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.PullRequestPage.788a782bb0": {
+    "ko": "체크를 다시 실행하지 못했습니다."
+  },
+  "auto.components.PullRequestPage.791ddede19": {
+    "ko": "댓글 L"
+  },
+  "auto.components.PullRequestPage.85e62c5266": {
+    "ko": "실패한 체크를 위한 AI agent를 시작했습니다."
+  },
+  "auto.components.PullRequestPage.98583589c6": {
+    "ko": "실패한 체크를 수정하기 위해 AI agent를 시작하지 못했습니다: {{value0}}"
+  },
+  "auto.components.PullRequestPage.a053bdd082": {
+    "ko": "AI로 실패한 체크 수정"
+  },
+  "auto.components.PullRequestPage.a4541fd3db": {
+    "ko": "실패한 체크 수정"
+  },
+  "auto.components.PullRequestPage.ae9a38fd4a": {
+    "ko": "리뷰어 {{value0}} 삭제"
+  },
+  "auto.components.PullRequestPage.b0e80f083d": {
+    "ko": "다음 브랜치에 병합하려고 함"
+  },
+  "auto.components.PullRequestPage.b8c6cbb8c4": {
+    "ko": "PR {{value0}}에 실패했습니다."
+  },
+  "auto.components.PullRequestPage.c057f2fcb0": {
+    "ko": "repos 경로가 없으면 체크를 새로고침할 수 없습니다."
+  },
+  "auto.components.PullRequestPage.c808db1dd1": {
+    "ko": "체크 수정"
+  },
+  "auto.components.PullRequestPage.d8e82b7f15": {
+    "ko": "체크 세부 정보 로드 중…"
+  },
+  "auto.components.PullRequestPage.ddfd42f460": {
+    "ko": "agent를 시작하기 전에 프롬프트를 검토하세요."
+  },
+  "auto.components.PullRequestPage.e1f3641bfd": {
+    "ko": "소스 브랜치"
+  },
+  "auto.components.PullRequestPage.eca289e593": {
+    "ko": "병합하려면 등록된 로컬 repo가 필요합니다."
+  },
+  "auto.components.PullRequestPage.f119e5f5ef": {
+    "ko": "답장"
+  },
+  "auto.components.PullRequestPage.ff84e1f54c": {
+    "ko": "{{value0}} {{value1}}을(를) 본 것으로 표시"
+  },
+  "auto.components.QuickOpen.1cf8561ab4": {
+    "ko": "빠르고 gitignore를 인식하는 목록을 활성화하려면 원격 호스트에서 다음을 수행하세요:"
+  },
+  "auto.components.QuickOpen.250e5b2dfb": {
+    "ko": "Enter"
+  },
+  "auto.components.QuickOpen.9e97f08d0f": {
+    "ko": "열 파일 검색"
+  },
+  "auto.components.ShortcutKeyCombo.07eb4985a1": {
+    "ko": "{{value0}} 두 번 누르기"
+  },
+  "auto.components.TaskPage.0c11ca0b6d": {
+    "ko": "새 Jira 이슈"
+  },
+  "auto.components.TaskPage.1301d376f1": {
+    "ko": "할당됨"
+  },
+  "auto.components.TaskPage.171b7739d8": {
+    "ko": "MR"
+  },
+  "auto.components.TaskPage.297a805b64": {
+    "ko": "이전"
+  },
+  "auto.components.TaskPage.345b169f1f": {
+    "ko": "높음"
+  },
+  "auto.components.TaskPage.34d97ca682": {
+    "ko": "무슨 일이 있나요?"
+  },
+  "auto.components.TaskPage.34da8ac06c": {
+    "ko": "리드"
+  },
+  "auto.components.TaskPage.3659f9792a": {
+    "ko": "보드"
+  },
+  "auto.components.TaskPage.3b11c8e8fc": {
+    "ko": "배열"
+  },
+  "auto.components.TaskPage.3cb855080f": {
+    "ko": "보기"
+  },
+  "auto.components.TaskPage.3f9604efc7": {
+    "ko": "이슈 #{{value0}}을 열었습니다"
+  },
+  "auto.components.TaskPage.3feb524d42": {
+    "ko": "새 Linear 이슈"
+  },
+  "auto.components.TaskPage.4b6e40e42c": {
+    "ko": "열린 항목 모두"
+  },
+  "auto.components.TaskPage.524f095d55": {
+    "ko": "리뷰 필요"
+  },
+  "auto.components.TaskPage.5d2d835467": {
+    "ko": "정렬 순서"
+  },
+  "auto.components.TaskPage.606a85c774": {
+    "ko": "열기"
+  },
+  "auto.components.TaskPage.6430594b18": {
+    "ko": "알 수 없는 작성자"
+  },
+  "auto.components.TaskPage.69591944e7": {
+    "ko": "낮음"
+  },
+  "auto.components.TaskPage.6d56559467": {
+    "ko": "Linear 계정 연결"
+  },
+  "auto.components.TaskPage.733b8f2421": {
+    "ko": "Linear / 보기"
+  },
+  "auto.components.TaskPage.7698af5263": {
+    "ko": "내 항목"
+  },
+  "auto.components.TaskPage.7719d8daa9": {
+    "ko": "{{value0}} 멤버{{value1}}"
+  },
+  "auto.components.TaskPage.7762f4b03a": {
+    "ko": "/"
+  },
+  "auto.components.TaskPage.8a07f21e76": {
+    "ko": "건강도"
+  },
+  "auto.components.TaskPage.8f06dbb9e5": {
+    "ko": "리뷰어가 요청됨"
+  },
+  "auto.components.TaskPage.903c7af49f": {
+    "ko": "Linear 이슈를 찾을 수 없습니다."
+  },
+  "auto.components.TaskPage.937b29fa35": {
+    "ko": "항목"
+  },
+  "auto.components.TaskPage.995dd6af9b": {
+    "ko": "PR 체크 열기"
+  },
+  "auto.components.TaskPage.9cd11ba218": {
+    "ko": "Jira"
+  },
+  "auto.components.TaskPage.9f2b4c03a6": {
+    "ko": "등록 위치: "
+  },
+  "auto.components.TaskPage.a04fe7ba73": {
+    "ko": "공개 범위"
+  },
+  "auto.components.TaskPage.a0544fb653": {
+    "ko": "MR !{{value0}}"
+  },
+  "auto.components.TaskPage.afc68824ff": {
+    "ko": "상태를 찾을 수 없습니다."
+  },
+  "auto.components.TaskPage.c8d5bec5f7": {
+    "ko": "우선순위"
+  },
+  "auto.components.TaskPage.cc13109b5d": {
+    "ko": "상태 로드 중"
+  },
+  "auto.components.TaskPage.cfaadb6b22": {
+    "ko": "리드 없음"
+  },
+  "auto.components.TaskPage.d1132848f8": {
+    "ko": "GitHub에서 열 GitHub 프로젝트 하나를 선택하세요."
+  },
+  "auto.components.TaskPage.d3d0998b7d": {
+    "ko": "새 GitHub 이슈"
+  },
+  "auto.components.TaskPage.d6cda23ef1": {
+    "ko": "멤버"
+  },
+  "auto.components.TaskPage.d747aed72f": {
+    "ko": "보드"
+  },
+  "auto.components.TaskPage.e224d76876": {
+    "ko": "MR"
+  },
+  "auto.components.TaskPage.e65757a338": {
+    "ko": "페이지네이션"
+  },
+  "auto.components.TaskPage.f373ab1a4f": {
+    "ko": "긴급"
+  },
+  "auto.components.TaskPage.f4374519ae": {
+    "ko": "선호하는 이슈 소스(upstream)가 더 이상 {{value0}}에 구성되어 있지 않습니다. origin을 사용합니다."
+  },
+  "auto.components.TaskPage.fe28c9821f": {
+    "ko": "보기"
+  },
+  "auto.components.Terminal.5b2c1a9e44": {
+    "ko": "agent CLI를 찾지 못했습니다. 하나를 설치하거나 설정에서 기본 agent를 선택하세요."
+  },
+  "auto.components.Terminal.7958465754": {
+    "ko": "실행 중인 프로세스가 있는 로컬 terminals이 있습니다. 그래도 창을 닫으시겠습니까?"
+  },
+  "auto.components.Terminal.cdc9ac4b2d": {
+    "ko": "편집기"
+  },
+  "auto.components.Terminal.e57db40c11": {
+    "ko": "{{value0}} 실행 명령을 만들 수 없습니다."
+  },
+  "auto.components.UpdateCard.ccd8b0a793": {
+    "ko": "마지막 업데이트 이후 추가됨"
+  },
+  "auto.components.UpdateCard.f58b5c57a6": {
+    "ko": "새 소식:"
+  },
+  "auto.components.WorktreeJumpPalette.1628fd7dfa": {
+    "ko": "활성 워크트리, 설정, 작업 또는 열린 탭이 없습니다."
+  },
+  "auto.components.WorktreeJumpPalette.1ebe225fee": {
+    "ko": "워크트리, 설정, 탭 및 작업 검색..."
+  },
+  "auto.components.WorktreeJumpPalette.50a1d11d5b": {
+    "ko": "열린 탭"
+  },
+  "auto.components.WorktreeJumpPalette.684e8d7bc2": {
+    "ko": "최근 워크트리와 열린 탭을 불러오는 중입니다."
+  },
+  "auto.components.WorktreeJumpPalette.739bda980c": {
+    "ko": "기본"
+  },
+  "auto.components.WorktreeJumpPalette.95be6587d3": {
+    "ko": "워크트리 \"{{value0}}\" 만들기"
+  },
+  "auto.components.WorktreeJumpPalette.c5081f2814": {
+    "ko": "현재 워크트리"
+  },
+  "auto.components.WorktreeJumpPalette.dabd819ca1": {
+    "ko": "{{value0}}개의 모든 워크트리를 보려면 입력하세요."
+  },
+  "auto.components.WorktreeJumpPalette.f60f8730be": {
+    "ko": "전환할 다른 워크트리가 없습니다."
+  },
+  "auto.components.WorktreeJumpPalette.f65d992a11": {
+    "ko": "Enter"
+  },
+  "auto.components.WorktreeJumpPalette.f7fda8d562": {
+    "ko": "워크트리를 만들거나 Orca에서 탭을 열어 시작하세요."
+  },
+  "auto.components.WorktreeJumpPalette.paletteHostBadge": {
+    "ko": "호스트: {{value0}}"
+  },
+  "auto.components.WorktreeJumpPalette.recentWorktreesHeader": {
+    "ko": "최근 워크트리"
+  },
+  "auto.components.WorktreeJumpPalette.worktreesHeader": {
+    "ko": "워크트리"
+  },
+  "auto.components.activity.ActivityPrototypePage.770d458144": {
+    "ko": "agent 활동 그룹화 기준"
+  },
+  "auto.components.activity.ActivityPrototypePage.8de7c5beaa": {
+    "ko": "Terminal을 사용할 수 없음"
+  },
+  "auto.components.activity.ActivityPrototypePage.afdc2139a8": {
+    "ko": "Agent terminal이 닫혔습니다. 계속하려면 이 워크스페이스에서 새 terminal을 여세요."
+  },
+  "auto.components.activity.ActivityPrototypePage.b29191b3e0": {
+    "ko": "워크트리"
+  },
+  "auto.components.activity.ActivityTitlebarControls.f915168c8e": {
+    "ko": "읽지 않음"
+  },
+  "auto.components.agent.AgentCombobox.48c6a5a9b4": {
+    "ko": "agents 검색..."
+  },
+  "auto.components.agent.AgentCombobox.986f946354": {
+    "ko": "빈 Terminal"
+  },
+  "auto.components.automations.AutomationCustomCronPanel.3e3b2c369f": {
+    "ko": "Cron 식"
+  },
+  "auto.components.automations.AutomationDetail.29baf8f4c2": {
+    "ko": "소스"
+  },
+  "auto.components.automations.AutomationDetail.620b22145e": {
+    "ko": "유예 시간"
+  },
+  "auto.components.automations.AutomationDetail.de0fedac06": {
+    "ko": "실행마다 새로 생성"
+  },
+  "auto.components.automations.AutomationEditorDialog.a2e688226d": {
+    "ko": "워크트리"
+  },
+  "auto.components.automations.AutomationMissedRunGraceField.3d70c185c8": {
+    "ko": "Orca 또는 실행 호스트를 예약된 시간에 사용할 수 없었다면, 이 기간 안에 다시 사용 가능해졌을 때 Orca가 놓친 실행을 한 번 실행합니다. 더 오래된 놓친 실행은 건너뜁니다."
+  },
+  "auto.components.automations.AutomationMissedRunGraceField.529dc6c0b7": {
+    "ko": "유예 없음"
+  },
+  "auto.components.automations.AutomationMissedRunGraceField.fc089e5fde": {
+    "ko": "유예 시간"
+  },
+  "auto.components.automations.AutomationPrecheckFields.99a577306c": {
+    "ko": "gh pr list --json number -q '.[0].number'"
+  },
+  "auto.components.automations.AutomationProjectCombobox.addProject": {
+    "ko": "프로젝트 추가"
+  },
+  "auto.components.automations.AutomationProjectCombobox.adding": {
+    "ko": "프로젝트 추가 중..."
+  },
+  "auto.components.automations.AutomationProjectCombobox.chooseHost": {
+    "ko": "자동화 호스트 선택"
+  },
+  "auto.components.automations.AutomationProjectCombobox.empty": {
+    "ko": "검색과 일치하는 프로젝트/폴더가 없습니다."
+  },
+  "auto.components.automations.AutomationProjectCombobox.search": {
+    "ko": "프로젝트/폴더 검색..."
+  },
+  "auto.components.automations.AutomationRunHistory.8faaa00726": {
+    "ko": "실행"
+  },
+  "auto.components.automations.AutomationSchedulePicker.233b8c94b6": {
+    "ko": "반복 주기"
+  },
+  "auto.components.automations.AutomationSchedulePicker.6b914c5fbb": {
+    "ko": "요일"
+  },
+  "auto.components.automations.AutomationSessionField.c90888ee94": {
+    "ko": "새로 시작"
+  },
+  "auto.components.automations.AutomationsPage.08efc3ae12": {
+    "ko": "Hermes 자동화가 업데이트되었습니다."
+  },
+  "auto.components.automations.AutomationsPage.0ae52dd760": {
+    "ko": "Hermes"
+  },
+  "auto.components.automations.AutomationsPage.53f06f0ad5": {
+    "ko": "소스 다시 시도"
+  },
+  "auto.components.automations.AutomationsPage.5918020edc": {
+    "ko": "실행"
+  },
+  "auto.components.automations.AutomationsPage.761a35834d": {
+    "ko": "자동화"
+  },
+  "auto.components.automations.AutomationsPage.82eb6cb933": {
+    "ko": "소스"
+  },
+  "auto.components.automations.AutomationsPage.8705757e27": {
+    "ko": "작업"
+  },
+  "auto.components.automations.AutomationsPage.a21f6c33ad": {
+    "ko": "자동화 소스를 새로 고쳤습니다."
+  },
+  "auto.components.automations.AutomationsPage.aecdc3681f": {
+    "ko": "관리 가능"
+  },
+  "auto.components.automations.AutomationsPage.b264564427": {
+    "ko": "및 실행 기록. 이전 실행으로 생성된 워크스페이스는 삭제되지 않습니다."
+  },
+  "auto.components.automations.AutomationsPage.b457436d6a": {
+    "ko": "일시 중지"
+  },
+  "auto.components.automations.AutomationsPage.d441032f7e": {
+    "ko": "일시 중지"
+  },
+  "auto.components.automations.AutomationsPage.dd0bc7a1ba": {
+    "ko": "실행마다 새로 생성"
+  },
+  "auto.components.automations.CreateFromPicker.dd3841b442": {
+    "ko": "브랜치 생성 기준"
+  },
+  "auto.components.automations.ExternalAutomationManagers.0a2d4359a8": {
+    "ko": "관리 가능"
+  },
+  "auto.components.automations.ExternalAutomationManagers.701515f010": {
+    "ko": "자동화"
+  },
+  "auto.components.automations.ExternalAutomationManagers.8e9165af08": {
+    "ko": "실행"
+  },
+  "auto.components.automations.ExternalAutomationManagers.92405f1431": {
+    "ko": "사용 불가"
+  },
+  "auto.components.automations.ExternalAutomationManagers.bf5f67b590": {
+    "ko": "Hermes"
+  },
+  "auto.components.automations.ExternalAutomationManagers.e66091daf4": {
+    "ko": "실행"
+  },
+  "auto.components.automations.ExternalAutomationRunTable.7475c0ce96": {
+    "ko": "중"
+  },
+  "auto.components.automations.ExternalAutomationRunTable.872d032d05": {
+    "ko": "실행"
+  },
+  "auto.components.automations.ExternalAutomationRunTable.9c080765ff": {
+    "ko": "아직 Hermes 실행이 없습니다."
+  },
+  "auto.components.automations.ExternalAutomationRunTable.a813df9808": {
+    "ko": "미리보기"
+  },
+  "auto.components.automations.ExternalAutomationRunTable.d4b34feb66": {
+    "ko": "실행 시간"
+  },
+  "auto.components.automations.ExternalAutomationRunTable.d5527d8fe7": {
+    "ko": "실행"
+  },
+  "auto.components.automations.automation.templates.37571fcb16": {
+    "ko": "중단된 작업, 오래된 생성 파일, 실패한 로컬 검증을 찾아보세요."
+  },
+  "auto.components.automations.automation.templates.maintenance.category": {
+    "ko": "유지보수"
+  },
+  "auto.components.automations.automation.templates.repoHealth.category": {
+    "ko": "Repo 상태"
+  },
+  "auto.components.automations.external.automation.schedule.display.a8e92b815a": {
+    "ko": "일정을 사용할 수 없음"
+  },
+  "auto.components.browser.pane.BrowserMobileDriverOverlay.20539eca03": {
+    "ko": "휴대폰에서 이 브라우저를 제어 중입니다."
+  },
+  "auto.components.browser.pane.BrowserPane.777b5bc4ec": {
+    "ko": "agent에게 보낼 피드백을 추가하려면 요소를 클릭하세요."
+  },
+  "auto.components.browser.pane.BrowserPane.95af781091": {
+    "ko": "새 agent에게 피드백 보내기"
+  },
+  "auto.components.browser.pane.BrowserPane.a5dcd0fd1d": {
+    "ko": "확인 중"
+  },
+  "auto.components.browser.pane.BrowserPane.e72dfa268a": {
+    "ko": "주석 추가"
+  },
+  "auto.components.browser.pane.BrowserPane.f2d0c22d67": {
+    "ko": "주석 {{value0}} 삭제"
+  },
+  "auto.components.browser.pane.BrowserPane.f30d2d35a7": {
+    "ko": "스크린샷 완료"
+  },
+  "auto.components.browser.pane.BrowserToolbarMenu.58f2c81542": {
+    "ko": "전환"
+  },
+  "auto.components.cmd.j.quick.actions.verbs.newMarkdownFile": {
+    "ko": "새 markdown 파일"
+  },
+  "auto.components.cmd.j.quick.actions.verbs.newShell": {
+    "ko": "새 셸"
+  },
+  "auto.components.cmd.j.quick.actions.verbs.trashWorktree": {
+    "ko": "워크트리 휴지통으로 이동"
+  },
+  "auto.components.contextual.tours.ContextualTourProgressDots.7734cb8ad3": {
+    "ko": "중"
+  },
+  "auto.components.contextual.tours.ContextualTourProgressDots.dcd6e6b03e": {
+    "ko": "{{value1}}단계 중 {{value0}}단계"
+  },
+  "auto.components.crash.report.CrashReportDialog.88fea8e84e": {
+    "ko": "보내지 않음"
+  },
+  "auto.components.crash.report.CrashReportDialog.b082f27490": {
+    "ko": "최근 진단 로그 첨부"
+  },
+  "auto.components.crash.report.CrashReportDialog.b2e36f53a1": {
+    "ko": "크래시 보고서를 보내지 못했습니다. 진단 티켓 {{value0}}이 업로드되었지만 연결되지 않았습니다."
+  },
+  "auto.components.crash.report.CrashReportDialog.e59f0b9427": {
+    "ko": "보고서와 함께 크기가 제한되고 민감 정보가 제거된 로그 묶음을 보냅니다."
+  },
+  "auto.components.crash.report.CrashReportDialog.ead6fc0510": {
+    "ko": "자동 크래시 보고서가 캡처되지 않았습니다. 그래도 세부 정보를 보내고, 가능한 경우 최근 진단 로그를 포함할 수 있습니다."
+  },
+  "auto.components.dashboard.DashboardAgentRowMessage.0a01046763": {
+    "ko": "중단됨"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.066fedd446": {
+    "ko": "실패한 작업"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.07eccfa397": {
+    "ko": "이 체크에 대한 세부 정보를 사용할 수 없습니다."
+  },
+  "auto.components.editor.CheckRunDetailsPanel.1f2b980522": {
+    "ko": "체크 세부 정보 불러오는 중…"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.2f6d8a1c45": {
+    "ko": "시간 초과"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14": {
+    "ko": "대기 중"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.4c8e1b2d73": {
+    "ko": "실패"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.5a1c8e3d67": {
+    "ko": "중립"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.7b3e9d4f12": {
+    "ko": "건너뜀"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.834cb3f23d": {
+    "ko": "AI로 수정"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0": {
+    "ko": "취소됨"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.a54ae21c6f": {
+    "ko": "상태:"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.a916648574": {
+    "ko": "세부 정보 열기"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.b3e7f9a1c2": {
+    "ko": "체크 수정 컨텍스트를 사용할 수 없습니다."
+  },
+  "auto.components.editor.CheckRunDetailsPanel.c8f1a2d4e7": {
+    "ko": "실행하기 전에 agent를 선택하고 전체 명령 입력을 편집하세요."
+  },
+  "auto.components.editor.CheckRunDetailsPanel.cdbfda4dec": {
+    "ko": "주석"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.d098e5529a": {
+    "ko": "출력"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.d5a8c2f1b9": {
+    "ko": "이 체크를 수정할 기본 AI agent 시작"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.e2b4d7c8a1": {
+    "ko": "이 체크를 처리할 agent 선택"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.f1c9e3a6d4": {
+    "ko": "체크를 수정할 agent 선택"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.f2fe8a4e8f": {
+    "ko": "주석"
+  },
+  "auto.components.editor.CheckRunDetailsPanel.fd46a70f1a": {
+    "ko": "시작됨"
+  },
+  "auto.components.editor.CombinedDiffFileTree.d5ac717d65": {
+    "ko": "commit 안 됨"
+  },
+  "auto.components.editor.CombinedDiffViewer.3d909843bb": {
+    "ko": "브랜치 diff 열기"
+  },
+  "auto.components.editor.ConflictReviewFileTree.496e28a932": {
+    "ko": "없어짐"
+  },
+  "auto.components.editor.CsvViewer.eedd0d37a7": {
+    "ko": "열"
+  },
+  "auto.components.editor.EditorContent.6c4f1a8d2e": {
+    "ko": "체크 세부 정보를 사용할 수 없습니다."
+  },
+  "auto.components.editor.EditorContent.d16e037f40": {
+    "ko": "리치"
+  },
+  "auto.components.editor.EditorViewToggle.0d193dc03c": {
+    "ko": "미리보기"
+  },
+  "auto.components.editor.EditorViewToggle.4d6ccb7ba6": {
+    "ko": "소스"
+  },
+  "auto.components.editor.EditorViewToggle.b3410cd5e0": {
+    "ko": "노트북"
+  },
+  "auto.components.editor.ImageDiffViewer.57aac3979a": {
+    "ko": "원본"
+  },
+  "auto.components.editor.IpynbViewer.07e7d96612": {
+    "ko": "셀"
+  },
+  "auto.components.editor.IpynbViewer.3e4cbf15ea": {
+    "ko": "원시"
+  },
+  "auto.components.editor.IpynbViewer.59b6cd874b": {
+    "ko": "코드"
+  },
+  "auto.components.editor.IpynbViewer.d6f37a640b": {
+    "ko": "빈 노트북"
+  },
+  "auto.components.editor.MarkdownTableOfContentsPanel.8f4d2c1a9b": {
+    "ko": "목차 크기 조절"
+  },
+  "auto.components.editor.MonacoGutterContextMenu.2e0b1cdc05": {
+    "ko": "줄까지의 상대 경로 복사"
+  },
+  "auto.components.editor.MonacoGutterContextMenu.4eaa991bde": {
+    "ko": "줄까지의 경로 복사"
+  },
+  "auto.components.editor.RichMarkdownCodeBlock.a209c57063": {
+    "ko": "JavaScript"
+  },
+  "auto.components.editor.RichMarkdownCodeBlock.d01f55be57": {
+    "ko": "Shell"
+  },
+  "auto.components.editor.RichMarkdownDocLinkMenu.90c5f0e1e4": {
+    "ko": "/"
+  },
+  "auto.components.editor.RichMarkdownToolbar.0bea19a988": {
+    "ko": "취소선"
+  },
+  "auto.components.editor.RichMarkdownToolbar.4f9e789fe0": {
+    "ko": "굵게"
+  },
+  "auto.components.editor.RichMarkdownToolbar.e935c6b61e": {
+    "ko": "이미지"
+  },
+  "auto.components.editor.check.run.details.fix.with.ai.1a8c4e2b90": {
+    "ko": "AI 작업을 실행하기 전에 워크스페이스를 선택하세요."
+  },
+  "auto.components.editor.check.run.details.fix.with.ai.2ef90c9819": {
+    "ko": "이 체크를 처리할 AI agent를 시작했습니다."
+  },
+  "auto.components.editor.check.run.details.fix.with.ai.4f2d9a8c17": {
+    "ko": "AI 작업을 실행하기 전에 repos를 선택하세요."
+  },
+  "auto.components.editor.check.run.details.fix.with.ai.7c3e1b5d42": {
+    "ko": "AI 수정을 실행하기 전에 PR 또는 MR을 여세요."
+  },
+  "auto.components.editor.check.run.details.fix.with.ai.9b2f6d4a81": {
+    "ko": "이 체크는 실패 상태가 아닙니다."
+  },
+  "auto.components.editor.rich.markdown.slash.commands.0ed9a7b38c": {
+    "ko": "Mermaid 코드 블록을 삽입합니다."
+  },
+  "auto.components.editor.rich.markdown.slash.commands.2bf5544faf": {
+    "ko": "인라인 수식"
+  },
+  "auto.components.editor.rich.markdown.slash.commands.41482b15ce": {
+    "ko": "토글 제목 1"
+  },
+  "auto.components.editor.rich.markdown.slash.commands.565907cf7a": {
+    "ko": "인라인 LaTeX 수식을 삽입합니다."
+  },
+  "auto.components.editor.rich.markdown.slash.commands.572be8e524": {
+    "ko": "이미지"
+  },
+  "auto.components.editor.rich.markdown.slash.commands.58abdb9d41": {
+    "ko": "단락"
+  },
+  "auto.components.editor.rich.markdown.slash.commands.6993a38ad1": {
+    "ko": "수식 블록"
+  },
+  "auto.components.editor.rich.markdown.slash.commands.ae7d0f3f37": {
+    "ko": "디스플레이 LaTeX 수식을 삽입합니다."
+  },
+  "auto.components.editor.rich.markdown.slash.commands.ae8377cf6b": {
+    "ko": "구분선"
+  },
+  "auto.components.editor.rich.markdown.slash.commands.e516d3f6e3": {
+    "ko": "Mermaid 다이어그램"
+  },
+  "auto.components.editor.rich.markdown.slash.commands.f82c78a2ee": {
+    "ko": "토글 텍스트"
+  },
+  "auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.5c59ea96ca": {
+    "ko": "모바일 에뮬레이터 Orca CLI 스킬 설정"
+  },
+  "auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.bff5341ac3": {
+    "ko": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal"
+  },
+  "auto.components.emulator.pane.emulator.pane.toolbar.868c0f2938": {
+    "ko": "작업 중…"
+  },
+  "auto.components.feature.tips.CliSkillSetupTerminal.1953e90447": {
+    "ko": "Enter를 눌러 agents 용 Orca CLI 오케스트레이션 스킬을 설치하세요."
+  },
+  "auto.components.feature.tips.CmdJPaletteFeatureTipVisual.379d776971": {
+    "ko": "입력 중"
+  },
+  "auto.components.feature.tips.FeatureTipActions.eb04abece8": {
+    "ko": "나중에"
+  },
+  "auto.components.feature.wall.AiCommitPrSettingsCard.1c0cb4fabb": {
+    "ko": "AI 작성자"
+  },
+  "auto.components.feature.wall.AiCommitPrSettingsCard.4b2fc4b80c": {
+    "ko": "사고 강도"
+  },
+  "auto.components.feature.wall.AiCommitPrSettingsCard.8d4152701a": {
+    "ko": "예: ollama run llama3.1 {{value0}}"
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.0ce7c24b4d": {
+    "ko": "작업 중…"
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.1bec24acc1": {
+    "ko": "@keyframes browserFlash { 0% { opacity: 0; } 20% { opacity: 0.85; } 100% { opacity: 0; } } @keyframes browserTabIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes browserViewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }"
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.25f15c2219": {
+    "ko": "Pro"
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.59ae327405": {
+    "ko": "Starter"
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.73bbb46073": {
+    "ko": "/pricing"
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.7da6eed7bf": {
+    "ko": "localhost:3000"
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.eb88125c6f": {
+    "ko": "✓ 검증됨 — 무료 체험판은 여전히 작동합니다."
+  },
+  "auto.components.feature.wall.BrowserAnimatedVisual.f39be6ca14": {
+    "ko": "/signup"
+  },
+  "auto.components.feature.wall.ComputerUseAnimatedVisual.6804cb356f": {
+    "ko": "클릭 전송됨"
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.33b650af52": {
+    "ko": "팀이 작업을 추적하는 서비스를 연결하세요. Orca는 이슈 제목, 링크, 컨텍스트가 이미 첨부된 워크스페이스를 시작합니다."
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.3a1fcdddad": {
+    "ko": "두 단계만 거치면 됩니다. 먼저 코드 리뷰 서비스를 연결한 다음, 팀이 작업을 계획하는 서비스를 연결하세요."
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.3dddb2d565": {
+    "ko": "작업용으로 연결됨"
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.5b3577a492": {
+    "ko": "리뷰 상태용으로 연결됨"
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.code_host_tasks_caption": {
+    "ko": "코드 호스트의 이슈도 작업으로 사용할 수 있습니다."
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.code_host_tasks_summary": {
+    "ko": "이슈를 작업으로 사용할 수 있음 · 팀이 Linear 또는 Jira에서 작업을 계획한다면 추가하세요"
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.list_end": {
+    "ko": ", 그리고 "
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.review_step_description": {
+    "ko": "Orca가 PR 또는 MR 상태, 체크, 리뷰를 표시할 수 있도록 리뷰 공급자를 연결하세요."
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.review_step_title": {
+    "ko": "agents가 작업하는 동안 PR 상태 보기"
+  },
+  "auto.components.feature.wall.ConnectIntegrationsList.task_step_title": {
+    "ko": "Orca를 떠나지 않고 작업에서 agents 시작"
+  },
+  "auto.components.feature.wall.EditorAnimatedVisual.22ae7b4d9d": {
+    "ko": "팀을 위한 간단한 메모 - 출시하기 전에 남은 항목을 정리합니다."
+  },
+  "auto.components.feature.wall.EditorAnimatedVisual.8521536429": {
+    "ko": "굵게 ·"
+  },
+  "auto.components.feature.wall.EditorAnimatedVisual.95f0c3a46f": {
+    "ko": "새 머신에서 설치 흐름을 스모크 테스트합니다."
+  },
+  "auto.components.feature.wall.EditorAnimatedVisual.e16479c1c5": {
+    "ko": "[data-slash-menu] [data-slash-row].slash-active { background: rgba(24,24,27,0.07); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role=\"active\"] { color: rgb(113 113 122); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; } [data-md-active-line][data-role=\"h1\"] { color: inherit; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin-top: 6px; } [data-md-caret] { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: md-caret-blink 1.05s steps(1) infinite; } @keyframes md-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } } @keyframes md-block-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes md-cursor-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } [data-clicking=\"1\"] [data-cursor-ripple] { animation: md-cursor-ripple 460ms ease-out forwards; }"
+  },
+  "auto.components.feature.wall.FeatureTourPreview.04d54d50ec": {
+    "ko": "orca · zsh"
+  },
+  "auto.components.feature.wall.FeatureTourPreview.304ad0dfc1": {
+    "ko": "생각 중..."
+  },
+  "auto.components.feature.wall.FeatureTourPreview.3822d8d14b": {
+    "ko": "fix/worktree-picker-truncates"
+  },
+  "auto.components.feature.wall.FeatureTourPreview.47f16ecf34": {
+    "ko": "여러 작업을 동시에 진행하세요. 각 워크스페이스는 브랜치, terminal, agent 활동을 함께 보관합니다."
+  },
+  "auto.components.feature.wall.FeatureTourPreview.5d6ee181b6": {
+    "ko": "워크스페이스를 열어 terminal로 돌아가고, 테스트와 로그, agents 용으로 패널을 나누세요."
+  },
+  "auto.components.feature.wall.FeatureTourPreview.6218a9014d": {
+    "ko": "pnpm playwright test"
+  },
+  "auto.components.feature.wall.FeatureTourPreview.6ed43cb0e0": {
+    "ko": "dashboard.spec.ts"
+  },
+  "auto.components.feature.wall.FeatureTourPreview.70aa182266": {
+    "ko": "목표를 넘겨두고 자리를 비우세요. 코디네이터 agent가 작업을 나누어 병렬 PR을 만듭니다."
+  },
+  "auto.components.feature.wall.FeatureTourPreview.f10c14dd9d": {
+    "ko": "탭을 오갈 필요 없이 GitHub 또는 Linear 백로그에서 선택하고 한 번의 클릭으로 워크스페이스를 시작하세요."
+  },
+  "auto.components.feature.wall.FeatureTourWorkspaceCard.9220794f6a": {
+    "ko": "작업 중"
+  },
+  "auto.components.feature.wall.FeatureWallSetupChecklist.713cc529a5": {
+    "ko": "마일스톤"
+  },
+  "auto.components.feature.wall.FullDiskAccessSetupPrompt.0d6efe9cf4": {
+    "ko": "프로젝트나 워크트리가 보호된 폴더에 있는 경우 macOS에서 권장됩니다."
+  },
+  "auto.components.feature.wall.ReviewAnimatedVisual.8df4d52b68": {
+    "ko": "pr-view"
+  },
+  "auto.components.feature.wall.ReviewNotesAnimatedVisual.1eee3a397e": {
+    "ko": "src/server/migrate.ts (diff)"
+  },
+  "auto.components.feature.wall.ReviewNotesAnimatedVisual.5cb213f967": {
+    "ko": "AI 메모"
+  },
+  "auto.components.feature.wall.ReviewNotesAnimatedVisual.a7a89d8f94": {
+    "ko": "줄"
+  },
+  "auto.components.feature.wall.ReviewPRViewAnimatedVisual.2ef0b97954": {
+    "ko": "typecheck"
+  },
+  "auto.components.feature.wall.ReviewPRViewAnimatedVisual.6e3f5223c5": {
+    "ko": "탐색기"
+  },
+  "auto.components.feature.wall.ReviewPRViewAnimatedVisual.6f4c2d7cb7": {
+    "ko": "다음에 대한 커버리지 케이스 추가:"
+  },
+  "auto.components.feature.wall.ReviewPRViewAnimatedVisual.8ed213397c": {
+    "ko": "실행 중"
+  },
+  "auto.components.feature.wall.ReviewPRViewAnimatedVisual.a6c8b9e32f": {
+    "ko": "체크 통과"
+  },
+  "auto.components.feature.wall.ReviewPRViewAnimatedVisual.f4d5e1a7b2": {
+    "ko": "체크 3개"
+  },
+  "auto.components.feature.wall.ReviewShipAnimatedVisual.cd8a3a39d7": {
+    "ko": "commits 3개 앞섬"
+  },
+  "auto.components.feature.wall.TasksAnimatedVisual.b13375617e": {
+    "ko": "워크트리 선택기가 이름을 자릅니다."
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.0b20782e0f": {
+    "ko": "워커 4개로 12개 테스트 실행"
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.16877e038d": {
+    "ko": "아래로 분할"
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.17cfdc3344": {
+    "ko": "Grep"
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.4371cc9931": {
+    "ko": "pnpm playwright test"
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.633a91e358": {
+    "ko": "생각 중…"
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.944199e54a": {
+    "ko": "› 장바구니 합계 업데이트"
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.9923847785": {
+    "ko": "Read"
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.99f5224f1e": {
+    "ko": "Edit"
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.a2b114dad0": {
+    "ko": "오른쪽으로 분할 ·"
+  },
+  "auto.components.feature.wall.WorkbenchAnimatedVisual.e370fa8c2b": {
+    "ko": "Terminal을 오른쪽으로 분할"
+  },
+  "auto.components.feature.wall.agents.orchestration.OrchestrationPage.30b509a467": {
+    "ko": "하위 2개"
+  },
+  "auto.components.feature.wall.agents.orchestration.StatusesPage.78f0318ac1": {
+    "ko": "실행하려고 함"
+  },
+  "auto.components.feature.wall.agents.orchestration.StatusesPage.7b26349cb2": {
+    "ko": "pnpm migrate latest"
+  },
+  "auto.components.feature.wall.agents.orchestration.UsageAccountsCard.6986b36708": {
+    "ko": "사용량 한도를 표시하고 계정을 인라인으로 전환하세요."
+  },
+  "auto.components.feature.wall.agents.orchestration.UsageAccountsCard.945865332e": {
+    "ko": "로그인 중"
+  },
+  "auto.components.feature.wall.agents.orchestration.orchestration.cards.da6f1f97c9": {
+    "ko": "작업 중"
+  },
+  "auto.components.feature.wall.review.notes.diff.rows.f621c734f8": {
+    "ko": "메모 · 줄"
+  },
+  "auto.components.github.CloseReasonDropdown.e1f2a3b4c5": {
+    "ko": "닫기 사유 선택"
+  },
+  "auto.components.github.GitHubIssueCommentComposer.082515176a": {
+    "ko": "댓글을 추가하지 못했습니다"
+  },
+  "auto.components.github.GitHubIssueCommentComposer.0a73f59e85": {
+    "ko": "댓글 보내기"
+  },
+  "auto.components.github.GitHubIssueCommentComposer.9f88657c4e": {
+    "ko": "이슈가 닫혔습니다"
+  },
+  "auto.components.github.GitHubIssueCommentComposer.a1b2c3d4e5": {
+    "ko": "댓글 추가"
+  },
+  "auto.components.github.GitHubIssueCommentComposer.b1c2d3e4f5": {
+    "ko": "이슈 다시 열기"
+  },
+  "auto.components.github.GitHubIssueCommentComposer.bd3b4492a0": {
+    "ko": "이슈가 다시 열렸습니다"
+  },
+  "auto.components.github.GitHubIssueCommentComposer.c5c117270e": {
+    "ko": "댓글을 입력하세요. 서로 배려해 주세요."
+  },
+  "auto.components.github.GitHubIssueCommentComposer.e9b7cb7d17": {
+    "ko": "이슈를 닫지 못했습니다"
+  },
+  "auto.components.github.GitHubIssueCommentComposer.f2a8c1d903": {
+    "ko": "이슈를 다시 열지 못했습니다"
+  },
+  "auto.components.github.GitHubMarkdownComposer.8f1c2d4e6a": {
+    "ko": "미리 볼 내용이 없습니다"
+  },
+  "auto.components.github.GitHubMarkdownComposer.b7e4a1c902": {
+    "ko": "붙여넣거나, 끌어다 놓거나, 클릭해서 파일 추가"
+  },
+  "auto.components.github.GitHubMarkdownComposer.c91f0a2b14": {
+    "ko": "작성"
+  },
+  "auto.components.github.GitHubMarkdownComposer.d82b1e3f05": {
+    "ko": "미리보기"
+  },
+  "auto.components.github.GitHubMarkdownComposer.e3bd59143c": {
+    "ko": "삽입"
+  },
+  "auto.components.github.GitHubWorkItemAssigneePopoverContent.4f8b6f2c1d": {
+    "ko": "담당자 필터..."
+  },
+  "auto.components.github.GitHubWorkItemAssigneePopoverContent.a00830d3f7": {
+    "ko": "사용자 없음"
+  },
+  "auto.components.github.GitHubWorkItemAssigneePopoverContent.cddd9b04a7": {
+    "ko": "담당자 로드 중"
+  },
+  "auto.components.github.GitHubWorkItemLabelPopoverContent.2aa9acdf34": {
+    "ko": "GitHub에서 라벨 편집"
+  },
+  "auto.components.github.GitHubWorkItemLabelPopoverContent.8b0d52ee3a": {
+    "ko": "라벨 필터..."
+  },
+  "auto.components.github.GitHubWorkItemLabelPopoverContent.cddd9b04a7": {
+    "ko": "라벨 로드 중"
+  },
+  "auto.components.github.GitHubWorkItemLabelPopoverContent.de26e2eb06": {
+    "ko": "라벨 없음"
+  },
+  "auto.components.github.IssueSourceSelector.51d1608920": {
+    "ko": "origin"
+  },
+  "auto.components.github.IssueSourceSelector.643d7e9496": {
+    "ko": "upstream"
+  },
+  "auto.components.github.IssueSourceSelector.cdc9bd64fa": {
+    "ko": "간결하게"
+  },
+  "auto.components.github.PRFilterDropdowns.01f3f3d161": {
+    "ko": "작성자"
+  },
+  "auto.components.github.PRFilterDropdowns.19bb6f115f": {
+    "ko": "reviewed-by"
+  },
+  "auto.components.github.PRFilterDropdowns.7f1ba66c3e": {
+    "ko": "리뷰한 사람"
+  },
+  "auto.components.github.PRFilterDropdowns.9d0f2eda6d": {
+    "ko": "라벨"
+  },
+  "auto.components.github.PRFilterDropdowns.b27b7e526c": {
+    "ko": "리뷰 요청 대상"
+  },
+  "auto.components.github.PRFilterSections.1e9b5244f2": {
+    "ko": "켜짐"
+  },
+  "auto.components.github.PRFilterSections.24754c44ad": {
+    "ko": "작성자"
+  },
+  "auto.components.github.PRFilterSections.2b2f019091": {
+    "ko": "모든 상태"
+  },
+  "auto.components.github.PRFilterSections.712c5abdbf": {
+    "ko": "라벨"
+  },
+  "auto.components.github.PRFilterSections.7bf3a6e5ac": {
+    "ko": "작성자"
+  },
+  "auto.components.github.PRFilterSections.b1d9fdea08": {
+    "ko": "라벨"
+  },
+  "auto.components.github.PRFilterSections.f0cf6dd591": {
+    "ko": "꺼짐"
+  },
+  "auto.components.github.github.rate.limit.display.6da1858354": {
+    "ko": "남음 · 재설정까지"
+  },
+  "auto.components.github.github.rate.limit.display.budget_scope_prefix": {
+    "ko": "예산 범위"
+  },
+  "auto.components.github.github.rate.limit.display.f42790d150": {
+    "ko": "/"
+  },
+  "auto.components.github.githubIssueCloseReasons.completed.description": {
+    "ko": "완료, 닫힘, 수정됨, 해결됨"
+  },
+  "auto.components.github.githubIssueCloseReasons.duplicate.description": {
+    "ko": "다른 이슈와 중복"
+  },
+  "auto.components.github.githubIssueCloseReasons.duplicate.label": {
+    "ko": "중복으로 닫기"
+  },
+  "auto.components.github.githubIssueCloseReasons.notPlanned.description": {
+    "ko": "수정하지 않음, 재현 불가, 오래됨"
+  },
+  "auto.components.github.githubIssueCloseReasons.notPlanned.label": {
+    "ko": "계획 없음으로 닫기"
+  },
+  "auto.components.github.pr.merge.state.039c072f94": {
+    "ko": "뒤처짐"
+  },
+  "auto.components.github.pr.merge.state.1432ecff30": {
+    "ko": "GitHub에서는 이 PR을 병합할 수 있다고 하지만 일부 체크가 실패했습니다."
+  },
+  "auto.components.github.pr.merge.state.4e2507176b": {
+    "ko": "체크 대기 중"
+  },
+  "auto.components.github.pr.merge.state.87fa36ac83": {
+    "ko": "체크 실패"
+  },
+  "auto.components.github.pr.merge.state.9bd983ce8f": {
+    "ko": "GitHub에서는 이 PR을 병합할 수 있다고 하지만 체크가 아직 실행 중입니다."
+  },
+  "auto.components.github.pr.merge.state.a5b66afb58": {
+    "ko": "체크 통과"
+  },
+  "auto.components.github.pr.merge.state.b289646bcd": {
+    "ko": "GitHub가 이 PR에 대해 변경을 요청했다고 보고합니다."
+  },
+  "auto.components.github.pr.merge.state.fbd4f57f0a": {
+    "ko": "체크를 통과했습니다. 병합 전에 병합 가능 여부를 다시 확인합니다."
+  },
+  "auto.components.github.project.ProjectCell.54cac64427": {
+    "ko": "행에 repo 슬러그가 없습니다."
+  },
+  "auto.components.github.project.ProjectCell.8d669084f6": {
+    "ko": "제한됨"
+  },
+  "auto.components.github.project.ProjectCell.af5d8c912a": {
+    "ko": "제한된 항목"
+  },
+  "auto.components.github.project.ProjectPicker.9b36829267": {
+    "ko": "보기를 찾을 수 없습니다."
+  },
+  "auto.components.github.project.ProjectPicker.b3044b7a25": {
+    "ko": "최근"
+  },
+  "auto.components.github.project.ProjectViewWrapper.067119985c": {
+    "ko": "GitHub 검색, 예: assignee:@me is:open"
+  },
+  "auto.components.github.project.ProjectViewWrapper.1850fceac8": {
+    "ko": "{{value0}}/{{value1}}이(가) Orca에 추가되어 있지 않습니다. 작업을 시작하려면 추가하거나 GitHub에서 여세요."
+  },
+  "auto.components.github.project.ProjectViewWrapper.1aa7c952b9": {
+    "ko": "프로젝트 보기"
+  },
+  "auto.components.github.project.ProjectViewWrapper.4d2a77a119": {
+    "ko": "기능 요청 제출"
+  },
+  "auto.components.gitlab.gitlab.rate.limit.display.3e2c982cfa": {
+    "ko": "남음, 재설정까지"
+  },
+  "auto.components.gitlab.gitlab.rate.limit.display.budget_scope_prefix": {
+    "ko": "예산 범위"
+  },
+  "auto.components.gitlab.gitlab.rate.limit.display.ea8ad0bae8": {
+    "ko": "/"
+  },
+  "auto.components.jira.connect.dialog.2849ddb295": {
+    "ko": "Atlassian 이메일"
+  },
+  "auto.components.jira.connect.dialog.3d81bf3ab3": {
+    "ko": "API 토큰"
+  },
+  "auto.components.jira.connect.dialog.4a2ab52781": {
+    "ko": "확인 중…"
+  },
+  "auto.components.jira.connect.dialog.7b3967c12f": {
+    "ko": "Atlassian API 토큰"
+  },
+  "auto.components.jira.connect.dialog.8090504a3e": {
+    "ko": "다음에서 토큰 생성:"
+  },
+  "auto.components.jira.connect.dialog.8388bdea2b": {
+    "ko": "Jira 사이트 연결"
+  },
+  "auto.components.jira.connect.dialog.d785c42b8b": {
+    "ko": "Jira Cloud 사이트 URL, Atlassian 이메일, API 토큰을 사용해 이슈를 탐색합니다."
+  },
+  "auto.components.jira.connect.dialog.e176f9d0c5": {
+    "ko": "Jira Cloud 사이트 URL"
+  },
+  "auto.components.jira.connect.dialog.fdd26d81cc": {
+    "ko": "Atlassian 계정 설정"
+  },
+  "auto.components.linear.api.key.dialog.57a66522c8": {
+    "ko": "연결 중"
+  },
+  "auto.components.linear.api.key.dialog.edec49dfae": {
+    "ko": "lin_api_..."
+  },
+  "auto.components.linear.priority.icon.c43d3e065b": {
+    "ko": "우선순위:"
+  },
+  "auto.components.linear.project.view.surfaces.06b887d622": {
+    "ko": "처음 표시"
+  },
+  "auto.components.linear.project.view.surfaces.111bef9aa8": {
+    "ko": "리드"
+  },
+  "auto.components.linear.project.view.surfaces.20b9d09b7d": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.linear.project.view.surfaces.3ad562bdf4": {
+    "ko": "범위 내 이슈"
+  },
+  "auto.components.linear.project.view.surfaces.3be47aed6f": {
+    "ko": "우선순위"
+  },
+  "auto.components.linear.project.view.surfaces.563501f191": {
+    "ko": "진행률"
+  },
+  "auto.components.linear.project.view.surfaces.65bda65159": {
+    "ko": "멤버"
+  },
+  "auto.components.linear.project.view.surfaces.7616c986c6": {
+    "ko": "열린 이슈 {{value0}}개"
+  },
+  "auto.components.linear.project.view.surfaces.c8db98b73b": {
+    "ko": "리소스"
+  },
+  "auto.components.linear.project.view.surfaces.ef90b21366": {
+    "ko": "보기를 찾을 수 없습니다."
+  },
+  "auto.components.linear.project.view.surfaces.f059181bd9": {
+    "ko": "비공개"
+  },
+  "auto.components.linear.project.view.surfaces.f5ef24cf46": {
+    "ko": "건강도"
+  },
+  "auto.components.linear.scope.selector.89f6580dbf": {
+    "ko": "팀 검색..."
+  },
+  "auto.components.mobile.MobilePage.1b4509a8a1": {
+    "ko": "페어링됨"
+  },
+  "auto.components.mobile.MobilePage.e17393c6a3": {
+    "ko": "휴대폰 미리보기"
+  },
+  "auto.components.mobile.PhoneCarousel.93217b41c1": {
+    "ko": "워크트리 목록"
+  },
+  "auto.components.mobile.slides.HomeSlide.0bad5b07c8": {
+    "ko": "GitHub 및 Linear"
+  },
+  "auto.components.mobile.slides.HomeSlide.0bc1881bc4": {
+    "ko": "연결됨 · 워크트리 40개 · 활성 5개"
+  },
+  "auto.components.mobile.slides.HomeSlide.c0e2e9dcd9": {
+    "ko": "다시 오신 것을 환영합니다"
+  },
+  "auto.components.mobile.slides.TerminalSlide.2defc05141": {
+    "ko": "dev@mac"
+  },
+  "auto.components.mobile.slides.TerminalSlide.53ff909568": {
+    "ko": "Tab"
+  },
+  "auto.components.mobile.slides.TerminalSlide.58a9ee6003": {
+    "ko": "도구 호출 형식. 다음으로 diff를 추가할까요?"
+  },
+  "auto.components.mobile.slides.TerminalSlide.80cc356591": {
+    "ko": "읽기"
+  },
+  "auto.components.mobile.slides.TerminalSlide.8d6516312d": {
+    "ko": "terminals 2개 · claude 활성"
+  },
+  "auto.components.mobile.slides.TerminalSlide.a6e7cdc688": {
+    "ko": "pnpm test --filter mobile"
+  },
+  "auto.components.mobile.slides.TerminalSlide.e0f98be657": {
+    "ko": "orca/feat-mobile-page"
+  },
+  "auto.components.mobile.slides.TerminalSlide.e4befee569": {
+    "ko": "셸"
+  },
+  "auto.components.mobile.slides.WorktreeListSlide.17f9e0d226": {
+    "ko": "최근"
+  },
+  "auto.components.new.workspace.ProjectCombobox.empty": {
+    "ko": "검색과 일치하는 프로젝트가 없습니다."
+  },
+  "auto.components.new.workspace.ProjectCombobox.search": {
+    "ko": "프로젝트 검색..."
+  },
+  "auto.components.new.workspace.ProjectHostSetupCombobox.empty": {
+    "ko": "이 프로젝트에 준비된 호스트가 없습니다."
+  },
+  "auto.components.new.workspace.ProjectHostSetupCombobox.placeholder": {
+    "ko": "호스트 선택"
+  },
+  "auto.components.notification.sound.options.0acd3d384e": {
+    "ko": "클랙"
+  },
+  "auto.components.notification.sound.options.1e4b81d892": {
+    "ko": "텀프"
+  },
+  "auto.components.notification.sound.options.79919c832d": {
+    "ko": "딩"
+  },
+  "auto.components.notification.sound.options.86af8d938c": {
+    "ko": "봉 소리"
+  },
+  "auto.components.onboarding.AgentFeatureSetupStep.97dcdc010f": {
+    "ko": "기능 활성화"
+  },
+  "auto.components.onboarding.AgentStep.1eee1c7bd8": {
+    "ko": "PATH에서 agents를 찾지 못했습니다. 나중에 설치할 항목을 선택하거나 빈 terminal로 계속 진행하세요."
+  },
+  "auto.components.onboarding.AgentStep.showMoreAgents": {
+    "ko": "agents {{value0}}개 더 보기→"
+  },
+  "auto.components.onboarding.AgentStep.yoloPermissionsInfo": {
+    "ko": "Agent 권한 정보"
+  },
+  "auto.components.onboarding.AgentStep.yoloPermissionsLabel": {
+    "ko": "Yolo / 권한 확인 위험하게 건너뛰기"
+  },
+  "auto.components.onboarding.AgentStep.yoloPermissionsTooltip": {
+    "ko": "중단을 줄이기 위해 agents 권한 확인을 건너뜁니다."
+  },
+  "auto.components.onboarding.FeatureSetupChecklist.01426f3a23": {
+    "ko": "Agents가 사이트를 탐색하고, 페이지를 검사하고, 브라우저 작업을 처리할 수 있습니다."
+  },
+  "auto.components.onboarding.FeatureSetupChecklist.c5292c409d": {
+    "ko": "Agents는 요청 시 앱 창을 검사하고 로컬 앱을 작동할 수 있습니다."
+  },
+  "auto.components.onboarding.IntegrationsStep.0b4a7d23ab": {
+    "ko": "로그인 중"
+  },
+  "auto.components.onboarding.OnboardingFlow.322fc50a18": {
+    "ko": "Orca는 모든 CLI agent와 함께 작동합니다. 가장 자주 사용할 agent를 선택하세요. 언제든지 전환할 수 있습니다."
+  },
+  "auto.components.onboarding.OnboardingFlow.a5e5da02f7": {
+    "ko": "연동"
+  },
+  "auto.components.onboarding.OnboardingFlow.windowsTerminalSubtitle": {
+    "ko": "새 창에서 사용할 기본 셸과 terminal에서 오른쪽 클릭이 동작하는 방식을 선택하세요."
+  },
+  "auto.components.onboarding.RepoStep.466108ab89": {
+    "ko": "선택한 호스트에 존재하는 경로를 입력하세요."
+  },
+  "auto.components.onboarding.RepoStep.6558d50c69": {
+    "ko": "한 번에 여러 repos를 가져오고 싶으신가요? 상위 폴더를 선택하세요."
+  },
+  "auto.components.onboarding.RepoStep.c33b190ca3": {
+    "ko": "호스트 경로만"
+  },
+  "auto.components.onboarding.RepoStep.cf23006ba7": {
+    "ko": "선택한 호스트"
+  },
+  "auto.components.onboarding.ThemeStep.7ee9234e54": {
+    "ko": "Ghostty 설정을 찾았습니다."
+  },
+  "auto.components.onboarding.ThemeStep.94b9dc561d": {
+    "ko": "설정 -> Terminal"
+  },
+  "auto.components.pet.PetOverlay.4712d196c6": {
+    "ko": "@keyframes pet-{{value0}} { from { background-position: {{value1}}px {{value2}}px; } to { background-position: {{value3}}px {{value4}}px; } }"
+  },
+  "auto.components.pet.PetOverlay.de932b0e8f": {
+    "ko": "@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }"
+  },
+  "auto.components.repo.NestedRepoChecklist.ea54c7bf8f": {
+    "ko": "/"
+  },
+  "auto.components.repo.NestedRepoChecklist.f7e1170567": {
+    "ko": "선택됨"
+  },
+  "auto.components.repo.NestedRepoScanLimitNotice.642a43c139": {
+    "ko": "중첩 repos 스캔 한도"
+  },
+  "auto.components.repo.RepoCombobox.b4a235e886": {
+    "ko": "프로젝트 추가 중"
+  },
+  "auto.components.repo.repo.icon.477b28c948": {
+    "ko": "데이터베이스"
+  },
+  "auto.components.repo.repo.icon.d202c659a3": {
+    "ko": "디자인"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.agentSessionQueued": {
+    "ko": "{{value0}} 세션이 대기열에 추가됨"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.clearSearch": {
+    "ko": "검색 지우기"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.localWorkspacesOnly": {
+    "ko": "기록에서 재개하기는 로컬 워크스페이스에서만 사용할 수 있습니다."
+  },
+  "auto.components.right.sidebar.AiVaultPanel.noAgentSessionsFound": {
+    "ko": "agent 세션을 찾을 수 없습니다"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.noSessionsMatchFilters": {
+    "ko": "현재 필터와 일치하는 세션이 없습니다"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming": {
+    "ko": "세션을 재개하기 전에 워크스페이스를 여세요."
+  },
+  "auto.components.right.sidebar.AiVaultPanel.refreshSessionHistory": {
+    "ko": "세션 기록 새로고침"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.remoteBrowseLocalHistory": {
+    "ko": "원격 워크스페이스는 로컬 기록을 탐색할 수 있습니다. 재개 작업은 로컬 워크스페이스에서 실행됩니다."
+  },
+  "auto.components.right.sidebar.AiVaultPanel.resumeCommandCopied": {
+    "ko": "재개 명령이 복사됨"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.resumePastSessions": {
+    "ko": "이전 세션 재개"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.searchSessions": {
+    "ko": "세션 검색"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.sessionHistory": {
+    "ko": "Agent 세션 기록"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.shownRecent": {
+    "ko": "{{value0}}개 표시 · 최근 {{value1}}개"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.transcriptsSkipped": {
+    "ko": "대화 기록 {{count}}개 건너뜀"
+  },
+  "auto.components.right.sidebar.AiVaultPanel.valueCopied": {
+    "ko": "{{value0}} 복사됨"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.allScope": {
+    "ko": "전체"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.allSessions": {
+    "ko": "모든 세션"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.allSessionsLower": {
+    "ko": "모든 세션"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.created": {
+    "ko": "생성됨"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.currentWorkspace": {
+    "ko": "현재 워크스페이스"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.currentWorkspaceLower": {
+    "ko": "현재 워크스페이스"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.currentWorktreeLower": {
+    "ko": "현재 워크트리"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.globalScope": {
+    "ko": "전역"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.group": {
+    "ko": "그룹"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.hideEmptySessions": {
+    "ko": "빈 세션 숨기기"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.lastUpdated": {
+    "ko": "마지막 업데이트"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.resetView": {
+    "ko": "보기 재설정"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.scanningSessions": {
+    "ko": "세션 스캔 중"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.scope": {
+    "ko": "범위"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.scopeAriaLabel": {
+    "ko": "세션 기록 범위: {{value0}}"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.sort": {
+    "ko": "정렬"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.thisScope": {
+    "ko": "현재"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.viewOptions": {
+    "ko": "보기 옵션"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.viewOptionsAriaLabel": {
+    "ko": "세션 기록 보기 옵션"
+  },
+  "auto.components.right.sidebar.AiVaultPanelControls.worktreeScope": {
+    "ko": "워크트리"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.branch": {
+    "ko": "브랜치"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.copyDetailValue": {
+    "ko": "{{value0}} 복사"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.copyLogPath": {
+    "ko": "로그 경로 복사"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.copyResumeCommand": {
+    "ko": "재개 명령 복사"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.copySessionId": {
+    "ko": "세션 ID 복사"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.created": {
+    "ko": "생성됨"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.daysAgo": {
+    "ko": "{{value0}}일 전"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.hoursAgo": {
+    "ko": "{{value0}}시간 전"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.justNow": {
+    "ko": "방금 전"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.latestLog": {
+    "ko": "최신 로그"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.log": {
+    "ko": "로그"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.minutesAgo": {
+    "ko": "{{value0}}분 전"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.model": {
+    "ko": "모델"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.monthsAgo": {
+    "ko": "{{value0}}개월 전"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.noReadablePreview": {
+    "ko": "이 대화 기록에는 읽을 수 있는 메시지 미리보기가 없습니다."
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.openLog": {
+    "ko": "로그 열기"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.openWorkingDirectory": {
+    "ko": "작업 디렉터리 열기"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.resumeCommand": {
+    "ko": "재개 명령"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.resumeInNewTab": {
+    "ko": "새 탭에서 재개"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.revealLog": {
+    "ko": "로그 위치 열기"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.session": {
+    "ko": "세션"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.sessionActions": {
+    "ko": "{{value0}} 세션 작업"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.tokenSuffix": {
+    "ko": " · 토큰 {{value0}}개"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.unknownLocation": {
+    "ko": "알 수 없는 위치"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.unknownTime": {
+    "ko": "알 수 없는 시간"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.updated": {
+    "ko": "업데이트됨"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.usage": {
+    "ko": "사용량"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.usageValue": {
+    "ko": "메시지 {{value0}}개{{value1}}"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.workingDir": {
+    "ko": "작업 디렉터리"
+  },
+  "auto.components.right.sidebar.AiVaultSessionDetails.yearsAgo": {
+    "ko": "{{value0}}년 전"
+  },
+  "auto.components.right.sidebar.AiVaultSessionRow.copyLogPath": {
+    "ko": "로그 경로 복사"
+  },
+  "auto.components.right.sidebar.AiVaultSessionRow.copyResumeCommand": {
+    "ko": "재개 명령 복사"
+  },
+  "auto.components.right.sidebar.AiVaultSessionRow.copySessionId": {
+    "ko": "세션 ID 복사"
+  },
+  "auto.components.right.sidebar.AiVaultSessionRow.messageCount": {
+    "ko": "메시지 {{value0}}개"
+  },
+  "auto.components.right.sidebar.AiVaultSessionRow.openLog": {
+    "ko": "로그 열기"
+  },
+  "auto.components.right.sidebar.AiVaultSessionRow.openWorkingDirectory": {
+    "ko": "작업 디렉터리 열기"
+  },
+  "auto.components.right.sidebar.AiVaultSessionRow.resumeAgentSession": {
+    "ko": "{{value0}} 세션 재개"
+  },
+  "auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab": {
+    "ko": "새 탭에서 재개"
+  },
+  "auto.components.right.sidebar.AiVaultSessionRow.revealLog": {
+    "ko": "로그 위치 열기"
+  },
+  "auto.components.right.sidebar.AiVaultSessionRow.tokenCount": {
+    "ko": "토큰 {{value0}}개"
+  },
+  "auto.components.right.sidebar.BulkActionBar.60ed678138": {
+    "ko": "선택됨"
+  },
+  "auto.components.right.sidebar.BulkActionBar.ef5f5bd06e": {
+    "ko": "스테이지에 올리기 ("
+  },
+  "auto.components.right.sidebar.ChecksPanel.5c88c6db07": {
+    "ko": "{{value0}}에서 열기"
+  },
+  "auto.components.right.sidebar.ChecksPanel.dda5924a40": {
+    "ko": "체크를 보려면 Git 브랜치와 호스팅 리뷰 컨텍스트가 필요합니다."
+  },
+  "auto.components.right.sidebar.ChecksPanel.fdb27637f2": {
+    "ko": "게시 중…"
+  },
+  "auto.components.right.sidebar.CreatePullRequestDialog.6f5f1962b6": {
+    "ko": "헤드 브랜치"
+  },
+  "auto.components.right.sidebar.CreatePullRequestDialog.7a21f0dae8": {
+    "ko": "{{value0}}에서 열기"
+  },
+  "auto.components.right.sidebar.FileExplorerRow.3161c4e425": {
+    "ko": "폴더"
+  },
+  "auto.components.right.sidebar.GitHistoryPanel.8232c8b2f2": {
+    "ko": "{{value0}} commit 열기: {{value1}}"
+  },
+  "auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9": {
+    "ko": "refs란 무엇인가요?"
+  },
+  "auto.components.right.sidebar.PortsPanel.0f1d8cd324": {
+    "ko": "바인딩"
+  },
+  "auto.components.right.sidebar.PortsPanel.729be0b4e5": {
+    "ko": "종류"
+  },
+  "auto.components.right.sidebar.PortsPanel.9f475dc994": {
+    "ko": "전달 중..."
+  },
+  "auto.components.right.sidebar.PortsPanel.b1ff94fa27": {
+    "ko": "프로토콜"
+  },
+  "auto.components.right.sidebar.PortsPanel.c9d106547a": {
+    "ko": "포워드"
+  },
+  "auto.components.right.sidebar.Search.1ec640c9c7": {
+    "ko": "일치"
+  },
+  "auto.components.right.sidebar.SourceControl.03d238218c": {
+    "ko": "세부정보"
+  },
+  "auto.components.right.sidebar.SourceControl.0fad573938": {
+    "ko": "commit 되지 않음"
+  },
+  "auto.components.right.sidebar.SourceControl.11b5dd8e41": {
+    "ko": "비교 대상"
+  },
+  "auto.components.right.sidebar.SourceControl.3278b2767b": {
+    "ko": "앞섬"
+  },
+  "auto.components.right.sidebar.SourceControl.383cf92c73": {
+    "ko": "트리"
+  },
+  "auto.components.right.sidebar.SourceControl.3a231c845b": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.right.sidebar.SourceControl.812cb992ee": {
+    "ko": "{{value0}}에서 열기"
+  },
+  "auto.components.right.sidebar.SourceControl.834cb3f23d": {
+    "ko": "AI로 수정"
+  },
+  "auto.components.right.sidebar.SourceControl.8cde1a2fb0": {
+    "ko": "스테이지"
+  },
+  "auto.components.right.sidebar.SourceControl.9bb062a886": {
+    "ko": "commit 되지 않음"
+  },
+  "auto.components.right.sidebar.SourceControl.aaf1451654": {
+    "ko": "초안 {{value0}} 만들기"
+  },
+  "auto.components.right.sidebar.SourceControl.c05fe04839": {
+    "ko": "{{value0}}의 포크로 푸시됩니다(origin 아님)."
+  },
+  "auto.components.right.sidebar.SourceControl.d37e68f61d": {
+    "ko": "리뷰용 브랜치를 준비하는 중…"
+  },
+  "auto.components.right.sidebar.SourceControl.f62ce91ade": {
+    "ko": "origin"
+  },
+  "auto.components.right.sidebar.SourceControlAgentActionDialog.808cfe0a3b": {
+    "ko": "이 repos"
+  },
+  "auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bb611240f": {
+    "ko": "Orca 기본 프롬프트를 사용하려면 {basePrompt}를 사용하세요."
+  },
+  "auto.components.right.sidebar.SourceControlAgentActionDialogForm.23280cbab1": {
+    "ko": "이 템플릿에는 {basePrompt}가 포함되어 있지 않아 agent가 Orca 기본 프롬프트를 받지 못합니다."
+  },
+  "auto.components.right.sidebar.SourceControlAgentActionDialogForm.6cefcdfba1": {
+    "ko": "나중에 Source Control AI 설정에서 변경할 수 있습니다."
+  },
+  "auto.components.right.sidebar.SourceControlAgentActionDialogForm.c29f9cf266": {
+    "ko": "이 프롬프트를 저장하고 다음에는 이 리뷰를 표시하지 않기"
+  },
+  "auto.components.right.sidebar.SourceControlAgentActionDialogForm.d8f40128ee": {
+    "ko": "{basePrompt}는 Orca 기본 프롬프트입니다."
+  },
+  "auto.components.right.sidebar.SourceControlAgentActionDialogForm.f4f3c9ca4a": {
+    "ko": "프롬프트 템플릿"
+  },
+  "auto.components.right.sidebar.SourceControlAgentActionDialogForm.fe119187bb": {
+    "ko": "--model sonnet"
+  },
+  "auto.components.right.sidebar.SourceControlTextGenerationDialogForm.551ffd111b": {
+    "ko": "--model sonnet"
+  },
+  "auto.components.right.sidebar.checks.panel.content.0975eeaaef": {
+    "ko": "충돌하는 파일"
+  },
+  "auto.components.right.sidebar.checks.panel.content.0fc6f743b3": {
+    "ko": "작성자"
+  },
+  "auto.components.right.sidebar.checks.panel.content.3a71a6ed0b": {
+    "ko": "체크와 병합을 완료하려면 먼저 충돌을 해결하세요."
+  },
+  "auto.components.right.sidebar.checks.panel.content.a2fb3f4408": {
+    "ko": "처음 100개 작업 표시"
+  },
+  "auto.components.right.sidebar.checks.panel.content.b45db92d0e": {
+    "ko": "수정"
+  },
+  "auto.components.right.sidebar.checks.panel.content.b652f38caf": {
+    "ko": "실패한 체크"
+  },
+  "auto.components.right.sidebar.checks.panel.content.b8c4e2a1f7": {
+    "ko": "전체 로그 보기"
+  },
+  "auto.components.right.sidebar.checks.panel.content.c16762ac8c": {
+    "ko": "아래 체크와 댓글은 현재 가져온 컨텍스트를 보여줍니다."
+  },
+  "auto.components.right.sidebar.checks.panel.content.d098e5529a": {
+    "ko": "출력"
+  },
+  "auto.components.right.sidebar.checks.panel.content.d7a2f9c401": {
+    "ko": "해결되지 않은 댓글 {{value0}}개 보내기"
+  },
+  "auto.components.right.sidebar.checks.panel.content.ee07b33924": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.right.sidebar.gitlab.mr.merge.state.49ac4fec10": {
+    "ko": "검사 실패"
+  },
+  "auto.components.right.sidebar.index.8bc2bbc3a0": {
+    "ko": "탐색기"
+  },
+  "auto.components.right.sidebar.index.fc3095d2ed": {
+    "ko": "탐색기"
+  },
+  "auto.components.right.sidebar.pull.policy.notice.body": {
+    "ko": "이 브랜치에는 로컬 commits과 원격 commits이 모두 있습니다. 이 워크트리 또는 SSH 호스트에서 명령 하나를 실행한 다음 풀 또는 동기화를 다시 시도하세요."
+  },
+  "auto.components.right.sidebar.pull.policy.notice.copyAria": {
+    "ko": "{{value0}} pull 정책 명령 복사"
+  },
+  "auto.components.right.sidebar.pull.policy.notice.copyCommand": {
+    "ko": "명령 복사"
+  },
+  "auto.components.right.sidebar.pull.policy.notice.fastForwardOnly": {
+    "ko": "fast-forward만 허용"
+  },
+  "auto.components.right.sidebar.pull.policy.notice.fastForwardOnlyDescription": {
+    "ko": "병합이나 리베이스가 필요 없을 때만 pull합니다."
+  },
+  "auto.components.right.sidebar.pull.policy.notice.mergeDescription": {
+    "ko": "로컬과 원격이 모두 변경된 경우 병합 commit을 만듭니다."
+  },
+  "auto.components.right.sidebar.pull.policy.notice.rebaseDescription": {
+    "ko": "로컬 commits을 원격 브랜치 위에 다시 적용합니다."
+  },
+  "auto.components.right.sidebar.pull.policy.notice.title": {
+    "ko": "Pull 정책 필요"
+  },
+  "auto.components.right.sidebar.right.panel.comment.composer.256300f8ea": {
+    "ko": "굵게"
+  },
+  "auto.components.right.sidebar.right.panel.comment.composer.542bf6a7e2": {
+    "ko": "기울임"
+  },
+  "auto.components.right.sidebar.source.control.discard.confirmation.2ae5a785b3": {
+    "ko": "스테이징되지 않은 변경 사항을 모두 삭제하시겠습니까?"
+  },
+  "auto.components.right.sidebar.source.control.discard.confirmation.5ddd8cac7f": {
+    "ko": "스테이징된 변경 사항을 모두 삭제하시겠습니까?"
+  },
+  "auto.components.right.sidebar.source.control.discard.confirmation.ddf36f291c": {
+    "ko": "그러면 모든 스테이징된 변경 사항이 언스테이징되고 되돌려집니다. 스테이징된 새 파일이 삭제됩니다. 이 작업은 취소할 수 없습니다."
+  },
+  "auto.components.right.sidebar.source.control.discard.dialog.6de99d162b": {
+    "ko": "항목"
+  },
+  "auto.components.right.sidebar.source.control.dropdown.items.226b85a3a7": {
+    "ko": "가져오기"
+  },
+  "auto.components.right.sidebar.source.control.dropdown.items.7aad2c0240": {
+    "ko": "호스팅 리뷰 작업 진행 중…"
+  },
+  "auto.components.right.sidebar.source.control.primary.action.1884cf34af": {
+    "ko": "이 브랜치를 origin에 게시"
+  },
+  "auto.components.right.sidebar.source.control.primary.action.1d47e850cf": {
+    "ko": "연결된 리뷰 브랜치에 업데이트 푸시"
+  },
+  "auto.components.right.sidebar.source.control.primary.action.a5d1f7b036": {
+    "ko": "{{value0}}을(를) 만들기 전에 commits을 게시하세요."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.b6e2a8c147": {
+    "ko": "{{value0}}을(를) 만들기 전에 commits을 푸시하세요."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.b8e4f2a901": {
+    "ko": "원격 작업이 끝날 때까지 기다리세요."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.c7f3b9d258": {
+    "ko": "{{value0}}을(를) 만들기 전에 이 브랜치를 동기화하세요."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.c9f3a1b802": {
+    "ko": "{{value0}}을(를) 만들기 전에 충돌을 해결하세요."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.d2a8c4e703": {
+    "ko": "이 브랜치에는 {{value0}}에 포함할 변경 사항이 없습니다."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.d8a4c0e369": {
+    "ko": "{{value0}}을(를) 만들기 전에 인증하세요."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.e3b9d5f814": {
+    "ko": "기본 브랜치에서는 {{value0}}을(를) 만들 수 없습니다."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.e9b5d1f470": {
+    "ko": "{{value0}}을(를) 만들기 전에 브랜치를 체크아웃하세요."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.f0c6e2a581": {
+    "ko": "이 브랜치는 아직 {{value0}}을(를) 만들 준비가 되지 않았습니다."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.f4c0e6a925": {
+    "ko": "{{value0}}을(를) 만들기 전에 변경 사항을 Commit 하세요."
+  },
+  "auto.components.right.sidebar.source.control.primary.action.h3i4j5k607": {
+    "ko": "이 브랜치에서 {{value0}}을(를) 만들 수 있는지 확인 중…"
+  },
+  "auto.components.right.sidebar.useFileDeletion.23e98f192f": {
+    "ko": "원격 호스트의 파일을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다."
+  },
+  "auto.components.right.sidebar.useFileDeletion.7fb9435c86": {
+    "ko": "원격 호스트의 디렉터리와 그 안의 내용을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다."
+  },
+  "auto.components.right.sidebar.useFileDeletion.a76c74f105": {
+    "ko": "파괴적"
+  },
+  "auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.countMany": {
+    "ko": "연결된 워크트리 {{value0}}개"
+  },
+  "auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.countOne": {
+    "ko": "연결된 워크트리 1개"
+  },
+  "auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.description": {
+    "ko": "이 폴더 워크스페이스에 연결된 워크트리를 표시합니다."
+  },
+  "auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy": {
+    "ko": "이 워크스페이스에서 만든 워크트리가 여기에 표시됩니다."
+  },
+  "auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle": {
+    "ko": "아직 연결된 워크트리가 없습니다"
+  },
+  "auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.label": {
+    "ko": "워크스페이스"
+  },
+  "auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.unavailable": {
+    "ko": "폴더 워크스페이스에서만 워크스페이스가 표시됩니다."
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.allChecksPassing": {
+    "ko": "모든 검사 통과"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.failingCount": {
+    "ko": "{{value0}}개 실패"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneFailing": {
+    "ko": "1개 실패"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.onePending": {
+    "ko": "1개 대기 중"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.oneWorktree": {
+    "ko": "워크트리 1개"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.pendingCount": {
+    "ko": "{{value0}}개 대기 중"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.reviewChecks": {
+    "ko": "리뷰 검사"
+  },
+  "auto.components.rightSidebar.FolderWorkspacePrChecksPanel.worktreeCount": {
+    "ko": "워크트리 {{value0}}개"
+  },
+  "auto.components.settings.AccountsPane.350b2a1aa7": {
+    "ko": "현재 사용 중인"
+  },
+  "auto.components.settings.AccountsPane.7ce0e1907c": {
+    "ko": "). 브라우저의 DevTools -> Network -> opencode.ai 요청 -> Cookie 헤더에서 찾으세요. OpenCode Go 인증은 웹 기반이며 Windows 및 WSL terminals에서 공유됩니다."
+  },
+  "auto.components.settings.AccountsPane.8951c5309f": {
+    "ko": "auth=Fe26.2**…"
+  },
+  "auto.components.settings.AccountsPane.b15ce90870": {
+    "ko": "{{value0}} -> {{value1}}. 이전 세션을 계속하기 전에 실행 중인 Claude terminals을 다시 시작하세요."
+  },
+  "auto.components.settings.AccountsPane.d70a5287a4": {
+    "ko": "자동 조회가 실패할 때 사용할 선택적 워크스페이스 ID 재정의입니다."
+  },
+  "auto.components.settings.AdvancedNetworkSettingsSection.0adfce9fa7": {
+    "ko": "http, https, SOCKS, SOCKS4, SOCKS5 URL을 지원합니다."
+  },
+  "auto.components.settings.AgentsPane.2d133152fa": {
+    "ko": "기본 환경 없음"
+  },
+  "auto.components.settings.AgentsPane.6f99bf5dd0": {
+    "ko": "기본 인수 없음"
+  },
+  "auto.components.settings.AgentsPane.agentPermissions": {
+    "ko": "Agent 권한"
+  },
+  "auto.components.settings.AgentsPane.agentPermissionsDescription": {
+    "ko": "Orca가 agents를 실행할 때 권한 프롬프트를 줄일지, 수동 확인을 유지할지 선택합니다."
+  },
+  "auto.components.settings.AgentsPane.agentPermissionsInfo": {
+    "ko": "Agent 권한 정보"
+  },
+  "auto.components.settings.AgentsPane.f9f127d664": {
+    "ko": "이 agent의 바이너리 경로나 이름을 재정의하고 기본 실행 인수 또는 환경을 편집합니다."
+  },
+  "auto.components.settings.AppearancePane.932ff1fbff": {
+    "ko": "테마"
+  },
+  "auto.components.settings.AppearancePane.fb0e0b4453": {
+    "ko": "시스템"
+  },
+  "auto.components.settings.AppearancePane.fd89b5487c": {
+    "ko": "라이트"
+  },
+  "auto.components.settings.AutoRenameBranchFromWorkSetting.2ee2779c05": {
+    "ko": "{firstPrompt}"
+  },
+  "auto.components.settings.AutoRenameBranchFromWorkSetting.69bf4830c2": {
+    "ko": "Orca의 항목을 포함하도록"
+  },
+  "auto.components.settings.AutoRenameBranchFromWorkSetting.800edb1e54": {
+    "ko": "fix-login-flow"
+  },
+  "auto.components.settings.AutoRenameBranchFromWorkSetting.a4fa380b67": {
+    "ko": "{assistantMessage}"
+  },
+  "auto.components.settings.AutoRenameBranchPromptEditor.ebb942a2ec": {
+    "ko": "fix-login-flow"
+  },
+  "auto.components.settings.BaseRefPicker.915ad97875": {
+    "ko": "upstream"
+  },
+  "auto.components.settings.BaseRefPicker.b468f46726": {
+    "ko": "upstream/main"
+  },
+  "auto.components.settings.BrowserDefaultZoomSetting.2622126877": {
+    "ko": "새로 열린 브라우저 탭에 적용되는 확대/축소 수준입니다."
+  },
+  "auto.components.settings.BrowserPane.6480776a03": {
+    "ko": "선택한 호스트의 브라우저 프로필입니다."
+  },
+  "auto.components.settings.BrowserPane.86b7c83fee": {
+    "ko": "이 컴퓨터"
+  },
+  "auto.components.settings.BrowserPane.c0f85056d9": {
+    "ko": "이 Orca 서버의 브라우저 프로필입니다."
+  },
+  "auto.components.settings.BrowserPane.cd47bc9622": {
+    "ko": "새 브라우저 탭의 기본 프로필을 선택합니다. 쿠키를 가져오고 탭별로 프로필을 전환하려면 다음을 이용하세요:"
+  },
+  "auto.components.settings.BrowserProfileRow.d420c43729": {
+    "ko": "{{value1}}{{value2}}에서 {{value0}}개의 쿠키를 {{value3}}(으)로 가져왔습니다."
+  },
+  "auto.components.settings.BrowserUseComputerUseNotice.15b5e680ba": {
+    "ko": "컴퓨터 사용 열기"
+  },
+  "auto.components.settings.CliSection.8a9b784c60": {
+    "ko": "오래됨"
+  },
+  "auto.components.settings.CommitMessageAiPane.15b60d54b2": {
+    "ko": "예: ollama run llama3.1 {prompt}"
+  },
+  "auto.components.settings.CommitMessageAiPane.6c84ba6de3": {
+    "ko": "템플릿"
+  },
+  "auto.components.settings.CommitMessageAiPane.a69e1fe91a": {
+    "ko": "프롬프트"
+  },
+  "auto.components.settings.CommitMessageAiPane.b8b6fd55b4": {
+    "ko": "{prompt}"
+  },
+  "auto.components.settings.CommitMessageAiPane.d8b6764d79": {
+    "ko": "가능한 경우 리뷰 템플릿 사용"
+  },
+  "auto.components.settings.DefaultWindowsProjectRuntimeSetting.defaultRuntime": {
+    "ko": "기본 프로젝트 런타임"
+  },
+  "auto.components.settings.DefaultWindowsProjectRuntimeSetting.distroRequired": {
+    "ko": "프로젝트가 WSL을 상속하려면 먼저 WSL 배포판을 선택하세요."
+  },
+  "auto.components.settings.DefaultWindowsProjectRuntimeSetting.selectDistro": {
+    "ko": "배포판 선택"
+  },
+  "auto.components.settings.DefaultWindowsProjectRuntimeSetting.windowsDescription": {
+    "ko": "프로젝트에서 재정의하지 않는 한 Windows를 상속합니다."
+  },
+  "auto.components.settings.DefaultWindowsProjectRuntimeSetting.wslDescription": {
+    "ko": "프로젝트는 별도로 재정의하지 않는 한 WSL을 통해 {{value0}}을(를) 상속합니다."
+  },
+  "auto.components.settings.DefaultWindowsProjectRuntimeSetting.wslUnavailable": {
+    "ko": "WSL을 사용할 수 없습니다. WSL을 상속하는 프로젝트는 복구가 필요합니다."
+  },
+  "auto.components.settings.DeveloperPermissionsPane.16381e040a": {
+    "ko": "마이크"
+  },
+  "auto.components.settings.DeveloperPermissionsPane.7ca17b62c8": {
+    "ko": "프로젝트, 워크트리 또는 심볼릭 링크된 파일이 macOS 보호 폴더에 닿을 때 권장됩니다."
+  },
+  "auto.components.settings.DeveloperPermissionsPane.e119f0d66b": {
+    "ko": "자동화"
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription": {
+    "ko": "완료된 백그라운드 agent를 Orca가 최대 절전 모드로 전환하기 전에 기다릴 유휴 시간(분)입니다."
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel": {
+    "ko": "최대 절전까지"
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix": {
+    "ko": "분"
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.title": {
+    "ko": "Agent 최대 절전"
+  },
+  "auto.components.settings.ExperimentalPane.agentHibernation.toggleLabel": {
+    "ko": "Agent 최대 절전 전환"
+  },
+  "auto.components.settings.ExperimentalPane.newWorktreeCardStyle.copy": {
+    "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
+  },
+  "auto.components.settings.ExperimentalPane.newWorktreeCardStyle.description": {
+    "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
+  },
+  "auto.components.settings.GeneralEditorSettingsSection.45c6e85c4d": {
+    "ko": "편집기"
+  },
+  "auto.components.settings.GeneralPane.d58fccfd84": {
+    "ko": "탐색"
+  },
+  "auto.components.settings.GeneralPane.projectRuntime": {
+    "ko": "프로젝트 런타임"
+  },
+  "auto.components.settings.GeneralPane.projectRuntimeDescription": {
+    "ko": "별도로 재정의하지 않은 로컬 Windows 프로젝트의 기본 런타임입니다."
+  },
+  "auto.components.settings.GeneralSupportSection.6922c1fa2b": {
+    "ko": "GitHub에서 Orca 스타 누르기"
+  },
+  "auto.components.settings.GeneralSupportSection.964acc6bb4": {
+    "ko": "스타"
+  },
+  "auto.components.settings.GeneralUpdateSettingsSection.90eb7309d7": {
+    "ko": "사용 불가"
+  },
+  "auto.components.settings.GeneralWorkspaceSettingsSection.5567191a6e": {
+    "ko": "찾아보기"
+  },
+  "auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f": {
+    "ko": "워크스페이스 중첩"
+  },
+  "auto.components.settings.GitPane.2351aa5a31": {
+    "ko": "Git 사용자 이름"
+  },
+  "auto.components.settings.GitPane.36e3de3619": {
+    "ko": "오래된 기록과 비교하지 않도록 합니다. Orca는 해당 브랜치에 commits 되지 않은 변경 사항이나 로컬 전용 commits이 있으면 업데이트를 건너뜁니다."
+  },
+  "auto.components.settings.GitPane.976afc6b3e": {
+    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고, 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. 예:"
+  },
+  "auto.components.settings.GitPane.b5f534717a": {
+    "ko": "공동 작성"
+  },
+  "auto.components.settings.GitPane.b9b5771bb1": {
+    "ko": "표기"
+  },
+  "auto.components.settings.GitPane.b9c011fbc2": {
+    "ko": "속도 제한"
+  },
+  "auto.components.settings.GitPane.d072a12995": {
+    "ko": "git diff main...HEAD"
+  },
+  "auto.components.settings.GitPane.db3a127eb1": {
+    "ko": "이렇게 하면 다음과 같은 명령이 유지됩니다"
+  },
+  "auto.components.settings.GitPane.e02ea23a32": {
+    "ko": "Orca 표기"
+  },
+  "auto.components.settings.GitPane.f35007e6e8": {
+    "ko": "git-username"
+  },
+  "auto.components.settings.IntegrationsPane.027440e1cb": {
+    "ko": "MR, 이슈, 할 일, 파이프라인을 다음 도구로 사용합니다."
+  },
+  "auto.components.settings.IntegrationsPane.05e5245af7": {
+    "ko": "GitLab CLI가 설치되어 있지만 인증되지 않았습니다. terminal에서 다음 명령을 실행하세요."
+  },
+  "auto.components.settings.IntegrationsPane.09285e9fe6": {
+    "ko": "GitHub CLI가 설치되어 있지만 인증되지 않았습니다. terminal에서 다음 명령을 실행하세요."
+  },
+  "auto.components.settings.IntegrationsPane.1683acbac4": {
+    "ko": "Orca가 PR, MR, 체크, 리뷰 상태에 사용할 소스 호스트를 연결합니다."
+  },
+  "auto.components.settings.IntegrationsPane.1a62c295c6": {
+    "ko": "Gitea 자격 증명이 구성되었지만 인증할 수 없습니다. 토큰, API 기본 URL, repos 권한을 확인한 후 환경 변수가 변경된 경우 Orca를 다시 시작하세요."
+  },
+  "auto.components.settings.IntegrationsPane.2c0330ec3e": {
+    "ko": "비공개 repos의 경우, 그리고"
+  },
+  "auto.components.settings.IntegrationsPane.3ba07f933b": {
+    "ko": "Orca가 작업을 탐색하고 연결된 컨텍스트로 워크스페이스를 시작하는 데 사용할 이슈 트래커를 연결합니다."
+  },
+  "auto.components.settings.IntegrationsPane.67a9f26a80": {
+    "ko": ". 설정"
+  },
+  "auto.components.settings.IntegrationsPane.ae38fc62a8": {
+    "ko": "정상"
+  },
+  "auto.components.settings.IntegrationsPane.d9467ab026": {
+    "ko": "공개 repos는 Git 원격에서 감지됩니다. 설정하세요"
+  },
+  "auto.components.settings.IntegrationsPane.e74de656ce": {
+    "ko": "glab auth login"
+  },
+  "auto.components.settings.ManageSessionsSection.2896a50f50": {
+    "ko": "terminal {{value0}}(으)로 이동"
+  },
+  "auto.components.settings.ManageSessionsSection.33c2a1e1b4": {
+    "ko": "세션 {{value0}} 종료"
+  },
+  "auto.components.settings.McpConfigSection.3b224167ff": {
+    "ko": "서버"
+  },
+  "auto.components.settings.McpConfigSection.6bac9ddfc6": {
+    "ko": "SSH repos는 원격 파일 시스템을 통해 읽힙니다. 스타터 생성은 워크스페이스 루트 구성으로 제한됩니다."
+  },
+  "auto.components.settings.MobileEmulatorExamples.4daa95f25a": {
+    "ko": "Orca CLI 스킬이 설치된 프로젝트의 Claude Code, Codex 또는 다른 agent에 이들 중 하나를 붙여넣으세요."
+  },
+  "auto.components.settings.MobileEmulatorSettingsPane.a4f1c82d90": {
+    "ko": "비활성화됨"
+  },
+  "auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c": {
+    "ko": "가용성"
+  },
+  "auto.components.settings.MobilePane.35100bca5d": {
+    "ko": "휴대폰에서 terminals을 사용하는 동안 Orca는 휴대폰 화면에 맞게 terminals을 축소합니다. 앱을 닫거나 다른 곳으로 전환하면 terminals이 휴대폰 크기로 유지되는지(대화형 CLI 도구가 리플로우되지 않음) 또는 데스크탑으로 다시 크기가 조정되는지 여부가 제어됩니다. 배너에서 '이 terminals 복원' 또는 '모든 terminals 복원'을 사용해 언제든지 수동으로 크기를 조정할 수 있습니다."
+  },
+  "auto.components.settings.MobileSettingsPane.b0088412a1": {
+    "ko": "또는 다음에서 Android APK를 받으세요"
+  },
+  "auto.components.settings.NotificationsPane.274af61bc0": {
+    "ko": "시스템"
+  },
+  "auto.components.settings.NotificationsPane.4aa5085cd7": {
+    "ko": "사용자 정의:"
+  },
+  "auto.components.settings.NotificationsPane.b6fc369244": {
+    "ko": "백그라운드 terminal이 벨 문자를 내보냅니다."
+  },
+  "auto.components.settings.OpenAiTranscriptionKeyDialog.07b26f2742": {
+    "ko": "키 지우기"
+  },
+  "auto.components.settings.PrivacyPane.79a0f3c16c": {
+    "ko": "텔레메트리는 다음에 의해 비활성화됩니다."
+  },
+  "auto.components.settings.PrivacyPane.e3970bbbf5": {
+    "ko": "CI 환경 변수가 설정되었기 때문에 텔레메트리가 비활성화되었습니다. 설정을 해제하고 다시 시작하세요."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.applyRuntimeChange": {
+    "ko": "런타임 변경 적용"
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.defaultRuntime": {
+    "ko": "기본값({{value0}})"
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.distroMissing": {
+    "ko": "{{value0}}이(가) WSL에 설치되어 있지 않습니다. 설치된 배포판을 선택하거나 이 프로젝트를 Windows로 전환하세요."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.distroRequired": {
+    "ko": "WSL 배포판을 선택하거나 이 프로젝트를 Windows로 전환하세요."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.inheritedWindows": {
+    "ko": "프로젝트 재정의가 없습니다. 일반 설정에서 Windows를 선택합니다."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.inheritedWsl": {
+    "ko": "프로젝트 재정의가 없습니다. 일반 설정에서 WSL을 통해 {{value0}}을(를) 선택합니다."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.pendingRuntimeChange": {
+    "ko": "런타임 변경이 대기 중입니다. 적용한 뒤 새 프로젝트 작업은 선택한 런타임을 사용합니다."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.projectRuntime": {
+    "ko": "프로젝트 런타임"
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.projectWindows": {
+    "ko": "이 프로젝트는 Windows에서 실행됩니다."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.projectWsl": {
+    "ko": "이 프로젝트는 WSL을 통해 {{value0}}에서 실행됩니다."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.runtimeChangeHelp": {
+    "ko": "런타임 변경은 이 프로젝트의 새 terminals, agent 확인, 스킬 검색에 적용됩니다. 기존 terminals은 현재 런타임을 유지합니다."
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.selectDistro": {
+    "ko": "배포판 선택"
+  },
+  "auto.components.settings.ProjectWindowsRuntimeSetting.wslUnavailable": {
+    "ko": "WSL을 사용할 수 없습니다. 이 프로젝트를 Windows로 전환하거나 WSL을 복구하세요."
+  },
+  "auto.components.settings.ProviderHostScopeControl.change_host": {
+    "ko": "원격 서버 열기"
+  },
+  "auto.components.settings.QuickCommandsPane.9fcfc29519": {
+    "ko": "삽입"
+  },
+  "auto.components.settings.RepositoryHooksSection.0e0dd5b9a5": {
+    "ko": "로드됨"
+  },
+  "auto.components.settings.RepositoryHooksSection.13394103bd": {
+    "ko": "사용자 지정 GitHub 이슈 명령"
+  },
+  "auto.components.settings.RepositoryHooksSection.29397e8bbc": {
+    "ko": "commit 된 repo 명령만 실행하고 로컬 명령은 무시합니다."
+  },
+  "auto.components.settings.RepositoryHooksSection.2cc27dc12b": {
+    "ko": "연결된 이슈 명령에 대한 선택적 사용자별 재정의입니다."
+  },
+  "auto.components.settings.RepositoryHooksSection.2d03a514db": {
+    "ko": "로컬"
+  },
+  "auto.components.settings.RepositoryHooksSection.32f417fe17": {
+    "ko": "text-emerald-700 dark:text-emerald-300"
+  },
+  "auto.components.settings.RepositoryHooksSection.40a446ae16": {
+    "ko": "- 이 기기에서 나만 사용"
+  },
+  "auto.components.settings.RepositoryHooksSection.8dbe6bedf5": {
+    "ko": "유효하지 않음"
+  },
+  "auto.components.settings.RepositoryHooksSection.925f9e0dc4": {
+    "ko": "text-foreground"
+  },
+  "auto.components.settings.RepositoryHooksSection.95a0411b3e": {
+    "ko": "템플릿"
+  },
+  "auto.components.settings.RepositoryHooksSection.a3fc966677": {
+    "ko": "# 예: pnpm install cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\""
+  },
+  "auto.components.settings.RepositoryHooksSection.b20c5df6ca": {
+    "ko": "이 repo의 공유 설정, 아카이브 또는 이슈 자동화 기본값을 사용하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:"
+  },
+  "auto.components.settings.RepositoryHooksSection.b5e3e77e89": {
+    "ko": "작업"
+  },
+  "auto.components.settings.RepositoryHooksSection.c5a55a2d2e": {
+    "ko": "고급"
+  },
+  "auto.components.settings.RepositoryHooksSection.c90b858573": {
+    "ko": "text-amber-700 dark:text-amber-300"
+  },
+  "auto.components.settings.RepositoryHooksSection.e03d9a8f38": {
+    "ko": "매번 묻기"
+  },
+  "auto.components.settings.RepositoryHooksSection.fac13f8c1e": {
+    "ko": "기준"
+  },
+  "auto.components.settings.RepositoryIconPicker.2d8bd302fa": {
+    "ko": "아바타"
+  },
+  "auto.components.settings.RepositoryIconPicker.b2d7fd2116": {
+    "ko": "아이콘"
+  },
+  "auto.components.settings.RepositoryPane.addPlannedHost": {
+    "ko": "호스트 자리표시자 추가"
+  },
+  "auto.components.settings.RepositoryPane.addPlannedHostConfirm": {
+    "ko": "이 프로젝트를 이 호스트에서 사용할 예정이라는 사실만 기록합니다. 폴더 추가나 클론은 나중에 할 수 있습니다."
+  },
+  "auto.components.settings.RepositoryPane.addPlannedHostHelp": {
+    "ko": "이 호스트를 기억해 두고 나중에 프로젝트 추가를 완료합니다."
+  },
+  "auto.components.settings.RepositoryPane.addPlannedHostToHost": {
+    "ko": "{{host}} 추가"
+  },
+  "auto.components.settings.RepositoryPane.addProjectHost": {
+    "ko": "프로젝트를 호스트에 추가"
+  },
+  "auto.components.settings.RepositoryPane.addProjectHostHelp": {
+    "ko": "이 프로젝트를 추가로 사용할 위치를 선택하세요."
+  },
+  "auto.components.settings.RepositoryPane.addToAnotherHost": {
+    "ko": "다른 호스트에 추가"
+  },
+  "auto.components.settings.RepositoryPane.availableHostsDescription": {
+    "ko": "이 프로젝트가 설정된 호스트입니다."
+  },
+  "auto.components.settings.RepositoryPane.availableHostsHelp": {
+    "ko": "프로젝트 경로와 워크트리 설정은 호스트별로 다릅니다. 워크스페이스를 만들 때 준비된 설정 중 하나를 대상으로 지정할 수 있습니다."
+  },
+  "auto.components.settings.RepositoryPane.browseFolder": {
+    "ko": "폴더 찾아보기"
+  },
+  "auto.components.settings.RepositoryPane.browseFolderHelp": {
+    "ko": "이 호스트의 기존 체크아웃 또는 폴더를 사용합니다."
+  },
+  "auto.components.settings.RepositoryPane.cloneFromUrl": {
+    "ko": "URL에서 클론"
+  },
+  "auto.components.settings.RepositoryPane.cloneFromUrlHelp": {
+    "ko": "이 리포지토리를 선택한 호스트에 클론합니다."
+  },
+  "auto.components.settings.RepositoryPane.cloneHost": {
+    "ko": "클론"
+  },
+  "auto.components.settings.RepositoryPane.cloneUrlPlaceholder": {
+    "ko": "리포지토리 URL"
+  },
+  "auto.components.settings.RepositoryPane.cloningHost": {
+    "ko": "클론 중..."
+  },
+  "auto.components.settings.RepositoryPane.createPendingSetup": {
+    "ko": "설정 추적"
+  },
+  "auto.components.settings.RepositoryPane.creatingPendingSetup": {
+    "ko": "만드는 중..."
+  },
+  "auto.components.settings.RepositoryPane.existingFolder": {
+    "ko": "기존 폴더"
+  },
+  "auto.components.settings.RepositoryPane.hostAvailability": {
+    "ko": "호스트 사용 가능 여부"
+  },
+  "auto.components.settings.RepositoryPane.hostAvailabilityHelp": {
+    "ko": "같은 프로젝트를 연결된 다른 호스트에도 추가합니다."
+  },
+  "auto.components.settings.RepositoryPane.hostSetupBlockedVersion": {
+    "ko": "Orca 서버 버전이 호환되지 않습니다."
+  },
+  "auto.components.settings.RepositoryPane.hostSetupCheckingCapability": {
+    "ko": "호스트 기능 확인 중"
+  },
+  "auto.components.settings.RepositoryPane.hostSetupMissingCapability": {
+    "ko": "프로젝트를 설정하려면 이 호스트의 Orca를 업데이트하세요."
+  },
+  "auto.components.settings.RepositoryPane.hostSetupStateError": {
+    "ko": "오류"
+  },
+  "auto.components.settings.RepositoryPane.hostSetupStateNotSetUp": {
+    "ko": "설정되지 않음"
+  },
+  "auto.components.settings.RepositoryPane.hostSetupStateSettingUp": {
+    "ko": "설정 중"
+  },
+  "auto.components.settings.RepositoryPane.hostSetupStateUnsupported": {
+    "ko": "지원되지 않음"
+  },
+  "auto.components.settings.RepositoryPane.otherWaysToAdd": {
+    "ko": "다른 추가 방법"
+  },
+  "auto.components.settings.RepositoryPane.projectRuntime": {
+    "ko": "프로젝트 런타임"
+  },
+  "auto.components.settings.RepositoryPane.projectRuntimeDescription": {
+    "ko": "이 프로젝트를 Windows에서 실행할지 WSL에서 실행할지 선택합니다."
+  },
+  "auto.components.settings.RepositoryPane.settingUpHost": {
+    "ko": "가져오는 중..."
+  },
+  "auto.components.settings.RepositoryPane.setupExistingFolder": {
+    "ko": "기존 폴더 가져오기"
+  },
+  "auto.components.settings.RepositoryPane.setupExistingFolderHelp": {
+    "ko": "해당 호스트에 이미 있는 체크아웃을 연결해 이 프로젝트를 다른 호스트에서도 사용할 수 있게 합니다."
+  },
+  "auto.components.settings.RepositoryPane.setupKindGit": {
+    "ko": "Git 리포지토리"
+  },
+  "auto.components.settings.RepositoryPane.setupPathPending": {
+    "ko": "경로 대기 중"
+  },
+  "auto.components.settings.RepositoryPane.setupProjectOnHost": {
+    "ko": "다른 호스트에 설정"
+  },
+  "auto.components.settings.RepositoryPane.setupProjectOnHostHelp": {
+    "ko": "호스트를 선택한 뒤 기존 체크아웃을 가져오거나, repos를 클론하거나, 나중에 준비될 설정을 추적합니다."
+  },
+  "auto.components.settings.RepositoryPane.viewingHost": {
+    "ko": "보고 있는 호스트"
+  },
+  "auto.components.settings.RepositorySourceControlAiCustomCommand.f9941f0caf": {
+    "ko": "예: ollama run llama3.1 {prompt}"
+  },
+  "auto.components.settings.RepositorySourceControlAiEnablement.84233d1bb3": {
+    "ko": "끄기"
+  },
+  "auto.components.settings.RepositorySourceControlAiEnablement.bea897eec2": {
+    "ko": "켜기"
+  },
+  "auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.053ccfbf52": {
+    "ko": "끄기"
+  },
+  "auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.629ed8a9d3": {
+    "ko": "생성 후 호스팅 리뷰 열기"
+  },
+  "auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.777443bf89": {
+    "ko": "켜기"
+  },
+  "auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.d32b87e754": {
+    "ko": "가능한 경우 리뷰 템플릿 사용"
+  },
+  "auto.components.settings.RuntimePairingUrlGenerator.b91e36a986": {
+    "ko": "웹"
+  },
+  "auto.components.settings.Settings.2309068a6f": {
+    "ko": "파괴적"
+  },
+  "auto.components.settings.Settings.23931df7e8": {
+    "ko": "원격 호스트"
+  },
+  "auto.components.settings.Settings.3c88ec55d6": {
+    "ko": "\"에 대한 설정을 찾을 수 없습니다."
+  },
+  "auto.components.settings.Settings.3d9adfe6a5": {
+    "ko": "전역 terminal, 브라우저, Markdown 탭."
+  },
+  "auto.components.settings.Settings.6742c7932c": {
+    "ko": "전역 또는 프로젝트별로 적용되는 저장된 terminal 명령입니다."
+  },
+  "auto.components.settings.Settings.7210ac09c4": {
+    "ko": "agent 활동과 terminal 이벤트에 대한 네이티브 데스크톱 알림입니다."
+  },
+  "auto.components.settings.Settings.9b83cc62c2": {
+    "ko": "terminal에서 실행되는 개발자 도구의 macOS 개인정보 보호 접근 권한입니다."
+  },
+  "auto.components.settings.Settings.b5ee17826b": {
+    "ko": "지속 세션, 더 풍부한 원격 상태, 웹 또는 모바일 핸드오프를 위해 원격 Orca 런타임을 페어링합니다."
+  },
+  "auto.components.settings.Settings.b79b5b31e9": {
+    "ko": "셸, 렌더러, 세션, terminal 동작."
+  },
+  "auto.components.settings.Settings.c2ee313198": {
+    "ko": "SSH를 통해 기존 머신의 파일, terminals, Git, 워크스페이스를 사용합니다."
+  },
+  "auto.components.settings.SettingsFormControls.c822571b2e": {
+    "ko": "\"{{value0}}\"과(와) 일치"
+  },
+  "auto.components.settings.SettingsFormControls.fbb428db98": {
+    "ko": "선택됨:"
+  },
+  "auto.components.settings.SettingsFormControls.imported_from": {
+    "ko": "{{value0}}에서 가져옴"
+  },
+  "auto.components.settings.SettingsFormControls.search_terminal_themes": {
+    "ko": "terminal 테마 검색"
+  },
+  "auto.components.settings.ShortcutFilterRail.f733c4b89f": {
+    "ko": "명령 또는 키 검색"
+  },
+  "auto.components.settings.ShortcutTerminalPolicyControl.0f55c6f15c": {
+    "ko": "단축키가 겹칠 때 Orca와 포커스된 terminal 중 어느 쪽이 우선할지 선택합니다."
+  },
+  "auto.components.settings.ShortcutsPane.4b7ae34062": {
+    "ko": "직접."
+  },
+  "auto.components.settings.SourceControlAiActionRecipeDefaults.2037c78a6f": {
+    "ko": "템플릿"
+  },
+  "auto.components.settings.SourceControlAiActionRecipeDefaults.cb67b938c5": {
+    "ko": "수정"
+  },
+  "auto.components.settings.SparsePresetSettingsSection.17f8c4ce10": {
+    "ko": "스파스 워크트리 생성을 위해 저장된 디렉터리 세트를 관리합니다."
+  },
+  "auto.components.settings.SparsePresetSettingsSection.694cc55ecb": {
+    "ko": "저장된 디렉터리는 이 repos의 스파스 워크트리를 생성할 때 사용됩니다."
+  },
+  "auto.components.settings.SparsePresetSettingsSection.88bfbf1a9c": {
+    "ko": "이 repos에 저장된 스파스 사전 설정이 없습니다."
+  },
+  "auto.components.settings.SparsePresetSettingsSection.8deb7024ab": {
+    "ko": "스파스 사전 설정 로드 중..."
+  },
+  "auto.components.settings.SparsePresetSettingsSection.c240a16f25": {
+    "ko": "packages/web 또는 apps/api와 같은 repo 상대 경로를 사용하세요."
+  },
+  "auto.components.settings.SparsePresetSettingsSection.fde7ff2cc3": {
+    "ko": "packages/web shared/ui"
+  },
+  "auto.components.settings.SshPane.025e107643": {
+    "ko": "원격 terminal을 종료하지 못했습니다."
+  },
+  "auto.components.settings.SshPane.90e308c98b": {
+    "ko": "원격 terminal 종료됨"
+  },
+  "auto.components.settings.SshPassphraseDialog.405066423c": {
+    "ko": "잠금 해제"
+  },
+  "auto.components.settings.SshTargetCard.c77f1abfe3": {
+    "ko": "원격 terminals 종료 중"
+  },
+  "auto.components.settings.SshTargetDestructiveActions.26be00392d": {
+    "ko": "이 SSH 대상의 원격 릴레이를 강제로 중지합니다. 이 대상의 활성 원격 terminals과 포트 포워딩이 종료됩니다."
+  },
+  "auto.components.settings.SshTargetForm.137e88ce8d": {
+    "ko": "연결 해제 후 릴레이가 terminals을 활성 상태로 유지하는 기간입니다. 기본값: 10800(3시간). 최대:"
+  },
+  "auto.components.settings.SshTargetForm.2ee9bcd2e8": {
+    "ko": "server, deploy@server:2222, ssh://server"
+  },
+  "auto.components.settings.SshTargetForm.47e082bc17": {
+    "ko": "deploy"
+  },
+  "auto.components.settings.SshTargetForm.63c0c145c1": {
+    "ko": "개인 키 파일"
+  },
+  "auto.components.settings.SshTargetForm.cb91f6375c": {
+    "ko": "선택 사항. 기본적으로 SSH agent가 사용됩니다."
+  },
+  "auto.components.settings.SshTargetForm.d6a5f2ee5c": {
+    "ko": "~/.ssh/id_ed25519(SSH agent를 사용하려면 비워 두세요)"
+  },
+  "auto.components.settings.SshTargetForm.f42d844544": {
+    "ko": "예: cloudflared access ssh --hostname %h"
+  },
+  "auto.components.settings.TasksPane.6b23a34f6d": {
+    "ko": "Jira"
+  },
+  "auto.components.settings.TerminalAppearanceSection.16c471ee03": {
+    "ko": "켜짐"
+  },
+  "auto.components.settings.TerminalAppearanceSection.52854a5608": {
+    "ko": "블록"
+  },
+  "auto.components.settings.TerminalAppearanceSection.70beb1bbc7": {
+    "ko": "미리보기"
+  },
+  "auto.components.settings.TerminalAppearanceSection.711e589f18": {
+    "ko": "새 패널 및 실시간 업데이트에 사용할 기본 terminal 타이포그래피입니다."
+  },
+  "auto.components.settings.TerminalAppearanceSection.84bd22f2cd": {
+    "ko": "켜짐"
+  },
+  "auto.components.settings.TerminalAppearanceSection.870377082f": {
+    "ko": "끔"
+  },
+  "auto.components.settings.TerminalAppearanceSection.abcb4dd019": {
+    "ko": "Terminal 커서"
+  },
+  "auto.components.settings.TerminalAppearanceSection.e070e8aeba": {
+    "ko": "막대"
+  },
+  "auto.components.settings.TerminalAppearanceSection.e90afcc44f": {
+    "ko": "끔"
+  },
+  "auto.components.settings.TerminalAppearanceSection.f27a99978d": {
+    "ko": "구분선 두께"
+  },
+  "auto.components.settings.TerminalPane.09bf02de9a": {
+    "ko": "새 terminals 패널을 열 때 사용할 셸입니다. 새 terminals에 적용됩니다."
+  },
+  "auto.components.settings.TerminalPane.0a10420e1a": {
+    "ko": "Option을 Alt로 사용"
+  },
+  "auto.components.settings.TerminalPane.1c337bef4a": {
+    "ko": "JIS 엔(¥) 키를 누르면 백슬래시(\\\\)가 대신 전송되는지 여부를 제어합니다."
+  },
+  "auto.components.settings.TerminalPane.219aaa59f4": {
+    "ko": "WSL 배포판"
+  },
+  "auto.components.settings.TerminalPane.29154326bb": {
+    "ko": "켜기"
+  },
+  "auto.components.settings.TerminalPane.2fba319f21": {
+    "ko": "렌더링"
+  },
+  "auto.components.settings.TerminalPane.34a0dfa06e": {
+    "ko": "새 워크스페이스를 만들 때 repos 설정 스크립트를 실행할 위치입니다."
+  },
+  "auto.components.settings.TerminalPane.3fe1c5bfe0": {
+    "ko": "끄기"
+  },
+  "auto.components.settings.TerminalPane.4263e940e0": {
+    "ko": "JIS 엔(¥) 키를 누르면 대신 백슬래시(\\\\)가 전송됩니다."
+  },
+  "auto.components.settings.TerminalPane.5336c096af": {
+    "ko": "{{value0}} 메가바이트"
+  },
+  "auto.components.settings.TerminalPane.6e6480a7df": {
+    "ko": "terminal의 프로그램(tmux, Neovim, fzf, SSH)이 시스템 클립보드에 복사할 수 있게 합니다."
+  },
+  "auto.components.settings.TerminalPane.8eefeaa3da": {
+    "ko": "마우스를 따라 포커스 이동"
+  },
+  "auto.components.settings.TerminalPane.907b0b9d3e": {
+    "ko": "사용자 지정"
+  },
+  "auto.components.settings.TerminalPane.96be03b8eb": {
+    "ko": "PowerShell 7+"
+  },
+  "auto.components.settings.TerminalPane.9c0b1c1792": {
+    "ko": "켜짐"
+  },
+  "auto.components.settings.TerminalPane.a016ffbeed": {
+    "ko": "자동은 현재 Windows PowerShell을 사용하고, PowerShell 7+가 설치되면 전환합니다."
+  },
+  "auto.components.settings.TerminalPane.ab20575a8a": {
+    "ko": "끄기"
+  },
+  "auto.components.settings.TerminalPane.ask_before_closing_running_terminals_description": {
+    "ko": "실행 중인 명령이나 agent가 있는 terminal을 닫기 전에 확인 창을 표시합니다."
+  },
+  "auto.components.settings.TerminalPane.ask_before_closing_running_terminals_title": {
+    "ko": "실행 중인 Terminals을 닫기 전에 확인"
+  },
+  "auto.components.settings.TerminalPane.d26174e1dd": {
+    "ko": "Windows PowerShell"
+  },
+  "auto.components.settings.TerminalPane.d78fc4fdef": {
+    "ko": "배포판 로드 중"
+  },
+  "auto.components.settings.TerminalThemeSections.5e0c24b5c8": {
+    "ko": "라이트 모드에서 패널 사이의 분할 구분선을 제어합니다."
+  },
+  "auto.components.settings.TerminalThemeSections.d56af60e6f": {
+    "ko": "Orca가 라이트 모드일 때 사용되는 테마를 선택합니다."
+  },
+  "auto.components.settings.TerminalThemeSections.d76f60c9cc": {
+    "ko": "라이트 모드에서 별도 테마 사용"
+  },
+  "auto.components.settings.TerminalThemeSections.import_themes_description": {
+    "ko": "가져온 테마는 다크 및 라이트 테마 선택기에서 모두 사용할 수 있습니다."
+  },
+  "auto.components.settings.TerminalThemeSections.import_themes_title": {
+    "ko": "테마 가져오기"
+  },
+  "auto.components.settings.TerminalWindowSection.1be593d3e8": {
+    "ko": "ANSI 밝은색"
+  },
+  "auto.components.settings.TerminalWindowSection.260d69ce9a": {
+    "ko": "밝은 검정"
+  },
+  "auto.components.settings.TerminalWindowSection.b96ba13ed1": {
+    "ko": "창"
+  },
+  "auto.components.settings.TerminalWindowSection.e56e7d6ea0": {
+    "ko": "밝은 마젠타"
+  },
+  "auto.components.settings.VoicePane.118b3c2dee": {
+    "ko": "토글"
+  },
+  "auto.components.settings.VoicePane.174da92062": {
+    "ko": "길게 누르기"
+  },
+  "auto.components.settings.VoicePane.295d84b849": {
+    "ko": "한 번 누르면 시작, 다시 누르면 중지. 길게 누르기: 누르고 있는 동안 받아쓰기"
+  },
+  "auto.components.settings.VoicePane.366e1b4f36": {
+    "ko": "포커스된 창에 텍스트를 받아쓰기합니다."
+  },
+  "auto.components.settings.VoicePane.4465596675": {
+    "ko": "누르기"
+  },
+  "auto.components.settings.VoicePane.61a16c8141": {
+    "ko": "추출 중..."
+  },
+  "auto.components.settings.VoicePane.7cf715f891": {
+    "ko": "누르고 있는 동안"
+  },
+  "auto.components.settings.VoicePane.901985625d": {
+    "ko": "토글"
+  },
+  "auto.components.settings.VoicePane.b6536a1d12": {
+    "ko": "추출 중"
+  },
+  "auto.components.settings.WarpThemeImportModal.builtin_themes_hint": {
+    "ko": "Warp의 사전 로드 테마는 Warp 앱의 일부라 디스크에서 읽을 수 없습니다. Orca에는 Dracula, Gruvbox, Solarized, Tokyo Night 등 대부분의 테마가 이미 포함되어 있습니다."
+  },
+  "auto.components.settings.WarpThemeImportModal.choose_file": {
+    "ko": "파일 선택"
+  },
+  "auto.components.settings.WarpThemeImportModal.choose_folder": {
+    "ko": "폴더 선택"
+  },
+  "auto.components.settings.WarpThemeImportModal.choose_manually": {
+    "ko": "수동으로 가져올 테마 YAML 파일 또는 폴더를 선택하세요."
+  },
+  "auto.components.settings.WarpThemeImportModal.clear_all": {
+    "ko": "모두 지우기"
+  },
+  "auto.components.settings.WarpThemeImportModal.colors_only": {
+    "ko": "색상만"
+  },
+  "auto.components.settings.WarpThemeImportModal.custom_theme_yaml_hint": {
+    "ko": "사용자 지정 및 커뮤니티 테마는 자동 가져오기가 찾을 수 있도록 Warp 테마 폴더에 YAML 파일로 있어야 합니다. Warp의 공개 테마 repo를 클론했다면 Choose Folder를 사용해 해당 체크아웃을 가져오세요."
+  },
+  "auto.components.settings.WarpThemeImportModal.description": {
+    "ko": "Warp 테마를 Orca terminal 테마로 가져옵니다."
+  },
+  "auto.components.settings.WarpThemeImportModal.found_in_source": {
+    "ko": "{{value0}}에서"
+  },
+  "auto.components.settings.WarpThemeImportModal.found_theme_one": {
+    "ko": "테마 1개를 찾았습니다."
+  },
+  "auto.components.settings.WarpThemeImportModal.found_theme_other": {
+    "ko": "테마 {{value0}}개를 찾았습니다."
+  },
+  "auto.components.settings.WarpThemeImportModal.import_theme_one": {
+    "ko": "테마 1개 가져오기"
+  },
+  "auto.components.settings.WarpThemeImportModal.import_theme_other": {
+    "ko": "테마 {{value0}}개 가져오기"
+  },
+  "auto.components.settings.WarpThemeImportModal.import_themes": {
+    "ko": "테마 가져오기"
+  },
+  "auto.components.settings.WarpThemeImportModal.loading": {
+    "ko": "Warp 테마 로드 중..."
+  },
+  "auto.components.settings.WarpThemeImportModal.more_skipped_files": {
+    "ko": "건너뛴 파일 {{value0}}개 더 있음"
+  },
+  "auto.components.settings.WarpThemeImportModal.no_themes_found": {
+    "ko": "사용자 지정 Warp 테마를 찾을 수 없습니다."
+  },
+  "auto.components.settings.WarpThemeImportModal.select_all": {
+    "ko": "모두 선택"
+  },
+  "auto.components.settings.WarpThemeImportModal.skipped_files": {
+    "ko": "건너뛴 파일"
+  },
+  "auto.components.settings.WarpThemeImportModal.title": {
+    "ko": "Warp에서 테마 가져오기"
+  },
+  "auto.components.settings.WarpThemeImportModal.yaml_description": {
+    "ko": "YAML 파일(Warp 형식)을 Orca terminal 테마로 가져옵니다."
+  },
+  "auto.components.settings.WarpThemeImportModal.yaml_no_themes_found": {
+    "ko": "선택한 파일에서 테마를 찾을 수 없습니다."
+  },
+  "auto.components.settings.WarpThemeImportModal.yaml_title": {
+    "ko": "테마 YAML 가져오기"
+  },
+  "auto.components.settings.WorkspaceDirectorySetting.1a2b3c4d5e": {
+    "ko": "클라이언트 기본값"
+  },
+  "auto.components.settings.WorkspaceDirectorySetting.2b3c4d5e6f": {
+    "ko": "적용 대상"
+  },
+  "auto.components.settings.WorkspaceDirectorySetting.3c4d5e6f7a": {
+    "ko": "클라이언트 기본값 재정의"
+  },
+  "auto.components.settings.WorkspaceDirectorySetting.4d5e6f7a8b": {
+    "ko": "클라이언트 기본값 상속"
+  },
+  "auto.components.settings.WorktreeSymlinksSection.d72ba8dc68": {
+    "ko": "경로 {{value0}}개"
+  },
+  "auto.components.settings.WslCliRegistration.6f91ad1333": {
+    "ko": "WSL에 `{{value0}}`을(를) 등록하지 못했습니다."
+  },
+  "auto.components.settings.WslCliRegistration.7ee4e52b99": {
+    "ko": "Orca는 명령이 WSL terminals에서 작동하도록 {{value0}}을(를) 등록합니다."
+  },
+  "auto.components.settings.WslCliRegistration.951536dda5": {
+    "ko": "WSL에 `{{value0}}`을(를) 등록했습니다."
+  },
+  "auto.components.settings.WslCliRegistration.e2b0ee267f": {
+    "ko": "오래됨"
+  },
+  "auto.components.settings.WslCliRegistration.e49688f67f": {
+    "ko": "WSL에 `{{value0}}`을(를) 등록하시겠습니까?"
+  },
+  "auto.components.settings.YamlThemeImportButton.label": {
+    "ko": "YAML에서 가져오기"
+  },
+  "auto.components.settings.accounts.search.042885c07c": {
+    "ko": "오래됨"
+  },
+  "auto.components.settings.accounts.search.5b3f18ef4a": {
+    "ko": "전환"
+  },
+  "auto.components.settings.accounts.search.7e67d7d1b6": {
+    "ko": "wrk"
+  },
+  "auto.components.settings.accounts.search.8b06729e0f": {
+    "ko": "활성"
+  },
+  "auto.components.settings.accounts.search.b7c2cee442": {
+    "ko": "실험적"
+  },
+  "auto.components.settings.accounts.search.bdbd1e668e": {
+    "ko": "Windows"
+  },
+  "auto.components.settings.accounts.search.c759741d77": {
+    "ko": "할당량"
+  },
+  "auto.components.settings.accounts.search.e949b08ffb": {
+    "ko": "속도 제한"
+  },
+  "auto.components.settings.advanced.search.4d44352eea": {
+    "ko": "네트워크"
+  },
+  "auto.components.settings.advanced.search.e04e9db503": {
+    "ko": "고급"
+  },
+  "auto.components.settings.agents.search.77c02fa3c3": {
+    "ko": "Windows"
+  },
+  "auto.components.settings.agents.search.agentPermissions": {
+    "ko": "Agent 권한"
+  },
+  "auto.components.settings.agents.search.agentPermissionsDescription": {
+    "ko": "agent 권한 기본값을 Yolo와 수동 사이에서 전환합니다."
+  },
+  "auto.components.settings.appearance.search.00a028f25f": {
+    "ko": "사용량"
+  },
+  "auto.components.settings.appearance.search.0c83659f48": {
+    "ko": "단축키"
+  },
+  "auto.components.settings.appearance.search.35565867cb": {
+    "ko": "Moonshot"
+  },
+  "auto.components.settings.appearance.search.3a6c028ea8": {
+    "ko": "Kimi 사용량"
+  },
+  "auto.components.settings.appearance.search.3a9b69d734": {
+    "ko": "시스템"
+  },
+  "auto.components.settings.appearance.search.40e5c3c285": {
+    "ko": "kimi"
+  },
+  "auto.components.settings.appearance.search.43cfba3b95": {
+    "ko": "서버"
+  },
+  "auto.components.settings.appearance.search.57fb424c56": {
+    "ko": "원격 호스트"
+  },
+  "auto.components.settings.appearance.search.6cf5f54ce1": {
+    "ko": "버튼"
+  },
+  "auto.components.settings.appearance.search.7164edf71a": {
+    "ko": "파일 탐색기에서 .gitignore와 일치하는 파일을 흐리게 표시합니다."
+  },
+  "auto.components.settings.appearance.search.71e06350b4": {
+    "ko": "테마"
+  },
+  "auto.components.settings.appearance.search.97957e374e": {
+    "ko": "OpenAI"
+  },
+  "auto.components.settings.appearance.search.bc046e7899": {
+    "ko": "OpenCode Go 사용량"
+  },
+  "auto.components.settings.appearance.search.bce3ac317a": {
+    "ko": "git"
+  },
+  "auto.components.settings.appearance.search.c690a15849": {
+    "ko": "리소스"
+  },
+  "auto.components.settings.appearance.search.de586def95": {
+    "ko": "구독"
+  },
+  "auto.components.settings.appearance.search.e5bc35d59e": {
+    "ko": "창"
+  },
+  "auto.components.settings.appearance.search.f17d66d0d2": {
+    "ko": "상태 표시줄에 원격 호스트 연결 상태를 표시합니다."
+  },
+  "auto.components.settings.appearance.search.fe192b060e": {
+    "ko": "호스트"
+  },
+  "auto.components.settings.auto.rename.branch.search.7adefcdd94": {
+    "ko": "템플릿"
+  },
+  "auto.components.settings.auto.rename.branch.search.a482f6a423": {
+    "ko": "슬러그"
+  },
+  "auto.components.settings.browser.search.0732ebe6fb": {
+    "ko": "비공개"
+  },
+  "auto.components.settings.browser.search.0bb34eacc9": {
+    "ko": "쿼리"
+  },
+  "auto.components.settings.browser.search.1c1e097985": {
+    "ko": "Arc"
+  },
+  "auto.components.settings.browser.search.1f8153acfb": {
+    "ko": "DuckDuckGo"
+  },
+  "auto.components.settings.browser.search.291f480a5e": {
+    "ko": "홈"
+  },
+  "auto.components.settings.browser.search.44d14df30d": {
+    "ko": "미리보기"
+  },
+  "auto.components.settings.browser.search.4596a52cf7": {
+    "ko": "랜딩"
+  },
+  "auto.components.settings.browser.search.533a253deb": {
+    "ko": "Edge"
+  },
+  "auto.components.settings.browser.search.7539f6336c": {
+    "ko": "프로필"
+  },
+  "auto.components.settings.browser.search.90425d313c": {
+    "ko": "Shift"
+  },
+  "auto.components.settings.browser.search.a7a07d5415": {
+    "ko": "편집기"
+  },
+  "auto.components.settings.browser.search.ad40e75d13": {
+    "ko": "Bing"
+  },
+  "auto.components.settings.browser.search.bea27bac4b": {
+    "ko": "링크"
+  },
+  "auto.components.settings.browser.search.c3d89ed4d0": {
+    "ko": "새로 열린 브라우저 탭에 적용되는 확대/축소 수준입니다."
+  },
+  "auto.components.settings.browser.use.search.2e1b09897b": {
+    "ko": "Edge"
+  },
+  "auto.components.settings.browser.use.search.3f4c559deb": {
+    "ko": "Arc 프로필"
+  },
+  "auto.components.settings.browser.use.search.7e0dcb257a": {
+    "ko": "셸"
+  },
+  "auto.components.settings.browser.use.search.a57c2172dc": {
+    "ko": "agent-browser"
+  },
+  "auto.components.settings.browser.use.search.ab349a2dd0": {
+    "ko": "Arc"
+  },
+  "auto.components.settings.browser.use.search.d5afa54d21": {
+    "ko": "Edge 프로필"
+  },
+  "auto.components.settings.cli.source.control.integration.cards.2e44dda68a": {
+    "ko": "GitHub CLI가 설치되어 있지만 인증되지 않았습니다. terminal에서 다음 명령을 실행하세요."
+  },
+  "auto.components.settings.cli.source.control.integration.cards.4be0616873": {
+    "ko": "GitLab CLI가 설치되어 있지만 인증되지 않았습니다. terminal에서 다음 명령을 실행하세요."
+  },
+  "auto.components.settings.cli.source.control.integration.cards.54a640af7a": {
+    "ko": "GitLab CLI 설치"
+  },
+  "auto.components.settings.cli.source.control.integration.cards.6f30fc4216": {
+    "ko": "이 런타임에서는 아직 GitHub CLI 상태를 사용할 수 없습니다."
+  },
+  "auto.components.settings.cli.source.control.integration.cards.7755c28af5": {
+    "ko": "GitHub CLI 설치"
+  },
+  "auto.components.settings.cli.source.control.integration.cards.8cbc39f862": {
+    "ko": "자세히 알아보기"
+  },
+  "auto.components.settings.cli.source.control.integration.cards.account_scope_prefix": {
+    "ko": "계정 범위"
+  },
+  "auto.components.settings.cli.source.control.integration.cards.faddeb763d": {
+    "ko": "이 런타임에서는 아직 GitLab CLI 상태를 사용할 수 없습니다."
+  },
+  "auto.components.settings.commit.message.ai.search.37c65bbb44": {
+    "ko": "수정"
+  },
+  "auto.components.settings.commit.message.ai.search.b7d50da4d8": {
+    "ko": "템플릿"
+  },
+  "auto.components.settings.computerUseSkillRuntime.thisDevice": {
+    "ko": "이 기기"
+  },
+  "auto.components.settings.computerUseSummary.checkingDescription": {
+    "ko": "Orca가 Computer Use 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다."
+  },
+  "auto.components.settings.computerUseSummary.checkingTitle": {
+    "ko": "Computer Use 액세스 확인 중입니다."
+  },
+  "auto.components.settings.computerUseSummary.permissionsRequired": {
+    "ko": "agents가 앱 창을 조작하려면 먼저 {{value0}} 권한{{value1}}이 필요합니다."
+  },
+  "auto.components.settings.computerUseSummary.permissionsTitle": {
+    "ko": "로컬 앱을 사용하려면 설정을 완료하세요."
+  },
+  "auto.components.settings.computerUseSummary.readyDescription": {
+    "ko": "요청하면 Agents가 앱 창을 검사하고 조작할 수 있습니다."
+  },
+  "auto.components.settings.computerUseSummary.readyTitle": {
+    "ko": "Computer Use를 사용할 준비가 되었습니다."
+  },
+  "auto.components.settings.computerUseSummary.unavailableDescription": {
+    "ko": "{{value0}} 때문에 Computer Use 권한을 사용할 수 없습니다."
+  },
+  "auto.components.settings.computerUseSummary.unavailableTitle": {
+    "ko": "Computer Use를 사용할 수 없습니다."
+  },
+  "auto.components.settings.developer.permissions.search.00e954319e": {
+    "ko": "Whisper"
+  },
+  "auto.components.settings.developer.permissions.search.05ab708ee5": {
+    "ko": "보호된 프로젝트 및 워크트리 파일 액세스를 위해 macOS 개인정보 보호 창을 엽니다."
+  },
+  "auto.components.settings.developer.permissions.search.2270ccff3f": {
+    "ko": "개인정보 보호"
+  },
+  "auto.components.settings.developer.permissions.search.4438f81bfa": {
+    "ko": "문서"
+  },
+  "auto.components.settings.developer.permissions.search.5610022e1e": {
+    "ko": "자동화"
+  },
+  "auto.components.settings.developer.permissions.search.6db4fca386": {
+    "ko": "macOS"
+  },
+  "auto.components.settings.developer.permissions.search.78a10b826f": {
+    "ko": "Bonjour"
+  },
+  "auto.components.settings.developer.permissions.search.7f145a3984": {
+    "ko": "창"
+  },
+  "auto.components.settings.developer.permissions.search.ed7c12bdb4": {
+    "ko": "마이크"
+  },
+  "auto.components.settings.developer.permissions.search.f061f08b7b": {
+    "ko": "sox"
+  },
+  "auto.components.settings.experimental.search.268e99d957": {
+    "ko": "강조 표시"
+  },
+  "auto.components.settings.experimental.search.65df471ab2": {
+    "ko": "애니메이션"
+  },
+  "auto.components.settings.experimental.search.7695fd30e9": {
+    "ko": "알림"
+  },
+  "auto.components.settings.experimental.search.7b79081695": {
+    "ko": "읽지 않음"
+  },
+  "auto.components.settings.experimental.search.9af7a518db": {
+    "ko": "캐릭터"
+  },
+  "auto.components.settings.experimental.search.9f5609bfb8": {
+    "ko": "오버레이"
+  },
+  "auto.components.settings.experimental.search.b54cea709b": {
+    "ko": "사이드킥"
+  },
+  "auto.components.settings.experimental.search.edc49480a1": {
+    "ko": "패널"
+  },
+  "auto.components.settings.experimental.search.f082788cfe": {
+    "ko": "링크"
+  },
+  "auto.components.settings.experimental.search.f10d307468": {
+    "ko": "완료"
+  },
+  "auto.components.settings.experimental.search.agentHibernation.hibernate": {
+    "ko": "최대 절전"
+  },
+  "auto.components.settings.experimental.search.agentHibernation.title": {
+    "ko": "Agent 최대 절전"
+  },
+  "auto.components.settings.experimental.search.newWorktreeCardStyle.description": {
+    "ko": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다."
+  },
+  "auto.components.settings.general.search.12ecc640a8": {
+    "ko": "mru"
+  },
+  "auto.components.settings.general.search.141f71c69f": {
+    "ko": "워크스페이스 중첩"
+  },
+  "auto.components.settings.general.search.2f42852568": {
+    "ko": "트리"
+  },
+  "auto.components.settings.general.search.36a72f0d9e": {
+    "ko": "GitHub에서 Orca에 스타 주기"
+  },
+  "auto.components.settings.general.search.3a73054565": {
+    "ko": "우회"
+  },
+  "auto.components.settings.general.search.3ca5ab78a5": {
+    "ko": "코드"
+  },
+  "auto.components.settings.general.search.54ba13831a": {
+    "ko": "최근"
+  },
+  "auto.components.settings.general.search.5d9ba08673": {
+    "ko": "Copilot"
+  },
+  "auto.components.settings.general.search.5fdf1dc2d1": {
+    "ko": "omp"
+  },
+  "auto.components.settings.general.search.7e9b556873": {
+    "ko": "건너뛰기"
+  },
+  "auto.components.settings.general.search.7edf4f69e2": {
+    "ko": "자동화"
+  },
+  "auto.components.settings.general.search.8fb00fcd05": {
+    "ko": "런처"
+  },
+  "auto.components.settings.general.search.93f6ec5e70": {
+    "ko": "디렉터리"
+  },
+  "auto.components.settings.general.search.9b0bc30160": {
+    "ko": "Pi"
+  },
+  "auto.components.settings.general.search.aea7d2cccb": {
+    "ko": "OpenClaude"
+  },
+  "auto.components.settings.general.search.bdfb6dc21b": {
+    "ko": "좋아요"
+  },
+  "auto.components.settings.general.search.c56cb6f1c2": {
+    "ko": "네트워크"
+  },
+  "auto.components.settings.general.search.defaultProjectRuntime": {
+    "ko": "기본 프로젝트 런타임"
+  },
+  "auto.components.settings.general.search.defaultProjectRuntimeDescription": {
+    "ko": "로컬 Windows 프로젝트가 상속할 런타임을 선택합니다."
+  },
+  "auto.components.settings.general.search.e1ee631696": {
+    "ko": "편집기"
+  },
+  "auto.components.settings.general.search.e4fb4516d0": {
+    "ko": "스타"
+  },
+  "auto.components.settings.general.search.e55d62dfa4": {
+    "ko": "런치패드"
+  },
+  "auto.components.settings.general.search.ebf8f056b5": {
+    "ko": "zed"
+  },
+  "auto.components.settings.general.search.f472e97440": {
+    "ko": "aider"
+  },
+  "auto.components.settings.general.search.f8f0ac213a": {
+    "ko": "순차적"
+  },
+  "auto.components.settings.general.search.fb84767421": {
+    "ko": "전환"
+  },
+  "auto.components.settings.git.search.0e993bf00f": {
+    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고, main 또는 master처럼 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. 이렇게 하면 git diff main...HEAD 같은 명령이 오래된 기록과 비교되지 않습니다. 해당 브랜치에 commits 되지 않은 변경 사항이나 로컬 전용 commits이 있으면 Orca가 업데이트를 건너뜁니다."
+  },
+  "auto.components.settings.git.search.1d2fae1fa2": {
+    "ko": "Git 사용자 이름"
+  },
+  "auto.components.settings.git.search.564942ffc5": {
+    "ko": "origin/main"
+  },
+  "auto.components.settings.git.search.6ee3cfff02": {
+    "ko": "git diff"
+  },
+  "auto.components.settings.git.search.b7e52124c7": {
+    "ko": "속도 제한"
+  },
+  "auto.components.settings.git.search.bae91effdd": {
+    "ko": "최신 기준 브랜치"
+  },
+  "auto.components.settings.input.search.886597d6b3": {
+    "ko": "macOS"
+  },
+  "auto.components.settings.input.search.c4440c3986": {
+    "ko": "붙여넣기"
+  },
+  "auto.components.settings.integrations.search.03a7b275be": {
+    "ko": "ADO"
+  },
+  "auto.components.settings.integrations.search.129fc59aa8": {
+    "ko": "Gitea"
+  },
+  "auto.components.settings.integrations.search.20540996ef": {
+    "ko": "자격 증명"
+  },
+  "auto.components.settings.integrations.search.581844769a": {
+    "ko": "MR"
+  },
+  "auto.components.settings.integrations.search.617603509b": {
+    "ko": "Jira 연동"
+  },
+  "auto.components.settings.integrations.search.67a2a0e868": {
+    "ko": "Bitbucket 연동"
+  },
+  "auto.components.settings.integrations.search.aab86d64e5": {
+    "ko": "Gitea 연동"
+  },
+  "auto.components.settings.integrations.search.af6611fa6e": {
+    "ko": "Azure DevOps 연동"
+  },
+  "auto.components.settings.integrations.search.b027b4b318": {
+    "ko": "Linear 연동"
+  },
+  "auto.components.settings.integrations.search.b40cbe5de4": {
+    "ko": "glab"
+  },
+  "auto.components.settings.integrations.search.b50b71ef9d": {
+    "ko": "GitLab 연동"
+  },
+  "auto.components.settings.integrations.search.b79c21bd42": {
+    "ko": "GitHub"
+  },
+  "auto.components.settings.integrations.search.c450244ad7": {
+    "ko": "연동"
+  },
+  "auto.components.settings.integrations.search.e1263dd748": {
+    "ko": "Jira"
+  },
+  "auto.components.settings.integrations.search.f16e41cc72": {
+    "ko": "GitHub 연동"
+  },
+  "auto.components.settings.jira.integration.card.09742875cd": {
+    "ko": "Jira"
+  },
+  "auto.components.settings.jira.integration.card.3df81cb0ac": {
+    "ko": "확인"
+  },
+  "auto.components.settings.jira.integration.card.fb854902d9": {
+    "ko": "연결 중"
+  },
+  "auto.components.settings.mobile.emulator.search.25d7bfbcd4": {
+    "ko": "udid"
+  },
+  "auto.components.settings.mobile.emulator.search.27397fe8e9": {
+    "ko": "Xcode 명령줄 도구"
+  },
+  "auto.components.settings.mobile.emulator.search.3211e7acf9": {
+    "ko": "xcrun"
+  },
+  "auto.components.settings.mobile.emulator.search.42bfab45d8": {
+    "ko": "가용성"
+  },
+  "auto.components.settings.mobile.emulator.search.7c5a8a2bee": {
+    "ko": "Xcode"
+  },
+  "auto.components.settings.mobile.emulator.search.84e5706975": {
+    "ko": "serve-sim"
+  },
+  "auto.components.settings.mobile.emulator.search.8ef0f08d36": {
+    "ko": "런타임"
+  },
+  "auto.components.settings.mobile.emulator.search.d4b7833894": {
+    "ko": "orca cli"
+  },
+  "auto.components.settings.mobile.emulator.search.ea1f51b980": {
+    "ko": "Xcode, simctl, serve-sim 및 에뮬레이터 장치가 준비되었는지 확인하세요."
+  },
+  "auto.components.settings.mobile.pane.search.16bff559a0": {
+    "ko": "tailnet"
+  },
+  "auto.components.settings.mobile.pane.search.1f70d63998": {
+    "ko": "IP"
+  },
+  "auto.components.settings.mobile.pane.search.2128a21096": {
+    "ko": "스캔"
+  },
+  "auto.components.settings.mobile.pane.search.3a5e31e84b": {
+    "ko": "나가기"
+  },
+  "auto.components.settings.mobile.pane.search.4a0c826f3d": {
+    "ko": "코드"
+  },
+  "auto.components.settings.mobile.pane.search.5e8fda4d7f": {
+    "ko": "페어링됨"
+  },
+  "auto.components.settings.mobile.pane.search.70f505f3c3": {
+    "ko": "LAN"
+  },
+  "auto.components.settings.mobile.pane.search.7b37c2e557": {
+    "ko": "네트워크"
+  },
+  "auto.components.settings.mobile.pane.search.8015fd9523": {
+    "ko": "유지"
+  },
+  "auto.components.settings.mobile.pane.search.d0c89bc4a9": {
+    "ko": "오버레이"
+  },
+  "auto.components.settings.mobile.pane.search.e518cbd61c": {
+    "ko": "페어링"
+  },
+  "auto.components.settings.mobile.pane.search.fadcbfdd99": {
+    "ko": "맞춤"
+  },
+  "auto.components.settings.mobile.settings.search.0b7e585cb9": {
+    "ko": "스캔"
+  },
+  "auto.components.settings.mobile.settings.search.59b1d75fd1": {
+    "ko": "코드"
+  },
+  "auto.components.settings.mobile.settings.search.cf2c93b479": {
+    "ko": "페어링"
+  },
+  "auto.components.settings.notifications.search.3014ad1b8f": {
+    "ko": "딩"
+  },
+  "auto.components.settings.notifications.search.57e34a31cd": {
+    "ko": "wav"
+  },
+  "auto.components.settings.notifications.search.5f7472d3fb": {
+    "ko": "완료"
+  },
+  "auto.components.settings.notifications.search.72539aede4": {
+    "ko": "시스템"
+  },
+  "auto.components.settings.notifications.search.aa288005c3": {
+    "ko": "테스트"
+  },
+  "auto.components.settings.notifications.search.adbc3a0fcf": {
+    "ko": "네이티브"
+  },
+  "auto.components.settings.notifications.search.d16ae23645": {
+    "ko": "ogg"
+  },
+  "auto.components.settings.notifications.search.d58b64dddf": {
+    "ko": "볼륨"
+  },
+  "auto.components.settings.notifications.search.ef86a782cc": {
+    "ko": "봉 소리"
+  },
+  "auto.components.settings.notifications.search.fa60d8e4ab": {
+    "ko": "억제"
+  },
+  "auto.components.settings.privacy.search.10124159f1": {
+    "ko": "개인정보"
+  },
+  "auto.components.settings.privacy.search.4104f6f0f3": {
+    "ko": "분석"
+  },
+  "auto.components.settings.privacy.search.4d4bb76bf4": {
+    "ko": "수신 동의"
+  },
+  "auto.components.settings.privacy.search.79c319948b": {
+    "ko": "사용량"
+  },
+  "auto.components.settings.providerAccountScope.localCredentials": {
+    "ko": "이 제공자의 자격 증명과 계정 확인은 이 데스크톱 클라이언트가 소유합니다. 서버 소유 자격 증명은 설정 > 원격 Orca 서버 > 고급에서 편집하세요."
+  },
+  "auto.components.settings.providerAccountScope.localMac": {
+    "ko": "로컬 Mac"
+  },
+  "auto.components.settings.providerAccountScope.localRateLimit": {
+    "ko": "{{value0}} API 예산은 이 데스크톱 클라이언트의 CLI에서 가져옵니다. 서버 소유 예산을 보려면 설정 > 원격 Orca 서버 > 고급을 사용하세요."
+  },
+  "auto.components.settings.providerAccountScope.remoteServer": {
+    "ko": "원격 서버: {{value0}}"
+  },
+  "auto.components.settings.providerAccountScope.remoteServerCredentials": {
+    "ko": "이 공급자의 자격 증명과 계정 확인은 이 원격 서버가 소유합니다. 다른 기본 런타임 범위를 편집하려면 설정 > 원격 Orca 서버 > 고급을 사용하세요."
+  },
+  "auto.components.settings.providerAccountScope.remoteServerRateLimit": {
+    "ko": "{{value0}} API 예산은 이 원격 서버의 CLI에서 가져옵니다. 다른 기본 런타임 예산을 보려면 설정 > 원격 Orca 서버 > 고급을 사용하세요."
+  },
+  "auto.components.settings.quick.commands.search.2d8aff42be": {
+    "ko": "실행"
+  },
+  "auto.components.settings.quick.commands.search.a26ecdb77b": {
+    "ko": "스니펫"
+  },
+  "auto.components.settings.quick.commands.search.d07d130849": {
+    "ko": "단축키"
+  },
+  "auto.components.settings.repository.search.0432d2fb7c": {
+    "ko": "로컬"
+  },
+  "auto.components.settings.repository.search.1ff4f12c0c": {
+    "ko": "디렉터리"
+  },
+  "auto.components.settings.repository.search.2011a6a4f2": {
+    "ko": "GitHub 이슈 명령"
+  },
+  "auto.components.settings.repository.search.4733ec2395": {
+    "ko": "../worktrees"
+  },
+  "auto.components.settings.repository.search.4f3c0230c2": {
+    "ko": "스파스"
+  },
+  "auto.components.settings.repository.search.66b584bd6c": {
+    "ko": "이슈 명령"
+  },
+  "auto.components.settings.repository.search.6d8de2f090": {
+    "ko": "16진수"
+  },
+  "auto.components.settings.repository.search.80c490b012": {
+    "ko": "묻기"
+  },
+  "auto.components.settings.repository.search.aa42616e3d": {
+    "ko": "체크아웃"
+  },
+  "auto.components.settings.repository.search.availableHostsDescription": {
+    "ko": "이 프로젝트가 설정된 호스트입니다."
+  },
+  "auto.components.settings.repository.search.cb4b4de666": {
+    "ko": "아바타"
+  },
+  "auto.components.settings.repository.search.f1e1bfa89f": {
+    "ko": "소스"
+  },
+  "auto.components.settings.repository.search.f9d84b7971": {
+    "ko": "설정 실행 정책"
+  },
+  "auto.components.settings.repository.search.projectRuntime": {
+    "ko": "프로젝트 런타임"
+  },
+  "auto.components.settings.repository.search.projectRuntimeDescription": {
+    "ko": "이 프로젝트를 Windows에서 실행할지 WSL에서 실행할지 선택합니다."
+  },
+  "auto.components.settings.runtime.environments.search.09568ccc65": {
+    "ko": "서버"
+  },
+  "auto.components.settings.runtime.environments.search.104f4d7dbd": {
+    "ko": "페어링"
+  },
+  "auto.components.settings.runtime.environments.search.45501ff2c3": {
+    "ko": "클라우드"
+  },
+  "auto.components.settings.runtime.environments.search.c6e5a03aa0": {
+    "ko": "개발 박스"
+  },
+  "auto.components.settings.runtime.environments.search.d198440ce3": {
+    "ko": "런타임"
+  },
+  "auto.components.settings.runtime.environments.search.d760866285": {
+    "ko": "클라이언트"
+  },
+  "auto.components.settings.settingOwnership.agentLaunchDefaults": {
+    "ko": "기본 agent, 명령 재정의, CLI 인수, 실행 환경은 클라이언트 환경설정입니다. SSH 및 원격 서버 실행은 실행 시점에 여전히 호스트 사용 가능 여부를 확인합니다."
+  },
+  "auto.components.settings.settingOwnership.clientDefault": {
+    "ko": "클라이언트 기본값"
+  },
+  "auto.components.settings.settingOwnership.clientDefaultProjectScopes": {
+    "ko": "클라이언트 기본값 + 프로젝트 범위"
+  },
+  "auto.components.settings.settingOwnership.hostOverride": {
+    "ko": "호스트 재정의"
+  },
+  "auto.components.settings.settingOwnership.projectOnThisHost": {
+    "ko": "이 호스트의 프로젝트"
+  },
+  "auto.components.settings.settingOwnership.providerAccounts": {
+    "ko": "자격 증명과 계정 확인은 공급자 연동을 소유한 로컬 클라이언트 또는 선택한 원격 서버에 속합니다."
+  },
+  "auto.components.settings.settingOwnership.providerHost": {
+    "ko": "공급자 호스트"
+  },
+  "auto.components.settings.settingOwnership.repositorySourceControlAi": {
+    "ko": "이 재정의는 이 프로젝트 설정에 적용되며, 사용자 지정하기 전까지 클라이언트의 Source Control AI 기본값을 상속합니다."
+  },
+  "auto.components.settings.settingOwnership.sourceControlAiDefaults": {
+    "ko": "레시피, 프롬프트, 호스팅 리뷰 기본값은 이 클라이언트에서 공유됩니다. 모델 선택과 탐색은 agent가 실행되는 호스트 범위에 유지됩니다."
+  },
+  "auto.components.settings.settingOwnership.terminalQuickCommands": {
+    "ko": "명령은 이 클라이언트에 저장된 뒤 전역 또는 프로젝트 설정 범위로 지정되어 선택한 terminal 컨텍스트에서 실행됩니다."
+  },
+  "auto.components.settings.settingOwnership.workspaceDirectory": {
+    "ko": "호스트에 자체 워크트리 디렉터리가 필요하기 전까지 클라이언트 기본값을 상속합니다."
+  },
+  "auto.components.settings.shortcuts.search.0ecba9aa5f": {
+    "ko": "키보드"
+  },
+  "auto.components.settings.shortcuts.search.7f1b38f59a": {
+    "ko": "TUI"
+  },
+  "auto.components.settings.shortcuts.search.afda131738": {
+    "ko": "Orca 먼저"
+  },
+  "auto.components.settings.shortcuts.search.ca6a0c2df7": {
+    "ko": "단축키"
+  },
+  "auto.components.settings.shortcuts.search.ebd7d81e1d": {
+    "ko": "단축키가 겹칠 때 Orca와 포커스된 terminal 중 어느 쪽이 우선할지 선택합니다."
+  },
+  "auto.components.settings.shortcuts.search.f1adebbe8c": {
+    "ko": "셸"
+  },
+  "auto.components.settings.ssh.search.09395490af": {
+    "ko": "대상"
+  },
+  "auto.components.settings.ssh.search.8cb870b109": {
+    "ko": "테스트"
+  },
+  "auto.components.settings.ssh.search.8fb1cc87cc": {
+    "ko": "호스트"
+  },
+  "auto.components.settings.ssh.search.f9493b80c0": {
+    "ko": "서버"
+  },
+  "auto.components.settings.task.tracker.integration.cards.1a12e33fe5": {
+    "ko": "Linear 액세스 추가"
+  },
+  "auto.components.settings.task.tracker.integration.cards.3e7c10d286": {
+    "ko": "테스트 중..."
+  },
+  "auto.components.settings.task.tracker.integration.cards.60996beda6": {
+    "ko": "Jira 사이트 추가"
+  },
+  "auto.components.settings.task.tracker.integration.cards.6224fe9d34": {
+    "ko": "연결된 각 Linear 워크스페이스에는 활성 런타임에 저장되는 키가 하나씩 있습니다. 전체 액세스 키는 키 소유자가 접근할 수 있는 모든 팀에 적용될 수 있으며, 제한된 키는 언제든 교체할 수 있습니다."
+  },
+  "auto.components.settings.task.tracker.integration.cards.622c224082": {
+    "ko": "워크스페이스 액세스 추가"
+  },
+  "auto.components.settings.task.tracker.integration.cards.7ca5ffffdb": {
+    "ko": "Jira Cloud 이슈를 탐색하고 생성하며, 이슈에서 작업을 시작합니다."
+  },
+  "auto.components.settings.task.tracker.integration.cards.8b2408a8e5": {
+    "ko": "이 런타임에 Jira가 연결되어 있습니다. 연결된 사이트 목록이 오래된 것 같으면 다시 확인하세요."
+  },
+  "auto.components.settings.task.tracker.integration.cards.8c20e76308": {
+    "ko": "연결된 각 Jira 사이트에는 활성 런타임이 저장한 토큰이 하나씩 있습니다."
+  },
+  "auto.components.settings.task.tracker.integration.cards.9fa04a032e": {
+    "ko": "{{value0}}개 사이트{{value1}} 연결됨"
+  },
+  "auto.components.settings.task.tracker.integration.cards.a1093a06c7": {
+    "ko": "설정 작업을 표시하기 전에 Jira 액세스를 확인하는 중입니다."
+  },
+  "auto.components.settings.task.tracker.integration.cards.a2c0015fb8": {
+    "ko": "확인됨"
+  },
+  "auto.components.settings.task.tracker.integration.cards.account_scope_prefix": {
+    "ko": "계정 범위"
+  },
+  "auto.components.settings.task.tracker.integration.cards.c90f2ef419": {
+    "ko": "다시 확인"
+  },
+  "auto.components.settings.task.tracker.integration.cards.cef18762a2": {
+    "ko": "Linear 설정의 개인 API 키로 액세스를 추가합니다. 전체 액세스 키는 키 소유자가 접근할 수 있는 모든 팀을 볼 수 있습니다."
+  },
+  "auto.components.settings.task.tracker.integration.cards.dd3529015d": {
+    "ko": "{{value0}} 연결 해제"
+  },
+  "auto.components.settings.task.tracker.integration.cards.e1f5e6424c": {
+    "ko": "{{value0}}개 워크스페이스{{value1}} 연결됨"
+  },
+  "auto.components.settings.task.tracker.integration.cards.e2ff968276": {
+    "ko": "Jira 연결"
+  },
+  "auto.components.settings.task.tracker.integration.cards.fe9231215b": {
+    "ko": "설정 작업을 표시하기 전에 Linear 액세스를 확인하는 중입니다."
+  },
+  "auto.components.settings.tasks.search.3d81c26d78": {
+    "ko": "소스"
+  },
+  "auto.components.settings.terminal.clipboard.search.2061d8db1a": {
+    "ko": "neovim"
+  },
+  "auto.components.settings.terminal.clipboard.search.459fea094a": {
+    "ko": "SSH를 포함하여 OSC 52를 통해 terminal의 프로그램이 시스템 클립보드에 복사할 수 있도록 허용합니다."
+  },
+  "auto.components.settings.terminal.clipboard.search.5fb3512e8c": {
+    "ko": "붙여넣기"
+  },
+  "auto.components.settings.terminal.clipboard.search.5ffcd13c90": {
+    "ko": "tmux"
+  },
+  "auto.components.settings.terminal.clipboard.search.603818e8d8": {
+    "ko": "terminal 선택 영역이 만들어지는 즉시 자동으로 클립보드에 복사합니다."
+  },
+  "auto.components.settings.terminal.clipboard.search.e87c6d776d": {
+    "ko": "자동"
+  },
+  "auto.components.settings.terminal.search.0838b3717b": {
+    "ko": "창"
+  },
+  "auto.components.settings.terminal.search.0a05629060": {
+    "ko": "복구"
+  },
+  "auto.components.settings.terminal.search.0f2fb0cb74": {
+    "ko": "줄 높이"
+  },
+  "auto.components.settings.terminal.search.11fd3fbcf2": {
+    "ko": "ANSI"
+  },
+  "auto.components.settings.terminal.search.17cc3ea102": {
+    "ko": "terminal 패널 위에 마우스를 올리면 클릭하지 않고도 활성화됩니다. Ghostty의 초점이 마우스를 따라가는 설정을 반영합니다. 선택 및 창 전환이 안전하게 유지됩니다."
+  },
+  "auto.components.settings.terminal.search.18ce996647": {
+    "ko": "수직"
+  },
+  "auto.components.settings.terminal.search.1ab57a0fbd": {
+    "ko": "Mac"
+  },
+  "auto.components.settings.terminal.search.1dee533bd9": {
+    "ko": "Orca가 라이트 모드일 때 사용되는 테마를 선택합니다."
+  },
+  "auto.components.settings.terminal.search.20ce287cc6": {
+    "ko": "두께"
+  },
+  "auto.components.settings.terminal.search.232e532169": {
+    "ko": "라이트 모드에서 별도의 테마 사용"
+  },
+  "auto.components.settings.terminal.search.25f606d9e5": {
+    "ko": "깜박임"
+  },
+  "auto.components.settings.terminal.search.2610ee3b56": {
+    "ko": "새 워크스페이스가 생성될 때 repos 설정 스크립트가 실행되는 위치: 수직 분할(기본값), 수평 분할 또는 'Setup'이라는 제목의 배경 탭."
+  },
+  "auto.components.settings.terminal.search.2d5ab88b7c": {
+    "ko": "구분선 두께"
+  },
+  "auto.components.settings.terminal.search.34fe1af39d": {
+    "ko": "입력"
+  },
+  "auto.components.settings.terminal.search.35c2311a33": {
+    "ko": "JetBrains Mono"
+  },
+  "auto.components.settings.terminal.search.36a1b38bc8": {
+    "ko": "terminal 줄 높이 승수를 제어합니다."
+  },
+  "auto.components.settings.terminal.search.38f1b4f4cb": {
+    "ko": "키"
+  },
+  "auto.components.settings.terminal.search.3982d88725": {
+    "ko": "기록"
+  },
+  "auto.components.settings.terminal.search.46d99ef4bb": {
+    "ko": "불투명도"
+  },
+  "auto.components.settings.terminal.search.54a9b3725b": {
+    "ko": "수평"
+  },
+  "auto.components.settings.terminal.search.595b97b446": {
+    "ko": "라이트 모드 구분선 색상"
+  },
+  "auto.components.settings.terminal.search.6cddc858ba": {
+    "ko": "WebGL"
+  },
+  "auto.components.settings.terminal.search.6ded6297fe": {
+    "ko": "Iosevka"
+  },
+  "auto.components.settings.terminal.search.7718d70356": {
+    "ko": "미리보기"
+  },
+  "auto.components.settings.terminal.search.77d9f9cd55": {
+    "ko": "라이트 모드에서 창 사이의 분할 구분선을 제어합니다."
+  },
+  "auto.components.settings.terminal.search.7d924d870d": {
+    "ko": "그래픽"
+  },
+  "auto.components.settings.terminal.search.7f1e356a54": {
+    "ko": "커서 불투명도"
+  },
+  "auto.components.settings.terminal.search.7f7640c29e": {
+    "ko": "Fira Code"
+  },
+  "auto.components.settings.terminal.search.846a7a1204": {
+    "ko": "창"
+  },
+  "auto.components.settings.terminal.search.88561b3499": {
+    "ko": "정지됨"
+  },
+  "auto.components.settings.terminal.search.8987db7ff2": {
+    "ko": "다크 모드 구분선 색상"
+  },
+  "auto.components.settings.terminal.search.97bcfff662": {
+    "ko": "커서 모양"
+  },
+  "auto.components.settings.terminal.search.9bd7229927": {
+    "ko": "Option을 Alt로 사용"
+  },
+  "auto.components.settings.terminal.search.9f2dda133c": {
+    "ko": "pty"
+  },
+  "auto.components.settings.terminal.search.a3e5297c10": {
+    "ko": "종료"
+  },
+  "auto.components.settings.terminal.search.a6e9dcc829": {
+    "ko": "바"
+  },
+  "auto.components.settings.terminal.search.abaa24752d": {
+    "ko": "키보드"
+  },
+  "auto.components.settings.terminal.search.ask_before_closing_running_terminals_description": {
+    "ko": "실행 중인 명령이나 agent가 있는 terminal을 닫기 전에 확인을 표시합니다."
+  },
+  "auto.components.settings.terminal.search.ask_before_closing_running_terminals_title": {
+    "ko": "실행 중인 Terminals을 닫기 전에 확인"
+  },
+  "auto.components.settings.terminal.search.b03d01fd49": {
+    "ko": "깜박이는 커서"
+  },
+  "auto.components.settings.terminal.search.b0bb76ae6b": {
+    "ko": "글꼴"
+  },
+  "auto.components.settings.terminal.search.b3b94cfcb5": {
+    "ko": "국제"
+  },
+  "auto.components.settings.terminal.search.b495dc6a9f": {
+    "ko": "JIS"
+  },
+  "auto.components.settings.terminal.search.b5116e7b12": {
+    "ko": "따라가기"
+  },
+  "auto.components.settings.terminal.search.bc7ae1f7c0": {
+    "ko": "렌더링"
+  },
+  "auto.components.settings.terminal.search.c4427dc5ff": {
+    "ko": "Alt"
+  },
+  "auto.components.settings.terminal.search.c6178a2b4d": {
+    "ko": "마우스를 따라가는 초점"
+  },
+  "auto.components.settings.terminal.search.d8d6f7a3c5": {
+    "ko": "macOS"
+  },
+  "auto.components.settings.terminal.search.da864e6cec": {
+    "ko": "라이트 모드"
+  },
+  "auto.components.settings.terminal.search.dd4f6cb541": {
+    "ko": "독일어"
+  },
+  "auto.components.settings.terminal.search.e3aeea308e": {
+    "ko": "Cascadia Code"
+  },
+  "auto.components.settings.terminal.search.e8baf0d12c": {
+    "ko": "패딩"
+  },
+  "auto.components.settings.terminal.search.ea364ce6e4": {
+    "ko": "마우스"
+  },
+  "auto.components.settings.terminal.search.f25d948664": {
+    "ko": "여백"
+  },
+  "auto.components.settings.terminal.search.f35400f7e8": {
+    "ko": "데몬"
+  },
+  "auto.components.settings.terminal.search.f7d56b6281": {
+    "ko": "최대 terminal 스크롤백 버퍼 크기입니다."
+  },
+  "auto.components.settings.terminal.search.fae142a354": {
+    "ko": "readline"
+  },
+  "auto.components.settings.terminal.search.fffdff40a7": {
+    "ko": "버퍼"
+  },
+  "auto.components.settings.terminal.search.warp_import.description": {
+    "ko": "Warp 테마를 Orca terminal 테마로 가져옵니다."
+  },
+  "auto.components.settings.terminal.search.warp_import.title": {
+    "ko": "Warp에서 테마 가져오기"
+  },
+  "auto.components.settings.terminal.search.yaml_import.description": {
+    "ko": "테마 YAML 파일을 Orca terminal 테마로 가져옵니다."
+  },
+  "auto.components.settings.terminal.search.yaml_import.title": {
+    "ko": "YAML에서 가져오기"
+  },
+  "auto.components.settings.terminal.windows.search.28ff08ed35": {
+    "ko": "창"
+  },
+  "auto.components.settings.terminal.windows.search.2b4a340ce0": {
+    "ko": "배포판"
+  },
+  "auto.components.settings.terminal.windows.search.4d09141a42": {
+    "ko": "컨텍스트 메뉴"
+  },
+  "auto.components.settings.terminal.windows.search.591912177b": {
+    "ko": "Git Bash"
+  },
+  "auto.components.settings.terminal.windows.search.7c7056940a": {
+    "ko": "셸"
+  },
+  "auto.components.settings.terminal.windows.search.d57f870938": {
+    "ko": "고급"
+  },
+  "auto.components.settings.terminal.windows.search.fcfa53920b": {
+    "ko": "붙여넣기"
+  },
+  "auto.components.settings.token.source.control.integration.cards.05863d2599": {
+    "ko": "Gitea REST API를 통한 PR 및 commit 상태입니다."
+  },
+  "auto.components.settings.token.source.control.integration.cards.0613928cb3": {
+    "ko": "이 런타임에서는 아직 Gitea 상태를 사용할 수 없습니다."
+  },
+  "auto.components.settings.token.source.control.integration.cards.087feb92f1": {
+    "ko": ", 또는 설정"
+  },
+  "auto.components.settings.token.source.control.integration.cards.0b5242f8a2": {
+    "ko": "{{value0}} · PR 및 commit 상태"
+  },
+  "auto.components.settings.token.source.control.integration.cards.0eb50d5593": {
+    "ko": "Azure DevOps REST API 토큰을 통한 PR 및 빌드 상태입니다."
+  },
+  "auto.components.settings.token.source.control.integration.cards.0fa5629dad": {
+    "ko": "PR 및 빌드 상태"
+  },
+  "auto.components.settings.token.source.control.integration.cards.19fb419c12": {
+    "ko": "Gitea 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰, API 기본 URL, repos 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요."
+  },
+  "auto.components.settings.token.source.control.integration.cards.1a9475dace": {
+    "ko": "자세히 알아보기"
+  },
+  "auto.components.settings.token.source.control.integration.cards.24ac1c69dc": {
+    "ko": "이 런타임에서는 아직 Bitbucket 상태를 사용할 수 없습니다."
+  },
+  "auto.components.settings.token.source.control.integration.cards.40f678df73": {
+    "ko": "Azure DevOps 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰, API 기본 URL, repos 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요."
+  },
+  "auto.components.settings.token.source.control.integration.cards.52f75876be": {
+    "ko": "감지된 repos의 PR 및 commit 상태"
+  },
+  "auto.components.settings.token.source.control.integration.cards.54636c65d4": {
+    "ko": "감지된 Azure Repos의 PR 및 빌드 상태"
+  },
+  "auto.components.settings.token.source.control.integration.cards.60708f23da": {
+    "ko": "Orca가 원격에서 API URL을 추론할 수 없는 경우에만 사용하세요."
+  },
+  "auto.components.settings.token.source.control.integration.cards.6154b02093": {
+    "ko": "Bitbucket 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰과 repos 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요."
+  },
+  "auto.components.settings.token.source.control.integration.cards.6da9dfa5de": {
+    "ko": "비공개 repos의 경우, 그리고"
+  },
+  "auto.components.settings.token.source.control.integration.cards.793a06e899": {
+    "ko": "다시 확인"
+  },
+  "auto.components.settings.token.source.control.integration.cards.7bd345e3f6": {
+    "ko": "Orca가 Git 원격에서 API 기본 URL을 추론할 수 없는 경우에만 사용하세요."
+  },
+  "auto.components.settings.token.source.control.integration.cards.a924e8dcd1": {
+    "ko": "Bitbucket Cloud API 토큰을 통한 PR 및 빌드 상태입니다."
+  },
+  "auto.components.settings.token.source.control.integration.cards.b8a10b07c1": {
+    "ko": ". 설정하세요"
+  },
+  "auto.components.settings.token.source.control.integration.cards.ea204f5e03": {
+    "ko": "{{value0}} · PR 및 빌드 상태"
+  },
+  "auto.components.settings.token.source.control.integration.cards.f3f47dc7de": {
+    "ko": "이 런타임에서는 아직 Azure DevOps 상태를 사용할 수 없습니다."
+  },
+  "auto.components.settings.token.source.control.integration.cards.fc71a0e7aa": {
+    "ko": "및"
+  },
+  "auto.components.settings.token.source.control.integration.cards.fcbe0469fd": {
+    "ko": "공개 repos는 Git 원격에서 감지됩니다. 설정하세요"
+  },
+  "auto.components.settings.useWarpThemeImport.import_failed": {
+    "ko": "테마를 가져오지 못했습니다."
+  },
+  "auto.components.settings.useWarpThemeImport.imported_one": {
+    "ko": "테마 1개를 가져왔습니다."
+  },
+  "auto.components.settings.useWarpThemeImport.imported_other": {
+    "ko": "테마 {{value0}}개를 가져왔습니다."
+  },
+  "auto.components.settings.useWarpThemeImport.over_limit_one": {
+    "ko": "이 테마를 가져오면 사용자 지정 terminal 테마 {{value0}}개 제한을 초과합니다. 새 테마 1개를 선택 해제하고 다시 시도하세요."
+  },
+  "auto.components.settings.useWarpThemeImport.over_limit_other": {
+    "ko": "이 테마들을 가져오면 사용자 지정 terminal 테마 {{value0}}개 제한을 초과합니다. 새 테마 {{value1}}개를 선택 해제하고 다시 시도하세요."
+  },
+  "auto.components.settings.useWarpThemeImport.unknown_error": {
+    "ko": "알 수 없는 오류"
+  },
+  "auto.components.settings.voice.pane.search.04c25a6fb0": {
+    "ko": "openai"
+  },
+  "auto.components.settings.voice.pane.search.064a9bd94a": {
+    "ko": "길게 누르기"
+  },
+  "auto.components.settings.voice.pane.search.3d8b853963": {
+    "ko": "음성"
+  },
+  "auto.components.settings.voice.pane.search.6fa48bcd41": {
+    "ko": "토글"
+  },
+  "auto.components.settings.voice.pane.search.d86f5600da": {
+    "ko": "모드"
+  },
+  "auto.components.settings.voice.pane.search.e360027a65": {
+    "ko": "마이크"
+  },
+  "auto.components.settings.voice.pane.search.f6e0dfa61c": {
+    "ko": "클라우드"
+  },
+  "auto.components.setup.guide.SetupGuideProgressRing.dac3a4724a": {
+    "ko": "설정 단계 {{value1}}개 중 {{value0}}개 완료"
+  },
+  "auto.components.shared.useDaemonActions.d18f3005c2": {
+    "ko": "세션 {{value0}}개{{value1}}이(가) 종료를 거부했습니다."
+  },
+  "auto.components.shared.useDaemonActions.d6372cc797": {
+    "ko": "세션 {{value0}}개{{value1}}를 종료했습니다."
+  },
+  "auto.components.shared.useDaemonActions.fe2ab66d45": {
+    "ko": "세션 {{value1}}개 중 {{value0}}개를 종료했습니다. {{value2}}개가 종료를 거부했습니다."
+  },
+  "auto.components.sidebar.AddRepoCreateStep.0ae45b8238": {
+    "ko": "my-project"
+  },
+  "auto.components.sidebar.AddRepoCreateStep.11fd2a7db8": {
+    "ko": "Git 리포지토리"
+  },
+  "auto.components.sidebar.AddRepoCreateStep.ssh_parent_manual": {
+    "ko": "SSH 상위 경로를 입력하세요."
+  },
+  "auto.components.sidebar.AddRepoHostSelector.host": {
+    "ko": "호스트"
+  },
+  "auto.components.sidebar.AddRepoNestedImportStep.220dd32d83": {
+    "ko": "스캔 중..."
+  },
+  "auto.components.sidebar.AddRepoNestedImportStep.b20bb7c24f": {
+    "ko": "이 리포지토리들을 하나의 그룹으로 묶어 둡니다. 마이크로서비스처럼 서로 관련된 리포지토리에 적합합니다."
+  },
+  "auto.components.sidebar.AddRepoNestedImportStep.e907ec8935": {
+    "ko": "모노 repo 이름이란?"
+  },
+  "auto.components.sidebar.AddRepoRemoteStep.35831a7312": {
+    "ko": "추가 중..."
+  },
+  "auto.components.sidebar.AddRepoRemoteStep.80557be85a": {
+    "ko": "연결된 SSH 대상을 선택하고 Git 리포지토리 경로를 입력하세요."
+  },
+  "auto.components.sidebar.AddRepoRemoteStep.lockedDescription": {
+    "ko": "{{value0}}의 Git 리포지토리 경로를 입력하세요."
+  },
+  "auto.components.sidebar.AddRepoRemoteStep.lockedDisconnected": {
+    "ko": "{{value0}} 연결이 끊어졌습니다."
+  },
+  "auto.components.sidebar.AddRepoServerStartStep.3d0c035483": {
+    "ko": "호스트 프로젝트 열기"
+  },
+  "auto.components.sidebar.AddRepoServerStartStep.423b5d3d31": {
+    "ko": "선택한 호스트에 이미 있는 Git 리포지토리 또는 폴더를 추가하세요."
+  },
+  "auto.components.sidebar.AddRepoServerStartStep.6b9958492a": {
+    "ko": "한 번에 여러 repos를 가져오고 싶으신가요? 상위 폴더로 이동하세요."
+  },
+  "auto.components.sidebar.AddRepoServerStartStep.8efa930eb5": {
+    "ko": "선택한 호스트에서 다른 프로젝트를 추가하세요."
+  },
+  "auto.components.sidebar.AddRepoServerStartStep.a2ea37d549": {
+    "ko": "원격 Git 리포지토리"
+  },
+  "auto.components.sidebar.AddRepoSteps.cloneOnHostDescription": {
+    "ko": "Git URL을 입력하고 {{value0}}에서 클론할 위치를 선택하세요."
+  },
+  "auto.components.sidebar.AddRepoSteps.cloneParentFolder": {
+    "ko": "상위 폴더"
+  },
+  "auto.components.sidebar.DeleteWorktreeWarningPanels.c4f96a6e18": {
+    "ko": "메인 워크트리"
+  },
+  "auto.components.sidebar.HostRemoveDialog.1a2b3c4d5e": {
+    "ko": "{{value0}} 제거됨"
+  },
+  "auto.components.sidebar.HostRemoveDialog.2b3c4d5e6f": {
+    "ko": "호스트를 제거하지 못했습니다."
+  },
+  "auto.components.sidebar.HostRemoveDialog.3c4d5e6f7a": {
+    "ko": "{{value0}}을(를) 제거할까요?"
+  },
+  "auto.components.sidebar.HostRemoveDialog.4d5e6f7a8b": {
+    "ko": "이 작업은 이 서버를 제거할 수 있는 Orca 서버 설정을 엽니다."
+  },
+  "auto.components.sidebar.HostRemoveDialog.5e6f7a8b9c": {
+    "ko": "이 컴퓨터에서 저장된 SSH 호스트와 인증 정보를 제거합니다. 원격 파일은 삭제되지 않습니다."
+  },
+  "auto.components.sidebar.HostRemoveDialog.7a8b9c0d1e": {
+    "ko": "설정 열기"
+  },
+  "auto.components.sidebar.HostRemoveDialog.8b9c0d1e2f": {
+    "ko": "호스트 제거"
+  },
+  "auto.components.sidebar.HostRenameDialog.1a2b3c4d5e": {
+    "ko": "호스트 이름 바꾸기"
+  },
+  "auto.components.sidebar.HostRenameDialog.2b3c4d5e6f": {
+    "ko": "이 이름은 이 컴퓨터에만 표시됩니다. 비워 두면 기본 이름을 사용합니다."
+  },
+  "auto.components.sidebar.HostRenameDialog.3c4d5e6f7a": {
+    "ko": "표시 이름"
+  },
+  "auto.components.sidebar.HostRenameDialog.4d5e6f7a8b": {
+    "ko": "기본값으로 재설정"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.2c29e2de68": {
+    "ko": "연결 실패"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.2d3e4f5a6b": {
+    "ko": "연결 확인"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.3c4d5e6f7a": {
+    "ko": "호스트 관리…"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.4f2c8a9b10": {
+    "ko": "{{value0}} 호스트 작업"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.5b8b4b6a01": {
+    "ko": "서버 업데이트 필요"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.63f36455cc": {
+    "ko": "다시 연결"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.6b7c8d9e10": {
+    "ko": "호스트 작업"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.6e7f8a9b0c": {
+    "ko": "호스트 제거…"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.7f1a2b3c4d": {
+    "ko": "{{value0}}에 연결할 수 있습니다."
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.8d1e2f3a4b": {
+    "ko": "이름 바꾸기…"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.9b3c1d2e44": {
+    "ko": "클라이언트 업데이트 필요"
+  },
+  "auto.components.sidebar.HostSectionHeaderMenu.bf07aee59e": {
+    "ko": "연결 해제 실패"
+  },
+  "auto.components.sidebar.ImportedWorktreesVisibilityLine.2251d41ebb": {
+    "ko": "숨겨진 워크트리 그룹"
+  },
+  "auto.components.sidebar.ImportedWorktreesVisibilityLine.ad99f4eea9": {
+    "ko": "숨김 유지"
+  },
+  "auto.components.sidebar.ImportedWorktreesVisibilityLine.b7a87dc32f": {
+    "ko": "워크트리 목록에 표시"
+  },
+  "auto.components.sidebar.ImportedWorktreesVisibilityLine.f54f2bec5d": {
+    "ko": "{{value1}}의 숨겨진 워크트리 {{value0}}개"
+  },
+  "auto.components.sidebar.NonGitFolderDialog.c49fb13492": {
+    "ko": "이 호스트에 폴더를 추가하지 못했습니다."
+  },
+  "auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd": {
+    "ko": "실행 안 함"
+  },
+  "auto.components.sidebar.OrcaYamlTrustDialog.531689199b": {
+    "ko": "항상 신뢰"
+  },
+  "auto.components.sidebar.OrcaYamlTrustDialog.831f2cd9f0": {
+    "ko": "내 컴퓨터에서 실행"
+  },
+  "auto.components.sidebar.PendingWorktreeRow.af21e953d1": {
+    "ko": "워크트리 만들기 취소"
+  },
+  "auto.components.sidebar.ProjectOrderManualDefaultNotice.e8c1f4a2b9": {
+    "ko": "워크스페이스 옵션에서."
+  },
+  "auto.components.sidebar.RemoteFileBrowser.971d85cc84": {
+    "ko": "이 호스트에서 프로젝트로 열립니다 · {{value0}}"
+  },
+  "auto.components.sidebar.RemoveFolderDialog.e62415c3d0": {
+    "ko": "다음 항목만 제거합니다"
+  },
+  "auto.components.sidebar.ScrollToCurrentWorkspaceToolbarButton.23989bb663": {
+    "ko": "활성 워크스페이스로 이동"
+  },
+  "auto.components.sidebar.SetupScriptPromptCardViews.bb879db364": {
+    "ko": "이 repo는 공유를 무시합니다"
+  },
+  "auto.components.sidebar.SidebarFeedbackDialog.3460258a54": {
+    "ko": "X에서 팔로우"
+  },
+  "auto.components.sidebar.SidebarHostScopeStrip.backToAll": {
+    "ko": "모든 호스트"
+  },
+  "auto.components.sidebar.SidebarHostScopeStrip.scopedTo": {
+    "ko": "{{value0}} 표시 중"
+  },
+  "auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c": {
+    "ko": "도움말"
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.631b97eea9": {
+    "ko": "호스트 범위"
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.activeRuntimeHost": {
+    "ko": "활성 서버"
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.allHostsDetail": {
+    "ko": "모든 호스트 표시"
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.automation": {
+    "ko": "자동화"
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162": {
+    "ko": "최근"
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.configuredSshHost": {
+    "ko": "구성된 SSH"
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.hosts": {
+    "ko": "호스트"
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectRuntimeHost": {
+    "ko": "프로젝트 서버"
+  },
+  "auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectSshHost": {
+    "ko": "프로젝트 SSH"
+  },
+  "auto.components.sidebar.SshDisconnectedDialog.authFailed": {
+    "ko": "원격 호스트 인증에 실패했습니다."
+  },
+  "auto.components.sidebar.SshDisconnectedDialog.disconnected": {
+    "ko": "이 SSH 호스트는 연결되어 있지 않습니다."
+  },
+  "auto.components.sidebar.SshDisconnectedDialog.reconnecting": {
+    "ko": "원격 호스트에 다시 연결하는 중..."
+  },
+  "auto.components.sidebar.SshDisconnectedDialog.reconnectionFailed": {
+    "ko": "원격 호스트에 다시 연결하지 못했습니다."
+  },
+  "auto.components.sidebar.WorkspaceKanbanStatusLane.8ad104642b": {
+    "ko": "비어 있음"
+  },
+  "auto.components.sidebar.WorkspaceStatusAppearancePopover.8be427206b": {
+    "ko": "아이콘"
+  },
+  "auto.components.sidebar.WorktreeCard.0777de5970": {
+    "ko": "기본 워크트리(원래 복제 디렉터리)"
+  },
+  "auto.components.sidebar.WorktreeCard.0f33af979b": {
+    "ko": "부분 체크아웃. 이 경로 외부의 파일은 디스크에 없습니다."
+  },
+  "auto.components.sidebar.WorktreeCard.4f964d5e8c": {
+    "ko": "스파스"
+  },
+  "auto.components.sidebar.WorktreeCard.7d517f82e2": {
+    "ko": "기본"
+  },
+  "auto.components.sidebar.WorktreeCardMetadataStatusBadges.29df45afa2": {
+    "ko": "MR"
+  },
+  "auto.components.sidebar.WorktreeContextMenu.250de158fd": {
+    "ko": "워크스페이스 제거"
+  },
+  "auto.components.sidebar.WorktreeContextMenu.3baa7d6507": {
+    "ko": "고정"
+  },
+  "auto.components.sidebar.WorktreeContextMenu.8d9cd19d09": {
+    "ko": "상위 워크스페이스 열기"
+  },
+  "auto.components.sidebar.WorktreeContextMenu.8dacff1fe0": {
+    "ko": "읽음으로 표시"
+  },
+  "auto.components.sidebar.WorktreeList.2ef41bf9a7": {
+    "ko": "프로젝트 작업"
+  },
+  "auto.components.sidebar.WorktreeList.7a8b9c0d1e": {
+    "ko": "업데이트 필요"
+  },
+  "auto.components.sidebar.WorktreeList.b667b59632": {
+    "ko": "일부 프로젝트를 Orca에서 제거하지 못했습니다."
+  },
+  "auto.components.sidebar.WorktreeList.bfbedc547b": {
+    "ko": "워크트리"
+  },
+  "auto.components.sidebar.WorktreeList.f94466bc39": {
+    "ko": "그룹 삭제 후에도 {{value0}}/{{value1}} 프로젝트{{value2}}가 남아 있습니다."
+  },
+  "auto.components.sidebar.WorktreeList.groupDeleteFailed": {
+    "ko": "그룹을 삭제하지 못했습니다."
+  },
+  "auto.components.sidebar.WorktreeList.groupDeleteFailedDesc": {
+    "ko": "그룹을 삭제하는 중 문제가 발생했습니다. 제거된 프로젝트는 없습니다."
+  },
+  "auto.components.sidebar.WorktreeList.hostAuthNeeded": {
+    "ko": "인증 필요"
+  },
+  "auto.components.sidebar.WorktreeMetaDialog.b48c271d39": {
+    "ko": "저장, 줄 바꿈은 Shift+Enter."
+  },
+  "auto.components.sidebar.WorktreeOpenInMenu.0bed8727db": {
+    "ko": "이동되었거나 삭제되었을 수 있습니다. 워크스페이스를 새로고침하거나 Orca에서 제거하세요."
+  },
+  "auto.components.sidebar.WorktreeTitleInlineRename.2f42ae024f": {
+    "ko": "읽지 않음:"
+  },
+  "auto.components.sidebar.WorktreeVisibilityDialog.83a5ba8dd1": {
+    "ko": "Orca 외부 워크트리"
+  },
+  "auto.components.sidebar.add.repo.local.start.actions.runtimeBrowseDescription": {
+    "ko": "이 호스트의 기존 Git 리포지토리 또는 폴더"
+  },
+  "auto.components.sidebar.add.repo.local.start.actions.sshBrowseDescription": {
+    "ko": "이 SSH 호스트의 기존 Git 리포지토리 또는 폴더"
+  },
+  "auto.components.sidebar.add.repo.local.start.actions.sshBrowseTitle": {
+    "ko": "SSH 호스트에서 프로젝트 열기"
+  },
+  "auto.components.sidebar.add.repo.local.start.actions.sshCreateUnavailable": {
+    "ko": "아직 SSH 호스트에서는 사용할 수 없습니다."
+  },
+  "auto.components.sidebar.index.b826a98b6f": {
+    "ko": "사용 중"
+  },
+  "auto.components.sidebar.sidebar.project.drop.740e8d0d46": {
+    "ko": "서버 경로는 프로젝트 추가를 사용하세요"
+  },
+  "auto.components.sidebar.sidebarHostOptions.3e102f111c": {
+    "ko": "모든 호스트"
+  },
+  "auto.components.sidebar.sidebarHostOptions.visibleHostsCount": {
+    "ko": "호스트 {{value0}}개"
+  },
+  "auto.components.sidebar.useAddRepoLocalFolderFlow.7ab10e4974": {
+    "ko": "원격 호스트에서 프로젝트를 추가하려면 호스트 경로를 사용하세요."
+  },
+  "auto.components.sidebar.workspace.status.1a9383112b": {
+    "ko": "Conductor 진행"
+  },
+  "auto.components.sidebar.workspace.status.1b81da243a": {
+    "ko": "보라색"
+  },
+  "auto.components.sidebar.workspace.status.226d1e7773": {
+    "ko": "진행"
+  },
+  "auto.components.sidebar.workspace.status.2c19d1db33": {
+    "ko": "재생"
+  },
+  "auto.components.sidebar.workspace.status.409528031f": {
+    "ko": "리뷰"
+  },
+  "auto.components.sidebar.workspace.status.52e3c6e2a4": {
+    "ko": "중립"
+  },
+  "auto.components.sidebar.workspace.status.642da473f2": {
+    "ko": "알림"
+  },
+  "auto.components.sidebar.workspace.status.6437a8c253": {
+    "ko": "하늘색"
+  },
+  "auto.components.sidebar.workspace.status.6c1efa2cf8": {
+    "ko": "리뷰 중"
+  },
+  "auto.components.sidebar.workspace.status.7adb43ecf0": {
+    "ko": "장미색"
+  },
+  "auto.components.sidebar.workspace.status.895f381714": {
+    "ko": "Conductor 완료"
+  },
+  "auto.components.sidebar.workspace.status.caabd5ca85": {
+    "ko": "징크"
+  },
+  "auto.components.sidebar.workspace.status.caebe3c10f": {
+    "ko": "Conductor 리뷰"
+  },
+  "auto.components.sidebar.worktree.list.groups.6798dc7c94": {
+    "ko": "리뷰 중"
+  },
+  "auto.components.skills.SkillsPage.b088e0785d": {
+    "ko": "베타"
+  },
+  "auto.components.source.control.SourceControlActionVariableChips.4bf6d88039": {
+    "ko": "(비어 있음)"
+  },
+  "auto.components.sparse.SparseCheckoutPresetSelect.bd6cec2056": {
+    "ko": "새 사전 설정"
+  },
+  "auto.components.sparse.SparseCheckoutPresetSelect.c7f9b3f0c1": {
+    "ko": "끔"
+  },
+  "auto.components.sparse.SparseCheckoutPresetSelect.ddbcaef7be": {
+    "ko": "src/renderer packages/ui"
+  },
+  "auto.components.star.nag.StarNagToastHost.body": {
+    "ko": "Orca가 마음에 드신다면 GitHub 별표가 다른 개발자가 Orca를 발견하는 데 도움이 됩니다."
+  },
+  "auto.components.star.nag.StarNagToastHost.githubOpened": {
+    "ko": "GitHub 열림"
+  },
+  "auto.components.star.nag.StarNagToastHost.onboardingCompleted": {
+    "ko": "온보딩 완료!"
+  },
+  "auto.components.star.nag.StarNagToastHost.openGithub": {
+    "ko": "GitHub 열기"
+  },
+  "auto.components.star.nag.StarNagToastHost.opening": {
+    "ko": "여는 중…"
+  },
+  "auto.components.star.nag.StarNagToastHost.starOnGithub": {
+    "ko": "GitHub에서 별표 누르기"
+  },
+  "auto.components.star.nag.StarNagToastHost.starredThanks": {
+    "ko": "별표를 눌러주셔서 감사합니다!"
+  },
+  "auto.components.star.nag.StarNagToastHost.starring": {
+    "ko": "별표 누르는 중…"
+  },
+  "auto.components.stats.ClaudeUsagePane.cfe2282ffa": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.stats.ClaudeUsagePane.rangeAllTime": {
+    "ko": "전체 기간"
+  },
+  "auto.components.stats.ClaudeUsagePane.rangeLast30Days": {
+    "ko": "최근 30일"
+  },
+  "auto.components.stats.ClaudeUsagePane.rangeLast7Days": {
+    "ko": "최근 7일"
+  },
+  "auto.components.stats.ClaudeUsagePane.rangeLast90Days": {
+    "ko": "최근 90일"
+  },
+  "auto.components.stats.CodexUsageDailyChart.1e6f62d7e3": {
+    "ko": "추론"
+  },
+  "auto.components.stats.CodexUsagePane.bf6cf2d4dd": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.stats.CodexUsagePane.e0b988599d": {
+    "ko": "합계"
+  },
+  "auto.components.stats.CodexUsagePane.rangeAllTime": {
+    "ko": "전체 기간"
+  },
+  "auto.components.stats.CodexUsagePane.rangeLast30Days": {
+    "ko": "최근 30일"
+  },
+  "auto.components.stats.CodexUsagePane.rangeLast7Days": {
+    "ko": "최근 7일"
+  },
+  "auto.components.stats.CodexUsagePane.rangeLast90Days": {
+    "ko": "최근 90일"
+  },
+  "auto.components.stats.OpenCodeUsagePane.349f7c3f5c": {
+    "ko": "합계"
+  },
+  "auto.components.stats.OpenCodeUsagePane.362231082f": {
+    "ko": "알 수 없음"
+  },
+  "auto.components.stats.OpenCodeUsagePane.rangeAllTime": {
+    "ko": "전체 기간"
+  },
+  "auto.components.stats.OpenCodeUsagePane.rangeLast30Days": {
+    "ko": "최근 30일"
+  },
+  "auto.components.stats.OpenCodeUsagePane.rangeLast7Days": {
+    "ko": "최근 7일"
+  },
+  "auto.components.stats.OpenCodeUsagePane.rangeLast90Days": {
+    "ko": "최근 90일"
+  },
+  "auto.components.stats.UsageOverviewPane.444585cb41": {
+    "ko": "데이터 있음"
+  },
+  "auto.components.stats.UsageOverviewPane.6c00c46815": {
+    "ko": "공급자를 활성화해 로컬 agent 로그를 스캔하고 통합 토큰 원장을 만드세요."
+  },
+  "auto.components.stats.UsageOverviewPane.e06d1baf5c": {
+    "ko": "사용량 개요 새로고침"
+  },
+  "auto.components.stats.UsageSessionsTable.01476891c7": {
+    "ko": "마지막 활동"
+  },
+  "auto.components.stats.UsageSessionsTable.0f03975d59": {
+    "ko": "이벤트"
+  },
+  "auto.components.stats.UsageSessionsTable.1afc25eb06": {
+    "ko": "턴"
+  },
+  "auto.components.stats.UsageSessionsTable.21ea00bfa8": {
+    "ko": "캐시"
+  },
+  "auto.components.stats.UsageSessionsTable.e0b988599d": {
+    "ko": "합계"
+  },
+  "auto.components.stats.share.card.utils.19f4b4dc75": {
+    "ko": "github.com/stablyai/orca"
+  },
+  "auto.components.stats.share.card.utils.7080aeaebb": {
+    "ko": "추론"
+  },
+  "auto.components.stats.stats.search.26bb901fcd": {
+    "ko": "Orca 통계, Claude/Codex/OpenCode 통합 사용량 분석, 토큰, 캐시, 모델, 세션"
+  },
+  "auto.components.stats.usage.overview.sections.1dd166c920": {
+    "ko": "적음"
+  },
+  "auto.components.stats.usage.overview.sections.3a795542fa": {
+    "ko": "통합 토큰 구성"
+  },
+  "auto.components.stats.usage.overview.sections.4ff104da47": {
+    "ko": "토큰 구성"
+  },
+  "auto.components.stats.usage.overview.sections.c424eb3f8e": {
+    "ko": "최고:"
+  },
+  "auto.components.stats.usage.overview.sections.e65084cb4b": {
+    "ko": "추론"
+  },
+  "auto.components.stats.usage.overview.sections.f6df0d7d6d": {
+    "ko": "많음"
+  },
+  "auto.components.status.bar.ResourceUsageStatusSegment.0f9e50eb07": {
+    "ko": "기타"
+  },
+  "auto.components.status.bar.SshStatusSegment.3ad70e0365": {
+    "ko": "원격 호스트 관리…"
+  },
+  "auto.components.status.bar.SshStatusSegment.6e8a9a4242": {
+    "ko": "원격 호스트"
+  },
+  "auto.components.status.bar.SshStatusSegment.d09ec41831": {
+    "ko": "원격 호스트"
+  },
+  "auto.components.status.bar.SshStatusSegment.fdc57e9970": {
+    "ko": "원격 호스트 연결 상태"
+  },
+  "auto.components.status.bar.SshStatusSegment.remote_server": {
+    "ko": "원격 서버"
+  },
+  "auto.components.status.bar.SshStatusSegment.runtime_connect_unavailable": {
+    "ko": "원격 호스트에 연결할 수 없습니다."
+  },
+  "auto.components.status.bar.SshStatusSegment.runtime_disconnect_failed": {
+    "ko": "연결 해제 실패"
+  },
+  "auto.components.status.bar.SshStatusSegment.runtime_last_close_reason": {
+    "ko": "닫힘: {{value0}}"
+  },
+  "auto.components.status.bar.SshStatusSegment.runtime_reconnect_attempt": {
+    "ko": "{{value0}}번째 시도"
+  },
+  "auto.components.status.bar.SshStatusSegment.runtime_reconnecting": {
+    "ko": "다시 연결 중"
+  },
+  "auto.components.status.bar.SshStatusSegment.runtime_unavailable": {
+    "ko": "연결 끊김"
+  },
+  "auto.components.status.bar.SshTargetStatusRow.sshHost": {
+    "ko": "SSH 호스트"
+  },
+  "auto.components.status.bar.StatusBar.24ac89df1a": {
+    "ko": "원격 호스트"
+  },
+  "auto.components.status.bar.StatusBar.25d8bbde69": {
+    "ko": "재설정 사용 중…"
+  },
+  "auto.components.status.bar.StatusBar.5e5f9f5160": {
+    "ko": "rate-limit 재설정 1회 사용 가능"
+  },
+  "auto.components.status.bar.StatusBar.5ecae9197c": {
+    "ko": "rate-limit 재설정 {{value0}}회 사용 가능"
+  },
+  "auto.components.status.bar.StatusBar.6d1042aa6f": {
+    "ko": "활성 계정의 Codex rate-limit 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 창을 즉시 초기화합니다."
+  },
+  "auto.components.status.bar.StatusBar.972a1ff497": {
+    "ko": "Codex 한도를 재설정할까요?"
+  },
+  "auto.components.status.bar.StatusBar.e159fc1fd7": {
+    "ko": "지금 재설정"
+  },
+  "auto.components.status.bar.StatusBar.f077f586db": {
+    "ko": "다시 묻지 않기"
+  },
+  "auto.components.status.bar.WorkspaceSpaceCompactPanel.0582df6d2e": {
+    "ko": "스캔"
+  },
+  "auto.components.status.bar.WorkspaceSpaceCompactPanel.5691353a21": {
+    "ko": "중지 중"
+  },
+  "auto.components.status.bar.WorkspaceSpaceCompactPanel.8ff597593d": {
+    "ko": "Space"
+  },
+  "auto.components.status.bar.WorkspaceSpaceCompactPanel.9be86c46a0": {
+    "ko": "확보 가능"
+  },
+  "auto.components.status.bar.WorkspaceSpaceCompactPanel.c361440dc0": {
+    "ko": "베타"
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.0bc756efaf": {
+    "ko": "Git 변경사항"
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.1fce91d1b9": {
+    "ko": "중지 중"
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.39801484e0": {
+    "ko": "실패"
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.433bb7f595": {
+    "ko": "정상"
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.63efebe0e6": {
+    "ko": "{{value0}} {{value1}}이(가) Space에서 제거되었습니다."
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.65402b7192": {
+    "ko": "선택됨"
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.81f14d9924": {
+    "ko": "리포지토리"
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.8c7c57fbf8": {
+    "ko": "스캔"
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.9155381019": {
+    "ko": "스파스"
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.a998501630": {
+    "ko": "강제"
+  },
+  "auto.components.status.bar.WorkspaceSpaceManagerPanel.d384a4ce9f": {
+    "ko": "삭제 판단"
+  },
+  "auto.components.status.bar.tooltip.1292d4f2ee": {
+    "ko": "사용할 수 없음"
+  },
+  "auto.components.status.bar.tooltip.45198c7d95": {
+    "ko": "rate-limit 재설정 1회 사용 가능"
+  },
+  "auto.components.status.bar.tooltip.7567cd1c6b": {
+    "ko": "사용량을 확인할 수 없음"
+  },
+  "auto.components.status.bar.tooltip.bce421cba3": {
+    "ko": "rate-limit 재설정 {{value0}}회 사용 가능"
+  },
+  "auto.components.tab.bar.BrowserTab.2186a8407c": {
+    "ko": "아래로 분할"
+  },
+  "auto.components.tab.bar.BrowserTab.911542656f": {
+    "ko": "탭 고정"
+  },
+  "auto.components.tab.bar.BrowserTab.96354ed249": {
+    "ko": "위로 분할"
+  },
+  "auto.components.tab.bar.EditorFileTabContextMenu.1d04b1630b": {
+    "ko": "아래로 분할"
+  },
+  "auto.components.tab.bar.EditorFileTabContextMenu.6b3efb106e": {
+    "ko": "위로 분할"
+  },
+  "auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669": {
+    "ko": "탭 고정"
+  },
+  "auto.components.tab.bar.RecentTabSwitcher.329638ff6f": {
+    "ko": "탭 전환"
+  },
+  "auto.components.tab.bar.SortableTabContextMenu.591f9b12c1": {
+    "ko": "위로 분할"
+  },
+  "auto.components.tab.bar.SortableTabContextMenu.60f958ec75": {
+    "ko": "탭 고정"
+  },
+  "auto.components.tab.bar.SortableTabContextMenu.845576bed1": {
+    "ko": "청록색"
+  },
+  "auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30": {
+    "ko": "다른 탭 닫기"
+  },
+  "auto.components.tab.bar.SortableTabContextMenu.af80ed83c1": {
+    "ko": "아래로 분할"
+  },
+  "auto.components.tab.bar.TabBarQuickCommandsButton.77ac113df0": {
+    "ko": "{{value0}} 시작: {{value1}}"
+  },
+  "auto.components.tab.bar.TabBarQuickCommandsButton.7b1c9d6ae1": {
+    "ko": "실행"
+  },
+  "auto.components.tab.bar.TabBarQuickCommandsButton.b4e7f9a2c1": {
+    "ko": "일치하는 명령 없음"
+  },
+  "auto.components.tab.bar.TabBarQuickCommandsButton.b82e237a4b": {
+    "ko": "빠른 명령 더 보기"
+  },
+  "auto.components.tab.bar.TabBarQuickCommandsButton.c781f992e4": {
+    "ko": "destructive"
+  },
+  "auto.components.tab.bar.TabBarQuickCommandsButton.f3a8c2d1e7": {
+    "ko": "빠른 명령 검색..."
+  },
+  "auto.components.tab.bar.tab.create.menu.options.164c394bab": {
+    "ko": "파일 열기"
+  },
+  "auto.components.tab.bar.tab.create.menu.options.1baeb07c17": {
+    "ko": "iOS 시뮬레이터"
+  },
+  "auto.components.tab.bar.tab.create.menu.options.37ff3ddca1": {
+    "ko": "Markdown 열기"
+  },
+  "auto.components.tab.bar.tab.create.menu.options.6d0e6a4b7a": {
+    "ko": "새 브라우저"
+  },
+  "auto.components.tab.bar.tab.create.menu.options.6d8b6b4117": {
+    "ko": "새 파일"
+  },
+  "auto.components.tab.bar.tab.create.menu.options.a094576900": {
+    "ko": "새 terminal"
+  },
+  "auto.components.tab.bar.tab.create.menu.options.bbaf4f85a4": {
+    "ko": "모바일 에뮬레이터"
+  },
+  "auto.components.tab.bar.tab.create.menu.options.c87ad57785": {
+    "ko": "브라우저 탭"
+  },
+  "auto.components.tab.group.AiVaultSessionDropLayer.couldNotReadPayload": {
+    "ko": "세션 드래그 데이터를 읽을 수 없습니다."
+  },
+  "auto.components.tab.group.AiVaultSessionDropLayer.dropOntoTerminalPane": {
+    "ko": "이 세션을 재개하려면 terminal 창에 놓으세요."
+  },
+  "auto.components.tab.group.AiVaultSessionDropLayer.localWorkspacesOnly": {
+    "ko": "기록에서 재개하기는 로컬 워크스페이스에서만 사용할 수 있습니다."
+  },
+  "auto.components.tab.group.AiVaultSessionDropLayer.openLocalWorkspace": {
+    "ko": "세션을 재개하기 전에 로컬 워크스페이스를 여세요."
+  },
+  "auto.components.tab.group.AiVaultSessionDropLayer.sessionQueued": {
+    "ko": "세션이 대기열에 추가됨"
+  },
+  "auto.components.tab.group.TabGroupPanel.0db2081805": {
+    "ko": "위로 분할"
+  },
+  "auto.components.tab.group.TabGroupPanel.4df2a06d36": {
+    "ko": "아래로 분할"
+  },
+  "auto.components.task.project.source.combobox.allProjects": {
+    "ko": "모든 프로젝트"
+  },
+  "auto.components.task.project.source.combobox.hostCount": {
+    "ko": "호스트 {{value0}}개"
+  },
+  "auto.components.task.project.source.combobox.noMatches": {
+    "ko": "검색과 일치하는 프로젝트가 없습니다."
+  },
+  "auto.components.task.project.source.combobox.noProjects": {
+    "ko": "프로젝트 없음"
+  },
+  "auto.components.task.project.source.combobox.searchProjects": {
+    "ko": "프로젝트 검색..."
+  },
+  "auto.components.taskPageEmptyState.changeQueryDescription": {
+    "ko": "쿼리를 변경하거나 지우세요."
+  },
+  "auto.components.taskPageEmptyState.noGitLabIssuesTitle": {
+    "ko": "GitLab 이슈 없음"
+  },
+  "auto.components.taskPageEmptyState.noGitLabMrsDescription": {
+    "ko": "이 필터와 일치하는 GitLab MR이 없습니다."
+  },
+  "auto.components.taskPageEmptyState.noGitLabMrsTitle": {
+    "ko": "GitLab MR 없음"
+  },
+  "auto.components.taskPageEmptyState.noGitLabWorkDescription": {
+    "ko": "이 필터와 일치하는 GitLab 작업이 없습니다."
+  },
+  "auto.components.taskPageEmptyState.noGitLabWorkTitle": {
+    "ko": "GitLab 작업 없음"
+  },
+  "auto.components.taskPageEmptyState.noMatchingGitHubWorkTitle": {
+    "ko": "일치하는 GitHub 작업 없음"
+  },
+  "auto.components.taskPageEmptyState.noProjectSourcesDescription": {
+    "ko": "Orca가 어느 호스트/계정에서 작업을 가져올지 알 수 있도록 프로젝트 소스를 하나 이상 선택하세요."
+  },
+  "auto.components.taskPageEmptyState.noProjectSourcesTitle": {
+    "ko": "선택한 프로젝트 소스 없음"
+  },
+  "auto.components.taskSourceContextSummary.reconnectOrUpdateTitle": {
+    "ko": "이 소스를 불러오려면 {{value0}}을(를) 다시 연결하거나 업데이트하세요."
+  },
+  "auto.components.taskSourceContextSummary.someSourceHostsUnavailable": {
+    "ko": "일부 {{value0}} 소스 호스트를 사용할 수 없음: {{value1}}"
+  },
+  "auto.components.taskSourceContextSummary.sourceUnavailable": {
+    "ko": "{{value0}} 소스를 사용할 수 없음: {{value1}}"
+  },
+  "auto.components.terminal.pane.CloseTerminalDialog.dont_ask_again": {
+    "ko": "실행 중인 terminals에 대해 다시 묻지 않기"
+  },
+  "auto.components.terminal.pane.CloseTerminalDialog.stop_agent_confirm": {
+    "ko": "Agent 중지"
+  },
+  "auto.components.terminal.pane.CloseTerminalDialog.stop_agent_description": {
+    "ko": "이 terminal을 닫으면 agent의 현재 작업이 중지됩니다."
+  },
+  "auto.components.terminal.pane.CloseTerminalDialog.stop_agent_title": {
+    "ko": "이 agent를 중지할까요?"
+  },
+  "auto.components.terminal.pane.CloseTerminalDialog.stop_command_confirm": {
+    "ko": "중지하고 닫기"
+  },
+  "auto.components.terminal.pane.CloseTerminalDialog.stop_command_description": {
+    "ko": "이 terminal을 닫으면 내부에서 실행 중인 명령이 중지됩니다."
+  },
+  "auto.components.terminal.pane.CloseTerminalDialog.stop_command_title": {
+    "ko": "실행 중인 명령을 중지할까요?"
+  },
+  "auto.components.terminal.pane.MobileDriverOverlay.54f7d6f69d": {
+    "ko": "모든 terminals 제어권 가져오기"
+  },
+  "auto.components.terminal.pane.MobileDriverOverlay.faa367dc74": {
+    "ko": "휴대폰이 이 화면을 휴대폰 크기로 남겨 두었습니다"
+  },
+  "auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d": {
+    "ko": "삽입"
+  },
+  "auto.components.terminal.pane.TerminalErrorToast.5c8ce20be6": {
+    "ko": "문제가 계속되면"
+  },
+  "auto.components.terminal.pane.TerminalSessionStateSaveFailureDialog.6bee0c8f17": {
+    "ko": "디스크 공간 분석기 열기"
+  },
+  "auto.components.terminal.quick.commands.TerminalQuickCommandAppendEnterSwitch.5fa607d807": {
+    "ko": "Enter 추가"
+  },
+  "auto.components.terminal.quick.commands.TerminalQuickCommandAppendEnterSwitch.c936c2d6d2": {
+    "ko": "텍스트만 삽입하지 않고 즉시 제출합니다."
+  },
+  "auto.components.terminal.quick.commands.TerminalQuickCommandAppendEnterSwitch.e4e5fed3b3": {
+    "ko": "Enter 추가 전환"
+  },
+  "auto.components.ui.color.picker.faa855a582": {
+    "ko": "Hex"
+  },
+  "auto.components.ui.team.multi.combobox.18ec58881e": {
+    "ko": "팀 검색..."
+  },
+  "auto.components.workspace.cleanup.WorkspaceCleanupDialog.1b18868569": {
+    "ko": "리뷰 필요"
+  },
+  "auto.components.workspace.cleanup.WorkspaceCleanupDialog.7eee951968": {
+    "ko": "워크스페이스 안전성 확인 중"
+  },
+  "auto.components.workspace.cleanup.WorkspaceCleanupDialog.8b74d4ea6e": {
+    "ko": "삭제를 제안하기 전에 워크트리와 Git 상태를 스캔하고, 열린 탭, terminal, 실행 중인 agent, 원격 사용 가능 여부 신호를 함께 확인합니다."
+  },
+  "auto.components.workspace.cleanup.WorkspaceCleanupDialog.97c772c4fe": {
+    "ko": "확인된 리포지토리에서 비활성 워크스페이스를 찾지 못했습니다."
+  },
+  "auto.components.workspace.cleanup.WorkspaceCleanupDialog.a19040cd67": {
+    "ko": "선택한 리포지토리와 일치하는 비활성 워크스페이스가 없습니다."
+  },
+  "auto.components.workspace.space.WorkspaceSpacePage.45f6302dbc": {
+    "ko": "Space"
+  },
+  "auto.components.workspace.space.WorkspaceSpacePage.8d0048e1cb": {
+    "ko": "워크스페이스 디스크 사용량과 회수 가능한 워크트리 저장 공간."
+  },
+  "auto.components.workspace.space.WorkspaceSpacePage.e8d6ba11ab": {
+    "ko": "베타"
+  },
+  "auto.hooks.useAutomationDispatchEvents.3ad7d77f57": {
+    "ko": "대상 워크스페이스가 이 자동화 실행 대상과 다른 호스트에 있습니다."
+  },
+  "auto.hooks.useComposerState.3db83fc58a": {
+    "ko": "이 호스트에 첨부 파일에 사용할 수 있는 프로젝트 경로가 없습니다."
+  },
+  "auto.hooks.useSettingsNavigationMetadata.31e57d1c70": {
+    "ko": "SSH를 통해 기존 머신의 파일, terminals, Git, 워크스페이스를 사용합니다."
+  },
+  "auto.hooks.useSettingsNavigationMetadata.3d65d3f1b9": {
+    "ko": "Orca 및 코딩 agents의 모바일 에뮬레이터 지원을 구성합니다."
+  },
+  "auto.hooks.useSettingsNavigationMetadata.40d80bad8a": {
+    "ko": "베타"
+  },
+  "auto.hooks.useSettingsNavigationMetadata.7682607591": {
+    "ko": "agent 및 terminal 이벤트에 대한 네이티브 데스크톱 알림입니다."
+  },
+  "auto.lib.pr.comment.audience.a7150a17bc": {
+    "ko": "사람"
+  },
+  "auto.lib.pr.comment.audience.empty.human": {
+    "ko": "사람 댓글이 없습니다."
+  },
+  "auto.lib.projectSkillRuntime.distroMissing": {
+    "ko": "선택한 WSL 배포판을 사용할 수 없습니다. 사용 가능한 배포판을 선택하거나 이 프로젝트를 Windows로 전환하세요."
+  },
+  "auto.lib.projectSkillRuntime.distroRequired": {
+    "ko": "이 스킬을 설치하기 전에 프로젝트의 WSL 배포판을 선택하세요."
+  },
+  "auto.lib.projectSkillRuntime.wslDefault": {
+    "ko": "WSL 기본값"
+  },
+  "auto.lib.projectSkillRuntime.wslUnavailable": {
+    "ko": "이 스킬을 설치하려면 프로젝트 런타임에 WSL이 필요합니다."
+  },
+  "auto.lib.source.control.agent.action.plan.3f0ea9aa0d": {
+    "ko": "agent 시작 명령을 만들 수 없습니다."
+  },
+  "auto.lib.sparse.preset.draft.5915a0a1f6": {
+    "ko": "루트, 절대 경로, 상위 경로가 아니라 repo 기준 상대 디렉터리를 사용하세요."
+  },
+  "auto.lib.terminal.shortcut.capture.notification.0ab0cd001a": {
+    "ko": "size-4 text-muted-foreground"
+  },
+  "auto.store.slices.editor.checkRunDetailsLoadFailed": {
+    "ko": "체크 세부 정보를 불러오지 못했습니다."
+  },
+  "auto.store.slices.editor.checkRunDetailsUnavailable": {
+    "ko": "이 체크에 사용할 수 있는 세부 정보가 없습니다."
+  },
+  "auto.store.slices.jira.856083302c": {
+    "ko": "더 새로운 요청이 있어 Jira 연결 요청을 건너뛰었습니다."
+  },
+  "auto.store.slices.linear.37d36984d0": {
+    "ko": "더 새로운 요청이 있어 Linear 연결 요청을 건너뛰었습니다."
+  },
+  "auto.store.slices.repos.e649269645": {
+    "ko": "선택한 호스트에 경로를 입력하려면 프로젝트 추가를 사용하세요."
+  },
+  "auto.store.slices.worktrees.903b51c2ed": {
+    "ko": "{{value0}}에서 워크스페이스를 만들었지만 {{value2}} 때문에 Orca가 로컬 {{value1}}을(를) fast-forward할 수 없습니다."
+  },
+  "auto.store.slices.worktrees.d1d78a7baa": {
+    "ko": "Git이 \"{{value0}}\"{{value1}} 브랜치를 안전하게 삭제할 수 없어, 로컬 commits 손실을 방지하기 위해 Orca가 브랜치를 유지했습니다."
+  },
+  "auto.store.slices.worktrees.fa9299a66f": {
+    "ko": "새 워크트리는 최신이지만 로컬 {{value0}}은(는) {{value1}} {{value2}} 뒤처져 있습니다. AI diff가 최근 commits을 놓칠 수 있습니다."
+  },
+  "auto.web.WebConnect.4a4c017be1": {
+    "ko": "엔드포인트:"
+  },
+  "settings.appearance.statusBar.resourceUsageToggleDescription": {
+    "ko": "리소스 관리자를 표시합니다. 클릭하면 CPU, 메모리, 세션, 데몬 제어, 워크스페이스 디스크 스캔을 볼 수 있습니다."
+  },
+  "settings.appearance.statusBar.sshToggleDescription": {
+    "ko": "사용 가능한 SSH 및 원격 Orca 호스트가 있으면 표시합니다."
+  }
+}

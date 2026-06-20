@@ -108,11 +108,19 @@ const sections: SettingsNavSection[] = [
     group: 'workflows'
   },
   {
+    id: 'servers',
+    title: 'Remote Orca Servers',
+    description: 'Pair remote Orca runtimes.',
+    icon: Settings,
+    searchEntries: [{ title: 'Remote Orca Servers' }],
+    group: 'remote'
+  },
+  {
     id: 'ssh',
     title: 'SSH Hosts',
-    description: 'Remote hosts.',
+    description: 'Remote hosts over SSH.',
     icon: Settings,
-    searchEntries: [{ title: 'Remote Shell' }],
+    searchEntries: [{ title: 'SSH Connections' }],
     group: 'remote'
   },
   {

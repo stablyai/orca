@@ -82,8 +82,10 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     localAccountRuntime: 'host',
     localAccountWslDistro: null,
     openLinksInApp: false,
+    openLinksInAppPreferencePrompted: false,
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
+    sourceControlGroupOrder: 'changes-first',
     showTitlebarAppName: true,
     showTasksButton: true,
     floatingTerminalEnabled: false,
@@ -110,7 +112,9 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     defaultTuiAgent: null,
     disabledTuiAgents: [],
     skipDeleteWorktreeConfirm: false,
+    skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
+    skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],
@@ -122,6 +126,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
+    confirmClosePinnedTab: true,
     terminalMacOptionAsAlt: 'false',
     terminalMacOptionAsAltMigrated: true,
     terminalJISYenToBackslash: false,
@@ -136,6 +141,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
     ...overrides,
+    localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
+    leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,
     agentStatusHooksEnabled,
     tabAutoGenerateTitle
@@ -1089,7 +1096,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeProfilePath, 'utf-8')).toBe('profile\n')
   })
 
-  it('bridges system Codex sessions before launch without replacing runtime sessions', async () => {
+  it('starts the system Codex session bridge without replacing runtime sessions', async () => {
     const systemMissingRuntimeSessionPath = join(
       getSystemCodexHomePath(),
       'sessions',
@@ -1124,9 +1131,12 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(join(getSystemCodexHomePath(), 'state_5.sqlite'), 'sqlite\n', 'utf-8')
     const store = createStore(createSettings())
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const { startSystemCodexSessionBridgeInBackground } =
+      await import('../codex/codex-session-bridge')
     const service = new CodexRuntimeHomeService(store as never)
 
     service.prepareForCodexLaunch()
+    await startSystemCodexSessionBridgeInBackground()
 
     const runtimeMissingSessionPath = join(
       getRuntimeCodexHomePath(),
@@ -1540,6 +1550,76 @@ describe('CodexRuntimeHomeService', () => {
 
       expect(readFileSync(managedAuthPath, 'utf-8')).toBe(reauthedAuth)
       expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(reauthedAuth)
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  })
+
+  it('reads active WSL token refreshes back before restart using the selected distro', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const wslHome = join(testState.userDataDir, 'wsl-home')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => wslHome
+    }))
+    const managedAuth = createCodexAuthJson('wsl@example.com', 'acct-wsl', 'managed', 1_000)
+    const refreshedAuth = createCodexAuthJson(
+      'wsl@example.com',
+      'acct-wsl',
+      'runtime-refreshed',
+      2_000
+    )
+    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+    const managedAuthPath = join(managedHomePath, 'auth.json')
+    const store = createStore(
+      createSettings({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'wsl@example.com',
+            managedHomePath,
+            managedHomeRuntime: 'wsl',
+            wslDistro: null,
+            wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/account-1/home',
+            providerAccountId: 'acct-wsl',
+            workspaceLabel: null,
+            workspaceAccountId: 'acct-wsl',
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountIdsByRuntime: {
+          host: null,
+          wsl: { Ubuntu: 'account-1' }
+        }
+      })
+    )
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
+      const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
+      const wslRuntimeHomePath = join(
+        wslHome,
+        '.local',
+        'share',
+        'orca',
+        'codex-runtime-home',
+        'home'
+      )
+      const runtimeAuthPath = join(wslRuntimeHomePath, 'auth.json')
+
+      expect(service.prepareForCodexLaunch(target)).toBe(wslRuntimeHomePath)
+      writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
+
+      service.syncActiveWslSelectionsBeforeRestart()
+
+      expect(readFileSync(managedAuthPath, 'utf-8')).toBe(refreshedAuth)
+      expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)

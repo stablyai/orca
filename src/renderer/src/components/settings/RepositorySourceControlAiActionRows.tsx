@@ -20,6 +20,8 @@ import {
   getActionDescriptions,
   SOURCE_CONTROL_TEXT_ACTION_ID_SET,
   getAgentCatalogForAction,
+  getSourceControlActionAgentSupportText,
+  getSourceControlActionAgentWarningText,
   getSourceControlAgentArgsPlaceholder
 } from './source-control-action-recipe-options'
 import {
@@ -86,6 +88,8 @@ export function RepositorySourceControlAiActionRows({
                 resolveAgentArgsPlaceholderAgent(effectiveAgent, source, actionId, defaultTuiAgent)
               )
         const agentOptions = getAgentCatalogForAction(actionId, effectiveAgent)
+        const agentWarningText = getSourceControlActionAgentWarningText(actionId, effectiveAgent)
+        const agentSupportText = getSourceControlActionAgentSupportText(actionId)
         return (
           <div key={actionId} className="space-y-3 rounded-md border border-border px-3 py-3">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -180,6 +184,11 @@ export function RepositorySourceControlAiActionRows({
                     ))}
                   </SelectContent>
                 </Select>
+                {agentWarningText ? (
+                  <p className="text-[11px] text-destructive">{agentWarningText}</p>
+                ) : agentSupportText ? (
+                  <p className="text-[11px] text-muted-foreground">{agentSupportText}</p>
+                ) : null}
                 <Label className="text-[11px] text-muted-foreground">
                   {translate(
                     'auto.components.settings.RepositorySourceControlAiActionRows.7a3a8e431d',

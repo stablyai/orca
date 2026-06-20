@@ -95,24 +95,40 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
             { value0: killedCount, value1: killedCount + remainingCount, value2: remainingCount }
           )
         )
+      } else if (killedCount === 1) {
+        toast.success(
+          translate(
+            'auto.components.shared.useDaemonActions.87412c2a68',
+            'Killed {{value0}} session.',
+            { value0: killedCount }
+          )
+        )
       } else if (killedCount > 0) {
         toast.success(
           translate(
-            'auto.components.shared.useDaemonActions.fe2ab66d45',
-            'Killed {{value0}} session{{value1}}.',
-            { value0: killedCount, value1: killedCount === 1 ? '' : 's' }
+            'auto.components.shared.useDaemonActions.a2f040ac1c',
+            'Killed {{value0}} sessions.',
+            { value0: killedCount }
           )
         )
       } else if (remainingCount === 0) {
         toast.info(
           translate('auto.components.shared.useDaemonActions.baad8cd651', 'No sessions running.')
         )
+      } else if (remainingCount === 1) {
+        toast.error(
+          translate(
+            'auto.components.shared.useDaemonActions.63520148e2',
+            '{{value0}} session refused to exit.',
+            { value0: remainingCount }
+          )
+        )
       } else {
         toast.error(
           translate(
-            'auto.components.shared.useDaemonActions.d18f3005c2',
-            '{{value0}} session{{value1}} refused to exit.',
-            { value0: remainingCount, value1: remainingCount === 1 ? '' : 's' }
+            'auto.components.shared.useDaemonActions.cc0a26cb14',
+            '{{value0}} sessions refused to exit.',
+            { value0: remainingCount }
           )
         )
       }

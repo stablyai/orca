@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   callRuntimeRpc,
+  assertRuntimeEnvironmentCapability,
   clearRuntimeCompatibilityCacheForTests,
   getActiveRuntimeTarget,
   RuntimeRpcCallError,
@@ -133,6 +134,52 @@ describe('runtime RPC client routing', () => {
       'status.get',
       'repo.list'
     ])
+  })
+
+  it('checks advertised runtime capabilities after protocol compatibility', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: {
+        runtimeId: 'remote-runtime',
+        graphStatus: 'ready',
+        runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+        minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+        capabilities: ['project-host-setup.v1']
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await expect(
+      assertRuntimeEnvironmentCapability(
+        'env-1',
+        'project-host-setup.v1',
+        'Project setup is unavailable.'
+      )
+    ).resolves.toBeUndefined()
+  })
+
+  it('rejects missing advertised runtime capabilities with the caller message', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: {
+        runtimeId: 'remote-runtime',
+        graphStatus: 'ready',
+        runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+        minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+        capabilities: []
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    await expect(
+      assertRuntimeEnvironmentCapability(
+        'env-1',
+        'project-host-setup.v1',
+        'Project setup is unavailable.'
+      )
+    ).rejects.toThrow('Project setup is unavailable.')
   })
 
   it('marks remote UI-owned runtime calls so feature interaction tracking can ignore them', async () => {

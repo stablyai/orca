@@ -80,6 +80,12 @@ vi.mock('../copilot/hook-service', () => ({
 vi.mock('../hermes/hook-service', () => ({
   hermesHookService: { getStatus: vi.fn(() => ({ agent: 'hermes', state: 'absent' })) }
 }))
+vi.mock('../devin/hook-service', () => ({
+  devinHookService: { getStatus: vi.fn(() => ({ agent: 'devin', state: 'absent' })) }
+}))
+vi.mock('../kimi/hook-service', () => ({
+  kimiHookService: { getStatus: vi.fn(() => ({ agent: 'kimi', state: 'absent' })) }
+}))
 
 beforeEach(() => {
   dropStatusEntry.mockReset()
@@ -220,6 +226,28 @@ describe('agentHooks:commandCodeStatus IPC', () => {
     const handler = handleHandlers.get('agentHooks:commandCodeStatus')
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual({ agent: 'command-code', state: 'absent' })
+  })
+})
+
+describe('agentHooks:devinStatus IPC', () => {
+  it('returns Devin hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:devinStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'devin', state: 'absent' })
+  })
+})
+
+describe('agentHooks:kimiStatus IPC', () => {
+  it('returns Kimi hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:kimiStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'kimi', state: 'absent' })
   })
 })
 

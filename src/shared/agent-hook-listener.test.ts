@@ -383,6 +383,152 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.lastAssistantMessage).toBeUndefined()
   })
 
+  it('normalizes Devin documented lifecycle events', () => {
+    const started = normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', source: 'resume' }
+      },
+      'production'
+    )
+    const compacted = normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PostCompaction', summary: 'trimmed' }
+      },
+      'production'
+    )
+    const ended = normalizeHookPayload(
+      state,
+      'devin',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionEnd', reason: 'complete' }
+      },
+      'production'
+    )
+
+    // Why: SessionStart fires when the TUI opens/resumes while still idle.
+    // It must not create a visible "working" row before the user submits a prompt.
+    expect(started).toBeNull()
+    expect(compacted?.payload).toMatchObject({ agentType: 'devin', state: 'working' })
+    expect(ended?.payload).toMatchObject({ agentType: 'devin', state: 'done' })
+  })
+
+  it('normalizes Kimi Code Claude-compatible lifecycle events as kimi status', () => {
+    const submitted = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'session_abc',
+          cwd: '/repo',
+          // Kimi sends the prompt as a content-block array, not a bare string.
+          prompt: [{ type: 'text', text: 'list the files here' }]
+        }
+      },
+      'production'
+    )
+    const tool = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          session_id: 'session_abc',
+          tool_name: 'Bash',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    const waiting = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PermissionRequest', session_id: 'session_abc' }
+      },
+      'production'
+    )
+    const stopped = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'Stop', session_id: 'session_abc' }
+      },
+      'production'
+    )
+
+    expect(submitted?.payload).toMatchObject({
+      agentType: 'kimi',
+      state: 'working',
+      prompt: 'list the files here'
+    })
+    expect(tool?.payload).toMatchObject({ agentType: 'kimi', state: 'working', toolName: 'Bash' })
+    expect(waiting?.payload).toMatchObject({ agentType: 'kimi', state: 'waiting' })
+    expect(stopped?.payload).toMatchObject({ agentType: 'kimi', state: 'done' })
+    // The Claude-shaped session_id is captured for provider-session resume.
+    expect(stopped?.providerSession).toMatchObject({ key: 'session_id', id: 'session_abc' })
+  })
+
+  it('maps Kimi AskUserQuestion PreToolUse to waiting, then back to working on answer', () => {
+    const question = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          session_id: 'session_abc',
+          tool_name: 'AskUserQuestion',
+          tool_input: {
+            questions: [
+              {
+                question: 'Which region should I deploy to?',
+                options: [{ label: 'us-east', description: 'US East' }]
+              }
+            ]
+          }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          session_id: 'session_abc',
+          tool_name: 'AskUserQuestion',
+          tool_response: { selected: ['us-east'] }
+        }
+      },
+      'production'
+    )
+
+    expect(question?.payload).toMatchObject({
+      agentType: 'kimi',
+      state: 'waiting',
+      toolName: 'AskUserQuestion'
+    })
+    expect(answered?.payload).toMatchObject({
+      agentType: 'kimi',
+      state: 'working',
+      toolName: 'AskUserQuestion'
+    })
+  })
+
   it('rejects oversized paneKey', () => {
     const event = normalizeHookPayload(
       state,

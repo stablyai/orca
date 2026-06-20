@@ -4,7 +4,8 @@
 // built-in ASSIGNEES/LABELS cells render their dedicated content) and fall
 // through to `fieldValuesByFieldId[field.id].kind` as a safety net so a
 // fetched value is never silently dropped.
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { CircleDot, FileText, GitPullRequest, Lock, Plus } from 'lucide-react'
 import { TYPE_FIELD_DATA_TYPE } from './columns'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -13,6 +14,8 @@ import { cn } from '@/lib/utils'
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { useRepoSlugIndex } from '@/lib/repo-slug-index'
+import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import type {
   GitHubIssueType,
   GitHubProjectField,
@@ -22,6 +25,7 @@ import type {
   GitHubProjectUser,
   ListIssueTypesBySlugResult
 } from '../../../../shared/github-project-types'
+import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
@@ -39,6 +43,7 @@ type Props = {
   onEditLabels?: (add: string[], remove: string[]) => void
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
   onOpenDialog?: () => void
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 }
 
 export default function ProjectCell({
@@ -49,7 +54,8 @@ export default function ProjectCell({
   onEditAssignees,
   onEditLabels,
   onEditIssueType,
-  onOpenDialog
+  onOpenDialog,
+  sourceSettings
 }: Props): React.JSX.Element {
   const value = row.fieldValuesByFieldId[field.id]
   const isRedacted = row.itemType === 'REDACTED'
@@ -60,15 +66,36 @@ export default function ProjectCell({
   }
   if (field.dataType === TYPE_FIELD_DATA_TYPE) {
     const editableHere = editable && !isRedacted && row.itemType === 'ISSUE'
-    return <TypeCell row={row} editable={editableHere} onEditIssueType={onEditIssueType} />
+    return (
+      <TypeCell
+        row={row}
+        editable={editableHere}
+        sourceSettings={sourceSettings}
+        onEditIssueType={onEditIssueType}
+      />
+    )
   }
   if (field.dataType === 'ASSIGNEES') {
     const editableHere = editable && !isRedacted && row.itemType !== 'DRAFT_ISSUE'
-    return <AssigneesCell row={row} editable={editableHere} onEditAssignees={onEditAssignees} />
+    return (
+      <AssigneesCell
+        row={row}
+        editable={editableHere}
+        sourceSettings={sourceSettings}
+        onEditAssignees={onEditAssignees}
+      />
+    )
   }
   if (field.dataType === 'LABELS') {
     const editableHere = editable && !isRedacted && row.itemType !== 'DRAFT_ISSUE'
-    return <LabelsCell row={row} editable={editableHere} onEditLabels={onEditLabels} />
+    return (
+      <LabelsCell
+        row={row}
+        editable={editableHere}
+        sourceSettings={sourceSettings}
+        onEditLabels={onEditLabels}
+      />
+    )
   }
   if (field.dataType === 'REPOSITORY') {
     return (
@@ -236,17 +263,26 @@ function TitleCell({
 function TypeCell({
   row,
   editable,
+  sourceSettings,
   onEditIssueType
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
 }): React.JSX.Element {
   // Why: for issues we surface the repo's `issueType` (Bug/Feature/Task etc)
   // when set — that's the editable taxonomy. PR/Draft/Restricted rows render
   // the static itemType glyph because there's no equivalent editable type.
   if (row.itemType === 'ISSUE') {
-    return <IssueTypeCell row={row} editable={editable} onEditIssueType={onEditIssueType} />
+    return (
+      <IssueTypeCell
+        row={row}
+        editable={editable}
+        sourceSettings={sourceSettings}
+        onEditIssueType={onEditIssueType}
+      />
+    )
   }
   const meta =
     row.itemType === 'PULL_REQUEST'
@@ -275,18 +311,27 @@ function TypeCell({
 function IssueTypeCell({
   row,
   editable,
+  sourceSettings,
   onEditIssueType
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditIssueType?: (issueType: GitHubIssueType | null) => void
 }): React.JSX.Element {
   const issueType = row.content.issueType
   const [open, setOpen] = useState(false)
   const [options, setOptions] = useState<GitHubIssueType[]>([])
   const [loading, setLoading] = useState(false)
-  const settings = useAppStore((s) => s.settings)
   const [owner, repo] = (row.content.repository ?? '').split('/')
+  const { lookupSlug } = useRepoSlugIndex()
+  const matchedRepo = useMemo(
+    () => lookupSlug(row.content.repository)[0] ?? null,
+    [lookupSlug, row.content.repository]
+  )
+  const ownerSettings = useAppStore(
+    useShallow((s) => getSettingsForRepoRuntimeOwner(s, matchedRepo?.id ?? null))
+  )
 
   React.useEffect(() => {
     if (!open || !owner || !repo) {
@@ -294,7 +339,7 @@ function IssueTypeCell({
     }
     let cancelled = false
     setLoading(true)
-    const target = getActiveRuntimeTarget(settings)
+    const target = getActiveRuntimeTarget(matchedRepo ? ownerSettings : sourceSettings)
     const request =
       target.kind === 'environment'
         ? callRuntimeRpc<ListIssueTypesBySlugResult>(
@@ -321,7 +366,7 @@ function IssueTypeCell({
     return () => {
       cancelled = true
     }
-  }, [open, owner, repo, settings])
+  }, [matchedRepo, open, owner, ownerSettings, repo, sourceSettings])
 
   const trigger = (
     <span className="inline-flex items-center gap-1 text-xs">
@@ -773,15 +818,16 @@ function UserChip({ user }: { user: GitHubProjectUser }): React.JSX.Element {
 function AssigneesCell({
   row,
   editable,
+  sourceSettings,
   onEditAssignees
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditAssignees?: (add: string[], remove: string[]) => void
 }): React.JSX.Element {
   const assignees = row.content.assignees
   const [open, setOpen] = useState(false)
-  const settings = useAppStore((s) => s.settings)
 
   const [owner, repo] = (row.content.repository ?? '').split('/')
 
@@ -803,7 +849,7 @@ function AssigneesCell({
     open ? owner : null,
     open ? repo : null,
     seedKey ? seedKey.split(',') : [],
-    settings
+    sourceSettings
   )
 
   const labelContent =
@@ -887,18 +933,19 @@ function AssigneesCell({
 function LabelsCell({
   row,
   editable,
+  sourceSettings,
   onEditLabels
 }: {
   row: GitHubProjectRow
   editable: boolean
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onEditLabels?: (add: string[], remove: string[]) => void
 }): React.JSX.Element {
   const labels = row.content.labels
   const [open, setOpen] = useState(false)
-  const settings = useAppStore((s) => s.settings)
 
   const [owner, repo] = (row.content.repository ?? '').split('/')
-  const metadata = useRepoLabelsBySlug(open ? owner : null, open ? repo : null, settings)
+  const metadata = useRepoLabelsBySlug(open ? owner : null, open ? repo : null, sourceSettings)
 
   const labelContent =
     labels.length === 0 ? null : labels.map((l) => <LabelChip key={l.name} label={l} />)

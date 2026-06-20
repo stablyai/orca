@@ -1,7 +1,9 @@
 import '../assets/main.css'
 
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { Suspense, useMemo, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import ReactDOM from 'react-dom/client'
+import { useTranslation } from 'react-i18next'
 import WebConnect from './WebConnect'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
@@ -45,24 +47,31 @@ function WebRoot(): React.JSX.Element {
 
   installWebPreloadApi()
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background" />}>
-      <I18nProvider>
-        <App />
-      </I18nProvider>
+    <Suspense fallback={<div className="min-h-dvh bg-background" />}>
+      <App />
     </Suspense>
   )
 }
 
+function WebRootBoundary(): React.JSX.Element {
+  useTranslation()
+  return (
+    <RecoverableRenderErrorBoundary
+      boundaryId="web.root"
+      surface="web-root"
+      title={translate('app.recoverableError.webTitle', 'Orca web hit a renderer error.')}
+      description={translate(
+        'app.recoverableError.webDescription',
+        'Retry the web client or reconnect to the paired runtime.'
+      )}
+    >
+      <WebRoot />
+    </RecoverableRenderErrorBoundary>
+  )
+}
+
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <RecoverableRenderErrorBoundary
-    boundaryId="web.root"
-    surface="web-root"
-    title={translate('app.recoverableError.webTitle', 'Orca web hit a renderer error.')}
-    description={translate(
-      'app.recoverableError.webDescription',
-      'Retry the web client or reconnect to the paired runtime.'
-    )}
-  >
-    <WebRoot />
-  </RecoverableRenderErrorBoundary>
+  <I18nProvider>
+    <WebRootBoundary />
+  </I18nProvider>
 )

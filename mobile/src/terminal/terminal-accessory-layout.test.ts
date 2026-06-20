@@ -4,10 +4,11 @@ import {
   TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
   createTerminalAccessoryLayoutPreference,
   getDefaultTerminalAccessoryBuiltInIds,
+  getDefaultTerminalAccessoryLayout,
   getVisibleTerminalAccessoryKeys,
   loadTerminalAccessoryLayout,
   normalizeTerminalAccessoryLayoutPreference,
-  resetTerminalAccessoryBuiltInIds,
+  reorderTerminalAccessoryBuiltInIds,
   saveTerminalAccessoryLayout,
   setTerminalAccessoryBuiltInVisible
 } from './terminal-accessory-layout'
@@ -45,6 +46,13 @@ describe('terminal accessory layout', () => {
     )
   })
 
+  it('default layout shows every built-in in canonical order', () => {
+    expect(getDefaultTerminalAccessoryLayout()).toEqual({
+      orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+      visibleBuiltInIds: getDefaultTerminalAccessoryBuiltInIds()
+    })
+  })
+
   it('normalizes invalid storage to defaults', () => {
     expect(normalizeTerminalAccessoryLayoutPreference(null).visibleBuiltInIds).toEqual(
       getDefaultTerminalAccessoryBuiltInIds()
@@ -55,31 +63,112 @@ describe('terminal accessory layout', () => {
         visibleBuiltInIds: ['escape']
       }).visibleBuiltInIds
     ).toEqual(getDefaultTerminalAccessoryBuiltInIds())
+    expect(
+      normalizeTerminalAccessoryLayoutPreference({
+        version: 2,
+        visibleBuiltInIds: ['escape']
+      }).visibleBuiltInIds
+    ).toEqual(getDefaultTerminalAccessoryBuiltInIds())
   })
 
   it('returns defaults for corrupt or unreadable storage', async () => {
     asyncStorageMock.getItem.mockResolvedValueOnce('{')
     await expect(loadTerminalAccessoryLayout()).resolves.toEqual(
-      createTerminalAccessoryLayoutPreference(getDefaultTerminalAccessoryBuiltInIds())
+      createTerminalAccessoryLayoutPreference(getDefaultTerminalAccessoryLayout())
     )
 
     asyncStorageMock.getItem.mockRejectedValueOnce(new Error('unreadable'))
     await expect(loadTerminalAccessoryLayout()).resolves.toEqual(
-      createTerminalAccessoryLayoutPreference(getDefaultTerminalAccessoryBuiltInIds())
+      createTerminalAccessoryLayoutPreference(getDefaultTerminalAccessoryLayout())
     )
   })
 
-  it('ignores removed ids and de-dupes visible ids', () => {
+  it('preserves a custom v2 order and its visible subset', () => {
+    const reversed = [...getDefaultTerminalAccessoryBuiltInIds()].reverse()
+
+    expect(
+      normalizeTerminalAccessoryLayoutPreference({
+        version: 2,
+        orderedBuiltInIds: reversed,
+        visibleBuiltInIds: ['tab', 'escape']
+      })
+    ).toEqual({
+      version: 2,
+      orderedBuiltInIds: reversed,
+      visibleBuiltInIds: ['tab', 'escape']
+    })
+  })
+
+  it('ignores removed ids and de-dupes ids in v2 storage', () => {
+    const current = ['escape', 'tab', 'enter']
+
+    expect(
+      normalizeTerminalAccessoryLayoutPreference(
+        {
+          version: 2,
+          orderedBuiltInIds: ['tab', 'removed', 'tab', 'escape', 'enter'],
+          visibleBuiltInIds: ['escape', 'removed', 'escape', 'tab']
+        },
+        current
+      )
+    ).toEqual({
+      version: 2,
+      orderedBuiltInIds: ['tab', 'escape', 'enter'],
+      visibleBuiltInIds: ['tab', 'escape']
+    })
+  })
+
+  it('inserts new built-ins next to their canonical neighbors in a custom order', () => {
+    const current = ['escape', 'tab', 'space', 'enter']
+
+    expect(
+      normalizeTerminalAccessoryLayoutPreference(
+        {
+          version: 2,
+          orderedBuiltInIds: ['enter', 'tab', 'escape'],
+          visibleBuiltInIds: ['enter', 'escape']
+        },
+        current
+      )
+    ).toEqual({
+      version: 2,
+      // Why asserted: 'space' follows its canonical predecessor 'tab' even
+      // though the user moved 'tab' into the middle of the bar.
+      orderedBuiltInIds: ['enter', 'tab', 'space', 'escape'],
+      visibleBuiltInIds: ['enter', 'space', 'escape']
+    })
+  })
+
+  it('puts a new built-in with no surviving predecessor at the front', () => {
+    const current = ['escape', 'tab', 'enter']
+
+    expect(
+      normalizeTerminalAccessoryLayoutPreference(
+        {
+          version: 2,
+          orderedBuiltInIds: ['enter', 'tab'],
+          visibleBuiltInIds: ['enter']
+        },
+        current
+      ).orderedBuiltInIds
+    ).toEqual(['escape', 'enter', 'tab'])
+  })
+
+  it('migrates v1 layouts to canonical order', () => {
     expect(
       normalizeTerminalAccessoryLayoutPreference({
         version: 1,
-        visibleBuiltInIds: ['escape', 'removed', 'escape', 'tab'],
+        visibleBuiltInIds: ['tab', 'escape'],
         knownBuiltInIds: getDefaultTerminalAccessoryBuiltInIds()
-      }).visibleBuiltInIds
-    ).toEqual(['escape', 'tab'])
+      })
+    ).toEqual({
+      version: 2,
+      orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+      visibleBuiltInIds: ['escape', 'tab']
+    })
   })
 
-  it('appends new defaults only when absent from known ids', () => {
+  it('appends new defaults only when absent from v1 known ids', () => {
     const current = ['escape', 'tab', 'enter']
 
     expect(
@@ -129,11 +218,14 @@ describe('terminal accessory layout', () => {
     ).toEqual(['space'])
   })
 
-  it('keeps Space hidden after that choice is persisted with current known ids', () => {
+  it('keeps hidden built-ins hidden across v2 round-trips', () => {
     const visibleBuiltInIds = getDefaultTerminalAccessoryBuiltInIds().filter((id) => id !== 'space')
-    const persisted = createTerminalAccessoryLayoutPreference(visibleBuiltInIds)
+    const persisted = createTerminalAccessoryLayoutPreference({
+      orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+      visibleBuiltInIds
+    })
 
-    expect(persisted.knownBuiltInIds).toContain('space')
+    expect(persisted.orderedBuiltInIds).toContain('space')
     expect(normalizeTerminalAccessoryLayoutPreference(persisted).visibleBuiltInIds).not.toContain(
       'space'
     )
@@ -145,43 +237,100 @@ describe('terminal accessory layout', () => {
     expect(
       normalizeTerminalAccessoryLayoutPreference(
         {
-          version: 1,
-          visibleBuiltInIds: [],
-          knownBuiltInIds: current
+          version: 2,
+          orderedBuiltInIds: current,
+          visibleBuiltInIds: []
         },
         current
       ).visibleBuiltInIds
     ).toEqual([])
   })
 
-  it('toggle and reset helpers preserve built-in order', () => {
-    expect(setTerminalAccessoryBuiltInVisible(['tab'], 'escape', true, ['escape', 'tab'])).toEqual([
-      'escape',
-      'tab'
-    ])
+  it('toggles visibility while preserving the custom order', () => {
+    const layout = { orderedBuiltInIds: ['tab', 'escape'], visibleBuiltInIds: ['tab'] }
+
+    expect(setTerminalAccessoryBuiltInVisible(layout, 'escape', true, ['escape', 'tab'])).toEqual({
+      orderedBuiltInIds: ['tab', 'escape'],
+      visibleBuiltInIds: ['tab', 'escape']
+    })
     expect(
-      setTerminalAccessoryBuiltInVisible(['escape', 'tab'], 'escape', false, ['escape', 'tab'])
-    ).toEqual(['tab'])
-    expect(resetTerminalAccessoryBuiltInIds()).toEqual(getDefaultTerminalAccessoryBuiltInIds())
+      setTerminalAccessoryBuiltInVisible(
+        { orderedBuiltInIds: ['tab', 'escape'], visibleBuiltInIds: ['tab', 'escape'] },
+        'tab',
+        false,
+        ['escape', 'tab']
+      ).visibleBuiltInIds
+    ).toEqual(['escape'])
+    expect(setTerminalAccessoryBuiltInVisible(layout, 'unknown', true, ['escape', 'tab'])).toEqual({
+      orderedBuiltInIds: ['tab', 'escape'],
+      visibleBuiltInIds: ['tab']
+    })
   })
 
-  it('saves visible ids with current known built-in ids', async () => {
+  it('reorders built-ins and keeps the visible subset in the new order', () => {
+    const layout = {
+      orderedBuiltInIds: ['escape', 'tab', 'enter'],
+      visibleBuiltInIds: ['escape', 'enter']
+    }
+
+    expect(
+      reorderTerminalAccessoryBuiltInIds(
+        layout,
+        ['enter', 'escape', 'tab'],
+        ['escape', 'tab', 'enter']
+      )
+    ).toEqual({
+      orderedBuiltInIds: ['enter', 'escape', 'tab'],
+      visibleBuiltInIds: ['enter', 'escape']
+    })
+
+    // Why asserted: a stale drag result missing an id must not drop that key.
+    expect(
+      reorderTerminalAccessoryBuiltInIds(layout, ['enter', 'escape'], ['escape', 'tab', 'enter'])
+        .orderedBuiltInIds
+    ).toEqual(['enter', 'escape', 'tab'])
+  })
+
+  it('keeps visible terminal keys in the order of their ids', () => {
+    expect(getVisibleTerminalAccessoryKeys(['enter', 'escape']).map((key) => key.id)).toEqual([
+      'enter',
+      'escape'
+    ])
+  })
+
+  it('saves the sanitized v2 preference', async () => {
     asyncStorageMock.setItem.mockResolvedValueOnce(undefined)
 
-    await saveTerminalAccessoryLayout(['tab', 'tab', 'missing'])
+    await saveTerminalAccessoryLayout({
+      orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+      visibleBuiltInIds: ['tab', 'tab', 'missing']
+    })
 
     expect(asyncStorageMock.setItem).toHaveBeenCalledWith(
       TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
-      JSON.stringify(createTerminalAccessoryLayoutPreference(['tab']))
+      JSON.stringify(
+        createTerminalAccessoryLayoutPreference({
+          orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+          visibleBuiltInIds: ['tab']
+        })
+      )
     )
   })
 
   it('rejects write failures without mutating helper output', async () => {
     asyncStorageMock.setItem.mockRejectedValueOnce(new Error('nope'))
 
-    await expect(saveTerminalAccessoryLayout(['escape'])).rejects.toThrow('nope')
-    expect(createTerminalAccessoryLayoutPreference(['escape']).visibleBuiltInIds).toEqual([
-      'escape'
-    ])
+    await expect(
+      saveTerminalAccessoryLayout({
+        orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+        visibleBuiltInIds: ['escape']
+      })
+    ).rejects.toThrow('nope')
+    expect(
+      createTerminalAccessoryLayoutPreference({
+        orderedBuiltInIds: getDefaultTerminalAccessoryBuiltInIds(),
+        visibleBuiltInIds: ['escape']
+      }).visibleBuiltInIds
+    ).toEqual(['escape'])
   })
 })

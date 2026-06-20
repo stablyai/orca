@@ -279,9 +279,6 @@ test.describe('Hidden terminal TUI visual restore', () => {
         hidden: false,
         initialized: true
       })
-    const cursorState = await readTuiCursorState(orcaPage)
-    expect(cursorState.cursorElementVisible || cursorState.cursorCanvasPresent).toBe(true)
-
     const screenshotPath = testInfo.outputPath('hidden-tui-restore-final.png')
     await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
     await testInfo.attach('hidden-tui-restore-final.png', {

@@ -21,6 +21,7 @@ import { GITHUB_METHODS } from './github'
 import { GITLAB_METHODS } from './gitlab'
 import { HOSTED_REVIEW_METHODS } from './hosted-review'
 import { LINEAR_METHODS } from './linear'
+import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
 import { JIRA_METHODS } from './jira'
 import { SSH_METHODS } from './ssh'
 import { SPEECH_METHODS } from './speech'
@@ -58,6 +59,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...GITLAB_METHODS,
   ...HOSTED_REVIEW_METHODS,
   ...LINEAR_METHODS,
+  ...LINEAR_AGENT_ACCESS_METHODS,
   ...JIRA_METHODS,
   ...SSH_METHODS,
   ...SPEECH_METHODS,

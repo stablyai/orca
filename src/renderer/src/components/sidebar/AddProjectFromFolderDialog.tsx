@@ -91,7 +91,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         toast.success(
           translate(
             'auto.components.sidebar.AddProjectFromFolderDialog.e643b30398',
-            'Remote project added'
+            'Project added on SSH host'
           ),
           { description: repo.displayName }
         )

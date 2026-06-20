@@ -37,6 +37,13 @@ describe('formatDiffComment', () => {
     )
   })
 
+  it('formats file-level diff notes', () => {
+    const out = formatDiffComment(makeComment({ source: 'diff', lineNumber: 0 }))
+    expect(out).toBe(
+      ['File: src/app.ts', 'Scope: file', 'User comment: "Needs validation"'].join('\n')
+    )
+  })
+
   it('adds markdown source metadata for markdown notes', () => {
     const out = formatDiffComment(makeComment({ source: 'markdown', startLine: 8 }))
     expect(out).toBe(

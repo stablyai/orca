@@ -27,10 +27,11 @@ import {
   Unlink,
   Workflow,
   FolderInput,
-  FolderPlus
+  FolderPlus,
+  FolderTree
 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
+import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
@@ -42,7 +43,15 @@ import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
+import { WorktreeParentPickerPopover } from './WorktreeParentPickerPopover'
+import { getEligibleWorktreeParents } from './worktree-parent-candidates'
+import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace-scope'
 
 type Props = {
   worktree: Worktree
@@ -93,6 +102,36 @@ function shouldSuppressContextMenuFollowUpClick(contextMenuOpenedAt: number, now
   return (
     now - contextMenuOpenedAt >= 0 && now - contextMenuOpenedAt <= CONTEXT_MENU_CLICK_SUPPRESSION_MS
   )
+}
+
+function getWorktreeParentPickerLabel(validParentWorktreeId: string | null): string {
+  return validParentWorktreeId
+    ? translate(
+        'auto.components.sidebar.WorktreeContextMenu.changeParentWorkspace',
+        'Change Parent Worktree...'
+      )
+    : translate(
+        'auto.components.sidebar.WorktreeContextMenu.setParentWorkspace',
+        'Set Parent Worktree...'
+      )
+}
+
+function isWorktreeParentPickerDisabled(args: {
+  isDeleting: boolean
+  eligibleParentCount: number
+}): boolean {
+  return args.isDeleting || args.eligibleParentCount === 0
+}
+
+function getWorktreeParentPickerAnchor(
+  scope: HTMLElement | null,
+  worktreeId: string
+): HTMLElement | null {
+  const dragRow = scope?.closest<HTMLElement>('[data-worktree-drag-id]')
+  if (dragRow?.dataset.worktreeDragId === worktreeId) {
+    return dragRow
+  }
+  return scope
 }
 
 function hasSleepableWorkspaceActivity(
@@ -217,6 +256,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
+  const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
+  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const repo = useRepoById(worktree.repoId)
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
@@ -225,10 +266,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     effectiveSelectedWorktrees
   )
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
+  const [parentPicker, setParentPicker] = useState<{
+    childWorktreeId: string
+    anchorElement: HTMLElement
+  } | null>(null)
+  const pendingParentPickerRef = useRef<{
+    childWorktreeId: string
+    anchorElement: HTMLElement
+  } | null>(null)
+  const parentPickerFallbackTimerRef = useRef<number | null>(null)
   const isDeleting = deleteState?.isDeleting ?? false
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
+  const allWorktrees = useAllWorktrees()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
+  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
@@ -238,6 +290,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const contextMenuOpenedAtRef = useRef<number | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
   const isMultiContext = activeContextWorktrees.length > 1
+  const workspaceScope = parseWorkspaceKey(worktree.id)
+  const folderWorkspaceId =
+    workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
   const sleepableWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter((item) =>
@@ -277,6 +332,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       ? `Delete ${batchDeleteWorktrees.length} Workspace${batchDeleteWorktrees.length === 1 ? '' : 's'}`
       : 'Delete Selected'
   const lineage = worktreeLineageById[worktree.id]
+  const workspaceLineage = workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
   // Why: path-derived worktree IDs can be reused. The menu must honor the same
   // instance check as grouped rows before offering navigation to a parent.
   const lineageInfo = useMemo(
@@ -284,7 +340,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     [worktree, worktreeLineageById, worktreeMap]
   )
   const validParentWorktreeId = lineageInfo.state === 'valid' ? lineageInfo.parent.id : null
-  const hasAnyContextLineage = activeContextWorktrees.some((item) => worktreeLineageById[item.id])
+  const hasAnyContextLineage = activeContextWorktrees.some(
+    (item) =>
+      worktreeLineageById[item.id] || workspaceLineageByChildKey[worktreeWorkspaceKey(item.id)]
+  )
+  const eligibleParentCount = useMemo(
+    () =>
+      getEligibleWorktreeParents({
+        child: worktree,
+        worktrees: allWorktrees,
+        lineageById: worktreeLineageById,
+        worktreeMap,
+        repoMap
+      }).length,
+    [allWorktrees, repoMap, worktree, worktreeLineageById, worktreeMap]
+  )
 
   const setMenuOpenState = useCallback(
     (open: boolean) => {
@@ -299,6 +369,15 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [setMenuOpenState])
+
+  useEffect(
+    () => () => {
+      if (parentPickerFallbackTimerRef.current != null) {
+        window.clearTimeout(parentPickerFallbackTimerRef.current)
+      }
+    },
+    []
+  )
 
   const handleCopyPath = useCallback(() => {
     window.api.ui.writeClipboardText(worktree.path)
@@ -408,19 +487,68 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         restoreSidebarPosition()
         return
       }
+      if (folderWorkspaceId) {
+        void deleteFolderWorkspace(folderWorkspaceId).then((deleted) => {
+          if (
+            deleted &&
+            useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+          ) {
+            setActiveWorktree(null)
+          }
+        })
+        restoreSidebarPosition()
+        return
+      }
       // Why delegate to runWorktreeDelete: keeps the delete-vs-project-removal
       // decision tree (and its rationale) in one place shared with command
       // surfaces and the memory popover's inline Delete action.
       runWorktreeDelete(worktree.id)
       restoreSidebarPosition()
     }, 50)
-  }, [batchDeleteWorktrees, isMultiContext, setMenuOpenState, worktree.id])
+  }, [
+    batchDeleteWorktrees,
+    deleteFolderWorkspace,
+    folderWorkspaceId,
+    isMultiContext,
+    setActiveWorktree,
+    setMenuOpenState,
+    worktree.id
+  ])
 
   const handleOpenParent = useCallback(() => {
     if (validParentWorktreeId) {
       activateAndRevealWorktree(validParentWorktreeId)
     }
   }, [validParentWorktreeId])
+
+  const openPendingParentPicker = useCallback(() => {
+    const pendingParentPicker = pendingParentPickerRef.current
+    if (!pendingParentPicker) {
+      return
+    }
+    pendingParentPickerRef.current = null
+    if (parentPickerFallbackTimerRef.current != null) {
+      window.clearTimeout(parentPickerFallbackTimerRef.current)
+      parentPickerFallbackTimerRef.current = null
+    }
+    setParentPicker(pendingParentPicker)
+  }, [])
+
+  const handleOpenParentPicker = useCallback(
+    (event?: { preventDefault: () => void }) => {
+      event?.preventDefault()
+      const anchorElement = getWorktreeParentPickerAnchor(scopeRef.current, worktree.id)
+      if (!anchorElement) {
+        return
+      }
+      pendingParentPickerRef.current = { childWorktreeId: worktree.id, anchorElement }
+      setMenuOpenState(false)
+      // Why: the picker should open from Radix's close-auto-focus callback, but
+      // this keeps keyboard activation working if that callback is skipped.
+      parentPickerFallbackTimerRef.current = window.setTimeout(openPendingParentPicker, 50)
+    },
+    [openPendingParentPicker, setMenuOpenState, worktree.id]
+  )
 
   const handleRemoveParentLink = useCallback(() => {
     void Promise.all(
@@ -448,17 +576,24 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     }
   }, [])
 
-  const handleCloseAutoFocus = useCallback((event: Event) => {
-    // Why: Radix otherwise restores focus to the hidden context-menu trigger.
-    // When Sleep/Delete clears the active workspace and remounts the sidebar,
-    // that focus restore can scroll the virtual list away from the row the
-    // user just acted on.
-    event.preventDefault()
-    const sidebar = scopeRef.current?.closest('[data-worktree-sidebar]')
-    if (sidebar instanceof HTMLElement) {
-      sidebar.focus({ preventScroll: true })
-    }
-  }, [])
+  const handleCloseAutoFocus = useCallback(
+    (event: Event) => {
+      // Why: Radix otherwise restores focus to the hidden context-menu trigger.
+      // When Sleep/Delete clears the active workspace and remounts the sidebar,
+      // that focus restore can scroll the virtual list away from the row the
+      // user just acted on.
+      event.preventDefault()
+      if (pendingParentPickerRef.current) {
+        window.setTimeout(openPendingParentPicker, 0)
+        return
+      }
+      const sidebar = scopeRef.current?.closest('[data-worktree-sidebar]')
+      if (sidebar instanceof HTMLElement) {
+        sidebar.focus({ preventScroll: true })
+      }
+    },
+    [openPendingParentPicker]
+  )
 
   return (
     <div
@@ -466,6 +601,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       className="relative"
       {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'worktree' }}
       onContextMenuCapture={(event) => {
+        if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+          return
+        }
         if (shouldUseNativeContextMenu(event.target)) {
           return
         }
@@ -499,6 +637,11 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           sideOffset={0}
           align="start"
           onPointerUpCapture={suppressOpeningPointerEvent}
+          onPointerDownCapture={(event) => {
+            if (event.button === 0) {
+              contextMenuOpenedAtRef.current = null
+            }
+          }}
           onMouseUpCapture={suppressOpeningPointerEvent}
           onClickCapture={suppressOpeningPointerEvent}
           onCloseAutoFocus={handleCloseAutoFocus}
@@ -578,18 +721,25 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 </>
               ) : null}
               <DropdownMenuSeparator />
-              {(validParentWorktreeId || lineage) && (
+              <DropdownMenuItem
+                onSelect={handleOpenParentPicker}
+                disabled={isWorktreeParentPickerDisabled({ isDeleting, eligibleParentCount })}
+              >
+                <FolderTree className="size-3.5" />
+                {getWorktreeParentPickerLabel(validParentWorktreeId)}
+              </DropdownMenuItem>
+              {(validParentWorktreeId || lineage || workspaceLineage) && (
                 <>
                   {validParentWorktreeId && (
                     <DropdownMenuItem onSelect={handleOpenParent} disabled={isDeleting}>
                       <Workflow className="size-3.5" />
                       {translate(
                         'auto.components.sidebar.WorktreeContextMenu.8d9cd19d09',
-                        'Open Parent Workspace'
+                        'Open Parent Worktree'
                       )}
                     </DropdownMenuItem>
                   )}
-                  {lineage && (
+                  {(lineage || workspaceLineage) && (
                     <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={isDeleting}>
                       <Unlink className="size-3.5" />
                       {translate(
@@ -703,12 +853,17 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               ? translate('auto.components.sidebar.WorktreeContextMenu.b42391d8bf', 'Deleting…')
               : isMultiContext
                 ? deleteLabel
-                : removesProject
+                : folderWorkspaceId
                   ? translate(
-                      'auto.components.sidebar.WorktreeContextMenu.f5ac91531d',
-                      'Remove Project from Orca'
+                      'auto.components.sidebar.WorktreeContextMenu.250de158fd',
+                      'Remove Workspace'
                     )
-                  : translate('auto.components.sidebar.WorktreeContextMenu.f4475537d8', 'Delete')}
+                  : removesProject
+                    ? translate(
+                        'auto.components.sidebar.WorktreeContextMenu.f5ac91531d',
+                        'Remove Project from Orca'
+                      )
+                    : translate('auto.components.sidebar.WorktreeContextMenu.f4475537d8', 'Delete')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -727,6 +882,16 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         onOpenChange={setCreateGroupDialogOpen}
         onSubmit={handleSubmitNewProjectGroup}
       />
+      <WorktreeParentPickerPopover
+        open={parentPicker !== null}
+        childWorktreeId={parentPicker?.childWorktreeId ?? null}
+        anchorElement={parentPicker?.anchorElement ?? null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setParentPicker(null)
+          }
+        }}
+      />
     </div>
   )
 })
@@ -738,6 +903,9 @@ export {
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
   hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
+  getWorktreeParentPickerAnchor,
+  getWorktreeParentPickerLabel,
+  isWorktreeParentPickerDisabled,
   shouldRemoveProjectFromContextMenu,
   shouldUseNativeContextMenu,
   shouldSuppressContextMenuFollowUpClick,

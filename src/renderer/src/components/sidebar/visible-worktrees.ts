@@ -4,6 +4,13 @@ import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  getRepoExecutionHostId,
+  getSettingsFocusedExecutionHostId,
+  type ExecutionHostId,
+  type ExecutionHostScope
+} from '../../../../shared/execution-host'
 
 /**
  * Whether a worktree represents the repo's default-branch row that the
@@ -18,11 +25,17 @@ export function isDefaultBranchWorkspace(worktree: Worktree): boolean {
   return worktree.isMainWorktree && worktree.branch.trim() !== ''
 }
 
+export function isAutomationGeneratedWorkspace(worktree: Worktree): boolean {
+  return worktree.automationProvenance?.kind === 'created-by-automation'
+}
+
 /** Inputs describing sidebar filter settings that the Clear Filters path owns. */
 export type SidebarFilterState = {
   showSleepingWorkspaces: boolean
   filterRepoIds: readonly string[]
   hideDefaultBranchWorkspace: boolean
+  hideAutomationGeneratedWorkspaces: boolean
+  visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
 }
 
 /**
@@ -38,7 +51,9 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
   return (
     state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES ||
     state.filterRepoIds.length > 0 ||
-    state.hideDefaultBranchWorkspace
+    state.hideDefaultBranchWorkspace ||
+    state.hideAutomationGeneratedWorkspaces ||
+    state.visibleWorkspaceHostIds != null
   )
 }
 
@@ -48,6 +63,8 @@ export type ClearFilterActions = {
   resetShowSleepingWorkspaces: boolean
   resetFilterRepoIds: boolean
   resetHideDefaultBranchWorkspace: boolean
+  resetHideAutomationGeneratedWorkspaces: boolean
+  resetVisibleWorkspaceHostIds: boolean
 }
 
 /**
@@ -64,7 +81,9 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
   return {
     resetShowSleepingWorkspaces: state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES,
     resetFilterRepoIds: state.filterRepoIds.length > 0,
-    resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace
+    resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
+    resetHideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
+    resetVisibleWorkspaceHostIds: state.visibleWorkspaceHostIds != null
   }
 }
 
@@ -92,7 +111,11 @@ export function computeVisibleWorktreeIds(
     // required prevents a future caller from silently dropping the filter by
     // forgetting to pass it.
     hideDefaultBranchWorkspace: boolean
+    hideAutomationGeneratedWorkspaces: boolean
     repoMap: Map<string, Repo>
+    workspaceHostScope: ExecutionHostScope
+    visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
+    defaultHostId: ExecutionHostId
     worktreeLineageById: Record<string, WorktreeLineage>
   }
 ): string[] {
@@ -107,6 +130,28 @@ export function computeVisibleWorktreeIds(
 
   if (opts.hideDefaultBranchWorkspace) {
     all = all.filter((w) => !isDefaultBranchWorkspace(w))
+  }
+
+  if (opts.hideAutomationGeneratedWorkspaces) {
+    all = all.filter((w) => !isAutomationGeneratedWorkspace(w))
+  }
+
+  const visibleHostIds =
+    opts.visibleWorkspaceHostIds ??
+    (opts.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [opts.workspaceHostScope])
+  if (visibleHostIds) {
+    const visibleHostIdSet = new Set(visibleHostIds)
+    all = all.filter((w) => {
+      const repo = opts.repoMap.get(w.repoId)
+      if (!repo) {
+        return false
+      }
+      const hostId =
+        repo.connectionId || repo.executionHostId
+          ? getRepoExecutionHostId(repo)
+          : opts.defaultHostId
+      return visibleHostIdSet.has(hostId)
+    })
   }
 
   // Filter by repo
@@ -257,7 +302,11 @@ export function getVisibleWorktreeIds(): string[] {
     ptyIdsByTabId: state.ptyIdsByTabId,
     browserTabsByWorktree: state.browserTabsByWorktree,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
+    hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     repoMap,
+    workspaceHostScope: state.workspaceHostScope,
+    visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
+    defaultHostId: getSettingsFocusedExecutionHostId(state.settings),
     worktreeLineageById: state.worktreeLineageById
   })
 }

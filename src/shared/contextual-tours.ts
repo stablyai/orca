@@ -6,6 +6,7 @@ export type ContextualTourId =
   | 'browser'
   | 'tasks'
   | 'automations'
+  | 'floating-workspace'
   | 'workspace-creation'
 
 export type ContextualTourStepControl = {
@@ -65,12 +66,6 @@ export const CONTEXTUAL_TOURS = [
         body: 'Drag workspaces between lanes as their status changes.',
         targetSelector:
           '[data-contextual-tour-target="workspace-board-done-lane"], [data-contextual-tour-target="workspace-board-lanes"]'
-      },
-      {
-        title: 'Tune density',
-        body: 'Use board settings to switch between detailed and compact cards.',
-        targetSelector:
-          '[data-contextual-tour-target="workspace-board-settings"], [data-contextual-tour-target="workspace-board-lanes"]'
       }
     ]
   },
@@ -160,6 +155,28 @@ export const CONTEXTUAL_TOURS = [
         title: 'Find the results',
         body: 'Runs show when automations executed, what happened, and where to inspect their output.',
         targetSelector: '[data-contextual-tour-target="automations-runs"]'
+      }
+    ]
+  },
+  {
+    id: 'floating-workspace',
+    steps: [
+      {
+        title: 'Run an agent across every repo',
+        body: 'Agents here run in any folder you choose. Point one at the directory above your services to work across all your repos at once.',
+        // Why: the per-action anchors only render in the empty state; fall back
+        // to the panel surface when floating tabs already exist.
+        targetSelector:
+          '[data-contextual-tour-target="floating-workspace-new-terminal"], [data-contextual-tour-target="floating-workspace-surface"]',
+        requiredForStart: true,
+        preferredPlacement: 'left'
+      },
+      {
+        title: 'Or use it as a scratchpad',
+        body: 'Open agents, scratch terminals, notes, and browser tabs without cluttering the worktree you’re focused on.',
+        targetSelector:
+          '[data-contextual-tour-target="floating-workspace-new-markdown"], [data-contextual-tour-target="floating-workspace-surface"]',
+        preferredPlacement: 'left'
       }
     ]
   },

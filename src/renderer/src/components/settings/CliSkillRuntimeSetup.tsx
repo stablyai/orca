@@ -1,16 +1,23 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import {
+  deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
+  normalizeGlobalWindowsRuntimeDefault
+} from '../../../../shared/project-execution-runtime'
+import {
+  buildWslLoginShellCommand,
+  escapeWslShCommandForWindows
+} from '../../../../shared/wsl-login-shell-command'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
   isOrcaCliAvailableOnPath,
   showOrcaCliRegistrationPromptToast
 } from '@/lib/agent-skill-cli-prerequisite'
-import { Label } from '../ui/label'
-import { SettingsSegmentedControl } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 
 export type LocalAgentRuntime = {
   runtime: 'host' | 'wsl'
+  wslDistro?: string | null
   label: string
 }
 
@@ -24,16 +31,20 @@ export function getSelectedAgentRuntime(
   wslAvailable: boolean,
   wslCapabilitiesLoading: boolean
 ): LocalAgentRuntime {
-  const selectedRuntime =
-    settings.localAgentRuntime ?? (settings.terminalWindowsShell === 'wsl.exe' ? 'wsl' : 'host')
-  if (
-    wslSupportedPlatform &&
-    selectedRuntime === 'wsl' &&
-    (wslAvailable || wslCapabilitiesLoading)
-  ) {
+  const defaultRuntime = normalizeGlobalWindowsRuntimeDefault(
+    settings.localWindowsRuntimeDefault ??
+      deriveGlobalWindowsRuntimeDefaultFromLegacySettings(settings, {
+        wslAvailable: wslCapabilitiesLoading ? undefined : wslAvailable
+      }).defaultRuntime
+  )
+  if (wslSupportedPlatform && defaultRuntime.kind === 'wsl') {
+    const selectedDistro = defaultRuntime.distro?.trim() || null
     return {
       runtime: 'wsl',
-      label: translate('auto.components.settings.CliSkillRuntimeSetup.c47127f222', 'WSL default')
+      wslDistro: selectedDistro,
+      label: selectedDistro
+        ? `WSL ${selectedDistro}`
+        : translate('auto.components.settings.CliSkillRuntimeSetup.c47127f222', 'WSL default')
     }
   }
   return { runtime: 'host', label: getHostRuntimeLabel() }
@@ -43,13 +54,38 @@ function quotePowerShellSingle(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }
 
+export function getWslCliDistroRequest(
+  runtime?: LocalAgentRuntime
+): { distro: string } | undefined {
+  return runtime?.runtime === 'wsl' && runtime.wslDistro?.trim()
+    ? { distro: runtime.wslDistro.trim() }
+    : undefined
+}
+
+export function buildSkillCommandForRuntime(command: string, runtime: LocalAgentRuntime): string {
+  if (runtime.runtime !== 'wsl') {
+    return command
+  }
+  const distroArg = runtime.wslDistro?.trim()
+    ? ` -d ${quotePowerShellSingle(runtime.wslDistro.trim())}`
+    : ''
+  const wslCommand = escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
+  return `wsl.exe${distroArg} -- sh -c ${quotePowerShellSingle(wslCommand)}`
+}
+
 export function buildSkillInstallCommandForRuntime(
   command: string,
   runtime: LocalAgentRuntime
 ): string {
+  return buildSkillCommandForRuntime(command, runtime)
+}
+
+export function getSkillDiscoveryTargetForRuntime(
+  runtime: LocalAgentRuntime
+): { runtime: 'wsl'; wslDistro?: string | null } | undefined {
   return runtime.runtime === 'wsl'
-    ? `wsl.exe -- bash -lc ${quotePowerShellSingle(command)}`
-    : command
+    ? { runtime: 'wsl', wslDistro: runtime.wslDistro ?? null }
+    : undefined
 }
 
 export function getAgentSkillTerminalShellOverride(
@@ -66,9 +102,12 @@ export function getAgentSkillTerminalShellOverride(
   return settings.terminalWindowsShell.toLowerCase() === 'wsl.exe' ? 'powershell.exe' : undefined
 }
 
-export async function ensureWslCliAvailableForAgentSkillTerminal(): Promise<CliInstallStatus | null> {
+export async function ensureWslCliAvailableForAgentSkillTerminal(
+  runtime?: LocalAgentRuntime
+): Promise<CliInstallStatus | null> {
+  const args = getWslCliDistroRequest(runtime)
   try {
-    const status = await window.api.cli.getWslInstallStatus()
+    const status = await window.api.cli.getWslInstallStatus(args)
     if (!status.supported) {
       toast.warning(
         translate(
@@ -88,7 +127,7 @@ export async function ensureWslCliAvailableForAgentSkillTerminal(): Promise<CliI
     }
     if (status.state !== 'installed' || !status.pathConfigured) {
       await showOrcaCliRegistrationPromptToast()
-      const next = await window.api.cli.installWsl()
+      const next = await window.api.cli.installWsl(args)
       if (!isOrcaCliAvailableOnPath(next)) {
         toast.warning(
           translate(
@@ -119,69 +158,4 @@ export async function ensureWslCliAvailableForAgentSkillTerminal(): Promise<CliI
     )
     return null
   }
-}
-
-type CliSkillRuntimeControlProps = {
-  runtime: LocalAgentRuntime
-  updateSettings: (updates: Partial<GlobalSettings>) => void
-  wslSupportedPlatform: boolean
-  wslAvailable: boolean
-  wslCapabilitiesLoading: boolean
-}
-
-export function CliSkillRuntimeControl({
-  runtime,
-  updateSettings,
-  wslSupportedPlatform,
-  wslAvailable,
-  wslCapabilitiesLoading
-}: CliSkillRuntimeControlProps): React.JSX.Element | null {
-  if (!wslSupportedPlatform) {
-    return null
-  }
-
-  return (
-    <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <Label>
-          {translate('auto.components.settings.CliSkillRuntimeSetup.a58ba464ad', 'Skill location')}
-        </Label>
-        <p className="text-xs text-muted-foreground">
-          {runtime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
-            ? translate(
-                'auto.components.settings.CliSkillRuntimeSetup.f00d6aa9b5',
-                'WSL is not available on this machine.'
-              )
-            : translate(
-                'auto.components.settings.CliSkillRuntimeSetup.0c9f3cf9da',
-                'Choose where Orca checks and installs global agent skills.'
-              )}
-        </p>
-      </div>
-      <div className="w-44 shrink-0">
-        <SettingsSegmentedControl
-          ariaLabel={translate(
-            'auto.components.settings.CliSkillRuntimeSetup.a58ba464ad',
-            'Skill location'
-          )}
-          value={runtime.runtime}
-          onChange={(value) =>
-            updateSettings({
-              localAgentRuntime: value,
-              localAgentWslDistro: null
-            })
-          }
-          equalWidth
-          options={[
-            { value: 'host', label: getHostRuntimeLabel() },
-            {
-              value: 'wsl',
-              label: translate('auto.components.settings.CliSkillRuntimeSetup.04325573f8', 'WSL'),
-              disabled: wslCapabilitiesLoading || !wslAvailable
-            }
-          ]}
-        />
-      </div>
-    </div>
-  )
 }

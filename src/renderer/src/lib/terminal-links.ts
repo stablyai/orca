@@ -91,7 +91,14 @@ function parsePathWithOptionalLineColumn(value: string): {
     return null
   }
   const pathText = match[1]
-  if (!pathText || pathText.endsWith('/')) {
+  const hasLineOrColumn = Boolean(match[2] || match[3])
+  if (!pathText) {
+    return null
+  }
+  if (/^[\\/]\s/.test(pathText)) {
+    return null
+  }
+  if (/[\\/]$/.test(pathText) && (hasLineOrColumn || !canKeepTrailingSeparator(pathText))) {
     return null
   }
 
@@ -102,6 +109,13 @@ function parsePathWithOptionalLineColumn(value: string): {
   }
 
   return { pathText, line, column }
+}
+
+function canKeepTrailingSeparator(pathText: string): boolean {
+  if (/^[\\/]+$/.test(pathText) || /^~[\\/]$/.test(pathText) || /^[A-Za-z]:[\\/]$/.test(pathText)) {
+    return false
+  }
+  return /^(?:~[\\/]|[\\/]|[A-Za-z]:[\\/])/.test(pathText)
 }
 
 // Project files that look like filenames despite having no extension. The

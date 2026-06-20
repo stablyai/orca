@@ -6,25 +6,29 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import {
   addressForPort,
   canStopWorkspacePort,
+  getPortOpenBrowserTooltipLabel,
   goToWorkspacePortOwner,
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   refreshWorkspacePortScanAfterStop,
-  shouldOpenWorkspacePortInOrcaBrowser
+  resolvePortOpenInOrcaBrowser
 } from '@/lib/workspace-port-actions'
 import type { WorkspacePortGroup } from '@/lib/workspace-port-groups'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
 
 function PortAction({
   label,
+  tooltipLabel = label,
   onClick,
   disabled,
   children
 }: {
   label: string
+  tooltipLabel?: string
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   disabled?: boolean
   children: React.ReactNode
@@ -56,7 +60,7 @@ function PortAction({
         {disabled ? <span className="inline-flex">{button}</span> : button}
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4} className="z-[70]">
-        {label}
+        {tooltipLabel}
       </TooltipContent>
     </Tooltip>
   )
@@ -72,21 +76,40 @@ export function PortRow({
   external?: boolean
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(
+      s,
+      port.kind === 'workspace' ? port.owner.worktreeId : activeWorktreeId
+    )
+  )
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const setRemoteBrowserPageHandle = useAppStore((s) => s.setRemoteBrowserPageHandle)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const runtimeTarget = useMemo(
+    () => getActiveRuntimeTarget({ ...settings, activeRuntimeEnvironmentId: runtimeEnvironmentId }),
+    [runtimeEnvironmentId, settings]
+  )
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
-  const openInOrcaBrowser = shouldOpenWorkspacePortInOrcaBrowser(settings)
-  const canOpen = !openInOrcaBrowser || port.kind === 'workspace' || Boolean(activeWorktreeId)
   const canStop = canStopWorkspacePort(port)
+  const openBrowserLabel = translate(
+    'auto.components.status.bar.ports.status.popover.rows.085f4f0334',
+    'Open in Browser'
+  )
 
   const handleOpen = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       recordFeatureInteraction('ports')
+      const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
+        settings,
+        // Why: keyboard activations have detail=0; only pointer clicks carry
+        // the modifier intent for the system-browser escape hatch.
+        event: event.detail > 0 ? event : null,
+        isMac: navigator.userAgent.includes('Mac')
+      })
       void openWorkspacePortInBrowser({
         port,
         activeWorktreeId,
@@ -109,10 +132,10 @@ export function PortRow({
     [
       activeWorktreeId,
       createBrowserTab,
-      openInOrcaBrowser,
       port,
       recordFeatureInteraction,
       runtimeTarget,
+      settings,
       setRemoteBrowserPageHandle
     ]
   )
@@ -161,6 +184,8 @@ export function PortRow({
         const refreshResult = await refreshWorkspacePortScanAfterStop({
           runtimeTarget,
           setWorkspacePortScan,
+          setWorkspacePortScanForKey,
+          getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
           setWorkspacePortScanRefreshing
         })
         if (!refreshResult.ok) {
@@ -182,6 +207,7 @@ export function PortRow({
       recordFeatureInteraction,
       runtimeTarget,
       setWorkspacePortScan,
+      setWorkspacePortScanForKey,
       setWorkspacePortScanRefreshing
     ]
   )
@@ -203,14 +229,11 @@ export function PortRow({
               {processLabel}
             </TooltipContent>
           </Tooltip>
-          <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
+          <div className="absolute inset-y-0 right-0 flex items-center gap-0.5 rounded-md border border-border/40 bg-popover/95 px-0.5 can-hover:opacity-0 shadow-xs transition-opacity group-hover/port:opacity-100 group-focus-within/port:opacity-100">
             <PortAction
-              label={translate(
-                'auto.components.status.bar.ports.status.popover.rows.085f4f0334',
-                'Open in Browser'
-              )}
+              label={openBrowserLabel}
+              tooltipLabel={getPortOpenBrowserTooltipLabel(openBrowserLabel)}
               onClick={handleOpen}
-              disabled={!canOpen}
             >
               <ExternalLink className="size-3" />
             </PortAction>

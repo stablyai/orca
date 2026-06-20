@@ -1,11 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Plug, Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
+/* eslint-disable max-lines -- Why: the right sidebar owns activity-bar visibility, routing, and resize behavior as one interaction surface; splitting the tab table away would make hidden-tab fallbacks harder to audit. */
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Plug, Files, GitBranch, ListChecks, PanelRight, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
+import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import type { ActivityBarPosition } from '@/store/slices/editor'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
   ContextMenu,
@@ -36,36 +39,50 @@ import {
 } from './right-sidebar-width'
 import { translate } from '@/i18n/i18n'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
+import { useMeasuredWidth } from './right-sidebar-measured-width'
+import { normalizeRightSidebarRoute } from '@/store/right-sidebar-route'
+import { AgentSessionHistoryIcon } from './agent-session-history-icon'
+import { resolveRightSidebarEffectiveTab } from './right-sidebar-effective-tab'
+import {
+  isPairedWebClientWindow,
+  shouldRenderDesktopWindowChrome
+} from '@/lib/desktop-window-chrome'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
-const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
 function RightSidebarInner(): React.JSX.Element {
+  const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
+    platform: getRendererAppPlatform(),
+    isWebClient: isPairedWebClientWindow()
+  })
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
   const explorerShortcut = useShortcutLabel('sidebar.explorer.toggle')
-  const searchShortcut = useShortcutLabel('sidebar.search.toggle')
   const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
-  const activeWorktree = useAppStore((s) =>
-    rightSidebarOpen && s.activeWorktreeId
-      ? (s.getKnownWorktreeById(s.activeWorktreeId) ?? null)
-      : null
-  )
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const rightSidebarRouteRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
+  const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
   const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
+  const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
+  const activeWorktree = useAppStore((s) =>
+    activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
+  )
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
-  const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
+  const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
+  const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
+  const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
 
   const activityItems = useMemo<ActivityBarItem[]>(
@@ -77,10 +94,27 @@ function RightSidebarInner(): React.JSX.Element {
         shortcut: explorerShortcut === 'Unassigned' ? '' : explorerShortcut
       },
       {
-        id: 'search',
-        icon: Search,
-        title: translate('auto.components.right.sidebar.index.06219e4cb1', 'Search'),
-        shortcut: searchShortcut === 'Unassigned' ? '' : searchShortcut
+        id: 'vault',
+        icon: AgentSessionHistoryIcon,
+        title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
+        shortcut: ''
+      },
+      {
+        id: 'workspaces',
+        icon: Workflow,
+        title: translate(
+          'auto.components.right.sidebar.index.folderWorkspaces',
+          'Attached worktrees'
+        ),
+        shortcut: '',
+        folderOnly: true
+      },
+      {
+        id: 'pr-checks',
+        icon: ListChecks,
+        title: translate('auto.components.right.sidebar.index.parentPrChecks', 'PR Checks'),
+        shortcut: '',
+        folderOnly: true
       },
       {
         id: 'source-control',
@@ -104,19 +138,63 @@ function RightSidebarInner(): React.JSX.Element {
         sshOnly: true
       }
     ],
-    [checksShortcut, explorerShortcut, portsShortcut, searchShortcut, sourceControlShortcut]
+    [checksShortcut, explorerShortcut, portsShortcut, sourceControlShortcut]
   )
 
   const visibleItems = useMemo(
-    () => getVisibleRightSidebarActivityItems(activityItems, { isFolder, isSshRepo }),
-    [activityItems, isFolder, isSshRepo]
+    () =>
+      getVisibleRightSidebarActivityItems(activityItems, {
+        isFolder,
+        isFolderWorkspace,
+        isSshRepo
+      }),
+    [activityItems, isFolder, isFolderWorkspace, isSshRepo]
   )
 
-  // If the active tab is hidden (e.g. switched from a git repo to a folder),
-  // fall back to the first visible tab.
-  const effectiveTab = visibleItems.some((item) => item.id === rightSidebarTab)
-    ? rightSidebarTab
-    : visibleItems[0].id
+  const rememberedFolderTabByWorkspaceKeyRef = useRef<Record<string, ActiveRightSidebarTab>>({})
+  const lastRightSidebarRouteRequestIdRef = useRef(rightSidebarRouteRequestId)
+  const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null
+
+  // If the active tab is hidden (e.g. switched from a folder workspace to a git
+  // worktree), render a visible fallback without overwriting the stored route.
+  // Folder workspaces keep a session-local effective-tab memory so a PR Checks
+  // row can open a child Checks tab without erasing the parent's overview tab.
+  const normalizedActiveTab = normalizeRightSidebarRoute(rightSidebarTab).rightSidebarTab
+  const rememberedFolderTab = activeFolderWorkspaceKey
+    ? rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey]
+    : null
+  const requestedFolderTab =
+    activeFolderWorkspaceKey &&
+    rightSidebarRouteRequestId !== lastRightSidebarRouteRequestIdRef.current
+      ? normalizedActiveTab
+      : null
+  const effectiveTab = resolveRightSidebarEffectiveTab({
+    normalizedActiveTab,
+    visibleItems,
+    activeFolderWorkspaceKey,
+    rememberedFolderTab: requestedFolderTab ?? rememberedFolderTab
+  })
+
+  useEffect(() => {
+    lastRightSidebarRouteRequestIdRef.current = rightSidebarRouteRequestId
+  }, [rightSidebarRouteRequestId])
+
+  useEffect(() => {
+    if (!activeFolderWorkspaceKey || !visibleItems.some((item) => item.id === effectiveTab)) {
+      return
+    }
+    rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = effectiveTab
+  }, [activeFolderWorkspaceKey, effectiveTab, visibleItems])
+  const selectActivityTab = (tab: ActiveRightSidebarTab): void => {
+    if (activeFolderWorkspaceKey) {
+      rememberedFolderTabByWorkspaceKeyRef.current[activeFolderWorkspaceKey] = tab
+    }
+    if (tab === 'explorer') {
+      showRightSidebarFiles()
+      return
+    }
+    setRightSidebarTab(tab)
+  }
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
@@ -164,7 +242,7 @@ function RightSidebarInner(): React.JSX.Element {
       key={item.id}
       item={item}
       active={effectiveTab === item.id}
-      onClick={() => setRightSidebarTab(item.id)}
+      onClick={() => selectActivityTab(item.id)}
       layout="side"
       statusIndicator={item.id === 'checks' ? checksStatus : null}
     />
@@ -219,7 +297,7 @@ function RightSidebarInner(): React.JSX.Element {
           /* ── Top activity bar: horizontal icon row ── */
           <ContextMenu>
             <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
-              {!isWindows && (
+              {!hasDesktopWindowChrome && (
                 <TooltipProvider delayDuration={400}>
                   <ContextMenuTrigger asChild>
                     <div
@@ -233,15 +311,16 @@ function RightSidebarInner(): React.JSX.Element {
                         )}
                       >
                         {/* Why: the top strip shares a narrow titlebar with the close
-                            button and Windows controls. Overflow goes behind More
-                            instead of creating a horizontally scrollable toolbar. */}
+                            button and desktop window controls. Overflow goes
+                            behind More instead of creating a horizontally
+                            scrollable toolbar. */}
                         <div className="flex min-w-0 shrink">
                           {topActivityLayout.visibleItems.map((item) => (
                             <ActivityBarButton
                               key={item.id}
                               item={item}
                               active={effectiveTab === item.id}
-                              onClick={() => setRightSidebarTab(item.id)}
+                              onClick={() => selectActivityTab(item.id)}
                               layout="top"
                               statusIndicator={item.id === 'checks' ? checksStatus : null}
                             />
@@ -251,7 +330,7 @@ function RightSidebarInner(): React.JSX.Element {
                           <TopActivityOverflowMenu
                             items={topActivityLayout.overflowItems}
                             activeTab={effectiveTab}
-                            onSelect={setRightSidebarTab}
+                            onSelect={selectActivityTab}
                             checksStatus={checksStatus}
                           />
                         )}
@@ -268,7 +347,7 @@ function RightSidebarInner(): React.JSX.Element {
                   </div>
                 </TooltipProvider>
               )}
-              {isWindows && (
+              {hasDesktopWindowChrome && (
                 <TooltipProvider delayDuration={400}>
                   <div
                     className={cn(
@@ -281,23 +360,24 @@ function RightSidebarInner(): React.JSX.Element {
                 </TooltipProvider>
               )}
             </div>
-            {isWindows && (
+            {hasDesktopWindowChrome && (
               <TooltipProvider delayDuration={400}>
                 <ContextMenuTrigger asChild>
                   <div
                     ref={topActivityStripRef}
                     className={RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME}
                   >
-                    {/* Why: Windows has fixed native-style controls in the titlebar
-                        area; keep sidebar navigation in the sidebar body so the
-                        titlebar stays visually native instead of crowded. */}
+                    {/* Why: custom desktop chrome has fixed native-style controls
+                        in the titlebar area; keep sidebar navigation in the
+                        sidebar body so the titlebar stays visually native
+                        instead of crowded. */}
                     <div className="flex min-w-0 flex-1 shrink">
                       {topActivityLayout.visibleItems.map((item) => (
                         <ActivityBarButton
                           key={item.id}
                           item={item}
                           active={effectiveTab === item.id}
-                          onClick={() => setRightSidebarTab(item.id)}
+                          onClick={() => selectActivityTab(item.id)}
                           layout="top"
                           statusIndicator={item.id === 'checks' ? checksStatus : null}
                         />
@@ -307,7 +387,7 @@ function RightSidebarInner(): React.JSX.Element {
                       <TopActivityOverflowMenu
                         items={topActivityLayout.overflowItems}
                         activeTab={effectiveTab}
-                        onSelect={setRightSidebarTab}
+                        onSelect={selectActivityTab}
                         checksStatus={checksStatus}
                       />
                     )}
@@ -323,10 +403,11 @@ function RightSidebarInner(): React.JSX.Element {
         ) : (
           /* ── Side layout: static title header ── */
           /* Why: the 40px side activity bar absorbs the rightmost 40px of the
-             138px window-controls overlay, but the remaining 98px still overlaps
-             the panel header. right-sidebar-header-side-inset applies exactly
-             that remainder (138-40=98px) as padding-right so the close button
-             clears the minimize button without the full 138px gap. */
+             138px window-controls overlay when custom desktop chrome is active,
+             but the remaining 98px still overlaps the panel header.
+             right-sidebar-header-side-inset applies exactly that remainder
+             (138-40=98px) as padding-right so the close button clears the
+             minimize button without the full 138px gap. */
           <div className="flex items-center justify-between h-[36px] min-h-[36px] px-3 border-b border-border right-sidebar-header-side-inset right-sidebar-header-drag">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
               {visibleItems.find((item) => item.id === effectiveTab)?.title ?? ''}
@@ -389,31 +470,6 @@ function getWindowWidth(): number | null {
     return null
   }
   return window.innerWidth
-}
-
-function useMeasuredWidth(onWidth: (width: number | null) => void) {
-  const observerRef = React.useRef<ResizeObserver | null>(null)
-
-  return React.useCallback(
-    (node: HTMLDivElement | null) => {
-      observerRef.current?.disconnect()
-      observerRef.current = null
-
-      if (!node || typeof ResizeObserver === 'undefined') {
-        onWidth(node ? node.getBoundingClientRect().width : null)
-        return
-      }
-
-      const updateWidth = (): void => {
-        onWidth(node.getBoundingClientRect().width)
-      }
-      updateWidth()
-      const observer = new ResizeObserver(updateWidth)
-      observer.observe(node)
-      observerRef.current = observer
-    },
-    [onWidth]
-  )
 }
 
 // ─── Context Menu for Activity Bar Position ───────────

@@ -130,6 +130,46 @@ describe('getHostedReviewForBranch', () => {
     expect(getPRForBranchMock).toHaveBeenCalledWith('/repo', 'feature', 3, undefined)
   })
 
+  it('routes local WSL project branch lookup through provider detection and the selected provider', async () => {
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockResolvedValue(null)
+    getBitbucketRepoSlugMock.mockResolvedValue({ workspace: 'team', repoSlug: 'orca' })
+    getBitbucketPullRequestForBranchMock.mockResolvedValue({
+      number: 22,
+      title: 'Bitbucket WSL branch',
+      state: 'open',
+      url: 'https://bitbucket.org/team/orca/pull-requests/22',
+      status: 'pending',
+      updatedAt: '2026-06-16T00:00:00.000Z',
+      mergeable: 'UNKNOWN'
+    })
+
+    await expect(
+      getHostedReviewForBranch({
+        repoPath: '/repo',
+        branch: 'feature/wsl',
+        linkedBitbucketPR: 22,
+        localGitExecOptions: { wslDistro: 'Ubuntu' }
+      })
+    ).resolves.toMatchObject({
+      provider: 'bitbucket',
+      number: 22,
+      status: 'pending'
+    })
+
+    const executionOptions = { localGitExecOptions: { wslDistro: 'Ubuntu' } }
+    expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', undefined, executionOptions)
+    expect(getRepoSlugMock).toHaveBeenCalledWith('/repo', undefined, executionOptions)
+    expect(getBitbucketRepoSlugMock).toHaveBeenCalledWith('/repo', undefined, executionOptions)
+    expect(getBitbucketPullRequestForBranchMock).toHaveBeenCalledWith(
+      '/repo',
+      'feature/wsl',
+      22,
+      undefined,
+      executionOptions
+    )
+  })
+
   it('uses fallback GitHub PR when branch is empty', async () => {
     getProjectSlugMock.mockResolvedValue(null)
     getRepoSlugMock.mockResolvedValue({ owner: 'o', repo: 'r' })

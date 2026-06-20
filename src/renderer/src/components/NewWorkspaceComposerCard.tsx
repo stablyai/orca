@@ -2,6 +2,7 @@
 composer card markup together so the inline and modal variants share one UI
 surface without splitting the controlled form into hard-to-follow fragments. */
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
   Check,
@@ -14,7 +15,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import RepoCombobox from '@/components/repo/RepoCombobox'
+import type RepoCombobox from '@/components/repo/RepoCombobox'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
@@ -34,12 +35,19 @@ import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPreset
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
+import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
+import ProjectHostSetupCombobox from '@/components/new-workspace/ProjectHostSetupCombobox'
 import type { SetupConfig } from '@/lib/new-workspace'
+import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
+import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
+const EMPTY_PROJECT_OPTIONS: NewWorkspaceProjectOption[] = []
+const EMPTY_PROJECT_HOST_SETUP_OPTIONS: ProjectHostSetupOption[] = []
 
 type NewWorkspaceComposerCardProps = {
   contextualTourSource?: string
@@ -51,9 +59,23 @@ type NewWorkspaceComposerCardProps = {
   onQuickAgentChange: (agent: TuiAgent | null) => void
   eligibleRepos: RepoOption[]
   repoId: string
+  projectOptions?: NewWorkspaceProjectOption[]
+  selectedProjectId?: string | null
   selectedRepoIsGit: boolean
   onRepoChange: (value: string) => void
+  onProjectChange: (value: string) => void
+  projectHostSetupOptions?: ProjectHostSetupOption[]
+  selectedProjectHostSetupId?: string | null
+  onProjectHostSetupChange?: (setupId: string) => void
+  repoBackedSearchRepos?: RepoOption[]
+  repoBackedSourcesDisabled?: boolean
+  allowSmartNameAddProject?: boolean
+  smartNameRepoSwitchTarget?: 'project' | 'task-source'
   primaryActionLabel: string
+  projectLabel?: string
+  projectPlaceholder?: string
+  emptyProjectMessage?: string
+  showAddProjectButton?: boolean
   name: string
   onNameValueChange: (value: string) => void
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
@@ -62,6 +84,11 @@ type NewWorkspaceComposerCardProps = {
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
+  /** True when an existing local branch is selected and can be reused. */
+  canReuseSelectedBranch: boolean
+  reuseSelectedBranch: boolean
+  onReuseSelectedBranchChange: (next: boolean) => void
+  smartNameGitHubSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
@@ -86,21 +113,59 @@ type NewWorkspaceComposerCardProps = {
   selectedRepoRequiresConnection: boolean
   selectedRepoConnectInProgress: boolean
   onConnectSelectedRepo: () => Promise<void>
+  branchesEnabled?: boolean
+  setupControlsEnabled?: boolean
   canUseSparseCheckout: boolean
   sparsePresets: SparsePreset[]
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
+  sparseControlsEnabled?: boolean
 }
 
-const SSH_STATUS_LABELS: Record<SshConnectionStatus, string> = {
-  disconnected: 'SSH not connected',
-  connecting: 'Connecting SSH...',
-  'auth-failed': 'SSH authentication failed',
-  'deploying-relay': 'Preparing SSH connection...',
-  connected: 'Connected',
-  reconnecting: 'Reconnecting SSH...',
-  'reconnection-failed': 'SSH reconnection failed',
-  error: translate('auto.components.NewWorkspaceComposerCard.a239038146', 'SSH connection error')
+const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
+  get disconnected() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.sshNotConnected',
+      'SSH not connected'
+    )
+  },
+  get connecting() {
+    return translate('auto.components.NewWorkspaceComposerCard.connectingSsh', 'Connecting SSH...')
+  },
+  get 'auth-failed'() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.sshAuthenticationFailed',
+      'SSH authentication failed'
+    )
+  },
+  get 'deploying-relay'() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.preparingSshConnection',
+      'Preparing SSH connection...'
+    )
+  },
+  get connected() {
+    return translate('auto.components.NewWorkspaceComposerCard.connected', 'Connected')
+  },
+  get reconnecting() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.reconnectingSsh',
+      'Reconnecting SSH...'
+    )
+  },
+  get 'reconnection-failed'() {
+    return translate(
+      'auto.components.NewWorkspaceComposerCard.sshReconnectionFailed',
+      'SSH reconnection failed'
+    )
+  },
+  get error() {
+    return translate('auto.components.NewWorkspaceComposerCard.a239038146', 'SSH connection error')
+  }
+}
+
+function getSshStatusLabel(status: SshConnectionStatus): string {
+  return SSH_STATUS_LABELS[status] ?? status
 }
 
 function SetupCommandPreview({
@@ -231,9 +296,23 @@ export default function NewWorkspaceComposerCard({
   onQuickAgentChange,
   eligibleRepos,
   repoId,
+  projectOptions = EMPTY_PROJECT_OPTIONS,
+  selectedProjectId = null,
   selectedRepoIsGit,
   onRepoChange,
+  onProjectChange,
+  projectHostSetupOptions = EMPTY_PROJECT_HOST_SETUP_OPTIONS,
+  selectedProjectHostSetupId = null,
+  onProjectHostSetupChange,
+  repoBackedSearchRepos,
+  repoBackedSourcesDisabled = false,
+  allowSmartNameAddProject = true,
+  smartNameRepoSwitchTarget = 'project',
   primaryActionLabel,
+  projectLabel,
+  projectPlaceholder,
+  emptyProjectMessage,
+  showAddProjectButton = true,
   name,
   onNameValueChange,
   onSmartGitHubItemSelect,
@@ -242,6 +321,10 @@ export default function NewWorkspaceComposerCard({
   onSmartLinearIssueSelect,
   smartNameSelection,
   onClearSmartNameSelection,
+  canReuseSelectedBranch,
+  reuseSelectedBranch,
+  onReuseSelectedBranchChange,
+  smartNameGitHubSourceContext,
   forkPushWarning,
   detectedAgentIds,
   onOpenAgentSettings,
@@ -265,11 +348,17 @@ export default function NewWorkspaceComposerCard({
   selectedRepoRequiresConnection,
   selectedRepoConnectInProgress,
   onConnectSelectedRepo,
+  branchesEnabled = true,
+  setupControlsEnabled = true,
   canUseSparseCheckout,
   sparsePresets,
   sparseSelectedPresetId,
-  onSparseSelectPreset
+  onSparseSelectPreset,
+  sparseControlsEnabled = true
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
+  // Why: this form uses the lightweight translate() helper directly; subscribe
+  // so an already-open create dialog repaints when the UI language changes.
+  useTranslation()
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
   const activeModal = useAppStore((s) => s.activeModal)
@@ -282,9 +371,13 @@ export default function NewWorkspaceComposerCard({
     const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
     return repo?.displayName ?? repo?.path ?? 'This project'
   }, [eligibleRepos, repoId])
+  const selectedProjectName = React.useMemo(() => {
+    const option = projectOptions.find((candidate) => candidate.id === selectedProjectId)
+    return option?.displayName ?? selectedRepoName
+  }, [projectOptions, selectedProjectId, selectedRepoName])
   const sshStatusLabel = selectedRepoSshStatus
-    ? SSH_STATUS_LABELS[selectedRepoSshStatus]
-    : 'Not connected'
+    ? getSshStatusLabel(selectedRepoSshStatus)
+    : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
   const connectButtonLabel =
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
       ? 'Connect'
@@ -372,9 +465,19 @@ export default function NewWorkspaceComposerCard({
     openModal('add-repo')
   }, [openModal])
   const projectDescriptionId = React.useId()
+  const readyProjectHostSetupOptions = React.useMemo(
+    () => projectHostSetupOptions.filter((option) => option.kind === 'ready'),
+    [projectHostSetupOptions]
+  )
+  const handleProjectHostSetupChange = React.useCallback(
+    (setupId: string): void => {
+      onProjectHostSetupChange?.(setupId)
+    },
+    [onProjectHostSetupChange]
+  )
   useContextualTour(
     'workspace-creation',
-    eligibleRepos.length > 0 && Boolean(repoId),
+    projectOptions.length > 0 && Boolean(selectedProjectId),
     contextualTourSource ??
       (activeModal === 'new-workspace-composer'
         ? 'workspace_creation_modal'
@@ -384,6 +487,7 @@ export default function NewWorkspaceComposerCard({
   return (
     <div
       ref={setComposerNode}
+      data-workspace-composer-root="true"
       // Why: preload classifies native OS file drops by the nearest
       // `data-native-file-drop-target` marker in the composedPath. Tagging
       // the composer root makes drops anywhere on the card route to the
@@ -402,46 +506,46 @@ export default function NewWorkspaceComposerCard({
         <div className="space-y-1" data-contextual-tour-target="workspace-creation-project">
           <div className="flex items-center justify-between gap-2">
             <label className="text-xs font-medium text-muted-foreground">
-              {translate('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
+              {projectLabel ??
+                translate('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
             </label>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleAddRepo}
-                  className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                  aria-label={translate(
-                    'auto.components.NewWorkspaceComposerCard.d6b0a96f32',
-                    'Add project'
-                  )}
-                >
-                  <FolderPlus className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {translate('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')}
-              </TooltipContent>
-            </Tooltip>
+            {showAddProjectButton ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={handleAddRepo}
+                    className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
+                    aria-label={translate(
+                      'auto.components.NewWorkspaceComposerCard.d6b0a96f32',
+                      'Add project'
+                    )}
+                  >
+                    <FolderPlus className="size-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {translate('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
           </div>
-          <RepoCombobox
-            repos={eligibleRepos}
-            value={repoId}
-            onValueChange={onRepoChange}
+          <ProjectCombobox
+            options={projectOptions}
+            value={selectedProjectId}
+            onValueChange={onProjectChange}
             onValueSelected={focusNameInput}
-            placeholder={translate(
-              'auto.components.NewWorkspaceComposerCard.dccd26d4e4',
-              'Choose project'
-            )}
-            // Why: programmatic .focus() from the Dialog's onOpenAutoFocus
-            // handler does not reliably trigger :focus-visible in Chromium.
-            // Mirror the Input component's standard ring (border-ring +
-            // ring-ring/50, 3px) onto :focus so the autofocused repo trigger
-            // paints the familiar field ring instead of leaving no visible
-            // focus state.
+            placeholder={
+              projectPlaceholder ??
+              translate('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
+            }
+            // Why: programmatic .focus() does not reliably trigger
+            // :focus-visible in Chromium. Mirror the Input component's
+            // standard ring (border-ring + ring-ring/50, 3px) onto :focus so
+            // keyboard navigation paints the familiar field ring.
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
-            showStandaloneAddButton={false}
             invalid={Boolean(projectError)}
             describedBy={projectDescriptionId}
           />
@@ -449,13 +553,26 @@ export default function NewWorkspaceComposerCard({
             <p id={projectDescriptionId} className="text-[11px] text-destructive">
               {projectError}
             </p>
-          ) : eligibleRepos.length === 0 ? (
+          ) : projectOptions.length === 0 ? (
             <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
-              {translate(
-                'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
-                'Add a project before creating a workspace.'
-              )}
+              {emptyProjectMessage ??
+                translate(
+                  'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
+                  'Add a project before creating a workspace.'
+                )}
             </p>
+          ) : null}
+          {readyProjectHostSetupOptions.length > 1 ? (
+            <div className="space-y-1">
+              <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
+                {translate('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
+              </label>
+              <ProjectHostSetupCombobox
+                options={readyProjectHostSetupOptions}
+                value={selectedProjectHostSetupId ?? null}
+                onValueChange={handleProjectHostSetupChange}
+              />
+            </div>
           ) : null}
           {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
             <div
@@ -466,7 +583,7 @@ export default function NewWorkspaceComposerCard({
               <div className="min-w-0">
                 <div className="truncate text-xs font-medium text-foreground">
                   {translate('auto.components.NewWorkspaceComposerCard.b5a0796911', 'Connect')}{' '}
-                  {selectedRepoName}
+                  {selectedProjectName}
                 </div>
                 <div className="mt-0.5 text-[11px] text-muted-foreground">{sshStatusLabel}</div>
               </div>
@@ -519,9 +636,18 @@ export default function NewWorkspaceComposerCard({
             onLinearIssueSelect={onSmartLinearIssueSelect}
             selectedSource={smartNameSelection}
             onClearSelectedSource={onClearSmartNameSelection}
+            githubSourceContext={smartNameGitHubSourceContext}
             disabled={selectedRepoRequiresConnection}
-            disabledPlaceholder="Connect this repo first"
+            disabledPlaceholder={translate(
+              'auto.components.NewWorkspaceComposerCard.connectProjectFirst',
+              'Connect this project first'
+            )}
             textOnly={!selectedRepoIsGit}
+            branchesEnabled={branchesEnabled}
+            repoBackedSourcesDisabled={repoBackedSourcesDisabled}
+            repoBackedSearchRepos={repoBackedSearchRepos}
+            allowCrossRepoProjectAdd={allowSmartNameAddProject}
+            crossRepoSwitchTarget={smartNameRepoSwitchTarget}
             onPlainEnter={() => {
               // Why: Enter on the workspace name advances focus to the next
               // field (Agent combobox) rather than submitting, letting the user
@@ -539,6 +665,64 @@ export default function NewWorkspaceComposerCard({
               <span>{forkPushWarning}</span>
             </p>
           ) : null}
+          {/* Why (#5181): sits right under the branch selection (not the Name
+              field, which can differ from the branch) so reusing the picked
+              branch is an explicit, discoverable choice. Stays mounted and
+              collapses via a grid-rows transition (matching the Advanced
+              drawer) so the dialog grows/shrinks smoothly as the option
+              appears. Only offered when reuse is possible — an existing local
+              branch not already checked out in another worktree. */}
+          <div
+            className={cn(
+              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+              canReuseSelectedBranch ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            )}
+            aria-hidden={!canReuseSelectedBranch}
+          >
+            <div className="min-h-0">
+              <div className="space-y-1 pt-1">
+                <label className="group flex w-fit items-center gap-2 text-xs text-foreground">
+                  <span
+                    className={cn(
+                      'flex size-4 items-center justify-center rounded-[3px] border shadow-sm transition',
+                      reuseSelectedBranch
+                        ? 'border-emerald-500/60 bg-emerald-500 text-white'
+                        : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
+                    )}
+                  >
+                    <Check
+                      className={cn(
+                        'size-3 transition-opacity',
+                        reuseSelectedBranch ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={reuseSelectedBranch}
+                    onChange={(event) => onReuseSelectedBranchChange(event.target.checked)}
+                    // Why: while collapsed the row is aria-hidden, so disable the
+                    // input too — keeps a hidden control out of the tab order and
+                    // fully inert (no focusable control inside an aria-hidden tree).
+                    disabled={!canReuseSelectedBranch}
+                    className="sr-only"
+                  />
+                  <span>
+                    {translate(
+                      'auto.components.NewWorkspaceComposerCard.reuseExistingBranch',
+                      'Reuse branch'
+                    )}
+                  </span>
+                </label>
+                <p className="pl-6 text-[11px] text-muted-foreground">
+                  {translate(
+                    'auto.components.NewWorkspaceComposerCard.reuseExistingBranchHint',
+                    'Check out the existing branch instead of creating a new one from it.'
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-1" data-contextual-tour-target="workspace-creation-agent">
@@ -669,7 +853,7 @@ export default function NewWorkspaceComposerCard({
                 />
               </div>
 
-              {setupConfig ? (
+              {setupControlsEnabled && setupConfig ? (
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <label className="text-xs font-medium text-muted-foreground">
@@ -771,29 +955,31 @@ export default function NewWorkspaceComposerCard({
                 </div>
               ) : null}
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  {translate(
-                    'auto.components.NewWorkspaceComposerCard.d861de981b',
-                    'Sparse checkout'
-                  )}
-                </label>
-                <SparseCheckoutPresetSelect
-                  repoId={repoId}
-                  presets={sparsePresets}
-                  selectedPresetId={sparseSelectedPresetId}
-                  onSelectPreset={onSparseSelectPreset}
-                  disabled={!canUseSparseCheckout}
-                />
-                {!canUseSparseCheckout ? (
-                  <p className="text-[11px] text-muted-foreground">
+              {sparseControlsEnabled ? (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
                     {translate(
-                      'auto.components.NewWorkspaceComposerCard.cbb47ee0dc',
-                      'Only available for local Git projects.'
+                      'auto.components.NewWorkspaceComposerCard.d861de981b',
+                      'Sparse checkout'
                     )}
-                  </p>
-                ) : null}
-              </div>
+                  </label>
+                  <SparseCheckoutPresetSelect
+                    repoId={repoId}
+                    presets={sparsePresets}
+                    selectedPresetId={sparseSelectedPresetId}
+                    onSelectPreset={onSparseSelectPreset}
+                    disabled={!canUseSparseCheckout}
+                  />
+                  {!canUseSparseCheckout ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {translate(
+                        'auto.components.NewWorkspaceComposerCard.cbb47ee0dc',
+                        'Only available for local Git projects.'
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

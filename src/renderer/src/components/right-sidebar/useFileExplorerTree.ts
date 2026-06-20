@@ -6,8 +6,8 @@ import type { DirCache, TreeNode } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
 import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
 import { readRuntimeDirectory, statRuntimePath } from '@/runtime/runtime-file-client'
-import { useAppStore } from '@/store'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
@@ -63,7 +63,7 @@ export function useFileExplorerTree(
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         const entries = await readRuntimeDirectory(
           {
-            settings: useAppStore.getState().settings,
+            settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
             worktreeId: activeWorktreeId,
             worktreePath,
             connectionId
@@ -133,7 +133,7 @@ export function useFileExplorerTree(
       const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
       return statRuntimePath(
         {
-          settings: useAppStore.getState().settings,
+          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId

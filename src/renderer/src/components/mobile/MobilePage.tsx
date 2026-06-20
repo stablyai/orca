@@ -1,17 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import QRCodeBrowser from 'qrcode/lib/browser'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { PhoneCarousel } from './PhoneCarousel'
-import {
-  HeroFlow,
-  HeroIntro,
-  HeroPaired,
-  type PairedDevice,
-  type Platform,
-  type StepIndex
-} from './MobileHero'
+import { type PairedDevice, type Platform, type StepIndex } from './MobileHero'
 import { PLATFORM_COPY } from './mobile-platform-copy'
 import {
   selectRefreshedNetworkAddress,
@@ -22,16 +13,10 @@ import {
   shouldShowPairedAfterDeviceRefresh,
   type MobilePageStage as FlowStage
 } from './mobile-page-stage'
-import { MobilePageToolbar } from './MobilePageToolbar'
 import { translate } from '@/i18n/i18n'
-
-async function renderQrDataUrl(text: string): Promise<string> {
-  return QRCodeBrowser.toDataURL(text, {
-    errorCorrectionLevel: 'M',
-    margin: 2,
-    width: 232
-  })
-}
+import { useMobilePageEscape } from './use-mobile-page-escape'
+import { MobilePageContent } from './MobilePageContent'
+import { useMobileInstallQr } from './use-mobile-install-qr'
 
 export default function MobilePage(): React.JSX.Element {
   // Why: stage starts unresolved so we don't flash the intro before we know
@@ -40,7 +25,6 @@ export default function MobilePage(): React.JSX.Element {
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
 
   const [platform, setPlatform] = useState<Platform>('ios')
-  const [installQrUrl, setInstallQrUrl] = useState<string | null>(null)
 
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
@@ -58,6 +42,7 @@ export default function MobilePage(): React.JSX.Element {
   const closeMobilePage = useAppStore((s) => s.closeMobilePage)
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const installQrUrl = useMobileInstallQr(stage, platform)
 
   const setPairingDeviceBaseline = useCallback(
     (count: number | null): void => {
@@ -171,33 +156,6 @@ export default function MobilePage(): React.JSX.Element {
     },
     [loadDevices, mountedRef, showStage]
   )
-
-  // Why: render install QRs lazily — only after the user enters the flow,
-  // and re-render whenever the platform changes.
-  useEffect(() => {
-    if (stage !== 'flow') {
-      return
-    }
-    // Clear the previous QR synchronously so the user never sees a stale
-    // platform's image while the new one is rendering.
-    setInstallQrUrl(null)
-    let cancelled = false
-    void (async () => {
-      try {
-        const dataUrl = await renderQrDataUrl(PLATFORM_COPY[platform].url)
-        if (!cancelled) {
-          setInstallQrUrl(dataUrl)
-        }
-      } catch {
-        if (!cancelled) {
-          setInstallQrUrl(null)
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [platform, stage])
 
   const generatePairing = useCallback(
     async (rotate: boolean, addressOverride?: string) => {
@@ -399,86 +357,38 @@ export default function MobilePage(): React.JSX.Element {
     void updateSettings({ showMobileButton: !showMobileButton })
   }, [showMobileButton, updateSettings])
 
-  // Why: mirror Automations/Tasks — Esc first exits field focus, then closes the page.
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key !== 'Escape' || event.defaultPrevented) {
-        return
-      }
-      const target = event.target
-      if (!(target instanceof HTMLElement)) {
-        return
-      }
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement ||
-        target.isContentEditable
-      ) {
-        event.preventDefault()
-        target.blur()
-        return
-      }
-      event.preventDefault()
-      closeMobilePage()
-    }
-    // Why: bubble phase (no capture) so Radix popovers/selects get a chance
-    // to consume Escape first; the defaultPrevented check below then skips.
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [closeMobilePage])
+  useMobilePageEscape(closeMobilePage)
 
   return (
-    <div className="mobile-page-root">
-      <MobilePageToolbar
-        showMobileButton={showMobileButton}
-        onClose={closeMobilePage}
-        onToggleMobileSidebarButton={toggleMobileSidebarButton}
-      />
-      <section className="mp-hero">
-        <div className="mp-hero-copy">
-          {stage === null ? null : stage === 'intro' ? (
-            <HeroIntro onStart={enterFlow} />
-          ) : stage === 'paired' ? (
-            <HeroPaired
-              devices={devices}
-              onPairAnother={pairAnotherDevice}
-              onRevoke={(id) => void revokeDevice(id)}
-              revokingDeviceIds={revokingDeviceIds}
-            />
-          ) : (
-            <HeroFlow
-              stepIdx={stepIdx}
-              platform={platform}
-              onPlatformChange={setPlatform}
-              installQrUrl={installQrUrl}
-              installCopy={PLATFORM_COPY[platform]}
-              onOpenInstallUrl={openInstallUrl}
-              onCopyInstallUrl={() => void copyInstallUrl()}
-              pairQrDataUrl={pairQrDataUrl}
-              pairingUrl={pairingUrl}
-              pairLoading={pairLoading}
-              onRegeneratePairing={() => void generatePairing(true)}
-              onCopyPairingCode={() => void copyPairingCode()}
-              networkInterfaces={networkInterfaces}
-              selectedAddress={selectedAddress}
-              onSelectedAddressChange={handleAddressChange}
-              onRefreshNetworkInterfaces={() => void loadNetworkInterfaces()}
-              refreshingNetworkInterfaces={refreshingNetworkInterfaces}
-              onBack={handleBack}
-              onContinue={handleContinue}
-              onDone={devices.length > 0 ? () => showPairedDevices(devices.length) : undefined}
-            />
-          )}
-        </div>
-
-        <div
-          className="mp-stage"
-          aria-label={translate('auto.components.mobile.MobilePage.e17393c6a3', 'Phone preview')}
-        >
-          <PhoneCarousel />
-        </div>
-      </section>
-    </div>
+    <MobilePageContent
+      closeMobilePage={closeMobilePage}
+      copyInstallUrl={() => void copyInstallUrl()}
+      copyPairingCode={() => void copyPairingCode()}
+      devices={devices}
+      enterFlow={enterFlow}
+      generatePairing={(rotate) => void generatePairing(rotate)}
+      handleAddressChange={handleAddressChange}
+      handleBack={handleBack}
+      handleContinue={handleContinue}
+      installQrUrl={installQrUrl}
+      loadNetworkInterfaces={() => void loadNetworkInterfaces()}
+      networkInterfaces={networkInterfaces}
+      openInstallUrl={openInstallUrl}
+      pairAnotherDevice={pairAnotherDevice}
+      pairLoading={pairLoading}
+      pairQrDataUrl={pairQrDataUrl}
+      pairingUrl={pairingUrl}
+      platform={platform}
+      refreshingNetworkInterfaces={refreshingNetworkInterfaces}
+      revokeDevice={(id) => void revokeDevice(id)}
+      revokingDeviceIds={revokingDeviceIds}
+      selectedAddress={selectedAddress}
+      setPlatform={setPlatform}
+      showMobileButton={showMobileButton}
+      showPairedDevices={showPairedDevices}
+      stage={stage}
+      stepIdx={stepIdx}
+      toggleMobileSidebarButton={toggleMobileSidebarButton}
+    />
   )
 }

@@ -159,10 +159,14 @@ export async function scrollActiveTerminalToText(page: Page, text: string): Prom
     if (targetLine === null) {
       throw new Error(`Text not found in terminal buffer: ${searchText}`)
     }
-    const scrollDelta = targetLine - buffer.viewportY
-    if (scrollDelta !== 0) {
-      pane.terminal.scrollLines(scrollDelta)
-    }
+    // Why: after workspace restore, xterm's viewport can be several wrapped
+    // rows away from the buffer line even when relative scroll events are
+    // coalesced. Scroll to an absolute line and center the target for the
+    // subsequent DOM-based visual assertion.
+    const centeredLine = Math.max(0, targetLine - Math.floor(pane.terminal.rows / 2))
+    pane.terminal.scrollToLine(centeredLine)
+    const viewport = pane.container.querySelector<HTMLElement>('.xterm-viewport')
+    viewport?.dispatchEvent(new Event('scroll', { bubbles: true }))
     pane.terminal.focus()
   }, text)
 }

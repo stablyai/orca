@@ -1,4 +1,4 @@
-import { buildWorktreeDragPreviewOffsets } from './worktree-manual-order'
+import { buildWorktreeDragPreviewOffsets } from './worktree-drag-preview-offsets'
 import {
   getWorktreeSidebarBoundaryDrop,
   type WorktreeSidebarDragRect
@@ -8,6 +8,7 @@ export type WorktreeSidebarDropPreview = {
   dropIndex: number
   dropIndicatorY: number
   previewOffsetsByWorktreeId: ReadonlyMap<string, number>
+  lineageParentId?: string
 }
 
 export type WorktreeSidebarStatusDropTarget = {
@@ -16,7 +17,7 @@ export type WorktreeSidebarStatusDropTarget = {
 }
 
 export type WorktreeSidebarTrackedStatusDropTarget = {
-  target: WorktreeSidebarStatusDropTarget
+  target: WorktreeSidebarStatusDropTarget & { lineageParentId: string | null }
   preview: WorktreeSidebarDropPreview | null
   x: number
   y: number
@@ -24,18 +25,58 @@ export type WorktreeSidebarTrackedStatusDropTarget = {
 
 const STATUS_DROP_TARGET_FALLBACK_TOLERANCE_PX = 6
 
-function hasWorktreeSidebarStatusDropTarget(target: WorktreeSidebarStatusDropTarget): boolean {
-  return target.isPinDrop || target.status !== null
+function getWorktreeSidebarDragUnitRects(args: {
+  rects: readonly WorktreeSidebarDragRect[]
+  groupIds: readonly string[]
+}): WorktreeSidebarDragRect[] {
+  // Why: expanded lineage renders child cards in the DOM, but reorder preview
+  // moves the whole parent lineage as one drag unit.
+  const sortedRects = [...args.rects].sort((a, b) => a.top - b.top)
+  const rectByWorktreeId = new Map(sortedRects.map((rect) => [rect.worktreeId, rect]))
+
+  return args.groupIds.flatMap((worktreeId, unitIndex) => {
+    const rootRect = rectByWorktreeId.get(worktreeId)
+    if (!rootRect) {
+      return []
+    }
+    const nextRootTop =
+      args.groupIds
+        .slice(unitIndex + 1)
+        .flatMap((nextId) => {
+          const nextRect = rectByWorktreeId.get(nextId)
+          return nextRect ? [nextRect.top] : []
+        })
+        .at(0) ?? Number.POSITIVE_INFINITY
+    const unitBottom = sortedRects.reduce(
+      (bottom, rect) =>
+        rect.top >= rootRect.top && rect.top < nextRootTop ? Math.max(bottom, rect.bottom) : bottom,
+      rootRect.bottom
+    )
+    return [
+      {
+        worktreeId,
+        groupIndex: unitIndex,
+        top: rootRect.top,
+        bottom: unitBottom
+      }
+    ]
+  })
+}
+
+function hasWorktreeSidebarStatusDropTarget(
+  target: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
+): boolean {
+  return target.isPinDrop || target.status !== null || (target.lineageParentId ?? null) !== null
 }
 
 export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
-  currentTarget: WorktreeSidebarStatusDropTarget
+  currentTarget: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
   currentPreview: WorktreeSidebarDropPreview | null
   latestTrackedTarget: WorktreeSidebarTrackedStatusDropTarget | null
   x: number
   y: number
 }): {
-  target: WorktreeSidebarStatusDropTarget
+  target: WorktreeSidebarStatusDropTarget & { lineageParentId?: string | null }
   preview: WorktreeSidebarDropPreview | null
 } {
   if (hasWorktreeSidebarStatusDropTarget(args.currentTarget)) {
@@ -59,7 +100,10 @@ export function computeWorktreeSidebarDropPreview(args: {
   groupIds: readonly string[]
   draggedIds: readonly string[]
 }): WorktreeSidebarDropPreview | null {
-  const { rects } = args
+  const rects = getWorktreeSidebarDragUnitRects({
+    rects: args.rects,
+    groupIds: args.groupIds
+  })
   if (rects.length === 0 || args.groupIds.length === 0) {
     return null
   }

@@ -8,18 +8,28 @@ type ResolveGitHubPrStartPointArgs = {
   repoPath: string
   prNumber: number
   headRefName?: string
+  baseRefName?: string
   isCrossRepository?: boolean
   connectionId?: string | null
+  localGitOptions?: { wslDistro?: string }
   gitExec: GitExec
+  fetchRemoteTrackingRef: (remote: string, branch: string) => Promise<void>
   resolveRemote: () => Promise<string>
 }
 
 type ResolveGitHubPrStartPointResult = GitHubPrStartPoint | { error: string }
 
+function localGitOptionArgs(
+  options: { wslDistro?: string } | undefined
+): [] | [{ wslDistro?: string }] {
+  return options && Object.keys(options).length > 0 ? [options] : []
+}
+
 export async function resolveGitHubPrStartPoint(
   args: ResolveGitHubPrStartPointArgs
 ): Promise<ResolveGitHubPrStartPointResult> {
   let headRefName = args.headRefName?.trim() ?? ''
+  let baseRefName = args.baseRefName?.trim() ?? ''
   let isCrossRepository = args.isCrossRepository === true
   let pushTarget: GitPushTarget | undefined
   let maintainerCanModify: boolean | undefined
@@ -32,7 +42,8 @@ export async function resolveGitHubPrStartPoint(
       const resolved = await getPullRequestPushTarget(
         args.repoPath,
         args.prNumber,
-        args.connectionId ?? null
+        args.connectionId ?? null,
+        ...localGitOptionArgs(args.localGitOptions)
       )
       pushTarget = resolved?.pushTarget
       maintainerCanModify = resolved?.maintainerCanModify
@@ -44,11 +55,18 @@ export async function resolveGitHubPrStartPoint(
   }
 
   if (!headRefName) {
-    const item = await getWorkItem(args.repoPath, args.prNumber, 'pr', args.connectionId ?? null)
+    const item = await getWorkItem(
+      args.repoPath,
+      args.prNumber,
+      'pr',
+      args.connectionId ?? null,
+      ...localGitOptionArgs(args.localGitOptions)
+    )
     if (!item || item.type !== 'pr') {
       return { error: `PR #${args.prNumber} not found.` }
     }
     headRefName = (item.branchName ?? '').trim()
+    baseRefName = (item.baseRefName ?? '').trim()
     if (!headRefName) {
       return { error: `PR #${args.prNumber} has no head branch.` }
     }
@@ -66,6 +84,21 @@ export async function resolveGitHubPrStartPoint(
     remote = await args.resolveRemote()
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Could not resolve git remote.' }
+  }
+
+  const compareBaseRef = baseRefName ? `refs/remotes/${remote}/${baseRefName}` : undefined
+
+  const fetchCompareBaseRef = async (): Promise<{ error: string } | null> => {
+    if (!baseRefName) {
+      return null
+    }
+    try {
+      await args.fetchRemoteTrackingRef(remote, baseRefName)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { error: `Failed to fetch ${remote}/${baseRefName}: ${message.split('\n')[0]}` }
+    }
+    return null
   }
 
   const fetchPullRequestHeadSha = async (): Promise<{ baseBranch: string } | { error: string }> => {
@@ -99,11 +132,16 @@ export async function resolveGitHubPrStartPoint(
     if ('error' in result) {
       return result
     }
+    const compareBaseFetchError = await fetchCompareBaseRef()
+    if (compareBaseFetchError) {
+      return compareBaseFetchError
+    }
     // Why: adopt the contributor's branch name locally (mirroring the same-repo
     // return below) so fork-PR worktrees aren't renamed with the maintainer's
     // branch prefix (e.g. `me/866`). The push refspec still targets the fork.
     return {
       ...result,
+      ...(compareBaseRef ? { compareBaseRef } : {}),
       headSha: result.baseBranch,
       branchNameOverride: headRefName,
       ...(pushTarget ? { pushTarget } : {}),
@@ -112,11 +150,7 @@ export async function resolveGitHubPrStartPoint(
   }
 
   try {
-    await args.gitExec([
-      'fetch',
-      remote,
-      `+refs/heads/${headRefName}:refs/remotes/${remote}/${headRefName}`
-    ])
+    await args.fetchRemoteTrackingRef(remote, headRefName)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     // Why: missing fork metadata can make a fork PR look like a same-repo
@@ -125,8 +159,13 @@ export async function resolveGitHubPrStartPoint(
       const result = await fetchPullRequestHeadSha()
       if (!('error' in result)) {
         await resolvePushTarget()
+        const compareBaseFetchError = await fetchCompareBaseRef()
+        if (compareBaseFetchError) {
+          return compareBaseFetchError
+        }
         return {
           ...result,
+          ...(compareBaseRef ? { compareBaseRef } : {}),
           headSha: result.baseBranch,
           branchNameOverride: headRefName,
           ...(pushTarget ? { pushTarget } : {}),
@@ -150,9 +189,14 @@ export async function resolveGitHubPrStartPoint(
   if (!headSha) {
     return { error: `Empty SHA resolving PR #${args.prNumber} head.` }
   }
+  const compareBaseFetchError = await fetchCompareBaseRef()
+  if (compareBaseFetchError) {
+    return compareBaseFetchError
+  }
 
   return {
     baseBranch: headSha,
+    ...(compareBaseRef ? { compareBaseRef } : {}),
     headSha,
     branchNameOverride: headRefName,
     pushTarget: { remoteName: remote, branchName: headRefName }

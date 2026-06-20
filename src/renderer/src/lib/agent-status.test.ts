@@ -10,6 +10,7 @@ import {
   getAgentLabel,
   isGeminiTerminalTitle,
   isClaudeAgent,
+  isClaudeManagementTitle,
   normalizeTerminalTitle,
   isExplicitAgentStatusFresh,
   mapAgentStatusStateToVisualStatus,
@@ -170,6 +171,22 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('⠋ OpenClaude')).toBe('working')
   })
 
+  it('excludes the exact Claude agents management title', () => {
+    expect(detectAgentStatusFromTitle('claude agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('  Claude Agents  ')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude.exe agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('Claude.CMD agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude.bat agents')).toBeNull()
+    expect(detectAgentStatusFromTitle('Claude.PS1 agents')).toBeNull()
+    expect(
+      detectAgentStatusFromTitle('C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd agents')
+    ).toBeNull()
+    expect(
+      detectAgentStatusFromTitle('"C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd" agents')
+    ).toBeNull()
+    expect(detectAgentStatusFromTitle('claude agents working')).toBe('working')
+  })
+
   it('detects Pi idle titles', () => {
     expect(detectAgentStatusFromTitle('π - my-project')).toBe('idle')
     expect(detectAgentStatusFromTitle('π - session-name - my-project')).toBe('idle')
@@ -213,6 +230,13 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Hermes ready')).toBe('idle')
     expect(detectAgentStatusFromTitle('Hermes - action required')).toBe('permission')
     expect(detectAgentStatusFromTitle('Hermes working')).toBe('working')
+  })
+
+  it('classifies synthesized Devin titles', () => {
+    expect(detectAgentStatusFromTitle('⠋ Devin')).toBe('working')
+    expect(detectAgentStatusFromTitle('Devin ready')).toBe('idle')
+    expect(detectAgentStatusFromTitle('Devin - action required')).toBe('permission')
+    expect(detectAgentStatusFromTitle('Devin working')).toBe('working')
   })
 
   it('does not treat Factory Droid native needs-input titles as completion', () => {
@@ -394,6 +418,12 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('⠋ π - my-project')).toBe('Pi')
   })
 
+  it('treats Claude Code prefixed task titles as Claude even when they mention another CLI', () => {
+    expect(getAgentLabel('✳ Gemini CLI')).toBe('Claude Code')
+    expect(getAgentLabel('. Compare Opencode Vs Orca')).toBe('Claude Code')
+    expect(getAgentLabel('* Review Codex behavior')).toBe('Claude Code')
+  })
+
   it('labels supported agent families consistently', () => {
     expect(getAgentLabel('✦ Gemini CLI')).toBe('Gemini CLI')
     expect(getAgentLabel('⠂ Claude Code')).toBe('Claude Code')
@@ -407,6 +437,12 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Droid ready')).toBe('Droid')
     expect(getAgentLabel('⠋ Hermes')).toBe('Hermes')
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
+    expect(getAgentLabel('⠋ Devin')).toBe('Devin')
+    expect(getAgentLabel('Devin ready')).toBe('Devin')
+  })
+
+  it('does not label the Claude agents management title', () => {
+    expect(getAgentLabel('claude agents')).toBeNull()
   })
 
   it('labels GitHub Copilot CLI', () => {
@@ -429,6 +465,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('~/projects/codex-scratch')).toBeNull()
     expect(getAgentLabel('~/cursor-rules')).toBeNull()
     expect(getAgentLabel('grok-fixtures')).toBeNull()
+    expect(getAgentLabel('devin-fixtures')).toBeNull()
     expect(getAgentLabel('aider-config')).toBeNull()
   })
 
@@ -438,6 +475,7 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('openclaude.cmd')).toBe('OpenClaude')
     expect(getAgentLabel('⠋ Codex')).toBe('Codex')
     expect(getAgentLabel('Aider idle')).toBe('Aider')
+    expect(getAgentLabel('Devin working')).toBe('Devin')
   })
 })
 
@@ -451,6 +489,21 @@ describe('isClaudeAgent', () => {
   it('does not classify non-prefix Claude mentions as Claude agent titles', () => {
     expect(isClaudeAgent('ask claude later')).toBe(false)
     expect(getAgentLabel('ask claude later')).toBeNull()
+  })
+
+  it('does not classify the Claude agents management title as a Claude agent', () => {
+    expect(isClaudeManagementTitle('  Claude Agents  ')).toBe(true)
+    expect(isClaudeManagementTitle('claude.exe agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.cmd agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.bat agents')).toBe(true)
+    expect(isClaudeManagementTitle('claude.ps1 agents')).toBe(true)
+    expect(
+      isClaudeManagementTitle('C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd agents')
+    ).toBe(true)
+    expect(
+      isClaudeManagementTitle('"C:\\Users\\dev\\AppData\\Roaming\\npm\\claude.cmd" agents')
+    ).toBe(true)
+    expect(isClaudeAgent('claude agents')).toBe(false)
   })
 })
 
@@ -770,6 +823,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('command-code')).toBe('Command Code')
   })
 
+  it("maps 'ante' to 'Ante'", () => {
+    expect(formatAgentTypeLabel('ante')).toBe('Ante')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })
@@ -793,6 +850,7 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
+    expect(agentTypeToIconAgent('ante')).toBe('ante')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {

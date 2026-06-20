@@ -1,4 +1,4 @@
-import { Folder, FolderOpen, Home, Pencil } from 'lucide-react'
+import { Folder, FolderOpen, Pencil } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,7 +7,8 @@ import { RemoteFileBrowser } from './RemoteFileBrowser'
 import { translate } from '@/i18n/i18n'
 
 type CreateProjectParentBrowserProps = {
-  runtimeEnvironmentId: string
+  runtimeEnvironmentId?: string | null
+  sshTargetId?: string | null
   createParent: string
   onParentChange: (value: string) => void
   onClose: () => void
@@ -15,6 +16,7 @@ type CreateProjectParentBrowserProps = {
 
 export function CreateProjectParentBrowser({
   runtimeEnvironmentId,
+  sshTargetId,
   createParent,
   onParentChange,
   onClose
@@ -25,7 +27,7 @@ export function CreateProjectParentBrowser({
         <DialogTitle>
           {translate(
             'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
-            'Browse server filesystem'
+            'Browse host filesystem'
           )}
         </DialogTitle>
         <DialogDescription>
@@ -35,15 +37,27 @@ export function CreateProjectParentBrowser({
           )}
         </DialogDescription>
       </DialogHeader>
-      <RemoteFileBrowser
-        runtimeEnvironmentId={runtimeEnvironmentId}
-        initialPath={createParent || '~'}
-        onSelect={(path) => {
-          onParentChange(path)
-          onClose()
-        }}
-        onCancel={onClose}
-      />
+      {sshTargetId ? (
+        <RemoteFileBrowser
+          targetId={sshTargetId}
+          initialPath={createParent || '~'}
+          onSelect={(path) => {
+            onParentChange(path)
+            onClose()
+          }}
+          onCancel={onClose}
+        />
+      ) : (
+        <RemoteFileBrowser
+          runtimeEnvironmentId={runtimeEnvironmentId as string}
+          initialPath={createParent || '~'}
+          onSelect={(path) => {
+            onParentChange(path)
+            onClose()
+          }}
+          onCancel={onClose}
+        />
+      )}
     </>
   )
 }
@@ -53,6 +67,7 @@ type CreateProjectLocationFieldProps = {
   isCreating: boolean
   manualParentEntry: boolean
   runtimeEnvironmentId?: string | null
+  sshTargetId?: string | null
   onParentChange: (value: string) => void
   onPickParent: () => void
   onBrowseServer: () => void
@@ -63,6 +78,7 @@ export function CreateProjectLocationField({
   isCreating,
   manualParentEntry,
   runtimeEnvironmentId,
+  sshTargetId,
   onParentChange,
   onPickParent,
   onBrowseServer
@@ -94,10 +110,10 @@ export function CreateProjectLocationField({
                 size="icon"
                 className="h-11 w-11 shrink-0"
                 onClick={onBrowseServer}
-                disabled={isCreating || !runtimeEnvironmentId}
+                disabled={isCreating || (!runtimeEnvironmentId && !sshTargetId)}
                 aria-label={translate(
                   'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
-                  'Browse server filesystem'
+                  'Browse host filesystem'
                 )}
               >
                 <FolderOpen className="size-4" />
@@ -106,16 +122,13 @@ export function CreateProjectLocationField({
             <TooltipContent side="top" sideOffset={4}>
               {translate(
                 'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
-                'Browse server filesystem'
+                'Browse host filesystem'
               )}
             </TooltipContent>
           </Tooltip>
         </div>
       ) : createParent ? (
         <div className="group flex items-center gap-2.5 rounded-md border border-border bg-background/40 h-11 min-w-0 px-3 text-sm">
-          <span className="shrink-0 inline-flex items-center justify-center size-7 rounded-md border border-border/70 bg-background/50 text-muted-foreground">
-            <Home className="size-3.5" />
-          </span>
           <span className="flex-1 min-w-0 truncate font-mono text-[12px]" title={createParent}>
             {createParent}
           </span>

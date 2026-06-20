@@ -16,6 +16,7 @@ import { applyDocumentTheme } from '@/lib/document-theme'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { SCROLLBACK_PRESETS_MB, getFallbackTerminalFonts } from './SettingsConstants'
 import { DEFAULT_APP_FONT_FAMILY, getDefaultVoiceSettings } from '../../../../shared/constants'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { GeneralPane } from './GeneralPane'
 import { BrowserPane } from './BrowserPane'
 import { AppearancePane } from './AppearancePane'
@@ -24,9 +25,11 @@ import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
 import { useGhosttyImport } from './useGhosttyImport'
+import { useWarpThemeImport } from './useWarpThemeImport'
 import { RepositoryPane } from './RepositoryPane'
 import { GitPane } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
+import { GitProviderApiBudgetPane } from './GitProviderApiBudgetPane'
 import { NotificationsPane } from './NotificationsPane'
 import { VoicePane } from './VoicePane'
 import { SshPane } from './SshPane'
@@ -51,6 +54,7 @@ import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSectio
 import { matchesSettingsSearch } from './settings-search'
 import { cn } from '@/lib/utils'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
+import { registerWindowCloseGuard } from '../window-close-request-coordinator'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -77,6 +81,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import {
   deriveNeededRepoIds,
   deriveNeededSectionIds,
@@ -84,33 +89,49 @@ import {
   getRuntimeTargetIdentity
 } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
+import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
 
 const SETTINGS_NAV_GROUPS = [
   {
     id: 'capabilities',
-    title: translate('auto.components.settings.Settings.23c6874fdf', 'AI Capabilities')
+    titleKey: 'auto.components.settings.Settings.23c6874fdf',
+    titleDefault: 'AI Capabilities'
   },
-  { id: 'setup', title: translate('auto.components.settings.Settings.9abb9be3bc', 'Set Up') },
+  { id: 'setup', titleKey: 'auto.components.settings.Settings.9abb9be3bc', titleDefault: 'Set Up' },
   {
     id: 'workflows',
-    title: translate('auto.components.settings.Settings.e1578cd4bc', 'Workflows')
+    titleKey: 'auto.components.settings.Settings.e1578cd4bc',
+    titleDefault: 'Workflows'
   },
   {
     id: 'interface',
-    title: translate('auto.components.settings.Settings.8bd117d669', 'Interface')
+    titleKey: 'auto.components.settings.Settings.8bd117d669',
+    titleDefault: 'Interface'
   },
   {
     id: 'remote',
-    title: translate('auto.components.settings.Settings.23931df7e8', 'Remote Access')
+    titleKey: 'auto.components.settings.Settings.23931df7e8',
+    titleDefault: 'Remote Hosts'
+  },
+  {
+    id: 'mobile',
+    titleKey: 'auto.components.settings.Settings.mobile_group',
+    titleDefault: 'Mobile'
   },
   {
     id: 'security',
-    title: translate('auto.components.settings.Settings.084d8fac5b', 'Privacy & Security')
+    titleKey: 'auto.components.settings.Settings.084d8fac5b',
+    titleDefault: 'Privacy & Security'
   },
-  { id: 'advanced', title: translate('auto.components.settings.Settings.1c87f8d024', 'Advanced') },
+  {
+    id: 'advanced',
+    titleKey: 'auto.components.settings.Settings.1c87f8d024',
+    titleDefault: 'Advanced'
+  },
   {
     id: 'experimental',
-    title: translate('auto.components.settings.Settings.8b017f2506', 'Experimental')
+    titleKey: 'auto.components.settings.Settings.8b017f2506',
+    titleDefault: 'Experimental'
   }
 ] as const
 
@@ -215,6 +236,9 @@ function Settings(): React.JSX.Element {
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
   const repos = useAppStore((s) => s.repos)
+  const projects = useAppStore((s) => s.projects)
+  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
+  const updateProject = useAppStore((s) => s.updateProject)
   const updateRepo = useAppStore((s) => s.updateRepo)
   const removeProject = useAppStore((s) => s.removeProject)
   const settingsNavigationTarget = useAppStore((s) => s.settingsNavigationTarget)
@@ -233,11 +257,14 @@ function Settings(): React.JSX.Element {
   const isMac = isMacUserAgent()
   const isWebClient = isWebClientLocation()
   const showDesktopOnlySettings = !isWebClient
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
     enabled: showDesktopOnlySettings,
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
@@ -249,8 +276,13 @@ function Settings(): React.JSX.Element {
   // Why: Appearance owns terminal visual controls, but the Ghostty import flow
   // still needs Settings-level state so the modal survives section remounts.
   const ghostty = useGhosttyImport(updateSettings, settings)
+  const warpThemes = useWarpThemeImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     Array.from(new Set([DEFAULT_APP_FONT_FAMILY, ...getFallbackTerminalFonts()]))
+  )
+  const terminalFontSuggestions = useMemo(
+    () => fontSuggestions.filter((font) => font !== DEFAULT_APP_FONT_FAMILY),
+    [fontSuggestions]
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
@@ -280,6 +312,11 @@ function Settings(): React.JSX.Element {
 
   const hasUnsavedSourceControlAiPromptChanges =
     hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
+  // Why: the window-close guard registers once for Settings' lifetime, so it
+  // reads the latest dirty state from a ref instead of a closure that would lag
+  // behind the draft state until the next effect commit.
+  const hasUnsavedSourceControlAiPromptChangesRef = useRef(hasUnsavedSourceControlAiPromptChanges)
+  hasUnsavedSourceControlAiPromptChangesRef.current = hasUnsavedSourceControlAiPromptChanges
 
   const writeSourceControlAiSettings = useCallback(
     (patch: SourceControlAiSettingsPatch): Promise<void> => {
@@ -322,11 +359,11 @@ function Settings(): React.JSX.Element {
     cancelPendingSettingsSubsectionScrollFrame(pendingSubsectionScrollFrameRef)
   }, [])
 
-  const confirmDiscardSourceControlAiPromptChanges = useCallback(async (): Promise<boolean> => {
-    if (!hasUnsavedSourceControlAiPromptChanges) {
-      return true
-    }
-    const shouldDiscard = await confirm({
+  // Pure "discard and leave?" prompt — no side effects. Why separate from the
+  // discard helper below: the window-close guard must ask without clearing the
+  // drafts, since a later guard/handler can still cancel the close.
+  const promptDiscardSourceControlAiPromptChanges = useCallback((): Promise<boolean> => {
+    return confirm({
       title: translate(
         'auto.components.settings.Settings.17bdee4ff1',
         'Discard unsaved Git AI Author changes?'
@@ -338,13 +375,20 @@ function Settings(): React.JSX.Element {
       confirmLabel: translate('auto.components.settings.Settings.65358016ea', 'Discard'),
       confirmVariant: 'destructive'
     })
+  }, [confirm])
+
+  const confirmDiscardSourceControlAiPromptChanges = useCallback(async (): Promise<boolean> => {
+    if (!hasUnsavedSourceControlAiPromptChanges) {
+      return true
+    }
+    const shouldDiscard = await promptDiscardSourceControlAiPromptChanges()
     if (shouldDiscard) {
       setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
       setHasUnsavedBranchPromptChanges(false)
     }
     return shouldDiscard
-  }, [confirm, hasUnsavedSourceControlAiPromptChanges])
+  }, [promptDiscardSourceControlAiPromptChanges, hasUnsavedSourceControlAiPromptChanges])
 
   const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
     if (!(await confirmDiscardSourceControlAiPromptChanges())) {
@@ -445,19 +489,25 @@ function Settings(): React.JSX.Element {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [activeSectionId, closeSettingsPageWithPromptGuard])
 
+  // Why: route window close / quit through the same discard dialog as in-app
+  // navigation. A raw beforeunload preventDefault only silently vetoes the close
+  // (no UI), which on the no-workspace Settings page reads as an unquittable
+  // window. Register one stable guard for Settings' lifetime, reading the latest
+  // dirty state from a ref. Why the pure prompt (no discard side effect): a
+  // downstream guard/handler can still cancel the close (e.g. a dirty-editor save
+  // dialog), and clearing the drafts up front would lose them while the window
+  // stays open; on an actual close they fall away with the renderer anyway.
   useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+    return registerWindowCloseGuard(() => {
       if (isIntentionalAppRestartInProgress()) {
-        return
+        return true
       }
-      if (!hasUnsavedSourceControlAiPromptChanges) {
-        return
+      if (!hasUnsavedSourceControlAiPromptChangesRef.current) {
+        return true
       }
-      event.preventDefault()
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [hasUnsavedSourceControlAiPromptChanges])
+      return promptDiscardSourceControlAiPromptChanges()
+    })
+  }, [promptDiscardSourceControlAiPromptChanges])
 
   useEffect(() => {
     const handleFindShortcut = (event: KeyboardEvent): void => {
@@ -601,6 +651,22 @@ function Settings(): React.JSX.Element {
     () => new Set(visibleNavSections.map((section) => section.id)),
     [visibleNavSections]
   )
+  const projectByRepoId = useMemo(() => {
+    const projection = getProjectHostSetupProjectionFromState({
+      repos,
+      projects,
+      projectHostSetups
+    })
+    const projectById = new Map(projection.projects.map((project) => [project.id, project]))
+    const nextProjectByRepoId = new Map<string, (typeof projection.projects)[number]>()
+    for (const setup of projection.setups) {
+      const project = projectById.get(setup.projectId)
+      if (project && setup.repoId.trim()) {
+        nextProjectByRepoId.set(setup.repoId, project)
+      }
+    }
+    return nextProjectByRepoId
+  }, [projectHostSetups, projects, repos])
   const neededSectionIds = useMemo(
     () =>
       deriveNeededSectionIds({
@@ -618,13 +684,17 @@ function Settings(): React.JSX.Element {
   )
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+  const needsRepoWindowsRuntimeCapabilities = [...neededSectionIds].some((sectionId) =>
+    sectionId.startsWith('repo-')
+  )
   const shouldLoadWindowsTerminalCapabilities =
     hasActiveRuntimeEnvironment ||
     ((isWindows || isWebClient) &&
       (neededSectionIds.has('terminal') ||
         neededSectionIds.has('general') ||
         neededSectionIds.has('accounts') ||
-        neededSectionIds.has('agents')))
+        neededSectionIds.has('agents') ||
+        needsRepoWindowsRuntimeCapabilities))
   // Why: General owns the Orca CLI controls, including WSL skill-location setup.
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldLoadWindowsTerminalCapabilities,
@@ -895,7 +965,8 @@ function Settings(): React.JSX.Element {
 
   const generalNavSections = visibleNavSections.filter((section) => !section.id.startsWith('repo-'))
   const generalNavGroups: SettingsNavGroup[] = SETTINGS_NAV_GROUPS.map((group) => ({
-    ...group,
+    id: group.id,
+    title: translate(group.titleKey, group.titleDefault),
     sections: generalNavSections.filter((section) => section.group === group.id)
   })).filter((group) => group.sections.length > 0 || group.id === 'setup')
   const repoNavSections = visibleNavSections
@@ -922,6 +993,7 @@ function Settings(): React.JSX.Element {
       className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background"
     >
       <SettingsSidebar
+        settings={settings}
         activeSectionId={activeSectionId}
         generalGroups={generalNavGroups}
         repoSections={repoNavSections}
@@ -1084,6 +1156,7 @@ function Settings(): React.JSX.Element {
                       updateSettings={updateSettings}
                       wslSupportedPlatform={wslSupportedPlatform}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
+                      wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
                     />
                   ) : null}
@@ -1134,6 +1207,7 @@ function Settings(): React.JSX.Element {
                         customPromptDiscardSignal={sourceControlAiPromptDiscardSignal}
                         settingsSearchQuery={settingsSearchQuery}
                       />
+                      <GitProviderApiBudgetPane settingsSearchQuery={settingsSearchQuery} />
                     </>
                   ) : null}
                 </SettingsSection>
@@ -1272,11 +1346,10 @@ function Settings(): React.JSX.Element {
                       updateSettings={updateSettings}
                       applyTheme={applyTheme}
                       fontSuggestions={fontSuggestions}
-                      terminalFontSuggestions={fontSuggestions.filter(
-                        (font) => font !== DEFAULT_APP_FONT_FAMILY
-                      )}
+                      terminalFontSuggestions={terminalFontSuggestions}
                       systemPrefersDark={systemPrefersDark}
                       ghostty={ghostty}
+                      warpThemes={warpThemes}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1362,7 +1435,7 @@ function Settings(): React.JSX.Element {
                         )
                       : translate(
                           'auto.components.settings.Settings.b5ee17826b',
-                          'Switch between local desktop mode and paired remote Orca runtimes.'
+                          'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.'
                         )
                   }
                   searchEntries={getSectionSearchEntries('servers')}
@@ -1384,7 +1457,7 @@ function Settings(): React.JSX.Element {
                       title={translate('auto.components.settings.Settings.9b02492d1f', 'SSH Hosts')}
                       description={translate(
                         'auto.components.settings.Settings.c2ee313198',
-                        'Remote SSH hosts for files, terminals, and git.'
+                        'Use existing machines over SSH for files, terminals, Git, and workspaces.'
                       )}
                       searchEntries={getSectionSearchEntries('ssh')}
                     >
@@ -1479,6 +1552,7 @@ function Settings(): React.JSX.Element {
                 {repos.map((repo) => {
                   const repoSectionId = `repo-${repo.id}`
                   const repoHooksState = repoHooksMap[repo.id]
+                  const project = projectByRepoId.get(repo.id) ?? null
 
                   return (
                     <SettingsSection
@@ -1501,6 +1575,15 @@ function Settings(): React.JSX.Element {
                           mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
                           updateRepo={updateRepo}
                           removeProject={removeProject}
+                          project={project}
+                          isLocalWindowsProject={
+                            getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+                            isWindowsTerminalHost
+                          }
+                          wslAvailable={windowsTerminalCapabilities.wslAvailable}
+                          wslDistros={windowsTerminalCapabilities.wslDistros}
+                          wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                          updateProject={updateProject}
                         />
                       ) : null}
                     </SettingsSection>

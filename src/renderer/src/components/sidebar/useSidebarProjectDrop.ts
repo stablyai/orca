@@ -70,7 +70,7 @@ export function useSidebarProjectDrop(): {
           {
             description: translate(
               'auto.components.sidebar.useSidebarProjectDrop.5ccb56c7be',
-              'Use Add Project to enter a server path.'
+              'Use Add Project to enter a host path.'
             )
           }
         )

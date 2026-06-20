@@ -112,6 +112,29 @@ describe('buildSourceControlDisplaySections', () => {
     expect(sections[1]?.items.map((item) => item.path)).toEqual(['normal.ts'])
   })
 
+  it('pins locally resolved staged conflicts and removes them from Staged Changes', () => {
+    const resolvedStaged = entry({
+      area: 'staged',
+      path: 'resolved-staged.ts',
+      conflictKind: 'both_modified',
+      conflictStatus: 'resolved_locally'
+    })
+    const staged = entry({ area: 'staged', path: 'staged.ts' })
+    const input = groups({ staged: [resolvedStaged, staged] })
+
+    const split = splitPinnedSourceControlConflicts(input)
+    const sections = buildSourceControlDisplaySections(
+      input,
+      resolveSourceControlGroupOrder('staged-first')
+    )
+
+    expect(split.pinnedConflicts).toEqual([resolvedStaged])
+    expect(split.normalGroups.staged).toEqual([staged])
+    expect(sections.map((section) => section.id)).toEqual(['conflicts', 'staged'])
+    expect(sections[0]?.items[0]?.area).toBe('staged')
+    expect(sections[1]?.items).toEqual([staged])
+  })
+
   it('builds review entries only for unresolved conflicts', () => {
     expect(
       getConflictReviewEntries([
@@ -153,25 +176,76 @@ describe('buildSourceControlDisplaySections', () => {
     })
     expect(getSourceControlSectionViewAction(sections[1]!)).toEqual({
       kind: 'combined-diff',
-      area: 'unstaged'
+      area: 'unstaged',
+      entries: [entry({ area: 'unstaged', path: 'normal.ts' })]
     })
   })
 
-  it('does not route locally resolved-only conflict sections to review', () => {
+  it('scopes normal combined-diff actions to the conflict-split section items', () => {
+    const pinned = entry({
+      area: 'unstaged',
+      path: 'resolved.ts',
+      conflictKind: 'both_modified',
+      conflictStatus: 'resolved_locally'
+    })
+    const normal = entry({ area: 'unstaged', path: 'normal.ts' })
+    const sections = buildSourceControlDisplaySections(
+      groups({ unstaged: [pinned, normal] }),
+      resolveSourceControlGroupOrder('changes-first')
+    )
+
+    expect(getSourceControlSectionViewAction(sections[1]!)).toEqual({
+      kind: 'combined-diff',
+      area: 'unstaged',
+      entries: [normal]
+    })
+  })
+
+  it('routes locally resolved-only conflict sections to combined diff', () => {
+    const resolved = entry({
+      area: 'unstaged',
+      path: 'resolved.ts',
+      conflictKind: 'both_modified',
+      conflictStatus: 'resolved_locally'
+    })
     const sections = buildSourceControlDisplaySections(
       groups({
-        unstaged: [
-          entry({
-            area: 'unstaged',
-            path: 'resolved.ts',
-            conflictKind: 'both_modified',
-            conflictStatus: 'resolved_locally'
-          })
-        ]
+        unstaged: [resolved]
       }),
       resolveSourceControlGroupOrder('changes-first')
     )
 
-    expect(getSourceControlSectionViewAction(sections[0]!)).toBeNull()
+    expect(getSourceControlSectionViewAction(sections[0]!)).toEqual({
+      kind: 'combined-diff',
+      area: 'unstaged',
+      entries: [resolved]
+    })
+  })
+
+  it('uses a generic combined diff action for mixed-area resolved conflict sections', () => {
+    const unstaged = entry({
+      area: 'unstaged',
+      path: 'resolved-unstaged.ts',
+      conflictKind: 'both_modified',
+      conflictStatus: 'resolved_locally'
+    })
+    const staged = entry({
+      area: 'staged',
+      path: 'resolved-staged.ts',
+      conflictKind: 'both_modified',
+      conflictStatus: 'resolved_locally'
+    })
+    const sections = buildSourceControlDisplaySections(
+      groups({
+        staged: [staged],
+        unstaged: [unstaged]
+      }),
+      resolveSourceControlGroupOrder('staged-first')
+    )
+
+    expect(getSourceControlSectionViewAction(sections[0]!)).toEqual({
+      kind: 'combined-diff',
+      entries: [unstaged, staged]
+    })
   })
 })

@@ -34,6 +34,20 @@ describe('ssh remote command builders', () => {
     expect(probeRelayInstalledCommand(windows, 'C:/Users/me/relay')).toContain('-EncodedCommand')
   })
 
+  it('uses -Path for Windows New-Item commands', () => {
+    const mkdirScript = decodePowerShellCommand(
+      makeRemoteDirectoryCommand(windows, 'C:/Users/me/.orca-remote')
+    )
+    const lockScript = decodePowerShellCommand(
+      tryCreateInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock')
+    )
+
+    expect(mkdirScript).toContain('New-Item -ItemType Directory -Force -Path')
+    expect(lockScript).toContain('New-Item -ItemType Directory -Path')
+    expect(mkdirScript).not.toContain('New-Item -ItemType Directory -Force -LiteralPath')
+    expect(lockScript).not.toContain('New-Item -ItemType Directory -LiteralPath')
+  })
+
   it('uses named pipe try-connect liveness for Windows GC', () => {
     const command = relayLivenessProbeCommand(windows, 'C:/Users/me/.orca-remote/relay-0.1.0', {
       nodePath: 'C:/Program Files/nodejs/node.exe',
@@ -50,6 +64,18 @@ describe('ssh remote command builders', () => {
     expect(listRelayBaseDirsCommand(windows, 'C:/Users/me/.orca-remote')).toContain(
       '-EncodedCommand'
     )
+  })
+
+  it('escapes double quotes before passing JavaScript to native Windows commands', () => {
+    const script = decodePowerShellCommand(
+      relayLivenessProbeCommand(windows, 'C:/Users/me/.orca-remote/relay-0.1.0', {
+        nodePath: 'C:/Program Files/nodejs/node.exe',
+        pipePaths: ['\\\\.\\pipe\\orca-relay-1234567890abcdef1234']
+      })
+    )
+
+    expect(script).toContain('fs=require(\\"fs\\")')
+    expect(script).toContain('net=require(\\"net\\")')
   })
 
   it('prepends the Windows node bin directory to PATH with native separators', () => {

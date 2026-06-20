@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenuCheckboxItem } from '@/components/ui/dropdown-menu'
 import { WorktreeOpenInMenuItems } from '@/components/sidebar/WorktreeOpenInMenu'
 import { FileExplorerToolbar } from './FileExplorerToolbar'
+import { FileExplorerNameFilter } from './FileExplorerNameFilter'
+import { FileExplorerViewSwitch } from './FileExplorerViewSwitch'
 import {
   downloadRemoteFile,
   FileExplorerRow,
@@ -57,6 +59,48 @@ function findRefreshButton(node: unknown): ReactElementLike {
   })
   if (!found) {
     throw new Error('refresh button not found')
+  }
+  return found
+}
+
+function findInputByAriaLabel(node: unknown, ariaLabel: string): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.type === 'input' && entry.props['aria-label'] === ariaLabel) {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error(`${ariaLabel} input not found`)
+  }
+  return found
+}
+
+function findElementByAriaLabel(node: unknown, ariaLabel: string): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.props['aria-label'] === ariaLabel) {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error(`${ariaLabel} element not found`)
+  }
+  return found
+}
+
+function findButtonByAriaLabel(node: unknown, ariaLabel: string): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (
+      entry.props['aria-label'] === ariaLabel &&
+      (entry.type === Button || entry.type === 'button')
+    ) {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error(`${ariaLabel} button not found`)
   }
   return found
 }
@@ -219,6 +263,7 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
     worktreePath: '/tmp/orca',
     connectionId: null,
     refresh: makeRefreshState(),
+    canRefresh: true,
     canCollapseAll: false,
     onCollapseAll: vi.fn(),
     showGitIgnoredFilesToggle: true,
@@ -246,6 +291,7 @@ describe('FileExplorerToolbar', () => {
 
     expect(onRefresh).toHaveBeenCalledTimes(1)
     expect(button.props.disabled).toBe(false)
+    expect(button.props['aria-disabled']).toBe(false)
     expect(hasIcon(button, RefreshCw)).toBe(true)
     expect(hasIcon(button, Loader2)).toBe(false)
   })
@@ -269,8 +315,26 @@ describe('FileExplorerToolbar', () => {
     const button = findRefreshButton(element)
 
     expect(button.props.disabled).toBe(true)
+    expect(button.props['aria-disabled']).toBe(true)
     expect(hasIcon(button, Loader2)).toBe(true)
     expect(hasIcon(button, RefreshCw)).toBe(false)
+  })
+
+  it('keeps disabled refresh clicks from firing', () => {
+    const onRefresh = vi.fn()
+    const preventDefault = vi.fn()
+    const element = makeToolbar({
+      canRefresh: false,
+      refresh: makeRefreshState({ handleRefresh: onRefresh })
+    })
+
+    const button = findRefreshButton(element)
+    ;(button.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+
+    expect(button.props.disabled).toBe(false)
+    expect(button.props['aria-disabled']).toBe(true)
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(onRefresh).not.toHaveBeenCalled()
   })
 
   it('fires the collapse all action from the icon button', () => {
@@ -284,7 +348,8 @@ describe('FileExplorerToolbar', () => {
     ;(button.props.onClick as () => void)()
 
     expect(onCollapseAll).toHaveBeenCalledTimes(1)
-    expect(button.props.disabled).toBe(false)
+    expect(button.props.disabled).toBeUndefined()
+    expect(button.props['aria-disabled']).toBe(false)
     expect(hasIcon(button, ListCollapse)).toBe(true)
   })
 
@@ -293,8 +358,23 @@ describe('FileExplorerToolbar', () => {
 
     const button = findCollapseAllButton(element)
 
-    expect(button.props.disabled).toBe(true)
+    expect(button.props.disabled).toBeUndefined()
+    expect(button.props['aria-disabled']).toBe(true)
+    expect(button.props.className).toContain('opacity-50')
+    expect(button.props.className).toContain('cursor-not-allowed')
     expect(hasIcon(button, ListCollapse)).toBe(true)
+  })
+
+  it('keeps disabled collapse all clicks from firing', () => {
+    const onCollapseAll = vi.fn()
+    const preventDefault = vi.fn()
+    const element = makeToolbar({ canCollapseAll: false, onCollapseAll })
+
+    const button = findCollapseAllButton(element)
+    ;(button.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(onCollapseAll).not.toHaveBeenCalled()
   })
 
   it('puts the git ignored visibility toggle in the overflow menu', () => {
@@ -346,6 +426,71 @@ describe('FileExplorerToolbar', () => {
     expect(queryMoreActionsButton(element)).not.toBeNull()
     expect(queryGitIgnoredMenuItem(element)).toBeNull()
     expect(findOpenInMenuItems(element).props.labelPrefix).toBe('Open in ')
+  })
+})
+
+describe('FileExplorerViewSwitch', () => {
+  it('switches between files and search views', () => {
+    const onSelectView = vi.fn()
+    const element = FileExplorerViewSwitch({
+      view: 'files',
+      onSelectView
+    })
+
+    const switchRoot = findElementByAriaLabel(element, 'Explorer search mode')
+    ;(switchRoot.props.onValueChange as (value: string) => void)('search')
+
+    expect(onSelectView).toHaveBeenCalledWith('search')
+  })
+
+  it('renders names and contents labels', () => {
+    const element = FileExplorerViewSwitch({
+      view: 'search',
+      onSelectView: vi.fn()
+    })
+
+    const contentsTab = findElementByAriaLabel(element, 'Search file contents')
+    const namesTab = findElementByAriaLabel(element, 'Filter files by name')
+    const switchRoot = findElementByAriaLabel(element, 'Explorer search mode')
+
+    expect(switchRoot.props.value).toBe('search')
+    expect(contentsTab.props.value).toBe('search')
+    expect(namesTab.props.value).toBe('files')
+    expect(JSON.stringify(contentsTab.props.children)).toContain('Contents')
+    expect(JSON.stringify(namesTab.props.children)).toContain('Names')
+  })
+})
+
+describe('FileExplorerNameFilter', () => {
+  it('reports text changes and shows the compact file filter input', () => {
+    const onQueryChange = vi.fn()
+    const element = FileExplorerNameFilter({
+      query: '',
+      onQueryChange,
+      onClear: vi.fn()
+    })
+
+    const input = findInputByAriaLabel(element, 'Find files')
+    ;(input.props.onChange as (event: { currentTarget: { value: string } }) => void)({
+      currentTarget: { value: 'FileExplorer' }
+    })
+
+    expect(input.props.placeholder).toBe('Find files')
+    expect(onQueryChange).toHaveBeenCalledWith('FileExplorer')
+  })
+
+  it('clears the current file filter from the clear button', () => {
+    const onClear = vi.fn()
+    const element = FileExplorerNameFilter({
+      query: 'FileExplorer',
+      onQueryChange: vi.fn(),
+      onClear
+    })
+
+    const button = findButtonByAriaLabel(element, 'Clear file filter')
+    ;(button.props.onClick as () => void)()
+
+    expect(onClear).toHaveBeenCalledTimes(1)
   })
 })
 

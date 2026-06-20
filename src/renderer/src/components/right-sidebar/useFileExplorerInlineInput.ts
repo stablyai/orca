@@ -11,6 +11,7 @@ import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-client'
+import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null
@@ -110,7 +111,7 @@ export function useFileExplorerInlineInput({
       const run = async (): Promise<void> => {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         const fileContext = {
-          settings: useAppStore.getState().settings,
+          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId

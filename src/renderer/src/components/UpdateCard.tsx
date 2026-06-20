@@ -757,8 +757,9 @@ function SimpleCardContent({
       </div>
 
       <p className="text-sm text-muted-foreground">
-        {translate('auto.components.UpdateCard.93794ea932', 'Orca v')}
-        {version} {translate('auto.components.UpdateCard.c4890662e9', 'is ready.')}
+        {translate('auto.components.UpdateCard.05ad78a6d1', 'Orca v{{value0}} is ready.', {
+          value0: version
+        })}
       </p>
 
       <p className="text-xs leading-relaxed text-muted-foreground">
@@ -1013,11 +1014,10 @@ function ReadyToInstallContent({
       </div>
 
       <p className="text-sm text-muted-foreground">
-        {translate('auto.components.UpdateCard.93794ea932', 'Orca v')}
-        {version}{' '}
         {translate(
-          'auto.components.UpdateCard.02d4b8a6b9',
-          "is downloaded. Restart when you're ready."
+          'auto.components.UpdateCard.6714206e5a',
+          "Orca v{{value0}} is downloaded. Restart when you're ready.",
+          { value0: version }
         )}
       </p>
 

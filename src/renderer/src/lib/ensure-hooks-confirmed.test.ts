@@ -3,9 +3,16 @@ import type { AppState } from '@/store/types'
 import type { PersistedTrustedOrcaHooks } from '../../../shared/types'
 import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from './ensure-hooks-confirmed'
 import { hashOrcaHookScript } from './orca-hook-trust'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const hooksCheckMock = vi.fn()
 const readIssueCommandMock = vi.fn()
+const runtimeEnvironmentCallMock = vi.fn()
+const runtimeEnvironmentTransportCallMock = vi.fn()
 
 function installHooksApiMock(): void {
   vi.stubGlobal('window', {
@@ -13,6 +20,9 @@ function installHooksApiMock(): void {
       hooks: {
         check: hooksCheckMock,
         readIssueCommand: readIssueCommandMock
+      },
+      runtimeEnvironments: {
+        call: runtimeEnvironmentTransportCallMock
       }
     }
   })
@@ -45,6 +55,16 @@ describe('ensureHooksConfirmed', () => {
   beforeEach(() => {
     hooksCheckMock.mockReset()
     readIssueCommandMock.mockReset()
+    runtimeEnvironmentCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) => {
+        return (
+          createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCallMock(args)
+        )
+      }
+    )
+    clearRuntimeCompatibilityCacheForTests()
     installHooksApiMock()
     __resetTrustPromptChainForTests()
   })
@@ -144,6 +164,65 @@ describe('ensureHooksConfirmed', () => {
     const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive')
 
     expect(decision).toBe('run')
+    expect(pending).toHaveLength(0)
+  })
+
+  it('checks SSH repo hooks through local IPC even when a runtime is focused', async () => {
+    const { state, pending } = createTestState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo One',
+          connectionId: 'ssh-1'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: {} },
+      mayNeedUpdate: false
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive')
+
+    expect(decision).toBe('run')
+    expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1' })
+    expect(pending).toHaveLength(0)
+  })
+
+  it('checks runtime-owned repo hooks through the repo owner runtime', async () => {
+    const { state, pending } = createTestState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' },
+      repos: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo One',
+          executionHostId: 'runtime:owner-env'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+    runtimeEnvironmentCallMock.mockResolvedValue({
+      id: 'rpc-hooks',
+      ok: true,
+      result: {
+        hasHooks: true,
+        hooks: { scripts: {} },
+        mayNeedUpdate: false
+      },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive')
+
+    expect(decision).toBe('run')
+    expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
+      selector: 'owner-env',
+      method: 'repo.hooksCheck',
+      params: { repo: 'repo-1' },
+      timeoutMs: 15_000
+    })
+    expect(hooksCheckMock).not.toHaveBeenCalled()
     expect(pending).toHaveLength(0)
   })
 

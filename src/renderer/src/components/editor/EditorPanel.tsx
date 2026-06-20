@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
@@ -10,7 +10,6 @@ import { requestEditorFileSave } from './editor-autosave'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
-import { acquireExportPdfListener } from './editor-panel-export-pdf-listener'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
 import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
@@ -112,7 +111,6 @@ function EditorPanelInner({
     handleRenameConfirm
   } = useUntitledFileRename({ openFiles, closeFile, openFile, clearUntitled })
 
-  useEffect(() => acquireExportPdfListener(), [])
   useClosedEditorTabCleanup(openFiles)
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
 
@@ -225,6 +223,7 @@ function EditorPanelInner({
   const model = getEditorPanelRenderModel({
     activeFile,
     fileContents,
+    editorDrafts,
     gitStatusByWorktree,
     gitBranchChangesByWorktree,
     markdownViewMode,
@@ -290,6 +289,10 @@ function EditorPanelInner({
     )
   }
   const handleOpenContainingFolder = (): void => {
+    // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
+    if (activeFile.mode === 'check-details') {
+      return
+    }
     if (
       isLocalPathOpenBlocked(settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId), {
         connectionId: getConnectionId(activeFile.worktreeId)
@@ -361,7 +364,9 @@ function EditorPanelInner({
           !isMarkdownFrontmatterVisible
         )
       }
-      onExportMarkdownToPdf={() => void exportActiveMarkdownToPdf()}
+      onExportMarkdownToPdf={() =>
+        void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
+      }
       onContentChange={handleContentChange}
       onContentChangeForFile={handleContentChangeForFile}
       onDirtyStateHint={handleDirtyStateHint}

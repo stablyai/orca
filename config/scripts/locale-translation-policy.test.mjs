@@ -80,7 +80,7 @@ describe('locale-translation-policy', () => {
         localeValue: '壊れた小切手に対して AI エージェントを開始しました。',
         locale: 'ja'
       })
-    ).toBe('失敗したチェックに対して AI エージェントを開始しました。')
+    ).toBe('失敗したチェックに対して AI agent を開始しました。')
     expect(
       repairTranslatedValue({
         key: 'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
@@ -88,7 +88,7 @@ describe('locale-translation-policy', () => {
         localeValue: '電話機からターミナルとエージェントを制御します。',
         locale: 'ja'
       })
-    ).toBe('スマートフォンからターミナルとエージェントを操作')
+    ).toBe('スマートフォンから terminals と agents を操作')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.934add88b6',
@@ -267,7 +267,7 @@ describe('locale-translation-policy', () => {
         localeValue: '未已检测代理',
         locale: 'zh'
       })
-    ).toBe('未检测到代理')
+    ).toBe('未检测到 agents')
     expect(
       repairTranslatedValue({
         key: 'auto.components.skills.SkillsPage.38e0951c3a',
@@ -275,7 +275,7 @@ describe('locale-translation-policy', () => {
         localeValue: '代理技巧',
         locale: 'zh'
       })
-    ).toBe('代理技能')
+    ).toBe('Agent 技能')
     expect(
       repairTranslatedValue({
         key: 'auto.components.settings.appearance.search.9ae151b26b',
@@ -358,7 +358,7 @@ describe('locale-translation-policy', () => {
         localeValue: 'コミットするものは何もありません。 PR はすでに統合されています。',
         locale: 'ja'
       })
-    ).toBe('コミットするものはありません。PR はすでにマージされています。')
+    ).toBe('commit するものはありません。PR はすでにマージされています。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.settings.integrations.search.581844769a',
@@ -390,7 +390,7 @@ describe('locale-translation-policy', () => {
         localeValue: 'Jira の問題',
         locale: 'ja'
       })
-    ).toBe('Jira イシュー')
+    ).toBe('Jira Issue')
     expect(
       repairTranslatedValue({
         key: 'auto.components.mobile.MobileHero.668016be7a',
@@ -406,7 +406,7 @@ describe('locale-translation-policy', () => {
         localeValue: '選択した GitHub の課題またはプル リクエストをプレビューおよび編集します。',
         locale: 'ja'
       })
-    ).toBe('選択した GitHub イシューまたは PR をプレビュー・編集します。')
+    ).toBe('選択した GitHub Issue または PR をプレビュー・編集します。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.a2495e4784',
@@ -422,7 +422,7 @@ describe('locale-translation-policy', () => {
         localeValue: '問題を表示する',
         locale: 'ja'
       })
-    ).toBe('イシューを表示')
+    ).toBe('Issue を表示')
     expect(
       repairTranslatedValue({
         key: 'auto.components.editor.EditorContent.e4b074749d',
@@ -439,7 +439,7 @@ describe('locale-translation-policy', () => {
           'GitHub CLI をインストールして、プル リクエスト、発行、チェックを有効にします。',
         locale: 'ja'
       })
-    ).toBe('GitHub CLI をインストールして PR、イシュー、チェックを有効にします。')
+    ).toBe('GitHub CLI をインストールして PR、Issue、チェックを有効にします。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.mobile.MobilePage.e17393c6a3',
@@ -582,5 +582,24 @@ describe('locale-translation-policy', () => {
         locale: 'ko'
       })
     ).toBe('폰트')
+  })
+
+  it('merges split Korean key overrides without dropping other locale repairs', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.8c45901789',
+        enValue: 'Request reviewer {{value0}}',
+        localeValue: '请求审阅者 {{value0}}',
+        locale: 'zh'
+      })
+    ).toBe('请求评审人 {{value0}}')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.right.sidebar.PortsPanel.c9d106547a',
+        enValue: 'Forward',
+        localeValue: '進む',
+        locale: 'ja'
+      })
+    ).toBe('転送')
   })
 })

@@ -15,6 +15,7 @@ export type GitHubPRMergeStateInput = {
   checksStatus?: CheckStatus
   checksSummary?: GitHubPRCheckSummary
   autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
 }
 
@@ -45,8 +46,44 @@ function checksState(item: GitHubPRMergeStateInput): CheckStatus | 'none' | unde
   return item.checksStatus
 }
 
+function checksPassed(item: GitHubPRMergeStateInput): boolean {
+  return checksState(item) === 'success'
+}
+
 function hasFullMergeMetadata(item: GitHubPRMergeStateInput): boolean {
   return item.mergeable !== undefined || item.mergeStateStatus !== undefined
+}
+
+function isConflicting(item: GitHubPRMergeStateInput): boolean {
+  return item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'DIRTY'
+}
+
+// Why: GitHub rejects enabling auto-merge on a conflicting PR, so offering it
+// there only yields an error toast. Repos can also disable auto-merge entirely,
+// so suppress the action when GitHub explicitly reports that setting is off.
+function canEnableAutoMerge(item: GitHubPRMergeStateInput): boolean {
+  return (
+    item.state === 'open' &&
+    item.autoMergeEnabled !== true &&
+    item.autoMergeAllowed !== false &&
+    item.mergeQueueRequired !== true &&
+    !isConflicting(item)
+  )
+}
+
+function passedChecksMergePresentation(
+  autoMergeAction: GitHubPRAutoMergeAction | null
+): GitHubPRMergeStatePresentation {
+  return {
+    label: translate('auto.components.github.pr.merge.state.a5b66afb58', 'Checks passed'),
+    tone: SUCCESS_TONE,
+    tooltip: translate(
+      'auto.components.github.pr.merge.state.fbd4f57f0a',
+      'Checks passed. Merge eligibility will be checked again before merging.'
+    ),
+    directMergeAvailable: true,
+    autoMergeAction
+  }
 }
 
 export function presentGitHubPRMergeState(
@@ -79,7 +116,19 @@ export function presentGitHubPRMergeState(
                 'Add this pull request to the GitHub merge queue'
               )
             }
-          : null
+          : canEnableAutoMerge(item)
+            ? {
+                kind: 'enable' as const,
+                label: translate(
+                  'auto.components.github.pr.merge.state.4ab19a62ef',
+                  'Enable auto-merge'
+                ),
+                tooltip: translate(
+                  'auto.components.github.pr.merge.state.8f6cb3772f',
+                  'Merge this pull request automatically once requirements are met'
+                )
+              }
+            : null
 
   if (item.state === 'merged') {
     return {
@@ -154,6 +203,11 @@ export function presentGitHubPRMergeState(
     }
   }
   if (!hasFullMergeMetadata(item)) {
+    // Why: GitHub can omit merge metadata while checks are already green; let
+    // users attempt merge and rely on the main-process preflight for blockers.
+    if (checksPassed(item)) {
+      return passedChecksMergePresentation(autoMergeAction)
+    }
     return {
       label: translate('auto.components.github.pr.merge.state.bd4f27b50e', 'Merge'),
       tone: MUTED_TONE,
@@ -165,7 +219,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
-  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'DIRTY') {
+  if (isConflicting(item)) {
     return {
       label: translate('auto.components.github.pr.merge.state.7e8bbe3cd7', 'Conflicts'),
       tone: DANGER_TONE,
@@ -237,6 +291,11 @@ export function presentGitHubPRMergeState(
       directMergeAvailable: true,
       autoMergeAction
     }
+  }
+  // Why: GitHub may still report intermediate mergeability while checks are
+  // green; the merge command re-checks authoritative blockers before merging.
+  if (checksPassed(item)) {
+    return passedChecksMergePresentation(autoMergeAction)
   }
   return {
     label: translate('auto.components.github.pr.merge.state.f958920f3a', 'Checking'),

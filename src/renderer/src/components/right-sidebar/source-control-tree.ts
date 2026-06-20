@@ -241,6 +241,29 @@ export function namespaceSourceControlTreeDirectoryKeys<
   return nodes.map(namespaceNode)
 }
 
+export function applyGitStatusEntryAreasToSourceControlTree(
+  nodes: SourceControlTreeNode<GitStatusEntry, SourceControlTreeArea>[]
+): SourceControlTreeNode<GitStatusEntry, SourceControlTreeArea>[] {
+  const applyEntryArea = (
+    node: SourceControlTreeNode<GitStatusEntry, SourceControlTreeArea>
+  ): SourceControlTreeNode<GitStatusEntry, SourceControlTreeArea> => {
+    if (node.type === 'file') {
+      return {
+        ...node,
+        key: `${node.entry.area}::${node.entry.path}`,
+        area: node.entry.area
+      }
+    }
+
+    return {
+      ...node,
+      children: node.children.map(applyEntryArea)
+    }
+  }
+
+  return nodes.map(applyEntryArea)
+}
+
 export function collectSourceControlTreeFileEntries<
   Entry extends SourceControlTreeEntry,
   Area extends string

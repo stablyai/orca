@@ -54,12 +54,17 @@ const EMOJI_TABLE_FIXTURE = readFileSync(
   path.join(__dirname, 'fixtures', 'terminal-emoji-table.md'),
   'utf8'
 )
+const RAW_EMOJI_BOX_TABLE_COLUMN_WIDTHS = [5, 17, 10, 25, 23, 12, 10, 10] as const
+const RAW_EMOJI_BOX_TABLE_WIDTH =
+  RAW_EMOJI_BOX_TABLE_COLUMN_WIDTHS.reduce((sum, width) => sum + width, 0) +
+  RAW_EMOJI_BOX_TABLE_COLUMN_WIDTHS.length * 3 +
+  1
 
 function rawEmojiFixtureBoxTableScript(table: string, runId: string): string {
   const marker = `RAW_EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
   return `
 const table = ${JSON.stringify(table)}
-const widths = [5, 17, 10, 25, 23, 12, 10, 10]
+const widths = ${JSON.stringify(RAW_EMOJI_BOX_TABLE_COLUMN_WIDTHS)}
 const border = {
   top: ['┌', '┬', '┐'],
   middle: ['├', '┼', '┤'],
@@ -152,10 +157,35 @@ async function setWideRenderedTableViewport(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
     if (store?.getState().rightSidebarOpen) {
-      store.setState({ rightSidebarOpen: false })
+      store.getState().setRightSidebarOpen(false)
     }
   })
   await page.waitForTimeout(250)
+}
+
+async function waitForActiveTerminalColumns(
+  page: Page,
+  minimumCols: number,
+  timeoutMs = 10_000
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          let pane: ReturnType<NonNullable<RawTableDebugWindow['getActiveTestPane']>> = null
+          try {
+            pane = (window as RawTableDebugWindow).getActiveTestPane?.() ?? null
+          } catch {
+            return 0
+          }
+          return pane?.terminal.cols ?? 0
+        }),
+      {
+        timeout: timeoutMs,
+        message: `active terminal did not resize to at least ${minimumCols} columns`
+      }
+    )
+    .toBeGreaterThanOrEqual(minimumCols)
 }
 
 async function readTerminalBoxTableWrapDiagnostics(page: Page): Promise<{
@@ -451,9 +481,10 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
       return
     }
 
-    await setWideRenderedTableViewport(orcaPage)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
+    await setWideRenderedTableViewport(orcaPage)
+    await waitForActiveTerminalColumns(orcaPage, RAW_EMOJI_BOX_TABLE_WIDTH)
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const runId = randomUUID()
     const scriptPath = path.join(testRepoPath, `.orca-raw-emoji-fixture-table-${runId}.mjs`)
@@ -466,8 +497,12 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await orcaPage.waitForTimeout(1_000)
       await switchToWorktree(orcaPage, firstWorktreeId)
+      // Why: activating another worktree can restore the right sidebar. This
+      // golden is about terminal renderer restore at a deliberately wide width.
       await ensureTerminalVisible(orcaPage)
       await waitForActiveTerminalManager(orcaPage, 30_000)
+      await setWideRenderedTableViewport(orcaPage)
+      await waitForActiveTerminalColumns(orcaPage, RAW_EMOJI_BOX_TABLE_WIDTH)
       await expect
         .poll(() => getTerminalContent(orcaPage, 30_000), {
           timeout: 30_000,
@@ -501,6 +536,7 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
         contentType: 'image/png'
       })
 
+      expect(wrapDiagnostics.cols).toBeGreaterThanOrEqual(RAW_EMOJI_BOX_TABLE_WIDTH)
       expect(diagnostics.hasComplexScriptOutput).toBe(false)
       expect(diagnostics.hasWebgl).toBe(await expectAutoWebgl(orcaPage))
       expect(diagnostics.cursorHidden).toBe(false)

@@ -56,6 +56,14 @@ export type GitStatusResult = {
   // Folding it in lets refresh polling avoid a second pair of git subprocesses.
   upstreamStatus?: GitUpstreamStatus
   ignoredPaths?: string[]
+  // Why: a repo with an enormous un-ignored folder can emit a status listing big
+  // enough to crash the process when buffered. Status is capped at an entry
+  // limit; when the cap is hit, `entries` holds the first `limit` rows,
+  // `didHitLimit` is true, and `statusLength` is the total seen before git was
+  // stopped. Optional so un-upgraded consumers keep working. See the SCM
+  // "too many changes" state.
+  didHitLimit?: boolean
+  statusLength?: number
 }
 
 // Why: when hasUpstream is false, ahead/behind are placeholder zeros, not a
@@ -67,6 +75,9 @@ export type GitUpstreamStatus = {
   upstreamName?: string
   ahead: number
   behind: number
+  /** True when push can target configured branch push metadata even though
+   * upstream/ahead-behind cannot be resolved. */
+  hasConfiguredPushTarget?: boolean
   // Why: when a branch was rebased, the upstream-only commits can be older
   // patch-equivalent copies. Pulling them reintroduces stale history; a
   // lease-protected force push is the correct reconciliation.

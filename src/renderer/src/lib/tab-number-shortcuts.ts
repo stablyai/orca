@@ -1,6 +1,7 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { dedupeTabOrder } from '@/store/slices/tab-group-state'
 import type { Tab } from '../../../shared/types'
 import {
@@ -14,7 +15,10 @@ type TabNumberShortcutState = Pick<
   | 'activeView'
   | 'activeWorktreeId'
   | 'groupsByWorktree'
+  | 'repos'
+  | 'settings'
   | 'unifiedTabsByWorktree'
+  | 'worktreesByRepo'
 >
 
 export function resolveTabNumberShortcutTarget(
@@ -57,8 +61,8 @@ export function activateTabNumberShortcut(index: number): boolean {
     return false
   }
 
-  const runtimeEnvironmentId = store.settings?.activeRuntimeEnvironmentId?.trim()
   const worktreeId = target.worktreeId
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   store.focusGroup(worktreeId, target.groupId)
   store.activateTab(target.id)
 

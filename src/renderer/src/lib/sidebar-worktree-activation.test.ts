@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
     openFiles: [] as { worktreeId: string }[]
   }
   const activateAndRevealWorktree = vi.fn()
+  const activateAndRevealFolderWorkspace = vi.fn()
   const markInputQuietSchedulerInput = vi.fn()
   const pendingCallbacks: (() => void)[] = []
   const pendingCancels: ReturnType<typeof vi.fn>[] = []
@@ -26,6 +27,7 @@ const mocks = vi.hoisted(() => {
   })
   return {
     activateAndRevealWorktree,
+    activateAndRevealFolderWorkspace,
     markInputQuietSchedulerInput,
     pendingCallbacks,
     pendingCancels,
@@ -41,6 +43,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace,
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
@@ -59,6 +62,7 @@ describe('sidebar worktree activation', () => {
     delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
     cancelPendingSidebarWorktreeActivation()
     mocks.activateAndRevealWorktree.mockClear()
+    mocks.activateAndRevealFolderWorkspace.mockClear()
     mocks.markInputQuietSchedulerInput.mockClear()
     mocks.scheduleAfterInputQuiet.mockClear()
     mocks.pendingCallbacks.length = 0
@@ -88,7 +92,17 @@ describe('sidebar worktree activation', () => {
     activateWorktreeFromSidebar('wt-live')
 
     expect(mocks.scheduleAfterInputQuiet).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live', {
+      revealInSidebar: false
+    })
+  })
+
+  it('routes folder workspace activation through the guarded folder path', () => {
+    activateWorktreeFromSidebar('folder:folder-workspace-1')
+
+    expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1')
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.scheduleAfterInputQuiet).not.toHaveBeenCalled()
   })
 
   it('does not defer slept workspace activation in the web client', () => {
@@ -99,6 +113,8 @@ describe('sidebar worktree activation', () => {
     activateWorktreeFromSidebar('wt-web-slept')
 
     expect(mocks.scheduleAfterInputQuiet).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-web-slept')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-web-slept', {
+      revealInSidebar: false
+    })
   })
 })

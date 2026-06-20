@@ -40,15 +40,14 @@ import type { AppMemory, UsageValues, Worktree } from '../../../../shared/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
-import {
-  mergeSnapshotAndSessions,
-  UNATTRIBUTED_REPO_ID,
-  type DaemonSession,
-  type Metric,
-  type UnifiedProjectGroup,
-  type UnifiedSessionRow,
-  type UnifiedWorktreeRow
-} from './mergeSnapshotAndSessions'
+import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
+import type {
+  DaemonSession,
+  Metric,
+  UnifiedProjectGroup,
+  UnifiedSessionRow,
+  UnifiedWorktreeRow
+} from './resource-usage-merge-types'
 import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import {
@@ -414,10 +413,10 @@ function SessionRow({
           className={cn(
             'rounded p-0.5 text-muted-foreground transition-opacity hover:bg-destructive/10 hover:text-destructive',
             session.bound &&
-              'opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
+              'can-hover:opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
           )}
           aria-label={translate(
-            'auto.components.status.bar.ResourceUsageStatusSegment.b10695d6ce',
+            'auto.components.status.bar.ResourceUsageStatusSegment.fa6d36758d',
             'Kill session {{value0}}',
             { value0: session.sessionId }
           )}
@@ -528,18 +527,20 @@ function WorktreeRow({
         </button>
         <div className="flex items-center gap-2 shrink-0 pr-3">
           <div className="relative">
+            {/* Why: no-hover devices show the action overlay by default, so
+                the sparkline yields there just like it does during hover. */}
             <span
               className={cn(
                 'block transition-opacity',
                 showWorktreeActions &&
-                  'group-hover/wtrow:opacity-0 group-hover/wtrow:pointer-events-none group-focus-within/wtrow:opacity-0 group-focus-within/wtrow:pointer-events-none'
+                  'group-hover/wtrow:opacity-0 group-hover/wtrow:pointer-events-none group-focus-within/wtrow:opacity-0 group-focus-within/wtrow:pointer-events-none [@media(hover:none)]:opacity-0 [@media(hover:none)]:pointer-events-none'
               )}
               aria-hidden={showWorktreeActions ? undefined : true}
             >
               <Sparkline samples={worktree.history} />
             </span>
             {showWorktreeActions && (
-              <div className="absolute inset-0 flex items-center justify-end gap-0.5 opacity-0 pointer-events-none transition-opacity group-hover/wtrow:opacity-100 group-hover/wtrow:pointer-events-auto group-focus-within/wtrow:opacity-100 group-focus-within/wtrow:pointer-events-auto">
+              <div className="absolute inset-0 flex items-center justify-end gap-0.5 can-hover:opacity-0 can-hover:pointer-events-none transition-opacity group-hover/wtrow:opacity-100 group-hover/wtrow:pointer-events-auto group-focus-within/wtrow:opacity-100 group-focus-within/wtrow:pointer-events-auto">
                 <Tooltip delayDuration={300}>
                   <TooltipTrigger asChild>
                     <button
@@ -1456,12 +1457,17 @@ export function ResourceUsageStatusSegment({
             </div>
             {orphanCount > 0 && (
               <span className="shrink-0 text-yellow-500" aria-live="polite">
-                {orphanCount}{' '}
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.30ff2c3c31',
-                  'orphan'
-                )}
-                {orphanCount === 1 ? '' : 's'}
+                {orphanCount === 1
+                  ? translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.30ff2c3c31',
+                      '{{value0}} orphan',
+                      { value0: orphanCount }
+                    )
+                  : translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.b8f4a2c1d0e3',
+                      '{{value0}} orphans',
+                      { value0: orphanCount }
+                    )}
               </span>
             )}
           </div>
@@ -1600,9 +1606,9 @@ export function ResourceUsageStatusSegment({
                 <span className="min-w-0 truncate px-4 text-center">
                   {translate(
                     'auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3',
-                    'Review inactive workspaces ('
+                    'Review inactive workspaces ({{value0}})',
+                    { value0: oldWorkspaceCount }
                   )}
-                  {oldWorkspaceCount})
                 </span>
                 <ChevronRight
                   className="absolute right-2.5 size-3.5 text-muted-foreground"
@@ -1616,16 +1622,17 @@ export function ResourceUsageStatusSegment({
                 onClick={() => void handleKillOrphans()}
                 className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.4bb076fa89',
-                  'Kill'
-                )}
-                {orphanCount}{' '}
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.996295bff2',
-                  'orphan terminal'
-                )}
-                {orphanCount === 1 ? '' : 's'}
+                {orphanCount === 1
+                  ? translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.c7e3b1a0d9f2',
+                      'Kill {{value0}} orphan terminal',
+                      { value0: orphanCount }
+                    )
+                  : translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.d8f4c2b1e0a3',
+                      'Kill {{value0}} orphan terminals',
+                      { value0: orphanCount }
+                    )}
               </button>
             ) : null}
           </div>
@@ -1669,17 +1676,17 @@ export function ResourceUsageStatusSegment({
           <DialogHeader>
             <DialogTitle className="text-sm">
               {translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.4bb076fa89',
-                'Kill'
-              )}{' '}
-              <span className="font-medium text-foreground">
-                {killConfirm?.label ??
-                  translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.138b99bd80',
-                    'this session'
-                  )}
-              </span>
-              ?
+                'auto.components.status.bar.ResourceUsageStatusSegment.e9a5d3c2b1f0',
+                'Kill {{value0}}?',
+                {
+                  value0:
+                    killConfirm?.label ??
+                    translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.138b99bd80',
+                      'this session'
+                    )
+                }
+              )}
             </DialogTitle>
             <DialogDescription className="text-xs">
               {translate(

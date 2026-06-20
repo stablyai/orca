@@ -2,6 +2,7 @@ import './assets/main.css'
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { useTranslation } from 'react-i18next'
 import App from './App'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
@@ -35,8 +36,9 @@ if (!rootElement) {
   throw new Error('Renderer root element not found.')
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
+function RendererRoot(): React.JSX.Element {
+  useTranslation()
+  return (
     <RecoverableRenderErrorBoundary
       boundaryId="app.root"
       surface="app-root"
@@ -46,10 +48,16 @@ createRoot(rootElement).render(
         'The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.'
       )}
     >
-      <I18nProvider>
-        <App />
-      </I18nProvider>
+      <App />
     </RecoverableRenderErrorBoundary>
+  )
+}
+
+createRoot(rootElement).render(
+  <StrictMode>
+    <I18nProvider>
+      <RendererRoot />
+    </I18nProvider>
   </StrictMode>
 )
 recordRendererCrashBreadcrumb('renderer_bootstrap_rendered')

@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useAppStore } from '@/store'
+import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GitHubWorkItemDetails } from '../../../../../shared/types'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
+import type { GlobalSettings } from '../../../../../shared/types'
 import { LabelsEditor } from './LabelsEditor'
 import { AssigneesEditor } from './AssigneesEditor'
 import { CommentsList, NewCommentForm } from './Comments'
@@ -15,9 +17,11 @@ import { translate } from '@/i18n/i18n'
 
 export function SlugDialogBody({
   projectOrigin,
+  sourceSettings,
   onClose
 }: {
   projectOrigin: GitHubItemDialogProjectOrigin
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onClose: () => void
 }): React.JSX.Element {
   const { owner, repo, number, type, cacheKey } = projectOrigin
@@ -52,8 +56,19 @@ export function SlugDialogBody({
     setLoading(true)
     setError(null)
     setDetails(null)
-    window.api.gh
-      .projectWorkItemDetailsBySlug({ owner, repo, number, type })
+    const target = getActiveRuntimeTarget(sourceSettings)
+    const request =
+      target.kind === 'environment'
+        ? callRuntimeRpc<
+            { ok: true; details: GitHubWorkItemDetails } | { ok: false; error: { message: string } }
+          >(
+            target,
+            'github.project.workItemDetailsBySlug',
+            { owner, repo, number, type },
+            { timeoutMs: 30_000 }
+          )
+        : window.api.gh.projectWorkItemDetailsBySlug({ owner, repo, number, type })
+    request
       .then((res) => {
         if (rid !== requestIdRef.current) {
           return
@@ -76,7 +91,7 @@ export function SlugDialogBody({
         }
         setLoading(false)
       })
-  }, [owner, repo, number, type])
+  }, [owner, repo, number, type, sourceSettings])
 
   const title = row?.content.title ?? details?.item.title ?? ''
   const url = row?.content.url ?? details?.item.url ?? null
@@ -208,6 +223,7 @@ export function SlugDialogBody({
             repo={repo}
             selected={labels}
             disabled={!row}
+            sourceSettings={sourceSettings}
             onChange={async (add, remove) => {
               // Why: bail rather than call the helper with an empty id —
               // see commitTitle above. Trigger is also disabled when !row.
@@ -228,6 +244,7 @@ export function SlugDialogBody({
             repo={repo}
             selected={assignees}
             disabled={!row}
+            sourceSettings={sourceSettings}
             onChange={async (add, remove) => {
               if (!row) {
                 return
@@ -321,12 +338,14 @@ export function SlugDialogBody({
                 owner={owner}
                 repo={repo}
                 comments={details.comments}
+                sourceSettings={sourceSettings}
                 onChange={(next) => setDetails((d) => (d ? { ...d, comments: next } : d))}
               />
               <NewCommentForm
                 owner={owner}
                 repo={repo}
                 number={number}
+                sourceSettings={sourceSettings}
                 onAdded={(c) => setDetails((d) => (d ? { ...d, comments: [...d.comments, c] } : d))}
               />
             </section>

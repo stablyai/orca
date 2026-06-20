@@ -1161,6 +1161,36 @@ describe('TabsSlice', () => {
 
       expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([t3.id, t2.id, t1.id])
     })
+
+    it('syncs isPinned to the TerminalTab in tabsByWorktree (reconcile echo guard)', () => {
+      // Why: reconcile derives a remote tab's pin from tabsByWorktree[*].isPinned;
+      // if pin/unpin only touched unifiedTabsByWorktree, an unrelated host
+      // snapshot would recompute isPinned:false and un-pin during the echo window.
+      const tab = store.getState().createUnifiedTab(WT, 'terminal')
+      store.setState((state) => ({
+        tabsByWorktree: {
+          ...state.tabsByWorktree,
+          [WT]: [
+            {
+              id: tab.id,
+              ptyId: null,
+              worktreeId: WT,
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        }
+      }))
+
+      store.getState().pinTab(tab.id)
+      expect(store.getState().tabsByWorktree[WT][0].isPinned).toBe(true)
+
+      store.getState().unpinTab(tab.id)
+      expect(store.getState().tabsByWorktree[WT][0].isPinned).toBe(false)
+    })
   })
 
   // ─── closeOtherTabs ───────────────────────────────────────────────

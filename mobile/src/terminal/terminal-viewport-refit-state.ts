@@ -10,11 +10,18 @@ export type TerminalViewportRefitTargetState = {
   currentRunSeq: number
 }
 
-export function isTerminalUpdateViewportApplied(response: RpcResponse): boolean {
+export function isTerminalUpdateViewportUpdated(response: RpcResponse): boolean {
   if (!response.ok || typeof response.result !== 'object' || response.result == null) {
     return false
   }
   return (response.result as { updated?: unknown }).updated === true
+}
+
+export function isTerminalUpdateViewportApplied(response: RpcResponse): boolean {
+  if (!response.ok || typeof response.result !== 'object' || response.result == null) {
+    return false
+  }
+  return (response.result as { applied?: unknown }).applied === true
 }
 
 export function isTerminalViewportRefitTargetCurrent(

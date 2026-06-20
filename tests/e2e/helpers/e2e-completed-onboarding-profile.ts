@@ -37,7 +37,8 @@ export function getE2ECompletedOnboardingProfile() {
         ])
       ),
       contextualToursSeenIds: [...SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS],
-      contextualToursAutoEligible: false
+      contextualToursAutoEligible: false,
+      projectOrderManualDefaultNoticeDismissed: true
     }
   }
 }

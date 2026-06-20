@@ -32,12 +32,23 @@ const {
 vi.mock('./gh-utils', () => ({
   execFileAsync: execFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
-  githubRepoContext: (repoPath: string, connectionId?: string | null) => ({
+  githubRepoContext: (
+    repoPath: string,
+    connectionId?: string | null,
+    localGitOptions: { wslDistro?: string } = {}
+  ) => ({
     repoPath,
-    connectionId: connectionId ?? null
+    connectionId: connectionId ?? null,
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
   }),
-  ghRepoExecOptions: (context: { repoPath: string; connectionId?: string | null }) =>
-    context.connectionId ? {} : { cwd: context.repoPath },
+  ghRepoExecOptions: (context: {
+    repoPath: string
+    connectionId?: string | null
+    wslDistro?: string
+  }) =>
+    context.connectionId
+      ? {}
+      : { cwd: context.repoPath, ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}) },
   getOwnerRepo: getOwnerRepoMock,
   getIssueOwnerRepo: getIssueOwnerRepoMock,
   getOwnerRepoForRemote: getOwnerRepoForRemoteMock,
@@ -227,7 +238,46 @@ describe('listWorkItems', () => {
     ])
   })
 
-  it('hydrates PR list rows with repository merge method settings', async () => {
+  it('routes local WSL work-item listing through repo resolution and gh execution options', async () => {
+    const localGitOptions = { wslDistro: 'Ubuntu' }
+    resolveIssueSourceMock.mockResolvedValue({
+      source: { owner: 'acme', repo: 'widgets' },
+      fellBack: false
+    })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoForRemoteMock.mockResolvedValue(null)
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
+
+    await listWorkItems(
+      '/repo-root',
+      5,
+      undefined,
+      undefined,
+      undefined,
+      null,
+      false,
+      localGitOptions
+    )
+
+    expect(resolveIssueSourceMock).toHaveBeenCalledWith(
+      '/repo-root',
+      undefined,
+      null,
+      localGitOptions
+    )
+    expect(getOwnerRepoMock).toHaveBeenCalledWith('/repo-root', null, localGitOptions)
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
+      '/repo-root',
+      'upstream',
+      null,
+      localGitOptions
+    )
+    expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
+      true
+    )
+  })
+
+  it('hydrates PR list rows with repository merge metadata', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     ghExecFileAsyncMock
@@ -255,7 +305,8 @@ describe('listWorkItems', () => {
               viewerDefaultMergeMethod: 'REBASE',
               mergeCommitAllowed: false,
               rebaseMergeAllowed: true,
-              squashMergeAllowed: true
+              squashMergeAllowed: true,
+              autoMergeAllowed: false
             }
           }
         })
@@ -272,6 +323,7 @@ describe('listWorkItems', () => {
         rebase: true
       }
     })
+    expect(items[0]?.autoMergeAllowed).toBe(false)
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       expect.arrayContaining(['api', 'graphql', '-f', 'owner=acme', '-f', 'repo=widgets']),

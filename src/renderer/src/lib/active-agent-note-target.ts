@@ -7,6 +7,10 @@ import {
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import {
+  getSettingsForWorktreeRuntimeOwner,
+  type WorktreeRuntimeOwnerState
+} from '@/lib/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/types'
@@ -15,7 +19,7 @@ import {
   getAgentLabel,
   isExplicitAgentStatusFresh
 } from './agent-status'
-import { resolveRuntimePaneTitleLeafId } from './runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleForLeaf } from './runtime-pane-title-leaf-id'
 
 const ACTIVE_AGENT_PROBE_RPC_TIMEOUT_MS = 3000
 const ACTIVE_AGENT_TERMINAL_LIST_LIMIT = 200
@@ -47,7 +51,7 @@ export type ActiveTerminalNoteTargetState = {
   runtimePaneTitlesByTabId?: Record<string, Record<number, string> | undefined>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry | undefined>
   settings: Parameters<typeof getActiveRuntimeTarget>[0]
-}
+} & Pick<WorktreeRuntimeOwnerState, 'repos' | 'worktreesByRepo'>
 
 type ActiveAgentRuntimeProbeDescriptor = {
   key: string
@@ -159,7 +163,11 @@ export function getActiveAgentRuntimeProbeDescriptor(
   if (!activePtyId) {
     return null
   }
-  const runtimeTarget = getActiveRuntimeTarget(state.settings)
+  // Route by the worktree's owner host so the probe targets the host that runs
+  // this worktree's agent terminal, not the focused runtime.
+  const runtimeTarget = getActiveRuntimeTarget(
+    getSettingsForWorktreeRuntimeOwner(state, worktreeId)
+  )
   const runtimeKey =
     runtimeTarget.kind === 'environment' ? `env:${runtimeTarget.environmentId}` : 'local'
   return {
@@ -255,34 +263,11 @@ function getFocusedRuntimePaneTitle(
   state: ActiveTerminalNoteTargetState,
   noteTarget: ActiveTerminalNoteTarget
 ): string | null {
-  const paneTitles = state.runtimePaneTitlesByTabId?.[noteTarget.tabId]
-  if (!paneTitles || Object.keys(paneTitles).length === 0) {
-    return null
-  }
-
-  const layout = state.terminalLayoutsByTabId[noteTarget.tabId]
-  const titleEntries = Object.entries(paneTitles)
-  if (layout?.root) {
-    // Why: split-pane title maps can be sparse; a lone background title must not
-    // enable "send to active agent" for the focused shell pane.
-    for (const [runtimePaneId, title] of titleEntries) {
-      if (resolveRuntimePaneTitleLeafId(layout, runtimePaneId) === noteTarget.leafId) {
-        return title
-      }
-    }
-    return null
-  }
-
-  if (titleEntries.length === 1) {
-    return titleEntries[0][1]
-  }
-
-  for (const [runtimePaneId, title] of titleEntries) {
-    if (resolveRuntimePaneTitleLeafId(layout, runtimePaneId) === noteTarget.leafId) {
-      return title
-    }
-  }
-  return null
+  return resolveRuntimePaneTitleForLeaf(
+    state.terminalLayoutsByTabId[noteTarget.tabId],
+    state.runtimePaneTitlesByTabId?.[noteTarget.tabId],
+    noteTarget.leafId
+  )
 }
 
 function isRecognizedAgentTitle(title: string): boolean {

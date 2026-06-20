@@ -1,6 +1,9 @@
-/* eslint-disable max-lines -- Why: this state-machine table intentionally keeps every primary-action priority case together so merge regressions are visible in one file. */
 import { describe, expect, it } from 'vitest'
-import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
+import {
+  resolveCommitAreaPrimaryAction,
+  resolvePrimaryAction,
+  type PrimaryActionInputs
+} from './source-control-primary-action'
 
 // Why: a shared defaults object keeps each case row terse while making the
 // "this is the one knob that differs from the baseline" intent obvious.
@@ -201,6 +204,55 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
+  it('returns Push when no upstream exists but an open linked review already owns the branch', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 1,
+        prState: 'open',
+        canPushLinkedReviewWithoutUpstream: true
+      })
+    )
+    expect(result).toEqual({
+      kind: 'push',
+      label: 'Push',
+      title: 'Push updates to the linked review branch',
+      disabled: false
+    })
+  })
+
+  it('does not push an open linked review when its branch target is unavailable', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 1,
+        prState: 'open'
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Linked review branch target is unavailable.',
+      disabled: true
+    })
+  })
+
+  it('does not offer Publish Branch when HEAD is detached', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 4,
+        hasCurrentBranch: false
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Check out a branch before publishing commits.',
+      disabled: true
+    })
+  })
+
   it('does not offer Publish Branch when an unpublished branch has no commits ahead', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, branchCommitsAhead: 0 })
@@ -364,6 +416,58 @@ describe('resolvePrimaryAction', () => {
     expect(result.disabled).toBe(false)
   })
 
+  it('keeps Stage All available in the commit area when Create PR intent is additive', () => {
+    const input = inputs({
+      stagedCount: 0,
+      hasUnstagedChanges: true,
+      hasStageableChanges: true,
+      hasPartiallyStagedChanges: false,
+      hasMessage: false,
+      upstreamStatus: upstreamInSync,
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'dirty',
+        nextAction: 'commit'
+      }
+    })
+
+    expect(resolvePrimaryAction(input).kind).toBe('create_pr_intent')
+    expect(resolveCommitAreaPrimaryAction(input)).toEqual({
+      kind: 'stage',
+      label: 'Stage All',
+      title: 'Stage all changes',
+      disabled: false
+    })
+  })
+
+  it('keeps the partial-staging reason on the additive commit-area Stage All action', () => {
+    const input = inputs({
+      stagedCount: 1,
+      hasUnstagedChanges: true,
+      hasStageableChanges: true,
+      hasPartiallyStagedChanges: true,
+      hasMessage: true,
+      upstreamStatus: upstreamInSync,
+      hostedReviewCreation: {
+        provider: 'github',
+        review: null,
+        canCreate: false,
+        blockedReason: 'dirty',
+        nextAction: 'commit'
+      }
+    })
+
+    expect(resolvePrimaryAction(input).kind).toBe('create_pr_intent')
+    expect(resolveCommitAreaPrimaryAction(input)).toEqual({
+      kind: 'stage',
+      label: 'Stage All',
+      title: 'Stage all changes before committing partially staged files',
+      disabled: false
+    })
+  })
+
   it('still resolves to Commit when staged and unrelated unstaged files exist', () => {
     const result = resolvePrimaryAction(
       inputs({
@@ -470,4 +574,28 @@ describe('resolvePrimaryAction', () => {
       disabled: false
     })
   })
+
+  it.each(['azure-devops', 'gitea'] as const)(
+    'returns Create PR when a clean tracked %s branch is eligible for review creation',
+    (provider) => {
+      const result = resolvePrimaryAction(
+        inputs({
+          upstreamStatus: upstreamInSync,
+          hostedReviewCreation: {
+            provider,
+            review: null,
+            canCreate: true,
+            blockedReason: null,
+            nextAction: null
+          }
+        })
+      )
+      expect(result).toEqual({
+        kind: 'create_pr',
+        label: 'Create PR',
+        title: 'Create a pull request for this branch',
+        disabled: false
+      })
+    }
+  )
 })

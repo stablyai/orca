@@ -11,14 +11,20 @@ import {
 } from './terminal-pane-appearance-search'
 import {
   getTerminalDarkThemeSearchEntries,
-  getTerminalLightThemeSearchEntries
+  getTerminalLightThemeSearchEntries,
+  getTerminalWarpImportSearchEntries,
+  getTerminalYamlImportSearchEntries
 } from './terminal-theme-search'
 import {
   getTerminalCursorSearchEntries,
   getTerminalRenderingSearchEntries,
   getTerminalTypographySearchEntries
 } from './terminal-typography-search'
-import { getTerminalWindowsSearchEntries } from './terminal-windows-search'
+import {
+  getTerminalRightClickToPasteSearchEntry,
+  getTerminalWindowsPowershellImplementationSearchEntry,
+  getTerminalWindowsShellSearchEntry
+} from './terminal-windows-search'
 import {
   getManageSessionsSearchEntries,
   getTerminalSetupScriptSearchEntries,
@@ -37,7 +43,9 @@ export {
 } from './terminal-pane-appearance-search'
 export {
   getTerminalDarkThemeSearchEntries,
-  getTerminalLightThemeSearchEntries
+  getTerminalLightThemeSearchEntries,
+  getTerminalWarpImportSearchEntries,
+  getTerminalYamlImportSearchEntries
 } from './terminal-theme-search'
 export {
   getTerminalAdvancedSearchEntries,
@@ -51,7 +59,11 @@ export {
   getTerminalSetupScriptSearchEntries
 } from './terminal-window-setup-search'
 
-export const getTerminalAppearanceSearchEntries = createLocalizedCatalog(
+type TerminalAppearanceSearchOptions = {
+  showWarpImport?: boolean
+}
+
+const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     ...getTerminalTypographySearchEntries(),
     ...getTerminalCursorSearchEntries(),
@@ -63,17 +75,43 @@ export const getTerminalAppearanceSearchEntries = createLocalizedCatalog(
   ]
 )
 
+// Why: compose rather than filter — entry titles are localized, so matching on
+// an English title would leak the Warp entry back in under non-English locales.
+const getTerminalAppearanceSearchEntriesWithWarp = createLocalizedCatalog(
+  (): SettingsSearchEntry[] => [
+    ...getTerminalAppearanceSearchEntriesWithoutWarp(),
+    ...getTerminalWarpImportSearchEntries(),
+    ...getTerminalYamlImportSearchEntries()
+  ]
+)
+
+export function getTerminalAppearanceSearchEntries(
+  options: TerminalAppearanceSearchOptions = {}
+): SettingsSearchEntry[] {
+  return (options.showWarpImport ?? true)
+    ? getTerminalAppearanceSearchEntriesWithWarp()
+    : getTerminalAppearanceSearchEntriesWithoutWarp()
+}
+
 export function getTerminalPaneSearchEntries(platform: {
   isWindows: boolean
+  isWindowsTerminalHost?: boolean
   isMac: boolean
 }): SettingsSearchEntry[] {
+  const isWindowsTerminalHost = platform.isWindowsTerminalHost ?? platform.isWindows
   // Why: the settings search index must mirror the visible controls. Keeping
   // platform-only controls out of other platforms' search results prevents
   // users from landing on an option the UI intentionally hides.
   return [
     ...getTerminalRenderingSearchEntries(),
     ...getTerminalPaneInteractionSearchEntries(),
-    ...(platform.isWindows ? getTerminalWindowsSearchEntries() : []),
+    ...(isWindowsTerminalHost
+      ? [
+          ...getTerminalWindowsShellSearchEntry(),
+          ...getTerminalWindowsPowershellImplementationSearchEntry()
+        ]
+      : []),
+    ...(platform.isWindows ? getTerminalRightClickToPasteSearchEntry() : []),
     ...getTerminalSetupScriptSearchEntries(),
     ...getManageSessionsSearchEntries(),
     ...getTerminalAdvancedSearchEntries(),

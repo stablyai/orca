@@ -529,7 +529,11 @@ export class SshRelaySession {
     )
     registerSshFilesystemProvider(this.targetId, fsProvider)
 
-    const gitProvider = new SshGitProvider(this.targetId, mux)
+    const gitProvider = new SshGitProvider(
+      this.targetId,
+      mux,
+      this.remoteCliBridgeEnv?.hostPlatform ?? null
+    )
     registerSshGitProvider(this.targetId, gitProvider)
 
     this.wireUpPtyEvents(ptyProvider)
@@ -651,12 +655,18 @@ export class SshRelaySession {
               )
             )
           : {}
-      return await runRemoteOrcaCli(this.runtime, { argv, cwd, env })
+      const stdin = typeof params.stdin === 'string' ? params.stdin : undefined
+      return await runRemoteOrcaCli(this.runtime, {
+        argv,
+        cwd,
+        env,
+        ...(stdin !== undefined ? { stdin } : {})
+      })
     })
   }
 
   // Why: ship the OpenCode plugin / Pi extension source bodies to the relay
-  // so it can materialize per-PTY overlay dirs and inject OPENCODE_CONFIG_DIR
+  // so it can materialize overlay dirs and inject OPENCODE_CONFIG_DIR
   // / PI_CODING_AGENT_DIR into spawn env. The strings change as we add agent
   // events (recent additions: cursor, pi); pinning them to the relay binary
   // would force a relay redeploy on every Orca update. See

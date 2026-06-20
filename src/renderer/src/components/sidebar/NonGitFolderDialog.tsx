@@ -73,7 +73,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               ? err.message
               : translate(
                   'auto.components.sidebar.NonGitFolderDialog.c49fb13492',
-                  'Failed to add remote folder'
+                  'Failed to add folder on this host'
                 )
           )
         }

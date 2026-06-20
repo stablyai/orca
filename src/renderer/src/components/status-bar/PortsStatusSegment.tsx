@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   scanWorkspacePortsForTarget,
-  workspacePortRuntimeTargetKey
+  workspacePortScanKeyForTarget
 } from '@/lib/workspace-port-actions'
 import { getExternalWorkspacePorts, getWorkspacePortGroups } from '@/lib/workspace-port-groups'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -25,11 +25,12 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
   const refreshing = useAppStore((s) => s.workspacePortScanRefreshing)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
+  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [open, setOpen] = useState(false)
   const [externalOpen, setExternalOpen] = useState(false)
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
-  const scanKey = `${workspacePortRuntimeTargetKey(runtimeTarget)}:all`
+  const scanKey = workspacePortScanKeyForTarget(runtimeTarget)
 
   const workspaceGroups = useMemo(() => getWorkspacePortGroups(scan), [scan])
   const externalPorts = useMemo(() => getExternalWorkspacePorts(scan), [scan])
@@ -46,6 +47,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
       // popover should still collapse that stale window without flashing icons.
       void scanWorkspacePortsForTarget(runtimeTarget)
         .then((result) => {
+          setWorkspacePortScanForKey(scanKey, result)
           setWorkspacePortScan({ key: scanKey, result })
         })
         .catch((error) => {
@@ -61,7 +63,13 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           })
         })
     },
-    [recordFeatureInteraction, runtimeTarget, scanKey, setWorkspacePortScan]
+    [
+      recordFeatureInteraction,
+      runtimeTarget,
+      scanKey,
+      setWorkspacePortScan,
+      setWorkspacePortScanForKey
+    ]
   )
 
   return (
@@ -98,19 +106,25 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          {translate('auto.components.status.bar.PortsStatusSegment.ca41be2802', 'Ports —')}
-          {workspacePortCount}{' '}
-          {translate('auto.components.status.bar.PortsStatusSegment.a11ed266ce', 'workspace')}
-          {workspacePortCount === 1
-            ? translate('auto.components.status.bar.PortsStatusSegment.45834a9ace', 'port')
-            : translate('auto.components.status.bar.PortsStatusSegment.8caaa86e9a', 'ports')}
-          {externalPorts.length > 0
-            ? translate(
-                'auto.components.status.bar.PortsStatusSegment.a8e4bdb412',
-                ' · {{value0}} external',
-                { value0: externalPorts.length }
-              )
-            : ''}
+          {translate(
+            'auto.components.status.bar.PortsStatusSegment.ca41be2802',
+            'Ports — {{value0}} workspace {{value1}}{{value2}}',
+            {
+              value0: workspacePortCount,
+              value1:
+                workspacePortCount === 1
+                  ? translate('auto.components.status.bar.PortsStatusSegment.45834a9ace', 'port')
+                  : translate('auto.components.status.bar.PortsStatusSegment.8caaa86e9a', 'ports'),
+              value2:
+                externalPorts.length > 0
+                  ? translate(
+                      'auto.components.status.bar.PortsStatusSegment.a8e4bdb412',
+                      ' · {{value0}} external',
+                      { value0: externalPorts.length }
+                    )
+                  : ''
+            }
+          )}
         </TooltipContent>
       </Tooltip>
 
@@ -131,10 +145,11 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               </span>
             </div>
             <span className="text-[11px] tabular-nums text-muted-foreground">
-              {workspacePortCount}{' '}
-              {translate('auto.components.status.bar.PortsStatusSegment.9aa11005bf', 'workspace ·')}
-              {externalPorts.length}{' '}
-              {translate('auto.components.status.bar.PortsStatusSegment.a8e4bdb412', 'external')}
+              {translate(
+                'auto.components.status.bar.PortsStatusSegment.2b84c4d11f',
+                '{{value0}} workspace · {{value1}} external',
+                { value0: workspacePortCount, value1: externalPorts.length }
+              )}
             </span>
           </div>
 
@@ -142,9 +157,9 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
             <div className="px-3 py-3 text-xs text-muted-foreground">
               {translate(
                 'auto.components.status.bar.PortsStatusSegment.95495019ed',
-                'Port scan unavailable on'
+                'Port scan unavailable on {{value0}}: {{value1}}',
+                { value0: scan.platform, value1: scan.unavailableReason }
               )}
-              {scan.platform}: {scan.unavailableReason}
             </div>
           ) : (
             <div className="max-h-[28rem] overflow-y-auto scrollbar-sleek">

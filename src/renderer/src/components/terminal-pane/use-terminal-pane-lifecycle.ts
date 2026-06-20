@@ -16,7 +16,10 @@ import {
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
-import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
+import {
+  installHttpLinkClickFallback,
+  type TerminalLinkRoutingPreferenceRequester
+} from './terminal-url-link-hit-testing'
 import type {
   GlobalSettings,
   SetupSplitDirection,
@@ -25,6 +28,7 @@ import type {
 } from '../../../../shared/types'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
   buildFontFamily,
@@ -76,6 +80,8 @@ import {
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -112,10 +118,16 @@ type UseTerminalPaneLifecycleDeps = {
   cwd?: string
   startup?: {
     command: string
+    /** Renderer-delivered startup input for callers that need xterm paste
+     *  semantics before the submit Enter. */
+    delivery?: 'terminal-paste'
+    startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
     /** Telemetry payload for `agent_started`. Forwarded to `pty:spawn`
      *  so main fires the event only after the spawn succeeds. */
     telemetry?: EventProps<'agent_started'>
+    /** Show the restored-session banner when this startup command mounts. */
+    showSessionRestoredBanner?: boolean
   } | null
   /** When present, the initial pane boots clean and a split pane is created
    *  (vertical or horizontal per the user setting) to run the setup command —
@@ -133,6 +145,7 @@ type UseTerminalPaneLifecycleDeps = {
   systemPrefersDark: boolean
   settings: GlobalSettings | null | undefined
   settingsRef: React.RefObject<GlobalSettings | null | undefined>
+  requestOpenLinksInAppPreference: TerminalLinkRoutingPreferenceRequester
   /** Resolved Option-as-Alt value: `'auto'` has already been mapped to
    *  `'true' | 'false'` via the keyboard-layout probe. Passed separately
    *  from `settings` because the probe lives outside the settings store. */
@@ -170,6 +183,7 @@ type UseTerminalPaneLifecycleDeps = {
   clearWorktreeUnread: (worktreeId: string) => void
   clearTerminalTabUnread: (tabId: string) => void
   clearTerminalPaneUnread: (paneKey: string) => void
+  onShowSessionRestoredBanner: (paneId: number) => void
   dispatchNotification: (event: {
     source: 'terminal-bell' | 'agent-task-complete'
     terminalTitle?: string
@@ -310,16 +324,6 @@ export function shouldDetachPaneTransportOnUnmount(args: {
   )
 }
 
-export function resolveTerminalGpuAccelerationForRuntime(
-  activeRuntimeEnvironmentId: GlobalSettings['activeRuntimeEnvironmentId'] | null | undefined,
-  terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration'] | null | undefined
-): GlobalSettings['terminalGpuAcceleration'] {
-  if (activeRuntimeEnvironmentId?.trim()) {
-    return 'off'
-  }
-  return terminalGpuAcceleration ?? 'auto'
-}
-
 export function useTerminalPaneLifecycle({
   tabId,
   worktreeId,
@@ -332,6 +336,7 @@ export function useTerminalPaneLifecycle({
   systemPrefersDark,
   settings,
   settingsRef,
+  requestOpenLinksInAppPreference,
   effectiveMacOptionAsAlt,
   effectiveMacOptionAsAltRef,
   initialLayoutRef,
@@ -361,6 +366,7 @@ export function useTerminalPaneLifecycle({
   clearWorktreeUnread,
   clearTerminalTabUnread,
   clearTerminalPaneUnread,
+  onShowSessionRestoredBanner,
   dispatchNotification,
   setCacheTimerStartedAt,
   syncPanePtyLayoutBinding,
@@ -528,6 +534,8 @@ export function useTerminalPaneLifecycle({
       cwd,
       startup,
       paneTransportsRef,
+      paneMode2031Ref,
+      paneLastThemeModeRef,
       replayingPanesRef,
       isActiveRef,
       isVisibleRef,
@@ -545,6 +553,7 @@ export function useTerminalPaneLifecycle({
       clearWorktreeUnread,
       clearTerminalTabUnread,
       clearTerminalPaneUnread,
+      onShowSessionRestoredBanner,
       dispatchNotification,
       setCacheTimerStartedAt,
       syncPanePtyLayoutBinding,
@@ -706,11 +715,12 @@ export function useTerminalPaneLifecycle({
           linkDeps
         )
         fileLinkClickFallbackDisposablesRef.current.set(pane.id, fileLinkClickFallbackDisposable)
-        const httpLinkClickFallbackDisposable = installHttpLinkClickFallback(
-          pane.terminal,
-          linkDeps
-        )
+        const httpLinkClickFallbackDisposable = installHttpLinkClickFallback(pane.terminal, {
+          ...linkDeps,
+          requestOpenLinksInAppPreference
+        })
         httpLinkClickFallbackDisposables.set(pane.id, httpLinkClickFallbackDisposable)
+        seedStartupSessionRestoredBanner(ptyDeps.startup, pane.id, onShowSessionRestoredBanner)
         // Why: skip empty selections so clicking to deselect doesn't clobber
         // whatever the user last copied elsewhere.
         const selectionDisposable = pane.terminal.onSelectionChange(() => {
@@ -776,7 +786,8 @@ export function useTerminalPaneLifecycle({
           activate: (event, text) => {
             handleOscLink(text, event as MouseEvent | undefined, {
               ...linkDeps,
-              runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null
+              runtimeEnvironmentId: linkDeps.getRuntimeEnvironmentIdForPane?.(pane.id) ?? null,
+              requestOpenLinksInAppPreference
             })
             // Why: Cmd/Ctrl+clicking a link activates Orca handling (open file,
             // new browser tab, system browser) which can steal focus from the
@@ -1043,7 +1054,8 @@ export function useTerminalPaneLifecycle({
           ...linkDeps,
           runtimeEnvironmentId: activePane
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
-            : null
+            : null,
+          requestOpenLinksInAppPreference
         })
         // Why: Cmd/Ctrl+click on a plain-text URL (WebLinksAddon) takes focus
         // away from the terminal before the click's mouseup reaches
@@ -1058,12 +1070,10 @@ export function useTerminalPaneLifecycle({
       // so PTYs survive navigation. Creating WebGL for those offscreen panes
       // still consumes Chromium's context budget and can blank visible panes.
       initialRenderingSuspended: !isVisibleRef.current,
-      // Why: remote-runtime snapshots arrive after pane open; WebGL can hold an
-      // empty atlas/canvas while the server-side buffer is already populated.
-      terminalGpuAcceleration: resolveTerminalGpuAccelerationForRuntime(
-        settingsRef.current?.activeRuntimeEnvironmentId,
-        settingsRef.current?.terminalGpuAcceleration
-      ),
+      // Why: remote-runtime panes honor the user GPU setting too — snapshots
+      // that arrive after WebGL attaches are handled by the post-replay
+      // rebuildPaneWebgl in pty-connection's replay callback.
+      terminalGpuAcceleration: settingsRef.current?.terminalGpuAcceleration ?? 'auto',
       debugLabel: `tab:${tabId}/wt:${worktreeId}`
     })
 
@@ -1263,7 +1273,10 @@ export function useTerminalPaneLifecycle({
         return
       }
       if (mgr.getPanes().length <= 1) {
-        useAppStore.getState().closeTab(tabId)
+        // Why: route through closeTerminalTab (not the raw store closeTab) so a
+        // pinned tab hits the confirmation guard. Closing the last pane here was
+        // the one path that silently dropped pinned tabs.
+        closeTerminalTab(tabId)
       } else {
         mgr.closePane(detail.paneRuntimeId)
         scheduleRuntimeGraphSync()
@@ -1382,15 +1395,8 @@ export function useTerminalPaneLifecycle({
   }, [settings, systemPrefersDark, effectiveMacOptionAsAlt])
 
   useEffect(() => {
-    // Why: remote-runtime panes stay on DOM rendering; local panes still honor
-    // the user's GPU setting and can switch live when settings change.
-    managerRef.current?.setTerminalGpuAcceleration(
-      resolveTerminalGpuAccelerationForRuntime(
-        settings?.activeRuntimeEnvironmentId,
-        settings?.terminalGpuAcceleration
-      )
-    )
-  }, [settings?.activeRuntimeEnvironmentId, settings?.terminalGpuAcceleration, managerRef])
+    managerRef.current?.setTerminalGpuAcceleration(settings?.terminalGpuAcceleration ?? 'auto')
+  }, [settings?.terminalGpuAcceleration, managerRef])
 
   useEffect(() => {
     const manager = managerRef.current

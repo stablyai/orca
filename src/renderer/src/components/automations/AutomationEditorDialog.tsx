@@ -58,6 +58,7 @@ type AutomationEditorDialogProps = {
   settings: GlobalSettings | null
   draft: AutomationDraft
   onProjectChange: (projectId: string) => void
+  getRepoHostLabel?: (repo: Repo) => string | null | undefined
   onCreateTargetChange: (target: AutomationCreateTarget) => void
   onOpenChange: (open: boolean) => void
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
@@ -78,6 +79,7 @@ export function AutomationEditorDialog({
   settings,
   draft,
   onProjectChange,
+  getRepoHostLabel,
   onCreateTargetChange,
   onOpenChange,
   onDraftChange,
@@ -166,6 +168,7 @@ export function AutomationEditorDialog({
           pickerTriggerClassName={PICKER_TRIGGER_CLASS}
           modeToggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
           onProjectChange={onProjectChange}
+          getRepoHostLabel={getRepoHostLabel}
           onDraftChange={onDraftChange}
           onOpenChange={onOpenChange}
           onSave={onSave}

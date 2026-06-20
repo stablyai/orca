@@ -1,6 +1,5 @@
+import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control-group-order'
 import type { GitStatusEntry, SourceControlGroupOrder } from '../../../../shared/types'
-
-export const DEFAULT_SOURCE_CONTROL_GROUP_ORDER: SourceControlGroupOrder = 'changes-first'
 
 export const SOURCE_CONTROL_AREAS = ['unstaged', 'staged', 'untracked'] as const
 export type SourceControlSectionArea = (typeof SOURCE_CONTROL_AREAS)[number]
@@ -21,7 +20,7 @@ export type SourceControlConflictReviewEntry = {
 
 export type SourceControlSectionViewAction =
   | { kind: 'conflict-review'; entries: SourceControlConflictReviewEntry[] }
-  | { kind: 'combined-diff'; area: SourceControlSectionArea }
+  | { kind: 'combined-diff'; area?: SourceControlSectionArea; entries: GitStatusEntry[] }
 
 const ORDER_BY_PRESET: Record<SourceControlGroupOrder, readonly SourceControlSectionArea[]> = {
   'changes-first': ['unstaged', 'staged', 'untracked'],
@@ -32,9 +31,7 @@ const ORDER_BY_PRESET: Record<SourceControlGroupOrder, readonly SourceControlSec
 export function resolveSourceControlGroupOrder(
   value: SourceControlGroupOrder | null | undefined
 ): readonly SourceControlSectionArea[] {
-  return (
-    ORDER_BY_PRESET[value ?? DEFAULT_SOURCE_CONTROL_GROUP_ORDER] ?? ORDER_BY_PRESET['changes-first']
-  )
+  return ORDER_BY_PRESET[normalizeSourceControlGroupOrder(value)]
 }
 
 export function isPinnedConflictEntry(entry: GitStatusEntry): boolean {
@@ -57,9 +54,21 @@ export function getSourceControlSectionViewAction(
 ): SourceControlSectionViewAction | null {
   if (section.id === 'conflicts') {
     const entries = getConflictReviewEntries(section.items)
-    return entries.length > 0 ? { kind: 'conflict-review', entries } : null
+    if (entries.length > 0) {
+      return { kind: 'conflict-review', entries }
+    }
+    if (section.items.length === 0) {
+      return null
+    }
+    const [firstItem] = section.items
+    const area = section.items.every((item) => item.area === firstItem?.area)
+      ? firstItem?.area
+      : undefined
+    return area
+      ? { kind: 'combined-diff', area, entries: section.items }
+      : { kind: 'combined-diff', entries: section.items }
   }
-  return { kind: 'combined-diff', area: section.area }
+  return { kind: 'combined-diff', area: section.area, entries: section.items }
 }
 
 export type SplitSourceControlGroups = {
@@ -70,7 +79,9 @@ export type SplitSourceControlGroups = {
 export function splitPinnedSourceControlConflicts(
   groups: SourceControlEntryGroups
 ): SplitSourceControlGroups {
-  const pinnedConflicts = groups.unstaged.filter(isPinnedConflictEntry)
+  const pinnedConflicts = SOURCE_CONTROL_AREAS.flatMap((area) =>
+    groups[area].filter(isPinnedConflictEntry)
+  )
   // Why: preserve referential identity of `groups` when nothing is pinned so
   // downstream memos (tree rebuilds, etc.) don't fire on every status refresh.
   if (pinnedConflicts.length === 0) {
@@ -79,9 +90,9 @@ export function splitPinnedSourceControlConflicts(
   return {
     pinnedConflicts,
     normalGroups: {
-      staged: groups.staged,
+      staged: groups.staged.filter((entry) => !isPinnedConflictEntry(entry)),
       unstaged: groups.unstaged.filter((entry) => !isPinnedConflictEntry(entry)),
-      untracked: groups.untracked
+      untracked: groups.untracked.filter((entry) => !isPinnedConflictEntry(entry))
     }
   }
 }

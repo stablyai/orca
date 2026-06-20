@@ -559,6 +559,25 @@ describe('updater', () => {
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
   })
 
+  it('runs pre-quit cleanup before killing PTYs during update install', async () => {
+    vi.useFakeTimers()
+
+    const onBeforeQuit = vi.fn()
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(killAllPtyMock).toHaveBeenCalledTimes(1)
+    expect(onBeforeQuit.mock.invocationCallOrder[0]).toBeLessThan(
+      killAllPtyMock.mock.invocationCallOrder[0]
+    )
+  })
+
   it('ignores duplicate quitAndInstall requests while the shared delay is pending', async () => {
     vi.useFakeTimers()
 
@@ -571,6 +590,35 @@ describe('updater', () => {
 
     await vi.advanceTimersByTimeAsync(100)
 
+    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores duplicate quitAndInstall requests while async pre-quit cleanup is running', async () => {
+    vi.useFakeTimers()
+
+    let finishCleanup!: () => void
+    const onBeforeQuit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCleanup = resolve
+        })
+    )
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+
+    quitAndInstall()
+    finishCleanup()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onBeforeQuit).toHaveBeenCalledTimes(1)
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
   })
 

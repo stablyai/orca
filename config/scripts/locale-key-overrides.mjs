@@ -1,8 +1,17 @@
-import { KO_KEY_OVERRIDES } from './locale-ko-key-overrides.mjs'
+import { mergeLocaleKeyOverrides } from './locale-key-override-merge.mjs'
 
 // Key-specific overrides from high-visibility UI audit (P0/P1/P2).
 // Why: some fixes depend on full key context, not English value alone.
-export const LOCALE_KEY_OVERRIDES = {
+const BASE_LOCALE_KEY_OVERRIDES = {
+  // "Open in" is a submenu header for "open in <app>"; bare で開く reads as broken JP.
+  'auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6': { ja: 'アプリで開く' },
+  // "Assigned to me" filter; the MT past-passive 割り当てられました reads as a sentence, not a filter label.
+  'auto.components.TaskPage.94f0339621': { ja: '私に割り当てられた Issue' },
+  // aria-label describing the assignee picker state; the past-passive sentence reads oddly for a static label.
+  'auto.components.TaskPage.bb63046423': { ja: '{{value0}} に割り当て済み' },
+  // Bare "Cursor" terminal/theme settings = on-screen カーソル, not the Cursor product.
+  'auto.components.settings.TerminalWindowSection.c9e1fdf42f': { ja: 'カーソル' },
+  'auto.components.onboarding.ThemeStep.ab2a583a97': { ja: 'カーソル' },
   'menu.reportCrash': { ko: '크래시 신고...', zh: '报告崩溃...', ja: 'クラッシュを報告...' },
   'menu.showMobileButton': {
     ko: 'Orca 모바일 버튼 표시',
@@ -25,7 +34,7 @@ export const LOCALE_KEY_OVERRIDES = {
     ja: 'ワークツリーパレットを開く'
   },
   'menu.exploreOrca': { ko: 'Orca 둘러보기', zh: '探索 Orca', ja: 'Orca を探索' },
-  'worktreeJumpPalette.matchLabel.issue': { ko: '이슈', zh: '议题', ja: 'イシュー' },
+  'worktreeJumpPalette.matchLabel.issue': { ko: '이슈', zh: '议题', ja: 'Issue' },
   'worktreeJumpPalette.matchLabel.comment': { ko: '댓글', zh: '评论', ja: 'コメント' },
   'auto.hooks.useSettingsNavigationMetadata.13241992bd': {
     ko: '일반',
@@ -258,9 +267,9 @@ export const LOCALE_KEY_OVERRIDES = {
     ja: '再試行'
   },
   'auto.components.settings.PrivacyDiagnosticBundleControls.2801d4ce22': {
-    ko: '티켓 복사',
-    zh: '复制工单',
-    ja: 'チケットをコピー'
+    ko: '참조 ID 복사',
+    zh: '复制参考 ID',
+    ja: '参照 ID をコピー'
   },
   'auto.components.settings.ComputerUsePane.4b65070096': {
     ko: 'darwin',
@@ -590,5 +599,8 @@ export const LOCALE_KEY_OVERRIDES = {
     zh: '已添加评审评论。',
     ja: 'レビューコメントを追加しました。'
   },
-  ...KO_KEY_OVERRIDES
+  // Port forwarding "Forward" is 転送, not the browser-navigation 進む.
+  'auto.components.right.sidebar.PortsPanel.c9d106547a': { ja: '転送' }
 }
+
+export const LOCALE_KEY_OVERRIDES = mergeLocaleKeyOverrides(BASE_LOCALE_KEY_OVERRIDES)

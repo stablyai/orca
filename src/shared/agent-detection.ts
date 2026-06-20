@@ -17,10 +17,13 @@ import {
 
 // Re-export so existing `agent-detection` importers keep working.
 export { AGENT_NAMES, titleHasAgentName } from './agent-name-token-match'
+export { isShellProcess } from './shell-process-detection'
 
 export type AgentStatus = 'working' | 'permission' | 'idle'
 
 const CLAUDE_IDLE = '\u2733' // ✳ (eight-spoked asterisk — Claude Code idle prefix)
+const CLAUDE_MANAGEMENT_TITLE_RE =
+  /^\s*(?:"(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?"|'(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?'|(?:.*[\\/])?claude(?:\.(?:exe|cmd|bat|ps1))?)\s+agents\s*$/i
 
 const GEMINI_WORKING = '\u2726' // ✦
 const GEMINI_SILENT_WORKING = '\u23F2' // ⏲
@@ -157,13 +160,9 @@ function containsBrailleSpinner(title: string): boolean {
   return false
 }
 
-function containsLegacyAgentName(title: string): boolean {
-  return titleHasAnyLegacyAgentName(title)
-}
-
 function containsAgentName(title: string): boolean {
   return (
-    containsLegacyAgentName(title) ||
+    titleHasAnyLegacyAgentName(title) ||
     AGY_AGENT_NAME_RE.test(title) ||
     DROID_AGENT_NAME_RE.test(title) ||
     HERMES_AGENT_NAME_RE.test(title)
@@ -299,7 +298,7 @@ export function normalizeTerminalTitle(title: string): string {
  * agents have different (or no) caching semantics.
  */
 export function isClaudeAgent(title: string): boolean {
-  if (!title) {
+  if (!title || isClaudeManagementTitle(title)) {
     return false
   }
   const lower = title.toLowerCase()
@@ -335,7 +334,24 @@ export function isClaudeAgent(title: string): boolean {
   return false
 }
 
+export function isClaudeManagementTitle(title: string): boolean {
+  return CLAUDE_MANAGEMENT_TITLE_RE.test(title)
+}
+
 export function getAgentLabel(title: string): string | null {
+  if (isClaudeManagementTitle(title)) {
+    return null
+  }
+  // Why: Claude Code title text is often the task title. If that task mentions
+  // another CLI, the Claude-specific prefix is the identity signal, not the words.
+  if (
+    title.startsWith(`${CLAUDE_IDLE} `) ||
+    title === CLAUDE_IDLE ||
+    title.startsWith('. ') ||
+    title.startsWith('* ')
+  ) {
+    return 'Claude Code'
+  }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
@@ -360,6 +376,9 @@ export function getAgentLabel(title: string): string | null {
   }
   if (titleHasAgentName(title, 'grok')) {
     return 'Grok'
+  }
+  if (titleHasAgentName(title, 'devin')) {
+    return 'Devin'
   }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
@@ -409,6 +428,9 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   if (!title) {
     return null
   }
+  if (isClaudeManagementTitle(title)) {
+    return null
+  }
   // Why: "Cursor Agent" exactly (case-insensitive, no prefix/suffix) is cursor's
   // native title. Anything with additional tokens ("⠋ Cursor Agent", "Cursor -
   // action required") is either an Orca-synthesized working/permission title
@@ -445,7 +467,7 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
-  const hasLegacyAgentName = containsLegacyAgentName(title)
+  const hasLegacyAgentName = titleHasAnyLegacyAgentName(title)
   if (hasLegacyAgentName || hasDroidAgentName || hasHermesAgentName || hasAgyAgentName) {
     if (containsAny(title, ['action required', 'permission', 'waiting'])) {
       return 'permission'
@@ -487,22 +509,4 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   }
 
   return null
-}
-
-// Why: shared between the runtime (dispatch guard, tui-idle fallback) and the
-// renderer (agent-ready-wait, new-workspace). A bare shell is the only process
-// type that garbles injected preambles, so this is the negative signal for
-// "is an agent running".
-const SHELL_NAMES = new Set(
-  '|bash|zsh|sh|fish|cmd|cmd.exe|powershell|powershell.exe|pwsh|pwsh.exe|nu'.split('|')
-)
-
-export function isShellProcess(processName: string): boolean {
-  const normalized = processName
-    .trim()
-    .replace(/^["']|["']$/g, '')
-    .toLowerCase()
-  return (
-    SHELL_NAMES.has(normalized) || SHELL_NAMES.has(normalized.split(/[\\/]/).pop() ?? normalized)
-  )
 }

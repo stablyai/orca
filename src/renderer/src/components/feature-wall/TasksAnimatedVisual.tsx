@@ -15,10 +15,12 @@ type Issue = {
 const ISSUES: readonly Issue[] = [
   {
     number: 1842,
-    title: translate(
-      'auto.components.feature.wall.TasksAnimatedVisual.b13375617e',
-      'Worktree picker truncates names'
-    )
+    get title() {
+      return translate(
+        'auto.components.feature.wall.TasksAnimatedVisual.b13375617e',
+        'Worktree picker truncates names'
+      )
+    }
   }
 ]
 

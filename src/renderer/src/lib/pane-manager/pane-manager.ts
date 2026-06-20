@@ -36,6 +36,7 @@ import {
   suspendPaneRendering
 } from './pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import { closeManagedPane, splitManagedPane } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
@@ -62,6 +63,9 @@ export class PaneManager {
     this.root = root
     this.options = options
     this.renderingSuspended = options.initialRenderingSuspended === true
+    // Why: atlas recovery must reach every live manager — see
+    // resetAllTerminalWebglAtlases for the shared-atlas rationale.
+    registerLivePaneManager(this)
   }
 
   createInitialPane(opts?: { focus?: boolean; leafId?: string }): ManagedPane {
@@ -289,6 +293,7 @@ export class PaneManager {
 
   destroy(): void {
     this.destroyed = true
+    unregisterLivePaneManager(this)
     cancelActivePaneDrag(this.dragState)
     this.cancelPendingPaneReparentFrames()
     for (const pane of this.panes.values()) {

@@ -6,13 +6,16 @@ import { quoteCliCommandArgument } from './shell-command-quote'
 import { RuntimeRpcFailureError } from './runtime-client'
 import {
   formatCliError,
+  formatAutomationShow,
   formatComputerAction,
   formatGetAppState,
+  formatTerminalList,
   formatTerminalRead,
   formatWorktreeList,
   printResult
 } from './format'
 import type { ComputerActionResult, RuntimeWorktreeRecord } from '../shared/runtime-types'
+import type { Automation } from '../shared/automations-types'
 
 let testScreenshotDir: string | null = null
 
@@ -93,10 +96,10 @@ describe('formatCliError', () => {
       ok: false,
       error: {
         code: 'LINEAGE_PARENT_NOT_FOUND',
-        message: 'Parent workspace was not found.',
+        message: 'Parent selector was not found.',
         data: {
           nextSteps: [
-            'Run `orca worktree list` and pass a valid --parent-worktree selector.',
+            'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
             'Retry with --no-parent to create without lineage.',
             123
           ]
@@ -107,8 +110,8 @@ describe('formatCliError', () => {
 
     expect(formatCliError(error)).toBe(
       [
-        'Parent workspace was not found.',
-        'Next step: Run `orca worktree list` and pass a valid --parent-worktree selector.',
+        'Parent selector was not found.',
+        'Next step: Pass a valid --parent-worktree selector such as folder:<id>, worktree:<id>, id:<worktreeId>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
         'Next step: Retry with --no-parent to create without lineage.'
       ].join('\n')
     )
@@ -137,6 +140,188 @@ describe('formatWorktreeList', () => {
     expect(output).toContain('childWorktreeIds: repo::/tmp/repo/child')
     expect(output).toContain('parentWorktreeId: repo::/tmp/repo/parent')
     expect(output).toContain('childWorktreeIds: []')
+  })
+})
+
+describe('formatAutomationShow', () => {
+  function automation(overrides: Partial<Automation> = {}): Automation {
+    return {
+      id: 'auto-1',
+      name: 'Nightly',
+      prompt: 'Run checks',
+      precheck: null,
+      agentId: 'codex',
+      projectId: 'repo-legacy',
+      executionTargetType: 'local',
+      executionTargetId: 'local',
+      schedulerOwner: 'local_host_service',
+      workspaceMode: 'new_per_run',
+      workspaceId: null,
+      baseBranch: null,
+      reuseSession: false,
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: 0,
+      enabled: true,
+      nextRunAt: 0,
+      missedRunPolicy: 'run_once_within_grace',
+      missedRunGraceMinutes: 720,
+      createdAt: 0,
+      updatedAt: 0,
+      ...overrides
+    }
+  }
+
+  it('shows explicit run context before the legacy repo id', () => {
+    const output = formatAutomationShow({
+      automation: automation({
+        runContext: {
+          kind: 'workspace-run',
+          projectId: 'github:stablyai/orca',
+          hostId: 'runtime:gpu',
+          projectHostSetupId: 'setup-gpu',
+          repoId: 'repo-gpu',
+          path: '/srv/orca'
+        }
+      })
+    })
+
+    expect(output).toContain('runProjectId: github:stablyai/orca')
+    expect(output).toContain('runHostId: runtime:gpu')
+    expect(output).toContain('projectHostSetupId: setup-gpu')
+    expect(output).toContain('runRepoId: repo-gpu')
+    expect(output).toContain('runPath: /srv/orca')
+    expect(output).toContain('legacyRepoId: repo-legacy')
+    expect(output).not.toContain('projectId: repo-legacy')
+  })
+})
+
+describe('formatTerminalList', () => {
+  it('prints visual split groups and nested terminal panes', () => {
+    const output = formatTerminalList({
+      terminals: [
+        {
+          handle: 'term_left',
+          ptyId: 'pty-left',
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          branch: 'main',
+          tabId: 'tab-left',
+          leafId: 'leaf-left',
+          title: 'Left',
+          connected: true,
+          writable: true,
+          lastOutputAt: null,
+          preview: ''
+        },
+        {
+          handle: 'term_top',
+          ptyId: 'pty-top',
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          branch: 'main',
+          tabId: 'tab-right',
+          leafId: 'leaf-top',
+          title: 'Right top',
+          connected: true,
+          writable: true,
+          lastOutputAt: null,
+          preview: ''
+        },
+        {
+          handle: 'term_bottom',
+          ptyId: 'pty-bottom',
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          branch: 'main',
+          tabId: 'tab-right',
+          leafId: 'leaf-bottom',
+          title: 'Right bottom',
+          connected: true,
+          writable: true,
+          lastOutputAt: null,
+          preview: ''
+        }
+      ],
+      totalCount: 3,
+      truncated: false,
+      visualLayouts: [
+        {
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: {
+              type: 'group',
+              groupId: 'group-left',
+              activeTabId: 'tab-left',
+              tabs: [
+                {
+                  tabId: 'tab-left',
+                  title: 'Left',
+                  activeLeafId: 'leaf-left',
+                  panes: {
+                    type: 'terminal',
+                    handle: 'term_left',
+                    tabId: 'tab-left',
+                    leafId: 'leaf-left',
+                    title: 'Left',
+                    connected: true,
+                    active: true
+                  }
+                }
+              ]
+            },
+            second: {
+              type: 'group',
+              groupId: 'group-right',
+              activeTabId: 'tab-right',
+              tabs: [
+                {
+                  tabId: 'tab-right',
+                  title: 'Right',
+                  activeLeafId: 'leaf-bottom',
+                  panes: {
+                    type: 'pane-split',
+                    direction: 'vertical',
+                    first: {
+                      type: 'terminal',
+                      handle: 'term_top',
+                      tabId: 'tab-right',
+                      leafId: 'leaf-top',
+                      title: 'Right top',
+                      connected: true,
+                      active: false
+                    },
+                    second: {
+                      type: 'terminal',
+                      handle: 'term_bottom',
+                      tabId: 'tab-right',
+                      leafId: 'leaf-bottom',
+                      title: 'Right bottom',
+                      connected: true,
+                      active: true
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    } as never)
+
+    expect(output).toContain('visual layout:')
+    expect(output).toContain('/repo')
+    expect(output).toContain('split horizontal')
+    expect(output).toContain('group group-left')
+    expect(output).toContain('tab tab-left  Left')
+    expect(output).toContain('* term_left  Left  tab=tab-left leaf=leaf-left')
+    expect(output).toContain('group group-right')
+    expect(output).toContain('pane split vertical')
+    expect(output).toContain('  term_top  Right top  tab=tab-right leaf=leaf-top')
+    expect(output).toContain('* term_bottom  Right bottom  tab=tab-right leaf=leaf-bottom')
   })
 })
 

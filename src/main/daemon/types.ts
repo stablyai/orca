@@ -1,10 +1,16 @@
+import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
+
 // ─── Protocol Version ────────────────────────────────────────────────
+import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
+
 // Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 11
-export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
+export const PROTOCOL_VERSION = 17
+export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
 export type SessionState = 'created' | 'spawning' | 'running' | 'exiting' | 'exited'
@@ -17,6 +23,7 @@ export type TerminalSnapshot = {
   /** Scrollback portion only (rows above the visible viewport). Write this
    *  to preserve history without interfering with TUI repaints. */
   scrollbackAnsi: string
+  oscLinks?: TerminalOscLinkRange[]
   rehydrateSequences: string
   cwd: string | null
   modes: TerminalModes
@@ -34,6 +41,26 @@ export type TerminalModes = {
   sgrMousePixelsMode?: boolean
   applicationCursor: boolean
   alternateScreen: boolean
+}
+
+/** On-disk shape of checkpoint.json. Written by history-manager, read by
+ *  history-reader — one type so the generation pairing with output.log's
+ *  header (see terminal-history-log.ts) cannot silently diverge between the
+ *  writer and the consumer. */
+export type TerminalCheckpointFile = {
+  snapshotAnsi: string
+  scrollbackAnsi: string
+  oscLinks?: TerminalOscLinkRange[]
+  rehydrateSequences: string
+  cwd: string | null
+  cols: number
+  rows: number
+  modes: TerminalModes
+  scrollbackLines: number
+  /** Ties this checkpoint to the output.log whose header carries the same
+   *  generation. Absent on checkpoints written before incremental logs. */
+  generation?: number
+  checkpointedAt: string
 }
 
 // ─── NDJSON Protocol Messages ───────────────────────────────────────
@@ -66,6 +93,7 @@ export type CreateOrAttachRequest = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    startupCommandDelivery?: StartupCommandDelivery
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
      *  The daemon forwards this to its subprocess spawner so each tab honors
      *  the shell picked in the "+" menu or the persisted default-shell setting,
@@ -80,6 +108,7 @@ export type CreateOrAttachRequest = {
      *  PTY path resolves the same effective executable as LocalPtyProvider. */
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
+    shellReadyTimeoutMs?: number
   }
 }
 
@@ -115,6 +144,7 @@ export type KillRequest = {
   type: 'kill'
   payload: {
     sessionId: string
+    immediate?: boolean
   }
 }
 
@@ -182,12 +212,53 @@ export type SystemResolverHealthRequest = {
   type: 'systemResolverHealth'
 }
 
+export type PtySpawnHealthRequest = {
+  id: string
+  type: 'ptySpawnHealth'
+}
+
 export type GetSnapshotRequest = {
   id: string
   type: 'getSnapshot'
   payload: {
     sessionId: string
   }
+}
+
+// ─── Incremental checkpoint records (v13+) ──────────────────────────
+// Why: the 5s checkpoint used to re-serialize the full emulator buffer per
+// tick, stalling the daemon's PTY pump for O(buffer). Incremental checkpoints
+// take only the raw records accumulated since the last take; the emulator is
+// serialized only when a full snapshot is explicitly requested (clean
+// shutdown, pending-buffer overflow, or the on-disk log reaching its cap).
+export type PendingOutputRecord =
+  | { kind: 'output'; data: string }
+  | { kind: 'resize'; cols: number; rows: number }
+  | { kind: 'clear' }
+
+export type TakePendingOutputRequest = {
+  id: string
+  type: 'takePendingOutput'
+  payload: {
+    sessionId: string
+    /** When true, the daemon serializes a full snapshot in the SAME
+     *  synchronous turn as the take. This atomicity is load-bearing: a
+     *  snapshot taken in a separate request could include bytes that a later
+     *  take would replay again, duplicating content on cold restore. */
+    includeSnapshot?: boolean
+  }
+}
+
+export type TakePendingOutputResult = {
+  records: PendingOutputRecord[]
+  /** Monotonic per-session batch sequence. The history log stores it so the
+   *  cold-restore reader can detect a lost batch (gap) and discard the log
+   *  instead of replaying a stream with missing bytes. */
+  seq: number
+  /** True when the session's pending buffer exceeded its cap and records were
+   *  dropped. The caller must fall back to a full snapshot checkpoint. */
+  overflowed: boolean
+  snapshot: TerminalSnapshot | null
 }
 
 export type DaemonRequest =
@@ -205,7 +276,9 @@ export type DaemonRequest =
   | ShutdownRequest
   | PingRequest
   | SystemResolverHealthRequest
+  | PtySpawnHealthRequest
   | GetSnapshotRequest
+  | TakePendingOutputRequest
 
 // ─── RPC Responses (Daemon → Client, on control socket) ────────────
 

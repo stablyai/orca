@@ -1,9 +1,11 @@
-import type { RefObject } from 'react'
+import type { CSSProperties, RefObject } from 'react'
+import { useMemo } from 'react'
 import { ArrowLeft, Search, Server } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
-import type { GitHubRepositoryIdentity } from '../../../../shared/types'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import type { GitHubRepositoryIdentity, GlobalSettings } from '../../../../shared/types'
+import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '../repo/repo-icon'
 import { RepoForkIndicator } from '../repo/repo-fork-indicator'
@@ -13,6 +15,8 @@ import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSettingsSetupGuideProgress } from './settings-setup-guide-progress'
 import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
 import { translate } from '@/i18n/i18n'
+import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
 
 type NavSection = {
   id: string
@@ -37,6 +41,7 @@ type RepoNavSection = NavSection & {
 
 type SettingsSidebarProps = {
   activeSectionId: string
+  settings: GlobalSettings | null
   generalGroups: NavGroup[]
   repoSections: RepoNavSection[]
   hasRepos: boolean
@@ -112,6 +117,7 @@ function SettingsSetupGuideNavRow({
 
 export function SettingsSidebar({
   activeSectionId,
+  settings,
   generalGroups,
   repoSections,
   hasRepos,
@@ -122,18 +128,23 @@ export function SettingsSidebar({
   onSelectSection
 }: SettingsSidebarProps): React.JSX.Element {
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
+  const systemPrefersDark = useSystemPrefersDark()
+  const leftSidebarStyle = useMemo(
+    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
+    [settings, systemPrefersDark]
+  ) as CSSProperties | undefined
   const setupActive = activeSectionId === 'setup-guide'
   // Why: "Hide from sidebar" only hides the top-left app sidebar prompt;
   // Settings should remain a stable place to reopen the checklist.
   const showSetupGuideTopRow =
     setupGuideProgress.ready && setupGuideProgress.doneCount < setupGuideProgress.total
-  const searchShortcutHint = useShortcutLabel('settings.search')
+  const searchShortcutCombos = useShortcutKeyComboDetails('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
-      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
+      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
       isActive
-        ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground'
-        : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
+        ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground ring-1 ring-worktree-sidebar-ring/25'
+        : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-accent/60 hover:text-worktree-sidebar-foreground'
     )
   const installStatusLabel = (status: SettingsNavInstallStatus): string => {
     switch (status) {
@@ -159,7 +170,10 @@ export function SettingsSidebar({
     )
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar">
+    <aside
+      className="flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar"
+      style={leftSidebarStyle}
+    >
       <div className="border-b border-worktree-sidebar-border px-3 py-3">
         <Button
           variant="ghost"
@@ -183,12 +197,20 @@ export function SettingsSidebar({
               'auto.components.settings.SettingsSidebar.dbceaa8840',
               'Search settings'
             )}
-            className="pl-9 pr-14 text-[13px]"
+            className="bg-background/60 pl-9 pr-14 text-[13px]"
           />
           {searchQuery === '' ? (
-            <kbd className="pointer-events-none absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center rounded border border-border/60 bg-background/40 px-1.5 py-px font-mono text-[10px] font-medium text-muted-foreground">
-              {searchShortcutHint}
-            </kbd>
+            <span className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center">
+              {searchShortcutCombos.map((combo) => (
+                <ShortcutKeyCombo
+                  key={combo.keys.join('-')}
+                  keys={combo.keys}
+                  doubleTap={combo.doubleTap}
+                  className="inline-flex gap-0.5"
+                  separatorClassName="text-[10px] text-muted-foreground"
+                />
+              ))}
+            </span>
           ) : null}
         </div>
       </div>

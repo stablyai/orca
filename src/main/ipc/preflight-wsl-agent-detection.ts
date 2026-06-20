@@ -1,6 +1,10 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
+import {
+  buildWslLoginShellCommand,
+  escapeWslShCommandForWindows
+} from '../../shared/wsl-login-shell-command'
 
 const execFileAsync = promisify(execFile)
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
@@ -20,18 +24,22 @@ export async function detectWslCommandsOnPath(
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
+  // Why: join with newlines, not spaces. zsh treats `fi done` as a parse error
+  // (it needs a separator before `done`); the login shell may be zsh, so a
+  // space-joined script silently fails for every agent. Newlines are valid
+  // statement separators in every POSIX shell and zsh.
   const script = [
     `for cmd in ${commandList}; do`,
     'if resolved=$(command -v "$cmd" 2>/dev/null); then',
     `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
     'fi',
     'done'
-  ].join(' ')
+  ].join('\n')
 
   try {
     // Why: WSL cold-start plus many parallel wsl.exe probes can timeout and
-    // cache an empty result. One interactive probe matches user terminals and
-    // gives the distro a single startup path.
+    // cache an empty result. One probe through the distro user's login shell
+    // matches zsh/bash PATH customizations from their normal terminals.
     const { stdout } = await execWslAgentDetectionCommand(wslTarget, script)
     return parseWslDetectedCommands(stdout)
   } catch {
@@ -50,7 +58,13 @@ async function execWslAgentDetectionCommand(
   const distroArgs = target.distro ? ['-d', target.distro] : []
   const commandPromise = execFileAsync(
     'wsl.exe',
-    [...distroArgs, '--exec', 'bash', '-ic', command],
+    [
+      ...distroArgs,
+      '--',
+      'sh',
+      '-c',
+      escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
+    ],
     {
       encoding: 'utf-8',
       timeout: WSL_AGENT_DETECTION_TIMEOUT_MS

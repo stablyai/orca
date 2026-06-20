@@ -171,15 +171,29 @@ export async function updateIssueBySlug(
   if (!args.updates || typeof args.updates !== 'object') {
     return { ok: false, error: { type: 'validation_error', message: 'Updates required.' } }
   }
-  const { title, body, state, addLabels, removeLabels, addAssignees, removeAssignees } =
-    args.updates
+  const {
+    title,
+    body,
+    state,
+    stateReason,
+    duplicateOf,
+    addLabels,
+    removeLabels,
+    addAssignees,
+    removeAssignees
+  } = args.updates
 
   // Title / body / state go through PATCH /repos/{owner}/{repo}/issues/{n}.
   // Labels/assignees go through their dedicated endpoints.
   const base = `repos/${args.owner}/${args.repo}/issues/${args.number}`
 
   // 1) PATCH body
-  if (title !== undefined || body !== undefined || state !== undefined) {
+  if (
+    title !== undefined ||
+    body !== undefined ||
+    state !== undefined ||
+    stateReason !== undefined
+  ) {
     const patchArgs: string[] = ['-X', 'PATCH', base]
     if (title !== undefined) {
       patchArgs.push('--raw-field', `title=${title}`)
@@ -189,6 +203,12 @@ export async function updateIssueBySlug(
     }
     if (state !== undefined) {
       patchArgs.push('--raw-field', `state=${state}`)
+    }
+    if (stateReason !== undefined) {
+      patchArgs.push('--raw-field', `state_reason=${stateReason}`)
+    }
+    if (duplicateOf !== undefined) {
+      patchArgs.push('--raw-field', `duplicate_of=${duplicateOf}`)
     }
     const r = await runRest<unknown>(patchArgs)
     if (!r.ok) {

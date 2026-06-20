@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest'
 
 describe('PTY startup barrier ordering', () => {
   it('waits for local startup before resolving the provider for runtime and renderer spawns', () => {
-    const source = readFileSync(join(process.cwd(), 'src/main/ipc/pty.ts'), 'utf8')
+    const source = readFileSync(join(process.cwd(), 'src/main/ipc/pty.ts'), 'utf8').replaceAll(
+      '\r\n',
+      '\n'
+    )
     const runtimeSpawnStart = source.indexOf('spawn: async (args) => {')
     const runtimeSpawnEnd = source.indexOf('      write:', runtimeSpawnStart)
     const runtimeSpawn = source.slice(runtimeSpawnStart, runtimeSpawnEnd)

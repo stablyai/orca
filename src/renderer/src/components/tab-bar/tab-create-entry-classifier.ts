@@ -5,23 +5,13 @@ import {
 } from '../quick-open-search'
 import type { RuntimeFileListState } from '../quick-open-file-list'
 import { translate } from '@/i18n/i18n'
+import {
+  isLikelyNewFileIntent,
+  validateNewTabEntryRelativePath
+} from './tab-create-entry-path-validation'
+import { classifyExplicitUrl, classifyHostUrl } from './tab-create-entry-url-classification'
 
-const HOST_FILE_EXTENSIONS = new Set([
-  'css',
-  'html',
-  'js',
-  'jsx',
-  'json',
-  'md',
-  'py',
-  'toml',
-  'ts',
-  'tsx',
-  'yaml',
-  'yml'
-])
-const LOCAL_ADDRESS_PATTERN =
-  /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i
+export { validateNewTabEntryRelativePath } from './tab-create-entry-path-validation'
 
 export type TabEntryClassification =
   | { kind: 'empty'; message: string }
@@ -47,18 +37,6 @@ export type TabEntryOption = {
 
 function normalizeFileMatchQuery(query: string): string {
   return query.trim().replace(/\\/g, '/')
-}
-
-function hasPathSeparator(query: string): boolean {
-  return /[\\/]/.test(query)
-}
-
-function hasFilenameExtension(query: string): boolean {
-  return /(?:^|[\\/])[^\\/]+\.[^\\/]+$/.test(query.trim())
-}
-
-function isLikelyNewFileIntent(query: string): boolean {
-  return hasPathSeparator(query) || hasFilenameExtension(query)
 }
 
 function dedupeMatches(matches: ExistingFileMatch[]): ExistingFileMatch[] {
@@ -108,110 +86,6 @@ function findExistingFileMatches(
     0,
     limit
   )
-}
-
-function classifyExplicitUrl(
-  query: string
-): Extract<TabEntryClassification, { kind: 'blocked' | 'explicit-url' }> | null {
-  if (LOCAL_ADDRESS_PATTERN.test(query)) {
-    return null
-  }
-  let url: URL
-  try {
-    url = new URL(query)
-  } catch {
-    return null
-  }
-  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname) {
-    return {
-      kind: 'blocked',
-      message: translate(
-        'auto.components.tab.bar.tab.create.entry.classifier.90eb94dc48',
-        'Enter an http:// or https:// URL.'
-      )
-    }
-  }
-  return { kind: 'explicit-url', url: url.href }
-}
-
-function classifyLocalDevUrl(
-  query: string
-): Extract<TabEntryActionClassification, { kind: 'host-url' }> | null {
-  if (!LOCAL_ADDRESS_PATTERN.test(query)) {
-    return null
-  }
-  try {
-    const url = new URL(`http://${query}`)
-    return url.hostname ? { kind: 'host-url', url: url.href } : null
-  } catch {
-    return null
-  }
-}
-
-function classifyHostLikeUrl(
-  query: string
-): Extract<TabEntryActionClassification, { kind: 'host-url' }> | null {
-  if (/[\\/]/.test(query) || /\s/.test(query)) {
-    return null
-  }
-  const extension = query.split(':')[0]?.split('.').pop()?.toLowerCase() ?? ''
-  if (HOST_FILE_EXTENSIONS.has(extension)) {
-    return null
-  }
-  const hostPort = '(?::\\d{1,5})?'
-  const localhost = new RegExp(`^localhost${hostPort}$`, 'i')
-  const ipv4 = new RegExp(`^(?:\\d{1,3}\\.){3}\\d{1,3}${hostPort}$`)
-  const domain = new RegExp(
-    `^(?=.{1,253}${hostPort}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,}${hostPort}$`,
-    'i'
-  )
-  if (!localhost.test(query) && !ipv4.test(query) && !domain.test(query)) {
-    return null
-  }
-  try {
-    const url = new URL(`https://${query}`)
-    return url.hostname ? { kind: 'host-url', url: url.href } : null
-  } catch {
-    return null
-  }
-}
-
-export function validateNewTabEntryRelativePath(query: string): string {
-  const trimmed = query.trim()
-  if (!trimmed) {
-    throw new Error('Enter a URL or file path.')
-  }
-  if (Array.from(trimmed).some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) {
-    throw new Error('File paths cannot contain control characters.')
-  }
-  if (trimmed.startsWith('/')) {
-    throw new Error('Enter a relative file path.')
-  }
-  if (/^[A-Za-z]:/.test(trimmed)) {
-    throw new Error('Windows drive paths are not supported here.')
-  }
-  if (/^[\\/]{2}/.test(trimmed)) {
-    throw new Error('UNC paths are not supported here.')
-  }
-  if (trimmed === '~' || trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
-    throw new Error('Home-relative paths are not supported here.')
-  }
-  if (/[\\/]$/.test(trimmed)) {
-    throw new Error('Enter a file path, not a directory path.')
-  }
-  if (trimmed.split(/[\\/]/).some((segment) => segment.length === 0)) {
-    throw new Error('File paths cannot contain empty segments.')
-  }
-
-  const normalized = trimmed.replace(/\\/g, '/')
-  const segments = normalized.split('/')
-  if (segments.some((segment) => segment === '.' || segment === '..')) {
-    throw new Error('File paths cannot contain . or .. segments.')
-  }
-  if (segments.some((segment) => segment === '~')) {
-    throw new Error('File paths cannot contain ~ segments.')
-  }
-  return normalized
 }
 
 export function classifyTabEntryQuery(
@@ -293,7 +167,7 @@ export function getTabEntryOptions(
     newFile = null
   }
 
-  const hostUrl = classifyLocalDevUrl(trimmed) ?? classifyHostLikeUrl(trimmed)
+  const hostUrl = classifyHostUrl(trimmed)
 
   const options: TabEntryActionClassification[] = []
   if (exactExistingFiles.length > 0) {

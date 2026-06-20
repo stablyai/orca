@@ -111,6 +111,7 @@ export function FloatingTerminalIconContextMenu({
           <DropdownMenuItem
             className="whitespace-nowrap"
             onSelect={() => {
+              useAppStore.getState().recordFeatureInteraction('floating-workspace-hidden')
               void updateSettings({ floatingTerminalEnabled: false })
             }}
           >

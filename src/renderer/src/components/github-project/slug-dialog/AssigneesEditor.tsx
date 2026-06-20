@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { useAppStore } from '@/store'
+import type { GlobalSettings } from '../../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 export function AssigneesEditor({
@@ -10,16 +10,17 @@ export function AssigneesEditor({
   repo,
   selected,
   disabled,
+  sourceSettings,
   onChange
 }: {
   owner: string
   repo: string
   selected: string[]
   disabled?: boolean
+  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   onChange: (add: string[], remove: string[]) => void | Promise<void>
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const settings = useAppStore((s) => s.settings)
   // Why: stabilize the assignee seed identity. `selected` is a fresh array on
   // every parent render — depending on it directly would refire the IPC for
   // every unrelated re-render while the popover is open.
@@ -28,7 +29,7 @@ export function AssigneesEditor({
     open ? owner : null,
     open ? repo : null,
     seedKey ? seedKey.split(',') : [],
-    settings
+    sourceSettings
   )
   return (
     <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>

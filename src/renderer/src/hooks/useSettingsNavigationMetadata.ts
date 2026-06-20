@@ -43,6 +43,7 @@ import { getAgentsPaneSearchEntries } from '@/components/settings/agents-search'
 import { getAccountsPaneSearchEntries } from '@/components/settings/accounts-search'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations-search'
 import { getGitPaneSearchEntries } from '@/components/settings/git-search'
+import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-provider-api-budget-search'
 import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/commit-message-ai-search'
 import { getTasksPaneSearchEntries } from '@/components/settings/tasks-search'
 import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspace-search'
@@ -69,18 +70,14 @@ import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-s
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   getCachedWindowsTerminalCapabilities,
   getWindowsTerminalCapabilityOwnerKey
 } from '@/lib/windows-terminal-capabilities'
 import { translate } from '@/i18n/i18n'
 
-export function isWebClientLocation(): boolean {
-  return (
-    Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) ||
-    window.location.pathname.endsWith('/web-index.html')
-  )
-}
+export { isWebClientLocation } from '@/lib/web-client-location'
 
 export function buildSettingsNavigationMetadata({
   isMac,
@@ -97,7 +94,8 @@ export function buildSettingsNavigationMetadata({
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   const terminalPaneSearchEntries = getTerminalPaneSearchEntries({
-    isWindows: isWindowsTerminalHost,
+    isWindows,
+    isWindowsTerminalHost,
     isMac
   })
   const runtimeEnvironmentsSearchEntry = isWebClient
@@ -212,7 +210,7 @@ export function buildSettingsNavigationMetadata({
         'Workspace defaults, app setup, and maintenance.'
       ),
       icon: SlidersHorizontal,
-      searchEntries: getGeneralPaneSearchEntries(),
+      searchEntries: getGeneralPaneSearchEntries({ includeProjectRuntime: isWindowsTerminalHost }),
       group: 'setup'
     },
     {
@@ -239,7 +237,11 @@ export function buildSettingsNavigationMetadata({
       icon: GitBranch,
       // Why: Git AI Author is rendered inside Git, so shared
       // metadata must search both surfaces wherever Git appears.
-      searchEntries: [...getGitPaneSearchEntries(), ...getCommitMessageAiPaneSearchEntries()],
+      searchEntries: [
+        ...getGitPaneSearchEntries(),
+        ...getCommitMessageAiPaneSearchEntries(),
+        ...getGitProviderApiBudgetSearchEntries()
+      ],
       group: 'workflows'
     },
     {
@@ -327,7 +329,10 @@ export function buildSettingsNavigationMetadata({
         'Theme, zoom, app and terminal appearance, sidebars, and status bar.'
       ),
       icon: Palette,
-      searchEntries: getAppearancePaneSearchEntries(),
+      searchEntries: getAppearancePaneSearchEntries({
+        showWarpImport: showDesktopOnlySettings,
+        showSystemTray: showDesktopOnlySettings && isWindows
+      }),
       group: 'interface'
     },
     {
@@ -389,7 +394,7 @@ export function buildSettingsNavigationMetadata({
       ),
       description: isWebClient
         ? 'Connect this browser to a saved Orca server.'
-        : 'Switch between local desktop mode and paired remote Orca runtimes.',
+        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
       icon: Server,
       searchEntries: [runtimeEnvironmentsSearchEntry],
       group: 'remote',
@@ -402,7 +407,7 @@ export function buildSettingsNavigationMetadata({
             title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
             description: translate(
               'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
-              'Remote SSH hosts for files, terminals, and git.'
+              'Use existing machines over SSH for files, terminals, Git, and workspaces.'
             ),
             icon: Cable,
             searchEntries: getSshPaneSearchEntries(),
@@ -417,7 +422,7 @@ export function buildSettingsNavigationMetadata({
             ),
             icon: Smartphone,
             searchEntries: getMobileSettingsPaneSearchEntries(),
-            group: 'remote'
+            group: 'mobile'
           }
         ]
       : []),
@@ -484,14 +489,18 @@ export function buildSettingsNavigationMetadata({
       title: repo.displayName,
       description: `${getRepoKindLabel(repo)} • ${repo.path}`,
       icon: SlidersHorizontal,
-      searchEntries: getRepositoryPaneSearchEntries(repo),
+      searchEntries: getRepositoryPaneSearchEntries(repo, {
+        windowsRuntimeSupported: isWindowsTerminalHost
+      }),
       group: 'repositories'
     }))
   ]
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
-  const { i18n } = useTranslation()
+  // Why: subscribe metadata consumers to language changes; translated memo
+  // contents refresh on rerender without depending on i18n.language directly.
+  useTranslation()
   const repos = useAppStore((state) => state.repos)
   const activeRuntimeEnvironmentId = useAppStore(
     (state) => state.settings?.activeRuntimeEnvironmentId
@@ -518,6 +527,6 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isWebClient,
         repos
       }),
-    [i18n.language, isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]
+    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]
   )
 }

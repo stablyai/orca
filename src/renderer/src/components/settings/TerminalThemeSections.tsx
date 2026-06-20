@@ -1,8 +1,12 @@
 import type { Dispatch, SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
-import { ColorField, ThemePicker } from './SettingsFormControls'
+import { ColorField, SettingsSubsectionHeader, ThemePicker } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { TerminalSettingsPreview } from './TerminalSettingsPreview'
+import { WarpThemeImportButton } from './WarpThemeImportButton'
+import { YamlThemeImportButton } from './YamlThemeImportButton'
+import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
+import { getAvailableTerminalThemeOptions } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
 
 type DarkTerminalThemeSectionProps = {
@@ -12,6 +16,7 @@ type DarkTerminalThemeSectionProps = {
   setThemeSearchDark: Dispatch<SetStateAction<string>>
   updateSettings: (updates: Partial<GlobalSettings>) => void
   previewFontFamily: string | null
+  importedHighlightSignal: number
 }
 
 type LightTerminalThemeSectionProps = {
@@ -22,28 +27,58 @@ type LightTerminalThemeSectionProps = {
   previewFontFamily: string | null
 }
 
+/** Shared import affordance for terminal themes. Why: imported themes land in
+ *  one pool used by both the dark and light pickers, so the buttons live above
+ *  both sections rather than implying a mode-specific import. */
+export function TerminalThemeImportSection({
+  warpThemes
+}: {
+  warpThemes: UseWarpThemeImportReturn
+}): React.JSX.Element {
+  return (
+    <section className="space-y-3">
+      <SettingsSubsectionHeader
+        title={translate(
+          'auto.components.settings.TerminalThemeSections.import_themes_title',
+          'Import Themes'
+        )}
+        description={translate(
+          'auto.components.settings.TerminalThemeSections.import_themes_description',
+          'Imported themes are available in both the dark and light theme pickers.'
+        )}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <WarpThemeImportButton warpThemes={warpThemes} />
+        <YamlThemeImportButton warpThemes={warpThemes} />
+      </div>
+    </section>
+  )
+}
+
 export function DarkTerminalThemeSection({
   settings,
   systemPrefersDark,
   themeSearchDark,
   setThemeSearchDark,
   updateSettings,
-  previewFontFamily
+  previewFontFamily,
+  importedHighlightSignal
 }: DarkTerminalThemeSectionProps): React.JSX.Element {
+  const themeOptions = getAvailableTerminalThemeOptions(settings)
+
   return (
     <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-6">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">
-            {translate('auto.components.settings.TerminalThemeSections.9499ad1dc4', 'Dark Theme')}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.TerminalThemeSections.f012172e21',
-              'Choose the theme used for terminal panes in dark mode.'
-            )}
-          </p>
-        </div>
+        <SettingsSubsectionHeader
+          title={translate(
+            'auto.components.settings.TerminalThemeSections.9499ad1dc4',
+            'Dark Theme'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalThemeSections.f012172e21',
+            'Choose the theme used for terminal panes in dark mode.'
+          )}
+        />
 
         <SearchableSetting
           title={translate(
@@ -66,9 +101,11 @@ export function DarkTerminalThemeSection({
               'Choose the terminal theme used in dark mode.'
             )}
             selectedTheme={settings.terminalThemeDark}
+            themeOptions={themeOptions}
             query={themeSearchDark}
             onQueryChange={setThemeSearchDark}
             onSelectTheme={(theme) => updateSettings({ terminalThemeDark: theme })}
+            importedHighlightSignal={importedHighlightSignal}
           />
         </SearchableSetting>
 
@@ -120,6 +157,8 @@ export function LightTerminalThemeSection({
   updateSettings,
   previewFontFamily
 }: LightTerminalThemeSectionProps): React.JSX.Element {
+  const themeOptions = getAvailableTerminalThemeOptions(settings)
+
   return (
     <section className="space-y-4">
       <SearchableSetting
@@ -208,6 +247,7 @@ export function LightTerminalThemeSection({
                     'Choose the theme used when Orca is in light mode.'
                   )}
                   selectedTheme={settings.terminalThemeLight}
+                  themeOptions={themeOptions}
                   query={themeSearchLight}
                   onQueryChange={setThemeSearchLight}
                   onSelectTheme={(theme) => updateSettings({ terminalThemeLight: theme })}

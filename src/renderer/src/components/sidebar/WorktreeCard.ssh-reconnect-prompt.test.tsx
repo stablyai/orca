@@ -13,6 +13,7 @@ const updateWorktreeMeta = vi.fn()
 let WorktreeCard: typeof WorktreeCardComponent
 let sshConnectionStates = new Map<string, { status: string }>()
 let sshTargetLabels = new Map<string, string>()
+let runtimeStatusByEnvironmentId = new Map<string, { status?: unknown }>()
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 
 vi.mock('@/store', () => ({
@@ -28,6 +29,7 @@ vi.mock('@/store', () => ({
       linearIssueCache: {},
       openModal,
       remoteBranchConflictByWorktreeId: {},
+      runtimeStatusByEnvironmentId,
       settings: null,
       sshConnectionStates,
       sshTargetLabels,
@@ -126,6 +128,7 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     vi.clearAllMocks()
     sshConnectionStates = new Map()
     sshTargetLabels = new Map()
+    runtimeStatusByEnvironmentId = new Map()
     worktreeCardProperties = ['status']
   })
 
@@ -140,5 +143,32 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     expect(markup).toContain('data-ssh-disconnected-dialog="open"')
     expect(markup).toContain('data-ssh-status="disconnected"')
     expect(markup).toContain('data-ssh-target-label="Remote target"')
+  })
+
+  it('marks a runtime-host worktree disconnected when its environment has no status', () => {
+    const runtimeRepo: Repo = {
+      ...makeRepo(),
+      connectionId: undefined,
+      executionHostId: 'runtime:env-1'
+    }
+    // No status entry for env-1 → host is disconnected.
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
+    )
+    expect(markup).toContain('Server disconnected')
+  })
+
+  it('shows a runtime-host worktree as connected when its environment has a status', () => {
+    runtimeStatusByEnvironmentId.set('env-1', { status: { runtimeId: 'r1' } })
+    const runtimeRepo: Repo = {
+      ...makeRepo(),
+      connectionId: undefined,
+      executionHostId: 'runtime:env-1'
+    }
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
+    )
+    expect(markup).not.toContain('Server disconnected')
+    expect(markup).toContain('Project on Orca server')
   })
 })

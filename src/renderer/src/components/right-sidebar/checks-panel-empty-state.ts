@@ -8,6 +8,7 @@ type ChecksPanelEmptyStateInput = {
   prRefreshStatus: PRRefreshStatus
   hostedReviewBlockedReason: HostedReviewCreationBlockedReason | undefined
   hasUpstream: boolean | undefined
+  hasCurrentBranch?: boolean
   reviewLabel?: 'pull request' | 'merge request'
   reviewShortLabel?: 'PR' | 'MR'
 }
@@ -41,7 +42,8 @@ export function getChecksPanelEmptyStateCopy(
   if (
     shouldShowChecksPanelPublishBranchAction({
       hostedReviewBlockedReason: blockedReason,
-      hasUpstream: input.hasUpstream
+      hasUpstream: input.hasUpstream,
+      hasCurrentBranch: input.hasCurrentBranch
     })
   ) {
     // Why: a local-only branch cannot have GitHub PR status yet; surfacing a
@@ -138,7 +140,11 @@ export function getChecksPanelEmptyStateCopy(
 export function shouldShowChecksPanelPublishBranchAction(input: {
   hostedReviewBlockedReason: HostedReviewCreationBlockedReason | undefined
   hasUpstream: boolean | undefined
+  hasCurrentBranch?: boolean
 }): boolean {
+  if (input.hasCurrentBranch === false) {
+    return false
+  }
   const blockedReason = input.hostedReviewBlockedReason
   return input.hasUpstream === false || blockedReason === 'no_upstream'
 }

@@ -1,5 +1,7 @@
 import { useAppStore } from '@/store'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { getFolderWorkspaceConnectionId } from './folder-workspace-connection'
 
 /**
  * Resolve the SSH connectionId for a worktree. Returns null for local repos,
@@ -9,6 +11,13 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
 export function getConnectionId(worktreeId: string | null): string | null | undefined {
   if (!worktreeId) {
     return null
+  }
+  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+  if (parsedWorkspaceKey?.type === 'folder') {
+    return getFolderWorkspaceConnectionId(
+      useAppStore.getState(),
+      parsedWorkspaceKey.folderWorkspaceId
+    )
   }
   const state = useAppStore.getState()
   const allWorktrees = Object.values(state.worktreesByRepo ?? {}).flat()

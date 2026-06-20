@@ -1,5 +1,5 @@
 /**
- * Row used in the "Open remote project" step to pick an SSH target.
+ * Row used in the "Open project on SSH host" step to pick an SSH target.
  *
  * Why extracted: keeps AddRepoSteps.tsx under the 400-line oxlint limit
  * while isolating the inline-connect interaction logic.

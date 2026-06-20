@@ -21,6 +21,7 @@ import {
 } from './workspace-kanban-card-pointer-drag-dom'
 
 const BOARD_SELECTOR = '[data-workspace-board-selection-surface]'
+const BOARD_SHEET_SELECTOR = '[data-workspace-board-sheet]'
 const EXTERNAL_DRAG_TARGET_ATTR = 'data-workspace-board-external-drag-target'
 
 let externalDragTargetElement: HTMLElement | null = null
@@ -31,6 +32,16 @@ function getWorkspaceKanbanBoardElement(): HTMLElement | null {
 
 export function hasWorkspaceKanbanSidebarDropBoard(): boolean {
   return getWorkspaceKanbanBoardElement() !== null
+}
+
+export function isWorkspaceKanbanSidebarDropPointInBoard(x: number, y: number): boolean {
+  const board = getWorkspaceKanbanBoardElement()
+  if (!board) {
+    return false
+  }
+  const hitSurface = board.closest<HTMLElement>(BOARD_SHEET_SELECTOR) ?? board
+  const rect = hitSurface.getBoundingClientRect()
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
 }
 
 function getStatusDropTargetElement(

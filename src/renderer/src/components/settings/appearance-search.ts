@@ -1,6 +1,9 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
+import { getLeftSidebarAppearanceEntry, getSidebarEntries } from './appearance-sidebar-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
@@ -153,71 +156,7 @@ export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntr
   }))
 )
 
-export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
-  {
-    title: translate('auto.components.settings.appearance.search.155a1e7438', 'Show Tasks Button'),
-    description: translate(
-      'auto.components.settings.appearance.search.9a248333c7',
-      'Show the Tasks button at the top of the left sidebar.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.appearance.search.0d5a74b606', 'tasks'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.2ee4810f38', 'github'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.6b846424cc', 'linear')
-    ]
-  },
-  {
-    title: translate(
-      'auto.components.settings.appearance.search.caa27e1a8e',
-      'Show Automations Button'
-    ),
-    description: translate(
-      'auto.components.settings.appearance.search.ae13a0d340',
-      'Show the Automations button at the top of the left sidebar.'
-    ),
-    keywords: [
-      ...translateSearchKeyword(
-        'auto.components.settings.appearance.search.b186f3cefb',
-        'automations'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.appearance.search.58f4e22fa2',
-        'automation'
-      ),
-      ...translateSearchKeyword(
-        'auto.components.settings.appearance.search.4c920ab2d1',
-        'schedule'
-      ),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show')
-    ]
-  },
-  {
-    title: translate(
-      'auto.components.settings.appearance.search.1de96ec8a6',
-      'Show Orca Mobile Button'
-    ),
-    description: translate(
-      'auto.components.settings.appearance.search.682293cadf',
-      'Show the Orca Mobile button at the top of the left sidebar.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.appearance.search.74618577c7', 'mobile'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.5e5b8878bf', 'phone'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show'),
-      ...translateSearchKeyword('auto.components.settings.appearance.search.839fb1e3ed', 'toolbox')
-    ]
-  }
-])
+export { getLeftSidebarAppearanceEntry, getSidebarEntries }
 
 export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
@@ -247,15 +186,93 @@ export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[
   }
 ])
 
-export const getAppearancePaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
-  ...getThemeEntries(),
-  ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
-  ...getTypographyEntries(),
-  ...getZoomEntries(),
-  ...getTerminalAppearanceSearchEntries(),
-  ...getLayoutEntries(),
-  ...getTitlebarEntries(),
-  ...getStatusBarEntries(),
-  ...getSidebarEntries(),
-  ...getAppIconEntries()
+const getSystemTrayEntryCatalog = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate(
+      'auto.components.settings.appearance.search.9a115966d3',
+      'Minimize to Tray on Close'
+    ),
+    description: translate(
+      'auto.components.settings.appearance.search.4d5b9427b5',
+      'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.appearance.search.tray.tray', 'tray', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.tray.system',
+        'system tray',
+        { englishOnly: true }
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.tray.minimize',
+        'minimize',
+        { englishOnly: true }
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.tray.close', 'close', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.e5bc35d59e', 'window'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.tray.notification',
+        'notification area',
+        { englishOnly: true }
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.tray.background',
+        'background',
+        { englishOnly: true }
+      )
+    ]
+  }
 ])
+
+type SystemTraySearchOptions = {
+  showSystemTray?: boolean
+}
+
+function shouldShowSystemTrayEntries(options: SystemTraySearchOptions): boolean {
+  return (
+    options.showSystemTray ??
+    // Why: this setting controls Electron's Windows tray only. A Windows web
+    // browser can report win32, but it has no local tray to affect.
+    (getRendererAppPlatform() === 'win32' && !isWebClientLocation())
+  )
+}
+
+export function getSystemTrayEntries(options: SystemTraySearchOptions = {}): SettingsSearchEntry[] {
+  return shouldShowSystemTrayEntries(options) ? getSystemTrayEntryCatalog() : []
+}
+
+type AppearancePaneSearchOptions = {
+  showWarpImport?: boolean
+  showSystemTray?: boolean
+}
+
+function buildAppearancePaneSearchEntries(
+  options: AppearancePaneSearchOptions
+): SettingsSearchEntry[] {
+  return [
+    ...getThemeEntries(),
+    ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
+    ...getTypographyEntries(),
+    ...getZoomEntries(),
+    ...getTerminalAppearanceSearchEntries(options),
+    ...getLayoutEntries(),
+    ...getTitlebarEntries(),
+    ...getStatusBarEntries(),
+    ...getSidebarEntries(),
+    ...getAppIconEntries(),
+    ...getSystemTrayEntries(options)
+  ]
+}
+
+export function getAppearancePaneSearchEntries(
+  options: AppearancePaneSearchOptions = {}
+): SettingsSearchEntry[] {
+  return buildAppearancePaneSearchEntries({
+    showWarpImport: options.showWarpImport ?? true,
+    showSystemTray: options.showSystemTray
+  })
+}

@@ -17,6 +17,8 @@ import {
   getActionDescriptions,
   SOURCE_CONTROL_TEXT_ACTION_ID_SET,
   getAgentCatalogForAction,
+  getSourceControlActionAgentSupportText,
+  getSourceControlActionAgentWarningText,
   getSourceControlAgentArgsPlaceholder
 } from './source-control-action-recipe-options'
 import { translate } from '@/i18n/i18n'
@@ -67,6 +69,8 @@ export function SourceControlActionRecipeRow({
     resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent)
   )
   const agentOptions = getAgentCatalogForAction(actionId, selectedAgent)
+  const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent)
+  const agentSupportText = getSourceControlActionAgentSupportText(actionId)
 
   return (
     <div className="rounded-md border border-border px-3 py-3">
@@ -77,44 +81,51 @@ export function SourceControlActionRecipeRow({
           </p>
           <p className="text-[11px] text-muted-foreground">{getActionDescriptions()[actionId]}</p>
         </div>
-        <Select
-          value={selectedAgent ?? DEFAULT_AGENT_VALUE}
-          onValueChange={(value) => onAgentChange(actionId, value)}
-        >
-          <SelectTrigger size="sm" className="h-8 w-full shrink-0 text-xs sm:w-[220px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={DEFAULT_AGENT_VALUE}>
-              <span className="flex items-center gap-2">
-                <Terminal className="size-3.5 text-muted-foreground" />
-                {translate(
-                  'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
-                  'Use default agent'
-                )}
-              </span>
-            </SelectItem>
-            {SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId) ? (
-              <SelectItem value={CUSTOM_AGENT_ID}>
+        <div className="w-full shrink-0 space-y-1 sm:w-[220px]">
+          <Select
+            value={selectedAgent ?? DEFAULT_AGENT_VALUE}
+            onValueChange={(value) => onAgentChange(actionId, value)}
+          >
+            <SelectTrigger size="sm" className="h-8 w-full text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={DEFAULT_AGENT_VALUE}>
                 <span className="flex items-center gap-2">
                   <Terminal className="size-3.5 text-muted-foreground" />
                   {translate(
-                    'auto.components.settings.SourceControlAiActionRecipeDefaults.0740d30915',
-                    'Custom command'
+                    'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
+                    'Use default agent'
                   )}
                 </span>
               </SelectItem>
-            ) : null}
-            {agentOptions.map((agent) => (
-              <SelectItem key={agent.id} value={agent.id}>
-                <span className="flex items-center gap-2">
-                  <AgentIcon agent={agent.id} size={14} />
-                  {agent.label}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+              {SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId) ? (
+                <SelectItem value={CUSTOM_AGENT_ID}>
+                  <span className="flex items-center gap-2">
+                    <Terminal className="size-3.5 text-muted-foreground" />
+                    {translate(
+                      'auto.components.settings.SourceControlAiActionRecipeDefaults.0740d30915',
+                      'Custom command'
+                    )}
+                  </span>
+                </SelectItem>
+              ) : null}
+              {agentOptions.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  <span className="flex items-center gap-2">
+                    <AgentIcon agent={agent.id} size={14} />
+                    {agent.label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {agentWarningText ? (
+            <p className="text-[11px] text-destructive">{agentWarningText}</p>
+          ) : agentSupportText ? (
+            <p className="text-[11px] text-muted-foreground">{agentSupportText}</p>
+          ) : null}
+        </div>
       </div>
       <div className="mt-3 grid gap-3 sm:grid-cols-[220px_1fr]">
         <div className="space-y-2">

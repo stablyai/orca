@@ -19,31 +19,39 @@ type RepositorySourceControlAiHostedReviewDefaultsProps = {
 const HOSTED_REVIEW_DEFAULT_ROWS: { key: HostedReviewDefaultKey; label: string }[] = [
   {
     key: 'draft',
-    label: translate(
-      'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.981eae7e14',
-      'Draft by default'
-    )
+    get label() {
+      return translate(
+        'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.981eae7e14',
+        'Draft by default'
+      )
+    }
   },
   {
     key: 'useTemplate',
-    label: translate(
-      'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.d32b87e754',
-      'Use review template when available'
-    )
+    get label() {
+      return translate(
+        'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.d32b87e754',
+        'Use review template when available'
+      )
+    }
   },
   {
     key: 'generateDetailsOnOpen',
-    label: translate(
-      'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.14f1eb99d0',
-      'Generate details when opening Create PR'
-    )
+    get label() {
+      return translate(
+        'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.14f1eb99d0',
+        'Generate details when opening Create PR'
+      )
+    }
   },
   {
     key: 'openAfterCreate',
-    label: translate(
-      'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.629ed8a9d3',
-      'Open hosted review after creation'
-    )
+    get label() {
+      return translate(
+        'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.629ed8a9d3',
+        'Open hosted review after creation'
+      )
+    }
   }
 ]
 

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { normalizeMatchQuery, scoreQueryTokens } from './query-token-match'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 
 export type TabCreateMenuOptionKind =
@@ -28,58 +29,13 @@ export type TabCreateMenuOptionsContext = {
   windowsShellEntries?: readonly { label: string; shell: BuiltInWindowsTerminalShell }[]
 }
 
-function normalizeQuery(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ')
-}
-
-function tokenize(value: string): string[] {
-  return normalizeQuery(value)
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean)
-}
-
-function scoreQueryTokens(
-  query: string,
-  values: readonly string[]
-): { allTokensMatched: boolean; score: number } {
-  const candidateTokens = values.flatMap(tokenize)
-  if (candidateTokens.length === 0) {
-    return { allTokensMatched: false, score: 0 }
-  }
-
-  const queryTokens = tokenize(query)
-  if (queryTokens.length === 0) {
-    return { allTokensMatched: false, score: 0 }
-  }
-
-  let score = 0
-  let allTokensMatched = true
-  for (const queryToken of queryTokens) {
-    let best = 0
-    for (const candidateToken of candidateTokens) {
-      if (candidateToken === queryToken) {
-        best = Math.max(best, 3)
-      } else if (candidateToken.startsWith(queryToken)) {
-        best = Math.max(best, 2)
-      } else if (candidateToken.includes(queryToken)) {
-        best = Math.max(best, 1)
-      }
-    }
-    if (best === 0) {
-      allTokensMatched = false
-    }
-    score += best
-  }
-  return { allTokensMatched, score }
-}
-
 function scoreMenuOption(query: string, option: TabCreateMenuOption): number {
-  const normalizedQuery = normalizeQuery(query)
+  const normalizedQuery = normalizeMatchQuery(query)
   if (!normalizedQuery) {
     return 0
   }
   const values = [option.label, ...option.keywords]
-  const normalizedLabel = normalizeQuery(option.label)
+  const normalizedLabel = normalizeMatchQuery(option.label)
   if (normalizedQuery === normalizedLabel) {
     return 100
   }
@@ -110,7 +66,13 @@ export function buildTabCreateMenuOptions(
         kind: 'new-terminal-shell',
         label,
         shell: entry.shell,
-        keywords: ['terminal', 'shell', 'new terminal', entry.label, label]
+        keywords: [
+          translate('auto.components.tab.bar.tab.create.menu.options.5501c2fb7a', 'terminal'),
+          translate('auto.components.tab.bar.tab.create.menu.options.9630dd5494', 'shell'),
+          translate('auto.components.tab.bar.tab.create.menu.options.a094576900', 'new terminal'),
+          entry.label,
+          label
+        ]
       })
     }
   } else {
@@ -119,7 +81,12 @@ export function buildTabCreateMenuOptions(
       id: 'new-terminal',
       kind: 'new-terminal',
       label,
-      keywords: ['terminal', 'shell', 'new terminal', 'new shell']
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.5501c2fb7a', 'terminal'),
+        translate('auto.components.tab.bar.tab.create.menu.options.9630dd5494', 'shell'),
+        translate('auto.components.tab.bar.tab.create.menu.options.a094576900', 'new terminal'),
+        translate('auto.components.tab.bar.tab.create.menu.options.4f23f4d01d', 'new shell')
+      ]
     })
   }
 
@@ -129,7 +96,12 @@ export function buildTabCreateMenuOptions(
       id: 'new-browser',
       kind: 'new-browser',
       label,
-      keywords: ['browser', 'new browser', 'browser tab', 'web']
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.4f2a91e15b', 'browser'),
+        translate('auto.components.tab.bar.tab.create.menu.options.6d0e6a4b7a', 'new browser'),
+        translate('auto.components.tab.bar.tab.create.menu.options.c87ad57785', 'browser tab'),
+        translate('auto.components.tab.bar.tab.create.menu.options.cce7ef1d2c', 'web')
+      ]
     })
   }
 
@@ -139,7 +111,13 @@ export function buildTabCreateMenuOptions(
       id: 'new-markdown',
       kind: 'new-markdown',
       label,
-      keywords: ['markdown', 'md', 'new markdown', 'new file', 'mark']
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.5f17fb9d0c', 'markdown'),
+        translate('auto.components.tab.bar.tab.create.menu.options.44caaf7b36', 'md'),
+        translate('auto.components.tab.bar.tab.create.menu.options.fb50e3d874', 'new markdown'),
+        translate('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file'),
+        translate('auto.components.tab.bar.tab.create.menu.options.b330f72434', 'mark')
+      ]
     })
   }
 
@@ -149,7 +127,12 @@ export function buildTabCreateMenuOptions(
       id: 'open-markdown',
       kind: 'open-markdown',
       label,
-      keywords: ['open markdown', 'markdown', 'md', 'open file']
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.37ff3ddca1', 'open markdown'),
+        translate('auto.components.tab.bar.tab.create.menu.options.5f17fb9d0c', 'markdown'),
+        translate('auto.components.tab.bar.tab.create.menu.options.44caaf7b36', 'md'),
+        translate('auto.components.tab.bar.tab.create.menu.options.164c394bab', 'open file')
+      ]
     })
   }
 
@@ -162,13 +145,13 @@ export function buildTabCreateMenuOptions(
       kind: context.simulatorIsGoTo ? 'go-to-simulator' : 'new-simulator',
       label,
       keywords: [
-        'mobile emulator',
-        'emulator',
-        'simulator',
-        'ios simulator',
-        'iphone',
-        'ipad',
-        'mobile'
+        translate('auto.components.tab.bar.tab.create.menu.options.bbaf4f85a4', 'mobile emulator'),
+        translate('auto.components.tab.bar.tab.create.menu.options.3784b83bd4', 'emulator'),
+        translate('auto.components.tab.bar.tab.create.menu.options.a63847a742', 'simulator'),
+        translate('auto.components.tab.bar.tab.create.menu.options.1baeb07c17', 'ios simulator'),
+        translate('auto.components.tab.bar.tab.create.menu.options.8a580f88cf', 'iphone'),
+        translate('auto.components.tab.bar.tab.create.menu.options.7ecdc5ef08', 'ipad'),
+        translate('auto.components.tab.bar.tab.create.menu.options.14965cc123', 'mobile')
       ]
     })
   }
@@ -180,7 +163,7 @@ export function findMatchingTabCreateMenuOptions(
   query: string,
   options: readonly TabCreateMenuOption[]
 ): TabCreateMenuOption[] {
-  const normalizedQuery = normalizeQuery(query)
+  const normalizedQuery = normalizeMatchQuery(query)
   if (!normalizedQuery) {
     return []
   }
