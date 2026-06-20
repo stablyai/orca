@@ -102,9 +102,14 @@ function buildParentPrChecksRow(
     args.worktree.linkedGitLabMR ?? null,
     args.worktree.linkedBitbucketPR ?? null,
     args.worktree.linkedAzureDevOpsPR ?? null,
-    args.worktree.linkedGiteaPR ?? null
+    args.worktree.linkedGiteaPR ?? null,
+    {
+      reviewHintKey: reviewSnapshot.reviewHintKey
+    }
   )
-  const review = reviewSnapshot.review
+  // Why: the display helper filters stale linked lookup cache entries; parent
+  // rows must not classify or link a review the worktree card would hide.
+  const review = fallbackDisplay === reviewSnapshot.review ? reviewSnapshot.review : null
   const status = classifyParentPrChecksRowStatus({
     isUnavailable: !args.repo || isFolderRepo(args.repo) || args.worktree.isBare || !branch,
     review,
@@ -141,9 +146,17 @@ function getReviewSnapshot(
   args: BuildParentPrChecksRowsArgs & { worktree: Worktree; repo: Repo | null },
   branch: string | null,
   outcome: ParentPrChecksRefreshOutcome | undefined
-): { review: HostedReviewInfo | null | undefined; hasCacheEntry: boolean } {
+): {
+  review: HostedReviewInfo | null | undefined
+  hasCacheEntry: boolean
+  reviewHintKey?: string
+} {
   if (outcome?.kind === 'found') {
-    return { review: outcome.review, hasCacheEntry: true }
+    return {
+      review: outcome.review,
+      hasCacheEntry: true,
+      reviewHintKey: linkedReviewHintKey(getLinkedReviewHints(args.worktree))
+    }
   }
   if (!args.repo || !branch) {
     return { review: undefined, hasCacheEntry: false }
@@ -151,7 +164,11 @@ function getReviewSnapshot(
   const scopedArgs = { ...args, repo: args.repo }
   const hostedReviewEntry = args.hostedReviewCache[getHostedReviewKey(scopedArgs, branch)]
   if (hostedReviewEntry?.data) {
-    return { review: hostedReviewEntry.data, hasCacheEntry: true }
+    return {
+      review: hostedReviewEntry.data,
+      hasCacheEntry: true,
+      reviewHintKey: hostedReviewEntry.linkedReviewHintKey
+    }
   }
   const prEntry = args.prCache[getPRKey(scopedArgs, branch)]
   if (prEntry?.data) {

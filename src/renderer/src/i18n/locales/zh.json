@@ -2307,7 +2307,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "清晰的屏幕",
             "8c17d6786d": "关闭窗格",
-            "copyTerminalId": "复制终端 ID",
+            "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "复制窗格 ID",
             "39809d152f": "设置标题...",
             "06c2b0f043": "均衡窗格大小",
@@ -2322,8 +2322,7 @@
             "f3eeb1de13": "复制",
             "c2f0b72b8d": "插入",
             "925f49f210": "展开窗格",
-            "df766809e0": "折叠窗格",
-            "copyTerminalId": "Copy Terminal ID"
+            "df766809e0": "折叠窗格"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "重新启动守护进程",
@@ -8469,8 +8468,8 @@
             "a1f2c8d901": "查看"
           },
           "SourceControl": {
-            "conflictsSection": "冲突",
             "1406954883": "清除所有笔记...",
+            "conflictsSection": "冲突",
             "cc05b2d088": "在文件资源管理器中打开",
             "03194cfff4": "本地会话状态源自您在此处打开的冲突。",
             "413a3ba113": "冲突",
@@ -9106,7 +9105,16 @@
             "daysAgo": "{{value0}} 天前",
             "monthsAgo": "{{value0}} 个月前",
             "yearsAgo": "{{value0}} 年前",
-            "sessionId": "会话 ID"
+            "sessionId": "会话 ID",
+            "originalAsk": "Original ask",
+            "latestTurns": "Latest turns",
+            "noPreviewAvailable": "No conversation preview available",
+            "messageCount": "{{value0}} msgs",
+            "userRole": "You",
+            "agentRole": "Agent",
+            "toolRole": "Tool",
+            "systemRole": "System",
+            "sessionRole": "Session"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",
@@ -9123,7 +9131,14 @@
             "hideDetails": "隐藏详情",
             "showDetails": "显示详情",
             "moreSessionActions": "更多会话操作",
-            "moreActions": "更多操作"
+            "moreActions": "更多操作",
+            "noPreviewAvailable": "No conversation preview available",
+            "dragToResume": "Drag to resume in a new tab",
+            "userRole": "You",
+            "agentRole": "Agent",
+            "toolRole": "Tool",
+            "systemRole": "System",
+            "sessionRole": "Session"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "查找文件",
@@ -9167,9 +9182,6 @@
                 "copyCommand": "Copy command"
               }
             }
-          },
-          "SourceControlEntryContextMenu": {
-            "a1f2c8d901": "查看"
           }
         }
       },

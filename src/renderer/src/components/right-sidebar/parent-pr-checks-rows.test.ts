@@ -72,7 +72,10 @@ function makeProjection({
 }: {
   worktree?: Worktree
   repo?: Repo
-  hostedReviewCache?: Record<string, { data: HostedReviewInfo | null; fetchedAt: number }>
+  hostedReviewCache?: Record<
+    string,
+    { data: HostedReviewInfo | null; fetchedAt: number; linkedReviewHintKey?: string }
+  >
   prCache?: Record<string, { data: PRInfo | null; fetchedAt: number }>
   checksCache?: Record<
     string,
@@ -102,7 +105,11 @@ describe('buildParentPrChecksProjection', () => {
         worktree,
         repo,
         hostedReviewCache: {
-          [cacheKey]: { data: makeReview({ status: 'failure' }), fetchedAt: 1 }
+          [cacheKey]: {
+            data: makeReview({ status: 'failure' }),
+            fetchedAt: 1,
+            linkedReviewHintKey: ''
+          }
         }
       }).rows[0]
     ).toMatchObject({
@@ -116,7 +123,11 @@ describe('buildParentPrChecksProjection', () => {
         worktree,
         repo,
         hostedReviewCache: {
-          [cacheKey]: { data: makeReview({ status: 'pending' }), fetchedAt: 1 }
+          [cacheKey]: {
+            data: makeReview({ status: 'pending' }),
+            fetchedAt: 1,
+            linkedReviewHintKey: ''
+          }
         }
       }).rows[0]
     ).toMatchObject({ status: 'pending', group: 'pending' })
@@ -126,7 +137,11 @@ describe('buildParentPrChecksProjection', () => {
         worktree,
         repo,
         hostedReviewCache: {
-          [cacheKey]: { data: makeReview({ state: 'merged' }), fetchedAt: 1 }
+          [cacheKey]: {
+            data: makeReview({ state: 'merged' }),
+            fetchedAt: 1,
+            linkedReviewHintKey: ''
+          }
         }
       }).rows[0]
     ).toMatchObject({ status: 'merged', group: 'merged' })
@@ -138,11 +153,114 @@ describe('buildParentPrChecksProjection', () => {
         hostedReviewCache: {
           [cacheKey]: {
             data: makeReview({ mergeable: 'CONFLICTING', status: 'success' }),
-            fetchedAt: 1
+            fetchedAt: 1,
+            linkedReviewHintKey: ''
           }
         }
       }).rows[0]
     ).toMatchObject({ status: 'conflict', group: 'needsAttention', checkTone: 'failure' })
+  })
+
+  it('keeps linked-lookup GitHub reviews hidden after the worktree is unlinked', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({ id: 'repo-1::/feature' })
+    const review = makeReview({ status: 'success' })
+    const cacheKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
+    const checksKey = getGitHubRepoCacheKey(
+      repo.path,
+      repo.id,
+      prChecksCacheSuffix(review.number, null),
+      settings
+    )
+
+    const projection = makeProjection({
+      worktree,
+      repo,
+      hostedReviewCache: {
+        [cacheKey]: {
+          data: review,
+          fetchedAt: 1,
+          linkedReviewHintKey: 'github:12'
+        }
+      },
+      checksCache: {
+        [checksKey]: {
+          data: [
+            {
+              name: 'stale-build',
+              status: 'completed',
+              conclusion: 'failure',
+              url: null
+            }
+          ],
+          fetchedAt: 1
+        }
+      }
+    })
+
+    expect(projection.rows[0]).toMatchObject({
+      status: 'notFetched',
+      group: 'unavailable',
+      title: 'feature',
+      reviewLabel: null,
+      provider: null,
+      detailNames: []
+    })
+    expect(projection.summary.knownReview).toBe(0)
+  })
+
+  it('shows neutral branch-discovered GitHub reviews for unlinked rows', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({ id: 'repo-1::/feature' })
+    const cacheKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
+
+    const projection = makeProjection({
+      worktree,
+      repo,
+      hostedReviewCache: {
+        [cacheKey]: {
+          data: makeReview({ status: 'success' }),
+          fetchedAt: 1,
+          linkedReviewHintKey: ''
+        }
+      }
+    })
+
+    expect(projection.rows[0]).toMatchObject({
+      status: 'success',
+      group: 'passing',
+      title: 'Review title',
+      reviewLabel: '#12',
+      provider: 'github',
+      summary: 'Checks passing'
+    })
+    expect(projection.summary.knownReview).toBe(1)
+  })
+
+  it('shows newly refreshed branch-discovered GitHub reviews for unlinked rows', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({ id: 'repo-1::/feature' })
+    const identity = getParentPrChecksRefreshIdentity(worktree, repo, 'feature')
+
+    const projection = makeProjection({
+      worktree,
+      repo,
+      refreshOutcomes: new Map([
+        [
+          identity,
+          {
+            kind: 'found',
+            review: makeReview({ status: 'success' })
+          }
+        ]
+      ])
+    })
+
+    expect(projection.rows[0]).toMatchObject({
+      status: 'success',
+      group: 'passing',
+      reviewLabel: '#12'
+    })
   })
 
   it('only counts a visible successful unlinked no-review outcome as No PR', () => {
@@ -218,7 +336,11 @@ describe('buildParentPrChecksProjection', () => {
       worktree,
       repo,
       hostedReviewCache: {
-        [cacheKey]: { data: makeReview({ status: 'success' }), fetchedAt: 1 }
+        [cacheKey]: {
+          data: makeReview({ status: 'success' }),
+          fetchedAt: 1,
+          linkedReviewHintKey: ''
+        }
       },
       refreshOutcomes: new Map([[identity, { kind: 'error' }]])
     })
@@ -253,7 +375,7 @@ describe('buildParentPrChecksProjection', () => {
     const projection = makeProjection({
       worktree,
       repo,
-      hostedReviewCache: { [hostedKey]: { data: review, fetchedAt: 1 } },
+      hostedReviewCache: { [hostedKey]: { data: review, fetchedAt: 1, linkedReviewHintKey: '' } },
       checksCache: {
         [checksKey]: {
           data: [

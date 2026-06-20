@@ -7,6 +7,7 @@ export type ParentPrChecksCacheEntry<T> = {
   data: T | null
   fetchedAt: number
   headSha?: string
+  linkedReviewHintKey?: string
 }
 
 export type ParentPrChecksRefreshOutcome =

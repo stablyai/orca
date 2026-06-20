@@ -2307,7 +2307,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "화면 지우기",
             "8c17d6786d": "창 닫기",
-            "copyTerminalId": "터미널 ID 복사",
+            "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "창 ID 복사",
             "39809d152f": "제목 설정…",
             "06c2b0f043": "창 크기 균등화",
@@ -2322,8 +2322,7 @@
             "f3eeb1de13": "복사",
             "c2f0b72b8d": "삽입",
             "925f49f210": "창 확장",
-            "df766809e0": "창 축소",
-            "copyTerminalId": "Copy Terminal ID"
+            "df766809e0": "창 축소"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "데몬 재시작",
@@ -8469,8 +8468,8 @@
             "a1f2c8d901": "보기"
           },
           "SourceControl": {
-            "conflictsSection": "충돌",
             "1406954883": "모든 메모 지우기...",
+            "conflictsSection": "충돌",
             "cc05b2d088": "파일 탐색기에서 열기",
             "03194cfff4": "여기에서 연 충돌에서 파생된 로컬 세션 상태입니다.",
             "413a3ba113": "충돌",
@@ -9106,7 +9105,16 @@
             "daysAgo": "{{value0}}일 전",
             "monthsAgo": "{{value0}}개월 전",
             "yearsAgo": "{{value0}}년 전",
-            "sessionId": "세션 ID"
+            "sessionId": "세션 ID",
+            "originalAsk": "Original ask",
+            "latestTurns": "Latest turns",
+            "noPreviewAvailable": "No conversation preview available",
+            "messageCount": "{{value0}} msgs",
+            "userRole": "You",
+            "agentRole": "Agent",
+            "toolRole": "Tool",
+            "systemRole": "System",
+            "sessionRole": "Session"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} 세션 재개",
@@ -9123,7 +9131,14 @@
             "hideDetails": "세부정보 숨기기",
             "showDetails": "세부정보 표시",
             "moreSessionActions": "세션 추가 작업",
-            "moreActions": "추가 작업"
+            "moreActions": "추가 작업",
+            "noPreviewAvailable": "No conversation preview available",
+            "dragToResume": "Drag to resume in a new tab",
+            "userRole": "You",
+            "agentRole": "Agent",
+            "toolRole": "Tool",
+            "systemRole": "System",
+            "sessionRole": "Session"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "파일 찾기",
@@ -9167,9 +9182,6 @@
                 "copyCommand": "명령 복사"
               }
             }
-          },
-          "SourceControlEntryContextMenu": {
-            "a1f2c8d901": "보기"
           }
         }
       },

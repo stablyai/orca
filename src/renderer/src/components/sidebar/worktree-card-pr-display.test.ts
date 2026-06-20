@@ -92,6 +92,22 @@ describe('getWorktreeCardPrDisplay', () => {
     expect(getWorktreeCardPrDisplay(gitLabReview, null, 321)).toBe(gitLabReview)
   })
 
+  it('ignores linked-lookup GitLab MR details when the worktree is unlinked', () => {
+    expect(
+      getWorktreeCardPrDisplay(gitLabReview, null, null, null, null, null, {
+        reviewHintKey: 'gitlab:321'
+      })
+    ).toBeNull()
+  })
+
+  it('shows branch-discovered GitLab MR details when the worktree is unlinked', () => {
+    expect(
+      getWorktreeCardPrDisplay(gitLabReview, null, null, null, null, null, {
+        reviewHintKey: ''
+      })
+    ).toBe(gitLabReview)
+  })
+
   it('keeps the linked GitLab MR number visible when cached details belong to a different MR', () => {
     expect(getWorktreeCardPrDisplay(gitLabReview, null, 654)).toEqual({
       provider: 'gitlab',
