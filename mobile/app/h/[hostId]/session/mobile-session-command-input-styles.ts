@@ -68,9 +68,14 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     zIndex: 20
   },
   accessoryBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
+  },
+  accessoryScroll: {
+    flex: 1
   },
   accessoryContent: {
     paddingHorizontal: spacing.sm,
@@ -109,6 +114,23 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   },
   accessoryKeyTextDisabled: {
     color: colors.textMuted
+  },
+  keyboardDismissKey: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginLeft: spacing.sm,
+    marginVertical: spacing.xs,
+    backgroundColor: colors.bgRaised,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.button,
+    minHeight: 28
+  },
+  keyboardDismissKeyText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontFamily: typography.monoFamily
   },
   inputBar: {
     flexDirection: 'row',

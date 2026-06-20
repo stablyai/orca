@@ -100,6 +100,7 @@ import {
   isTerminalLiveInputWithinByteLimit,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keyboard-dismiss'
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
@@ -1006,6 +1007,7 @@ export default function SessionScreen() {
   const viewportMeasuredRef = useRef(false)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
+  const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
@@ -3208,6 +3210,15 @@ export default function SessionScreen() {
     ]
   )
 
+  const dismissSoftwareKeyboard = useCallback(() => {
+    dismissTerminalKeyboard({
+      clearPendingLiveInputFocus: () => clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef),
+      commandInput: commandInputRef.current,
+      dismissKeyboard: () => Keyboard.dismiss(),
+      liveInput: liveInputRef.current
+    })
+  }, [])
+
   const handleTerminalTap = useCallback(
     (handle: string) => {
       if (handle !== activeHandleRef.current) {
@@ -4783,7 +4794,22 @@ export default function SessionScreen() {
                   {/* Why: with default tap handling the first tap on any accessory
                   key dismisses the open keyboard and is swallowed, so live
                   input lost its keyboard on every Esc/Tab press (#5106). */}
+                  {keyboardHeight > 0 && (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.keyboardDismissKey,
+                        pressed && styles.accessoryKeyPressed
+                      ]}
+                      onPress={dismissSoftwareKeyboard}
+                      accessibilityLabel="Dismiss keyboard"
+                      accessibilityHint="Hides the software keyboard and keeps the current terminal session open."
+                    >
+                      <KeyboardIcon size={14} color={colors.textSecondary} strokeWidth={2} />
+                      <Text style={styles.keyboardDismissKeyText}>Hide</Text>
+                    </Pressable>
+                  )}
                   <ScrollView
+                    style={styles.accessoryScroll}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.accessoryContent}
@@ -5009,6 +5035,7 @@ export default function SessionScreen() {
                 ) : (
                   <View style={styles.inputBar}>
                     <TextInput
+                      ref={commandInputRef}
                       // Why: Android caches the IME inputType at mount, so toggling
                       // autocomplete must remount there; iOS can update without a focus-costly remount.
                       key={
