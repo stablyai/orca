@@ -139,7 +139,11 @@ const tabContentTypeSchema = z.enum([
   'conflict-review',
   'check-details',
   'browser',
-  'simulator'
+  'simulator',
+  // Why: jcode chat-bubble view (M1). Must stay in sync with TabContentType in
+  // src/shared/types.ts — once a 'chat' tab is persisted, session restore
+  // safeParse would otherwise reject it and drop the tab/workspace state.
+  'chat'
 ])
 
 const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser', 'simulator'])

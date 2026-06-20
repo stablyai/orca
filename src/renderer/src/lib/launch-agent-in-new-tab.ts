@@ -22,6 +22,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { launchChatAgentTab } from '@/lib/launch-chat-agent-tab'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -123,6 +124,15 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const store = useAppStore.getState()
   const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
   const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
+
+  // Why: chat-mode agents (jcode, M1) bypass the PTY/terminal startup machinery
+  // entirely — they render in a 'chat' tab driven by ChatPane (`jcode run
+  // --ndjson`). Consuming renderMode here is what makes the chat view reachable
+  // at runtime instead of falling back to a bare terminal.
+  if (TUI_AGENT_CONFIG[agent].renderMode === 'chat') {
+    return launchChatAgentTab({ agent, worktreeId, groupId, quickCommandLabel })
+  }
+
   const resolvedLaunchPlatform =
     launchPlatform ??
     (repo

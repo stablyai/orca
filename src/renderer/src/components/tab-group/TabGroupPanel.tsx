@@ -55,6 +55,15 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  // Why: chat tabs run `jcode run --ndjson` in this worktree's directory, so
+  // ChatPane needs the worktree's absolute path as cwd. Without it the headless
+  // jcode session would default to the app's process cwd and operate on the
+  // wrong tree. Provider/model fall back to ChatPane's defaults (openai today,
+  // matching the jcode agent config); they live here so a future per-agent
+  // override has a single wiring point.
+  const chatCwd = useAppStore(
+    (state) => state.allWorktrees?.().find((worktree) => worktree.id === worktreeId)?.path
+  )
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
@@ -396,7 +405,7 @@ export default function TabGroupPanel({
             >
               {/* Why: key the chat session by the tab id so each jcode chat tab
                   keeps an independent conversation / --resume session. */}
-              <ChatPane sessionKey={activeTab.id} />
+              <ChatPane sessionKey={activeTab.id} cwd={chatCwd} />
             </Suspense>
           </div>
         )}
