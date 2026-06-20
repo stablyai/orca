@@ -75,7 +75,8 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
     backgroundColor: colors.bgPanel
   },
   accessoryScroll: {
-    flex: 1
+    flex: 1,
+    minWidth: 0
   },
   accessoryContent: {
     paddingHorizontal: spacing.sm,

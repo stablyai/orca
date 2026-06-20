@@ -4795,7 +4795,7 @@ export default function SessionScreen() {
                   keyboard. Kept outside the horizontal ScrollView so it does
                   not scroll away, and out of the terminal-byte shortcut path so
                   it cannot be hidden by user shortcut customization (#5106). */}
-                  {keyboardHeight > 0 && (
+                  {keyboardLift > 0 && (
                     <Pressable
                       style={({ pressed }) => [
                         styles.keyboardDismissKey,
