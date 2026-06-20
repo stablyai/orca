@@ -1,8 +1,8 @@
-import type SyncDatabase from './sync-database'
+import type SyncDatabase from '../sqlite/sync-database'
 
 // Why: OpenCode's usage scanner and the AI Vault session scanner both need to
-// probe SQLite schema shape across multiple DB generations. Centralizing the
-// probes here avoids two private copies and keeps the contract testable.
+// probe the opencode.db schema shape across multiple DB generations. Centralizing
+// the probes here avoids two private copies and keeps the contract testable.
 type Database = SyncDatabase.Database
 
 export function tableExists(db: Database, tableName: string): boolean {

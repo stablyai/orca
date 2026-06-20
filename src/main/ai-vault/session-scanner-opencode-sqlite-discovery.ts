@@ -10,7 +10,7 @@ import type {
 } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
-import { columnExists, tableExists } from '../sqlite/schema-helpers'
+import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
 // Why: keep the SQLite discovery + dedup layer separate from the parser so
 // each file stays under the max-lines lint rule and the discovery layer can

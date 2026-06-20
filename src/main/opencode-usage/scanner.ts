@@ -6,7 +6,7 @@ import { isAbsolute, join, posix, win32 } from 'path'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import Database from '../sqlite/sync-database'
-import { columnExists, tableExists } from '../sqlite/schema-helpers'
+import { columnExists, tableExists } from './schema-helpers'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import type {
   OpenCodeUsageAttributedEvent,
