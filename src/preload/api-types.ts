@@ -235,6 +235,13 @@ import type {
 } from '../shared/browser-guest-events'
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../shared/browser-annotation-viewport-bridge'
+import type {
+  BrowserCredentialEntry,
+  BrowserCredentialSaveOutcome,
+  BrowserCredentialVaultStatus,
+  SaveBrowserCredentialArgs,
+  UpdateBrowserCredentialArgs
+} from '../shared/browser-credential-types'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { E2EConfig } from '../shared/e2e-config'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
@@ -454,6 +461,24 @@ export type BrowserApi = {
   }) => Promise<BrowserCookieImportResult>
   sessionClearDefaultCookies: () => Promise<boolean>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
+  credentials: {
+    status: () => Promise<BrowserCredentialVaultStatus>
+    matchesForOrigin: (origin: string) => Promise<BrowserCredentialEntry[]>
+    list: () => Promise<BrowserCredentialEntry[]>
+    reveal: (id: string) => Promise<string | null>
+    save: (
+      args: SaveBrowserCredentialArgs
+    ) => Promise<{ outcome: BrowserCredentialSaveOutcome; entry: BrowserCredentialEntry | null }>
+    add: (args: SaveBrowserCredentialArgs) => Promise<BrowserCredentialEntry | null>
+    update: (args: UpdateBrowserCredentialArgs) => Promise<BrowserCredentialEntry | null>
+    delete: (id: string) => Promise<boolean>
+    injectBridge: (args: {
+      browserTabId: string
+      token: string
+      enabled: boolean
+    }) => Promise<boolean>
+    fill: (args: { browserTabId: string; entryId: string; fieldId: string }) => Promise<boolean>
+  }
 }
 
 export type EmulatorApi = {
