@@ -2143,7 +2143,7 @@ export async function discardChanges(
 
     if (tracked) {
       await gitExecFileAsync(
-        ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath, options)],
+        ['restore', '--worktree', '--', literalPathspec(filePath, options)],
         {
           ...gitOptionsForWorktree(worktreePath, options)
         }
@@ -2260,7 +2260,6 @@ export async function bulkDiscardChanges(
             [
               'restore',
               '--worktree',
-              '--source=HEAD',
               '--',
               ...chunk.map((filePath) => literalPathspec(filePath, options))
             ],

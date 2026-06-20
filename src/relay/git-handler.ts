@@ -679,7 +679,7 @@ export class GitHandler {
 
       if (tracked) {
         await this.git(
-          ['restore', '--worktree', '--source=HEAD', '--', this.literalPathspec(filePath)],
+          ['restore', '--worktree', '--', this.literalPathspec(filePath)],
           worktreePath
         )
         return
@@ -737,7 +737,6 @@ export class GitHandler {
               [
                 'restore',
                 '--worktree',
-                '--source=HEAD',
                 '--',
                 ...chunk.map((p) => this.literalPathspec(p))
               ],

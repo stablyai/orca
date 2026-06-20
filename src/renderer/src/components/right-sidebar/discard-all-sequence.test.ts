@@ -40,9 +40,7 @@ describe('getDiscardAllPaths', () => {
         conflictStatus: 'unresolved'
       })
     ]
-    // Why: `git restore --worktree --source=HEAD` on an unresolved conflict
-    // clears the `u` record silently before the user has reviewed it, which
-    // is why the per-row Stage/Discard buttons also suppress this case.
+    // Why: discard is suppressed on unresolved conflicts (no stage-0 entry to restore).
     expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['clean.ts'])
   })
 

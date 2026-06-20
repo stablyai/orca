@@ -97,12 +97,12 @@ export type DiscardAllResult = {
 /**
  * Run the "Discard all" sequence for a given area.
  *
- * For 'staged', this first bulk-unstages the paths — without that step,
- * `discardOne` (which maps to `git restore --worktree --source=HEAD`) would
- * reset the working tree to HEAD but leave the index carrying the staged
- * delta, producing phantom inverse "Changes" rows the user thought they just
- * discarded. If the unstage fails we MUST skip the discard loop entirely for
- * the same reason: a stale index with a clean worktree is a worse state than
+ * For 'staged', this first bulk-unstages the paths. `discardOne` restores the
+ * working tree from the index (`git restore --worktree`), so a staged-only
+ * change (worktree already equals the index) would not be reverted at all
+ * without unstaging first. Unstaging moves the staged delta into the working
+ * tree so the subsequent restore actually discards it. If the unstage fails we
+ * MUST skip the discard loop entirely: a partially-applied state is worse than
  * the one the user started in.
  *
  * Per-file `discardOne` failures are best-effort: we continue past a failed

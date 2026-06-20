@@ -918,7 +918,7 @@ describe('GitHandler', () => {
 
       expect(gitMock).toHaveBeenNthCalledWith(
         2,
-        ['restore', '--worktree', '--source=HEAD', '--', ':(literal)docs'],
+        ['restore', '--worktree', '--', ':(literal)docs'],
         tmpDir
       )
     })
