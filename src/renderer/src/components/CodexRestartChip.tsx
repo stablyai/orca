@@ -1,6 +1,5 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
-import { useShallow } from 'zustand/react/shallow'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
@@ -73,20 +72,21 @@ export default function CodexRestartChip({
   isVisible?: boolean
   worktreeId: string
 }): React.JSX.Element | null {
-  const { staleWorktreePtyIds, restartNotice } = useAppStore(
-    useShallow((s) => {
-      const stalePtyIds = collectStalePtyIdsForTabs({
-        tabs: s.tabsByWorktree[worktreeId] ?? EMPTY_TABS,
-        ptyIdsByTabId: s.ptyIdsByTabId,
-        codexRestartNoticeByPtyId: s.codexRestartNoticeByPtyId
-      })
-      const firstStalePtyId = stalePtyIds[0]
-      return {
-        staleWorktreePtyIds: stalePtyIds,
-        restartNotice: firstStalePtyId ? s.codexRestartNoticeByPtyId[firstStalePtyId] : undefined
-      }
-    })
+  const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
+  const staleWorktreePtyIds = useMemo(
+    () =>
+      collectStalePtyIdsForTabs({
+        tabs,
+        ptyIdsByTabId,
+        codexRestartNoticeByPtyId
+      }),
+    [codexRestartNoticeByPtyId, ptyIdsByTabId, tabs]
   )
+  const restartNotice = staleWorktreePtyIds[0]
+    ? codexRestartNoticeByPtyId[staleWorktreePtyIds[0]]
+    : undefined
   const queueCodexPaneRestarts = useAppStore((s) => s.queueCodexPaneRestarts)
   const clearCodexRestartNotice = useAppStore((s) => s.clearCodexRestartNotice)
 
@@ -96,10 +96,11 @@ export default function CodexRestartChip({
   )
 
   const currentCollapseState = getCodexRestartOverlayCollapseState(collapseState, noticeKey)
-  // Why: a new account switch must reopen loud mode even if the prior notice was collapsed.
-  if (currentCollapseState !== collapseState) {
-    setCollapseState(currentCollapseState)
-  }
+  useEffect(() => {
+    // Why: a new account switch must reopen loud mode without updating state
+    // during render, which can trip React's external-store snapshot guard.
+    setCollapseState((state) => getCodexRestartOverlayCollapseState(state, noticeKey))
+  }, [noticeKey])
 
   if (staleWorktreePtyIds.length === 0 || !restartNotice) {
     return null
