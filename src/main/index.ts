@@ -1328,13 +1328,14 @@ app.whenReady().then(async () => {
   rateLimits.setClaudeAuthPreparationResolver((target) =>
     claudeRuntimeAuth!.prepareForRateLimitFetch(target)
   )
-  rateLimits.setSettingsResolver(() => {
+  rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store!.getSettings()
     return {
-      opencodeSessionCookie: settings.opencodeSessionCookie,
-      opencodeWorkspaceId: settings.opencodeWorkspaceId
+      sessionCookie: settings.opencodeSessionCookie,
+      workspaceIdOverride: settings.opencodeWorkspaceId
     }
   })
+  rateLimits.setGeminiCliOAuthEnabledResolver(() => store!.getSettings().geminiCliOAuthEnabled)
   keybindings = new KeybindingService({
     homePath: app.getPath('home'),
     getLegacyOverrides: () => store!.getSettings().keybindings

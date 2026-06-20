@@ -37,10 +37,12 @@ type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
 
-type OpencodeSettingsSnapshot = {
-  opencodeSessionCookie: string
-  opencodeWorkspaceId: string
+type OpenCodeGoRateLimitConfig = {
+  sessionCookie: string
+  workspaceIdOverride: string
 }
+
+type GeminiCliOAuthEnabledResolver = () => boolean
 
 // Why: Claude's subscription usage endpoint has a tight request budget. Quota
 // state is informational, so prefer keeping a recent snapshot over polling it
@@ -103,7 +105,8 @@ export class RateLimitService {
     runtime: 'host',
     wslDistro: null
   }
-  private settingsResolver: (() => OpencodeSettingsSnapshot) | null = null
+  private openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
+  private geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   private inactiveClaudeCache = new Map<string, ProviderRateLimits>()
@@ -141,8 +144,12 @@ export class RateLimitService {
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
   }
 
-  setSettingsResolver(resolver: () => OpencodeSettingsSnapshot): void {
-    this.settingsResolver = resolver
+  setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
+    this.openCodeGoConfigResolver = resolver
+  }
+
+  setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
+    this.geminiCliOAuthEnabledResolver = resolver
   }
 
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {
@@ -812,10 +819,10 @@ export class RateLimitService {
     const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
-    const settings = this.settingsResolver?.()
-    const cookie = settings?.opencodeSessionCookie ?? ''
-    const workspaceIdOverride = settings?.opencodeWorkspaceId ?? ''
-    const geminiCliOAuthEnabled = settings?.geminiCliOAuthEnabled ?? false
+    const openCodeGoConfig = this.openCodeGoConfigResolver?.()
+    const cookie = openCodeGoConfig?.sessionCookie ?? ''
+    const workspaceIdOverride = openCodeGoConfig?.workspaceIdOverride ?? ''
+    const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
 
     // Detect if configuration changed — if it did, we must discard any stale
     // data because it belongs to a different session/workspace.
