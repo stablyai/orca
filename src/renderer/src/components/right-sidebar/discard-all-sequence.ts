@@ -71,7 +71,7 @@ export type DiscardAllDeps = {
    * keep the legacy per-file sequence in tests or older surfaces.
    */
   discardMany?: (paths: string[]) => Promise<void>
-  /** Discard a single path (restore working-tree to HEAD, or rm if untracked). */
+  /** Discard a single path (restore working-tree from the index, or rm if untracked). */
   discardOne: (path: string) => Promise<void>
   /**
    * Called when either the pre-step (bulkUnstage) rejects OR an individual
