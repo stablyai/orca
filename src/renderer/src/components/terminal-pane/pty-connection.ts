@@ -128,6 +128,12 @@ const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
+// Why: bound the per-pane synchronized-output latch so a TUI that emits
+// `\x1b[?2026h` and then crashes/never emits the matching end marker cannot
+// keep every later foreground chunk routed through the scheduler's 250 ms
+// hold path. Longer than legitimate synchronized frames, short enough that a
+// stuck pane recovers within ~1 s instead of for the lifetime of the pane.
+const SYNCHRONIZED_FOREGROUND_OUTPUT_ACTIVE_MAX_MS = 1000
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 128 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
@@ -792,6 +798,7 @@ export function connectPanePty(
   let pendingTerminalBellNotification = false
   let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
   let synchronizedForegroundOutputActive = false
+  let synchronizedForegroundOutputActiveSince: number | null = null
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
@@ -2459,14 +2466,32 @@ export function connectPanePty(
         shouldProtectNativeWindowsSynchronizedOutput &&
         foreground &&
         (synchronizedForegroundOutputActive || synchronizedOutputStarted || synchronizedOutputEnded)
-      const nextSynchronizedForegroundOutputActive =
+      let nextSynchronizedForegroundOutputActive =
         shouldProtectNativeWindowsSynchronizedOutput &&
         foreground &&
         shouldSynchronizedOutputRemainActive(data, synchronizedForegroundOutputActive)
+      // Why: if the latch was already active and no end marker has arrived for
+      // longer than the scheduler's safety window, force-decay it so a TUI
+      // that emitted `\x1b[?2026h` and then died cannot pin every later
+      // foreground chunk on the 250 ms hold path for the rest of the pane's
+      // lifetime.
+      if (
+        nextSynchronizedForegroundOutputActive &&
+        synchronizedForegroundOutputActiveSince !== null &&
+        Date.now() - synchronizedForegroundOutputActiveSince >=
+          SYNCHRONIZED_FOREGROUND_OUTPUT_ACTIVE_MAX_MS
+      ) {
+        nextSynchronizedForegroundOutputActive = false
+      }
       // Why: xterm's DOM renderer draws the cursor as row content; Windows
       // cursor-only restores need row invalidation even outside DEC 2026.
       const nativeWindowsCursorRestore =
         shouldProtectNativeWindowsSynchronizedOutput && foreground && containsCursorRestore(data)
+      if (nextSynchronizedForegroundOutputActive && !synchronizedForegroundOutputActive) {
+        synchronizedForegroundOutputActiveSince = Date.now()
+      } else if (!nextSynchronizedForegroundOutputActive) {
+        synchronizedForegroundOutputActiveSince = null
+      }
       synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
       if (hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
