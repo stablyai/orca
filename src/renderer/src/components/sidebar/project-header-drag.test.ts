@@ -34,4 +34,14 @@ describe('repo header action targets', () => {
     expect(isRepoHeaderActionTarget(header.querySelector('#label'), header)).toBe(false)
     expect(isRepoHeaderActionTarget(header, header)).toBe(false)
   })
+
+  it('ignores the hover collapse affordance', () => {
+    const header = createHeader(`
+      <div data-repo-header-collapse-affordance="">
+        <span id="chevron"></span>
+      </div>
+    `)
+
+    expect(isRepoHeaderActionTarget(header.querySelector('#chevron'), header)).toBe(true)
+  })
 })

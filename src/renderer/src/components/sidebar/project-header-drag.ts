@@ -53,7 +53,7 @@ export type RepoHeaderDragController = {
 // real drag. Below this we treat the press as a normal click (toggle group).
 const DRAG_THRESHOLD_PX = 4
 const REPO_HEADER_ACTION_SELECTOR =
-  '[data-repo-header-action], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
+  '[data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
 
 export function isRepoHeaderActionTarget(
   target: EventTarget | null,

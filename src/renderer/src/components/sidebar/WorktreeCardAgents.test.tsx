@@ -525,6 +525,27 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('>+2<')
   })
 
+  it('rotates the compact summary chevron when collapsed', async () => {
+    const { CompactAgentSummaryButton } = await import('./worktree-card-compact-agents')
+    const agents = [
+      mockAgent({ paneKey: 'tab-1:1', agentType: 'codex', startedAt: 1000, prompt: 'One' })
+    ] as DashboardAgentRowData[]
+
+    const markup = renderToStaticMarkup(
+      <CompactAgentSummaryButton
+        agents={agents}
+        subjectLabel="1 agent"
+        expanded={false}
+        onToggle={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).toContain(
+      'lucide-chevron-down size-3 shrink-0 transition-transform duration-150 -rotate-90'
+    )
+  })
+
   it('uses a neutral compact summary label while expanded', async () => {
     const { CompactAgentSummaryButton } = await import('./worktree-card-compact-agents')
     const agents = [
