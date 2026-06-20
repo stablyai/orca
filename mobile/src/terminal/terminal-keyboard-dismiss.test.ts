@@ -64,4 +64,19 @@ describe('dismissTerminalKeyboard', () => {
     expect(liveInput.blur).toHaveBeenCalledTimes(1)
     expect(dismissKeyboard).toHaveBeenCalledTimes(1)
   })
+
+  it('still clears focus and dismisses when both input handles are missing', () => {
+    const calls: string[] = []
+    const clearPendingLiveInputFocus = vi.fn(() => calls.push('clear'))
+    const dismissKeyboard = vi.fn(() => calls.push('dismiss'))
+
+    dismissTerminalKeyboard({
+      clearPendingLiveInputFocus,
+      commandInput: undefined,
+      dismissKeyboard,
+      liveInput: null
+    })
+
+    expect(calls).toEqual(['clear', 'dismiss'])
+  })
 })
