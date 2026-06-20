@@ -45,6 +45,7 @@ import { MobileSettingsPane } from './MobileSettingsPane'
 import { MobileEmulatorSettingsPane } from './MobileEmulatorSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
+import { PasswordsPane } from './PasswordsPane'
 import { AdvancedPane } from './AdvancedPane'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSetupGuidePane } from './SettingsSetupGuidePane'
@@ -1479,6 +1480,23 @@ function Settings(): React.JSX.Element {
                   searchEntries={getSectionSearchEntries('privacy')}
                 >
                   {isSectionMounted('privacy') ? <PrivacyPane settings={settings} /> : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="passwords"
+                  title={translate(
+                    'auto.components.settings.Settings.passwords_title',
+                    'Passwords'
+                  )}
+                  description={translate(
+                    'auto.components.settings.Settings.passwords_description',
+                    'Saved logins for the built-in browser.'
+                  )}
+                  searchEntries={getSectionSearchEntries('passwords')}
+                >
+                  {isSectionMounted('passwords') ? (
+                    <PasswordsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 {showDesktopOnlySettings ? (
