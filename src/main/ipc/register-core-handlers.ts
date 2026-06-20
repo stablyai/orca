@@ -71,15 +71,6 @@ import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
 
-// Why: constructed once at module scope so the vault caches records across IPC
-// calls without re-reading the file on every request.
-const browserCredentialVault = new BrowserCredentialVault({
-  filePath: join(app.getPath('userData'), 'orca-browser-credentials.json'),
-  encryptionAvailable: () => safeStorage.isEncryptionAvailable(),
-  encrypt: (p) => safeStorage.encryptString(p),
-  decrypt: (b) => safeStorage.decryptString(b)
-})
-
 let registered = false
 
 type CoreHandlerLifecycleOptions = {
@@ -115,6 +106,14 @@ export function registerCoreHandlers(
     return
   }
   registered = true
+  // Why: constructed here (not module scope) so app.getPath is available;
+  // registerCoreHandlers is called once so the vault is effectively a singleton.
+  const browserCredentialVault = new BrowserCredentialVault({
+    filePath: join(app.getPath('userData'), 'orca-browser-credentials.json'),
+    encryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (p) => safeStorage.encryptString(p),
+    decrypt: (b) => safeStorage.decryptString(b)
+  })
 
   registerAppHandlers(store, { onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch })
   registerCliHandlers()

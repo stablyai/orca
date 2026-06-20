@@ -50,7 +50,8 @@ const {
   registerSkillsHandlersMock,
   registerWorkspaceSpaceHandlersMock,
   registerWorkspacePortHandlersMock,
-  registerEmulatorFrameStreamHandlersMock
+  registerEmulatorFrameStreamHandlersMock,
+  registerBrowserCredentialHandlersMock
 } = vi.hoisted(() => ({
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
@@ -99,7 +100,19 @@ const {
   registerSkillsHandlersMock: vi.fn(),
   registerWorkspaceSpaceHandlersMock: vi.fn(),
   registerWorkspacePortHandlersMock: vi.fn(),
-  registerEmulatorFrameStreamHandlersMock: vi.fn()
+  registerEmulatorFrameStreamHandlersMock: vi.fn(),
+  registerBrowserCredentialHandlersMock: vi.fn()
+}))
+
+// Why: register-core-handlers calls app.getPath and safeStorage at call time via
+// BrowserCredentialVault; mock electron so those don't throw in the test environment.
+vi.mock('electron', () => ({
+  app: { getPath: () => '/tmp/test-user-data' },
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: (s: string) => Buffer.from(s),
+    decryptString: (b: Buffer) => b.toString()
+  }
 }))
 
 vi.mock('./onboarding', () => ({
@@ -265,7 +278,8 @@ vi.mock('../window/clipboard-ipc-handlers', () => ({
 vi.mock('./browser', () => ({
   registerBrowserHandlers: registerBrowserHandlersMock,
   setTrustedBrowserRendererWebContentsId: setTrustedBrowserRendererWebContentsIdMock,
-  setAgentBrowserBridgeRef: setAgentBrowserBridgeRefMock
+  setAgentBrowserBridgeRef: setAgentBrowserBridgeRefMock,
+  isTrustedBrowserRenderer: vi.fn()
 }))
 
 vi.mock('./app', () => ({
@@ -286,6 +300,16 @@ vi.mock('./gitlab', () => ({
 
 vi.mock('./hosted-review', () => ({
   registerHostedReviewHandlers: registerHostedReviewHandlersMock
+}))
+
+vi.mock('./browser-credentials', () => ({
+  registerBrowserCredentialHandlers: registerBrowserCredentialHandlersMock
+}))
+
+// Why: BrowserCredentialVault calls app.getPath at construction time, which is
+// unavailable in the test environment. Mock the class to a no-op constructor.
+vi.mock('../browser/credential-vault', () => ({
+  BrowserCredentialVault: class {}
 }))
 
 import { registerCoreHandlers } from './register-core-handlers'
@@ -339,6 +363,7 @@ describe('registerCoreHandlers', () => {
     registerWorkspaceSpaceHandlersMock.mockReset()
     registerWorkspacePortHandlersMock.mockReset()
     registerEmulatorFrameStreamHandlersMock.mockReset()
+    registerBrowserCredentialHandlersMock.mockReset()
   })
 
   it('passes the store through to handler registrars that need it', () => {
