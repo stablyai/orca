@@ -193,7 +193,8 @@ export function buildHeadlessTabGroupSplit(args: {
       return {
         ...group,
         tabOrder: sourceOrder,
-        activeTabId: group.activeTabId === args.tabId ? (sourceOrder[0] ?? null) : group.activeTabId
+        activeTabId:
+          group.activeTabId === args.tabId ? (sourceOrder[0] ?? null) : group.activeTabId
       }
     }
     return group
