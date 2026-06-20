@@ -26,7 +26,12 @@ beforeEach(() => {
     reveal: vi.fn().mockReturnValue('pw'),
     matchesForOrigin: vi.fn().mockReturnValue([{ id: 'e1', username: 'me' }]),
     markUsed: vi.fn(),
-    listAll: vi.fn().mockReturnValue([{ id: 'e1', username: 'me' }])
+    listAll: vi.fn().mockReturnValue([{ id: 'e1', username: 'me' }]),
+    save: vi.fn().mockReturnValue({ outcome: 'saved', entry: { id: 'e1' } }),
+    add: vi.fn().mockReturnValue({ id: 'e2', username: 'new' }),
+    update: vi.fn().mockReturnValue({ id: 'e1', username: 'updated' }),
+    delete: vi.fn().mockReturnValue(true),
+    status: vi.fn().mockReturnValue({ available: true })
   }
   browserManager = {
     fillPasswordField: vi.fn().mockResolvedValue(true),
@@ -59,5 +64,51 @@ describe('registerBrowserCredentialHandlers', () => {
     expect(result).toBe(true)
     expect(browserManager.fillPasswordField).toHaveBeenCalledWith('t1', 'pf-1', 'me', 'pw')
     expect(vault.markUsed).toHaveBeenCalledWith('e1')
+  })
+
+  it('reveal: untrusted sender returns null and vault.reveal is not called', async () => {
+    const result = await handlerFor('browser:credentials:reveal')!(
+      { sender: untrustedSender },
+      { id: 'e1' }
+    )
+    expect(result).toBeNull()
+    expect(vault.reveal).not.toHaveBeenCalled()
+  })
+
+  it('reveal: trusted sender returns the plaintext value from vault.reveal', async () => {
+    vault.reveal.mockReturnValue('secret')
+    const result = await handlerFor('browser:credentials:reveal')!(
+      { sender: trustedSender },
+      { id: 'e1' }
+    )
+    expect(result).toBe('secret')
+    expect(vault.reveal).toHaveBeenCalledWith('e1')
+  })
+
+  it('save: untrusted sender returns safe default and vault.save is not called', async () => {
+    const result = await handlerFor('browser:credentials:save')!(
+      { sender: untrustedSender },
+      { origin: 'https://example.com', username: 'me', password: 'pw' }
+    )
+    expect(result).toEqual({ outcome: 'unchanged', entry: null })
+    expect(vault.save).not.toHaveBeenCalled()
+  })
+
+  it('delete: untrusted sender returns false and vault.delete is not called', async () => {
+    const result = await handlerFor('browser:credentials:delete')!(
+      { sender: untrustedSender },
+      { id: 'e1' }
+    )
+    expect(result).toBe(false)
+    expect(vault.delete).not.toHaveBeenCalled()
+  })
+
+  it('injectBridge: untrusted sender returns false and browserManager.injectPasswordBridge is not called', async () => {
+    const result = await handlerFor('browser:credentials:injectBridge')!(
+      { sender: untrustedSender },
+      { browserTabId: 't1', token: 'tok', enabled: true }
+    )
+    expect(result).toBe(false)
+    expect(browserManager.injectPasswordBridge).not.toHaveBeenCalled()
   })
 })
