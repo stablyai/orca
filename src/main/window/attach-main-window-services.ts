@@ -110,7 +110,7 @@ export function attachMainWindowServices(
   // child_process (not a PTY) and streams parsed NDJSON events to the renderer.
   // Registered here so it is reinstalled on macOS window recreation like the
   // other per-window IPC surfaces.
-  registerJcodeChatHandlers(mainWindow)
+  registerJcodeChatHandlers(mainWindow, store)
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)

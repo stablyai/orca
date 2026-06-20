@@ -6,6 +6,8 @@
 // captured from the 'start'/'done' events on a previous turn.
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { type BrowserWindow, ipcMain } from 'electron'
+import type { Store } from '../persistence'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import {
   JCODE_CHAT_EVENT_CHANNEL,
   JCODE_CHAT_SEND_CHANNEL,
@@ -35,7 +37,7 @@ function sendEvent(mainWindow: BrowserWindow, sessionKey: string, event: JcodeNd
   mainWindow.webContents.send(JCODE_CHAT_EVENT_CHANNEL, { sessionKey, event })
 }
 
-function buildArgs(payload: JcodeChatSendPayload): string[] {
+function buildArgs(payload: JcodeChatSendPayload, remoteExecHost: string | null): string[] {
   const provider = payload.provider?.trim() || 'openai'
   const args = ['run', '-p', provider]
   if (payload.model?.trim()) {
@@ -47,17 +49,49 @@ function buildArgs(payload: JcodeChatSendPayload): string[] {
   if (payload.resumeSessionId?.trim()) {
     args.push('--resume', payload.resumeSessionId.trim())
   }
-  // brain-local (M3): unused until then, but wired so the chat path needs no
-  // further changes when remote-exec lands.
-  if (payload.remoteExecHost?.trim()) {
-    args.push('--remote-exec', payload.remoteExecHost.trim())
+  // brain-local / hands-remote (M3): jcode itself runs LOCALLY (local auth/model)
+  // — only bash executes on this remote host. The host is resolved authoritatively
+  // from the worktree's SSH target in the main process; see resolveRemoteExecHost.
+  if (remoteExecHost) {
+    args.push('--remote-exec', remoteExecHost)
   }
   args.push('--ndjson', payload.prompt)
   return args
 }
 
-function startTurn(mainWindow: BrowserWindow, payload: JcodeChatSendPayload): void {
+/** Resolve the brain-local (M3) remote-exec host for a chat turn.
+ *  Priority: the worktree's SSH target host when its folder workspace is
+ *  `isRemoteExecOnly`, else the explicit `payload.remoteExecHost` override.
+ *  Returns null when this turn should run fully local (no --remote-exec). */
+function resolveRemoteExecHost(
+  store: Store | undefined,
+  payload: JcodeChatSendPayload
+): string | null {
+  if (store && typeof payload.worktreeId === 'string') {
+    const scope = parseWorkspaceKey(payload.worktreeId)
+    if (scope?.type === 'folder') {
+      const workspace = store.getFolderWorkspace(scope.folderWorkspaceId)
+      if (workspace?.isRemoteExecOnly && workspace.connectionId) {
+        const target = store.getSshTarget(workspace.connectionId)
+        // Prefer the OpenSSH config alias so ~/.ssh/config (ProxyJump/identity)
+        // applies; fall back to the raw host. jcode resolves the host itself.
+        const host = target?.configHost?.trim() || target?.host?.trim()
+        if (host) {
+          return host
+        }
+      }
+    }
+  }
+  return payload.remoteExecHost?.trim() || null
+}
+
+function startTurn(
+  mainWindow: BrowserWindow,
+  store: Store | undefined,
+  payload: JcodeChatSendPayload
+): void {
   const { sessionKey } = payload
+  const remoteExecHost = resolveRemoteExecHost(store, payload)
 
   // A fresh turn supersedes any pending Stop bookkeeping for this pane.
   stoppedKeys.delete(sessionKey)
@@ -74,7 +108,7 @@ function startTurn(mainWindow: BrowserWindow, payload: JcodeChatSendPayload): vo
 
   let child: ChildProcessWithoutNullStreams
   try {
-    child = spawn(JCODE_BIN, buildArgs(payload), {
+    child = spawn(JCODE_BIN, buildArgs(payload, remoteExecHost), {
       cwd: payload.cwd?.trim() || undefined,
       env: process.env
     })
@@ -152,7 +186,7 @@ function startTurn(mainWindow: BrowserWindow, payload: JcodeChatSendPayload): vo
   })
 }
 
-export function registerJcodeChatHandlers(mainWindow: BrowserWindow): void {
+export function registerJcodeChatHandlers(mainWindow: BrowserWindow, store?: Store): void {
   // Re-registration safe (macOS window recreate): drop the previous listener.
   ipcMain.removeAllListeners(JCODE_CHAT_SEND_CHANNEL)
   ipcMain.on(JCODE_CHAT_SEND_CHANNEL, (event, raw: unknown) => {
@@ -163,7 +197,7 @@ export function registerJcodeChatHandlers(mainWindow: BrowserWindow): void {
     if (!payload || typeof payload.sessionKey !== 'string' || typeof payload.prompt !== 'string') {
       return
     }
-    startTurn(mainWindow, payload)
+    startTurn(mainWindow, store, payload)
   })
 
   // Stop: kill the in-flight child for a pane. The 'close' handler then emits a

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { JcodeChatEventMessage, JcodeNdjsonEvent } from '../../../../shared/jcode-chat-types'
 import { JcodeToolCard, type JcodeToolCall } from './JcodeToolCard'
 
@@ -28,14 +30,75 @@ function strField(event: JcodeNdjsonEvent, key: string): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
+/** Minimal brain-local (M3) affordance: for a folder-scoped chat pane whose
+ *  workspace has an SSH connection, show whether jcode is running brain-local
+ *  (agent local, bash on the remote host via --remote-exec) and let the user
+ *  toggle it. The host itself is resolved authoritatively in the main process;
+ *  here we only surface the SSH target label and the on/off flag. Renders
+ *  nothing for local workspaces or workspaces without an SSH connection. */
+function RemoteExecBanner({ worktreeId }: { worktreeId?: string }): React.JSX.Element | null {
+  const parsedScope = worktreeId ? parseWorkspaceKey(worktreeId) : null
+  const folderWorkspaceId =
+    parsedScope?.type === 'folder' ? parsedScope.folderWorkspaceId : undefined
+  const workspace = useAppStore((state) =>
+    folderWorkspaceId
+      ? state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
+      : undefined
+  )
+  const updateFolderWorkspace = useAppStore((state) => state.updateFolderWorkspace)
+  const targetLabel = useAppStore((state) =>
+    workspace?.connectionId ? (state.sshTargetLabels.get(workspace.connectionId) ?? null) : null
+  )
+
+  // Only meaningful when the workspace is bound to an SSH connection: that host
+  // is what jcode --remote-exec runs bash on.
+  if (!workspace?.connectionId || !folderWorkspaceId) {
+    return null
+  }
+  const enabled = workspace.isRemoteExecOnly === true
+  const hostText = targetLabel ?? workspace.connectionId
+
+  return (
+    <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-1.5 text-xs">
+      <span className="text-muted-foreground">
+        {enabled ? (
+          <>
+            Brain-local: jcode runs locally, bash on <span className="font-medium">{hostText}</span>
+          </>
+        ) : (
+          <>Local jcode (bash also local)</>
+        )}
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          void updateFolderWorkspace(folderWorkspaceId, { isRemoteExecOnly: !enabled })
+        }}
+        className={cn(
+          'rounded px-2 py-0.5 font-medium',
+          enabled
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted text-foreground hover:bg-muted/80'
+        )}
+      >
+        {enabled ? 'Hands remote: on' : 'Hands remote: off'}
+      </button>
+    </div>
+  )
+}
+
 export default function ChatPane({
   sessionKey,
   cwd,
+  worktreeId,
   provider = 'openai',
   model
 }: {
   sessionKey: string
   cwd?: string
+  /** Worktree / folder-workspace key. Threaded to main so it can resolve
+   *  brain-local (M3): a remote-exec-only workspace gets --remote-exec <host>. */
+  worktreeId?: string
   provider?: string
   model?: string
 }): React.JSX.Element {
@@ -237,9 +300,10 @@ export default function ChatPane({
       provider,
       model,
       cwd,
+      worktreeId,
       resumeSessionId: resumeSessionIdRef.current
     })
-  }, [input, isStreaming, sessionKey, provider, model, cwd])
+  }, [input, isStreaming, sessionKey, provider, model, cwd, worktreeId])
 
   const stop = useCallback(() => {
     if (!isStreaming) {
@@ -251,6 +315,7 @@ export default function ChatPane({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
+      <RemoteExecBanner worktreeId={worktreeId} />
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

@@ -923,6 +923,8 @@ export type PreloadApi = {
           | 'pendingFirstAgentMessageRename'
           | 'firstAgentMessageRenameError'
           | 'lastActivityAt'
+          | 'connectionId'
+          | 'isRemoteExecOnly'
         >
       >
     }) => Promise<FolderWorkspace | null>

@@ -106,6 +106,9 @@ export function normalizeFolderWorkspaces(
           : raw.connectionId === null
             ? null
             : (group?.connectionId ?? null),
+      // brain-local / hands-remote (M3): persist the opt-in flag. Only emit the
+      // key when true so existing (local) workspaces serialize unchanged.
+      ...(raw.isRemoteExecOnly === true ? { isRemoteExecOnly: true } : {}),
       linkedTask: normalizeFolderWorkspaceLinkedTask(raw.linkedTask),
       comment: typeof raw.comment === 'string' ? raw.comment : '',
       isArchived: raw.isArchived === true,

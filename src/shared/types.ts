@@ -309,6 +309,13 @@ export type FolderWorkspace = {
   folderPath: string
   /** SSH target ID for folder workspaces whose folder path lives remotely. */
   connectionId?: string | null
+  /** brain-local / hands-remote (M3): when true this folder workspace runs the
+   *  agent (jcode) LOCALLY — local model/auth/agent-loop — but executes bash on
+   *  the remote `connectionId` host via jcode's `--remote-exec <host>`. Such a
+   *  workspace therefore has BOTH a `connectionId` (the SSH target whose host is
+   *  passed to --remote-exec) AND `isRemoteExecOnly: true`. Spawns for it bypass
+   *  the SSH PTY provider and use the LOCAL provider so jcode gets local auth. */
+  isRemoteExecOnly?: boolean
   linkedTask: FolderWorkspaceLinkedTask | null
   comment: string
   isArchived: boolean

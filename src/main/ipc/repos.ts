@@ -776,7 +776,12 @@ const FolderWorkspaceUpdateArgs = z.object({
     createdWithAgent: z.string().refine(isTuiAgent).optional(),
     pendingFirstAgentMessageRename: z.boolean().optional(),
     firstAgentMessageRenameError: z.string().nullable().optional(),
-    lastActivityAt: z.number().finite().optional()
+    lastActivityAt: z.number().finite().optional(),
+    // brain-local / hands-remote (M3): the SSH target whose host is passed to
+    // jcode --remote-exec, plus the flag that opts this workspace into running
+    // the agent locally while bash runs on that host.
+    connectionId: z.string().nullable().optional(),
+    isRemoteExecOnly: z.boolean().optional()
   })
 })
 

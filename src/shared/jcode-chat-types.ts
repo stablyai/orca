@@ -40,7 +40,14 @@ export type JcodeChatSendPayload = {
   cwd?: string
   /** jcode session id (from a prior 'start'/'done' event) to continue a turn. */
   resumeSessionId?: string
-  /** brain-local (M3): only bash runs over SSH on this host. Wired now, used later. */
+  /** Worktree / folder-workspace key for this chat pane. The MAIN process uses
+   *  it to resolve brain-local (M3) state authoritatively from its Store: if the
+   *  folder workspace is `isRemoteExecOnly`, jcode is spawned LOCALLY with
+   *  `--remote-exec <host>` (host from the workspace's SSH target). */
+  worktreeId?: string
+  /** brain-local (M3): explicit override for the remote-exec host. Normally the
+   *  main process resolves the host from `worktreeId`; this is only honored when
+   *  no worktree-derived host is available (e.g. ad-hoc callers). */
   remoteExecHost?: string
 }
 

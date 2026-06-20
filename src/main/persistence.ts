@@ -3518,6 +3518,8 @@ export class Store {
         | 'pendingFirstAgentMessageRename'
         | 'firstAgentMessageRenameError'
         | 'lastActivityAt'
+        | 'connectionId'
+        | 'isRemoteExecOnly'
       >
     >
   ): FolderWorkspace | null {

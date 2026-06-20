@@ -1622,11 +1622,46 @@ export function registerPtyHandlers(
     assertFolderWorkspacePathUsable(status)
   }
 
+  // Why (M3 brain-local / hands-remote): a folder workspace marked
+  // isRemoteExecOnly runs the agent LOCALLY (local model/auth) while bash
+  // executes on the remote host via jcode's --remote-exec. For PTY spawns that
+  // means we must NOT route through the SSH provider even though the workspace
+  // carries a connectionId — the process (jcode TUI / shell) runs on this
+  // machine. Resolve here whether a given worktree key is such a workspace.
+  const getRemoteExecOnlyFolderWorkspace = (
+    worktreeId: string | undefined
+  ): { connectionId: string; host: string } | null => {
+    if (!store || typeof worktreeId !== 'string') {
+      return null
+    }
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (workspaceScope?.type !== 'folder') {
+      return null
+    }
+    const workspace = store.getFolderWorkspace(workspaceScope.folderWorkspaceId)
+    if (!workspace?.isRemoteExecOnly || !workspace.connectionId) {
+      return null
+    }
+    const target = store.getSshTarget(workspace.connectionId)
+    // Prefer the OpenSSH config alias (so ProxyJump/identity from ~/.ssh/config
+    // apply) and fall back to the raw host. jcode resolves the SSH host itself.
+    const host = target?.configHost?.trim() || target?.host?.trim()
+    if (!host) {
+      return null
+    }
+    return { connectionId: workspace.connectionId, host }
+  }
+
   // Why: the runtime controller must route through getProviderForPty() so that
   // CLI commands (terminal.send, terminal.stop) work for both local and remote PTYs.
   // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
   runtime?.setPtyController({
     spawn: async (args) => {
+      // M3 brain-local: see the pty:spawn handler — a remote-exec-only workspace
+      // runs the agent locally, so route this spawn through the local provider.
+      if (getRemoteExecOnlyFolderWorkspace(args.worktreeId)) {
+        args.connectionId = null
+      }
       const startupPromise = getLocalPtyStartupPromise(args.connectionId)
       if (startupPromise) {
         await startupPromise
@@ -2140,6 +2175,15 @@ export function registerPtyHandlers(
         }
       }
     ) => {
+      // M3 brain-local: a remote-exec-only workspace runs jcode LOCALLY (only
+      // bash is remoted via --remote-exec), so clear connectionId here. Every
+      // downstream decision in this handler keys on args.connectionId; nulling
+      // it makes the entire spawn take the local provider + local host-env path
+      // (so jcode gets local auth) without touching each reference individually.
+      const remoteExecOnly = getRemoteExecOnlyFolderWorkspace(args.worktreeId)
+      if (remoteExecOnly) {
+        args.connectionId = null
+      }
       const startupPromise = getLocalPtyStartupPromise(args.connectionId)
       if (startupPromise) {
         await startupPromise

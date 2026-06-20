@@ -702,6 +702,8 @@ export type RepoSlice = {
         | 'pendingFirstAgentMessageRename'
         | 'firstAgentMessageRenameError'
         | 'lastActivityAt'
+        | 'connectionId'
+        | 'isRemoteExecOnly'
       >
     >
   ) => Promise<boolean>

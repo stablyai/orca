@@ -405,7 +405,7 @@ export default function TabGroupPanel({
             >
               {/* Why: key the chat session by the tab id so each jcode chat tab
                   keeps an independent conversation / --resume session. */}
-              <ChatPane sessionKey={activeTab.id} cwd={chatCwd} />
+              <ChatPane sessionKey={activeTab.id} cwd={chatCwd} worktreeId={worktreeId} />
             </Suspense>
           </div>
         )}
