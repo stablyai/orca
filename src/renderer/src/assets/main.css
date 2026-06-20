@@ -2966,6 +2966,46 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   background: rgba(59, 130, 246, 0.14);
 }
 
+.orca-diff-hunk-stage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 7px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  border: 1px solid color-mix(in srgb, var(--foreground) 22%, var(--border));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--foreground) 5%, var(--editor-surface));
+  color: color-mix(in srgb, var(--foreground) 78%, var(--muted-foreground));
+  cursor: pointer;
+  z-index: 5;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
+  transition:
+    color 100ms ease,
+    background-color 100ms ease,
+    border-color 100ms ease,
+    opacity 100ms ease;
+}
+
+.orca-diff-hunk-stage-btn:hover {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
+  background: color-mix(in srgb, var(--primary) 12%, var(--background));
+}
+
+.orca-diff-hunk-stage-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.orca-diff-hunk-stage-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .dark .orca-diff-comment-range-highlight {
   background: rgba(96, 165, 250, 0.18);
 }

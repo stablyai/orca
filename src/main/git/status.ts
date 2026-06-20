@@ -32,6 +32,7 @@ import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import {
   gitExecFileAsync,
   gitExecFileAsyncBuffer,
+  gitExecFileWithStdin,
   gitOptionalLocksDisabledEnv,
   gitStreamStdout
 } from './runner'
@@ -1195,6 +1196,42 @@ export async function unstageFile(
   await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath)], {
     ...gitOptionsForWorktree(worktreePath, options)
   })
+}
+
+/** Raw unified diff for one file (staged = index-vs-HEAD, else worktree-vs-index). */
+export async function getFileDiffPatch(
+  worktreePath: string,
+  filePath: string,
+  staged: boolean,
+  options: GitRuntimeOptions = {}
+): Promise<string> {
+  const { stdout } = await gitExecFileAsync(
+    [
+      'diff',
+      ...(staged ? ['--cached'] : []),
+      '--no-color',
+      '--no-ext-diff',
+      '--',
+      literalPathspec(filePath)
+    ],
+    { ...gitOptionsForWorktree(worktreePath, options), maxBuffer: MAX_GIT_SHOW_BYTES }
+  )
+  return stdout
+}
+
+/** Apply a unified patch to the index only (reverse unstages). git apply is
+ * atomic, so a stale patch fails cleanly instead of corrupting the index. */
+export async function applyIndexPatch(
+  worktreePath: string,
+  patch: string,
+  reverse: boolean,
+  options: GitRuntimeOptions = {}
+): Promise<void> {
+  await gitExecFileWithStdin(
+    ['apply', '--cached', ...(reverse ? ['--reverse'] : [])],
+    gitOptionsForWorktree(worktreePath, options),
+    patch
+  )
 }
 
 export async function getStagedCommitContext(

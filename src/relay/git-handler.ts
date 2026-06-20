@@ -69,6 +69,8 @@ export class GitHandler {
     this.dispatcher.onRequest('git.diff', (p) => this.getDiff(p))
     this.dispatcher.onRequest('git.stage', (p) => this.stage(p))
     this.dispatcher.onRequest('git.unstage', (p) => this.unstage(p))
+    this.dispatcher.onRequest('git.diffPatch', (p) => this.getDiffPatch(p))
+    this.dispatcher.onRequest('git.applyPatch', (p, context) => this.applyPatch(p, context))
     this.dispatcher.onRequest('git.bulkStage', (p) => this.bulkStage(p))
     this.dispatcher.onRequest('git.bulkUnstage', (p) => this.bulkUnstage(p))
     this.dispatcher.onRequest('git.abortMerge', (p) => this.abortMerge(p))
@@ -198,6 +200,87 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
     await this.git(['restore', '--staged', '--', filePath], worktreePath)
+  }
+
+  private async getDiffPatch(params: Record<string, unknown>) {
+    const worktreePath = params.worktreePath as string
+    const filePath = params.filePath as string
+    // Why: filePath is relative; reject traversal before passing it to git diff.
+    const resolved = path.resolve(worktreePath, filePath)
+    const rel = path.relative(path.resolve(worktreePath), resolved)
+    if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+      throw new Error(`Path "${filePath}" resolves outside the worktree`)
+    }
+    const staged = params.staged === true
+    const { stdout } = await this.git(
+      ['diff', ...(staged ? ['--cached'] : []), '--no-color', '--no-ext-diff', '--', filePath],
+      worktreePath
+    )
+    return { patch: stdout }
+  }
+
+  private async applyPatch(params: Record<string, unknown>, context?: RequestContext) {
+    const worktreePath = params.worktreePath as string
+    const patch = params.patch as string
+    const reverse = params.reverse === true
+    // Why: dedicated index-only op with fixed args — no path args and no exec
+    // allowlist surface; git apply itself rejects patch paths escaping the repo.
+    await this.gitWithStdin(
+      ['apply', '--cached', ...(reverse ? ['--reverse'] : [])],
+      worktreePath,
+      patch,
+      context?.signal
+    )
+  }
+
+  private gitWithStdin(
+    args: string[],
+    cwd: string,
+    input: string,
+    signal?: AbortSignal
+  ): Promise<{ stdout: string; stderr: string }> {
+    return new Promise((resolve, reject) => {
+      const child = spawn('git', args, {
+        cwd: expandTilde(cwd),
+        env: buildRelayCommandEnv(),
+        windowsHide: true
+      })
+      let stdout = ''
+      let stderr = ''
+      let settled = false
+      const finish = (error: Error | null): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        if (error) {
+          reject(Object.assign(error, { stdout, stderr }))
+          return
+        }
+        resolve({ stdout, stderr })
+      }
+      child.stdout?.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString('utf-8')
+      })
+      child.stderr?.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString('utf-8')
+      })
+      child.on('error', finish)
+      child.on('close', (code) =>
+        code === 0 ? finish(null) : finish(new Error(`git exited with ${code}: ${stderr.trim()}`))
+      )
+      signal?.addEventListener(
+        'abort',
+        () => {
+          child.kill()
+          finish(new Error('git apply aborted'))
+        },
+        { once: true }
+      )
+      // Why: git may exit before draining stdin (malformed patch) → EPIPE.
+      child.stdin?.on('error', () => {})
+      child.stdin?.end(input)
+    })
   }
 
   private async bulkStage(params: Record<string, unknown>) {

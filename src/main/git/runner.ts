@@ -993,6 +993,106 @@ export function gitSpawn(
   })
 }
 
+/** Run git with a stdin payload (async execFile can't); via gitSpawn so WSL
+ * routing is preserved. Feeds `git apply --cached` a patch without a temp file. */
+export async function gitExecFileWithStdin(
+  args: string[],
+  options: {
+    cwd: string
+    wslDistro?: string
+    env?: NodeJS.ProcessEnv
+    maxBuffer?: number
+    signal?: AbortSignal
+  },
+  input: string
+): Promise<{ stdout: string; stderr: string }> {
+  const maxBuffer = options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER
+  return withGitSpan({ args, cwd: options.cwd }, async () => {
+    return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      if (options.signal?.aborted) {
+        reject(createAbortError())
+        return
+      }
+      const child = gitSpawn(args, {
+        cwd: options.cwd,
+        env: nonInteractiveGitEnv(options.env),
+        stdio: ['pipe', 'pipe', 'pipe'],
+        wslDistro: options.wslDistro,
+        windowsHide: true
+      })
+      let settled = false
+      let stdout = ''
+      let stderr = ''
+      let stdoutBytes = 0
+      let stderrBytes = 0
+      const stdoutDecoder = new StringDecoder('utf8')
+      const stderrDecoder = new StringDecoder('utf8')
+      const cleanup = (): void => {
+        options.signal?.removeEventListener('abort', onAbort)
+        child.stdout?.off('data', onStdout)
+        child.stderr?.off('data', onStderr)
+        child.off('error', onError)
+        child.off('close', onClose)
+        stdoutDecoder.end()
+        stderrDecoder.end()
+      }
+      const finish = (error: Error | null): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        if (error) {
+          reject(Object.assign(error, { stdout, stderr }))
+          return
+        }
+        resolve({ stdout, stderr })
+      }
+      const onAbort = (): void => {
+        killSpawnedCommandTree(child)
+        finish(createAbortError())
+      }
+      function onStdout(chunk: Buffer): void {
+        stdoutBytes += chunk.byteLength
+        if (stdoutBytes > maxBuffer) {
+          killSpawnedCommandTree(child)
+          finish(new Error('git stdout exceeded maxBuffer.'))
+          return
+        }
+        stdout += stdoutDecoder.write(chunk)
+      }
+      function onStderr(chunk: Buffer): void {
+        stderrBytes += chunk.byteLength
+        if (stderrBytes > maxBuffer) {
+          killSpawnedCommandTree(child)
+          finish(new Error('git stderr exceeded maxBuffer.'))
+          return
+        }
+        stderr += stderrDecoder.write(chunk)
+      }
+      function onError(error: Error): void {
+        finish(error)
+      }
+      function onClose(code: number | null): void {
+        if (code === 0) {
+          finish(null)
+          return
+        }
+        finish(new Error(`git exited with ${code}: ${stderr.trim()}`))
+      }
+      child.stdout?.on('data', onStdout)
+      child.stderr?.on('data', onStderr)
+      child.on('error', onError)
+      child.on('close', onClose)
+      // Why: git can exit (e.g. malformed patch) before draining stdin, raising
+      // EPIPE on the write. Swallow it — onClose already surfaces the failure.
+      child.stdin?.on('error', () => {})
+      child.stdin?.end(input)
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+    })
+  })
+}
+
 // ─── gh CLI runners ─────────────────────────────────────────────────
 
 // Why: non-repo-scoped gh calls (listAccessibleProjects, rate_limit, etc.)

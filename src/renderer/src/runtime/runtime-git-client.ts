@@ -734,6 +734,61 @@ export async function unstageRuntimeGitPath(
   )
 }
 
+export async function getRuntimeGitFileDiffPatch(
+  context: RuntimeGitContext,
+  args: { filePath: string; staged: boolean }
+): Promise<string> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    const result = await window.api.git.diffPatch({
+      worktreePath: context.worktreePath,
+      filePath: args.filePath,
+      staged: args.staged,
+      connectionId: context.connectionId
+    })
+    return result.patch
+  }
+  const result = await callRuntimeRpc<{ patch: string }>(
+    target,
+    'git.diffPatch',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      filePath: args.filePath,
+      staged: args.staged
+    },
+    { timeoutMs: 15_000 }
+  )
+  return result.patch
+}
+
+export async function applyRuntimeGitIndexPatch(
+  context: RuntimeGitContext,
+  args: { filePath: string; patch: string; reverse: boolean }
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.applyPatch({
+      worktreePath: context.worktreePath,
+      filePath: args.filePath,
+      patch: args.patch,
+      reverse: args.reverse,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.applyPatch',
+    {
+      worktree: toRuntimeWorktreeSelector(context.worktreeId),
+      filePath: args.filePath,
+      patch: args.patch,
+      reverse: args.reverse
+    },
+    { timeoutMs: 15_000 }
+  )
+}
+
 export async function bulkUnstageRuntimeGitPaths(
   context: RuntimeGitContext,
   filePaths: string[]

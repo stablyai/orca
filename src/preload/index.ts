@@ -2664,6 +2664,19 @@ const api = {
       filePath: string
       connectionId?: string
     }): Promise<void> => ipcRenderer.invoke('git:unstage', args),
+    diffPatch: (args: {
+      worktreePath: string
+      filePath: string
+      staged: boolean
+      connectionId?: string
+    }): Promise<{ patch: string }> => ipcRenderer.invoke('git:diffPatch', args),
+    applyPatch: (args: {
+      worktreePath: string
+      filePath: string
+      patch: string
+      reverse: boolean
+      connectionId?: string
+    }): Promise<void> => ipcRenderer.invoke('git:applyPatch', args),
     bulkUnstage: (args: {
       worktreePath: string
       filePaths: string[]

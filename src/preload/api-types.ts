@@ -2270,6 +2270,19 @@ export type PreloadApi = {
       filePath: string
       connectionId?: string
     }) => Promise<void>
+    diffPatch: (args: {
+      worktreePath: string
+      filePath: string
+      staged: boolean
+      connectionId?: string
+    }) => Promise<{ patch: string }>
+    applyPatch: (args: {
+      worktreePath: string
+      filePath: string
+      patch: string
+      reverse: boolean
+      connectionId?: string
+    }) => Promise<void>
     bulkUnstage: (args: {
       worktreePath: string
       filePaths: string[]
