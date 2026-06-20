@@ -1,4 +1,5 @@
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getCommandTokenPathBasename, getFirstCommandToken } from './command-token-scanner'
 
 /**
  * Pi-compatible agent kinds. Both Pi and OMP (omp.sh) consume the same
@@ -27,7 +28,7 @@ const PATH_PREFIX = `(?:[^\\s;&|('"\`]*[\\\\/])?`
 function makeLaunchCmdRegex(launchCmd: string): RegExp {
   // Why: launchCmd may be a multi-token string ("hermes --tui"); only the
   // first token is the binary name. Use that for matching.
-  const binary = launchCmd.split(/\s+/, 1)[0]
+  const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCmd))
   const escaped = binary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return new RegExp(
     `${BOUNDARY_BEFORE}${PATH_PREFIX}${escaped}(?:\\.cmd|\\.exe|\\.sh)?${BOUNDARY_AFTER}`,

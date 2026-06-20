@@ -630,7 +630,32 @@ function settingsForRepoOwner(state: Pick<AppState, 'repos' | 'settings'>, repoI
     : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
 }
 
-function settingsForWorktreeOwner(state: Pick<AppState, 'repos' | 'settings'>, worktreeId: string) {
+function settingsForExecutionHostOwner(
+  settings: AppState['settings'],
+  executionHostId: string | null | undefined
+) {
+  const parsed = parseExecutionHostId(executionHostId)
+  if (parsed?.kind === 'runtime') {
+    return settings
+      ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
+      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
+  }
+  if (parsed?.kind === 'local' || parsed?.kind === 'ssh') {
+    return settings
+      ? { ...settings, activeRuntimeEnvironmentId: null }
+      : ({ activeRuntimeEnvironmentId: null } as AppState['settings'])
+  }
+  return settings
+}
+
+function settingsForWorktreeOwner(
+  state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo'>,
+  worktreeId: string
+) {
+  const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
+  if (worktree?.hostId) {
+    return settingsForExecutionHostOwner(state.settings, worktree.hostId)
+  }
   return settingsForRepoOwner(state, getRepoIdFromWorktreeId(worktreeId))
 }
 
@@ -730,6 +755,87 @@ function projectWorktreeLineageToWorkspaceLineage(
   return next
 }
 
+type WorktreeLineageUpdateResult = {
+  target: ReturnType<typeof getActiveRuntimeTarget>
+  lineage: WorktreeLineage | null
+  updatedRemoteWorktree?: WorktreeWithLineage
+}
+
+async function setWorktreeLineageForRuntime(
+  settings: AppState['settings'],
+  worktreeId: string,
+  args: { parentWorktreeId?: string; noParent?: boolean }
+): Promise<WorktreeLineageUpdateResult> {
+  const target = getActiveRuntimeTarget(settings)
+  if (target.kind === 'local') {
+    return {
+      target,
+      lineage: await window.api.worktrees.updateLineage({ worktreeId, ...args })
+    }
+  }
+  const result = await callRuntimeRpc<{ worktree: WorktreeWithLineage }>(
+    target,
+    'worktree.set',
+    {
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      ...(args.parentWorktreeId
+        ? { parentWorktree: toRuntimeWorktreeSelector(args.parentWorktreeId) }
+        : {}),
+      ...(args.noParent === true ? { noParent: true } : {})
+    },
+    { timeoutMs: 15_000 }
+  )
+  return {
+    target,
+    lineage: result.worktree.lineage ?? null,
+    updatedRemoteWorktree: result.worktree
+  }
+}
+
+function applyWorktreeLineageUpdate(
+  set: Parameters<StateCreator<AppState>>[0],
+  worktreeId: string,
+  result: WorktreeLineageUpdateResult
+): void {
+  set((s) => {
+    const next = { ...s.worktreeLineageById }
+    if (result.lineage) {
+      next[worktreeId] = result.lineage
+    } else {
+      delete next[worktreeId]
+    }
+    return {
+      worktreeLineageById: next,
+      workspaceLineageByChildKey: projectWorktreeLineageToWorkspaceLineage(
+        worktreeId,
+        result.lineage,
+        s.workspaceLineageByChildKey
+      ),
+      worktreesByRepo:
+        result.target.kind === 'local' || !result.updatedRemoteWorktree
+          ? s.worktreesByRepo
+          : replaceWorktreeInRepoLists(s.worktreesByRepo, result.updatedRemoteWorktree),
+      sortEpoch: s.sortEpoch + 1
+    }
+  })
+}
+
+async function refreshWorktreeLineageForSettings(
+  settings: AppState['settings'],
+  set: Parameters<StateCreator<AppState>>[0]
+): Promise<void> {
+  const lineage = await listWorktreeLineageForRuntime(settings)
+  const hostId = getSettingsFocusedExecutionHostId(settings)
+  set((s) => ({
+    worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
+    workspaceLineageByChildKey: mergeWorkspaceLineageForHost(
+      s,
+      hostId,
+      lineage.workspaceLineageByChildKey
+    )
+  }))
+}
+
 async function refreshRemoteWorktreeLineageBestEffort(
   settings: AppState['settings'],
   set: (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void
@@ -756,16 +862,20 @@ async function refreshRemoteWorktreeLineageBestEffort(
 }
 
 function getWorktreeHostId(
-  state: Pick<AppState, 'repos'>,
+  state: Pick<AppState, 'repos' | 'worktreesByRepo'>,
   worktreeId: string
 ): ExecutionHostId | null {
+  const worktree = findWorktreeById(state.worktreesByRepo, worktreeId)
+  if (worktree?.hostId) {
+    return worktree.hostId
+  }
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const repo = state.repos.find((entry) => entry.id === repoId)
   return repo ? getRepoExecutionHostId(repo) : null
 }
 
 function mergeLineageForHost(
-  state: Pick<AppState, 'repos' | 'worktreeLineageById'>,
+  state: Pick<AppState, 'repos' | 'worktreesByRepo' | 'worktreeLineageById'>,
   hostId: ExecutionHostId,
   lineage: Record<string, WorktreeLineage>
 ): Record<string, WorktreeLineage> {
@@ -779,7 +889,7 @@ function mergeLineageForHost(
 }
 
 function mergeWorkspaceLineageForHost(
-  state: Pick<AppState, 'repos' | 'workspaceLineageByChildKey'>,
+  state: Pick<AppState, 'repos' | 'worktreesByRepo' | 'workspaceLineageByChildKey'>,
   hostId: ExecutionHostId,
   lineage: Record<string, WorkspaceLineage>
 ): Record<string, WorkspaceLineage> {
@@ -1464,68 +1574,38 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       // Why: lineage is a focused-host refresh — fetch from the focused host and
       // host-merge so other hosts' previously fetched lineage is preserved.
-      const settings = get().settings
-      const lineage = await listWorktreeLineageForRuntime(settings)
-      const hostId = getSettingsFocusedExecutionHostId(settings)
-      set((s) => ({
-        worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
-        workspaceLineageByChildKey: mergeWorkspaceLineageForHost(
-          s,
-          hostId,
-          lineage.workspaceLineageByChildKey
-        )
-      }))
+      await refreshWorktreeLineageForSettings(get().settings, set)
     } catch (err) {
       console.error('Failed to fetch worktree lineage:', err)
     }
   },
 
   updateWorktreeLineage: async (worktreeId, args) => {
+    const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
     try {
-      const target = getActiveRuntimeTarget(settingsForWorktreeOwner(get(), worktreeId))
-      let updatedRemoteWorktree: WorktreeWithLineage | undefined
-      const lineage =
-        target.kind === 'local'
-          ? await window.api.worktrees.updateLineage({ worktreeId, ...args })
-          : await callRuntimeRpc<{ worktree: WorktreeWithLineage }>(
-              target,
-              'worktree.set',
-              {
-                worktree: toRuntimeWorktreeSelector(worktreeId),
-                ...(args.parentWorktreeId
-                  ? { parentWorktree: toRuntimeWorktreeSelector(args.parentWorktreeId) }
-                  : {}),
-                ...(args.noParent === true ? { noParent: true } : {})
-              },
-              { timeoutMs: 15_000 }
-            ).then((result) => {
-              updatedRemoteWorktree = result.worktree
-              return result.worktree.lineage ?? null
-            })
-      set((s) => {
-        const next = { ...s.worktreeLineageById }
-        if (lineage) {
-          next[worktreeId] = lineage
-        } else {
-          delete next[worktreeId]
-        }
-        return {
-          worktreeLineageById: next,
-          workspaceLineageByChildKey: projectWorktreeLineageToWorkspaceLineage(
-            worktreeId,
-            lineage,
-            s.workspaceLineageByChildKey
-          ),
-          worktreesByRepo:
-            target.kind === 'local' || !updatedRemoteWorktree
-              ? s.worktreesByRepo
-              : replaceWorktreeInRepoLists(s.worktreesByRepo, updatedRemoteWorktree),
-          sortEpoch: s.sortEpoch + 1
-        }
-      })
+      applyWorktreeLineageUpdate(
+        set,
+        worktreeId,
+        await setWorktreeLineageForRuntime(ownerSettings, worktreeId, args)
+      )
     } catch (err) {
       console.error('Failed to update worktree lineage:', err)
-      await get().fetchWorktreeLineage()
+      await refreshWorktreeLineageForSettings(ownerSettings, set)
+    }
+  },
+
+  assignWorktreeParent: async (worktreeId, args) => {
+    const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
+    try {
+      applyWorktreeLineageUpdate(
+        set,
+        worktreeId,
+        await setWorktreeLineageForRuntime(ownerSettings, worktreeId, args)
+      )
+    } catch (err) {
+      console.error('Failed to assign worktree parent:', err)
+      await refreshWorktreeLineageForSettings(ownerSettings, set)
+      throw err
     }
   },
 

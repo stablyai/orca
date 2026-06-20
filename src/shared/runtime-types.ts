@@ -152,6 +152,9 @@ export type RuntimeMobileSessionMarkdownTab = {
   sourceFilePath: string
   sourceRelativePath: string
   documentVersion: string
+  /** Tab-level color/pin, host-persisted for remote servers. */
+  color?: string | null
+  isPinned?: boolean
 }
 
 export type RuntimeMobileSessionFileTab = {
@@ -164,6 +167,9 @@ export type RuntimeMobileSessionFileTab = {
   mode?: 'edit' | 'diff'
   diffSource?: 'staged' | 'unstaged'
   isDirty: boolean
+  /** Tab-level color/pin, host-persisted for remote servers. */
+  color?: string | null
+  isPinned?: boolean
   isActive: boolean
 }
 
@@ -336,8 +342,57 @@ export type RuntimeTerminalSummary = {
   preview: string
 }
 
+export type RuntimeTerminalVisualTerminalNode = {
+  type: 'terminal'
+  handle: string
+  tabId: string
+  leafId: string
+  title: string | null
+  connected: boolean
+  active: boolean
+}
+
+export type RuntimeTerminalVisualPaneNode =
+  | RuntimeTerminalVisualTerminalNode
+  | {
+      type: 'pane-split'
+      direction: Extract<TerminalPaneLayoutNode, { type: 'split' }>['direction']
+      first: RuntimeTerminalVisualPaneNode
+      second: RuntimeTerminalVisualPaneNode
+    }
+
+export type RuntimeTerminalVisualTab = {
+  tabId: string
+  title: string | null
+  activeLeafId: string | null
+  panes: RuntimeTerminalVisualPaneNode
+}
+
+export type RuntimeTerminalVisualGroupNode = {
+  type: 'group'
+  groupId: string | null
+  activeTabId: string | null
+  tabs: RuntimeTerminalVisualTab[]
+}
+
+export type RuntimeTerminalVisualLayoutNode =
+  | RuntimeTerminalVisualGroupNode
+  | {
+      type: 'split'
+      direction: Extract<TabGroupLayoutNode, { type: 'split' }>['direction']
+      first: RuntimeTerminalVisualLayoutNode
+      second: RuntimeTerminalVisualLayoutNode
+    }
+
+export type RuntimeTerminalVisualLayout = {
+  worktreeId: string
+  worktreePath: string
+  root: RuntimeTerminalVisualLayoutNode
+}
+
 export type RuntimeTerminalListResult = {
   terminals: RuntimeTerminalSummary[]
+  visualLayouts?: RuntimeTerminalVisualLayout[]
   totalCount: number
   truncated: boolean
 }
@@ -386,6 +441,13 @@ export type RuntimeTerminalSplit = {
   handle: string
   tabId: string
   paneRuntimeId: number
+}
+
+export type RuntimeTerminalResolvePane = {
+  handle: string
+  tabId: string
+  leafId: string
+  ptyId: string | null
 }
 
 export type RuntimeTerminalFocus = {

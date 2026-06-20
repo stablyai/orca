@@ -47,6 +47,7 @@ import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
+import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -774,8 +775,8 @@ export async function getCommitCompare(
       ['rev-list', '--parents', '-n', '1', commitOid],
       gitOptionsForWorktree(worktreePath, options)
     )
-    const [, firstParent] = stdout.trim().split(/\s+/)
-    summary.parentOid = firstParent ?? null
+    const firstParent = parseGitRevListFirstParentOid(stdout)
+    summary.parentOid = firstParent
     summary.baseRef = firstParent ? firstParent.slice(0, 7) : 'empty tree'
 
     const entries = await loadCommitChanges(worktreePath, summary.parentOid, commitOid, options)

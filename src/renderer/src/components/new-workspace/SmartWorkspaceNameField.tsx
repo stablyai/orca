@@ -58,6 +58,7 @@ import {
   getBranchSearchRequest,
   getSmartWorkspaceEmptyHint,
   getVisibleBranchResults,
+  isSmartWorkspaceSourceQueryWithinLimit,
   type SmartNameMode,
   type SmartWorkspaceSourceRow
 } from './smart-workspace-source-results'
@@ -514,17 +515,29 @@ export default function SmartWorkspaceNameField({
     return () => window.clearTimeout(timer)
   }, [value])
 
-  const normalizedGhQuery = useMemo(
-    () => normalizeGitHubLinkQuery(debouncedQuery),
+  const sourceQueryWithinLimit = useMemo(
+    () => isSmartWorkspaceSourceQueryWithinLimit(debouncedQuery),
     [debouncedQuery]
   )
-  const parsedGhLink = useMemo(() => parseGitHubIssueOrPRLink(debouncedQuery), [debouncedQuery])
+  const normalizedGhQuery = useMemo(
+    () => normalizeGitHubLinkQuery(sourceQueryWithinLimit ? debouncedQuery : ''),
+    [debouncedQuery, sourceQueryWithinLimit]
+  )
+  const parsedGhLink = useMemo(
+    () => (sourceQueryWithinLimit ? parseGitHubIssueOrPRLink(debouncedQuery) : null),
+    [debouncedQuery, sourceQueryWithinLimit]
+  )
   const shouldQueryGithub =
+    sourceQueryWithinLimit &&
     !repoBackedSourcesDisabled &&
     !textOnly &&
     repoBackedSearchTargets.length > 0 &&
     (mode === 'smart' || mode === 'github')
-  const shouldQueryLinear = !textOnly && linearAvailable && (mode === 'smart' || mode === 'linear')
+  const shouldQueryLinear =
+    sourceQueryWithinLimit &&
+    !textOnly &&
+    linearAvailable &&
+    (mode === 'smart' || mode === 'linear')
 
   useEffect(() => {
     if (disabled || !shouldQueryGithub) {
@@ -872,8 +885,12 @@ export default function SmartWorkspaceNameField({
   // via the project-internal `/-/` separator) and resolves it to a
   // GitLabWorkItem via the IPC. Skipped silently when the host hook
   // hasn't supplied an onGitLabItemSelect handler.
-  const parsedGlLink = useMemo(() => parseGitLabIssueOrMRLink(debouncedQuery), [debouncedQuery])
+  const parsedGlLink = useMemo(
+    () => (sourceQueryWithinLimit ? parseGitLabIssueOrMRLink(debouncedQuery) : null),
+    [debouncedQuery, sourceQueryWithinLimit]
+  )
   const shouldQueryGitlab =
+    sourceQueryWithinLimit &&
     !repoBackedSourcesDisabled &&
     !textOnly &&
     gitlabSourceAvailable &&
@@ -1056,7 +1073,11 @@ export default function SmartWorkspaceNameField({
   //     commits the typed text instead of a stale issue/PR/branch.
   //   - GitHub/Linear: no typed-text fallback row, so clear the highlight
   //     entirely; the input's Enter handler falls through to onPlainEnter.
-  const isQueryStale = value.trim().length > 0 && debouncedQuery.trim() !== value.trim()
+  const valueWithinSourceLimit = isSmartWorkspaceSourceQueryWithinLimit(value)
+  const debouncedQueryWithinSourceLimit = isSmartWorkspaceSourceQueryWithinLimit(debouncedQuery)
+  const trimmedValue = valueWithinSourceLimit ? value.trim() : ''
+  const trimmedDebouncedQuery = debouncedQueryWithinSourceLimit ? debouncedQuery.trim() : ''
+  const isQueryStale = trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
 
   // Why: when the typed value is unambiguously a source reference — a
   // GitHub issue/PR shorthand ("#1234"), a github.com issue/pull URL, or a
@@ -1065,6 +1086,9 @@ export default function SmartWorkspaceNameField({
   // appears in the results, snap the highlight onto it so Enter picks it
   // instead of the typed-text fallback.
   const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | null>(() => {
+    if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
+      return null
+    }
     const trimmed = value.trim()
     if (!trimmed) {
       return null

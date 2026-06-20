@@ -32,7 +32,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { resolveRemoteOperationErrorMessage } from '@/store/slices/editor'
+import { resolveRemoteOperationErrorMessage } from '@/lib/source-control-remote-error'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
@@ -86,6 +86,12 @@ import {
   buildActiveOpenFileSignature,
   buildActiveOpenRowKeys
 } from './source-control-active-open-file-keys'
+import {
+  filterSourceControlGroupedPathEntries,
+  filterSourceControlPathEntries,
+  getSourceControlFileFilterState
+} from './source-control-file-filter'
+import { getCommitMessageTextareaRows } from './source-control-commit-message-rows'
 import {
   SourceControlDiscardDialog,
   type PendingDiscardConfirmation
@@ -1465,27 +1471,22 @@ function SourceControlInner(): React.JSX.Element {
     return groups
   }, [entries])
 
-  const normalizedFilter = filterQuery.toLowerCase()
+  const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
+  const normalizedFilter = fileFilterState.normalizedFilter
   const isGitHistoryVisible =
-    !normalizedFilter && Boolean(activeWorktreeId && worktreePath && !isFolder)
+    !normalizedFilter &&
+    !fileFilterState.tooLarge &&
+    Boolean(activeWorktreeId && worktreePath && !isFolder)
 
-  const filteredGrouped = useMemo(() => {
-    if (!normalizedFilter) {
-      return grouped
-    }
-    return {
-      staged: grouped.staged.filter((e) => e.path.toLowerCase().includes(normalizedFilter)),
-      unstaged: grouped.unstaged.filter((e) => e.path.toLowerCase().includes(normalizedFilter)),
-      untracked: grouped.untracked.filter((e) => e.path.toLowerCase().includes(normalizedFilter))
-    }
-  }, [grouped, normalizedFilter])
+  const filteredGrouped = useMemo(
+    () => filterSourceControlGroupedPathEntries(grouped, fileFilterState),
+    [fileFilterState, grouped]
+  )
 
-  const filteredBranchEntries = useMemo(() => {
-    if (!normalizedFilter) {
-      return branchEntries
-    }
-    return branchEntries.filter((e) => e.path.toLowerCase().includes(normalizedFilter))
-  }, [branchEntries, normalizedFilter])
+  const filteredBranchEntries = useMemo(
+    () => filterSourceControlPathEntries(branchEntries, fileFilterState),
+    [branchEntries, fileFilterState]
+  )
 
   const flatEntries = useMemo(() => {
     const arr: FlatEntry[] = []
@@ -5262,6 +5263,13 @@ function SourceControlInner(): React.JSX.Element {
             />
           ) : null}
 
+          {fileFilterState.tooLarge && (
+            <EmptyState
+              heading="Search text is too large"
+              supportingText="Use a shorter file filter."
+            />
+          )}
+
           {normalizedFilter && !hasFilteredUncommittedEntries && !hasFilteredBranchEntries && (
             <EmptyState
               heading="No matching files"
@@ -6148,7 +6156,7 @@ export function CommitArea({
   // Why: cap at 12 rows so a pasted multi-page commit message doesn't push
   // the Commit button off-screen. The textarea keeps `resize-none` (matching
   // the existing style) — the browser scrolls internally past 12 rows.
-  const rows = Math.min(12, Math.max(2, commitMessage.split('\n').length))
+  const rows = getCommitMessageTextareaRows(commitMessage)
   // Why: only spin the primary when its label matches what's actually
   // running. The commit-area resolver overrides the primary kind to mirror
   // the in-flight op (e.g. user picks Sync from the dropdown → primary

@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/command'
 import { prepareQuickOpenFiles, rankQuickOpenFiles } from '@/components/quick-open-search'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
+import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
 
 /**
@@ -176,6 +177,11 @@ export default function QuickOpen(): React.JSX.Element | null {
 
   const worktreePath = activeWorktree?.path ?? null
 
+  // Why: Radix's onCloseAutoFocus restore is suppressed below, so dismissing
+  // the dialog (Esc / click-away) would otherwise leave the active panel
+  // unfocused. This returns focus to the surface that was active on open.
+  const { captureReturnFocus, skipReturnFocus } = useModalReturnFocus(visible)
+
   // Why: reset input only on open. Keeping this out of the file-load effect
   // prevents unrelated store updates (which can produce a new excludePaths
   // array reference) from wiping a query the user is currently typing.
@@ -198,6 +204,9 @@ export default function QuickOpen(): React.JSX.Element | null {
       if (!activeWorktreeId || !worktreePath) {
         return
       }
+      // Why: opening a file moves focus into the editor; don't restore focus to
+      // the surface that was active before QuickOpen opened.
+      skipReturnFocus()
       closeModal()
       openFile({
         filePath: joinPath(worktreePath, relativePath),
@@ -207,7 +216,7 @@ export default function QuickOpen(): React.JSX.Element | null {
         mode: 'edit'
       })
     },
-    [activeWorktreeId, worktreePath, openFile, closeModal]
+    [activeWorktreeId, worktreePath, openFile, closeModal, skipReturnFocus]
   )
 
   const handleOpenChange = useCallback(
@@ -224,11 +233,16 @@ export default function QuickOpen(): React.JSX.Element | null {
     e.preventDefault()
   }, [])
 
+  const handleOpenAutoFocus = useCallback(() => {
+    captureReturnFocus()
+  }, [captureReturnFocus])
+
   return (
     <CommandDialog
       open={visible}
       onOpenChange={handleOpenChange}
       shouldFilter={false}
+      onOpenAutoFocus={handleOpenAutoFocus}
       onCloseAutoFocus={handleCloseAutoFocus}
       title={translate('auto.components.QuickOpen.ec31e058f7', 'Go to file')}
       description={translate('auto.components.QuickOpen.9e97f08d0f', 'Search for a file to open')}

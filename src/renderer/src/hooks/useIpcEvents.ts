@@ -712,6 +712,14 @@ function getRuntimeClientEventEnvironmentIds(): string[] {
   return [...ids]
 }
 
+export function buildRuntimeClientEventEnvironmentKey(environmentIds: string[]): string {
+  return [...new Set(environmentIds)].sort().join('\u0000')
+}
+
+function getRuntimeClientEventEnvironmentKey(): string {
+  return buildRuntimeClientEventEnvironmentKey(getRuntimeClientEventEnvironmentIds())
+}
+
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
@@ -886,7 +894,17 @@ export function useIpcEvents(): void {
     })
 
     runtimeClientEventsSync.sync()
-    unsubs.push(useAppStore.subscribe(runtimeClientEventsSync.sync))
+    let runtimeClientEventEnvironmentKey = getRuntimeClientEventEnvironmentKey()
+    unsubs.push(
+      useAppStore.subscribe(() => {
+        const nextKey = getRuntimeClientEventEnvironmentKey()
+        if (nextKey === runtimeClientEventEnvironmentKey) {
+          return
+        }
+        runtimeClientEventEnvironmentKey = nextKey
+        runtimeClientEventsSync.sync()
+      })
+    )
     unsubs.push(runtimeClientEventsSync.stop)
 
     unsubs.push(

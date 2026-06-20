@@ -15,7 +15,11 @@ import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { getWorkspaceFileBrowserOpenTarget } from '@/lib/file-preview'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import {
+  getWorkspaceFileDragRejectionMessage,
+  readWorkspaceFileDragPaths,
+  WORKSPACE_FILE_PATH_MIME
+} from '@/lib/workspace-file-drag'
 import {
   ArrowLeft,
   ArrowRight,
@@ -1863,6 +1867,32 @@ function RemoteBrowserPagePane({
     })
   }, [isActive])
 
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const handleBrowserFocusRequest = (event: Event): void => {
+      const detail = (event as CustomEvent<BrowserFocusRequestDetail>).detail
+      if (!detail || detail.pageId !== browserTab.id) {
+        return
+      }
+      const focusTarget = consumeBrowserFocusRequest(browserTab.id)
+      if (!focusTarget) {
+        return
+      }
+      if (focusTarget === 'address-bar') {
+        addressBarInputRef.current?.focus()
+        addressBarInputRef.current?.select()
+        return
+      }
+      const target = imageRef.current ?? remoteViewportRef.current
+      target?.focus()
+    }
+    window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+    return () =>
+      window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+  }, [browserTab.id, isActive])
+
   const runRemoteNavigation = useCallback(
     async (
       method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
@@ -2515,6 +2545,7 @@ function RemoteBrowserPagePane({
       </div>
       <div
         ref={remoteViewportRef}
+        tabIndex={-1}
         className="relative min-h-0 flex-1 overflow-hidden bg-background"
       >
         {frameUrl ? (
@@ -4478,12 +4509,23 @@ function BrowserPagePane({
 
   const handleInternalFileDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
-      const filePath = event.dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
-      if (!filePath) {
+      if (!event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)) {
         return
       }
       event.preventDefault()
       event.stopPropagation()
+
+      // Why: browser drops open one URL; multi-path drags must not silently
+      // degrade into opening whichever selected file happened to lead.
+      const dragPaths = readWorkspaceFileDragPaths(event.dataTransfer, { maxPaths: 1 })
+      if (dragPaths.status === 'rejected') {
+        setResourceNotice(getWorkspaceFileDragRejectionMessage(dragPaths.reason))
+        return
+      }
+      const filePath = dragPaths.paths[0]
+      if (!filePath) {
+        return
+      }
 
       const target = getWorkspaceFileBrowserOpenTarget({ filePath, worktreeId })
       if (target.status === 'unsupported') {

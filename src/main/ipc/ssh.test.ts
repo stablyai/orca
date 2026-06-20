@@ -431,6 +431,55 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
   })
 
+  it('ssh:connect exposes the detected remote platform in public state', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Windows Server',
+      host: 'windows.example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const hostPlatform = {
+      relayPlatform: 'win32-x64',
+      os: 'win32',
+      arch: 'x64',
+      pathFlavor: 'windows',
+      commandDialect: 'powershell',
+      pathSeparator: '\\',
+      pathDelimiter: ';'
+    }
+    mockDeployAndLaunchRelay.mockResolvedValueOnce({
+      transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
+      hostPlatform
+    })
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue({})
+    mockConnectionManager.getState.mockReturnValue({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).resolves.toEqual({
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      remotePlatform: 'win32'
+    })
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('ssh:state-changed', {
+      targetId: 'ssh-1',
+      state: {
+        targetId: 'ssh-1',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0,
+        remotePlatform: 'win32'
+      }
+    })
+  })
+
   it('surfaces relay channel loss while the SSH connection remains alive', async () => {
     vi.useFakeTimers()
     const target: SshTarget = {

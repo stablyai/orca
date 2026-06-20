@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
 import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
 
@@ -159,19 +164,29 @@ export function DiffCommentPopover({
     if (submitting) {
       return
     }
-    const trimmed = body.trim()
-    if (!trimmed) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty') {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.diff.comments.DiffCommentPopover.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
     try {
-      await onSubmit(trimmed)
+      await onSubmit(bodyState.body)
     } finally {
       if (mountedRef.current) {
         setSubmitting(false)
       }
     }
   }
+  const canSubmitComment = hasBoundedCommentBodyText(body)
 
   return (
     <div
@@ -239,11 +254,7 @@ export function DiffCommentPopover({
           <Button variant="ghost" size="sm" onClick={onCancel}>
             {translate('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
           </Button>
-          <Button
-            size="sm"
-            onClick={handleSubmit}
-            disabled={submitting || body.trim().length === 0}
-          >
+          <Button size="sm" onClick={handleSubmit} disabled={submitting || !canSubmitComment}>
             {submitting ? submittingLabel : submitLabel}
             {!submitting && <CornerDownLeft className="ml-1 size-3 opacity-70" />}
           </Button>

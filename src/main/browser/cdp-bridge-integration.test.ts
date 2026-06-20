@@ -24,6 +24,7 @@ vi.mock('../git/worktree', () => ({
 
 import { BrowserManager } from './browser-manager'
 import { CdpBridge } from './cdp-bridge'
+import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from './browser-text-insertion'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
@@ -474,12 +475,45 @@ describe('Browser automation pipeline (integration)', () => {
     expect((res.result as { filled: string }).filled).toBe('@e2')
   })
 
+  it('chunks large browser fill text before CDP insertText', async () => {
+    await rpc('browser.goto', { url: 'https://search.example.com' })
+    await rpc('browser.snapshot')
+
+    const text = 'x'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 5)
+    const res = await rpc('browser.fill', { element: '@e2', value: text })
+
+    const insertCalls = activeGuestHarness.sendCommandMock.mock.calls.filter(
+      ([method]) => method === 'Input.insertText'
+    )
+    expect(res.ok).toBe(true)
+    expect(insertCalls).toHaveLength(2)
+    expect((insertCalls[0]![1] as { text: string }).text).toHaveLength(
+      BROWSER_TEXT_INSERT_CHUNK_BYTES
+    )
+    expect((insertCalls[1]![1] as { text: string }).text).toBe('xxxxx')
+  })
+
   // ── Type ──
 
   it('types text at current focus', async () => {
     const res = await rpc('browser.type', { input: 'some text' })
     expect(res.ok).toBe(true)
     expect((res.result as { typed: boolean }).typed).toBe(true)
+  })
+
+  it('chunks large browser type text before CDP insertText', async () => {
+    const text = 'y'.repeat(BROWSER_TEXT_INSERT_CHUNK_BYTES + 2)
+    const res = await rpc('browser.type', { input: text })
+
+    const insertCalls = activeGuestHarness.sendCommandMock.mock.calls.filter(
+      ([method]) => method === 'Input.insertText'
+    )
+    expect(res.ok).toBe(true)
+    expect(insertCalls).toHaveLength(2)
+    expect((insertCalls[0]![1] as { text: string }).text).toHaveLength(
+      BROWSER_TEXT_INSERT_CHUNK_BYTES
+    )
+    expect((insertCalls[1]![1] as { text: string }).text).toBe('yy')
   })
 
   // ── Select ──

@@ -444,6 +444,61 @@ describe('attachMainWindowServices', () => {
     expect(removeListenerMock).toHaveBeenCalledWith(channel, relayHandler)
   })
 
+  it('relays native file drops only from the owning renderer webContents', () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const channel = 'terminal:file-dropped-from-preload'
+    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
+    const payload = { paths: ['/tmp/a'], target: 'editor' }
+
+    relayHandler?.({ sender: { id: 999 } }, payload)
+
+    expect(sendMock).not.toHaveBeenCalled()
+
+    relayHandler?.({ sender: mainWindow.webContents }, payload)
+
+    expect(sendMock).toHaveBeenCalledWith('terminal:file-drop', payload)
+  })
+
+  it('ignores malformed native file-drop payloads from the owning renderer', () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const channel = 'terminal:file-dropped-from-preload'
+    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
+
+    relayHandler?.(
+      { sender: mainWindow.webContents },
+      { paths: ['C:\\Users\\alice\\secret.txt'], target: 'browser' }
+    )
+    relayHandler?.(
+      { sender: mainWindow.webContents },
+      { paths: ['/tmp/a'], target: 'file-explorer' }
+    )
+
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
+  it('ignores native file drops after the owning webContents is destroyed', () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const channel = 'terminal:file-dropped-from-preload'
+    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
+    mainWindow.webContents.isDestroyed?.mockReturnValue(true)
+
+    relayHandler?.({ sender: mainWindow.webContents }, { paths: ['/tmp/a'], target: 'editor' })
+
+    expect(sendMock).not.toHaveBeenCalled()
+  })
+
   it('clears the runtime notifier when the owning window closes', () => {
     const mainWindowOnMock = vi.fn()
     const mainWindow = createMainWindow()

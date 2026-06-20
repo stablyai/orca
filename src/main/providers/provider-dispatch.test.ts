@@ -66,6 +66,7 @@ describe('PTY provider dispatch', () => {
     isDestroyed: () => false,
     webContents: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
   }
+  const mainWindowIpcEvent = { sender: mainWindow.webContents }
 
   function setup(): void {
     handlers.clear()
@@ -185,8 +186,8 @@ describe('PTY provider dispatch', () => {
 
     try {
       const write = handlers.get('pty:write') as (event: unknown, args: unknown) => void
-      write(null, { id: 'ssh:conn-a@@pty-1', data: 'a' })
-      write(null, { id: 'ssh:conn-b@@pty-1', data: 'b' })
+      write(mainWindowIpcEvent, { id: 'ssh:conn-a@@pty-1', data: 'a' })
+      write(mainWindowIpcEvent, { id: 'ssh:conn-b@@pty-1', data: 'b' })
 
       expect(providerA.write).toHaveBeenCalledWith('ssh:conn-a@@pty-1', 'a')
       expect(providerB.write).toHaveBeenCalledWith('ssh:conn-b@@pty-1', 'b')

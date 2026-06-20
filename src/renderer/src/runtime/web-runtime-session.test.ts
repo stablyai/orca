@@ -1028,6 +1028,38 @@ describe('setWebRuntimeTabProps', () => {
     })
   })
 
+  it('maps mirrored browser/editor unified ids before setting host tab props', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(ENVIRONMENT_ID)
+    mocks.getState.mockReturnValue({})
+    mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
+      (_state, args: { tabId: string }) =>
+        args.tabId === 'local-browser-unified' ? 'host-browser-unified' : null
+    )
+    const runtimeCall = vi.fn().mockResolvedValue({ id: 'p', ok: true, result: { updated: true } })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    expect(
+      setWebRuntimeTabProps({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        color: '#3b82f6'
+      })
+    ).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.setTabProps',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        tabId: 'host-browser-unified',
+        color: '#3b82f6'
+      },
+      timeoutMs: 15_000
+    })
+  })
+
   it('no-ops for a worktree with no runtime environment (local tab)', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
     mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)

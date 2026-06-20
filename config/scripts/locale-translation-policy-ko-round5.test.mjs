@@ -82,6 +82,14 @@ describe('locale-translation-policy ko round 5', () => {
     ).toBe(
       '작업 중단, 오래 생성된 파일, 유효성 검사 실패 및 사람의 주의가 필요한 모든 사항을 확인하세요. 실행 가능한 이슈만 보고하세요.'
     )
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitLabItemDialog.02cbe2de44',
+        enValue: 'Pipeline',
+        localeValue: '파이프라인',
+        locale: 'ko'
+      })
+    ).toBe('파이프라인')
   })
 
   it('keeps protected workflow terms in English', () => {

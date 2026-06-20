@@ -126,8 +126,10 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
 }
 
 export function registerShellHandlers(): void {
-  ipcMain.handle('shell:openPath', (_event, path: string) => {
-    shell.showItemInFolder(path)
+  ipcMain.handle('shell:openPath', async (_event, path: string): Promise<void> => {
+    // Why: keep the legacy fire-and-forget renderer contract while reusing the
+    // same absolute/existing path validation as the explicit file-manager API.
+    void (await openInFileManager(path))
   })
 
   ipcMain.handle(

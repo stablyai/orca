@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
-import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
+import {
+  BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH,
+  formatBrowserAnnotationsAsMarkdown
+} from './browser-annotation-output'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 function makeAnnotation(overrides?: Partial<BrowserPageAnnotation>): BrowserPageAnnotation {
   return {
@@ -111,6 +118,7 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
   })
 
   it('formats page snippets with many backtick runs', () => {
+    const matchAll = vi.spyOn(String.prototype, 'matchAll')
     const annotation = makeAnnotation()
     const manyBacktickRuns = Array.from({ length: 130_000 }, () => '`').join(' ')
 
@@ -128,6 +136,7 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
         })
       ])
     ).not.toThrow()
+    expect(matchAll).not.toHaveBeenCalled()
   })
 
   it('collapses page-controlled newlines before putting text in headings and lists', () => {
@@ -154,5 +163,68 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     expect(markdown).toContain('- Plan # injected')
     expect(markdown).toContain('**Feedback:** Keep this change scoped. ## injected')
     expect(markdown).not.toContain('\n## injected')
+  })
+
+  it('bounds large inline page text without regex replacement passes', () => {
+    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+    const annotation = makeAnnotation()
+    const repeatedInlineText = 'x '.repeat(BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH * 2)
+    const repeatedFeedback = 'y\n'.repeat(BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH * 2)
+    const largeInlineText = `Summary ${repeatedInlineText}SECRET_TAIL`
+    const largeFeedback = `Feedback ${repeatedFeedback}SECRET_COMMENT`
+
+    const markdown = formatBrowserAnnotationsAsMarkdown([
+      makeAnnotation({
+        comment: largeFeedback,
+        payload: {
+          ...annotation.payload,
+          target: {
+            ...annotation.payload.target,
+            selectedText: largeInlineText,
+            accessibility: {
+              ...annotation.payload.target.accessibility,
+              accessibleName: largeInlineText
+            }
+          },
+          nearbyText: [largeInlineText]
+        }
+      })
+    ])
+
+    expect(markdown).toContain('**Selected text:** "Summary x x')
+    expect(markdown).not.toContain('SECRET_TAIL')
+    expect(markdown).not.toContain('SECRET_COMMENT')
+    expect(replaceSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not split surrogate pairs at the inline annotation cap', () => {
+    const annotation = makeAnnotation()
+    const selectedText = `${'x'.repeat(BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH - 1)}😀tail`
+
+    const markdown = formatBrowserAnnotationsAsMarkdown([
+      makeAnnotation({
+        payload: {
+          ...annotation.payload,
+          target: {
+            ...annotation.payload.target,
+            selectedText
+          }
+        }
+      })
+    ])
+
+    const selectedLabel = '**Selected text:**'
+    const selectedLineStart = markdown.indexOf(selectedLabel)
+    const selectedLineEnd = markdown.indexOf('\n', selectedLineStart)
+    const selectedLine = markdown.slice(
+      selectedLineStart,
+      selectedLineEnd === -1 ? markdown.length : selectedLineEnd
+    )
+
+    expect(selectedLineStart).not.toBe(-1)
+    expect(selectedLine).toBeDefined()
+    expect(selectedLine).not.toContain('😀')
+    expect(selectedLine).not.toContain('tail')
+    expect(selectedLine).not.toContain('\ufffd')
   })
 })

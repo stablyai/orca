@@ -1170,6 +1170,7 @@ function Settings(): React.JSX.Element {
                     'Connect GitHub, GitLab, Linear, and source-hosting services.'
                   )}
                   searchEntries={getSectionSearchEntries('integrations')}
+                  bodyClassName="rounded-none border-0 bg-transparent p-0 shadow-none"
                 >
                   {isSectionMounted('integrations') ? <IntegrationsPane /> : null}
                 </SettingsSection>

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import * as path from 'path'
 import type { GitExec } from './git-handler-ops'
 import { removeWorktreeOp } from './git-handler-worktree-ops'
 
@@ -28,7 +29,7 @@ function nulWorktreeList(...entries: { path: string; branch?: string }[]): strin
 }
 
 function resolvedRepoPath(): string {
-  return '/repo'
+  return path.posix.resolve('/repo-feature', '/repo/.git', '..')
 }
 
 describe('relay worktree path parsing', () => {

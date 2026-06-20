@@ -27,7 +27,10 @@ const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'do
 // Why: a missing review display can also mean provider state is unavailable,
 // so the passive label names the branch cue without claiming no review exists.
 const BRANCH_STATUS_LABEL = 'Branch'
-const branchStatusIconClassName = 'size-4 text-muted-foreground/70'
+// Why: branch-style SVGs are optically left-heavy; this keeps them aligned with
+// the centered activity dots in the shared status column.
+const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
+const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
 
 function getReviewStatusTooltip(review: WorktreeCardPrDisplay): string {
   const label = getReviewLabel(review)
@@ -84,14 +87,18 @@ export function WorktreeCardStatusSlot({
       : canShowBranchStatus
         ? BRANCH_STATUS_LABEL
         : statusLabel
-  const reviewStatusIconClassName = 'size-4'
+  const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const passiveStatus =
     canShowReviewStatus && prDisplay ? (
       <Tooltip>
         <TooltipTrigger asChild>
           <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
-            <ReviewIcon review={prDisplay} className={reviewStatusIconClassName} />
+            <ReviewIcon
+              review={prDisplay}
+              className={reviewStatusIconClassName}
+              variant="generic"
+            />
             <span className="sr-only">{passiveStatusLabel}</span>
           </span>
         </TooltipTrigger>
@@ -135,7 +142,7 @@ export function WorktreeCardStatusSlot({
 
   const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'
   const tooltip =
-    showStatus && (!isUnread || (newCardStyle && (canShowBranchStatus || canShowReviewStatus)))
+    showStatus && (!isUnread || newCardStyle)
       ? `${passiveStatusLabel} · ${unreadTooltip}`
       : unreadTooltip
 
@@ -157,36 +164,26 @@ export function WorktreeCardStatusSlot({
             )}
             aria-label={actionLabel}
           >
-            {isUnread && showStatus && canShowReviewStatus && prDisplay ? (
-              <>
+            {newCardStyle ? (
+              showStatus && canShowReviewStatus && prDisplay ? (
                 <span className="inline-flex size-5 items-center justify-center p-0.5">
-                  <ReviewIcon review={prDisplay} className={reviewStatusIconClassName} />
+                  <ReviewIcon
+                    review={prDisplay}
+                    className={reviewStatusIconClassName}
+                    variant="generic"
+                  />
                 </span>
-                <FilledBellIcon className="absolute -right-1 -top-1 size-[13px] text-amber-500 drop-shadow-sm" />
-              </>
-            ) : isUnread && showStatus && canShowBranchStatus ? (
-              <>
+              ) : showStatus && canShowBranchStatus ? (
                 <span className="inline-flex size-5 items-center justify-center p-0.5">
                   {branchStatusIcon}
                 </span>
-                <FilledBellIcon className="absolute -right-1 -top-1 size-[13px] text-amber-500 drop-shadow-sm" />
-              </>
+              ) : showStatus ? (
+                <StatusIndicator status={status} aria-hidden="true" />
+              ) : (
+                <span className="sr-only">{actionLabel}</span>
+              )
             ) : isUnread ? (
               <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
-            ) : showStatus && canShowReviewStatus && prDisplay ? (
-              <>
-                <span className="inline-flex size-5 items-center justify-center p-0.5 transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0">
-                  <ReviewIcon review={prDisplay} className={reviewStatusIconClassName} />
-                </span>
-                <Bell className="absolute size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />
-              </>
-            ) : showStatus && canShowBranchStatus ? (
-              <>
-                <span className="inline-flex size-5 items-center justify-center p-0.5 transition-opacity group-hover/unread:opacity-0 group-focus-within/unread:opacity-0">
-                  {branchStatusIcon}
-                </span>
-                <Bell className="absolute size-3 text-muted-foreground/40 opacity-0 transition-opacity group-hover/unread:opacity-100 group-focus-within/unread:opacity-100" />
-              </>
             ) : showStatus ? (
               <>
                 <StatusIndicator

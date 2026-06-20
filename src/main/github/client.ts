@@ -28,6 +28,7 @@ import {
   normalizeHostedReviewHeadRef
 } from '../../shared/hosted-review-refs'
 import { normalizeGitHubPRMergeMethodSettings } from '../../shared/github-pr-merge-methods'
+import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-query-bounds'
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
@@ -1259,13 +1260,24 @@ export async function listWorkItems(
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListWorkItemsResult<MainWorkItem>> {
+  const trimmedQuery = query?.trim() ?? ''
+  if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
+    return {
+      items: [],
+      sources: {
+        issues: null,
+        prs: null,
+        originCandidate: null,
+        upstreamCandidate: null
+      }
+    }
+  }
   const [issueResolved, prResolved] = await Promise.all([
     resolveIssueSource(repoPath, preference, connectionId, localGitOptions),
     resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
   ])
   const issueOwnerRepo = issueResolved.source
   const prOwnerRepo = prResolved.source
-  const trimmedQuery = query?.trim() ?? ''
   await acquire()
   try {
     // Why: errors propagate to IPC so the renderer's cross-repo aggregator can
@@ -1417,6 +1429,10 @@ export async function countWorkItems(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<number> {
+  const trimmedQuery = query?.trim() ?? ''
+  if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
+    return 0
+  }
   const [issueResolved, prResolved] = await Promise.all([
     resolveIssueSource(repoPath, preference, connectionId, localGitOptions),
     resolvePrWorkItemSource(repoPath, preference, connectionId, localGitOptions)
@@ -1428,7 +1444,6 @@ export async function countWorkItems(
     return 0
   }
 
-  const trimmedQuery = query?.trim() ?? ''
   const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
   const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
 

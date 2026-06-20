@@ -365,7 +365,8 @@ describe('WorktreeCard compact hover details', () => {
       />
     )
 
-    expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('Workspace metadata')
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
     expectParentBodyIsHoverTrigger(markup)
     expect(markup.match(/data-hover-open-delay="100"/g)).toHaveLength(1)
     expect(markup).toContain('Reviewer handoff note')

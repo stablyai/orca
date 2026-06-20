@@ -23,6 +23,7 @@ import { SearchResultsPane } from './SearchResultsPane'
 import { useFileSearchPanel } from './useFileSearchPanel'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
+import { isFileExplorerNameFilterQueryTooLarge } from './file-explorer-name-filter-projection'
 import { splitPathSegments } from './path-tree'
 import { buildFolderStatusMap, buildStatusMap } from './status-display'
 import { useFileDeletion } from './useFileDeletion'
@@ -119,9 +120,13 @@ function FileExplorerFiles(): React.JSX.Element {
     resetAndLoad
   } = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
   const hasNameFilterQuery = nameFilterQuery.trim().length > 0
+  const nameFilterQueryTooLarge = useMemo(
+    () => isFileExplorerNameFilterQueryTooLarge(nameFilterQuery),
+    [nameFilterQuery]
+  )
   const hasNameFilter = isFilesViewActive && hasNameFilterQuery
   const nameFilterFiles = useRuntimeFileListForWorktree({
-    enabled: hasNameFilter,
+    enabled: hasNameFilter && !nameFilterQueryTooLarge,
     worktreeId: activeWorktreeId
   })
   const nameFilterSource = useMemo(
@@ -129,13 +134,20 @@ function FileExplorerFiles(): React.JSX.Element {
       hasNameFilter
         ? {
             query: nameFilterQuery,
-            relativePaths:
-              nameFilterFiles.loading && nameFilterFiles.files.length === 0
+            relativePaths: nameFilterQueryTooLarge
+              ? []
+              : nameFilterFiles.loading && nameFilterFiles.files.length === 0
                 ? null
                 : nameFilterFiles.files
           }
         : null,
-    [hasNameFilter, nameFilterFiles.files, nameFilterFiles.loading, nameFilterQuery]
+    [
+      hasNameFilter,
+      nameFilterFiles.files,
+      nameFilterFiles.loading,
+      nameFilterQuery,
+      nameFilterQueryTooLarge
+    ]
   )
   const {
     rowProjection,

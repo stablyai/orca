@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: these tests cover one reconciliation boundary
  * across ready, pending, split, and batched session snapshots. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { posix as pathPosix } from 'path'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
@@ -1872,6 +1873,8 @@ describe('applyWebSessionTabsSnapshot', () => {
             loading: false,
             canGoBack: true,
             canGoForward: false,
+            color: '#3b82f6',
+            isPinned: true,
             isActive: true
           }
         ],
@@ -1919,7 +1922,9 @@ describe('applyWebSessionTabsSnapshot', () => {
           id: 'host-browser-unified',
           entityId: 'host-browser-workspace',
           contentType: 'browser',
-          label: 'Example Domain'
+          label: 'Example Domain',
+          color: '#3b82f6',
+          isPinned: true
         })
       ])
     )
@@ -2274,7 +2279,9 @@ describe('applyWebSessionTabsSnapshot', () => {
             sourceFileId: '/repo/README.md',
             sourceFilePath: '/repo/README.md',
             sourceRelativePath: 'README.md',
-            documentVersion: 'draft:1'
+            documentVersion: 'draft:1',
+            color: '#16a34a',
+            isPinned: true
           }
         ],
         { activeTabId: 'host-readme-unified', activeTabType: 'markdown' }
@@ -2302,7 +2309,9 @@ describe('applyWebSessionTabsSnapshot', () => {
           id: 'host-readme-unified',
           entityId: '/repo/README.md',
           contentType: 'editor',
-          label: 'README.md'
+          label: 'README.md',
+          color: '#16a34a',
+          isPinned: true
         })
       ])
     )
@@ -2314,6 +2323,142 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeFileIdByWorktree?.[WT]).toBe('/repo/README.md')
     expect(patch.activeTabType).toBe('editor')
     expect(patch.activeTabTypeByWorktree?.[WT]).toBe('editor')
+  })
+
+  it('applies host-cleared browser and editor tab props over existing mirrored state', () => {
+    const workspace: BrowserWorkspace = {
+      id: 'local-browser-workspace',
+      worktreeId: WT,
+      activePageId: 'local-browser-page',
+      pageIds: ['local-browser-page'],
+      url: 'https://example.com/',
+      title: 'Example Domain',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW - 10
+    }
+    const page: BrowserPage = {
+      id: 'local-browser-page',
+      workspaceId: workspace.id,
+      worktreeId: WT,
+      url: 'https://example.com/',
+      title: 'Example Domain',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW - 10
+    }
+    const readmePath = pathPosix.join('/repo', 'README.md')
+    const file: OpenFile = {
+      id: readmePath,
+      filePath: readmePath,
+      relativePath: 'README.md',
+      worktreeId: WT,
+      language: 'markdown',
+      isDirty: false,
+      runtimeEnvironmentId: ENV,
+      mode: 'edit'
+    }
+    const existingTabs: Tab[] = [
+      {
+        id: 'local-browser-unified',
+        entityId: workspace.id,
+        groupId: 'host-group-1',
+        worktreeId: WT,
+        contentType: 'browser',
+        label: 'Example Domain',
+        customLabel: null,
+        color: '#3b82f6',
+        sortOrder: 0,
+        createdAt: NOW - 10,
+        isPreview: false,
+        isPinned: true
+      },
+      {
+        id: 'host-readme-unified',
+        entityId: file.id,
+        groupId: 'host-group-1',
+        worktreeId: WT,
+        contentType: 'editor',
+        label: 'README.md',
+        customLabel: null,
+        color: '#16a34a',
+        sortOrder: 1,
+        createdAt: NOW - 9,
+        isPreview: false,
+        isPinned: true
+      }
+    ]
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        browserTabsByWorktree: { [WT]: [workspace] },
+        browserPagesByWorkspace: { [workspace.id]: [page] },
+        remoteBrowserPageHandlesByPageId: {
+          [page.id]: { environmentId: ENV, remotePageId: 'host-browser-page' }
+        },
+        openFiles: [file],
+        unifiedTabsByWorktree: { [WT]: existingTabs }
+      }),
+      makeSnapshot(
+        [
+          {
+            type: 'browser',
+            id: 'host-browser-unified',
+            title: 'Example Domain',
+            browserWorkspaceId: 'host-browser-workspace',
+            browserPageId: 'host-browser-page',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            color: null,
+            isPinned: false,
+            isActive: false
+          },
+          {
+            type: 'markdown',
+            id: 'host-readme-unified',
+            title: 'README.md',
+            filePath: readmePath,
+            relativePath: 'README.md',
+            language: 'markdown',
+            mode: 'edit',
+            isDirty: false,
+            isActive: true,
+            sourceFileId: readmePath,
+            sourceFilePath: readmePath,
+            sourceRelativePath: 'README.md',
+            documentVersion: `file:${readmePath}`,
+            color: null,
+            isPinned: false
+          }
+        ],
+        { activeTabId: 'host-readme-unified', activeTabType: 'markdown' }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.unifiedTabsByWorktree?.[WT]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'local-browser-unified',
+          color: null,
+          isPinned: false
+        }),
+        expect.objectContaining({
+          id: 'host-readme-unified',
+          color: null,
+          isPinned: false
+        })
+      ])
+    )
   })
 
   it('uses local markdown preview file ids while preserving the host unified tab id', () => {

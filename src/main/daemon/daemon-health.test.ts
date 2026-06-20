@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { createServer, connect, type Server } from 'net'
 import { DaemonServer } from './daemon-server'
-import { getDaemonPidPath, getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
+import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import {
   getProcessStartedAtMs,
   healthCheckDaemon,
   killStaleDaemon,
+  parseLinuxBootTimeSeconds,
+  parseLinuxProcStartTicks,
   parseDaemonPidFile,
   startTimeMatches
 } from './daemon-health'
@@ -58,6 +60,12 @@ function canConnect(socketPath: string): Promise<boolean> {
   })
 }
 
+function daemonTestSocketPath(dir: string): string {
+  return process.platform === 'win32'
+    ? `\\\\.\\pipe\\${basename(dir)}-daemon.sock`
+    : join(dir, 'daemon.sock')
+}
+
 describe('daemon health', () => {
   let dir: string
   let socketPath: string
@@ -65,7 +73,7 @@ describe('daemon health', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-health-test-'))
-    socketPath = getDaemonSocketPath(dir)
+    socketPath = daemonTestSocketPath(dir)
     tokenPath = join(dir, 'daemon.token')
   })
 
@@ -199,6 +207,35 @@ describe('parseDaemonPidFile', () => {
   })
 })
 
+describe('Linux process start-time parsing', () => {
+  it('parses start ticks from proc stat with spaces in the command name', () => {
+    const fields = Array.from({ length: 20 }, (_, index) => String(index + 1))
+    fields[0] = 'S'
+    fields[19] = '987654'
+
+    expect(parseLinuxProcStartTicks(`123 (orca daemon) ${fields.join(' ')}`)).toBe(987654)
+  })
+
+  it('parses boot time seconds from proc stat output', () => {
+    expect(parseLinuxBootTimeSeconds('cpu  1 2 3\r\nbtime 1700000000\nintr 1')).toBe(1_700_000_000)
+  })
+
+  it('does not use line-array or whitespace-regex splitting', () => {
+    const splitSpy = vi.spyOn(String.prototype, 'split')
+
+    parseLinuxProcStartTicks('123 (orca daemon) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 42')
+    parseLinuxBootTimeSeconds('cpu 1 2 3\nbtime 1700000000')
+
+    const usedUnboundedSplit = splitSpy.mock.calls.some(
+      ([separator]) =>
+        (typeof separator === 'string' && (separator === '\n' || separator === ' ')) ||
+        (separator instanceof RegExp && separator.source.includes('\\s+'))
+    )
+    splitSpy.mockRestore()
+    expect(usedUnboundedSplit).toBe(false)
+  })
+})
+
 describe('startTimeMatches', () => {
   it('returns true when expected is null (legacy pid file)', () => {
     // The real process pid is irrelevant here — null short-circuits before
@@ -252,7 +289,7 @@ describe('killStaleDaemon pid identity guards', () => {
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-health-pid-test-'))
-    socketPath = join(dir, 'daemon.sock')
+    socketPath = daemonTestSocketPath(dir)
     tokenPath = join(dir, 'daemon.token')
   })
 

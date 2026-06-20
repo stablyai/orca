@@ -4,6 +4,7 @@
 // runtime-rpc.ts focused on framing/auth/connection bookkeeping.
 import {
   ZodError,
+  InvalidArgumentError,
   buildRegistry,
   formatZodError,
   isStreamingMethod,
@@ -192,6 +193,13 @@ export class RpcDispatcher {
   }
 
   private mapError(request: RpcRequest, meta: RpcEnvelopeMeta, error: unknown): RpcResponse {
+    if (error instanceof ZodError) {
+      return this.invalidArgumentResponse(request, meta, formatZodError(error))
+    }
+    if (error instanceof InvalidArgumentError) {
+      return this.invalidArgumentResponse(request, meta, error.message)
+    }
+
     // Why: browser methods throw BrowserError with a structured `code`;
     // every other runtime error has a plain-message code. Routing by method
     // prefix keeps the mapping a single decision rather than a per-method
@@ -201,9 +209,6 @@ export class RpcDispatcher {
     }
     if (request.method.startsWith('emulator.')) {
       return mapEmulatorError(request.id, meta, error)
-    }
-    if (error instanceof ZodError) {
-      return this.invalidArgumentResponse(request, meta, formatZodError(error))
     }
     return mapRuntimeError(request.id, meta, error)
   }

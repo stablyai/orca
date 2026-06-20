@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the Agents pane keeps catalog rows, default
-   selection, and per-agent controls together so settings reconciliation stays
-   visible in one file. */
-import { useMemo, useState } from 'react'
+   selection, per-agent controls, and runtime location together so settings
+   reconciliation stays visible in one file. */
+import { useId, useMemo, useState } from 'react'
 import { Check, ChevronDown, ExternalLink, Info, RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
@@ -41,6 +41,7 @@ import {
 import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { parseAgentDefaultEnvDraft, stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
 
 export { getAgentsPaneSearchEntries } from './agents-search'
 
@@ -372,80 +373,87 @@ function AgentDefaultArgsInput({
   )
 }
 
-function stringifyAgentEnv(env: Record<string, string>): string {
-  return Object.entries(env)
-    .map(([name, value]) => `${name}=${value}`)
-    .join(' ')
-}
-
-function parseAgentEnvDraft(value: string): Record<string, string> {
-  const env: Record<string, string> = {}
-  for (const pair of value.trim().split(/\s+/)) {
-    const separatorIndex = pair.indexOf('=')
-    if (separatorIndex <= 0) {
-      continue
-    }
-    const name = pair.slice(0, separatorIndex).trim()
-    if (!name) {
-      continue
-    }
-    env[name] = pair.slice(separatorIndex + 1)
-  }
-  return env
-}
-
 function AgentDefaultEnvInput({
   defaultEnv,
   envOverride,
   onSaveEnv
 }: AgentDefaultEnvInputProps): React.JSX.Element {
-  const defaultEnvText = stringifyAgentEnv(defaultEnv)
-  const draftSeed = stringifyAgentEnv(envOverride)
+  const defaultEnvText = stringifyAgentDefaultEnvDraft(defaultEnv)
+  const draftSeed = stringifyAgentDefaultEnvDraft(envOverride)
   const [envDraft, setEnvDraft] = useState(draftSeed)
+  const [envDraftTooLarge, setEnvDraftTooLarge] = useState(false)
+  const envDraftErrorId = useId()
 
   const commitEnv = (): void => {
-    onSaveEnv(parseAgentEnvDraft(envDraft))
+    const parsedDraft = parseAgentDefaultEnvDraft(envDraft)
+    setEnvDraftTooLarge(parsedDraft.tooLarge)
+    if (parsedDraft.tooLarge) {
+      return
+    }
+    onSaveEnv(parsedDraft.env)
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <span className="shrink-0 text-xs text-muted-foreground">
-        {translate('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
-      </span>
-      <Input
-        value={envDraft}
-        onChange={(e) => setEnvDraft(e.target.value)}
-        onBlur={commitEnv}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            commitEnv()
-            e.currentTarget.blur()
-          }
-          if (e.key === 'Escape') {
-            setEnvDraft(draftSeed)
-            e.currentTarget.blur()
-          }
-        }}
-        placeholder={
-          defaultEnvText ||
-          translate('auto.components.settings.AgentsPane.2d133152fa', 'No default environment')
-        }
-        spellCheck={false}
-        className="h-7 flex-1 font-mono text-xs"
-      />
-      {draftSeed !== defaultEnvText && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          onClick={() => {
-            onSaveEnv(defaultEnv)
-            setEnvDraft(defaultEnvText)
+    <div>
+      <div className="flex items-center gap-2">
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {translate('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
+        </span>
+        <Input
+          value={envDraft}
+          onChange={(e) => {
+            setEnvDraft(e.target.value)
+            if (envDraftTooLarge) {
+              setEnvDraftTooLarge(false)
+            }
           }}
-          className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
-        >
-          {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
-        </Button>
+          onBlur={commitEnv}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commitEnv()
+              e.currentTarget.blur()
+            }
+            if (e.key === 'Escape') {
+              setEnvDraft(draftSeed)
+              setEnvDraftTooLarge(false)
+              e.currentTarget.blur()
+            }
+          }}
+          placeholder={
+            defaultEnvText ||
+            translate('auto.components.settings.AgentsPane.2d133152fa', 'No default environment')
+          }
+          spellCheck={false}
+          aria-invalid={envDraftTooLarge || undefined}
+          aria-describedby={envDraftTooLarge ? envDraftErrorId : undefined}
+          className={cn(
+            'h-7 flex-1 font-mono text-xs',
+            envDraftTooLarge && 'border-destructive/50 bg-destructive/5'
+          )}
+        />
+        {draftSeed !== defaultEnvText && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={() => {
+              onSaveEnv(defaultEnv)
+              setEnvDraft(defaultEnvText)
+              setEnvDraftTooLarge(false)
+            }}
+            className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+          </Button>
+        )}
+      </div>
+      {envDraftTooLarge && (
+        <p id={envDraftErrorId} className="mt-1 text-[11px] text-destructive">
+          {translate(
+            'auto.components.settings.AgentsPane.3f1bdf3cb4',
+            'Environment text is too large to parse safely.'
+          )}
+        </p>
       )}
     </div>
   )
@@ -470,8 +478,8 @@ function AgentRow({
   onSaveArgs,
   onSaveEnv
 }: AgentRowProps): React.JSX.Element {
-  const envSummary = stringifyAgentEnv(envOverride)
-  const defaultEnvSummary = stringifyAgentEnv(defaultEnv)
+  const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
+  const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
   const [cmdOpen, setCmdOpen] = useState(
     Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
   )

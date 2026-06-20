@@ -12,6 +12,10 @@ import {
   runIssueStateUpdate,
   type GitHubIssueCommentProjectOrigin
 } from '@/components/github/github-issue-comment-helpers'
+import {
+  getCommentBodySubmitState,
+  hasBoundedCommentBodyText
+} from '@/lib/comment-body-submit-state'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
@@ -124,8 +128,17 @@ export function GitHubIssueCommentComposer({
   )
 
   const handleSubmit = useCallback(async () => {
-    const trimmed = body.trim()
-    if (!trimmed) {
+    const bodyState = getCommentBodySubmitState(body)
+    if (bodyState.status === 'empty') {
+      return
+    }
+    if (bodyState.status === 'too-large-leading-whitespace') {
+      toast.error(
+        translate(
+          'auto.components.github.GitHubIssueCommentComposer.commentTooLarge',
+          'Comment is too large to submit safely.'
+        )
+      )
       return
     }
     setSubmitting(true)
@@ -135,7 +148,7 @@ export function GitHubIssueCommentComposer({
         repoId: repoId ?? undefined,
         sourceContext,
         number: issueNumber,
-        body: trimmed,
+        body: bodyState.body,
         type: itemType
       })
       if (!mountedRef.current) {
@@ -288,6 +301,7 @@ export function GitHubIssueCommentComposer({
   ) : (
     <div className="size-8 shrink-0 rounded-full border border-border/50 bg-muted" />
   )
+  const canSubmitComment = hasBoundedCommentBodyText(body)
 
   return (
     <div className={cn('github-issue-comment-composer', className)}>
@@ -365,7 +379,7 @@ export function GitHubIssueCommentComposer({
             ) : null}
             <Button
               onClick={() => void handleSubmit()}
-              disabled={!body.trim() || submitting || statePending}
+              disabled={!canSubmitComment || submitting || statePending}
               size="sm"
               className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-600/50"
               aria-label={translate(

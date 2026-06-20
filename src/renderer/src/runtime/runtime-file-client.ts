@@ -22,6 +22,10 @@ import {
   relativePathInsideRoot
 } from '../../../shared/cross-platform-path'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import {
+  createEmptyRuntimeFileSearchResult,
+  getRuntimeFileSearchRejectedField
+} from './runtime-file-search-bounds'
 
 export type RuntimeReadableFileContent = {
   content: string
@@ -537,6 +541,9 @@ export async function searchRuntimeFiles(
   context: RuntimeFileOperationArgs,
   options: SearchOptions
 ): Promise<SearchResult> {
+  if (getRuntimeFileSearchRejectedField(options)) {
+    return createEmptyRuntimeFileSearchResult()
+  }
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind !== 'environment' || !context.worktreeId) {
     return window.api.fs.search({

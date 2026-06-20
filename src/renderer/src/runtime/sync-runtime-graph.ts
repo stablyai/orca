@@ -680,6 +680,9 @@ export function buildMobileSessionTabSnapshots(
         workspace
       ])
     )
+    const unifiedTabByIdForWorktree = new Map(
+      (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
+    )
     const editorIds = openFileIndexes.idsByWorktree.get(worktreeId) ?? []
     const publishableTerminalIds = [...terminalTabByIdForWorktree.values()]
       .filter((terminal) => !isWebOnlyMirroredTerminalTab(state, terminal))
@@ -721,12 +724,18 @@ export function buildMobileSessionTabSnapshots(
           openFileIndexes.byWorktreeAndId,
           editorDraftVersionByFileId,
           file,
-          item.tabId
+          item.tabId ? unifiedTabByIdForWorktree.get(item.tabId) : undefined
         )
         if (markdown) {
           tabs.push(markdown)
         } else {
-          tabs.push(buildMobileFileTab(state, file, item.tabId))
+          tabs.push(
+            buildMobileFileTab(
+              state,
+              file,
+              item.tabId ? unifiedTabByIdForWorktree.get(item.tabId) : undefined
+            )
+          )
         }
         emittedEditorFileIds.add(file.id)
         emittedEditorTabIds.add(item.tabId ?? item.id)
@@ -735,7 +744,13 @@ export function buildMobileSessionTabSnapshots(
         if (!workspace) {
           continue
         }
-        tabs.push(buildMobileBrowserTab(state, workspace, item.tabId))
+        tabs.push(
+          buildMobileBrowserTab(
+            state,
+            workspace,
+            item.tabId ? unifiedTabByIdForWorktree.get(item.tabId) : undefined
+          )
+        )
       }
     }
 
@@ -759,9 +774,9 @@ export function buildMobileSessionTabSnapshots(
           openFileIndexes.byWorktreeAndId,
           editorDraftVersionByFileId,
           file,
-          unifiedTab.id
+          unifiedTab
         )
-        const fallbackTab = markdown ?? buildMobileFileTab(state, file, unifiedTab.id)
+        const fallbackTab = markdown ?? buildMobileFileTab(state, file, unifiedTab)
         tabs.push(fallbackTab)
         fallbackEditorTabs.push({
           tabId: fallbackTab.id,
@@ -1317,7 +1332,7 @@ function buildMobileMarkdownTab(
   openFileByWorktreeAndId: OpenFileByWorktreeAndId,
   editorDraftVersionByFileId: ReadonlyMap<string, string>,
   file: AppState['openFiles'][number],
-  unifiedTabId?: string
+  unifiedTab?: Tab
 ): RuntimeMobileSessionMarkdownTab | null {
   if (file.mode !== 'edit' && file.mode !== 'markdown-preview') {
     return null
@@ -1333,6 +1348,7 @@ function buildMobileMarkdownTab(
       : file
   const draftVersion = editorDraftVersionByFileId.get(sourceFile.id)
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'Markdown'
+  const unifiedTabId = unifiedTab?.id
 
   return {
     type: 'markdown',
@@ -1349,17 +1365,20 @@ function buildMobileMarkdownTab(
     sourceFileId: sourceFile.id,
     sourceFilePath: sourceFile.filePath,
     sourceRelativePath: sourceFile.relativePath,
-    documentVersion: draftVersion ?? `file:${sourceFile.id}`
+    documentVersion: draftVersion ?? `file:${sourceFile.id}`,
+    color: unifiedTab?.color ?? null,
+    isPinned: unifiedTab?.isPinned === true
   }
 }
 
 function buildMobileFileTab(
   state: AppState,
   file: AppState['openFiles'][number],
-  unifiedTabId?: string
+  unifiedTab?: Tab
 ): RuntimeMobileSessionFileTab {
   const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File'
   const diffSource = isMobileFileDiffSource(file.diffSource) ? file.diffSource : undefined
+  const unifiedTabId = unifiedTab?.id
 
   return {
     type: 'file',
@@ -1371,6 +1390,8 @@ function buildMobileFileTab(
     mode: file.mode === 'diff' ? 'diff' : 'edit',
     ...(diffSource ? { diffSource } : {}),
     isDirty: file.isDirty,
+    color: unifiedTab?.color ?? null,
+    isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId
       ? isUnifiedTabActiveInActiveGroup(state, file.worktreeId, unifiedTabId)
       : isFileActiveEditorSurface(state, file)
@@ -1400,12 +1421,13 @@ function isMobileFileDiffSource(
 function buildMobileBrowserTab(
   state: AppState,
   workspace: NonNullable<AppState['browserTabsByWorktree'][string]>[number],
-  unifiedTabId?: string
+  unifiedTab?: Tab
 ): RuntimeMobileSessionBrowserTab {
   const pages = state.browserPagesByWorkspace[workspace.id] ?? []
   const activePage = pages.find((page) => page.id === workspace.activePageId) ?? pages[0] ?? null
   const title =
     activePage?.title || workspace.title || activePage?.url || workspace.url || 'Browser'
+  const unifiedTabId = unifiedTab?.id
 
   return {
     type: 'browser',
@@ -1417,6 +1439,8 @@ function buildMobileBrowserTab(
     loading: activePage?.loading ?? workspace.loading,
     canGoBack: activePage?.canGoBack ?? workspace.canGoBack,
     canGoForward: activePage?.canGoForward ?? workspace.canGoForward,
+    color: unifiedTab?.color ?? null,
+    isPinned: unifiedTab?.isPinned === true,
     isActive: unifiedTabId
       ? isUnifiedTabActiveInActiveGroup(state, workspace.worktreeId, unifiedTabId)
       : state.activeBrowserTabIdByWorktree[workspace.worktreeId] === workspace.id

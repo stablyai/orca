@@ -673,26 +673,36 @@ function buildTerminalUnifiedTab(tab: TerminalTab, groupId: string): Tab {
   }
 }
 
-function buildBrowserUnifiedTab(tab: BrowserWorkspace, unifiedTabId: string, groupId: string): Tab {
+function buildBrowserUnifiedTab(
+  tab: BrowserWorkspace,
+  hostTab: RuntimeMobileSessionBrowserTab,
+  existingUnifiedTab: Tab | null,
+  groupId: string
+): Tab {
   return {
-    id: unifiedTabId,
+    id: existingUnifiedTab?.id ?? hostTab.id,
     entityId: tab.id,
     groupId,
     worktreeId: tab.worktreeId,
     contentType: 'browser',
     label: tab.title,
     customLabel: null,
-    color: null,
+    color: hostTab.color !== undefined ? hostTab.color : (existingUnifiedTab?.color ?? null),
     sortOrder: tab.createdAt,
     createdAt: tab.createdAt,
     isPreview: false,
-    isPinned: false
+    isPinned:
+      hostTab.isPinned !== undefined
+        ? hostTab.isPinned === true
+        : existingUnifiedTab?.isPinned === true
   }
 }
 
 function buildEditorUnifiedTab(
   file: OpenFile,
+  tab: ReadyEditorSurface,
   hostTabId: string,
+  existingUnifiedTab: Tab | null,
   label: string,
   groupId: string,
   sortOrder: number,
@@ -706,11 +716,12 @@ function buildEditorUnifiedTab(
     contentType: 'editor',
     label,
     customLabel: null,
-    color: null,
+    color: tab.color !== undefined ? tab.color : (existingUnifiedTab?.color ?? null),
     sortOrder,
     createdAt,
     isPreview: false,
-    isPinned: false
+    isPinned:
+      tab.isPinned !== undefined ? tab.isPinned === true : existingUnifiedTab?.isPinned === true
   }
 }
 
@@ -769,7 +780,9 @@ function buildMirroredEditorTabs(
       hostTabId: tab.id,
       unifiedTab: buildEditorUnifiedTab(
         file,
+        tab,
         tab.id,
+        existingUnifiedTab,
         tab.title.trim() || tab.relativePath || 'File',
         groupId,
         sortOffset + index,
@@ -871,7 +884,7 @@ function buildMirroredBrowserTabs(
       workspace,
       page,
       remotePageId: tab.browserPageId,
-      unifiedTab: buildBrowserUnifiedTab(workspace, existing?.unifiedTab?.id ?? tab.id, groupId),
+      unifiedTab: buildBrowserUnifiedTab(workspace, tab, existing?.unifiedTab ?? null, groupId),
       hostTabId: tab.id
     }
   })

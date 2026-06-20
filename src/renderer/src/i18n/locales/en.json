@@ -530,7 +530,11 @@
       "useGlobalFileDrop": {
         "38c9f034ff": "Failed to upload dropped files.",
         "d720e2f855": "Some dropped files could not be uploaded.",
-        "245faa95b9": "No remote workspace path is available for dropped files."
+        "245faa95b9": "No remote workspace path is available for dropped files.",
+        "nativeDropTooManyPathsDescription": "Drop {{value0}} or fewer files at a time.",
+        "nativeDropTooManyPaths": "Drop contains too many files.",
+        "nativeDropPathsTooLargeDescription": "Drop fewer files or use a shorter path list.",
+        "nativeDropPathsTooLarge": "Drop path list is too large."
       },
       "useIpcEvents": {
         "0e3cf53060": "Browser tab {{value0}} not found",
@@ -609,6 +613,12 @@
         "f70ac54d38": "AI Provider Accounts",
         "4121f7a0a2": "Manage AI agents, set a default, and customize commands.",
         "b49abbd2f7": "Agents"
+      },
+      "useAppMenuPaste": {
+        "pasteTooLarge": "Paste is too large."
+      },
+      "useLargeTextControlPaste": {
+        "pasteTooLarge": "Paste is too large."
       }
     },
     "components": {
@@ -801,7 +811,8 @@
         "16c1abe76c": "Mark viewed",
         "ba8e329d92": "Unmark viewed",
         "3f79ffc8b7": "Open the PR details to view current reviewers.",
-        "5c1c973855": "Remove reviewer"
+        "5c1c973855": "Remove reviewer",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -865,7 +876,8 @@
         "40c56b95e2": "{{value0}} approval{{value1}} remaining",
         "3a051b8ade": "Work item",
         "32f8bef818": "No log output.",
-        "4168eb2c51": "Resolve"
+        "4168eb2c51": "Resolve",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "Comment",
@@ -899,7 +911,8 @@
         "54649eaeab": "+ Assignee",
         "2a829a2f00": "priority",
         "693be070d0": "transition",
-        "ef21405c6d": "Jira issue"
+        "ef21405c6d": "Jira issue",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "Landing": {
         "76a95f7f47": "Create",
@@ -1021,7 +1034,8 @@
         "858d0630da": "Close preview",
         "39883467f4": "Linear issue",
         "fda549766e": "{{value0}} to comment",
-        "d71cd3003e": "+ Assignee"
+        "d71cd3003e": "+ Assignee",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "NewWorkspaceComposerCard": {
         "reuseExistingBranch": "Reuse branch",
@@ -1078,7 +1092,8 @@
         "connected": "Connected",
         "reconnectingSsh": "Reconnecting SSH...",
         "sshReconnectionFailed": "SSH reconnection failed",
-        "notConnected": "Not connected"
+        "notConnected": "Not connected",
+        "notePasteTooLarge": "Paste is too large for the note field."
       },
       "NewWorkspaceComposerModal": {
         "fa90f739a5": "Choose the project, workspace name, and agent before creating the workspace."
@@ -1247,7 +1262,8 @@
         "50b8fb290f": "Mark viewed",
         "2b4fdb880c": "Unmark viewed",
         "56ec6eafb7": "Open the PR details to view current reviewers.",
-        "7f964a365a": "Remove reviewer"
+        "7f964a365a": "Remove reviewer",
+        "commentTooLarge": "Comment is too large to submit safely."
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -1836,7 +1852,8 @@
                 "c3e829b4d9": "Save",
                 "463d030ae4": "Delete",
                 "8564f58542": "Edit",
-                "5f104bf855": "No comments yet."
+                "5f104bf855": "No comments yet.",
+                "commentTooLarge": "Comment is too large to submit safely."
               },
               "LabelsEditor": {
                 "34dd57d6c8": "Loading…",
@@ -1864,7 +1881,8 @@
           "b7e4a1c902": "Paste, drop, or click to add files",
           "8f1c2d4e6a": "Nothing to preview",
           "c91f0a2b14": "Write",
-          "d82b1e3f05": "Preview"
+          "d82b1e3f05": "Preview",
+          "imageUrlTooLarge": "Image URL is too large."
         },
         "IssueSourceSelector": {
           "d6aeb2012b": "Showing issues from",
@@ -1954,7 +1972,8 @@
           "f6a7b8c9d0": "Close issue",
           "b1c2d3e4f5": "Reopen issue",
           "0a73f59e85": "Send comment",
-          "bf43425540": "Comment"
+          "bf43425540": "Comment",
+          "commentTooLarge": "Comment is too large to submit safely."
         },
         "GitHubWorkItemAssigneePopoverContent": {
           "cddd9b04a7": "Loading assignees",
@@ -2284,6 +2303,7 @@
           "TerminalContextMenu": {
             "b4cdd9314e": "Clear Screen",
             "8c17d6786d": "Close Pane",
+            "copyTerminalId": "Copy Terminal ID",
             "2cf85a6a55": "Copy Pane ID",
             "39809d152f": "Set Title…",
             "06c2b0f043": "Equalize Pane Sizes",
@@ -2298,7 +2318,8 @@
             "f3eeb1de13": "Copy",
             "c2f0b72b8d": "Insert",
             "925f49f210": "Expand Pane",
-            "df766809e0": "Collapse Pane"
+            "df766809e0": "Collapse Pane",
+            "copyTerminalId": "Copy Terminal ID"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
@@ -2358,7 +2379,12 @@
                 "53f015fd85": "Skipped {{value0}} symlink{{value1}}.",
                 "29c031b49a": "Uploading {{value0}} file{{value1}} to runtime…",
                 "0c77693641": "Worktree not ready — try again in a moment.",
-                "ce8248b835": "Worktree path not available."
+                "ce8248b835": "Worktree path not available.",
+                "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
+                "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
+                "b4cf68e889": "Skipped {{value0}} {{value1}}.",
+                "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
+                "writeRejected": "File drop cancelled: terminal could not accept the path."
               }
             }
           },
@@ -2367,7 +2393,15 @@
               "pane": {
                 "context": {
                   "menu": {
-                    "a29b9faa01": "Pane ID copied"
+                    "a29b9faa01": "Pane ID copied",
+                    "terminal": {
+                      "id": {
+                        "copied": "Terminal ID copied",
+                        "copy": {
+                          "failed": "Unable to copy terminal ID"
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -2533,7 +2567,8 @@
                   "097a982ee0": "Loading files...",
                   "5a9c83c04b": "Open any file, URL, agent, ...",
                   "90eb94dc48": "Enter an http:// or https:// URL.",
-                  "5553b283ce": "Enter a URL or file path."
+                  "5553b283ce": "Enter a URL or file path.",
+                  "queryTooLarge": "Search text is too large."
                 }
               },
               "menu": {
@@ -3474,7 +3509,8 @@
           "f8b1deb1a4": "Cancel",
           "51001182e3": "Empty directory",
           "971d85cc84": "Opens as a project on this host · {{value0}}",
-          "00c4235c10": "No matches for '{{value0}}'"
+          "00c4235c10": "No matches for '{{value0}}'",
+          "largeInputNoMatches": "No matches for this long input"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "Remove",
@@ -3753,7 +3789,8 @@
           "ca74db7550": "Project on SSH host",
           "021538e1d1": "SSH disconnected",
           "runtimeHostDisconnected": "Server disconnected",
-          "runtimeHostProject": "Project on Orca server"
+          "runtimeHostProject": "Project on Orca server",
+          "automationCreated": "Created by automation"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -3815,7 +3852,7 @@
           "e091caab15": "The project could not be found",
           "439fa94d53": "Update",
           "579b1a8e61": "Remove from Parent",
-          "8d9cd19d09": "Open Parent Workspace",
+          "8d9cd19d09": "Open Parent Worktree",
           "d35dfeae58": "Remove from group",
           "76865d827f": "Move to group",
           "503ec0f8e6": "New group from project",
@@ -3831,7 +3868,9 @@
           "8dacff1fe0": "Mark Read",
           "3baa7d6507": "Pin",
           "697d0f6e1b": "Unpin",
-          "250de158fd": "Remove Workspace"
+          "250de158fd": "Remove Workspace",
+          "changeParentWorkspace": "Change Parent Worktree...",
+          "setParentWorkspace": "Set Parent Worktree..."
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -3872,7 +3911,8 @@
           "b667b59632": "Some projects could not be removed from Orca",
           "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
           "groupDeleteFailed": "Failed to delete group",
-          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed."
+          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
+          "failedNestWorkspace": "Failed to nest workspace"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -4181,6 +4221,12 @@
           "c7d8e9f0a1": "{{value0}} updated",
           "d8e9f0a1b2": "{{value0}} skipped",
           "e9f0a1b2c3": "{{value0}} failed"
+        },
+        "WorktreeParentPickerPopover": {
+          "failedSetParent": "Failed to set parent worktree",
+          "current": "Current",
+          "searchPlaceholder": "Search worktrees...",
+          "empty": "No matching eligible worktrees."
         }
       },
       "shared": {
@@ -4385,7 +4431,8 @@
           "agentPermissionsTooltip": "Doesn't apply to agents where you've overridden launch arguments.",
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
-          "agentPermissionsManual": "Manual"
+          "agentPermissionsManual": "Manual",
+          "3f1bdf3cb4": "Environment text is too large to parse safely."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -4750,11 +4797,11 @@
           "agentHibernation": {
             "copy": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again. Experimental while we tune the safety model.",
             "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.",
-            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can hibernate it.",
-            "idleMinutesLabel": "Hibernate after",
+            "idleMinutesDescription": "How many idle minutes a completed background agent must wait before Orca can sleep it.",
+            "idleMinutesLabel": "Sleep after",
             "idleMinutesSuffix": "minutes",
-            "title": "Agent hibernation",
-            "toggleLabel": "Toggle agent hibernation"
+            "title": "Agent sleep",
+            "toggleLabel": "Toggle agent sleep"
           },
           "newWorktreeCardStyle": {
             "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
@@ -5830,19 +5877,6 @@
           "df38d612b7": "No projects added yet.",
           "3e483e256b": "No matching project settings."
         },
-        "ShortcutBindingRow": {
-          "4a4c2c9d32": "Add shortcut",
-          "87381fd8f8": "Press keys…",
-          "9cdaaa3d8f": "Disable shortcut",
-          "3b62c142fa": "Disable {{value0}}",
-          "f75335b155": "Reset to default",
-          "4f2c9b2a05": "Reset {{value0}} to default",
-          "97dccee14e": "Modified",
-          "3b11ef3a43": "{{value0}} shortcut",
-          "f6579be67b": "Change shortcut",
-          "6a7848fdac": "Listening for shortcut",
-          "a98d551407": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels."
-        },
         "ShortcutFilterRail": {
           "28b63545bf": "Status",
           "8a1e78c14b": "Shortcut status filters",
@@ -6850,11 +6884,10 @@
               "agent": "agent",
               "agents": "agents",
               "description": "Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again.",
-              "hibernate": "hibernate",
               "minutes": "minutes",
               "sleep": "sleep",
               "terminal": "terminal",
-              "title": "Agent hibernation"
+              "title": "Agent sleep"
             },
             "newWorktreeCardStyle": {
               "card": "card",
@@ -7897,7 +7930,8 @@
           "2b3c4d5e6f": "Apply to",
           "3c4d5e6f7a": "Overrides client default",
           "4d5e6f7a8b": "Inherits the client default",
-          "5e6f7a8b9c": "Reset"
+          "5e6f7a8b9c": "Reset",
+          "6f7a8b9cad": "Use a relative path (e.g. .orca/worktrees) for a per-project location, or an absolute path for one shared folder."
         },
         "agent-awake-copy": {
           "e5995ce268": "Keep computer awake while agents are working",
@@ -8116,6 +8150,36 @@
           "d37e92a06b": "ORCA_DIAGNOSTICS_DISABLED=1 is set — app diagnostics are off.",
           "5ebb31e1fb": "Running in CI — diagnostics are off.",
           "e27c8d45bf": "Diagnostics are disabled by an environment variable."
+        },
+        "ShortcutCommandBlock": {
+          "eb72c52c28": "Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.",
+          "70b5d25583": "{{value0}} shortcut",
+          "287e07ddde": "Modified",
+          "3c83cd7d1c": "Disabled",
+          "07939d084e": "Reset {{value0}} to default",
+          "9b02917027": "Reset to default",
+          "a799f90f82": "Disable {{value0}}",
+          "25e6e76618": "Disable shortcut",
+          "035a822ef0": "Add shortcut",
+          "a0e2ef0e61": "Add another shortcut for {{value0}}",
+          "245c83af24": "Add another shortcut",
+          "482a60225d": "Enable {{value0}}",
+          "6287677c37": "Enable",
+          "01481b964c": "Add shortcut for {{value0}}"
+        },
+        "ShortcutRecorderButton": {
+          "1a13bb054d": "Press shortcut keys for {{value0}}. Escape cancels.",
+          "3732775d74": "Add shortcut for {{value0}}",
+          "88764af2c1": "Change shortcut for {{value0}}",
+          "30feb099d6": "Change shortcut {{value0}} of {{value1}} for {{value2}}",
+          "5d982a2a1f": "Listening for shortcut",
+          "152e0bcd64": "Add shortcut",
+          "5bd56445da": "Change shortcut",
+          "f5ed5dcbf6": "Press keys…"
+        },
+        "ShortcutRemoveButton": {
+          "9e29aff18b": "Remove {{value0}} shortcut {{value1}}",
+          "2a9588b1c2": "Remove this binding"
         }
       },
       "right": {
@@ -8375,6 +8439,9 @@
           "SearchResultItems": {
             "cc06595a3b": "Copy Line Path",
             "3596b9668d": "Copy Path"
+          },
+          "SourceControlEntryContextMenu": {
+            "a1f2c8d901": "View"
           },
           "SourceControl": {
             "1406954883": "Clear all notes...",
@@ -8784,7 +8851,8 @@
                   "f49e0a21e0": "Code",
                   "542bf6a7e2": "Italic",
                   "256300f8ea": "Bold",
-                  "87aff03d63": "Sending..."
+                  "87aff03d63": "Sending...",
+                  "commentTooLarge": "Comment is too large to submit safely."
                 }
               }
             }
@@ -10188,6 +10256,11 @@
                 }
               }
             }
+          },
+          "useEmulatorScreenKeyboard": {
+            "pasteTooLarge": "Paste is too large for emulator keyboard input.",
+            "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
+            "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
           }
         }
       },
@@ -10439,7 +10512,8 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "Add note on selected text",
-          "fd68ae03b3": "Search in Files"
+          "fd68ae03b3": "Search in Files",
+          "largePasteTooLarge": "Paste is too large."
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "Copy Remote URL",
@@ -10720,6 +10794,9 @@
               }
             }
           }
+        },
+        "richMarkdownLargeTextPaste": {
+          "tooLarge": "Paste is too large."
         }
       },
       "diff": {
@@ -10736,7 +10813,8 @@
           "DiffCommentPopover": {
             "2b3ce6d394": "Cancel",
             "e05063cfc1": "Line {{value0}}",
-            "c845170b3b": "Lines {{value0}}-{{value1}}"
+            "c845170b3b": "Lines {{value0}}-{{value1}}",
+            "commentTooLarge": "Comment is too large to submit safely."
           },
           "useDiffCommentDecorator": {
             "995fa28b50": "This note"

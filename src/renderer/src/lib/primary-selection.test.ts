@@ -68,7 +68,7 @@ describe('primary selection buffer', () => {
     expect(setPrimarySelectionText('hello')).toBe(true)
     expect(writeSelectionClipboardText).toHaveBeenCalledWith('hello')
     await expect(readPrimarySelectionText()).resolves.toBe('from-system')
-    expect(readSelectionClipboardText).toHaveBeenCalled()
+    expect(readSelectionClipboardText).toHaveBeenCalledWith({ maxBytes: 262_144 })
   })
 
   it('keeps the private buffer on non-Linux platforms', async () => {

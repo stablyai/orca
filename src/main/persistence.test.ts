@@ -5277,6 +5277,27 @@ describe('Store', () => {
     expect(store.getUI().worktreeCardProperties).not.toContain('automation')
   })
 
+  it('preserves the current defaulted Compact preset without expanding display toggles', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true },
+      ui: {
+        worktreeCardProperties: ['status', 'unread'],
+        _worktreeCardModeDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().compactWorktreeCards).toBe(true)
+    expect(store.getUI().worktreeCardProperties).toEqual(['status', 'unread'])
+    expect(store.getUI().worktreeCardProperties).not.toContain('ports')
+    expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+  })
+
   it.each([
     ['raw', ['status', 'automation']],
     ['normalized', ['status', 'unread', 'automation']]

@@ -21,6 +21,7 @@ import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-
 import { getRepositoryLocalCommandsSectionId } from './repository-settings-targets'
 import { matchesSettingsSearch } from './settings-search'
 import { translate } from '@/i18n/i18n'
+import { getRepositoryHookScriptTextareaRows } from '@/lib/script-textarea-rows'
 
 type RepositoryHooksSectionProps = {
   repo: Repo
@@ -633,7 +634,7 @@ function ScriptEditor({
   }, [value])
 
   const showLocalEditor = showLocal || value.length > 0 || !hasShared
-  const lineCount = value ? value.split('\n').length : 0
+  const editorRows = getRepositoryHookScriptTextareaRows(value)
 
   return (
     <div
@@ -702,7 +703,7 @@ function ScriptEditor({
             onBlur={onCommit}
             placeholder={field.placeholder}
             spellCheck={false}
-            rows={Math.min(Math.max(lineCount + 1, 4), 14)}
+            rows={editorRows}
             className="w-full min-w-0 resize-y rounded-lg border border-input bg-muted/20 px-3 py-2 font-mono text-[12px] leading-[1.55] shadow-xs transition-[color,box-shadow] outline-none placeholder:italic placeholder:text-muted-foreground/60 focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/40"
           />
           <p className="text-[11px] text-muted-foreground">

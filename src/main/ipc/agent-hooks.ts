@@ -23,6 +23,7 @@ import { grokHookService } from '../grok/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { devinHookService } from '../devin/hook-service'
+import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 type AgentStatusRuntimeEnrichment = Pick<
@@ -70,6 +71,7 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
   ipcMain.removeHandler('agentHooks:copilotStatus')
   ipcMain.removeHandler('agentHooks:hermesStatus')
   ipcMain.removeHandler('agentHooks:devinStatus')
+  ipcMain.removeHandler('agentHooks:kimiStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
@@ -279,6 +281,19 @@ export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment
     } catch (err) {
       return {
         agent: 'devin',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:kimiStatus', (): AgentHookInstallStatus => {
+    try {
+      return kimiHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'kimi',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

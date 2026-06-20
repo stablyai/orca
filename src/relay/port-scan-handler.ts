@@ -1,4 +1,5 @@
 import { readFile, readdir, readlink } from 'fs/promises'
+import { getProcessOutputFields } from '../shared/process-output-field-scanner'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { scanWindowsListeningPorts } from './windows-port-scan'
 
@@ -105,7 +106,7 @@ export class PortScanHandler {
     const results: { port: number; host: string; inode: number }[] = []
 
     for (let i = 1; i < lines.length; i++) {
-      const fields = lines[i].trim().split(/\s+/)
+      const fields = getProcessOutputFields(lines[i], 10)
       if (fields.length < 10) {
         continue
       }

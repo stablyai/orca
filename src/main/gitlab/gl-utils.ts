@@ -1,6 +1,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { gitExecFileAsync, glabExecFileAsync } from '../git/runner'
+import { parseGlabApiResponse, type GlabApiResponse } from './glab-api-response'
 
 // Why: legacy generic execFile wrapper - only used by callers that don't need
 // WSL-aware routing. Repo-scoped callers should use the runner exports below.
@@ -27,6 +28,7 @@ export type {
   ProjectRef,
   ResolvedIssueSource
 } from './gitlab-project-ref-resolution'
+export { parseGlabApiResponse, type GlabApiResponse } from './glab-api-response'
 
 const MAX_CONCURRENT = 4
 let running = 0
@@ -53,34 +55,10 @@ export function release(): void {
   }
 }
 
-export type GlabApiResponse = {
-  body: string
-  headers: Record<string, string>
-}
-
 export async function glabApiWithHeaders(
   args: string[],
   options?: { cwd?: string }
 ): Promise<GlabApiResponse> {
   const { stdout } = await glabExecFileAsync(['api', '-i', ...args], options)
   return parseGlabApiResponse(stdout)
-}
-
-/** @internal - exported for tests. */
-export function parseGlabApiResponse(stdout: string): GlabApiResponse {
-  const sepMatch = stdout.match(/\r?\n\r?\n/)
-  if (!sepMatch || sepMatch.index === undefined) {
-    return { body: stdout, headers: {} }
-  }
-  const headerBlock = stdout.slice(0, sepMatch.index)
-  const body = stdout.slice(sepMatch.index + sepMatch[0].length)
-  const headers: Record<string, string> = {}
-  const lines = headerBlock.split(/\r?\n/)
-  for (const line of lines) {
-    const m = line.match(/^([A-Za-z][A-Za-z0-9-]*):\s*(.*)$/)
-    if (m) {
-      headers[m[1].toLowerCase()] = m[2].trim()
-    }
-  }
-  return { body, headers }
 }

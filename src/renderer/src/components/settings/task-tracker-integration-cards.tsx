@@ -12,6 +12,7 @@ import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
+const INTEGRATION_SUBORDINATE_ROW_CLASS = 'rounded-md border border-border/50 bg-muted/50 px-3 py-2'
 
 export function LinearIntegrationCard(): React.JSX.Element {
   const linearStatus = useAppStore((s) => s.linearStatus)
@@ -107,99 +108,101 @@ export function LinearIntegrationCard(): React.JSX.Element {
         ) : null
       }
     >
-      <ProviderAccountScopeRow scope={accountScope} />
-      {connected ? (
-        <div className="mt-3 space-y-2">
-          {workspaces.map((workspace) => {
-            const testResult = testResultByWorkspace[workspace.id]
-            const testing = testingWorkspaceId === workspace.id
-            return (
-              <div
-                key={workspace.id}
-                className="flex items-center gap-3 rounded-md border border-border/50 bg-background/60 px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {workspace.organizationName}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {workspace.displayName}
-                    {workspace.email ? ` · ${workspace.email}` : ''}
-                  </p>
-                </div>
-                {testResult?.state === 'ok' ? (
-                  <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
-                    <CheckCircle2 className="size-3.5" />
-                    {translate(
-                      'auto.components.settings.task.tracker.integration.cards.a2c0015fb8',
-                      'Verified'
-                    )}
-                  </span>
-                ) : null}
-                {testResult?.state === 'error' ? (
-                  <span className="flex min-w-0 max-w-[220px] shrink items-center gap-1 truncate text-xs text-destructive">
-                    <AlertCircle className="size-3.5 shrink-0" />
-                    <span className="truncate">{testResult.error}</span>
-                  </span>
-                ) : null}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleTest(workspace.id)}
-                  disabled={testing}
+      <IntegrationCardDetails>
+        <ProviderAccountScopeRow scope={accountScope} />
+        {connected ? (
+          <div className="space-y-2">
+            {workspaces.map((workspace) => {
+              const testResult = testResultByWorkspace[workspace.id]
+              const testing = testingWorkspaceId === workspace.id
+              return (
+                <div
+                  key={workspace.id}
+                  className={`flex items-center gap-3 ${INTEGRATION_SUBORDINATE_ROW_CLASS}`}
                 >
-                  {testing ? (
-                    <>
-                      <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {workspace.organizationName}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {workspace.displayName}
+                      {workspace.email ? ` · ${workspace.email}` : ''}
+                    </p>
+                  </div>
+                  {testResult?.state === 'ok' ? (
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
+                      <CheckCircle2 className="size-3.5" />
                       {translate(
-                        'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
-                        'Testing...'
+                        'auto.components.settings.task.tracker.integration.cards.a2c0015fb8',
+                        'Verified'
                       )}
-                    </>
-                  ) : (
-                    translate(
-                      'auto.components.settings.task.tracker.integration.cards.c24e56c532',
-                      'Test'
-                    )
-                  )}
-                </Button>
-                <button
-                  onClick={() => void handleDisconnect(workspace.id)}
-                  aria-label={translate(
-                    'auto.components.settings.task.tracker.integration.cards.dd3529015d',
-                    'Disconnect {{value0}}',
-                    { value0: workspace.organizationName }
-                  )}
-                  className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
-                >
-                  <Unlink className="size-3.5" />
-                </button>
-              </div>
-            )
-          })}
-          <p className="text-[11px] text-muted-foreground/70">
-            {translate(
-              'auto.components.settings.task.tracker.integration.cards.6224fe9d34',
-              'Each connected Linear workspace has one key stored by the active runtime. Full-access keys can cover all teams the key owner can access; restricted keys can be replaced any time.'
-            )}
-          </p>
-        </div>
-      ) : !checking ? (
-        <IntegrationCardDetails>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.task.tracker.integration.cards.cef18762a2',
-              'Add access with a Personal API key from your Linear settings. Full-access keys can see every team the key owner can reach.'
-            )}
-          </p>
-          <Button variant="ghost" size="sm" onClick={() => void checkLinearConnection(true)}>
-            {translate(
-              'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
-              'Re-check'
-            )}
-          </Button>
-        </IntegrationCardDetails>
-      ) : null}
+                    </span>
+                  ) : null}
+                  {testResult?.state === 'error' ? (
+                    <span className="flex min-w-0 max-w-[220px] shrink items-center gap-1 truncate text-xs text-destructive">
+                      <AlertCircle className="size-3.5 shrink-0" />
+                      <span className="truncate">{testResult.error}</span>
+                    </span>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleTest(workspace.id)}
+                    disabled={testing}
+                  >
+                    {testing ? (
+                      <>
+                        <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
+                        {translate(
+                          'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
+                          'Testing...'
+                        )}
+                      </>
+                    ) : (
+                      translate(
+                        'auto.components.settings.task.tracker.integration.cards.c24e56c532',
+                        'Test'
+                      )
+                    )}
+                  </Button>
+                  <button
+                    onClick={() => void handleDisconnect(workspace.id)}
+                    aria-label={translate(
+                      'auto.components.settings.task.tracker.integration.cards.dd3529015d',
+                      'Disconnect {{value0}}',
+                      { value0: workspace.organizationName }
+                    )}
+                    className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
+                  >
+                    <Unlink className="size-3.5" />
+                  </button>
+                </div>
+              )
+            })}
+            <p className="text-[11px] text-muted-foreground/70">
+              {translate(
+                'auto.components.settings.task.tracker.integration.cards.6224fe9d34',
+                'Each connected Linear workspace has one key stored by the active runtime. Full-access keys can cover all teams the key owner can access; restricted keys can be replaced any time.'
+              )}
+            </p>
+          </div>
+        ) : !checking ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.task.tracker.integration.cards.cef18762a2',
+                'Add access with a Personal API key from your Linear settings. Full-access keys can see every team the key owner can reach.'
+              )}
+            </p>
+            <Button variant="ghost" size="sm" onClick={() => void checkLinearConnection(true)}>
+              {translate(
+                'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
+                'Re-check'
+              )}
+            </Button>
+          </>
+        ) : null}
+      </IntegrationCardDetails>
 
       <LinearApiKeyDialog
         open={dialogOpen}
@@ -221,7 +224,7 @@ function ProviderAccountScopeRow({ scope }: { scope: ReturnType<typeof getProvid
         'Account scope'
       )}
       scope={scope}
-      className="mt-3 rounded-md border border-border/40 bg-background/50 px-3 py-2 text-xs"
+      className={`text-xs ${INTEGRATION_SUBORDINATE_ROW_CLASS}`}
     />
   )
 }

@@ -22,6 +22,7 @@ export type AiVaultScanOptions = {
   piSessionsDir?: string
   droidSessionsDir?: string
   droidProjectsDir?: string
+  kimiSessionsDir?: string
   limit?: number
   limitPerAgent?: number
   platform?: NodeJS.Platform
