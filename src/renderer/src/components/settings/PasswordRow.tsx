@@ -8,6 +8,8 @@ import { translate } from '@/i18n/i18n'
 
 type PasswordRowProps = {
   entry: BrowserCredentialEntry
+  /** When true the vault is unavailable; block entering edit mode and saving edits. */
+  disabled?: boolean
   onReveal: (id: string) => Promise<string | null>
   onUpdate: (
     id: string,
@@ -19,6 +21,7 @@ type PasswordRowProps = {
 
 export function PasswordRow({
   entry,
+  disabled = false,
   onReveal,
   onUpdate,
   onDelete
@@ -106,7 +109,7 @@ export function PasswordRow({
             variant="ghost"
             size="sm"
             className="h-7 gap-1 px-2"
-            disabled={saving || !editUsername.trim()}
+            disabled={saving || !editUsername.trim() || disabled}
             onClick={() => void handleSave()}
           >
             <Check className="size-3.5" />
@@ -161,6 +164,7 @@ export function PasswordRow({
           variant="ghost"
           size="icon"
           className="size-7"
+          disabled={disabled}
           onClick={handleEdit}
           aria-label={translate('auto.components.settings.PasswordsPane.edit_aria', 'Edit login')}
         >

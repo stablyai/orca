@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import type {
@@ -43,7 +43,9 @@ export function PasswordsPane({ settings, updateSettings }: PasswordsPaneProps):
     }
   }, [mountedRef])
 
-  const loadEntries = (): void => {
+  // Why: stable reference via useCallback so the mount effect can declare loadEntries
+  // as a dependency without triggering a re-run on every render.
+  const loadEntries = useCallback((): void => {
     setLoadingEntries(true)
     void window.api.browser.credentials.list().then((list) => {
       if (mountedRef.current) {
@@ -51,13 +53,12 @@ export function PasswordsPane({ settings, updateSettings }: PasswordsPaneProps):
         setLoadingEntries(false)
       }
     })
-  }
+  }, [mountedRef])
 
+  // Why: run once on mount; mutations call loadEntries() manually after completing.
   useEffect(() => {
     loadEntries()
-    // Why: run once on mount; mutations call loadEntries() manually after completing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [loadEntries])
 
   const vaultUnavailable = vaultStatus !== null && !vaultStatus.available
 
@@ -196,6 +197,7 @@ export function PasswordsPane({ settings, updateSettings }: PasswordsPaneProps):
               <PasswordRow
                 key={entry.id}
                 entry={entry}
+                disabled={vaultUnavailable}
                 onReveal={(id) => window.api.browser.credentials.reveal(id)}
                 onUpdate={async (id, username, password) => {
                   const result = await handleUpdate(id, username, password)
