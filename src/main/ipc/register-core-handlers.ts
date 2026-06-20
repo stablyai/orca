@@ -1,3 +1,7 @@
+import { safeStorage, app } from 'electron'
+import { join } from 'path'
+import { BrowserCredentialVault } from '../browser/credential-vault'
+import { browserManager } from '../browser/browser-manager'
 import { registerAppHandlers } from './app'
 import { registerCliHandlers } from './cli'
 import { registerPreflightHandlers } from './preflight'
@@ -29,7 +33,11 @@ import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
 import { registerDeveloperPermissionHandlers } from './developer-permissions'
 import { registerComputerUsePermissionHandlers } from './computer-use-permissions'
-import { setTrustedBrowserRendererWebContentsId, setAgentBrowserBridgeRef } from './browser'
+import {
+  setTrustedBrowserRendererWebContentsId,
+  setAgentBrowserBridgeRef,
+  isTrustedBrowserRenderer
+} from './browser'
 import { registerSessionHandlers } from './session'
 import { registerSettingsHandlers } from './settings'
 import { registerDiagnosticsHandlers } from './diagnostics'
@@ -40,6 +48,7 @@ import { registerAutomationHandlers } from './automations'
 import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
+import { registerBrowserCredentialHandlers } from './browser-credentials'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
 import { registerUIHandlers } from './ui'
@@ -61,6 +70,15 @@ import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
+
+// Why: constructed once at module scope so the vault caches records across IPC
+// calls without re-reading the file on every request.
+const browserCredentialVault = new BrowserCredentialVault({
+  filePath: join(app.getPath('userData'), 'orca-browser-credentials.json'),
+  encryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+  encrypt: (p) => safeStorage.encryptString(p),
+  decrypt: (b) => safeStorage.decryptString(b)
+})
 
 let registered = false
 
@@ -141,6 +159,11 @@ export function registerCoreHandlers(
   }
   registerTelemetryHandlers(store)
   registerBrowserHandlers()
+  registerBrowserCredentialHandlers({
+    vault: browserCredentialVault,
+    browserManager,
+    isTrusted: isTrustedBrowserRenderer
+  })
   registerShellHandlers()
   registerPetHandlers()
   registerSessionHandlers(store)
