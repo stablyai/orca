@@ -10,10 +10,7 @@ import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { codexHomeForSessionsDir, uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { listOpenCodeDatabases } from '../opencode-usage/scanner'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
-import {
-  dedupOpenCodeSessions,
-  discoverOpenCodeSessions
-} from './session-scanner-opencode-sqlite-discovery'
+import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-discovery'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import type {
   AiVaultScanOptions,
@@ -216,13 +213,7 @@ export async function scanAiVaultSessions(
     issues
   })
 
-  // Why: on mixed installs the same OpenCode session may appear once via the
-  // SQLite DB and once via a stale legacy JSON file. SQLite is the source of
-  // truth on 1.17.x, so drop file-based duplicates when a SQLite entry with
-  // the same sessionId already exists.
-  const dedupedSessions = dedupOpenCodeSessions(parsedSessions)
-
-  const sessions = dedupedSessions
+  const sessions = parsedSessions
     .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
     .slice(0, limit)
 

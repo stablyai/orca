@@ -1,9 +1,13 @@
-import { join } from 'path'
-import type { AiVaultAgent, AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import { basename, extname, join } from 'path'
+import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { discoverFiles } from './session-scanner-discovery'
 import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
-import type { SessionFileCandidate, SessionFileDiscovery } from './session-scanner-types'
+import type {
+  FileWithMtime,
+  SessionFileCandidate,
+  SessionFileDiscovery
+} from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../sqlite/schema-helpers'
@@ -118,6 +122,13 @@ export async function listOpenCodeSqliteSessions(args: {
   return candidates
 }
 
+// Why: extract the sessionId from a legacy file path like
+// storage/session/<projectId>/<sessionId>.json. Falls back to the filename
+// without extension when the opencode id format doesn't match a UUID.
+function sessionIdFromLegacyFilePath(filePath: string): string {
+  return basename(filePath, extname(filePath))
+}
+
 export async function discoverOpenCodeSessions(args: {
   storageDir: string
   dbPaths: readonly string[]
@@ -138,35 +149,37 @@ export async function discoverOpenCodeSessions(args: {
       issues: args.issues
     })
   ])
+
+  const sqliteFiles = sqliteCandidates.map((c) => c.file)
+  // Why: on mixed installs the same OpenCode session may appear once via the
+  // SQLite DB and once via a stale legacy JSON file. SQLite is the source of
+  // truth on 1.17.x, so drop file-based duplicates when a SQLite entry with
+  // the same sessionId already exists. Deduping at the file level also avoids
+  // parsing the same session twice.
+  if (sqliteFiles.length === 0) {
+    return {
+      agent: 'opencode' as const,
+      rootDir: fileDiscovery.rootDir,
+      files: fileDiscovery.files
+    }
+  }
+  const sqliteSessionIds = new Set<string>()
+  for (const file of sqliteFiles) {
+    const parsed = splitOpenCodeSqliteCandidate(file.path)
+    if (parsed) {
+      sqliteSessionIds.add(parsed.sessionId)
+    }
+  }
+  const dedupedFileDiscovery: FileWithMtime[] = []
+  for (const file of fileDiscovery.files) {
+    if (!sqliteSessionIds.has(sessionIdFromLegacyFilePath(file.path))) {
+      dedupedFileDiscovery.push(file)
+    }
+  }
+
   return {
     agent: 'opencode' as const,
     rootDir: fileDiscovery.rootDir,
-    files: [...fileDiscovery.files, ...sqliteCandidates.map((c) => c.file)]
+    files: [...dedupedFileDiscovery, ...sqliteFiles]
   }
-}
-
-export function dedupOpenCodeSessions(sessions: AiVaultSession[]): AiVaultSession[] {
-  const opencodeSessions = sessions.filter((s) => s.agent === 'opencode')
-  if (opencodeSessions.length === 0) {
-    return sessions
-  }
-  const sqliteSessionIds = new Set<string>()
-  for (const session of opencodeSessions) {
-    if (splitOpenCodeSqliteCandidate(session.filePath)) {
-      sqliteSessionIds.add(session.sessionId)
-    }
-  }
-  if (sqliteSessionIds.size === 0) {
-    return sessions
-  }
-  return sessions.filter((s) => {
-    if (s.agent !== 'opencode') {
-      return true
-    }
-    if (splitOpenCodeSqliteCandidate(s.filePath)) {
-      return true
-    }
-    // Why: file-based entry whose sessionId also exists in SQLite — drop it.
-    return !sqliteSessionIds.has(s.sessionId)
-  })
 }
