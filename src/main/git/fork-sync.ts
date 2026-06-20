@@ -5,7 +5,7 @@ import {
   type GitForkSyncResult
 } from '../../shared/git-fork-sync'
 import type { GitRuntimeOptions } from './git-runtime-options'
-import { gitOptionsForWorktree } from './git-runtime-options'
+import { gitRemoteOperationOptionsForWorktree } from './git-remote-operation-options'
 import { gitExecFileAsync } from './runner'
 
 export async function gitSyncForkDefaultBranch(
@@ -22,7 +22,7 @@ export async function gitSyncForkDefaultBranch(
     return await syncForkDefaultBranch(
       (args) =>
         gitExecFileAsync(args, {
-          ...gitOptionsForWorktree(worktreePath, options),
+          ...gitRemoteOperationOptionsForWorktree(worktreePath, options),
           timeout: 60_000,
           signal
         }),

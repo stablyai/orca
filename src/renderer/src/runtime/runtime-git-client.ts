@@ -25,6 +25,12 @@ import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-hi
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS } from '../../../shared/git-remote-operation-timeout'
+
+const REMOTE_GIT_RUNTIME_RPC_OPTIONS = {
+  timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS,
+  compatibilityTimeoutMs: 15_000
+} as const
 
 export type RuntimeGenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
@@ -468,7 +474,7 @@ export async function fetchRuntimeGit(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...(pushTarget ? { pushTarget } : {})
     },
-    { timeoutMs: 30_000 }
+    REMOTE_GIT_RUNTIME_RPC_OPTIONS
   )
 }
 
@@ -491,7 +497,7 @@ export async function syncRuntimeGitForkDefaultBranch(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       expectedUpstream
     },
-    { timeoutMs: 60_000 }
+    REMOTE_GIT_RUNTIME_RPC_OPTIONS
   )
 }
 
@@ -515,7 +521,7 @@ export async function pullRuntimeGit(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...(pushTarget ? { pushTarget } : {})
     },
-    { timeoutMs: 30_000 }
+    REMOTE_GIT_RUNTIME_RPC_OPTIONS
   )
 }
 
@@ -539,7 +545,7 @@ export async function fastForwardRuntimeGit(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...(pushTarget ? { pushTarget } : {})
     },
-    { timeoutMs: 30_000 }
+    REMOTE_GIT_RUNTIME_RPC_OPTIONS
   )
 }
 
@@ -560,7 +566,7 @@ export async function rebaseRuntimeGitFromBase(
     target,
     'git.rebaseFromBase',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), baseRef },
-    { timeoutMs: 30_000 }
+    REMOTE_GIT_RUNTIME_RPC_OPTIONS
   )
 }
 
@@ -588,7 +594,7 @@ export async function pushRuntimeGit(
       ...(args.pushTarget !== undefined ? { pushTarget: args.pushTarget } : {}),
       ...(args.forceWithLease !== undefined ? { forceWithLease: args.forceWithLease } : {})
     },
-    { timeoutMs: 30_000 }
+    REMOTE_GIT_RUNTIME_RPC_OPTIONS
   )
 }
 

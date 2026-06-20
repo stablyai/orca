@@ -7,6 +7,7 @@ import {
   type MobileGitUpstreamStatus
 } from './mobile-git-status'
 import type { GitCommitResult, GitRequestError } from './mobile-source-control-screen-state'
+import { mobileGitRequestOptions } from './mobile-git-remote-request-options'
 
 type Params = {
   client: RpcClient | null
@@ -22,10 +23,14 @@ export function useMobileGitRequests({ client, connState, worktreeId }: Params) 
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
-      const response = await client.sendRequest(method, {
-        worktree: `id:${worktreeId}`,
-        ...params
-      })
+      const response = await client.sendRequest(
+        method,
+        {
+          worktree: `id:${worktreeId}`,
+          ...params
+        },
+        mobileGitRequestOptions(method)
+      )
       if (!response.ok) {
         const error = new Error(
           response.error?.message || 'Source control action failed'

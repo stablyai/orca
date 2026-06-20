@@ -49,6 +49,7 @@ export async function callRuntimeRpc<TResult>(
   params?: unknown,
   options: {
     timeoutMs?: number
+    compatibilityTimeoutMs?: number
     suppressFeatureInteraction?: boolean
     reuseRecentCompatibilityFailure?: boolean
     skipCompatibilityCheck?: boolean

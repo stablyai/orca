@@ -29,6 +29,10 @@ type GitSpyTarget = {
   ): Promise<{ stdout: string; stderr: string }>
 }
 
+type RemoteGitSpyTarget = {
+  remoteGit(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>
+}
+
 function deferredRelayBuffer(content: string): {
   promise: Promise<Buffer>
   resolve: () => void
@@ -1218,6 +1222,9 @@ describe('GitHandler', () => {
           }
           return { stdout: '', stderr: '' }
         })
+      const remoteGitSpy = vi
+        .spyOn(handler as unknown as RemoteGitSpyTarget, 'remoteGit')
+        .mockResolvedValue({ stdout: '', stderr: '' })
 
       const first = dispatcher.callRequest('git.diff', {
         worktreePath: tmpDir,
@@ -1246,21 +1253,12 @@ describe('GitHandler', () => {
       await Promise.all([first, second])
 
       expect(gitBufferSpy).toHaveBeenCalledTimes(2)
-      expect(gitSpy).toHaveBeenCalledWith(
-        [
-          '-c',
-          'maintenance.auto=false',
-          '-c',
-          'maintenance.commit-graph.auto=0',
-          '-c',
-          'gc.auto=0',
-          'fetch',
-          '--no-tags',
-          'origin',
-          '+refs/heads/main:refs/remotes/origin/main'
-        ],
-        tmpDir
+      expect(remoteGitSpy).toHaveBeenCalledWith(
+        expect.arrayContaining(['fetch', 'origin']),
+        tmpDir,
+        expect.any(Object)
       )
+      expect(gitSpy).toHaveBeenCalledWith(['check-ref-format', 'refs/heads/main'], tmpDir)
     })
 
     it('coalesces concurrent identical git.branchDiff reads while in flight', async () => {

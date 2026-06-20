@@ -12,6 +12,7 @@ const NORMALIZED_SUBMODULE_PUSH_FAILURE_PATTERN =
   /(?:^|:\s)((?:Submodule '[^'\n]+'|A submodule) (?:has remote changes\. Pull inside the submodule, then try again\.|could not be pushed\. Resolve the submodule push error, then try again\.))(?:$|\s)/i
 const DIVERGENT_PULL_RECONCILIATION_PATTERN =
   /Need to specify how to reconcile divergent branches|divergent branches and need to specify how to reconcile them/i
+const REMOTE_OPERATION_TIMEOUT_PATTERN = /\btimed out\b/i
 // Why: these args already pin a reconcile strategy; the merge fallback must not override an explicit choice like --ff-only.
 const RECONCILIATION_PULL_ARG_PATTERN =
   /^(--rebase|--no-rebase|--ff-only|--ff|--no-ff|--merge|-r)(=|$)/
@@ -124,6 +125,11 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
   // Why: scrub credentials up-front so every downstream branch operates on already-redacted text.
   const raw = stripCredentialsFromMessage(error.message)
 
+  if (operation && REMOTE_OPERATION_TIMEOUT_PATTERN.test(raw)) {
+    const label = operation === 'upstream' ? 'Remote status' : capitalizeOperation(operation)
+    return `${label} timed out. Check your network connection and Git authentication, then try again.`
+  }
+
   const submodulePushFailureDetail = formatSubmodulePushFailureDetail(raw)
   if ((operation === 'push' || operation === undefined) && submodulePushFailureDetail) {
     return submodulePushFailureDetail
@@ -175,6 +181,10 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
 
   // Fallthrough: raw was already credential-scrubbed at top, so just extract the tail stderr line.
   return extractTailLine(raw)
+}
+
+function capitalizeOperation(operation: Exclude<GitRemoteOperation, 'upstream'>): string {
+  return operation[0].toUpperCase() + operation.slice(1)
 }
 
 // Why: require a `fatal:` prefix so wrapped command text or hook/progress output can't spuriously match and mask real failures.

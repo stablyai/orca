@@ -7,6 +7,7 @@ import type {
   HostedReviewProvider
 } from '../../../src/shared/hosted-review'
 import type { RpcClient } from '../transport/rpc-client'
+import { mobileGitRequestOptions } from './mobile-git-remote-request-options'
 import type { RpcSuccess } from '../transport/types'
 import { hostedReviewCopy } from './hosted-review-copy'
 import { linkMobileHostedReview } from './mobile-pr-link'
@@ -177,7 +178,11 @@ async function pushMobileBranchBeforeCreate(
   worktreeId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const response = await client.sendRequest('git.push', { worktree: `id:${worktreeId}` })
+    const response = await client.sendRequest(
+      'git.push',
+      { worktree: `id:${worktreeId}` },
+      mobileGitRequestOptions('git.push')
+    )
     if (!response.ok) {
       return { ok: false, error: 'Push failed. Resolve the push error, then try again.' }
     }

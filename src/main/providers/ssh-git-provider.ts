@@ -30,8 +30,11 @@ import {
   describeMaxBufferOverflowError,
   isMaxBufferOverflowError
 } from '../git/max-buffer-overflow'
+import { GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS } from '../../shared/git-remote-operation-timeout'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import { gitExecMutatesRepository } from '../../shared/git-exec-mutation'
+
+const REMOTE_GIT_RPC_OPTIONS = { timeoutMs: GIT_REMOTE_OPERATION_RPC_TIMEOUT_MS } as const
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -530,39 +533,59 @@ export class SshGitProvider implements IGitProvider {
     options: { forceWithLease?: boolean } = {}
   ): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.push', {
-        worktreePath,
-        publish,
-        pushTarget,
-        ...(options.forceWithLease === true ? { forceWithLease: true } : {})
-      })
+      await this.mux.request(
+        'git.push',
+        {
+          worktreePath,
+          publish,
+          pushTarget,
+          ...(options.forceWithLease === true ? { forceWithLease: true } : {})
+        },
+        REMOTE_GIT_RPC_OPTIONS
+      )
     })
   }
 
   async pullBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.pull', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
+      await this.mux.request(
+        'git.pull',
+        { worktreePath, ...(pushTarget ? { pushTarget } : {}) },
+        REMOTE_GIT_RPC_OPTIONS
+      )
     })
   }
 
   async fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.fastForward', {
-        worktreePath,
-        ...(pushTarget ? { pushTarget } : {})
-      })
+      await this.mux.request(
+        'git.fastForward',
+        {
+          worktreePath,
+          ...(pushTarget ? { pushTarget } : {})
+        },
+        REMOTE_GIT_RPC_OPTIONS
+      )
     })
   }
 
   async rebaseFromBase(worktreePath: string, baseRef: string): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.rebaseFromBase', { worktreePath, baseRef })
+      await this.mux.request(
+        'git.rebaseFromBase',
+        { worktreePath, baseRef },
+        REMOTE_GIT_RPC_OPTIONS
+      )
     })
   }
 
   async fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.fetch', { worktreePath, ...(pushTarget ? { pushTarget } : {}) })
+      await this.mux.request(
+        'git.fetch',
+        { worktreePath, ...(pushTarget ? { pushTarget } : {}) },
+        REMOTE_GIT_RPC_OPTIONS
+      )
     })
   }
 
@@ -572,10 +595,14 @@ export class SshGitProvider implements IGitProvider {
   ): Promise<GitForkSyncResult> {
     return this.runWithDiffDedupeClear(
       async () =>
-        (await this.mux.request('git.forkSync', {
-          worktreePath,
-          ...(expectedUpstream ? { expectedUpstream } : {})
-        })) as GitForkSyncResult
+        (await this.mux.request(
+          'git.forkSync',
+          {
+            worktreePath,
+            ...(expectedUpstream ? { expectedUpstream } : {})
+          },
+          REMOTE_GIT_RPC_OPTIONS
+        )) as GitForkSyncResult
     )
   }
 
@@ -587,13 +614,17 @@ export class SshGitProvider implements IGitProvider {
     options?: { skipAutoMaintenance?: boolean }
   ): Promise<void> {
     await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.fetchRemoteTrackingRef', {
-        worktreePath,
-        remote,
-        branch,
-        ref,
-        ...(options?.skipAutoMaintenance ? { skipAutoMaintenance: true } : {})
-      })
+      await this.mux.request(
+        'git.fetchRemoteTrackingRef',
+        {
+          worktreePath,
+          remote,
+          branch,
+          ref,
+          ...(options?.skipAutoMaintenance ? { skipAutoMaintenance: true } : {})
+        },
+        REMOTE_GIT_RPC_OPTIONS
+      )
     })
   }
 
@@ -608,11 +639,11 @@ export class SshGitProvider implements IGitProvider {
         // FETCH_HEAD-semantics git.fetchGitLabMergeRequestHead, so calling the ref
         // variant makes them return -32601 rather than silently no-op the durable
         // ref (which would leave the client resolving a stale/missing MR head).
-        const result = await this.mux.request('git.fetchGitLabMergeRequestHeadRef', {
-          worktreePath,
-          remote,
-          mrIid
-        })
+        const result = await this.mux.request(
+          'git.fetchGitLabMergeRequestHeadRef',
+          { worktreePath, remote, mrIid },
+          REMOTE_GIT_RPC_OPTIONS
+        )
         // Why: use the host-written path; a second client-side get-url can disagree.
         return readDurableReviewHeadLocalRef(result, 'merge request')
       })
@@ -635,11 +666,11 @@ export class SshGitProvider implements IGitProvider {
   ): Promise<string> {
     try {
       return await this.runWithDiffDedupeClear(async () => {
-        const result = await this.mux.request('git.fetchGitHubPullRequestHead', {
-          worktreePath,
-          remote,
-          prNumber
-        })
+        const result = await this.mux.request(
+          'git.fetchGitHubPullRequestHead',
+          { worktreePath, remote, prNumber },
+          REMOTE_GIT_RPC_OPTIONS
+        )
         // Why: use the host-written path; a second client-side get-url can disagree.
         return readDurableReviewHeadLocalRef(result, 'pull request')
       })

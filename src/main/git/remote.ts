@@ -8,6 +8,7 @@ import { resolveGitRemoteRebaseSource } from '../../shared/git-rebase-source'
 import type { GitPushTarget } from '../../shared/types'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
+import { gitRemoteOperationOptionsForWorktree } from './git-remote-operation-options'
 import { validateGitPushTarget } from './push-target-validation'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
@@ -205,7 +206,7 @@ export async function gitPush(
       '--set-upstream',
       ...(target ? [target.remote, target.refspec] : ['origin', 'HEAD'])
     ]
-    await gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
+    await gitExecFileAsync(args, gitRemoteOperationOptionsForWorktree(worktreePath, options))
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'push'))
   }
@@ -222,7 +223,7 @@ async function gitPullWithArgs(
       const target = await validateGitPushTarget(worktreePath, pushTarget, options)
       await gitExecFileAsync(
         ['pull', ...effectiveArgs, target.remoteName, target.branchName],
-        gitOptionsForWorktree(worktreePath, options)
+        gitRemoteOperationOptionsForWorktree(worktreePath, options)
       )
       return
     }
@@ -234,12 +235,15 @@ async function gitPullWithArgs(
       // target origin/<branch>. Pull the same effective branch the UI reports.
       await gitExecFileAsync(
         ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
-        gitOptionsForWorktree(worktreePath, options)
+        gitRemoteOperationOptionsForWorktree(worktreePath, options)
       )
       return
     }
 
-    await gitExecFileAsync(['pull', ...effectiveArgs], gitOptionsForWorktree(worktreePath, options))
+    await gitExecFileAsync(
+      ['pull', ...effectiveArgs],
+      gitRemoteOperationOptionsForWorktree(worktreePath, options)
+    )
   }
 
   try {
@@ -285,7 +289,7 @@ export async function gitPullRebaseFromBase(
       )
       await gitExecFileAsync(
         ['pull', '--rebase', source.remoteName, source.branchName],
-        gitOptionsForWorktree(worktreePath, options)
+        gitRemoteOperationOptionsForWorktree(worktreePath, options)
       )
     } catch (error) {
       throw new Error(normalizeGitErrorMessage(error, 'pull'))
@@ -303,11 +307,14 @@ export async function gitFetch(
       const target = await validateGitPushTarget(worktreePath, pushTarget, options)
       await gitExecFileAsync(
         ['fetch', '--prune', target.remoteName],
-        gitOptionsForWorktree(worktreePath, options)
+        gitRemoteOperationOptionsForWorktree(worktreePath, options)
       )
       return
     }
-    await gitExecFileAsync(['fetch', '--prune'], gitOptionsForWorktree(worktreePath, options))
+    await gitExecFileAsync(
+      ['fetch', '--prune'],
+      gitRemoteOperationOptionsForWorktree(worktreePath, options)
+    )
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'fetch'))
   }
