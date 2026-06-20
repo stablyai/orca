@@ -82,6 +82,64 @@ describe('BrowserCredentialVault', () => {
     expect(
       vault.save({ origin: 'https://github.com', username: 'me', password: 'x' }).entry
     ).toBeNull()
+    // Fix C: no vault file should have been written to disk
+    expect(() => readFileSync(join(dir, 'creds.json'), 'utf-8')).toThrow()
+  })
+
+  it('update() does not corrupt state when encryption is unavailable', () => {
+    // Fix D: regression test for Fix A — cache must stay coherent when
+    // encryption is unavailable mid-update.
+    const filePath = join(dir, 'creds.json')
+
+    // Create the entry with encryption available.
+    const xor = (s: string): Buffer =>
+      Buffer.from(
+        s
+          .split('')
+          .map((c) => String.fromCharCode(c.charCodeAt(0) ^ 7))
+          .join(''),
+        'binary'
+      )
+    const vaultAvailable = new BrowserCredentialVault({
+      filePath,
+      encryptionAvailable: () => true,
+      encrypt: (p) => xor(p),
+      decrypt: (b) => xor(b.toString('binary')).toString('binary'),
+      now: () => 1000,
+      generateId: () => `id-${(counter += 1)}`
+    })
+    const { entry } = vaultAvailable.save({
+      origin: 'https://example.com',
+      username: 'original',
+      password: 'secret'
+    })
+    const id = entry!.id
+
+    // Now construct a second vault over the same file with encryption unavailable.
+    const vaultUnavailable = new BrowserCredentialVault({
+      filePath,
+      encryptionAvailable: () => false,
+      encrypt: (p) => xor(p),
+      decrypt: (b) => xor(b.toString('binary')).toString('binary'),
+      now: () => 2000,
+      generateId: () => `id-${(counter += 1)}`
+    })
+    const result = vaultUnavailable.update({ id, username: 'new', password: 'x' })
+    expect(result).toBeNull()
+
+    // A fresh vault reading the same file must see the ORIGINAL username —
+    // neither the in-memory cache nor the file on disk should have been mutated.
+    const reopened = new BrowserCredentialVault({
+      filePath,
+      encryptionAvailable: () => true,
+      encrypt: (p) => xor(p),
+      decrypt: (b) => xor(b.toString('binary')).toString('binary'),
+      now: () => 3000,
+      generateId: () => `id-${(counter += 1)}`
+    })
+    const matches = reopened.matchesForOrigin('https://example.com')
+    expect(matches).toHaveLength(1)
+    expect(matches[0].username).toBe('original')
   })
 
   it('rejects invalid origins', () => {

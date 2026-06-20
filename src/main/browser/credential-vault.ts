@@ -114,15 +114,30 @@ export class BrowserCredentialVault {
     if (!record) {
       return null
     }
-    if (args.username !== undefined && args.username !== '') {
-      record.username = args.username
+
+    // Fix A: check encryption availability BEFORE mutating any field so the
+    // in-memory record stays consistent with the file if we must bail out.
+    const wantsPassword = args.password !== undefined && args.password !== ''
+    if (wantsPassword && !this.deps.encryptionAvailable()) {
+      return null
     }
-    if (args.password !== undefined && args.password !== '') {
-      if (!this.deps.encryptionAvailable()) {
-        return null
-      }
-      record.encryptedPassword = this.encryptPassword(args.password)
+
+    // Compute new values first; apply atomically once we know all will succeed.
+    const newUsername =
+      args.username !== undefined && args.username !== '' ? args.username : record.username
+    const newEncryptedPassword = wantsPassword
+      ? this.encryptPassword(args.password!)
+      : record.encryptedPassword
+
+    // Fix B: only flush when something actually changed.
+    const changed =
+      newUsername !== record.username || newEncryptedPassword !== record.encryptedPassword
+    if (!changed) {
+      return toPublic(record)
     }
+
+    record.username = newUsername
+    record.encryptedPassword = newEncryptedPassword
     record.updatedAt = this.now()
     this.flush()
     return toPublic(record)
